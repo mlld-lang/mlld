@@ -68,6 +68,8 @@ export class LiteralVisitor extends BaseVisitor {
     // Handle special keyword literals first
     if (valueType === 'wildcard' || valueType === 'none') {
       tokenType = 'keyword';
+    } else if (valueType === 'denied') {
+      tokenType = 'keyword';
     } else if (valueType === 'retry') {
       tokenType = 'keyword';
     } else if (valueType === 'done' || valueType === 'continue') {

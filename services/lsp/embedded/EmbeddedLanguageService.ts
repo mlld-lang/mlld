@@ -3,7 +3,37 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { ISemanticToken } from '@services/lsp/types';
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+export function resolveEmbeddedLanguageModuleDir(options: {
+  currentDir?: string;
+  importMetaUrl?: string;
+  argvPath?: string;
+  cwd?: string;
+} = {}): string {
+  const currentDir = Object.prototype.hasOwnProperty.call(options, 'currentDir')
+    ? options.currentDir
+    : (typeof __dirname === 'string' ? __dirname : undefined);
+  if (currentDir) {
+    return currentDir;
+  }
+
+  const importMetaUrl = Object.prototype.hasOwnProperty.call(options, 'importMetaUrl')
+    ? options.importMetaUrl
+    : import.meta.url;
+  if (typeof importMetaUrl === 'string' && importMetaUrl.length > 0) {
+    return path.dirname(fileURLToPath(importMetaUrl));
+  }
+
+  const argvPath = Object.prototype.hasOwnProperty.call(options, 'argvPath')
+    ? options.argvPath
+    : process.argv[1];
+  if (typeof argvPath === 'string' && argvPath.length > 0) {
+    return path.dirname(path.resolve(argvPath));
+  }
+
+  return options.cwd ?? process.cwd();
+}
+
+const MODULE_DIR = resolveEmbeddedLanguageModuleDir();
 
 /**
  * Service for parsing and tokenizing embedded language code blocks

@@ -101,7 +101,8 @@ export class TokenCoverageValidator {
       'typeParameter',    // 11
       'namespace',        // 12
       'function',         // 13
-      'modifier'          // 14 Definition directives
+      'modifier',         // 14 Definition directives
+      'enum'              // 15 Block statement brackets
     ];
 
     // Token modifiers (MUST MATCH language-server-impl.ts EXACTLY)

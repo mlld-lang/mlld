@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - URL alligator results now expose `.mx.text`, `.mx.html`, and `.mx.md` correctly. Previously, the content-type-derived accessors on `LoadContentResultURLImpl` were not propagated through the StructuredValue metadata path, so `.mx.html.isDefined()` and `.mx.md.isDefined()` returned `false` for HTML pages.
 - Guard `op:` prefix now accepts colon-compound labels (e.g., `op:tool:w`, `op:net:r`). Previously `GuardOpIdentifier` only allowed dot-separated segments, so `op:tool:w` failed to parse. Guards also now warn when a data filter like `guard before tool:w` matches a known operation label, suggesting `op:tool:w` instead.
 - Live SDK state updates now preserve their labels on the updated `@state` path/top-level export instead of collapsing those labels onto the entire reserved `@state` object, and `mlld live --stdio` now forwards `state:update.labels` through to the runtime.
+- Bundled language-server semantic highlighting no longer crashes at startup, and agent-style `when` scripts now get full token coverage instead of leaving semantic highlight gaps.
 
 ### Documentation
 - Added/updated docs for tolerant comparison (`~=` / `!~=`), privileged-guard validation guidance, and the expanded `mlld validate` JSON/context workflow.

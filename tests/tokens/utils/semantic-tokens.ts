@@ -27,7 +27,9 @@ const TOKEN_TYPES = [
   'interface',        // 10 - Interfaces (file references)
   'typeParameter',    // 11 - Type parameters (file paths in sections)
   'namespace',        // 12 - Namespaces (section names)
-  'function'          // 13 - Functions (exec invocations)
+  'function',         // 13 - Functions (exec invocations)
+  'modifier',         // 14 - Definition directives and arrow modifiers
+  'enum'              // 15 - Block statement brackets
 ];
 
 const TOKEN_MODIFIERS = [

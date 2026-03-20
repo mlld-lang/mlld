@@ -316,6 +316,16 @@ export class ASTSemanticVisitor {
           case 'stream':
           case 'inlineValue':
           case 'pair':
+          case 'CondensedPipe':
+          case 'GuardFilter':
+          case 'GuardBlock':
+          case 'GuardRule':
+          case 'GuardAction':
+          case 'section':
+          case 'arraySlice':
+          case 'variableIndex':
+          case 'consumed':
+          case 'string':
             this.visitChildren(node, actualContext);
             break;
           case 'PathSeparator':

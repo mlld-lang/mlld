@@ -108,7 +108,7 @@ export class NodeExpectationBuilder {
       nodeType: node.type,
       location: node.location,
       expectedTokenTypes,
-      mustBeCovered,
+      mustBeCovered: mustBeCovered && expectedTokenTypes.length > 0,
       context: { ...context },
       text
     });
