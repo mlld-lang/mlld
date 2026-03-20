@@ -468,6 +468,7 @@ mlld live --stdio
   "payload": {"key": "value"},
   "state": {"sessionId": "123"},
   "dynamicModules": {"@custom": {"data": [1,2,3]}},
+  "mcpServers": {"tools": "uv run python3 server.py"},
   "allowAbsolutePaths": true
 }
 ```
@@ -480,10 +481,13 @@ mlld live --stdio
   "payload": {"task": "analyze"},
   "state": {"conversationId": "abc"},
   "dynamicModules": {"@tools": "export @search = ..."},
+  "mcpServers": {"tools": "uv run python3 server.py --config abc"},
   "timeoutMs": 30000,
   "mode": "markdown"
 }
 ```
+
+`mcpServers` maps logical names to MCP server commands. `import tools from mcp "tools"` in the script resolves against this map before treating the spec as a shell command. Each request gets its own server lifecycle.
 
 **State updates** (during execution):
 

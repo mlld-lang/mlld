@@ -55,6 +55,17 @@ Features:
 - Payload injection via `@payload`, including per-field labels via `payloadLabels`
 - State writes via `state://` protocol
 - Stream handles can apply labeled in-flight state updates with `updateState(path, value, labels?)`
+- `mcpServers` maps logical names to MCP server commands per-execution
+
+**MCP server injection** lets parallel `execute()` calls each get independent MCP server instances:
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  mcpServers: { tools: 'uv run python3 server.py --config abc' }
+});
+```
+
+The script uses `import tools from mcp "tools" as @t` — `"tools"` resolves to the SDK-provided command instead of being treated as a shell command.
 
 ## @state Module
 
