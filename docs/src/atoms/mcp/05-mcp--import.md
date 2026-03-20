@@ -31,6 +31,17 @@ Namespace import requires `as @alias`.
 
 **Name conversion** is automatic. MCP's `list_directory` becomes mlld's `@listDirectory`. The mapping works in both directions.
 
+**Type coercion** is automatic. Arguments are coerced to match the MCP tool's `inputSchema` types before dispatch. A string where the schema expects an array is wrapped (`"x"` → `["x"]`), string numbers are parsed, `"true"`/`"false"` become booleans, and JSON strings are parsed for object/array types.
+
+**Name-based argument matching:** When calling an MCP tool with variable references whose names match schema properties, arguments are matched by name instead of position:
+
+```mlld
+exe createEvent(title, participants, date) =
+  @mcp.createCalendarEvent(@title, @participants, @date)
+```
+
+Even if the MCP schema declares `participants` before `title`, mlld matches `@title` to the `title` property and `@participants` to `participants`. Falls back to positional mapping when arg names don't match.
+
 **SDK server injection:** When using the SDK, `mcpServers` maps logical names to commands per-execution. `import tools from mcp "name"` checks the map before treating the spec as a shell command:
 
 ```python

@@ -1555,11 +1555,13 @@ async function evaluateExecInvocationInternal(
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
   const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
   const expressionSourceVariables: (Variable | undefined)[] = new Array(args.length);
+  const argSourceNames: (string | undefined)[] = new Array(args.length);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
       const varRef = arg as any;
       const varName = varRef.identifier;
+      argSourceNames[i] = varName;
       const variable = env.getVariable(varName);
       if (variable && !varRef.fields) {
         // GOTCHA: Don't preserve template variables after interpolation,
@@ -1630,6 +1632,7 @@ async function evaluateExecInvocationInternal(
     originalVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     guardVariableCandidates.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     expressionSourceVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+    argSourceNames.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
   }
   
   const guardHelperImpl =
@@ -1875,6 +1878,7 @@ async function evaluateExecInvocationInternal(
     variable,
     params,
     evaluatedArgs,
+    argSourceNames,
     resultSecurityDescriptor,
     exeLabels,
     services: {

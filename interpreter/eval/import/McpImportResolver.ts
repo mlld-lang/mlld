@@ -79,6 +79,81 @@ export function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[];
   return { paramNames, paramTypes };
 }
 
+/**
+ * Coerce argument values to match the types declared in the MCP tool's inputSchema.
+ * LLMs frequently produce string representations of non-string types.
+ */
+export function coerceMcpArgs(
+  payload: Record<string, unknown>,
+  paramTypes: Record<string, string>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    const schemaType = paramTypes[key];
+    if (!schemaType || schemaType === 'string') {
+      result[key] = value;
+      continue;
+    }
+    result[key] = coerceValue(value, schemaType);
+  }
+  return result;
+}
+
+function coerceValue(value: unknown, schemaType: string): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  switch (schemaType) {
+    case 'array':
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.startsWith('[')) {
+          try { return JSON.parse(trimmed); } catch { /* fall through */ }
+        }
+        // wrap single value
+        return [value];
+      }
+      return [value];
+
+    case 'integer':
+    case 'number': {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const n = schemaType === 'integer' ? parseInt(value, 10) : parseFloat(value);
+        if (!isNaN(n)) return n;
+      }
+      return value;
+    }
+
+    case 'boolean':
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        if (value.toLowerCase() === 'true') return true;
+        if (value.toLowerCase() === 'false') return false;
+      }
+      return value;
+
+    case 'null':
+      if (typeof value === 'string' && value.toLowerCase() === 'null') return null;
+      return value;
+
+    case 'object':
+      if (typeof value === 'object' && !Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.startsWith('{')) {
+          try { return JSON.parse(trimmed); } catch { /* fall through */ }
+        }
+      }
+      return value;
+
+    default:
+      return value;
+  }
+}
+
 export function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unknown> {
   if (args.length === 0) {
     return {};
