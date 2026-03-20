@@ -581,7 +581,7 @@ async function evaluateExecInvocationInternal(
   // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
   const isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
     && existingVar.mx.labels.includes('recursive');
-  const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
+  let shouldTrackResolution = !isBuiltinCommand && !isReservedName;
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -598,6 +598,9 @@ async function evaluateExecInvocationInternal(
       if (namespaceCandidate.found) {
         variable = namespaceCandidate.value;
         namespaceMethodPreferred = true;
+        // @mcp.sendEmail is not @sendEmail — namespace-qualified calls must not
+        // participate in recursion tracking for the unqualified method name.
+        shouldTrackResolution = false;
       }
     }
 
