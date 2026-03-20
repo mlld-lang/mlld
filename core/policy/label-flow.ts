@@ -259,9 +259,11 @@ function checkBuiltinPolicyRules(
   const hasSecret = inputTaint.includes('secret');
   const hasSensitive = inputTaint.includes('sensitive');
   const hasUntrusted = inputTaint.includes('untrusted');
+  const hasInfluenced = inputTaint.includes('influenced');
   const hasExfil = hasTargetLabel(opTargets, 'exfil');
   const hasSend = hasTargetLabel(opTargets, 'exfil:send');
   const hasDestructive = hasTargetLabel(opTargets, 'destructive');
+  const hasAdvice = hasTargetLabel(opTargets, 'advice');
   const hasTargetedDestructive = hasTargetLabel(opTargets, 'destructive:targeted');
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
   const primaryInput = ctx.inputs?.[0];
@@ -334,6 +336,15 @@ function checkBuiltinPolicyRules(
         rule: 'policy.defaults.rules.no-untrusted-privileged',
         label: 'untrusted',
         matched: 'privileged'
+      };
+    }
+    if (rule === 'no-influenced-advice' && hasInfluenced && hasAdvice) {
+      return {
+        allowed: false,
+        reason: "Rule 'no-influenced-advice': label 'influenced' cannot flow to 'advice' — use structured extraction to debias evaluative output",
+        rule: 'policy.defaults.rules.no-influenced-advice',
+        label: 'influenced',
+        matched: 'advice'
       };
     }
   }

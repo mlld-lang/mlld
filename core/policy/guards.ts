@@ -150,6 +150,17 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         locked: policyLocked
       }));
     }
+    if (rule === 'no-influenced-advice') {
+      guards.push(makeDataRuleGuard({
+        name: '__policy_rule_no_influenced_advice',
+        label: 'influenced',
+        operationLabel: 'advice',
+        reason: "Rule 'no-influenced-advice': label 'influenced' cannot flow to 'advice' — use structured extraction to debias evaluative output",
+        operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
+      }));
+    }
   }
 
   const allow = policy.allow;

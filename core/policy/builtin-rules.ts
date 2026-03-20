@@ -9,6 +9,7 @@ export const BUILTIN_POLICY_RULES = [
   'no-destroy-unknown',
   'no-untrusted-destructive',
   'no-untrusted-privileged',
+  'no-influenced-advice',
   'untrusted-llms-get-influenced'
 ] as const;
 
