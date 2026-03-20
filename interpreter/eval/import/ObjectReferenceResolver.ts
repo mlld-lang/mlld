@@ -149,8 +149,11 @@ export class ObjectReferenceResolver {
 
       const result = {
         __executable: true,
+        name: execVar.name,
         value: execVar.value,
         paramNames: execVar.paramNames,
+        paramTypes: execVar.paramTypes,
+        description: execVar.description,
         executableDef: execVar.internal?.executableDef,
         mx: serializedCtx,
         internal: serializedInternal
@@ -189,8 +192,11 @@ export class ObjectReferenceResolver {
 
         result[name] = {
           __executable: true,
+          name: execVar.name,
           value: execVar.value,
           paramNames: execVar.paramNames,
+          paramTypes: execVar.paramTypes,
+          description: execVar.description,
           executableDef: execVar.internal?.executableDef,
           mx: serializedCtx,
           internal: serializedInternal

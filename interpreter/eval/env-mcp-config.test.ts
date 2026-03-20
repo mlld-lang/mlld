@@ -272,4 +272,36 @@ describe('box MCP config integration', () => {
       environment?.cleanup();
     }
   });
+
+  it('preserves imported executable arrays when passed to config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/mcp_active.mld', [
+      '/exe tool:w @send_email(recipient, subject, body) = `sent:@subject`',
+      '/var @toolList = [@send_email]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/exe llm @agent(prompt, config) = `@mx.llm.allowed`',
+      '/show @agent("Email the summary", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__send_email');
+    } finally {
+      environment?.cleanup();
+    }
+  });
 });
