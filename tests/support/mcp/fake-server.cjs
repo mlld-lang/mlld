@@ -18,6 +18,35 @@ const tools = [
       properties: {},
       required: []
     }
+  },
+  {
+    name: 'create_event',
+    description: 'Create a calendar event (typed params for coercion tests)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Event title' },
+        participants: { type: 'array', description: 'List of participants' },
+        count: { type: 'integer', description: 'Number of attendees' },
+        all_day: { type: 'boolean', description: 'All day event' }
+      },
+      required: ['title', 'participants']
+    }
+  },
+  {
+    name: 'type_mirror',
+    description: 'Returns JSON with the type and value of each arg',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        str_arg: { type: 'string' },
+        arr_arg: { type: 'array' },
+        int_arg: { type: 'integer' },
+        num_arg: { type: 'number' },
+        bool_arg: { type: 'boolean' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -71,6 +100,22 @@ rl.on('line', line => {
     }
     if (toolName === 'ping') {
       respond(id ?? null, { content: [{ type: 'text', text: 'pong' }] });
+      return;
+    }
+    if (toolName === 'create_event') {
+      const parts = [];
+      parts.push(`title=${JSON.stringify(args.title)}`);
+      parts.push(`participants=${JSON.stringify(args.participants)}`);
+      if (args.count !== undefined) parts.push(`count=${JSON.stringify(args.count)}`);
+      if (args.all_day !== undefined) parts.push(`all_day=${JSON.stringify(args.all_day)}`);
+      respond(id ?? null, { content: [{ type: 'text', text: parts.join(' ') }] });
+      return;
+    }
+    if (toolName === 'type_mirror') {
+      const entries = Object.entries(args).map(([k, v]) =>
+        `${k}:${typeof v === 'object' && v !== null ? (Array.isArray(v) ? 'array' : 'object') : typeof v}=${JSON.stringify(v)}`
+      );
+      respond(id ?? null, { content: [{ type: 'text', text: entries.join(' ') }] });
       return;
     }
     respond(id ?? null, null, { code: -32601, message: `Tool '${toolName}' not found` });
