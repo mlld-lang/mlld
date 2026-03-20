@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { coerceMcpArgs, buildMcpArgs } from './McpImportResolver';
+import { coerceMcpArgs, buildMcpArgs, deriveMcpParamInfo } from './McpImportResolver';
+import type { MCPToolSchema } from '@interpreter/mcp/McpImportManager';
 
 describe('coerceMcpArgs', () => {
   it('passes string values through when schema type is string', () => {
@@ -66,9 +67,9 @@ describe('coerceMcpArgs', () => {
     expect(result).toEqual({ active: true });
   });
 
-  it('coerces string "null" to null', () => {
+  it('omits string "null" for null-typed params', () => {
     const result = coerceMcpArgs({ value: 'null' }, { value: 'null' });
-    expect(result).toEqual({ value: null });
+    expect(result).not.toHaveProperty('value');
   });
 
   it('parses JSON object string when schema says object', () => {
@@ -105,18 +106,36 @@ describe('coerceMcpArgs', () => {
     });
   });
 
-  it('passes null and undefined through unchanged', () => {
+  it('omits null, undefined, and string "null" from payload', () => {
     const result = coerceMcpArgs(
-      { a: null, b: undefined },
-      { a: 'array', b: 'integer' }
+      { a: null, b: undefined, c: 'kept', d: 'null', e: ' null ' },
+      { a: 'array', b: 'integer', c: 'string', d: 'string', e: 'integer' }
     );
-    expect(result.a).toBeNull();
-    expect(result.b).toBeUndefined();
+    expect(result).not.toHaveProperty('a');
+    expect(result).not.toHaveProperty('b');
+    expect(result).not.toHaveProperty('d');
+    expect(result).not.toHaveProperty('e');
+    expect(result.c).toBe('kept');
   });
 
   it('wraps non-string non-array values to array', () => {
     const result = coerceMcpArgs({ ids: 42 }, { ids: 'array' });
     expect(result).toEqual({ ids: [42] });
+  });
+
+  it('coerces empty string to empty array', () => {
+    const result = coerceMcpArgs({ tags: '' }, { tags: 'array' });
+    expect(result).toEqual({ tags: [] });
+  });
+
+  it('coerces whitespace-only string to empty array', () => {
+    const result = coerceMcpArgs({ tags: '  ' }, { tags: 'array' });
+    expect(result).toEqual({ tags: [] });
+  });
+
+  it('omits string "null" for array-typed params', () => {
+    const result = coerceMcpArgs({ cc: 'null' }, { cc: 'array' });
+    expect(result).not.toHaveProperty('cc');
   });
 });
 
@@ -133,5 +152,45 @@ describe('buildMcpArgs', () => {
 
   it('returns empty object for no args', () => {
     expect(buildMcpArgs(['name'], [])).toEqual({});
+  });
+});
+
+describe('deriveMcpParamInfo', () => {
+  it('extracts type from anyOf nullable schemas', () => {
+    const tool: MCPToolSchema = {
+      name: 'send_email',
+      description: 'Send email',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          recipients: { type: 'array', items: { type: 'string' } },
+          subject: { type: 'string' },
+          attachments: { anyOf: [{ type: 'array', items: { type: 'object' } }, { type: 'null' }], default: null },
+          cc: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], default: null }
+        },
+        required: ['recipients', 'subject']
+      }
+    };
+    const info = deriveMcpParamInfo(tool);
+    expect(info.paramTypes.recipients).toBe('array');
+    expect(info.paramTypes.subject).toBe('string');
+    expect(info.paramTypes.attachments).toBe('array');
+    expect(info.paramTypes.cc).toBe('array');
+  });
+
+  it('extracts type from oneOf nullable schemas', () => {
+    const tool: MCPToolSchema = {
+      name: 'test',
+      description: 'test',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          count: { oneOf: [{ type: 'integer' }, { type: 'null' }] }
+        },
+        required: []
+      }
+    };
+    const info = deriveMcpParamInfo(tool);
+    expect(info.paramTypes.count).toBe('integer');
   });
 });

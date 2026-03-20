@@ -116,11 +116,15 @@ export class ModuleExportSerializer {
     }
 
     if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
-      return this.objectResolver.resolveObjectReferences(
+      const resolved = this.objectResolver.resolveObjectReferences(
         variable.value,
         context.childVars,
         { resolveStrings: context.options?.resolveStrings }
       );
+      if (variable.internal?.isNamespace && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
+        (resolved as Record<string, unknown>).__namespace = true;
+      }
+      return resolved;
     }
 
     return variable.value;

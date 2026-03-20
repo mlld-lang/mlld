@@ -34,6 +34,22 @@ const tools = [
     }
   },
   {
+    name: 'send_email',
+    description: 'Send an email',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recipients: { type: 'array', description: 'Email recipients' },
+        subject: { type: 'string', description: 'Email subject' },
+        body: { type: 'string', description: 'Email body' },
+        attachments: { type: 'array', description: 'File attachments' },
+        cc: { type: 'array', description: 'CC recipients' },
+        bcc: { type: 'array', description: 'BCC recipients' }
+      },
+      required: ['recipients', 'subject', 'body']
+    }
+  },
+  {
     name: 'type_mirror',
     description: 'Returns JSON with the type and value of each arg',
     inputSchema: {
@@ -108,6 +124,17 @@ rl.on('line', line => {
       parts.push(`participants=${JSON.stringify(args.participants)}`);
       if (args.count !== undefined) parts.push(`count=${JSON.stringify(args.count)}`);
       if (args.all_day !== undefined) parts.push(`all_day=${JSON.stringify(args.all_day)}`);
+      respond(id ?? null, { content: [{ type: 'text', text: parts.join(' ') }] });
+      return;
+    }
+    if (toolName === 'send_email') {
+      const parts = [];
+      parts.push(`recipients=${JSON.stringify(args.recipients)}`);
+      parts.push(`subject=${JSON.stringify(args.subject)}`);
+      parts.push(`body=${JSON.stringify(args.body)}`);
+      if (args.attachments !== undefined) parts.push(`attachments=${JSON.stringify(args.attachments)}`);
+      if (args.cc !== undefined) parts.push(`cc=${JSON.stringify(args.cc)}`);
+      if (args.bcc !== undefined) parts.push(`bcc=${JSON.stringify(args.bcc)}`);
       respond(id ?? null, { content: [{ type: 'text', text: parts.join(' ') }] });
       return;
     }

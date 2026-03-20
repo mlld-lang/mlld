@@ -835,8 +835,7 @@ async function evaluateWhenExpressionInternal(
         throw conditionError;
       }
       if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
-        errors.push(conditionError);
-        continue;
+        throw conditionError;
       }
 
       // Let the error propagate - it's expected in retry scenarios

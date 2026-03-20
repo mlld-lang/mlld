@@ -40,7 +40,12 @@ export class ObjectImportStrategy {
       } catch {}
     }
 
-    return createObjectVariable(
+    const isNamespace = normalizedObject && (normalizedObject as any).__namespace === true;
+    if (isNamespace) {
+      delete (normalizedObject as any).__namespace;
+    }
+
+    const variable = createObjectVariable(
       request.name,
       normalizedObject,
       isComplex,
@@ -51,6 +56,12 @@ export class ObjectImportStrategy {
         originalName: request.originalName !== request.name ? request.originalName : undefined
       })
     );
+
+    if (isNamespace) {
+      variable.internal = { ...(variable.internal ?? {}), isNamespace: true };
+    }
+
+    return variable;
   }
 
   private isVariableLike(value: any): boolean {

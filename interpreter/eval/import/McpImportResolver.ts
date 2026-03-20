@@ -73,10 +73,24 @@ export function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[];
   const paramNames = [...required, ...optional];
   const paramTypes: Record<string, string> = {};
   for (const [name, schema] of Object.entries(properties)) {
-    const raw = typeof schema?.type === 'string' ? schema.type.toLowerCase() : 'string';
-    paramTypes[name] = raw;
+    paramTypes[name] = extractSchemaType(schema);
   }
   return { paramNames, paramTypes };
+}
+
+function extractSchemaType(schema: any): string {
+  if (typeof schema?.type === 'string') {
+    return schema.type.toLowerCase();
+  }
+  if (Array.isArray(schema?.anyOf)) {
+    const nonNull = schema.anyOf.find((s: any) => s?.type && s.type !== 'null');
+    if (nonNull?.type) return nonNull.type.toLowerCase();
+  }
+  if (Array.isArray(schema?.oneOf)) {
+    const nonNull = schema.oneOf.find((s: any) => s?.type && s.type !== 'null');
+    if (nonNull?.type) return nonNull.type.toLowerCase();
+  }
+  return 'string';
 }
 
 /**
@@ -89,6 +103,12 @@ export function coerceMcpArgs(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    if (typeof value === 'string' && value.trim() === 'null') {
+      continue;
+    }
     const schemaType = paramTypes[key];
     if (!schemaType || schemaType === 'string') {
       result[key] = value;
@@ -109,6 +129,7 @@ function coerceValue(value: unknown, schemaType: string): unknown {
       if (Array.isArray(value)) return value;
       if (typeof value === 'string') {
         const trimmed = value.trim();
+        if (trimmed.length === 0) return [];
         if (trimmed.startsWith('[')) {
           try { return JSON.parse(trimmed); } catch { /* fall through */ }
         }
