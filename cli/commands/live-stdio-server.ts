@@ -70,6 +70,7 @@ interface ProcessRequestParams {
   dynamicModuleSource?: string;
   dynamicModuleMode?: MlldMode;
   allowAbsolutePaths?: boolean;
+  mcpServers?: Record<string, string>;
 }
 
 interface ExecuteRequestParams {
@@ -82,6 +83,7 @@ interface ExecuteRequestParams {
   timeoutMs?: number;
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
+  mcpServers?: Record<string, string>;
 }
 
 interface AnalyzeRequestParams {
@@ -556,8 +558,9 @@ export class LiveStdioServer {
       dynamicModuleSource: parsed.dynamicModuleSource,
       payloadLabels: parsed.payloadLabels,
       dynamicModuleMode: parsed.dynamicModuleMode,
-      allowAbsolutePaths: parsed.allowAbsolutePaths
-    })) as StreamExecution;
+      allowAbsolutePaths: parsed.allowAbsolutePaths,
+      mcpServers: parsed.mcpServers
+    } as any)) as StreamExecution;
 
     await this.streamExecution(requestId, streamHandle);
   }
@@ -580,6 +583,7 @@ export class LiveStdioServer {
       timeoutMs: parsed.timeoutMs,
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mode: parsed.mode,
+      mcpServers: parsed.mcpServers,
       fileSystem,
       pathService,
       stream: true
@@ -715,7 +719,8 @@ export class LiveStdioServer {
         typeof params.dynamicModuleSource === 'string' ? params.dynamicModuleSource : undefined,
       dynamicModuleMode: this.parseMode(params.dynamicModuleMode),
       allowAbsolutePaths:
-        typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined
+        typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
+      mcpServers: this.parseMcpServers(params.mcpServers)
     };
   }
 
@@ -739,8 +744,20 @@ export class LiveStdioServer {
       timeoutMs: typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined,
       allowAbsolutePaths:
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
-      mode: this.parseMode(params.mode)
+      mode: this.parseMode(params.mode),
+      mcpServers: this.parseMcpServers(params.mcpServers)
     };
+  }
+
+  private parseMcpServers(value: unknown): Record<string, string> | undefined {
+    if (!isRecord(value)) return undefined;
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === 'string') {
+        result[k] = v;
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
   }
 
   private parseAnalyzeParams(params: unknown): AnalyzeRequestParams {

@@ -78,6 +78,10 @@ Live transports can also emit structured `guard_denial` events before a request 
 
 Structured execute results also expose `denials`, a list of structured guard/policy label-flow denials observed during the run.
 
+## MCP Server Injection
+
+`execute` and `process` accept an `mcp_servers` map (logical name → shell command). When a script uses `import tools from mcp "name"`, the runtime checks this map before treating the spec as a command. Each execution gets its own server lifecycle, enabling parallel calls with independent MCP server state.
+
 ## Requirements
 
 - `mlld` CLI on PATH (or command override)

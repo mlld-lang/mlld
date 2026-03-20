@@ -602,6 +602,9 @@ export async function interpret(
         })
   );
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
+  if ((options as any).mcpServers) {
+    env.setMcpServerMap((options as any).mcpServers);
+  }
   env.setProvenanceEnabled(provenanceEnabled);
   env.setCheckpointScriptResumeMode(scriptResumeMode);
   env.setCheckpointResumeOverride(options.resume !== undefined);

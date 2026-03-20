@@ -473,6 +473,7 @@ class Client:
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
         timeout: float | None = None,
+        mcp_servers: dict[str, str] | None = None,
     ) -> str:
         """
         Execute an mlld script string and return the output.
@@ -488,6 +489,7 @@ class Client:
             mode: Parsing mode (strict|markdown).
             allow_absolute_paths: Allow absolute path access when True.
             timeout: Override the client default timeout.
+            mcp_servers: Map of logical name to MCP server command.
 
         Returns:
             The script output as a string.
@@ -507,6 +509,7 @@ class Client:
             mode=mode,
             allow_absolute_paths=allow_absolute_paths,
             timeout=timeout,
+            mcp_servers=mcp_servers,
         ).result()
 
     def process_async(
@@ -522,6 +525,7 @@ class Client:
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
         timeout: float | None = None,
+        mcp_servers: dict[str, str] | None = None,
     ) -> ProcessHandle:
         """
         Start an mlld script execution and return an in-flight request handle.
@@ -545,6 +549,8 @@ class Client:
             params["mode"] = mode
         if allow_absolute_paths is not None:
             params["allowAbsolutePaths"] = allow_absolute_paths
+        if mcp_servers is not None:
+            params["mcpServers"] = mcp_servers
 
         request_id, response_queue = self._send_request("process", params)
         return ProcessHandle(
@@ -566,6 +572,7 @@ class Client:
         allow_absolute_paths: bool | None = None,
         mode: str | None = None,
         timeout: float | None = None,
+        mcp_servers: dict[str, str] | None = None,
     ) -> ExecuteResult:
         """
         Run an mlld file with a payload and optional state.
@@ -580,6 +587,8 @@ class Client:
             allow_absolute_paths: Allow absolute path access when True.
             mode: Parsing mode (strict|markdown).
             timeout: Override the client default timeout.
+            mcp_servers: Map of logical name to MCP server command. Allows
+                ``import tools from mcp "name"`` to resolve to the mapped command.
 
         Returns:
             ExecuteResult with output, state writes, and metrics.
@@ -598,6 +607,7 @@ class Client:
             allow_absolute_paths=allow_absolute_paths,
             mode=mode,
             timeout=timeout,
+            mcp_servers=mcp_servers,
         ).result()
 
     def execute_async(
@@ -612,6 +622,7 @@ class Client:
         allow_absolute_paths: bool | None = None,
         mode: str | None = None,
         timeout: float | None = None,
+        mcp_servers: dict[str, str] | None = None,
     ) -> ExecuteHandle:
         """
         Start an mlld file execution and return an in-flight request handle.
@@ -633,6 +644,8 @@ class Client:
             params["allowAbsolutePaths"] = allow_absolute_paths
         if mode is not None:
             params["mode"] = mode
+        if mcp_servers is not None:
+            params["mcpServers"] = mcp_servers
 
         request_id, response_queue = self._send_request("execute", params)
         return ExecuteHandle(

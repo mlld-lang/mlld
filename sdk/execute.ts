@@ -47,6 +47,7 @@ export interface ExecuteOptions {
   fork?: string;
   checkpointScriptName?: string;
   checkpointCacheRootDir?: string;
+  mcpServers?: Record<string, string>;
 }
 
 const astCache = new MemoryAstCache();
@@ -99,7 +100,8 @@ export async function execute(
     resume: effectiveResume,
     fork: options.fork,
     checkpointScriptName: options.checkpointScriptName,
-    checkpointCacheRootDir: options.checkpointCacheRootDir
+    checkpointCacheRootDir: options.checkpointCacheRootDir,
+    mcpServers: options.mcpServers
   } as InterpretOptions;
   const signingContext = (options as { signingContext?: unknown }).signingContext;
   if (signingContext !== undefined) {

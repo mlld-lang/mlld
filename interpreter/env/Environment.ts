@@ -251,6 +251,7 @@ export class Environment
   private guardRegistry: GuardRegistry;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
+  private mcpServerMap?: Record<string, string>;
 
   // Shadow environments for language-specific function injection
   private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
@@ -1276,6 +1277,15 @@ export class Environment
     // Get from this environment or parent
     if (this.registryManager) return this.registryManager;
     return this.parent?.getRegistryManager();
+  }
+
+  setMcpServerMap(map: Record<string, string>): void {
+    this.mcpServerMap = map;
+  }
+
+  getMcpServerMap(): Record<string, string> | undefined {
+    if (this.mcpServerMap) return this.mcpServerMap;
+    return this.parent?.getMcpServerMap();
   }
 
   getMcpImportManager(): McpImportManager {

@@ -78,6 +78,7 @@ export interface InterpretOptions {
   fork?: string;
   checkpointScriptName?: string;
   checkpointCacheRootDir?: string;
+  mcpServers?: Record<string, string>;
 }
 
 export interface StructuredEffect extends Effect {

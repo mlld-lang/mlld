@@ -31,4 +31,17 @@ Namespace import requires `as @alias`.
 
 **Name conversion** is automatic. MCP's `list_directory` becomes mlld's `@listDirectory`. The mapping works in both directions.
 
+**SDK server injection:** When using the SDK, `mcpServers` maps logical names to commands per-execution. `import tools from mcp "name"` checks the map before treating the spec as a shell command:
+
+```python
+client.execute('./agent.mld', payload,
+    mcp_servers={'tools': f'uv run python3 server.py {config}'})
+```
+
+```mlld
+import tools from mcp "tools" as @t
+```
+
+Each `execute()` call gets an independent server lifecycle, enabling parallel executions with isolated MCP state.
+
 **Security:** All MCP tool outputs carry `src:mcp` taint automatically. See `mcp-security` for propagation details, `mcp-guards` for filtering, `mcp-policy` for flow restrictions.

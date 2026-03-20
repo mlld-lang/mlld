@@ -51,6 +51,22 @@ print(result.output)
 client.close()
 ```
 
+## MCP Server Injection
+
+Pass per-execution MCP server commands so each parallel call gets its own server instance:
+
+```python
+result = client.execute(
+    './agent.mld',
+    payload,
+    mcp_servers={
+        'tools': f'uv run python3 mcp_server.py {config_b64}'
+    },
+)
+```
+
+In the mlld script, `import tools from mcp "tools" as @mcp` resolves `"tools"` to the command provided by the SDK. Each `execute()` call gets an independent server lifecycle.
+
 ## Filesystem Integrity
 
 ```python
@@ -95,9 +111,9 @@ print(handle.result())
 ### Client
 
 - `Client(command='mlld', command_args=None, timeout=30.0, working_dir=None)`
-- `process(script, *, file_path=None, payload=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None)`
+- `process(script, *, file_path=None, payload=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None, mcp_servers=None)`
 - `process_async(...) -> ProcessHandle`
-- `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None)`
+- `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None, mcp_servers=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
 - `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
