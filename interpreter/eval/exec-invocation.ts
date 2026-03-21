@@ -32,7 +32,11 @@ import {
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
-import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import {
+  makeSecurityDescriptor,
+  normalizeSecurityDescriptor,
+  type SecurityDescriptor
+} from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -1546,7 +1550,8 @@ async function evaluateExecInvocationInternal(
         const callConfig = await createCallMcpConfig({
           tools: normalized,
           env: execEnv,
-          workingDirectory
+          workingDirectory,
+          conversationDescriptor: resultSecurityDescriptor
         });
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
@@ -1659,6 +1664,14 @@ async function evaluateExecInvocationInternal(
       });
     }
   }
+  const inputSecurityDescriptor = normalizeSecurityDescriptor(
+    (node as any).meta?.inputSecurityDescriptor as SecurityDescriptor | undefined
+  );
+  if (inputSecurityDescriptor) {
+    resultSecurityDescriptor = resultSecurityDescriptor
+      ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
+      : inputSecurityDescriptor;
+  }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
   let toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
@@ -1719,9 +1732,15 @@ async function evaluateExecInvocationInternal(
       evaluatedArgStrings,
       guardVariableCandidates,
       expressionSourceVariables,
+      inputSecurityDescriptor,
       mcpSecurityDescriptor,
       argNames: params
     });
+    for (const entry of guardInputsWithMapping) {
+      if (entry.index >= 0 && entry.index < guardVariableCandidates.length) {
+        guardVariableCandidates[entry.index] = entry.variable;
+      }
+    }
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
     const {

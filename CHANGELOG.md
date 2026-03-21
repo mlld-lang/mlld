@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live SDK state updates now preserve their labels on the updated `@state` path/top-level export instead of collapsing those labels onto the entire reserved `@state` object, and `mlld live --stdio` now forwards `state:update.labels` through to the runtime.
 - Bundled language-server semantic highlighting no longer crashes at startup, and agent-style `when` scripts now get full token coverage instead of leaving semantic highlight gaps.
 - Imported executable arrays now work in `exe llm` `config.tools`, so tool lists exported from helper modules preserve their function references instead of re-resolving in the caller scope.
+- Native `exe llm` tool calling via `config.tools` now preserves label-flow provenance across the internal function-tool bridge. Tool-call args inherit the enclosing LLM/input descriptor plus prior tool-result taint, so label-based defenses like `untrusted-llms-get-influenced` and `no-untrusted-destructive` apply to subsequent native function tool calls instead of resetting at the JSON bridge boundary.
 
 ### Documentation
 - Added/updated docs for tolerant comparison (`~=` / `!~=`), privileged-guard validation guidance, and the expanded `mlld validate` JSON/context workflow.

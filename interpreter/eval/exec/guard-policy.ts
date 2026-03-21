@@ -75,6 +75,7 @@ export type PrepareExecGuardInputsOptions = {
   evaluatedArgStrings: string[];
   guardVariableCandidates: (Variable | undefined)[];
   expressionSourceVariables: (Variable | undefined)[];
+  inputSecurityDescriptor?: SecurityDescriptor;
   mcpSecurityDescriptor?: SecurityDescriptor;
   argNames?: readonly GuardArgName[];
 };
@@ -256,6 +257,7 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     evaluatedArgStrings,
     guardVariableCandidates,
     expressionSourceVariables,
+    inputSecurityDescriptor,
     mcpSecurityDescriptor,
     argNames
   } = options;
@@ -282,13 +284,22 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     }
   );
 
-  if (mcpSecurityDescriptor) {
+  const descriptorOverrides = [inputSecurityDescriptor, mcpSecurityDescriptor].filter(
+    (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
+  );
+
+  if (descriptorOverrides.length > 0) {
+    const mergedOverrideDescriptor =
+      descriptorOverrides.length === 1
+        ? descriptorOverrides[0]
+        : env.mergeSecurityDescriptors(...descriptorOverrides);
+
     if (guardInputsWithMapping.length === 0) {
       const syntheticInput = createSimpleTextVariable('__guard_input__', '', DEFAULT_GUARD_INPUT_SOURCE);
       if (!syntheticInput.mx) {
         syntheticInput.mx = {};
       }
-      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mcpSecurityDescriptor);
+      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mergedOverrideDescriptor);
       if ((syntheticInput.mx as any).mxCache) {
         delete (syntheticInput.mx as any).mxCache;
       }
@@ -299,8 +310,8 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
       const base = entry.variable;
       const baseDescriptor = getVariableSecurityDescriptor(base);
       const mergedDescriptor = baseDescriptor
-        ? env.mergeSecurityDescriptors(baseDescriptor, mcpSecurityDescriptor)
-        : mcpSecurityDescriptor;
+        ? env.mergeSecurityDescriptors(baseDescriptor, mergedOverrideDescriptor)
+        : mergedOverrideDescriptor;
       const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
       if (!cloned.mx) {
         cloned.mx = {};

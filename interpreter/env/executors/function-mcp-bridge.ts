@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
+import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { generateToolSchema } from '@cli/mcp/SchemaGenerator';
@@ -32,6 +33,7 @@ interface JsonRpcResponse {
 export interface FunctionMcpBridgeOptions {
   env: Environment;
   functions: Map<string, ExecutableVariable>; // key is exposed MCP tool name
+  conversationDescriptor?: SecurityDescriptor;
 }
 
 export interface FunctionMcpBridge {
@@ -50,7 +52,8 @@ class FunctionMcpBridgeServer {
   constructor(
     private readonly env: Environment,
     private readonly functions: Map<string, ExecutableVariable>,
-    private readonly socketPath: string
+    private readonly socketPath: string,
+    conversationDescriptor?: SecurityDescriptor
   ) {
     this.toolEnv = env.createChild();
     this.toolCollection = {};
@@ -86,7 +89,8 @@ class FunctionMcpBridgeServer {
 
     this.router = new FunctionRouter({
       environment: this.toolEnv,
-      toolCollection: this.toolCollection
+      toolCollection: this.toolCollection,
+      conversationDescriptor
     });
   }
 
@@ -347,7 +351,12 @@ export async function createFunctionMcpBridge(
     `mlld-toolbridge-fn-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
   );
 
-  const server = new FunctionMcpBridgeServer(options.env, options.functions, socketPath);
+  const server = new FunctionMcpBridgeServer(
+    options.env,
+    options.functions,
+    socketPath,
+    options.conversationDescriptor
+  );
   await server.start();
 
   await fs.writeFile(proxyPath, buildProxyScript(), 'utf8');

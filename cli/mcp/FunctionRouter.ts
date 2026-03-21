@@ -3,18 +3,23 @@ import type { ExecInvocation, TextNode, VariableReferenceNode, CommandReference,
 import type { DataValue, DataObjectEntry } from '@core/types/var';
 import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
+import type { SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { normalizeExecutableDescriptor } from '@interpreter/eval/pipeline/command-execution/normalize-executable';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
-import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { normalizeSecurityDescriptor } from '@core/types/security';
+import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 export interface FunctionRouterOptions {
   environment: Environment;
   toolCollection?: ToolCollection;
   toolNames?: string[];
   toolNamesAreMcp?: boolean;
+  conversationDescriptor?: SecurityDescriptor;
 }
 
 interface ExecResult {
@@ -34,12 +39,14 @@ export class FunctionRouter {
   private readonly toolNamesMcp: string[];
   private readonly toolKeyByMcpName?: Map<string, string>;
   private readonly toolNamesAreMcp: boolean;
+  private conversationDescriptor?: SecurityDescriptor;
 
   constructor(options: FunctionRouterOptions) {
     this.environment = options.environment;
     this.toolCollection = options.toolCollection;
     this.toolNames = options.toolNames;
     this.toolNamesAreMcp = options.toolNamesAreMcp ?? false;
+    this.conversationDescriptor = normalizeSecurityDescriptor(options.conversationDescriptor);
     if (this.toolCollection) {
       this.toolKeyByMcpName = this.buildToolKeyMap(this.toolCollection);
       this.toolNamesMcp = Object.keys(this.toolCollection).map(name => mlldNameToMCPName(name));
@@ -68,6 +75,7 @@ export class FunctionRouter {
     };
 
     try {
+      const toolCallSecurity = this.buildToolCallSecurityDescriptor();
       if (this.toolCollection) {
         const definition = this.toolCollection[toolKey];
         if (!definition?.mlld) {
@@ -87,9 +95,13 @@ export class FunctionRouter {
         execVar,
         resolvedArgs,
         definition.labels,
-        this.shouldUseObjectArgs(execVar)
+        this.shouldUseObjectArgs(execVar),
+        toolCallSecurity
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
+      this.mergeConversationDescriptor(
+        extractSecurityDescriptor(result.value, { recursive: true, mergeArrayElements: true })
+      );
 
         this.environment.recordToolCall({
           ...callRecord,
@@ -112,9 +124,13 @@ export class FunctionRouter {
         execVar,
         args,
         undefined,
-        this.shouldUseObjectArgs(execVar)
+        this.shouldUseObjectArgs(execVar),
+        toolCallSecurity
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
+      this.mergeConversationDescriptor(
+        extractSecurityDescriptor(result.value, { recursive: true, mergeArrayElements: true })
+      );
 
       this.environment.recordToolCall({
         ...callRecord,
@@ -236,7 +252,8 @@ export class FunctionRouter {
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     toolLabels?: string[],
-    argsAsObject?: boolean
+    argsAsObject?: boolean,
+    inputSecurityDescriptor?: SecurityDescriptor
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
@@ -260,9 +277,33 @@ export class FunctionRouter {
       commandRef,
       meta: {
         toolCallTracking: 'router',
-        ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {})
+        ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {}),
+        ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {})
       }
     } as ExecInvocation;
+  }
+
+  private buildToolCallSecurityDescriptor(): SecurityDescriptor | undefined {
+    if (!this.conversationDescriptor) {
+      return undefined;
+    }
+    const policyEnforcer = new PolicyEnforcer(this.environment.getPolicySummary());
+    return (
+      policyEnforcer.applyOutputPolicyLabels(this.conversationDescriptor, {
+        inputTaint: descriptorToInputTaint(this.conversationDescriptor),
+        exeLabels: ['llm']
+      }) ?? this.conversationDescriptor
+    );
+  }
+
+  private mergeConversationDescriptor(descriptor: SecurityDescriptor | undefined): void {
+    const normalized = normalizeSecurityDescriptor(descriptor);
+    if (!normalized) {
+      return;
+    }
+    this.conversationDescriptor = this.conversationDescriptor
+      ? this.environment.mergeSecurityDescriptors(this.conversationDescriptor, normalized)
+      : normalized;
   }
 
   private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {
