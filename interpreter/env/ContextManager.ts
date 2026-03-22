@@ -686,12 +686,13 @@ export class ContextManager {
   ): { llm: Record<string, unknown> } | null {
     if (config === undefined) return null;
     if (config === null) {
-      return { llm: { config: '', allowed: '', inBox: false, hasTools: true } };
+      return { llm: { config: '', allowed: '', native: '', inBox: false, hasTools: true } };
     }
     return {
       llm: {
         config: config.mcpConfigPath,
         allowed: config.unifiedAllowedTools,
+        native: config.nativeAllowedTools,
         inBox: config.inBox,
         hasTools: true
       }
