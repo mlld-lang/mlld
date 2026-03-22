@@ -66,15 +66,14 @@ describe('rhs content evaluator', () => {
     expect(mocks.readFileWithPolicy).toHaveBeenCalledWith(env, '/docs/readme.md', sourceLocation);
   });
 
-  it('evaluates sections via llmxml and applies asSection header transform', async () => {
+  it('evaluates sections via text extraction and applies asSection header transform', async () => {
     const env = createEnvStub();
     const interpolateWithSecurity = vi
       .fn()
       .mockResolvedValueOnce('/docs/spec.md')
       .mockResolvedValueOnce('Overview')
       .mockResolvedValueOnce('## Renamed');
-    mocks.readFileWithPolicy.mockResolvedValue('# Overview\nBody');
-    mocks.getSection.mockResolvedValue('Section Body');
+    mocks.readFileWithPolicy.mockResolvedValue('# Overview\nBody\n# Next');
 
     const evaluator = createRhsContentEvaluator(env, {
       interpolateWithSecurity,
@@ -88,15 +87,11 @@ describe('rhs content evaluator', () => {
       section: [{ type: 'Text', content: 'Overview' }]
     });
 
-    expect(result).toBe('## Renamed\nSection Body');
-    expect(mocks.getSection).toHaveBeenCalledWith('# Overview\nBody', 'Overview', {
-      includeNested: true,
-      includeTitle: true
-    });
-    expect(mocks.applyHeaderTransform).toHaveBeenCalledWith('Section Body', '## Renamed');
+    expect(result).toBe('## Renamed\n# Overview\nBody');
+    expect(mocks.applyHeaderTransform).toHaveBeenCalledWith('# Overview\nBody', '## Renamed');
   });
 
-  it('falls back to local section extraction when llmxml errors', async () => {
+  it('extracts section stopping at same-level heading', async () => {
     const env = createEnvStub();
     const interpolateWithSecurity = vi
       .fn()
@@ -105,7 +100,6 @@ describe('rhs content evaluator', () => {
     mocks.readFileWithPolicy.mockResolvedValue(
       '# Intro\nTop\n## Details\nLine A\nLine B\n## Next\nDone'
     );
-    mocks.getSection.mockRejectedValue(new Error('llmxml unavailable'));
 
     const evaluator = createRhsContentEvaluator(env, {
       interpolateWithSecurity
@@ -116,7 +110,7 @@ describe('rhs content evaluator', () => {
       section: [{ type: 'Text', content: 'Details' }]
     });
 
-    expect(result).toBe('## Details\nLine A\nLine B\n## Next\nDone');
+    expect(result).toBe('## Details\nLine A\nLine B');
   });
 
   it('applies asSection as section.renamed for single-file load-content', async () => {

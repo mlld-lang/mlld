@@ -1,10 +1,9 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
-import { llmxmlInstance } from '@interpreter/utils/llmxml-instance';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import type { Environment } from '@interpreter/env/Environment';
 import { interpolate } from '@interpreter/core/interpreter';
-import { applyHeaderTransform, extractSection } from './section-utils';
+import { applyHeaderTransform, extractMarkdownSection } from './section-utils';
 
 export interface ShowPathHandlerParams {
   directive: DirectiveNode;
@@ -79,15 +78,8 @@ export async function evaluateShowPathSection({
   const resolvedPath = await resolvePathValue(pathValue, env, collectInterpolatedDescriptor);
   let content = await readPathContent(env, resolvedPath, directiveLocation);
 
-  try {
-    const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-    content = await llmxmlInstance.getSection(content, titleWithoutHash, {
-      includeNested: true
-    });
-    content = content.trimEnd();
-  } catch {
-    content = extractSection(content, sectionTitle);
-  }
+  const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
+  content = extractMarkdownSection(content, titleWithoutHash);
 
   const newTitleNodes = directive.values?.newTitle;
   if (newTitleNodes) {
