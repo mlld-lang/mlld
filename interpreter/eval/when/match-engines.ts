@@ -1,7 +1,7 @@
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
-import type { WhenConditionPair } from '@core/types/when';
+import { normalizeWhenCondition, type WhenConditionPair } from '@core/types/when';
 import { MlldConditionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
@@ -51,7 +51,9 @@ export async function evaluateFirstMatch(
   let anyNonNoneMatched = false;
 
   for (const pair of conditions) {
-    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+    const conditionNodes = normalizeWhenCondition(pair.condition);
+
+    if (conditionNodes.length === 1 && isNoneCondition(conditionNodes[0])) {
       if (!anyNonNoneMatched) {
         const actionNodes = pair.action ?? blockAction;
         if (actionNodes) {
@@ -67,7 +69,7 @@ export async function evaluateFirstMatch(
     if (expressionValue !== undefined) {
       let conditionValue: any;
       let isNegated = false;
-      let actualCondition = pair.condition;
+      let actualCondition = conditionNodes;
 
       if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
         const unaryNode = actualCondition[0] as any;
@@ -96,7 +98,7 @@ export async function evaluateFirstMatch(
         matches = !matches;
       }
     } else {
-      matches = await runtime.evaluateCondition(pair.condition, env, variableName);
+      matches = await runtime.evaluateCondition(conditionNodes, env, variableName);
     }
 
     if (matches) {
@@ -132,11 +134,13 @@ export async function evaluateAllMatches(
 
     let allMatch = true;
     for (const pair of conditions) {
-      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+      const conditionNodes = normalizeWhenCondition(pair.condition);
+
+      if (conditionNodes.length === 1 && isNoneCondition(conditionNodes[0])) {
         continue;
       }
 
-      const conditionResult = await runtime.evaluateCondition(pair.condition, env, variableName);
+      const conditionResult = await runtime.evaluateCondition(conditionNodes, env, variableName);
       if (!conditionResult) {
         allMatch = false;
         break;
@@ -155,11 +159,13 @@ export async function evaluateAllMatches(
   let anyNonNoneMatched = false;
 
   for (const pair of conditions) {
-    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+    const conditionNodes = normalizeWhenCondition(pair.condition);
+
+    if (conditionNodes.length === 1 && isNoneCondition(conditionNodes[0])) {
       continue;
     }
 
-    const conditionResult = await runtime.evaluateCondition(pair.condition, env, variableName);
+    const conditionResult = await runtime.evaluateCondition(conditionNodes, env, variableName);
     if (conditionResult) {
       anyNonNoneMatched = true;
       if (pair.action) {
@@ -176,7 +182,9 @@ export async function evaluateAllMatches(
 
   if (!anyNonNoneMatched) {
     for (const pair of conditions) {
-      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+      const conditionNodes = normalizeWhenCondition(pair.condition);
+
+      if (conditionNodes.length === 1 && isNoneCondition(conditionNodes[0])) {
         if (pair.action) {
           const actionResult = await runtime.evaluateActionSequence(pair.action, env);
           if (runtime.isExeReturnControl(actionResult.value)) {
@@ -210,12 +218,13 @@ export async function evaluateAnyMatch(
 
   let anyMatch = false;
   for (const pair of conditions) {
-    const conditionResult = await runtime.evaluateCondition(pair.condition, env, variableName);
+    const conditionNodes = normalizeWhenCondition(pair.condition);
+    const conditionResult = await runtime.evaluateCondition(conditionNodes, env, variableName);
     if (conditionResult) {
       anyMatch = true;
 
-      if (variableName && pair.condition.length > 0) {
-        const pairResult = await runtime.evaluateNode(pair.condition, env);
+      if (variableName && conditionNodes.length > 0) {
+        const pairResult = await runtime.evaluateNode(conditionNodes, env);
         const conditionValue = pairResult.value;
 
         const variable = typeof conditionValue === 'string'

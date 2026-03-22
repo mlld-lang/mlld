@@ -70,6 +70,23 @@ export function isConditionPair(entry: WhenEntry): entry is WhenConditionPair {
 }
 
 /**
+ * Some parser paths wrap a single condition node in an extra array layer.
+ * Normalize to the flat BaseMlldNode[] shape expected by evaluators.
+ */
+export function normalizeWhenCondition(condition: unknown): BaseMlldNode[] {
+  if (!Array.isArray(condition)) {
+    return condition && typeof condition === 'object' ? [condition as BaseMlldNode] : [];
+  }
+
+  let normalized = condition as unknown[];
+  while (normalized.length === 1 && Array.isArray(normalized[0])) {
+    normalized = normalized[0] as unknown[];
+  }
+
+  return normalized as BaseMlldNode[];
+}
+
+/**
  * Type guard for direct action entries (directives like show, log without condition)
  */
 export function isDirectAction(entry: WhenEntry): entry is BaseMlldNode {

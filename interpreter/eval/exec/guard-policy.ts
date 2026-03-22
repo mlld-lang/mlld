@@ -189,9 +189,10 @@ export function cloneExecVariableWithNewValue(
   value: unknown,
   fallback: string
 ): Variable {
+  const resolvedValue = value !== undefined ? value : fallback;
   const cloned: Variable = {
     ...source,
-    value: value ?? fallback,
+    value: resolvedValue,
     mx: source.mx ? { ...source.mx } : undefined,
     internal: { ...(source.internal ?? {}) }
   };

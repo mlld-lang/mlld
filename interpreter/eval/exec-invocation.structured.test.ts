@@ -202,6 +202,44 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(asText(result.value)).toBe('hello');
   });
 
+  it('preserves null exec parameters for when guards instead of coercing them to text', async () => {
+    const src = `
+/exe @guard(x) = [
+  when !@x => "missing"
+  => "ok: @x"
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const nullInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'guard-null',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'guard-null-ref',
+        identifier: 'guard',
+        args: [{ type: 'Literal', nodeId: 'null-arg', value: null, valueType: 'null' } as any]
+      }
+    };
+    const helloInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'guard-hello',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'guard-hello-ref',
+        identifier: 'guard',
+        args: [{ type: 'Text', nodeId: 'hello-arg', content: 'hello' } as any]
+      }
+    };
+
+    const nullResult = await evaluateExecInvocation(nullInvocation, env);
+    const helloResult = await evaluateExecInvocation(helloInvocation, env);
+
+    expect(asText(nullResult.value)).toBe('missing');
+    expect(asText(helloResult.value)).toBe('ok: hello');
+  });
+
   it('supports legacy run-pipe sugar in exe RHS', async () => {
     const src = '/exe @pipeRun(value) = run @value | cmd { cat }';
     const { ast } = await parse(src);

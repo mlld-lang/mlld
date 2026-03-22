@@ -56,6 +56,7 @@ import type {
 } from './for/types';
 import { isBailError } from '@core/errors';
 import { isConditionPair } from '@core/types/when';
+import { normalizeWhenCondition } from '@core/types/when';
 import { evaluateCondition } from './when';
 
 function extractControlKind(value: unknown): ReturnType<ForControlKindResolver> {
@@ -283,14 +284,15 @@ function getDirectiveWhenFilterCondition(directive: ForDirective): BaseMlldNode[
   if (!isConditionPair(first) || !Array.isArray(first.condition) || first.condition.length === 0) {
     return null;
   }
-  if (first.condition.length === 1) {
-    const single = first.condition[0];
+  const conditionNodes = normalizeWhenCondition(first.condition);
+  if (conditionNodes.length === 1) {
+    const single = conditionNodes[0];
     if (isLiteralValueType(single, 'none') || isLiteralValueType(single, 'wildcard')) {
       return null;
     }
   }
 
-  return first.condition as BaseMlldNode[];
+  return conditionNodes;
 }
 
 function getExpressionWhenFilterNode(expr: ForExpression): any | null {
@@ -307,7 +309,7 @@ function getExpressionWhenFilterNode(expr: ForExpression): any | null {
     if (!isConditionPair(entry as any) || !Array.isArray((entry as any).condition)) {
       return false;
     }
-    const condition = (entry as any).condition;
+    const condition = normalizeWhenCondition((entry as any).condition);
     return condition.length === 1 && isLiteralValueType(condition[0], 'none') && isSkipLiteralAction((entry as any).action);
   });
 
@@ -323,9 +325,10 @@ async function evaluateWhenFilterMatch(whenExpr: any, env: Environment): Promise
     if (!isConditionPair(entry) || !Array.isArray(entry.condition) || entry.condition.length === 0) {
       continue;
     }
+    const conditionNodes = normalizeWhenCondition(entry.condition);
 
-    if (entry.condition.length === 1) {
-      const single = entry.condition[0];
+    if (conditionNodes.length === 1) {
+      const single = conditionNodes[0];
       if (isLiteralValueType(single, 'none')) {
         return false;
       }
@@ -334,7 +337,7 @@ async function evaluateWhenFilterMatch(whenExpr: any, env: Environment): Promise
       }
     }
 
-    const matched = await evaluateCondition(entry.condition, env);
+    const matched = await evaluateCondition(conditionNodes, env);
     if (matched) {
       return true;
     }

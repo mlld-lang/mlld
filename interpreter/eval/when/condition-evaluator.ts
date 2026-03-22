@@ -1,4 +1,5 @@
 import type { BaseMlldNode } from '@core/types';
+import { normalizeWhenCondition } from '@core/types/when';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { logger } from '@core/utils/logger';
@@ -22,6 +23,7 @@ export async function evaluateCondition(
   runtime: WhenConditionRuntime,
   variableName?: string
 ): Promise<boolean> {
+  condition = normalizeWhenCondition(condition);
   const deniedContext = env.getContextManager().peekDeniedContext();
   const deniedState = Boolean(deniedContext?.denied);
 

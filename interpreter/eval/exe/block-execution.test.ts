@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExeBlockNode } from '@core/types';
+import type { WhenExpressionNode } from '@core/types/when';
 import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -25,6 +26,56 @@ function createReturn(value: string): any {
     values: [createText(value)],
     meta: { hasValue: true }
   };
+}
+
+function createWhenExpressionWithNestedCondition(): WhenExpressionNode {
+  return {
+    type: 'WhenExpression',
+    nodeId: 'nested-when-condition',
+    conditions: [
+      {
+        condition: [[{
+          type: 'UnaryExpression',
+          nodeId: 'negated-x',
+          operator: '!',
+          operand: {
+            type: 'VariableReference',
+            nodeId: 'var-x',
+            valueType: 'varIdentifier',
+            identifier: 'x'
+          },
+          meta: {
+            isWhenCondition: true,
+            isSimple: true,
+            negated: true
+          }
+        }]],
+        action: [
+          {
+            content: [
+              {
+                type: 'Literal',
+                nodeId: 'missing-literal',
+                value: 'missing',
+                valueType: 'string'
+              }
+            ],
+            wrapperType: 'doubleQuote',
+            hasInterpolation: false
+          }
+        ]
+      }
+    ],
+    withClause: null,
+    meta: {
+      conditionCount: 1,
+      isValueReturning: true,
+      evaluationType: 'expression',
+      hasTailModifiers: false,
+      modifier: null,
+      hasBoundValue: false
+    }
+  } as WhenExpressionNode;
 }
 
 describe('exe block execution module', () => {
@@ -102,5 +153,27 @@ describe('exe block execution module', () => {
     } finally {
       env.popExecutionContext('while');
     }
+  });
+
+  it('normalizes nested when-condition arrays inside exe blocks before short-circuiting', async () => {
+    const env = createEnvironment();
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      nodeId: 'nested-when-short-circuit',
+      values: {
+        statements: [createWhenExpressionWithNestedCondition()],
+        return: createReturn('ok')
+      },
+      meta: {
+        statementCount: 1,
+        hasReturn: true
+      }
+    } as ExeBlockNode;
+
+    const missingResult = await evaluateExeBlock(blockNode, env, { x: null });
+    expect(missingResult.value).toBe('missing');
+
+    const okResult = await evaluateExeBlock(blockNode, env, { x: 'hello' });
+    expect(okResult.value).toBe('ok');
   });
 });

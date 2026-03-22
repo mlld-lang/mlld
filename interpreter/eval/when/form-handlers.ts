@@ -2,7 +2,7 @@ import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { WhenSimpleNode, WhenMatchNode, WhenBlockNode } from '@core/types/when';
-import { isLetAssignment, isAugmentedAssignment, isConditionPair } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair, normalizeWhenCondition } from '@core/types/when';
 import { MlldConditionError } from '@core/errors';
 import {
   evaluateFirstMatch,
@@ -83,12 +83,14 @@ export async function evaluateWhenMatchForm(
   let anyNonNoneMatched = false;
 
   for (const pair of conditionPairs) {
-    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+    const conditionNodes = normalizeWhenCondition(pair.condition);
+
+    if (conditionNodes.length === 1 && isNoneCondition(conditionNodes[0])) {
       continue;
     }
 
     let isNegated = false;
-    let actualCondition = pair.condition;
+    let actualCondition = conditionNodes;
     if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
       const unaryNode = actualCondition[0] as any;
       if (unaryNode.operator === '!') {
@@ -140,7 +142,8 @@ export async function evaluateWhenMatchForm(
 
   if (!anyNonNoneMatched) {
     for (const pair of conditionPairs) {
-      if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
+      const conditionNodes = normalizeWhenCondition(pair.condition);
+      if (!(conditionNodes.length === 1 && isNoneCondition(conditionNodes[0]))) {
         continue;
       }
       if (!pair.action) {

@@ -6,7 +6,7 @@
  */
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction, normalizeWhenCondition } from '@core/types/when';
 import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
@@ -120,12 +120,13 @@ function getConditionText(condition: BaseMlldNode[], source?: string): string | 
 }
 
 function getConditionPairText(pair: WhenConditionPair, source?: string): string | undefined {
-  if (!source || !Array.isArray(pair.condition) || pair.condition.length === 0) {
+  const condition = normalizeWhenCondition(pair.condition);
+  if (!source || condition.length === 0) {
     return undefined;
   }
 
-  const firstCondition = pair.condition[0];
-  const lastCondition = pair.condition[pair.condition.length - 1];
+  const firstCondition = condition[0];
+  const lastCondition = condition[condition.length - 1];
   const lastAction =
     Array.isArray(pair.action) && pair.action.length > 0
       ? pair.action[pair.action.length - 1]
@@ -297,7 +298,7 @@ function validateNonePlacement(
   let foundWildcard = false;
 
   for (let i = 0; i < conditionPairs.length; i++) {
-    const condition = conditionPairs[i].condition;
+    const condition = normalizeWhenCondition(conditionPairs[i].condition);
 
     if (condition.length === 1 && isNoneCondition(condition[0])) {
       foundNone = true;
@@ -360,9 +361,14 @@ async function evaluateWhenExpressionInternal(
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
   const sourceInfo = getWhenExpressionSource(env);
+  const normalizedEntries = node.conditions.map(entry =>
+    isConditionPair(entry)
+      ? { ...entry, condition: normalizeWhenCondition(entry.condition) }
+      : entry
+  );
 
   // Validate none placement
-  validateNonePlacement(node.conditions, sourceInfo, env);
+  validateNonePlacement(normalizedEntries, sourceInfo, env);
   
   const errors: MlldWhenExpressionError[] = [];
   const denyMode = Boolean(options?.denyMode);
@@ -412,21 +418,21 @@ async function evaluateWhenExpressionInternal(
   });
   
   // Empty conditions array - return null
-  if (node.conditions.length === 0) {
+  if (normalizedEntries.length === 0) {
     return buildResult(null, env);
   }
 
   // Check if any condition pair has an action (filter out let assignments)
-  const conditionPairs = node.conditions.filter(isConditionPair);
+  const conditionPairs = normalizedEntries.filter(isConditionPair);
   const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
 
   // Check if we have direct actions (show, log, etc. without condition)
-  const hasDirectActions = node.conditions.some(e => isDirectAction(e));
+  const hasDirectActions = normalizedEntries.some(e => isDirectAction(e));
 
   // Check if this is a "when (condition) [block]" syntax
   // In this case, there are no condition pairs, only let/augmented assignments and/or direct actions
   // The boundValue holds the condition to check
-  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && node.conditions.some(e =>
+  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && normalizedEntries.some(e =>
     isLetAssignment(e) || isAugmentedAssignment(e) || isDirectAction(e)
   );
 
@@ -485,8 +491,8 @@ async function evaluateWhenExpressionInternal(
   }
   
   // First pass: Evaluate entries in order (let assignments, direct actions, and non-none conditions)
-  for (let i = 0; i < node.conditions.length; i++) {
-    const entry = node.conditions[i];
+  for (let i = 0; i < normalizedEntries.length; i++) {
+    const entry = normalizedEntries[i];
 
     // Unwrap array-wrapped entries (grammar sometimes wraps actions in arrays)
     const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
@@ -863,8 +869,8 @@ async function evaluateWhenExpressionInternal(
   
   // Second pass: Evaluate none conditions after scanning non-none conditions
   if (!denyMode) {
-    for (let i = 0; i < node.conditions.length; i++) {
-      const entry = node.conditions[i];
+    for (let i = 0; i < normalizedEntries.length; i++) {
+      const entry = normalizedEntries[i];
 
       // Unwrap array-wrapped entries
       const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
