@@ -71,16 +71,30 @@ function formatBlockingAnalysisErrors(results: AnalyzeResult[]): string {
   const lines: string[] = [];
 
   for (const result of results) {
-    if (!result.errors || result.errors.length === 0) {
-      continue;
+    if (result.errors && result.errors.length > 0) {
+      for (const error of result.errors) {
+        const location = formatLocation(result.filepath, error.line, error.column);
+        const messageLines = String(error.message ?? 'Unknown validation error').split('\n');
+        lines.push(`error: ${location} - ${messageLines[0]}`);
+        for (const extraLine of messageLines.slice(1)) {
+          lines.push(`  ${extraLine}`);
+        }
+      }
     }
 
-    for (const error of result.errors) {
-      const location = formatLocation(result.filepath, error.line, error.column);
-      const messageLines = String(error.message ?? 'Unknown validation error').split('\n');
-      lines.push(`error: ${location} - ${messageLines[0]}`);
-      for (const extraLine of messageLines.slice(1)) {
-        lines.push(`  ${extraLine}`);
+    const hardRedefinitions = (result.redefinitions ?? []).filter(
+      redef => redef.reason !== 'builtin-conflict' && redef.reason !== 'soft-reserved-conflict'
+    );
+    for (const redef of hardRedefinitions) {
+      const location = formatLocation(result.filepath, redef.line, redef.column);
+      if (redef.reason === 'reserved-conflict') {
+        lines.push(`error: ${location} - @${redef.variable} conflicts with reserved name`);
+        if (redef.suggestion) {
+          lines.push(`  hint: ${redef.suggestion}`);
+        }
+      } else {
+        const origLoc = redef.originalLine ? ` (originally at line ${redef.originalLine})` : '';
+        lines.push(`error: ${location} - @${redef.variable} cannot redefine variable in nested scope${origLoc}`);
       }
     }
   }
