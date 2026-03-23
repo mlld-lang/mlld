@@ -81,6 +81,7 @@ function createOptions(overrides: Partial<EvaluateGuardRuntimeOptions> = {}): Ev
       labels: [],
       sources: ['source:input'],
       taint: [],
+      toolsHistory: [],
       guards: []
     },
     attemptNumber: 1,
@@ -235,6 +236,7 @@ describe('guard runtime evaluator', () => {
           labels: ['secret'],
           sources: ['source:secret'],
           taint: [],
+          toolsHistory: [],
           guards: []
         }
       }),
@@ -286,5 +288,40 @@ describe('guard runtime evaluator', () => {
     expect(stateAfterSecond?.history).toHaveLength(2);
     expect((first.metadata as any).tries).toHaveLength(1);
     expect((second.metadata as any).tries).toHaveLength(2);
+  });
+
+  it('exposes value-level tool lineage at @mx.tools.history without changing @mx.tools.calls', async () => {
+    const env = createEnv();
+    env.recordToolCall({
+      name: 'sessionTool',
+      timestamp: Date.now(),
+      ok: true
+    });
+
+    const history = [{ name: 'verify', args: ['value'], auditRef: 'audit-1' }] as const;
+    const evaluateGuardBlock = vi.fn(async (_block, guardEnv) => {
+      const ambient = guardEnv.getContextManager().buildAmbientContext();
+      expect((ambient.tools as any).calls).toEqual(['sessionTool']);
+      expect((ambient.tools as any).history).toEqual(history);
+      return createAction('allow');
+    });
+
+    await evaluateGuardRuntime(
+      createOptions({
+        env,
+        perInput: {
+          index: 0,
+          variable: createInput('input'),
+          labels: [],
+          sources: ['source:input'],
+          taint: [],
+          toolsHistory: history,
+          guards: []
+        }
+      }),
+      createDeps({ evaluateGuardBlock })
+    );
+
+    expect(evaluateGuardBlock).toHaveBeenCalledTimes(1);
   });
 });

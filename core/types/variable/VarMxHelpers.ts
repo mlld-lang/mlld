@@ -8,10 +8,11 @@ import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor
 } from '@core/types/security';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor, ToolProvenance } from '@core/types/security';
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
+const EMPTY_TOOLS: readonly ToolProvenance[] = Object.freeze([]);
 
 interface LegacyLoadResult extends Partial<LoadContentResult> {
   url?: string;
@@ -32,6 +33,7 @@ export function varMxToSecurityDescriptor(mx: VariableContext): SecurityDescript
     labels: mx.labels ? [...mx.labels] : [],
     taint: mx.taint ? [...mx.taint] : [],
     sources: mx.sources ? [...mx.sources] : [],
+    tools: mx.tools ? [...mx.tools] : [],
     policyContext: mx.policy ?? undefined
   });
 }
@@ -47,6 +49,7 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
     labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
     taint: descriptor.taint ? cloneArray(descriptor.taint) : [],
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
+    tools: descriptor.tools ? cloneArray(descriptor.tools) : EMPTY_TOOLS,
     policy: descriptor.policyContext ?? null,
     source: metadata?.source,
     retries: metadata?.retries,
@@ -112,11 +115,16 @@ export function updateVarMxFromDescriptor(
   mx.labels = normalized.labels ? [...normalized.labels] : [];
   mx.taint = normalized.taint ? [...normalized.taint] : [];
   mx.sources = normalized.sources ? [...normalized.sources] : [];
+  mx.tools = normalized.tools ? [...normalized.tools] : [];
   mx.policy = normalized.policyContext ?? null;
 }
 
 export function hasSecurityVarMx(mx: VariableContext): boolean {
-  return (mx.labels?.length ?? 0) > 0 || (mx.taint?.length ?? 0) > 0;
+  return (
+    (mx.labels?.length ?? 0) > 0
+    || (mx.taint?.length ?? 0) > 0
+    || (mx.tools?.length ?? 0) > 0
+  );
 }
 
 export function serializeSecurityVarMx(
@@ -125,12 +133,14 @@ export function serializeSecurityVarMx(
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
   sources: readonly string[];
+  tools: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
 } {
   return {
     labels: mx.labels ?? EMPTY_LABELS,
     taint: mx.taint ?? [],
     sources: mx.sources ?? EMPTY_SOURCES,
+    tools: mx.tools ?? EMPTY_TOOLS,
     policy: mx.policy ?? null
   };
 }

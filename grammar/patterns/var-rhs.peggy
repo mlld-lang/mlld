@@ -14,6 +14,7 @@ VarRHSContent "var assignment value"
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
+  / McpToolSource               // Dynamic MCP-backed tool collections: mcp @expr
   / BoxExpression               // box @config [...] - scoped environment with return value
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
@@ -29,6 +30,14 @@ VarRHSContent "var assignment value"
   / NestedDirective             // Nested directives @run, etc.
   / InlineShowDirective         // show actions used inline (for expressions)
   / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
+
+McpToolSource "dynamic MCP tool source"
+  = "mcp" __ source:Expression {
+      return {
+        type: 'mcpToolSource',
+        source
+      };
+    }
 
 VarBlock "var block"
   = &{

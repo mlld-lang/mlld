@@ -56,6 +56,7 @@ describe('guard materialization utilities', () => {
       labels: [],
       sources: [],
       taint: [],
+      toolsHistory: [],
       guards: []
     };
     const secretCandidate: PerInputCandidate = {
@@ -64,12 +65,14 @@ describe('guard materialization utilities', () => {
       labels: ['secret'],
       sources: [],
       taint: [],
+      toolsHistory: [],
       guards: []
     };
     const opSnapshot: OperationSnapshot = {
       labels: [],
       sources: [],
       taint: [],
+      toolsHistory: [],
       aggregate: {
         labels: [],
         sources: [],

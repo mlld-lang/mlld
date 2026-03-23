@@ -62,7 +62,8 @@ export class PolicyEnforcer {
     const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
     const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
     const sources = Array.isArray(descriptor.sources) ? descriptor.sources : [];
-    if (labels.length === 0 && taint.length === 0 && sources.length === 0) {
+    const tools = Array.isArray(descriptor.tools) ? descriptor.tools : [];
+    if (labels.length === 0 && taint.length === 0 && sources.length === 0 && tools.length === 0) {
       return descriptor;
     }
     const hasUserLabel = [...labels, ...taint].some(label => {

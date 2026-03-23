@@ -143,6 +143,7 @@ export async function evaluateGuardRuntime(
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
   let contextTaint: readonly string[];
+  let contextToolsHistory: readonly import('@core/types/security').ToolProvenance[];
   const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
   let outputValue: unknown;
 
@@ -151,6 +152,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.perInput.labels;
     contextSources = options.perInput.sources;
     contextTaint = options.perInput.taint;
+    contextToolsHistory = options.perInput.toolsHistory;
     outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
@@ -162,6 +164,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
     contextTaint = options.operationSnapshot.taint;
+    contextToolsHistory = options.operationSnapshot.toolsHistory;
     const primaryOutput = options.operationSnapshot.variables[0];
     outputValue = resolveGuardValue(primaryOutput, inputVariable);
   } else {
@@ -179,7 +182,14 @@ export async function evaluateGuardRuntime(
     outputText as any,
     deps.guardInputSource,
     {
-      metadata: { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) },
+      metadata: {
+        security: makeSecurityDescriptor({
+          labels: contextLabels,
+          taint: contextTaint,
+          sources: contextSources,
+          tools: contextToolsHistory
+        })
+      },
       internal: { isReserved: true }
     }
   );
@@ -208,6 +218,7 @@ export async function evaluateGuardRuntime(
     labels: contextLabels,
     sources: contextSources,
     taint: contextTaint,
+    toolsHistory: contextToolsHistory,
     inputPreview: isSecretContext ? '[REDACTED]' : inputPreview,
     outputPreview: isSecretContext ? '[REDACTED]' : buildVariablePreview(guardOutputVariable),
     hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),

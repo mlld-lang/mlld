@@ -29,6 +29,9 @@ async function readAuditEvents(
   projectRoot: string
 ): Promise<Record<string, unknown>[]> {
   const auditPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  if (!(await fileSystem.exists(auditPath))) {
+    return [];
+  }
   const contents = await fileSystem.readFile(auditPath);
   return contents
     .trim()
@@ -194,6 +197,83 @@ describe('Security metadata propagation', () => {
 
     const resultVar = env.getVariable('result');
     expect(resultVar?.mx.labels).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('writes toolCall audit events for executable invocations', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+
+    const exeDirective = parseSync('/exe @greet(name) = `Hello @name`')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const invocationDirective = parseSync('/var @result = @greet("Ada")')[0] as DirectiveNode;
+    await evaluateVar(invocationDirective, env);
+
+    const auditEvents = await readAuditEvents(fileSystem, projectRoot);
+    const toolCallEvent = auditEvents.find(event => event.event === 'toolCall');
+
+    expect(toolCallEvent).toMatchObject({
+      event: 'toolCall',
+      tool: 'greet',
+      ok: true,
+      args: { name: 'Ada' }
+    });
+    expect(typeof toolCallEvent?.id).toBe('string');
+    expect(typeof toolCallEvent?.duration).toBe('number');
+    expect(typeof toolCallEvent?.resultLength).toBe('number');
+  });
+
+  it('skips toolCall audit events when pre-guards short-circuit before the tool body runs', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    const directives = parseSync(`
+/var secret @name = "Ada"
+/guard before @blocker for secret = when [ * => deny "blocked-before-run" ]
+/exe @guarded(name) = when [
+  denied => "guarded-result"
+  * => "ran"
+]
+/var @result = @guarded(@name)
+    `).filter((directive): directive is DirectiveNode => Boolean((directive as DirectiveNode | undefined)?.kind));
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    expect(env.getVariable('result')?.value).toBe('guarded-result');
+
+    const auditEvents = await readAuditEvents(fileSystem, projectRoot);
+    expect(auditEvents.filter(event => event.event === 'toolCall')).toHaveLength(0);
+  });
+
+  it('carries cumulative tool provenance on invocation results and derived values', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/project');
+
+    const directives = [
+      '/exe @first(name) = `first:@name`',
+      '/exe @second(value) = `second:@value`',
+      '/var @firstResult = @first("Ada")',
+      '/var @secondResult = @second(@firstResult)',
+      '/var @derived = `copy: @secondResult`'
+    ];
+
+    for (const source of directives) {
+      const directive = parseSync(source)[0] as DirectiveNode;
+      await evaluateDirective(directive, env);
+    }
+
+    const firstResult = env.getVariable('firstResult');
+    const secondResult = env.getVariable('secondResult');
+    const derived = env.getVariable('derived');
+
+    expect(firstResult?.mx.tools?.map(tool => tool.name)).toEqual(['first']);
+    expect(firstResult?.mx.tools?.[0]?.args).toEqual(['name']);
+    expect(typeof firstResult?.mx.tools?.[0]?.auditRef).toBe('string');
+
+    expect(secondResult?.mx.tools?.map(tool => tool.name)).toEqual(['first', 'second']);
+    expect(derived?.mx.tools?.map(tool => tool.name)).toEqual(['first', 'second']);
   });
 
   it('applies influenced when untrusted data reaches an llm exe through a later config argument', async () => {

@@ -166,7 +166,7 @@ class McpImportServer {
       const reason = `MCP server '${this.spec.displayName}' exited` +
         (typeof code === 'number' ? ` with code ${code}` : '') +
         (signal ? ` (signal ${signal})` : '');
-      this.rejectPending(new Error(reason));
+      this.rejectPending(new Error(this.decorateError(reason)));
     });
   }
 

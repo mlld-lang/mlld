@@ -4,6 +4,12 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ToolCollection } from '@core/types/tools';
+import { FunctionRouter } from '@cli/mcp/FunctionRouter';
+import { fileURLToPath } from 'url';
+
+const fakeServerPath = fileURLToPath(
+  new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
 
 const pathService = new PathService();
 const pathContext = {
@@ -372,5 +378,49 @@ describe('tool collections', () => {
         /var @result = @agent(@agentTools) with { policy: @taskPolicy }
       `)
     ).rejects.toThrow(/cannot use true in policy\.authorizations/i);
+  });
+
+  it('creates tool collections directly from runtime MCP specs', async () => {
+    const env = await interpretWithEnv(`
+      /var @serverSpec = "${process.execPath} ${fakeServerPath}"
+      /var tools @dynamicTools = mcp @serverSpec
+    `);
+
+    const toolsVar = env.getVariable('dynamicTools');
+    expect(toolsVar?.internal?.isToolsCollection).toBe(true);
+
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(Object.keys(collection)).toEqual(expect.arrayContaining(['echo', 'ping']));
+    expect(collection.echo.mlld).toMatch(/^__mcp_dynamicTools_echo/);
+
+    const router = new FunctionRouter({ environment: env, toolCollection: collection });
+    await expect(router.executeFunction('ping', {})).resolves.toBe('pong');
+  });
+
+  it('rejects dynamic MCP tool sources when the runtime spec is not a string', async () => {
+    await expect(
+      interpretWithEnv(`
+        /var @serverSpec = { cmd: "${process.execPath} ${fakeServerPath}" }
+        /var tools @dynamicTools = mcp @serverSpec
+      `)
+    ).rejects.toThrow(/non-empty string/);
+  });
+
+  it('keeps dynamic MCP proxy aliases isolated per tool collection variable', async () => {
+    const env = await interpretWithEnv(`
+      /var @serverSpec = "${process.execPath} ${fakeServerPath}"
+      /var tools trusted @dynamicToolsA = mcp @serverSpec
+      /var tools @dynamicToolsB = mcp @serverSpec
+    `);
+
+    const dynamicToolsA = env.getVariable('dynamicToolsA');
+    const dynamicToolsB = env.getVariable('dynamicToolsB');
+    const collectionA = dynamicToolsA?.internal?.toolCollection as ToolCollection;
+    const collectionB = dynamicToolsB?.internal?.toolCollection as ToolCollection;
+
+    expect(dynamicToolsA?.mx.labels).toContain('trusted');
+    expect(collectionA.echo.mlld).not.toBe(collectionB.echo.mlld);
+    expect(collectionA.echo.mlld).toMatch(/^__mcp_dynamicToolsA_echo/);
+    expect(collectionB.echo.mlld).toMatch(/^__mcp_dynamicToolsB_echo/);
   });
 });

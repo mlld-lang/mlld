@@ -1,5 +1,5 @@
 import type { GuardResult, GuardHint } from '@core/types/guard';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor, ToolProvenance } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { GuardDefinition } from '../guards/GuardRegistry';
@@ -18,6 +18,8 @@ interface RetryContextSnapshot {
 export interface GuardOperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
+  taint: readonly string[];
+  toolsHistory?: readonly ToolProvenance[];
   variables: readonly Variable[];
 }
 

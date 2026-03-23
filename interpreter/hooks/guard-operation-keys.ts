@@ -2,12 +2,13 @@ import type { OperationContext } from '../env/ContextManager';
 import type { Variable } from '@core/types/variable';
 import { buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
 import type { ArrayAggregateSnapshot } from '@core/types/variable/ArrayHelpers';
-import type { DataLabel } from '@core/types/security';
+import type { DataLabel, ToolProvenance } from '@core/types/security';
 
 export interface OperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
   taint: readonly string[];
+  toolsHistory: readonly ToolProvenance[];
   aggregate: ArrayAggregateSnapshot;
   variables: readonly Variable[];
 }
@@ -18,9 +19,30 @@ export function buildOperationSnapshot(inputs: readonly Variable[]): OperationSn
     labels: aggregate.labels,
     sources: aggregate.sources,
     taint: aggregate.taint,
+    toolsHistory: collectToolHistory(inputs),
     aggregate,
     variables: inputs
   };
+}
+
+function collectToolHistory(inputs: readonly Variable[]): readonly ToolProvenance[] {
+  const history: ToolProvenance[] = [];
+  const seenAuditRefs = new Set<string>();
+
+  for (const variable of inputs) {
+    const tools = Array.isArray(variable.mx?.tools) ? variable.mx.tools : [];
+    for (const tool of tools) {
+      if (tool.auditRef) {
+        if (seenAuditRefs.has(tool.auditRef)) {
+          continue;
+        }
+        seenAuditRefs.add(tool.auditRef);
+      }
+      history.push(tool);
+    }
+  }
+
+  return history;
 }
 
 export function buildOperationKeys(operation: OperationContext): string[] {

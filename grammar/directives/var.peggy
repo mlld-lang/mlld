@@ -208,6 +208,11 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
+      // Handle dynamic MCP-backed tool collections
+      else if (value && value.type === 'mcpToolSource') {
+        processedValue = [value];
+        metaInfo.inferredType = 'mcpToolSource';
+      }
       // Handle expressions (BinaryExpression, TernaryExpression, UnaryExpression)
       else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression')) {
         processedValue = [value];

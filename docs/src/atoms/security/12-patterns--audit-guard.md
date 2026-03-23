@@ -68,6 +68,7 @@ show @result
 - In real agent loops, that untrusted data often arrives through `messages`, `system`, or tool config rather than the top-level prompt string; those inputs still trigger `influenced`
 - **Warning:** Define guards BEFORE the `exe llm` calls they protect. Guards only apply to operations that execute after registration — a guard defined after an `exe llm` call silently won't fire for that call.
 - `autoverify` injects verification instructions but cannot enforce compliance. The enforcement guard requires it — use both together.
+- The enforcement guard intentionally uses `@mx.tools.calls`, not `@mx.tools.history`. It is checking whether the current LLM execution ran `verify`, not tracing provenance of a later value.
 - Mock exes use plain `exe` (no `llm` label) for deterministic output. In production, `exe llm` triggers both autoverify and the enforcement guard. See `main.mld` for the complete flow.
 - Use `retry` in the enforcement guard for MCP mode (LLM retries with verification); use `deny` for standalone mode (immediate block, as in `main.mld`)
 - For a complete working example with guard enforcement and denied handlers, see `llm/run/j2bd/security/impl/main.mld`

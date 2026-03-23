@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
@@ -35,7 +36,8 @@ import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor,
-  type SecurityDescriptor
+  type SecurityDescriptor,
+  type ToolProvenance
 } from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -92,6 +94,7 @@ import {
 } from './exec/policy-fragment';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
+import { logToolCallEvent } from '@interpreter/utils/audit-log';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -186,6 +189,7 @@ function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDes
     labels,
     taint,
     sources: descriptor.sources,
+    tools: descriptor.tools,
     capability: descriptor.capability,
     policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
   });
@@ -235,6 +239,41 @@ function buildToolCallArguments(
 
 function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildToolProvenance(
+  toolName: string,
+  args: Record<string, unknown> | undefined,
+  auditRef: string | undefined
+): ToolProvenance | undefined {
+  const name = toolName.trim();
+  if (!name) {
+    return undefined;
+  }
+
+  const argNames = args
+    ? Object.keys(args).filter(key => key.trim().length > 0)
+    : [];
+  return {
+    name,
+    ...(argNames.length > 0 ? { args: argNames } : {}),
+    ...(auditRef ? { auditRef } : {})
+  };
+}
+
+function getToolResultLength(value: unknown): number | undefined {
+  try {
+    return asText(value).length;
+  } catch {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    try {
+      return String(value).length;
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 function isToolWriteLabelSet(labels: readonly string[]): boolean {
@@ -1701,11 +1740,20 @@ async function evaluateExecInvocationInternal(
       ? (mcpTool as any).name.trim()
       : '';
   const trackedToolName = trackedMcpName || (variable.name ?? commandName ?? '');
+  const toolCallArguments =
+    trackedToolName.length > 0
+      ? buildToolCallArguments(params, evaluatedArgs)
+      : undefined;
+  const toolAuditId = trackedToolName.length > 0 ? randomUUID() : undefined;
+  let toolBodyExecuted = false;
+  let toolBodyStartedAt: number | undefined;
+  let toolBodyEndedAt: number | undefined;
+  const toolProvenance = buildToolProvenance(trackedToolName, toolCallArguments, toolAuditId);
   const toolCallRecordBase =
     !skipInternalToolCallTracking && trackedToolName.length > 0
       ? {
           name: trackedToolName,
-          arguments: buildToolCallArguments(params, evaluatedArgs),
+          arguments: toolCallArguments,
           timestamp: Date.now()
         }
       : null;
@@ -1722,6 +1770,55 @@ async function evaluateExecInvocationInternal(
       ok: false,
       error: normalizeToolCallError(error)
     });
+  };
+  const recordToolAudit = async (
+    ok: boolean,
+    resultValue?: unknown,
+    error?: unknown
+  ): Promise<void> => {
+    if (
+      !toolAuditId ||
+      trackedToolName.length === 0 ||
+      !toolBodyExecuted ||
+      toolBodyStartedAt === undefined ||
+      toolBodyEndedAt === undefined
+    ) {
+      return;
+    }
+
+    const descriptor =
+      normalizeSecurityDescriptor(
+        ok
+          ? (
+              extractSecurityDescriptor(resultValue, {
+                recursive: true,
+                mergeArrayElements: true
+              }) ?? resultSecurityDescriptor
+            )
+          : resultSecurityDescriptor
+      );
+
+    await logToolCallEvent(runtimeEnv, {
+      id: toolAuditId,
+      tool: trackedToolName,
+      args: toolCallArguments,
+      ok,
+      ...(ok ? {} : { error: normalizeToolCallError(error) }),
+      ...(ok ? { resultLength: getToolResultLength(resultValue) } : {}),
+      duration: Math.max(0, toolBodyEndedAt - toolBodyStartedAt),
+      labels: descriptor?.labels,
+      taint: descriptor?.taint,
+      sources: descriptor?.sources
+    });
+  };
+  const runTrackedToolBody = async <T>(runner: () => Promise<T>): Promise<T> => {
+    toolBodyExecuted = true;
+    toolBodyStartedAt = Date.now();
+    try {
+      return await runner();
+    } finally {
+      toolBodyEndedAt = Date.now();
+    }
   };
 
   try {
@@ -1827,6 +1924,9 @@ async function evaluateExecInvocationInternal(
       if (sourceTaintLabel) {
         descriptorPieces.push(makeSecurityDescriptor({ taint: [sourceTaintLabel] }));
       }
+      if (toolProvenance) {
+        descriptorPieces.push(makeSecurityDescriptor({ tools: [toolProvenance] }));
+      }
       if (descriptorPieces.length > 0) {
         const descriptorFromPieces =
           descriptorPieces.length === 1
@@ -1890,86 +1990,97 @@ async function evaluateExecInvocationInternal(
   }
 
   try {
-  const nonCommandResult = await executeNonCommandExecutable({
-    definition,
-    commandName,
-    node,
-    nodeSourceLocation,
-    env: runtimeEnv,
-    execEnv,
-    variable,
-    params,
-    evaluatedArgs,
-    argSourceNames,
-    resultSecurityDescriptor,
-    exeLabels,
-    services: {
-      interpolateWithResultDescriptor,
-      toPipelineInput,
-      evaluateExecInvocation
+  const isCommandDefinition = isCommandExecutable(definition);
+  const isCodeDefinition = isCodeExecutable(definition);
+  if (!isCommandDefinition && !isCodeDefinition) {
+    const nonCommandResult = await runTrackedToolBody(() =>
+      executeNonCommandExecutable({
+        definition,
+        commandName,
+        node,
+        nodeSourceLocation,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        argSourceNames,
+        resultSecurityDescriptor,
+        exeLabels,
+        services: {
+          interpolateWithResultDescriptor,
+          toPipelineInput,
+          evaluateExecInvocation
+        }
+      })
+    );
+    if (nonCommandResult === undefined) {
+      throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
     }
-  });
-  if (nonCommandResult !== undefined) {
     result = nonCommandResult;
   }
   // Handle command executables
-  else if (isCommandExecutable(definition)) {
-    result = await executeCommandExecutable({
-      definition,
-      commandName,
-      node,
-      env: runtimeEnv,
-      execEnv,
-      variable,
-      params,
-      evaluatedArgs,
-      evaluatedArgStrings,
-      originalVariables,
-      exeLabels,
-      preDecisionMetadata: preDecision?.metadata,
-      policyEnforcer: activePolicyEnforcer,
-      operationContext,
-      mergePolicyInputDescriptor,
-      workingDirectory,
-      streamingEnabled,
-      pipelineId,
-      hasStreamFormat,
-      suppressTerminal: streamingOptions.suppressTerminal === true,
-      chunkEffect,
-      services: {
-        interpolateWithResultDescriptor,
-        mergeResultDescriptor,
-        getResultSecurityDescriptor: () => resultSecurityDescriptor,
-        resolveStdinInput
-      }
-    });
+  else if (isCommandDefinition) {
+    result = await runTrackedToolBody(() =>
+      executeCommandExecutable({
+        definition,
+        commandName,
+        node,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        evaluatedArgStrings,
+        originalVariables,
+        exeLabels,
+        preDecisionMetadata: preDecision?.metadata,
+        policyEnforcer: activePolicyEnforcer,
+        operationContext,
+        mergePolicyInputDescriptor,
+        workingDirectory,
+        streamingEnabled,
+        pipelineId,
+        hasStreamFormat,
+        suppressTerminal: streamingOptions.suppressTerminal === true,
+        chunkEffect,
+        services: {
+          interpolateWithResultDescriptor,
+          mergeResultDescriptor,
+          getResultSecurityDescriptor: () => resultSecurityDescriptor,
+          resolveStdinInput
+        }
+      })
+    );
   }
   // Handle code executables
-  else if (isCodeExecutable(definition)) {
-    const codeResult = await executeCodeExecutable({
-      definition,
-      commandName,
-      node,
-      env: runtimeEnv,
-      execEnv,
-      variable,
-      params,
-      evaluatedArgs,
-      evaluatedArgStrings,
-      exeLabels,
-      policyEnforcer: activePolicyEnforcer,
-      operationContext,
-      mergePolicyInputDescriptor,
-      workingDirectory,
-      whenExprNode,
-      services: {
-        interpolateWithResultDescriptor,
-        toPipelineInput,
-        mergeResultDescriptor,
-        getResultSecurityDescriptor: () => resultSecurityDescriptor,
-        finalizeResult
-      }
-    });
+  else if (isCodeDefinition) {
+    const codeResult = await runTrackedToolBody(() =>
+      executeCodeExecutable({
+        definition,
+        commandName,
+        node,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        evaluatedArgStrings,
+        exeLabels,
+        policyEnforcer: activePolicyEnforcer,
+        operationContext,
+        mergePolicyInputDescriptor,
+        workingDirectory,
+        whenExprNode,
+        services: {
+          interpolateWithResultDescriptor,
+          toPipelineInput,
+          mergeResultDescriptor,
+          getResultSecurityDescriptor: () => resultSecurityDescriptor,
+          finalizeResult
+        }
+      })
+    );
     if (codeResult.kind === 'return') {
       return codeResult.evalResult;
     }
@@ -2138,9 +2249,11 @@ async function evaluateExecInvocationInternal(
   }
       });
     });
+    await recordToolAudit(true, invocationResult.value);
     recordToolCall(true);
     return invocationResult;
   } catch (error) {
+    await recordToolAudit(false, undefined, error);
     recordToolCall(false, error);
     throw error;
   }

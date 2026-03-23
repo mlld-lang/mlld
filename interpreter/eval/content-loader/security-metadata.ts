@@ -42,7 +42,8 @@ function sanitizeInheritedDescriptor(
   return makeSecurityDescriptor({
     labels,
     taint,
-    sources: descriptor.sources
+    sources: descriptor.sources,
+    tools: descriptor.tools
   });
 }
 

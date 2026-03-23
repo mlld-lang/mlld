@@ -74,7 +74,8 @@ function applyCurrentInputToCandidate(
     variable: currentInput,
     labels: Array.isArray(currentInput.mx?.labels) ? currentInput.mx.labels : [],
     sources: Array.isArray(currentInput.mx?.sources) ? currentInput.mx.sources : [],
-    taint: Array.isArray(currentInput.mx?.taint) ? currentInput.mx.taint : []
+    taint: Array.isArray(currentInput.mx?.taint) ? currentInput.mx.taint : [],
+    toolsHistory: Array.isArray(currentInput.mx?.tools) ? currentInput.mx.tools : []
   };
 }
 

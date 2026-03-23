@@ -1,9 +1,9 @@
 ---
 id: security
 title: Security
-brief: Guards, labels, policies, signing, environments, and audit logging
+brief: Guards, labels, policies, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-03-18
+updated: 2026-03-23
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -23,7 +23,7 @@ Most detailed security atoms now live in:
 - **Authorize specific tools and arguments for a task** → [authorizations](#authorizations): declarative per-tool authorization with control-arg enforcement
 - **Create trust boundaries for LLM instructions** → [signing](#signing): integrity for templates and instructions
 - **Isolate execution with credentials and resource limits** → [environments](#environments): scoped contexts with filesystem, network, and tool restrictions
-- **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, and signing events
+- **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, tool calls, and signing events
 
 ## Labels
 
@@ -48,6 +48,7 @@ Custom labels are common too. A frequent pattern is `known` / `known:internal` f
 - `.mx.labels` — user-declared labels (`secret`, `pii`, `untrusted`)
 - `.mx.taint` — union of all labels plus source markers (the full provenance picture)
 - `.mx.sources` — transformation trail (`mcp:createIssue`, `command:curl`)
+- `.mx.tools` — tool lineage for this specific value, with audit references
 
 **Atoms:** `labels-overview` (start here), `labels-sensitivity`, `labels-trust`, `labels-influenced`, `labels-source-auto`, `security-automatic-labels`, `security-label-tracking`, `label-modification`
 
@@ -173,6 +174,7 @@ Cryptographic signing defends against prompt injection by letting auditor LLMs v
 MCP tool outputs automatically carry `src:mcp` taint. No configuration needed — it happens at the interpreter level.
 
 - **Taint tracking** — `src:mcp` propagates through all transformations and cannot be removed (`mcp-security`)
+- **Tool lineage** — `.mx.tools` and `@mx.tools.history` preserve which MCP/exe calls produced the current value (`mcp-security`, `tool-call-tracking`)
 - **Policy rules** — restrict what MCP-sourced data can do via label flow rules (`mcp-policy`)
 - **Guards** — inspect, block, or retry MCP tool calls using `for secret`, `before op:exe`, or `after op:exe` (`mcp-guards`)
 
@@ -198,10 +200,10 @@ Environments encapsulate execution contexts with credentials, isolation, tool re
 ## Audit Logging
 
 Two JSONL ledgers record security events:
-- `.mlld/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint
+- `.mlld/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint, and `toolCall` events
 - `.sig/audit.jsonl` — signing, verification, and mutable file updates
 
-File reads consult the audit log to restore taint from prior writes, ensuring labels survive persistence.
+Every audit event carries a stable `id`. File reads consult the audit log to restore taint from prior writes, and tool provenance entries keep `auditRef` pointers back to the `toolCall` records. Inside guards, `@mx.tools.history` exposes that value-level lineage alongside the existing execution-level `@mx.tools.calls`.
 
 **Atoms:** `audit-log`, `tool-call-tracking`
 

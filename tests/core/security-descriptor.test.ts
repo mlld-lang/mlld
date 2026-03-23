@@ -55,4 +55,32 @@ describe('SecurityDescriptor helpers', () => {
     expect(restored!.labels).toEqual(['pii']);
     expect(restored!.taint).toEqual(['pii', 'src:dynamic']);
   });
+
+  it('preserves tool provenance order and deduplicates by auditRef', () => {
+    const first = makeSecurityDescriptor({
+      tools: [
+        { name: 'fetchIssue', args: ['id'], auditRef: 'audit-1' }
+      ]
+    });
+    const duplicate = makeSecurityDescriptor({
+      tools: [
+        { name: 'fetchIssue', args: ['id'], auditRef: 'audit-1' }
+      ]
+    });
+    const second = makeSecurityDescriptor({
+      tools: [
+        { name: 'verifyIssue', args: ['content'], auditRef: 'audit-2' }
+      ]
+    });
+
+    const merged = mergeDescriptors(first, duplicate, second);
+    expect(merged.tools).toEqual([
+      { name: 'fetchIssue', args: ['id'], auditRef: 'audit-1' },
+      { name: 'verifyIssue', args: ['content'], auditRef: 'audit-2' }
+    ]);
+
+    const serialized = serializeSecurityDescriptor(merged);
+    const restored = deserializeSecurityDescriptor(serialized);
+    expect(restored?.tools).toEqual(merged.tools);
+  });
 });

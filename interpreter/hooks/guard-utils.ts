@@ -123,6 +123,7 @@ export function applyGuardLabelModifications(
     labels: Array.from(labelSet),
     taint: Array.from(taintSet),
     sources: descriptor.sources,
+    tools: descriptor.tools,
     capability: descriptor.capability,
     policyContext
   });

@@ -1,13 +1,13 @@
 ---
 id: audit-log
 title: Audit Log
-brief: Event ledgers for labels, taint, and signatures
+brief: Event ledgers with stable IDs, tool calls, and signing records
 category: security
 parent: audit-log
 tags: [audit, security, labels, signing, taint]
 related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking]
 related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, core/security/sig-adapter.ts, interpreter/utils/audit-log.ts]
-updated: 2026-02-05
+updated: 2026-03-23
 qa_tier: 2
 ---
 
@@ -16,16 +16,17 @@ mlld records security events in two JSONL audit ledgers:
 - `.mlld/sec/audit.jsonl` for label and taint events managed by mlld
 - `.sig/audit.jsonl` for signing and verification events managed by `@disreguard/sig`
 
-Each line is a JSON object with a timestamp and an event type.
+Each line is a JSON object with a stable `id`, timestamp, and event type.
 
 ```json
-{"ts":"2026-02-05T08:42:21.123Z","event":"write","path":"/project/output.txt","taint":["secret","src:network"],"writer":"src:network"}
+{"id":"6b2a0f8d-fb2b-420d-9c15-1dd9ad18f9e2","ts":"2026-03-23T08:42:21.123Z","event":"toolCall","tool":"verify","args":{"value":"..."},"ok":true,"resultLength":12,"duration":8,"labels":["safe"],"taint":["src:mcp"],"sources":["mcp:verify"]}
 ```
 
 **Common fields:**
 
 | Field | Meaning |
 | --- | --- |
+| `id` | Stable UUID for the audit event |
 | `ts` | ISO timestamp of the event |
 | `event` | Event type |
 
@@ -37,6 +38,7 @@ Each line is a JSON object with a timestamp and an event type.
 | `bless` | `var`, `add`, `remove`, `by` | Privileged label changes that remove labels |
 | `conflict` | `var`, `labels`, `resolved` | Trusted/untrusted conflict resolution |
 | `write` | `path`, `taint`, `writer` | File writes with taint provenance |
+| `toolCall` | `tool`, `args`, `ok`, `resultLength`, `duration`, `labels`, `taint`, `sources`, `detail` | Exe/native tool body execution with timing and result summary |
 
 **sig audit log (`.sig/audit.jsonl`):**
 
@@ -54,11 +56,21 @@ Each line is a JSON object with a timestamp and an event type.
 - `taint` records the label/taint set applied to the written data.
 - `writer` stores the first available source tag when present. When no source tag is available (e.g., for inline-declared values), `writer` is `null`.
 
+**Tool-call ledger vs value provenance:**
+
+- `toolCall.args` in the audit ledger stores the full argument payload for debugging and forensics.
+- `toolCall` events are written only when the tool body actually executes; pre-guard and param-flow short-circuits do not emit them.
+- `toolCall.duration` measures tool-body execution only. It excludes guard handling, `with`-clause processing, and downstream pipelines.
+- Value-level provenance lives separately on `@value.mx.tools` and `@mx.tools.history`.
+- Provenance entries are lightweight: `{ name, args, auditRef }`.
+- In provenance, `args` contains parameter names only, and `auditRef` points back to the audit event `id`.
+
 **Inspecting the ledger:**
 
 ```sh
 tail -n 20 .mlld/sec/audit.jsonl
 jq 'select(.event == "write")' .mlld/sec/audit.jsonl
+jq 'select(.event == "toolCall")' .mlld/sec/audit.jsonl
 jq 'select(.event == "label")' .mlld/sec/audit.jsonl
 jq 'select(.event == "verify" or .event == "verify-fail")' .sig/audit.jsonl
 ```
@@ -67,10 +79,10 @@ jq 'select(.event == "verify" or .event == "verify-fail")' .sig/audit.jsonl
 
 ```mlld
 var @audit = <@root/.mlld/sec/audit.jsonl>
-exe @findWrites(events) = js {
-  return events.filter(e => e.event === "write");
+exe @findToolCalls(events) = js {
+  return events.filter(e => e.event === "toolCall");
 }
-show @findWrites(@audit) | @parse
+show @findToolCalls(@audit) | @parse
 ```
 
 **Note:** When working with audit events in mlld, use `@event | @parse` or a JS function to access the `taint` field, since `.taint` on a variable accesses the variable's metadata, not the JSON property.

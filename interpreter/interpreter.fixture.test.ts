@@ -677,7 +677,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   }
 
   function usesMcpSubprocess(fixture: any): boolean {
-    return typeof fixture?.input === 'string' && /\bmlld\s+mcp\b/.test(fixture.input);
+    if (typeof fixture?.input !== 'string') {
+      return false;
+    }
+
+    return (
+      /\bmlld\s+mcp\b/.test(fixture.input) ||
+      /\bfrom\s+mcp\b/.test(fixture.input) ||
+      /=\s*mcp\b/.test(fixture.input)
+    );
   }
 
   // Recursive function to copy test files to virtual filesystem

@@ -85,6 +85,11 @@ export interface ForeachSectionExpression {
   arrays: (ContentNodeArray | DirectiveNode)[];
 }
 
+export interface McpToolSourceValue {
+  type: 'mcpToolSource';
+  source: Expression;
+}
+
 /**
  * Recursive type for data values
  */
@@ -98,7 +103,8 @@ export type DataValue =
   | NewExpression
   | ConditionalArrayElementNode
   | ForeachCommandExpression
-  | ForeachSectionExpression;
+  | ForeachSectionExpression
+  | McpToolSourceValue;
 
 /**
  * Var directive raw values
@@ -143,6 +149,7 @@ export type VarValue =
   | ExeBlockNode // Block expressions
   | ForeachCommandExpression // Foreach command expressions
   | ForeachSectionExpression // Foreach section expressions
+  | McpToolSourceValue
   | VarExecDefinition; // Exec definitions (parameterized commands)
 
 /**

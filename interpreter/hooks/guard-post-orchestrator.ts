@@ -381,6 +381,7 @@ function buildOperationSnapshot(inputs: readonly Variable[]): GuardOperationSnap
   return {
     labels: aggregate.labels,
     sources: aggregate.sources,
+    taint: aggregate.taint,
     variables: inputs
   };
 }

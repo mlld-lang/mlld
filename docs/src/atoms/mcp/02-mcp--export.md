@@ -80,4 +80,4 @@ Uses `bind`/`expose` definitions from a `var tools` collection instead of raw ex
 }
 ```
 
-**Security:** When tools are called via MCP, inputs carry `src:mcp` taint. See `mcp-security`.
+**Security:** MCP-served tool inputs keep the caller's existing labels/taint; they do not gain synthetic `src:mcp`. `src:mcp` is applied to values returned from imported MCP tools. See `mcp-security`.

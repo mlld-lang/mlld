@@ -1097,6 +1097,7 @@ export class Environment
         labels: this.securityRuntime.descriptor.labels,
         sources: this.securityRuntime.descriptor.sources,
         taint: this.securityRuntime.descriptor.taint,
+        tools: this.securityRuntime.descriptor.tools,
         policy: this.securityRuntime.policy,
         operation: top?.operation
       };
@@ -1109,7 +1110,12 @@ export class Environment
     if (!descriptor) {
       return undefined;
     }
-    if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) {
+    if (
+      descriptor.labels.length === 0
+      && descriptor.taint.length === 0
+      && descriptor.sources.length === 0
+      && (descriptor.tools?.length ?? 0) === 0
+    ) {
       return undefined;
     }
     return descriptor;
@@ -1123,6 +1129,7 @@ export class Environment
       labels: snapshot.labels,
       taint: snapshot.taint,
       sources: snapshot.sources,
+      tools: snapshot.tools,
       policyContext: snapshot.policy
     });
   }

@@ -1,4 +1,4 @@
-import type { SecurityDescriptor, DataLabel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel, ToolProvenance } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
@@ -81,6 +81,7 @@ export interface StructuredValueContext {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
   sources: readonly string[];
+  tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
   text?: string;
   data?: unknown;
@@ -127,6 +128,9 @@ function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: 
     labels: mx.labels ? [...mx.labels] : [],
     taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
     sources: mx.sources ? [...mx.sources] : [],
+    tools: Array.isArray((mx as { tools?: readonly ToolProvenance[] }).tools)
+      ? [...((mx as { tools?: readonly ToolProvenance[] }).tools ?? [])]
+      : [],
     policyContext: mx.policy ?? undefined
   });
 }
@@ -437,6 +441,7 @@ export function applySecurityDescriptorToStructuredValue(
   value.mx.labels = normalized.labels ? [...normalized.labels] : [];
   value.mx.taint = normalized.taint ? [...normalized.taint] : [];
   value.mx.sources = normalized.sources ? [...normalized.sources] : [];
+  value.mx.tools = normalized.tools ? [...normalized.tools] : [];
   value.mx.policy = normalized.policyContext ?? null;
 }
 
@@ -567,6 +572,7 @@ function buildVarMxFromMetadata(
     labels,
     taint,
     sources,
+    tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
     policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
@@ -724,7 +730,16 @@ function extractDescriptorInternal(
     return descriptors[0];
   }
 
-  const candidate = value as { metadata?: { security?: SecurityDescriptor }; mx?: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null } };
+  const candidate = value as {
+    metadata?: { security?: SecurityDescriptor };
+    mx?: {
+      labels?: readonly DataLabel[];
+      taint?: string;
+      sources?: readonly string[];
+      tools?: readonly ToolProvenance[];
+      policy?: Readonly<Record<string, unknown>> | null;
+    };
+  };
   const metadataDescriptor = candidate.mx
     ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
     : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize);

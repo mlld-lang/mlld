@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.5]
 
 ### Added
+- Tool provenance rollout: `.mlld/sec/audit.jsonl` now assigns a stable `id` to every event, exe/native tool invocations emit `toolCall` records with args/timing/result summaries, result values carry `.mx.tools` lineage with audit references, and guards now expose that lineage as `@mx.tools.history`.
+- Dynamic MCP tool collections: `var tools @name = mcp @expr` now builds a first-class `ToolCollection` directly from runtime-discovered MCP server tools, complementing the existing `import tools from mcp "..."` flow.
 - SDK `mcp_servers` option on `execute()` and `process()`: maps logical names to MCP server commands per-execution. `import tools from mcp "name"` resolves against the map before treating the spec as a shell command. Enables parallel executions with independent MCP server instances. Supported in TypeScript, Python, and live stdio transport.
 - MCP tool argument coercion: arguments are automatically coerced to match the declared `inputSchema` types. String-to-array wrapping (`"x"` → `["x"]`), string-to-number/integer, string-to-boolean, string-to-null, and JSON string parsing for object/array types. Runs at the MCP call boundary using schema type info from `tools/list`.
 - MCP tool argument name matching: when calling an MCP tool with variable-reference arguments whose names match schema property names, arguments are matched by name instead of position. Exe wrappers can declare params in any order (e.g. control args first) and mlld routes them to the correct MCP schema properties.
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guard and managed policy label-flow denials now surface as structured SDK observability data. Streamed executions emit immediate `guard_denial` events, structured execute results collect `denials`, and the live stdio / Python / Ruby / Go / Rust / Elixir SDK layers now preserve that payload without string parsing.
 
 ### Fixed
+- `toolCall` audit events are now emitted only when an executable/tool body actually runs. Early returns from pre-guards or parameter label-flow checks no longer create false tool-call records, and `duration` now measures body execution only.
+- After-guards now preserve taint-only provenance on both `@mx.taint` and `@output.mx.taint`, so source markers such as `src:mcp` and `src:js` remain visible in after-guard checks.
 - TypeScript AST extractor is now lazy-loaded, so `npm install -g mlld` no longer requires a globally installed `typescript` package. The `typescript` module is only imported when extracting definitions from `.ts` files.
 - Python package resolver no longer eagerly detects pip/uv during environment bootstrap. Detection is deferred until a `@py/` or `@python/` import is actually resolved, so scripts that don't use Python imports work without Python installed.
 - `py { }`, `bash { }`, and `node { }` blocks now show actionable error messages when the required binary is missing (e.g. "Python 3 is not installed. Install it to use py { } blocks") instead of the raw `spawn ENOENT` error.

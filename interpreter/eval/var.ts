@@ -195,8 +195,24 @@ export async function prepareVarAssignment(
     sourceLocation
   });
 
-  if (isToolsCollection && (!valueNode || typeof valueNode !== 'object' || valueNode.type !== 'object')) {
-    throw new Error('Tool collections must be object literals');
+  if (
+    isToolsCollection
+    && (
+      !valueNode
+      || typeof valueNode !== 'object'
+      || ((valueNode as any).type !== 'object' && (valueNode as any).type !== 'mcpToolSource')
+    )
+  ) {
+    throw new Error('Tool collections must be object literals or dynamic MCP sources');
+  }
+
+  if (
+    !isToolsCollection
+    && valueNode
+    && typeof valueNode === 'object'
+    && (valueNode as any).type === 'mcpToolSource'
+  ) {
+    throw new Error('Dynamic MCP tool sources are only valid for `var tools` declarations');
   }
 
   let resolvedValue: any;
@@ -241,7 +257,9 @@ export async function prepareVarAssignment(
   }
 
   if (isToolsCollection) {
-    toolCollection = normalizeToolCollection(resolvedValue, env);
+    toolCollection = rhsResult.handler === 'mcp-tool-source'
+      ? resolvedValue as ToolCollection
+      : normalizeToolCollection(resolvedValue, env);
     resolvedValue = toolCollection;
   }
 

@@ -1,5 +1,5 @@
 import type { SourceLocation } from '@core/types';
-import type { DataLabel } from '@core/types/security';
+import type { DataLabel, ToolProvenance } from '@core/types/security';
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import {
   createGuardArgsView,
@@ -57,6 +57,7 @@ export interface GuardContextSnapshot {
   labels?: readonly DataLabel[];
   sources?: readonly string[];
   taint?: readonly string[];
+  toolsHistory?: readonly ToolProvenance[];
   inputPreview?: string | null;
   outputPreview?: string | null;
   timing?: 'before' | 'after';
@@ -81,6 +82,7 @@ export interface SecuritySnapshotLike {
   labels: readonly string[];
   sources: readonly string[];
   taint: readonly string[];
+  tools?: readonly ToolProvenance[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
 }
@@ -108,6 +110,7 @@ export interface ToolsContextSnapshot {
   allowed: ReadonlyArray<string>;
   denied: ReadonlyArray<string>;
   results: Readonly<Record<string, unknown>>;
+  history: ReadonlyArray<ToolProvenance>;
 }
 
 type SigFilesResolver = (pattern: string) => Promise<unknown[]>;
@@ -301,7 +304,8 @@ export class ContextManager {
       calls: this.toolCalls.map(call => call.name),
       allowed: [...this.toolAllowed],
       denied: [...this.toolDenied],
-      results: { ...this.toolResults }
+      results: { ...this.toolResults },
+      history: []
     };
   }
 
@@ -369,6 +373,11 @@ export class ContextManager {
         ? (((normalizedOperation as any).metadata.userHookErrors as unknown[]) ?? [])
         : [];
     const checkpointContext = this.buildCheckpointContext(normalizedOperation);
+    const toolHistory = guardContext?.toolsHistory
+      ? Array.from(guardContext.toolsHistory)
+      : security?.tools
+        ? Array.from(security.tools)
+        : [];
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -398,7 +407,10 @@ export class ContextManager {
       hooks: {
         errors: Array.isArray(hookErrors) ? [...hookErrors] : []
       },
-      tools: this.getToolsSnapshot(),
+      tools: {
+        ...this.getToolsSnapshot(),
+        history: toolHistory
+      },
       sig: this.buildSigContext(),
       ...(checkpointContext ? { checkpoint: checkpointContext } : {}),
       ...(options.boxContext ? { box: options.boxContext } : {}),

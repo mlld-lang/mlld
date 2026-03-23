@@ -91,6 +91,8 @@ export async function evaluatePostGuardRuntime(
   let outputValue: unknown;
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
+  let contextTaint: readonly string[];
+  let contextToolsHistory: readonly import('@core/types/security').ToolProvenance[];
   let inputPreview: string | null = null;
 
   if (options.activeInput) {
@@ -108,6 +110,8 @@ export async function evaluatePostGuardRuntime(
     contextSources =
       options.sourcesOverride ??
       (Array.isArray(options.activeInput.mx?.sources) ? options.activeInput.mx.sources : []);
+    contextTaint = Array.isArray(options.activeInput.mx?.taint) ? options.activeInput.mx.taint : [];
+    contextToolsHistory = Array.isArray(options.activeInput.mx?.tools) ? options.activeInput.mx.tools : [];
     inputPreview = options.inputPreviewOverride ?? dependencies.buildVariablePreview(inputVariable);
   } else if (scope === 'perInput' && options.perInput) {
     inputVariable = dependencies.cloneVariable(options.perInput.variable);
@@ -118,6 +122,8 @@ export async function evaluatePostGuardRuntime(
       options.outputRaw ?? dependencies.resolveGuardValue(outputVariable, inputVariable);
     contextLabels = options.labelsOverride ?? options.perInput.labels;
     contextSources = options.sourcesOverride ?? options.perInput.sources;
+    contextTaint = options.perInput.taint;
+    contextToolsHistory = options.perInput.toolsHistory;
     inputPreview = options.inputPreviewOverride ?? dependencies.buildVariablePreview(inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const inputSnapshot = options.operationInputSnapshot ?? options.operationSnapshot;
@@ -129,6 +135,8 @@ export async function evaluatePostGuardRuntime(
     attachArrayHelpers(inputVariable as any);
     contextLabels = options.labelsOverride ?? options.operationSnapshot.labels;
     contextSources = options.sourcesOverride ?? options.operationSnapshot.sources;
+    contextTaint = options.operationSnapshot.taint;
+    contextToolsHistory = options.operationSnapshot.toolsHistory ?? [];
     outputVariable = options.activeOutput
       ? dependencies.cloneVariable(options.activeOutput)
       : options.operationSnapshot.variables[0]
@@ -154,7 +162,14 @@ export async function evaluatePostGuardRuntime(
     outputText as any,
     dependencies.guardInputSource,
     {
-      metadata: { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) },
+      metadata: {
+        security: makeSecurityDescriptor({
+          labels: contextLabels,
+          taint: contextTaint,
+          sources: contextSources,
+          tools: contextToolsHistory
+        })
+      },
       internal: { isReserved: true }
     }
   );
@@ -196,6 +211,8 @@ export async function evaluatePostGuardRuntime(
     output: guardOutputVariable,
     labels: contextLabels,
     sources: contextSources,
+    taint: contextTaint,
+    toolsHistory: contextToolsHistory,
     inputPreview,
     outputPreview: dependencies.buildVariablePreview(guardOutputVariable),
     hintHistory,

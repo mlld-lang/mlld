@@ -57,5 +57,6 @@ function hasSecuritySignals(mx: VariableContext | StructuredValueContext): boole
   const labels = Array.isArray(mx.labels) ? mx.labels : [];
   const sources = Array.isArray(mx.sources) ? mx.sources : [];
   const taint = (mx as any).taint ?? 'unknown';
-  return !(labels.length === 0 && sources.length === 0 && taint === 'unknown');
+  const tools = Array.isArray((mx as any).tools) ? (mx as any).tools : [];
+  return !(labels.length === 0 && sources.length === 0 && taint === 'unknown' && tools.length === 0);
 }

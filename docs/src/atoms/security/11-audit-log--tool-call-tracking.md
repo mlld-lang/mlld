@@ -1,17 +1,22 @@
 ---
 id: tool-call-tracking
 title: Tool Call Tracking
-brief: Track exe invocations with @mx.tools namespace
+brief: Use @mx.tools.calls for execution history and @mx.tools.history for value lineage
 category: security
 parent: audit-log
 tags: [tools, guards, mx, tracking]
 related: [mcp, mcp-tool-gateway, security-guards-basics, box-directive]
 related-code: [interpreter/env/ContextManager.ts, cli/mcp/FunctionRouter.ts]
-updated: 2026-02-16
+updated: 2026-03-23
 qa_tier: 2
 ---
 
-The `@mx.tools` namespace tracks `exe` invocations — the tools you define and expose to LLMs during orchestration. Guards can use this to enforce rate limits, prevent duplicate calls, and require verification steps.
+The `@mx.tools` namespace now exposes two different histories:
+
+- `@mx.tools.calls` is execution-level history for the current run.
+- `@mx.tools.history` is value-level lineage for the current guarded input/output.
+
+Guards can use `calls` for rate limits and duplicate suppression, and `history` for "what produced this value?" checks.
 
 Raw commands (`run cmd {}`, `run sh {}`) are not tracked. Only `exe`-defined functions count as tools.
 
@@ -25,6 +30,23 @@ guard @limitCalls before op:exe = when [
 ```
 
 Array of tool names invoked this session (both direct calls and MCP-routed).
+
+**@mx.tools.history - Value lineage:**
+
+```mlld
+guard @requireVerified before publishes = when [
+  @mx.tools.history.length() < 2 || @mx.tools.history[1].name != "verify" => deny "Value must pass through verify"
+  * => allow
+]
+```
+
+`history` comes from the current value's security descriptor, not from the whole session. Each entry has:
+
+- `name` — tool name
+- `args` — parameter names only
+- `auditRef` — UUID of the matching `toolCall` event in `.mlld/sec/audit.jsonl`
+
+Outside guards, inspect the same lineage directly on values with `@value.mx.tools`.
 
 **Check if specific tool was called:**
 
@@ -80,6 +102,8 @@ guard @ensureVerified after llm = when [
 ]
 ```
 
+This example intentionally uses `calls`, not `history`: it is enforcing that the current `llm` execution invoked `verify`, not tracing the lineage of a later value.
+
 **Conditional behavior based on history:**
 
 ```mlld
@@ -96,7 +120,7 @@ Calls are tracked within the current execution context. `env` blocks with tool r
 ```mlld
 box @agent with { tools: @agentTools } [
   >> @mx.tools.calls scoped to this env block
-  >> only tracks exe invocations the agent makes
+  >> @mx.tools.history still follows the specific values flowing through guards
   var @result = @fetchData("input")
 ]
 ```

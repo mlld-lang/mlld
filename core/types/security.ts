@@ -69,10 +69,17 @@ export type CapabilityKind =
   | 'command'
   | 'output';
 
+export interface ToolProvenance {
+  readonly name: string;
+  readonly args?: readonly string[];
+  readonly auditRef?: string;
+}
+
 export interface SecurityDescriptor {
   readonly labels: readonly DataLabel[];
   readonly taint: readonly DataLabel[];
   readonly sources: readonly string[];
+  readonly tools?: readonly ToolProvenance[];
   readonly capability?: CapabilityKind;
   readonly policyContext?: Readonly<Record<string, unknown>>;
 }
@@ -93,6 +100,7 @@ export type SerializedSecurityDescriptor = {
   labels: DataLabel[];
   taint: DataLabel[];
   sources: string[];
+  tools?: ToolProvenance[];
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
 };
@@ -152,10 +160,71 @@ function freezeObject<T extends Record<string, unknown> | undefined>(input: T): 
   return Object.freeze({ ...input }) as T;
 }
 
+function freezeToolProvenanceEntry(entry: ToolProvenance): ToolProvenance | undefined {
+  if (!entry || typeof entry.name !== 'string') {
+    return undefined;
+  }
+
+  const name = entry.name.trim();
+  if (!name) {
+    return undefined;
+  }
+
+  const args = Array.isArray(entry.args)
+    ? Object.freeze(
+        entry.args
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .map(value => value.trim())
+      ) as readonly string[]
+    : undefined;
+  const auditRef =
+    typeof entry.auditRef === 'string' && entry.auditRef.trim().length > 0
+      ? entry.auditRef.trim()
+      : undefined;
+
+  return Object.freeze({
+    name,
+    ...(args && args.length > 0 ? { args } : {}),
+    ...(auditRef ? { auditRef } : {})
+  });
+}
+
+function freezeToolArray(
+  values: Iterable<ToolProvenance> | undefined
+): readonly ToolProvenance[] | undefined {
+  if (!values) {
+    return undefined;
+  }
+
+  const deduped: ToolProvenance[] = [];
+  const seenAuditRefs = new Set<string>();
+
+  for (const value of values) {
+    const normalized = freezeToolProvenanceEntry(value);
+    if (!normalized) {
+      continue;
+    }
+    if (normalized.auditRef) {
+      if (seenAuditRefs.has(normalized.auditRef)) {
+        continue;
+      }
+      seenAuditRefs.add(normalized.auditRef);
+    }
+    deduped.push(normalized);
+  }
+
+  if (deduped.length === 0) {
+    return undefined;
+  }
+
+  return Object.freeze(deduped);
+}
+
 function createDescriptor(
   labels: readonly DataLabel[],
   taint: readonly DataLabel[],
   sources: readonly string[],
+  tools?: readonly ToolProvenance[],
   capability?: CapabilityKind,
   policyContext?: Readonly<Record<string, unknown>>
 ): SecurityDescriptor {
@@ -163,6 +232,7 @@ function createDescriptor(
     labels,
     taint,
     sources,
+    ...(tools && tools.length > 0 ? { tools } : {}),
     capability,
     policyContext
   });
@@ -172,17 +242,20 @@ export function makeSecurityDescriptor(options?: {
   labels?: Iterable<DataLabel>;
   taint?: Iterable<DataLabel>;
   sources?: Iterable<string>;
+  tools?: Iterable<ToolProvenance>;
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
 }): SecurityDescriptor {
   const labels = freezeArray(options?.labels);
   const taint = freezeArray([...(options?.taint ?? []), ...labels]);
   const sources = freezeArray(options?.sources);
+  const tools = freezeToolArray(options?.tools);
   const policyContext = freezeObject(options?.policyContext);
   return createDescriptor(
     labels,
     taint,
     sources,
+    tools,
     options?.capability,
     policyContext
   );
@@ -206,11 +279,14 @@ export function normalizeSecurityDescriptor(
   const labels = (candidate as any).labels;
   const sources = (candidate as any).sources;
   const taint = (candidate as any).taint;
+  const tools = (candidate as any).tools;
   const hasIterableLabels = Array.isArray(labels) && typeof labels.forEach === 'function';
   const hasIterableSources = Array.isArray(sources) && typeof sources.forEach === 'function';
   const hasIterableTaint = Array.isArray(taint) && typeof taint.forEach === 'function';
+  const hasIterableTools =
+    tools === undefined || (Array.isArray(tools) && typeof tools.forEach === 'function');
 
-  if (hasIterableLabels && hasIterableSources && hasIterableTaint) {
+  if (hasIterableLabels && hasIterableSources && hasIterableTaint && hasIterableTools) {
     return candidate;
   }
 
@@ -231,6 +307,7 @@ export function normalizeSecurityDescriptor(
     labels: normalizedLabels,
     taint: normalizedTaint,
     sources: normalizedSources,
+    tools: Array.isArray(tools) ? (tools as ToolProvenance[]) : undefined,
     capability: (candidate as any).capability,
     policyContext: (candidate as any).policyContext
   });
@@ -242,6 +319,8 @@ export function mergeDescriptors(
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
   const taintSet = new Set<DataLabel>();
+  const toolList: ToolProvenance[] = [];
+  const seenToolAuditRefs = new Set<string>();
   let capability: CapabilityKind | undefined;
   let policyContext: Record<string, unknown> | undefined;
 
@@ -255,6 +334,15 @@ export function mergeDescriptors(
     });
     descriptor.taint.forEach(label => taintSet.add(label));
     descriptor.sources.forEach(source => sourceSet.add(source));
+    for (const tool of descriptor.tools ?? []) {
+      if (tool.auditRef) {
+        if (seenToolAuditRefs.has(tool.auditRef)) {
+          continue;
+        }
+        seenToolAuditRefs.add(tool.auditRef);
+      }
+      toolList.push(tool);
+    }
 
     if (descriptor.capability) {
       capability = descriptor.capability;
@@ -269,6 +357,7 @@ export function mergeDescriptors(
     freezeArray(labelSet),
     freezeArray(taintSet),
     freezeArray(sourceSet),
+    freezeToolArray(toolList),
     capability,
     freezeObject(policyContext)
   );
@@ -290,6 +379,13 @@ export function serializeSecurityDescriptor(
     labels: Array.from(descriptor.labels),
     taint: Array.from(descriptor.taint),
     sources: Array.from(descriptor.sources),
+    tools: descriptor.tools
+      ? descriptor.tools.map(tool => ({
+          name: tool.name,
+          ...(tool.args ? { args: Array.from(tool.args) } : {}),
+          ...(tool.auditRef ? { auditRef: tool.auditRef } : {})
+        }))
+      : undefined,
     capability: descriptor.capability,
     policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
   };
@@ -303,6 +399,7 @@ export function deserializeSecurityDescriptor(
     labels: serialized.labels,
     taint: serialized.taint,
     sources: serialized.sources,
+    tools: serialized.tools,
     capability: serialized.capability,
     policyContext: serialized.policyContext
   });

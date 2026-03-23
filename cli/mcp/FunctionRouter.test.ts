@@ -7,6 +7,15 @@ import { PathService } from '@services/fs/PathService';
 import type { ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
 
+async function readAuditEvents(environment: Environment): Promise<Array<Record<string, unknown>>> {
+  const contents = await environment.getFileSystemService().readFile('/.mlld/sec/audit.jsonl');
+  return contents
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
+
 async function createEnvironment(source: string): Promise<Environment> {
   const fileSystem = new MemoryFileSystem();
   const pathService = new PathService();
@@ -309,6 +318,30 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
     await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
     await expect(router.executeFunction('greet', { name: 'Grace' })).rejects.toThrow('Too many calls');
+  });
+
+  it('writes a single toolCall audit event for router-owned native tool calls', async () => {
+    const environment = await createEnvironment(`
+      /exe @greet(name) = js {
+        return 'Hello ' + name;
+      }
+
+      /export { @greet }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    await expect(router.executeFunction('greet', { name: 'Ada' })).resolves.toBe('Hello Ada');
+
+    const toolCallEvents = (await readAuditEvents(environment)).filter(
+      event => event.event === 'toolCall' && event.tool === 'greet'
+    );
+
+    expect(toolCallEvents).toHaveLength(1);
+    expect(toolCallEvents[0]).toMatchObject({
+      tool: 'greet',
+      ok: true,
+      args: { name: 'Ada' }
+    });
   });
 
   it('supports optional exposed tool parameters', async () => {

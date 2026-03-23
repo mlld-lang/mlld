@@ -1,13 +1,13 @@
 ---
 id: mcp-tool-gateway
 title: Tool Collections
-brief: Define tool sets with labels, scoping, and metadata for agents
+brief: Define tool sets from object literals or runtime MCP discovery
 category: mcp
 parent: mcp
 tags: [mcp, tools, env, labels, collections]
 related: [mcp, mcp-export, tool-reshaping, mcp-guards, exe-metadata]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts]
-updated: 2026-02-11
+updated: 2026-03-23
 qa_tier: 2
 ---
 
@@ -62,3 +62,19 @@ guard @blockDestructive before op:exe = when [
 ```
 
 Labels from the tool definition flow to `@mx.op.labels` in guard context. See `mcp-guards`.
+
+**Create a collection directly from a runtime MCP spec:**
+
+```mlld
+var @serverSpec = "node ./calendar-server.cjs"
+var tools trusted @calendarTools = mcp @serverSpec
+show @calendarTools.createEvent.description
+```
+
+This asks the MCP server for its tool schema and builds the `ToolCollection` directly from the discovered tools. It is not object-literal normalization:
+
+- Use object literals when you want `bind`, `expose`, `optional`, `controlArgs`, or per-tool labels.
+- Use `var tools @t = mcp @expr` when the server command is only known at runtime and you want the discovered collection as a value.
+- Normal `var` labels still apply to the collection variable itself, as in `trusted @calendarTools`.
+
+Use `import tools from mcp "..."` when you want callable functions or a namespace in the current scope. Use `var tools @t = mcp @expr` when you want to pass a runtime-built collection into `box with { tools: @t }` or other tool-collection APIs.

@@ -45,13 +45,18 @@ function createGuard(overrides: Partial<GuardDefinition> = {}): GuardDefinition 
   };
 }
 
-function createInput(name: string, value = 'visible', labels: string[] = []): Variable {
+function createInput(
+  name: string,
+  value = 'visible',
+  labels: string[] = [],
+  taint: string[] = []
+): Variable {
   return createSimpleTextVariable(
     name,
     value,
     VARIABLE_SOURCE,
     {
-      security: makeSecurityDescriptor({ labels, sources: [`source:${name}`] })
+      security: makeSecurityDescriptor({ labels, taint, sources: [`source:${name}`] })
     }
   );
 }
@@ -86,6 +91,7 @@ function createOptions(
       labels: ['secret'],
       sources: ['source:input'],
       taint: [],
+      toolsHistory: [],
       guards: []
     },
     attemptNumber: 1,
@@ -218,11 +224,13 @@ describe('guard post runtime evaluator', () => {
       operationSnapshot: {
         labels: ['secret'],
         sources: ['source:result'],
+        taint: [],
         variables: [operationOutput]
       },
       operationInputSnapshot: {
         labels: ['secret'],
         sources: ['source:arg'],
+        taint: [],
         variables: [operationInput]
       },
       activeOutput: operationOutput,
@@ -242,5 +250,38 @@ describe('guard post runtime evaluator', () => {
 
     const result = await evaluatePostGuardRuntime(options, deps);
     expect(result.decision).toBe('allow');
+  });
+
+  it('preserves taint-only labels on after-guard output and guard context', async () => {
+    const input = createInput('input', 'visible', ['secret'], ['src:mcp']);
+    let outputTaint: readonly string[] = [];
+    let guardContextTaint: readonly string[] | undefined;
+    const options = createOptions({
+      activeInput: input,
+      activeOutput: input,
+      perInput: {
+        index: 0,
+        variable: input,
+        labels: input.mx?.labels ?? [],
+        sources: input.mx?.sources ?? [],
+        taint: input.mx?.taint ?? [],
+        toolsHistory: [],
+        guards: []
+      }
+    });
+    const deps = createDeps({
+      evaluateGuardBlock: async (_block, guardEnv) => {
+        outputTaint = Array.isArray((guardEnv.getVariable('output') as any)?.mx?.taint)
+          ? ((guardEnv.getVariable('output') as any).mx.taint as readonly string[])
+          : [];
+        guardContextTaint = guardEnv.getContextManager().peekGuardContext()?.taint;
+        return createAction('allow');
+      }
+    });
+
+    const result = await evaluatePostGuardRuntime(options, deps);
+    expect(result.decision).toBe('allow');
+    expect(outputTaint).toEqual(expect.arrayContaining(['src:mcp']));
+    expect(guardContextTaint).toEqual(expect.arrayContaining(['src:mcp']));
   });
 });

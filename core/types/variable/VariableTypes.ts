@@ -10,7 +10,7 @@ import type {
   StructuredValue,
   StructuredValueType
 } from '@interpreter/utils/structured-value';
-import type { CapabilityContext, SecurityDescriptor, DataLabel } from '../security';
+import type { CapabilityContext, SecurityDescriptor, DataLabel, ToolProvenance } from '../security';
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
@@ -114,6 +114,7 @@ export interface VariableContext {
   length?: number;
   size?: number;
   sources: readonly string[];
+  tools?: readonly ToolProvenance[];
   exported?: boolean;
   policy?: Readonly<Record<string, unknown>> | null;
   totalTokens?: () => number;
