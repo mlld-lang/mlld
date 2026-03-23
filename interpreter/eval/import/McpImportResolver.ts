@@ -1,7 +1,14 @@
 import { MlldImportError } from '@core/errors';
 import { mlldNameToMCPName, mcpNameToMlldName } from '@core/mcp/names';
+import {
+  deriveMcpParamInfo as _deriveMcpParamInfo,
+  coerceMcpArgs as _coerceMcpArgs,
+  type McpParamInfo
+} from '@core/mcp/coerce';
 import type { MCPToolSchema } from '../../mcp/McpImportManager';
 import type { Environment } from '../../env/Environment';
+
+export type { McpParamInfo };
 
 export interface McpToolIndex {
   tools: MCPToolSchema[];
@@ -65,114 +72,23 @@ export function resolveMcpTool(
   });
 }
 
-export function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[]; paramTypes: Record<string, string> } {
-  const properties = tool.inputSchema?.properties ?? {};
-  const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
-  const allParams = Object.keys(properties);
-  const optional = allParams.filter(name => !required.includes(name));
-  const paramNames = [...required, ...optional];
-  const paramTypes: Record<string, string> = {};
-  for (const [name, schema] of Object.entries(properties)) {
-    paramTypes[name] = extractSchemaType(schema);
-  }
-  return { paramNames, paramTypes };
+export function deriveMcpParamInfo(tool: MCPToolSchema): McpParamInfo {
+  return _deriveMcpParamInfo(tool.inputSchema);
 }
 
-function extractSchemaType(schema: any): string {
-  if (typeof schema?.type === 'string') {
-    return schema.type.toLowerCase();
-  }
-  if (Array.isArray(schema?.anyOf)) {
-    const nonNull = schema.anyOf.find((s: any) => s?.type && s.type !== 'null');
-    if (nonNull?.type) return nonNull.type.toLowerCase();
-  }
-  if (Array.isArray(schema?.oneOf)) {
-    const nonNull = schema.oneOf.find((s: any) => s?.type && s.type !== 'null');
-    if (nonNull?.type) return nonNull.type.toLowerCase();
-  }
-  return 'string';
-}
-
-/**
- * Coerce argument values to match the types declared in the MCP tool's inputSchema.
- * LLMs frequently produce string representations of non-string types.
- */
 export function coerceMcpArgs(
   payload: Record<string, unknown>,
-  paramTypes: Record<string, string>
+  paramTypesOrInfo: Record<string, string> | McpParamInfo
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (value === null || value === undefined) {
-      continue;
-    }
-    if (typeof value === 'string' && value.trim() === 'null') {
-      continue;
-    }
-    const schemaType = paramTypes[key];
-    if (!schemaType || schemaType === 'string') {
-      result[key] = value;
-      continue;
-    }
-    result[key] = coerceValue(value, schemaType);
+  if ('paramTypes' in paramTypesOrInfo && 'requiredParams' in paramTypesOrInfo) {
+    return _coerceMcpArgs(payload, paramTypesOrInfo as McpParamInfo);
   }
-  return result;
-}
-
-function coerceValue(value: unknown, schemaType: string): unknown {
-  if (value === undefined || value === null) {
-    return value;
-  }
-
-  switch (schemaType) {
-    case 'array':
-      if (Array.isArray(value)) return value;
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (trimmed.length === 0) return [];
-        if (trimmed.startsWith('[')) {
-          try { return JSON.parse(trimmed); } catch { /* fall through */ }
-        }
-        // wrap single value
-        return [value];
-      }
-      return [value];
-
-    case 'integer':
-    case 'number': {
-      if (typeof value === 'number') return value;
-      if (typeof value === 'string') {
-        const n = schemaType === 'integer' ? parseInt(value, 10) : parseFloat(value);
-        if (!isNaN(n)) return n;
-      }
-      return value;
-    }
-
-    case 'boolean':
-      if (typeof value === 'boolean') return value;
-      if (typeof value === 'string') {
-        if (value.toLowerCase() === 'true') return true;
-        if (value.toLowerCase() === 'false') return false;
-      }
-      return value;
-
-    case 'null':
-      if (typeof value === 'string' && value.toLowerCase() === 'null') return null;
-      return value;
-
-    case 'object':
-      if (typeof value === 'object' && !Array.isArray(value)) return value;
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (trimmed.startsWith('{')) {
-          try { return JSON.parse(trimmed); } catch { /* fall through */ }
-        }
-      }
-      return value;
-
-    default:
-      return value;
-  }
+  return _coerceMcpArgs(payload, {
+    paramNames: Object.keys(paramTypesOrInfo),
+    paramTypes: paramTypesOrInfo as Record<string, string>,
+    paramNullable: {},
+    requiredParams: Object.keys(paramTypesOrInfo)
+  });
 }
 
 export function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unknown> {

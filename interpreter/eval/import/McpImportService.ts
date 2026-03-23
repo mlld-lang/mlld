@@ -23,7 +23,7 @@ export class McpImportService {
     const paramInfo = deriveMcpParamInfo(tool);
     const manager = this.env.getMcpImportManager();
     const execFn = async (...args: unknown[]) => {
-      const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo.paramTypes);
+      const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
       return await manager.callTool(importPath, mcpName, payload);
     };
     const execDef: NodeFunctionExecutable = {

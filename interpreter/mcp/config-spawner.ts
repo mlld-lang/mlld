@@ -1,4 +1,5 @@
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
+import { deriveMcpParamInfo as sharedDeriveMcpParamInfo, coerceMcpArgs } from '@core/mcp/coerce';
 import type { NodeFunctionExecutable } from '@core/types/executable';
 import type { VariableSource } from '@core/types/variable';
 import { createExecutableVariable, createObjectVariable } from '@core/types/variable';
@@ -250,20 +251,8 @@ function resolveServerSpec(server: McpServerConfig, index: number): NormalizedSe
   };
 }
 
-function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[]; paramTypes: Record<string, string> } {
-  const properties = tool.inputSchema?.properties ?? {};
-  const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
-  const allParams = Object.keys(properties);
-  const optional = allParams.filter(name => !required.includes(name));
-  const paramNames = [...required, ...optional];
-  const paramTypes: Record<string, string> = {};
-
-  for (const [name, schema] of Object.entries(properties)) {
-    const raw = typeof schema?.type === 'string' ? schema.type.toLowerCase() : 'string';
-    paramTypes[name] = raw;
-  }
-
-  return { paramNames, paramTypes };
+function deriveMcpParamInfo(tool: MCPToolSchema) {
+  return sharedDeriveMcpParamInfo(tool.inputSchema);
 }
 
 function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unknown> {
@@ -350,7 +339,7 @@ function createMcpToolVariable(
   const manager = env.getMcpImportManager();
   const paramInfo = deriveMcpParamInfo(tool);
   const execFn = async (...args: unknown[]) => {
-    const payload = buildMcpArgs(paramInfo.paramNames, args);
+    const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
     return await manager.callTool(importPath, mcpName, payload);
   };
 
