@@ -71,26 +71,16 @@ export function createReferenceEvaluator(
     }
 
     const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const { accessField } = await import('@interpreter/utils/field-access');
+    const { accessFields } = await import('@interpreter/utils/field-access');
     const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
 
     let resolvedValue: unknown;
     if (valueNode.fields && valueNode.fields.length > 0) {
-      const fieldResult = await accessField(resolvedVar, valueNode.fields[0], {
+      const currentResult = await accessFields(resolvedVar, valueNode.fields, {
         preserveContext: true,
         env,
         sourceLocation: directive.location
-      });
-      let currentResult = fieldResult as any;
-
-      for (let i = 1; i < valueNode.fields.length; i++) {
-        currentResult = await accessField(currentResult.value, valueNode.fields[i], {
-          preserveContext: true,
-          parentPath: currentResult.accessPath,
-          env,
-          sourceLocation: directive.location
-        });
-      }
+      }) as any;
 
       resolvedValue = currentResult.value;
       if (

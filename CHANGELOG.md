@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.5]
 
 ### Added
+- Wildcard index `[*]` for array element projection: `@arr[*].field` extracts a field from every element, producing a flat array. Works anywhere arrays appear — variables, guard expressions, template interpolation. Combines naturally with `.includes()` for membership checks like `@mx.tools.history[*].name.includes("verify")`.
 - Tool provenance rollout: `.mlld/sec/audit.jsonl` now assigns a stable `id` to every event, exe/native tool invocations emit `toolCall` records with args/timing/result summaries, result values carry `.mx.tools` lineage with audit references, and guards now expose that lineage as `@mx.tools.history`.
 - Dynamic MCP tool collections: `var tools @name = mcp @expr` now builds a first-class `ToolCollection` directly from runtime-discovered MCP server tools, complementing the existing `import tools from mcp "..."` flow.
 - SDK `mcp_servers` option on `execute()` and `process()`: maps logical names to MCP server commands per-execution. `import tools from mcp "name"` resolves against the map before treating the spec as a shell command. Enables parallel executions with independent MCP server instances. Supported in TypeScript, Python, and live stdio transport.

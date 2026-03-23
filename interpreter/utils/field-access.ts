@@ -1120,7 +1120,43 @@ export async function accessFields(
   
   const shouldPreserveContext = options?.preserveContext !== false;
   
-  for (const field of fields) {
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+
+    // Wildcard index: project remaining fields over each array element
+    if (field.type === 'wildcardIndex') {
+      let unwrapped = isVariable(current) ? current.value : current;
+      unwrapped = isStructuredValue(unwrapped) ? asData(unwrapped) : unwrapped;
+      // Handle AST array nodes ({type: 'array', items: [...]})
+      const arrayData = (unwrapped && typeof unwrapped === 'object' && unwrapped.type === 'array' && unwrapped.items)
+        ? unwrapped.items
+        : unwrapped;
+      if (!Array.isArray(arrayData)) {
+        throw new FieldAccessError('Cannot use [*] on non-array value', {
+          baseValue: current,
+          fieldAccessChain: path,
+          failedAtIndex: path.length,
+          failedKey: '*'
+        });
+      }
+      const remaining = fields.slice(i + 1);
+      if (remaining.length === 0) {
+        // [*] with no trailing fields returns the array as-is
+        break;
+      }
+      const projected = await Promise.all(
+        arrayData.map(element =>
+          accessFields(element, remaining, {
+            ...options,
+            preserveContext: false,
+            parentPath: [...path, '*']
+          })
+        )
+      );
+      current = projected;
+      break;
+    }
+
     const result = await accessField(current, field, {
       preserveContext: shouldPreserveContext,
       parentPath: path,

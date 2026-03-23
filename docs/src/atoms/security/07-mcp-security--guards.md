@@ -55,12 +55,12 @@ Use `@mx.guard.try` for guard retries. It is 1-based, so the first guard evaluat
 
 ```mlld
 guard @requireVerify before publishes = when [
-  @mx.tools.history.length() < 2 || @mx.tools.history[1].name != "verify" => deny "Value must be verified first"
+  !@mx.tools.history[*].name.includes("verify") => deny "Value must be verified first"
   * => allow
 ]
 ```
 
-Use `@mx.taint.includes("src:mcp")` when any MCP origin is enough. Use `@mx.tools.history` when the guard needs a specific transformation or verifier in the chain that produced the current value.
+`[*]` projects `.name` across all provenance entries so `.includes()` checks the entire chain regardless of position. Use `@mx.taint.includes("src:mcp")` when any MCP origin is enough. Use `@mx.tools.history` when the guard needs a specific transformation or verifier in the chain that produced the current value.
 
 **Guard context for MCP calls:**
 

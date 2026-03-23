@@ -35,10 +35,12 @@ Array of tool names invoked this session (both direct calls and MCP-routed).
 
 ```mlld
 guard @requireVerified before publishes = when [
-  @mx.tools.history.length() < 2 || @mx.tools.history[1].name != "verify" => deny "Value must pass through verify"
+  !@mx.tools.history[*].name.includes("verify") => deny "Value must pass through verify"
   * => allow
 ]
 ```
+
+Use `[*]` to project a field across all entries and check with `.includes()`. This avoids fragile positional checks since the position of a tool in the provenance chain is unpredictable.
 
 `history` comes from the current value's security descriptor, not from the whole session. Each entry has:
 

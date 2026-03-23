@@ -40,6 +40,9 @@ updated: 2026-02-24
 - `@arr.flat(depth?)` - flatten nested arrays (default depth 1)
 - `@arr.at(index)` - element at index (supports negative indices)
 
+**Wildcard projection:**
+- `@arr[*].field` - extract `.field` from every element, producing a flat array
+
 **Helpers:**
 - `@keep(obj, [...keys])` - keep only specified keys from object
 - `@keepStructured(obj, schema)` - keep keys matching a schema structure
@@ -63,4 +66,9 @@ exe @normalize(text) = @text
   .trim()
   .toLowerCase()
   .replace("hello", "hi")
+
+>> Wildcard projection
+var @tools = [{"name": "readData"}, {"name": "verify"}, {"name": "sendEmail"}]
+show @tools[*].name                       >> ["readData", "verify", "sendEmail"]
+show @tools[*].name.includes("verify")    >> true
 ```

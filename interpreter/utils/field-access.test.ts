@@ -487,4 +487,67 @@ describe('workspace metadata accessors', () => {
       { path: '/repo/project/task.md', type: 'created', entity: 'file' }
     ]);
   });
+
+  describe('wildcardIndex [*]', () => {
+    it('projects a field across array elements', async () => {
+      const items = [
+        { name: 'readData', auditRef: 'a1' },
+        { name: 'debiasedEval', auditRef: 'a2' },
+        { name: 'sendEmail', auditRef: 'a3' }
+      ];
+      const variable = createObjectVariable('history', { items }, true, source);
+
+      const names = await accessFields(
+        variable,
+        [
+          { type: 'field', value: 'items' } as const,
+          { type: 'wildcardIndex' } as const,
+          { type: 'field', value: 'name' } as const
+        ],
+        { preserveContext: false }
+      );
+      expect(names).toEqual(['readData', 'debiasedEval', 'sendEmail']);
+    });
+
+    it('projects nested fields across array elements', async () => {
+      const items = [
+        { meta: { id: 1 } },
+        { meta: { id: 2 } },
+        { meta: { id: 3 } }
+      ];
+      const variable = createObjectVariable('deep', { items }, true, source);
+
+      const ids = await accessFields(
+        variable,
+        [
+          { type: 'field', value: 'items' } as const,
+          { type: 'wildcardIndex' } as const,
+          { type: 'field', value: 'meta' } as const,
+          { type: 'field', value: 'id' } as const
+        ],
+        { preserveContext: false }
+      );
+      expect(ids).toEqual([1, 2, 3]);
+    });
+
+    it('returns the array as-is when [*] has no trailing fields', async () => {
+      const arr = [1, 2, 3];
+      const result = await accessFields(
+        arr,
+        [{ type: 'wildcardIndex' } as const],
+        { preserveContext: false }
+      );
+      expect(result).toEqual([1, 2, 3]);
+    });
+
+    it('throws on non-array values', async () => {
+      await expect(
+        accessFields(
+          'not-an-array',
+          [{ type: 'wildcardIndex' } as const, { type: 'field', value: 'x' } as const],
+          { preserveContext: false }
+        )
+      ).rejects.toThrow('Cannot use [*] on non-array value');
+    });
+  });
 });

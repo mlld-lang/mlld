@@ -530,9 +530,40 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           // Handle field access if present
           let fieldsToProcess = (baseNode as any).fields || [];
           if (fieldsToProcess.length > 0 && (typeof value === 'object' || typeof value === 'string') && value !== null) {
-            const { accessField } = await import('../utils/field-access');
+            const { accessField, accessFields } = await import('../utils/field-access');
+            const { isStructuredValue, asData } = await import('./structured-value');
             let fieldPath: string[] = [];
-            for (const field of fieldsToProcess) {
+            for (let fi = 0; fi < fieldsToProcess.length; fi++) {
+              const field = fieldsToProcess[fi];
+
+              // Handle wildcardIndex: project remaining fields over array elements
+              if (field.type === 'wildcardIndex') {
+                const arrayData = isStructuredValue(value) ? asData(value) : value;
+                if (!Array.isArray(arrayData)) {
+                  const { FieldAccessError } = await import('@core/errors');
+                  throw new FieldAccessError('Cannot use [*] on non-array value', {
+                    baseValue: value,
+                    fieldAccessChain: fieldPath,
+                    failedAtIndex: fieldPath.length,
+                    failedKey: '*'
+                  });
+                }
+                const remaining = fieldsToProcess.slice(fi + 1);
+                if (remaining.length > 0) {
+                  value = await Promise.all(
+                    arrayData.map((element: any) =>
+                      accessFields(element, remaining, {
+                        preserveContext: false,
+                        env,
+                        parentPath: [...fieldPath, '*'],
+                        baseIdentifier: varName
+                      })
+                    )
+                  );
+                }
+                break;
+              }
+
               let fieldToAccess = field;
 
               // Handle variableIndex type - need to resolve the variable first
