@@ -1,0 +1,1 @@
+Pipe expressions are not supported inside function arguments

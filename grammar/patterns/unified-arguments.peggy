@@ -118,9 +118,20 @@ UnifiedArgument "unified argument"
   / varRef:VariableNoTail {  // Use unified variable pattern for all contexts
       return varRef;
     }
+  / PipeInArgumentError   // Catch @var | @pipe before RawArgument swallows it
   / PrimitiveValue       // Direct primitives: 42, true, false, null
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
+
+PipeInArgumentError "pipe expression in argument"
+  = "@" id:BaseIdentifier fields:AnyFieldAccessOptional* _ "|" {
+      const varName = id + (fields.length > 0 ? fields.map(f => '.' + f.value).join('') : '');
+      helpers.mlldError(
+        'Pipe expressions are not supported inside function arguments. Assign the result to a variable first:\n\n  let @piped = @' + varName + ' | ...\n  @func(@piped)',
+        'argument',
+        location()
+      );
+    }
 
 // Regex literal for arguments: /body/flags
 RegexLiteral "regex literal"
