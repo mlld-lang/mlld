@@ -42,7 +42,6 @@ const needsRebuild = {
   fixtures: false,
   typescript: false,
   docs: false,
-  python: false,
   wasm: false,
   mlldx: false
 };
@@ -465,10 +464,6 @@ async function main() {
 
     needsRebuild.docs = checkDocs(lastBuildTime, dirtyFiles);
 
-    // Python, WASM, mlldx - check their files too
-    const pythonPattern = (f) => (f.startsWith('python/') && f.endsWith('.py')) || f === 'package.json';
-    needsRebuild.python = hasFilesNewerThan(pythonPattern, lastBuildTime, dirtyFiles) !== null;
-
     needsRebuild.wasm = false; // Usually skip WASM (optional step)
 
     const mlldxFiles = ['package.json', 'mlldx-package/package.json'];
@@ -510,10 +505,6 @@ async function main() {
 
     if (needsRebuild.docs) {
       runBuildStep('LLM docs', 'npm run build:docs');
-    }
-
-    if (needsRebuild.python) {
-      runBuildStep('Python wrapper', 'npm run build:python');
     }
 
     if (needsRebuild.wasm) {
