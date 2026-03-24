@@ -20,14 +20,14 @@ describe('coerceMcpArgs', () => {
     expect(result).toEqual({ name: 'alice' });
   });
 
-  it('omits null, undefined, and string "null"', () => {
+  it('omits null, undefined, and string "null" for non-string types', () => {
     const result = coerceMcpArgs(
       { a: null, b: undefined, c: 'kept', d: 'null', e: ' null ' },
       info({ types: { a: 'array', b: 'integer', c: 'string', d: 'string', e: 'integer' } })
     );
     expect(result).not.toHaveProperty('a');
     expect(result).not.toHaveProperty('b');
-    expect(result).not.toHaveProperty('d');
+    expect(result.d).toBe('null');
     expect(result).not.toHaveProperty('e');
     expect(result.c).toBe('kept');
   });

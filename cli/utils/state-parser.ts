@@ -29,7 +29,7 @@ async function parseStateArg(
 
   if (rawArg.startsWith('@')) {
     const filePath = path.resolve(basePath, rawArg.slice(1));
-    const content = await fileSystem.readFile(filePath, 'utf8');
+    const content = await fileSystem.readFile(filePath);
     return parseStateObject(content, `--state ${rawArg}`);
   }
 

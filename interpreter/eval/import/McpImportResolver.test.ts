@@ -106,14 +106,14 @@ describe('coerceMcpArgs', () => {
     });
   });
 
-  it('omits null, undefined, and string "null" from payload', () => {
+  it('omits null, undefined, and string "null" for non-string types', () => {
     const result = coerceMcpArgs(
       { a: null, b: undefined, c: 'kept', d: 'null', e: ' null ' },
       { a: 'array', b: 'integer', c: 'string', d: 'string', e: 'integer' }
     );
     expect(result).not.toHaveProperty('a');
     expect(result).not.toHaveProperty('b');
-    expect(result).not.toHaveProperty('d');
+    expect(result.d).toBe('null');
     expect(result).not.toHaveProperty('e');
     expect(result.c).toBe('kept');
   });

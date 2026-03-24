@@ -45,7 +45,10 @@ export function coerceMcpArgs(
       continue;
     }
     if (typeof value === 'string' && value.trim() === 'null') {
-      continue;
+      const schemaType = paramTypes[key];
+      if (schemaType !== 'string') {
+        continue;
+      }
     }
     if (typeof value === 'string' && value.trim() === '') {
       const schemaType = paramTypes[key];

@@ -36,7 +36,8 @@ const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-send-to-external',
   'no-destroy-unknown',
   'no-untrusted-destructive',
-  'no-untrusted-privileged'
+  'no-untrusted-privileged',
+  'no-influenced-advice'
 ]);
 
 function normalizeList(values?: readonly string[]): string[] {
