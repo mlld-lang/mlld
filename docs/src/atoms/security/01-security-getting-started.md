@@ -4,8 +4,8 @@ title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
-related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview]
-updated: 2026-02-15
+related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations]
+updated: 2026-03-18
 qa_tier: 2
 ---
 
@@ -89,6 +89,8 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 
 `defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
+For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires `@input[0]` to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the first argument to be a `known` pinned target.
+
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 
 ## Level 3: Add Guards
@@ -118,9 +120,53 @@ guard @noSecretExfil before op:exe = when [
 ]
 ```
 
-Policy denials are hard errors. Guard denials can be caught with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
+Capability denials (e.g., `capabilities.deny`) are hard errors. Managed label-flow denials from `defaults.rules` and `labels` flow through the guard pipeline — an explicit privileged guard can override them with `allow`, and `denied =>` handlers can catch them for graceful fallback. To make a label-flow denial absolute, add `locked: true` to the policy. Use policy for broad restrictions and privileged guards for task-specific exceptions.
 
 See `guards-basics` for syntax, timing, and security context. See `guard-composition` for ordering rules.
+
+## Level 3b: Task-Scoped Authorization
+
+For planner-worker agent architectures, use `authorizations` to declaratively control which tools a worker can use and with what arguments.
+
+```mlld
+policy @base = {
+  defaults: {
+    rules: ["no-send-to-unknown", "no-destroy-unknown"],
+    unlabeled: "untrusted"
+  },
+  operations: {
+    "exfil:send": ["tool:w:send_email"],
+    "destructive:targeted": ["tool:w:delete_file"]
+  }
+}
+
+>> Planner produces authorization data (JSON, not code)
+var @plannerOutput = @planner(@task) | @parse
+
+>> Worker runs under combined policy
+var @result = @agent(@prompt) with { policy: @plannerOutput }
+```
+
+The planner's output is a JSON fragment like:
+
+```json
+{
+  "authorizations": {
+    "allow": {
+      "send_email": { "args": { "recipients": ["mark@example.com"] } },
+      "create_file": true
+    }
+  }
+}
+```
+
+Tools not listed in `allow` are denied by default. Argument constraints use tolerant comparison (`~=`). Args not mentioned in the constraint are enforced as empty/null at runtime, so silent omission never becomes an open hole. With tool context, `mlld validate` additionally catches unconstrained control args as errors before execution. The host validates planner output before injection.
+
+In phase 1, that tool context comes from the worker's trusted `var tools` collection via `controlArgs`. Invalid authorization fragments fail closed during `with { policy }` activation, so no partial authorization envelope is installed.
+
+Authorization entries generate privileged guards that can override managed label-flow denials for matching calls. `locked: true` on the base policy prevents all overrides.
+
+See `policy-authorizations` for full syntax and control-arg enforcement.
 
 ## Level 4: Full Custom Security with Environments
 
@@ -170,6 +216,8 @@ box @sandbox [
 
 Environments encapsulate execution contexts. Credentials flow through sealed paths that bypass string interpolation, preventing prompt injection from extracting secrets. The `provider` field adds process isolation via Docker or cloud sandboxes.
 
+`untrusted-llms-get-influenced` is not prompt-only. If untrusted conversation history or tool output is passed to an `exe llm` via later config fields such as `messages`, `system`, or tool config, the result still receives `influenced`. That includes named wrapper objects like `var @config = { messages: @history }`: the object carries the union of labels from its nested fields, so policy and guards still see the taint when `@config` is passed around.
+
 > **Note:** Environment providers (`@mlld/env-docker`, `@mlld/env-sprites`) are spec-defined but not yet shipped. `box` blocks currently run with the local provider.
 
 See `box-overview` for concepts. See `box-config` for configuration fields. See `policy-auth` for credential flow. See `pattern-audit-guard` and `pattern-dual-audit` for advanced prompt injection defense patterns.
@@ -182,4 +230,5 @@ See `box-overview` for concepts. See `box-config` for configuration fields. See 
 | 1 | You know what commands your script needs and want to restrict access |
 | 2 | You handle sensitive data and need to control how it flows |
 | 3 | You need runtime inspection, transformation, or graceful denial handling |
-| 4 | You run untrusted code, manage credentials, or orchestrate multiple agents |
+| 3b | You orchestrate agents where a planner authorizes specific tools per task |
+| 4 | You run untrusted code, manage credentials, or need process isolation |

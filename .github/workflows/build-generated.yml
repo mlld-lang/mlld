@@ -1,0 +1,75 @@
+name: Build Generated Files
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'grammar/**/*.peggy'
+      - 'grammar/syntax-generator/**'
+      - 'docs/llm/**'
+      - 'llm/**'
+      - 'tests/cases/**'
+      - 'examples/**'
+      - 'core/**'
+      - 'interpreter/**'
+      - 'cli/**'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Build syntax highlighting
+        run: npm run build:grammar:syntax
+        env:
+          FORCE_SYNTAX_BUILD: true
+
+      - name: Build fixtures
+        run: npm run build:fixtures
+
+      - name: Build llms docs
+        run: npm run build:docs
+
+      - name: Check for changes
+        id: check
+        run: |
+          PATHS="grammar/generated/ tests/cases/EXAMPLES.md docs/llm/ llms-combined.txt"
+          if [ -n "$(git status --porcelain $PATHS)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No generated files changed"
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add grammar/generated/ tests/cases/EXAMPLES.md docs/llm/ llms-combined.txt
+          git commit -m "chore: update generated files [skip ci]"
+          git push

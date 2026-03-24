@@ -17,6 +17,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { ExecuteError } from './types';
 import { MlldParseError } from '@core/errors';
+import { cloneErrorForTransport, truncateText } from '@core/errors/errorSerialization';
 import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
 
@@ -31,6 +32,7 @@ export interface ExecuteOptions {
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
+  payloadLabels?: Record<string, string[]>;
   timeoutMs?: number;
   signal?: AbortSignal;
   stream?: boolean;
@@ -45,6 +47,7 @@ export interface ExecuteOptions {
   fork?: string;
   checkpointScriptName?: string;
   checkpointCacheRootDir?: string;
+  mcpServers?: Record<string, string>;
 }
 
 const astCache = new MemoryAstCache();
@@ -89,6 +92,7 @@ export async function execute(
     allowAbsolutePaths: options.allowAbsolutePaths,
     dynamicModules,
     dynamicModuleSource: options.dynamicModuleSource,
+    payloadLabels: options.payloadLabels,
     ast: cacheEntry.ast,
     checkpoint: options.checkpoint,
     noCheckpoint: effectiveNoCheckpoint,
@@ -96,8 +100,17 @@ export async function execute(
     resume: effectiveResume,
     fork: options.fork,
     checkpointScriptName: options.checkpointScriptName,
-    checkpointCacheRootDir: options.checkpointCacheRootDir
+    checkpointCacheRootDir: options.checkpointCacheRootDir,
+    mcpServers: options.mcpServers
   } as InterpretOptions;
+  const signingContext = (options as { signingContext?: unknown }).signingContext;
+  if (signingContext !== undefined) {
+    (interpretOptions as InterpretOptions & { signingContext?: unknown }).signingContext = signingContext;
+  }
+  const signingIdentity = (options as { signingIdentity?: unknown }).signingIdentity;
+  if (typeof signingIdentity === 'string' && signingIdentity.trim().length > 0) {
+    (interpretOptions as InterpretOptions & { signingIdentity?: string }).signingIdentity = signingIdentity.trim();
+  }
 
   const metricsContext = {
     startTime: overallStart,
@@ -270,26 +283,36 @@ async function runInterpret(source: string, options: InterpretOptions, filePath:
 function wrapExecuteError(error: unknown, filePath?: string): ExecuteError {
   if (error instanceof ExecuteError) return error;
 
+  const sanitizedCause = cloneErrorForTransport(error, {
+    includeStack: false,
+    includeDetails: true,
+    maxCauseDepth: 2,
+    maxDepth: 6,
+    maxObjectKeys: 50,
+    maxArrayLength: 50,
+    maxStringLength: 4000
+  });
+
   if (error instanceof TimeoutError) {
-    return new ExecuteError(error.message, 'TIMEOUT', filePath, { cause: error });
+    return new ExecuteError(truncateText(error.message, 4000), 'TIMEOUT', filePath, { cause: sanitizedCause });
   }
 
   if (error instanceof MlldParseError) {
-    return new ExecuteError(error.message, 'PARSE_ERROR', filePath, { cause: error });
+    return new ExecuteError(truncateText(error.message, 4000), 'PARSE_ERROR', filePath, { cause: sanitizedCause });
   }
 
   if (error instanceof Error) {
     if (error.name === 'AbortError') {
-      return new ExecuteError(error.message, 'ABORTED', filePath, { cause: error });
+      return new ExecuteError(truncateText(error.message, 4000), 'ABORTED', filePath, { cause: sanitizedCause });
     }
 
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') {
-      return new ExecuteError(error.message, 'FILE_NOT_FOUND', filePath, { cause: error });
+      return new ExecuteError(truncateText(error.message, 4000), 'FILE_NOT_FOUND', filePath, { cause: sanitizedCause });
     }
 
-    return new ExecuteError(error.message, 'RUNTIME_ERROR', filePath, { cause: error });
+    return new ExecuteError(truncateText(error.message, 4000), 'RUNTIME_ERROR', filePath, { cause: sanitizedCause });
   }
 
-  return new ExecuteError('Execution failed', 'RUNTIME_ERROR', filePath, { cause: error });
+  return new ExecuteError('Execution failed', 'RUNTIME_ERROR', filePath, { cause: sanitizedCause });
 }

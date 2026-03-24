@@ -42,7 +42,6 @@ const needsRebuild = {
   fixtures: false,
   typescript: false,
   docs: false,
-  python: false,
   wasm: false,
   mlldx: false
 };
@@ -166,21 +165,35 @@ function hasFilesNewerThan(pattern, timestamp, dirtyFiles) {
 /**
  * Check if output file is older than any input files
  */
-function isOutputStale(outputFile, inputFiles) {
-  if (!existsSync(outputFile)) return true;
+function findNewerInputThanOutput(outputFile, inputFiles) {
+  if (!existsSync(outputFile)) return outputFile;
 
   const outputTime = statSync(outputFile).mtimeMs;
 
   for (const inputFile of inputFiles) {
-    if (existsSync(inputFile)) {
-      const inputTime = statSync(inputFile).mtimeMs;
-      if (inputTime > outputTime) {
-        return true;
-      }
+    if (!existsSync(inputFile)) {
+      continue;
+    }
+    const inputTime = statSync(inputFile).mtimeMs;
+    if (inputTime > outputTime) {
+      return inputFile;
     }
   }
 
-  return false;
+  return null;
+}
+
+function getTypeScriptInputFiles() {
+  const tsSourceFiles = globSync('{api,cli,core,interpreter,output,security,services}/**/*.{ts,tsx}', {
+    ignore: ['**/*.test.*', '**/*.spec.*', '**/tests/**']
+  });
+
+  return [
+    ...tsSourceFiles,
+    'tsup.config.ts',
+    'tsconfig.json',
+    'tsconfig.build.json'
+  ];
 }
 
 /**
@@ -269,6 +282,20 @@ function checkGrammar(lastBuildTime, dirtyFiles) {
     return true;
   }
 
+  // Dirty-file checks miss clean git pulls and fresh checkouts. Fall back to
+  // direct output-vs-source freshness checks so generated parsers cannot lag
+  // behind tracked grammar sources.
+  const grammarInputs = globSync('grammar/**/*.{peggy,ts,mjs}', {
+    ignore: ['grammar/generated/**', '**/*.test.*']
+  });
+  for (const output of grammarOutputs) {
+    const staleInput = findNewerInputThanOutput(output, grammarInputs);
+    if (staleInput) {
+      console.log(`${cyan}  Grammar:${reset} ${output} older than ${staleInput}`);
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -310,6 +337,18 @@ function checkTypeScript(lastBuildTime, dirtyFiles) {
   if (changedFile) {
     console.log(`${cyan}  TypeScript:${reset} ${changedFile} changed`);
     return true;
+  }
+
+  // Dirty-file checks miss clean git pulls and branch switches. Fall back to
+  // direct output-vs-source freshness checks so dist artifacts cannot lag
+  // behind tracked TypeScript sources.
+  const tsInputs = getTypeScriptInputFiles();
+  for (const output of tsOutputs) {
+    const staleInput = findNewerInputThanOutput(output, tsInputs);
+    if (staleInput) {
+      console.log(`${cyan}  TypeScript:${reset} ${output} older than ${staleInput}`);
+      return true;
+    }
   }
 
   return false;
@@ -425,10 +464,6 @@ async function main() {
 
     needsRebuild.docs = checkDocs(lastBuildTime, dirtyFiles);
 
-    // Python, WASM, mlldx - check their files too
-    const pythonPattern = (f) => (f.startsWith('python/') && f.endsWith('.py')) || f === 'package.json';
-    needsRebuild.python = hasFilesNewerThan(pythonPattern, lastBuildTime, dirtyFiles) !== null;
-
     needsRebuild.wasm = false; // Usually skip WASM (optional step)
 
     const mlldxFiles = ['package.json', 'mlldx-package/package.json'];
@@ -470,10 +505,6 @@ async function main() {
 
     if (needsRebuild.docs) {
       runBuildStep('LLM docs', 'npm run build:docs');
-    }
-
-    if (needsRebuild.python) {
-      runBuildStep('Python wrapper', 'npm run build:python');
     }
 
     if (needsRebuild.wasm) {

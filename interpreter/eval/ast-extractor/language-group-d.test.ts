@@ -8,7 +8,7 @@ function onlyResult(results: Array<{ name: string; type: string } | null>): { na
 }
 
 describe('ast extractor language group D (Solidity/Java/C#)', () => {
-  it('keeps Solidity contract member extraction stable', () => {
+  it('keeps Solidity contract member extraction stable', async () => {
     const source = [
       'contract Vault {',
       '  event Deposited(address indexed user);',
@@ -22,20 +22,20 @@ describe('ast extractor language group D (Solidity/Java/C#)', () => {
       '}'
     ].join('\n');
 
-    const contractMatch = onlyResult(extractAst(source, 'vault.sol', [{ type: 'definition', name: 'Vault' }]));
+    const contractMatch = onlyResult(await extractAst(source, 'vault.sol', [{ type: 'definition', name: 'Vault' }]));
     expect(contractMatch.type).toBe('contract');
 
-    const eventMatch = onlyResult(extractAst(source, 'vault.sol', [{ type: 'definition', name: 'Deposited' }]));
+    const eventMatch = onlyResult(await extractAst(source, 'vault.sol', [{ type: 'definition', name: 'Deposited' }]));
     expect(eventMatch.type).toBe('event');
 
-    const constructorMatch = onlyResult(extractAst(source, 'vault.sol', [{ type: 'definition', name: 'constructor' }]));
+    const constructorMatch = onlyResult(await extractAst(source, 'vault.sol', [{ type: 'definition', name: 'constructor' }]));
     expect(constructorMatch.type).toBe('constructor');
 
-    const functionMatch = onlyResult(extractAst(source, 'vault.sol', [{ type: 'definition', name: 'store' }]));
+    const functionMatch = onlyResult(await extractAst(source, 'vault.sol', [{ type: 'definition', name: 'store' }]));
     expect(functionMatch.type).toBe('function');
   });
 
-  it('keeps Java class/interface/enum and member extraction stable', () => {
+  it('keeps Java class/interface/enum and member extraction stable', async () => {
     const source = [
       'public class Service {',
       '  public Service() {}',
@@ -54,20 +54,20 @@ describe('ast extractor language group D (Solidity/Java/C#)', () => {
       '}'
     ].join('\n');
 
-    const classMatch = onlyResult(extractAst(source, 'Service.java', [{ type: 'definition', name: 'Service' }]));
+    const classMatch = onlyResult(await extractAst(source, 'Service.java', [{ type: 'definition', name: 'Service' }]));
     expect(classMatch.type).toBe('class');
 
-    const methodMatch = onlyResult(extractAst(source, 'Service.java', [{ type: 'definition', name: 'createUser' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'Service.java', [{ type: 'definition', name: 'createUser' }]));
     expect(methodMatch.type).toBe('method');
 
-    const interfaceMatch = onlyResult(extractAst(source, 'Service.java', [{ type: 'definition', name: 'Worker' }]));
+    const interfaceMatch = onlyResult(await extractAst(source, 'Service.java', [{ type: 'definition', name: 'Worker' }]));
     expect(interfaceMatch.type).toBe('interface');
 
-    const enumMatch = onlyResult(extractAst(source, 'Service.java', [{ type: 'definition', name: 'Mode' }]));
+    const enumMatch = onlyResult(await extractAst(source, 'Service.java', [{ type: 'definition', name: 'Mode' }]));
     expect(enumMatch.type).toBe('enum');
   });
 
-  it('keeps C# record/class/method/variable extraction stable', () => {
+  it('keeps C# record/class/method/variable extraction stable', async () => {
     const source = [
       'public class Service {',
       '  public Service() { }',
@@ -85,19 +85,19 @@ describe('ast extractor language group D (Solidity/Java/C#)', () => {
       'public record UserRecord(string Name);'
     ].join('\n');
 
-    const recordMatch = onlyResult(extractAst(source, 'Service.cs', [{ type: 'definition', name: 'UserRecord' }]));
+    const recordMatch = onlyResult(await extractAst(source, 'Service.cs', [{ type: 'definition', name: 'UserRecord' }]));
     expect(recordMatch.type).toBe('record');
 
-    const classMatch = onlyResult(extractAst(source, 'Service.cs', [{ type: 'definition', name: 'Service' }]));
+    const classMatch = onlyResult(await extractAst(source, 'Service.cs', [{ type: 'definition', name: 'Service' }]));
     expect(classMatch.type).toBe('class');
 
-    const methodMatch = onlyResult(extractAst(source, 'Service.cs', [{ type: 'definition', name: 'Build' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'Service.cs', [{ type: 'definition', name: 'Build' }]));
     expect(methodMatch.type).toBe('method');
 
-    const variableMatch = onlyResult(extractAst(source, 'Service.cs', [{ type: 'definition', name: 'TopCounter' }]));
+    const variableMatch = onlyResult(await extractAst(source, 'Service.cs', [{ type: 'definition', name: 'TopCounter' }]));
     expect(variableMatch.type).toBe('variable');
 
-    const interfaceMatch = onlyResult(extractAst(source, 'Service.cs', [{ type: 'definition', name: 'IRunner' }]));
+    const interfaceMatch = onlyResult(await extractAst(source, 'Service.cs', [{ type: 'definition', name: 'IRunner' }]));
     expect(interfaceMatch.type).toBe('interface');
   });
 });

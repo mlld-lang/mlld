@@ -52,6 +52,69 @@ describe('execute', () => {
     expect(metrics.effectCount).toBeGreaterThan(0);
   });
 
+  it('preserves object and boolean values for state:// writes', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/var @payload = {"enabled": true, "nested": {"count": 2}}
+/var @flag = true
+/output @payload to "state://payload"
+/output @flag to "state://flag"
+/show \`count=@state.payload.nested.count flag=@state.flag\`
+      `.trim()
+    );
+
+    const result = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      state: { payload: null, flag: false }
+    });
+
+    expect(result.output).toContain('count=2 flag=true');
+    expect((result as any).stateWrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'payload',
+          value: { enabled: true, nested: { count: 2 } },
+          operation: 'set'
+        }),
+        expect.objectContaining({
+          path: 'flag',
+          value: true,
+          operation: 'set'
+        })
+      ])
+    );
+  });
+
+  it('preserves inline object literal values for state:// writes', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/var @count = 2
+/output { enabled: true, nested: { count: @count } } to "state://payload"
+/show \`count=@state.payload.nested.count enabled=@state.payload.enabled\`
+      `.trim()
+    );
+
+    const result = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      state: { payload: null }
+    });
+
+    expect(result.output).toContain('count=2 enabled=true');
+    expect((result as any).stateWrites).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'payload',
+          value: { enabled: true, nested: { count: 2 } },
+          operation: 'set'
+        })
+      ])
+    );
+  });
+
   it('marks cache hits on subsequent executions', async () => {
     await fileSystem.writeFile(routePath, '/show "cached"');
 
@@ -61,6 +124,37 @@ describe('execute', () => {
     const metrics = (second as any).metrics;
     expect(metrics.cacheHit).toBe(true);
     expect(metrics.parseMs).toBe(0);
+  });
+
+  it('collects structured guard denials in execute results when the script handles them', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/guard @blocker before op:exe = when [
+  @mx.op.name == "send" => deny "blocked by policy"
+  * => allow
+]
+/exe @send(value) = when [
+  denied => "fallback"
+  * => \`sent: @value\`
+]
+/show @send("hello")
+      `.trim()
+    );
+
+    const result = await execute(routePath, undefined, { fileSystem, pathService });
+
+    expect(result.output).toContain('fallback');
+    expect(result.denials).toEqual([
+      expect.objectContaining({
+        guard: 'blocker',
+        operation: 'send',
+        reason: 'blocked by policy',
+        rule: null,
+        labels: [],
+        args: { value: 'hello' }
+      })
+    ]);
   });
 
   it('propagates metrics in stream mode', async () => {
@@ -148,6 +242,94 @@ describe('execute', () => {
 
     expect(payloadModule?.content).toContain("@text = 'hello'");
     expect(stateModule?.content).toContain("@greeting = 'hi'");
+  });
+
+  it('applies per-field payload labels to imports and direct payload access', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      [
+        '/import "@payload" as @p',
+        '/import { @query, @tool_result } from @payload',
+        '/show @query.mx.labels.includes("trusted")',
+        '/show @tool_result.mx.labels.includes("untrusted")',
+        '/show @p.query.mx.labels.includes("trusted")',
+        '/show @p.tool_result.mx.labels.includes("untrusted")',
+        '/show @payload.query.mx.labels.includes("trusted")',
+        '/show @payload.tool_result.mx.labels.includes("untrusted")'
+      ].join('\n')
+    );
+
+    const result = await execute(
+      routePath,
+      { query: 'hello', tool_result: 'external' },
+      {
+        fileSystem,
+        pathService,
+        payloadLabels: {
+          query: ['trusted'],
+          tool_result: ['untrusted']
+        }
+      }
+    );
+
+    expect(
+      result.output
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    ).toEqual(['true', 'true', 'true', 'true', 'true', 'true']);
+
+    const resolverManager = (result as any).environment?.getResolverManager();
+    const dynamicResolver = resolverManager
+      ?.getResolversForContext('import')
+      ?.find((resolver: any) => resolver.name === 'dynamic');
+
+    const payloadModule = await dynamicResolver?.resolve('@payload');
+    expect(payloadModule?.content).toContain("/var trusted @query = 'hello'");
+    expect(payloadModule?.content).toContain("/var untrusted @tool_result = 'external'");
+  });
+
+  it('applies payload labels and labeled state updates during stream execution', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      [
+        'loop(99999, 10ms) until @state.exit [',
+        '  continue',
+        ']',
+        '/show @payload.history.mx.labels.includes("untrusted")',
+        '/show @state.tool_result.mx.labels.includes("untrusted")',
+        '/show @state.tool_result'
+      ].join('\n')
+    );
+
+    const handle = (await execute(
+      routePath,
+      { history: 'tool transcript' },
+      {
+        fileSystem,
+        pathService,
+        mode: 'strict',
+        stream: true,
+        state: { exit: false, tool_result: null },
+        payloadLabels: {
+          history: ['untrusted']
+        }
+      }
+    )) as any;
+
+    await handle.updateState('tool_result', 'tool output', ['untrusted']);
+    await handle.updateState('exit', true);
+
+    const result = await handle.result();
+
+    expect(
+      result.output
+        .trim()
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter(Boolean)
+    ).toEqual(['true', 'true', 'tool output']);
   });
 
   it('applies checkpoint options through SDK execute into interpreter runtime', async () => {

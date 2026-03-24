@@ -29,6 +29,8 @@ import {
 } from './guard-materialization';
 import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import { attachGuardHelper } from './guard-helper-injection';
+import type { GuardArgsSnapshot } from '../utils/guard-args';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -52,6 +54,7 @@ export interface EvaluateGuardRuntimeOptions {
   attemptKey: string;
   attemptStore: Map<string, GuardAttemptState>;
   inputHelper?: GuardInputHelper;
+  args?: GuardArgsSnapshot;
 }
 
 export interface EvaluateGuardRuntimeDependencies {
@@ -103,6 +106,31 @@ export interface EvaluateGuardRuntimeDependencies {
   }) => void;
 }
 
+function buildGuardScopeKey(options: EvaluateGuardRuntimeOptions): string {
+  if (options.scope === 'perInput' && options.perInput) {
+    return `perInput:${options.perInput.index}`;
+  }
+  return 'perOperation';
+}
+
+function snapshotPolicyArgs(args?: GuardArgsSnapshot): Readonly<Record<string, unknown>> | undefined {
+  if (!args || args.names.length === 0) {
+    return undefined;
+  }
+
+  const values = Object.create(null) as Record<string, unknown>;
+  for (const name of args.names) {
+    const variable = args.values[name];
+    if (!variable) {
+      continue;
+    }
+    const rawValue = variable.value;
+    values[name] = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+  }
+
+  return Object.freeze(values);
+}
+
 export async function evaluateGuardRuntime(
   options: EvaluateGuardRuntimeOptions,
   deps: EvaluateGuardRuntimeDependencies
@@ -115,6 +143,7 @@ export async function evaluateGuardRuntime(
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
   let contextTaint: readonly string[];
+  let contextToolsHistory: readonly import('@core/types/security').ToolProvenance[];
   const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
   let outputValue: unknown;
 
@@ -123,6 +152,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.perInput.labels;
     contextSources = options.perInput.sources;
     contextTaint = options.perInput.taint;
+    contextToolsHistory = options.perInput.toolsHistory;
     outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
     const arrayValue = options.operationSnapshot.variables.slice();
@@ -134,6 +164,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
     contextTaint = options.operationSnapshot.taint;
+    contextToolsHistory = options.operationSnapshot.toolsHistory;
     const primaryOutput = options.operationSnapshot.variables[0];
     outputValue = resolveGuardValue(primaryOutput, inputVariable);
   } else {
@@ -151,7 +182,14 @@ export async function evaluateGuardRuntime(
     outputText as any,
     deps.guardInputSource,
     {
-      metadata: { security: makeSecurityDescriptor({ labels: contextLabels, sources: contextSources }) },
+      metadata: {
+        security: makeSecurityDescriptor({
+          labels: contextLabels,
+          taint: contextTaint,
+          sources: contextSources,
+          tools: contextToolsHistory
+        })
+      },
       internal: { isReserved: true }
     }
   );
@@ -180,13 +218,16 @@ export async function evaluateGuardRuntime(
     labels: contextLabels,
     sources: contextSources,
     taint: contextTaint,
+    toolsHistory: contextToolsHistory,
     inputPreview: isSecretContext ? '[REDACTED]' : inputPreview,
     outputPreview: isSecretContext ? '[REDACTED]' : buildVariablePreview(guardOutputVariable),
     hintHistory: options.attemptHistory.map(entry => entry.hint ?? null),
-    timing: 'before'
+    timing: 'before',
+    args: options.args
   };
 
   const contextSnapshotForMetadata = cloneGuardContextSnapshot(guardContext);
+  const scopeKey = buildGuardScopeKey(options);
 
   deps.logGuardEvaluationStart({
     guard,
@@ -198,6 +239,7 @@ export async function evaluateGuardRuntime(
   });
 
   if (guard.policyCondition) {
+    const policyGuardMode = guard.policyGuardMode ?? 'policy';
     const policyInput = options.perInput
       ? {
           labels: options.perInput.labels,
@@ -205,7 +247,21 @@ export async function evaluateGuardRuntime(
           sources: options.perInput.sources
         }
       : undefined;
-    const policyResult = guard.policyCondition({ operation, input: policyInput });
+    const policyInputs = options.perInput
+      ? [policyInput]
+      : options.operationSnapshot
+        ? options.operationSnapshot.variables.map(variable => ({
+            labels: Array.isArray(variable.mx?.labels) ? variable.mx.labels : [],
+            taint: Array.isArray(variable.mx?.taint) ? variable.mx.taint : [],
+            sources: Array.isArray(variable.mx?.sources) ? variable.mx.sources : []
+          }))
+        : undefined;
+    const policyResult = guard.policyCondition({
+      operation,
+      args: snapshotPolicyArgs(options.args),
+      input: policyInput,
+      inputs: policyInputs
+    });
     if (policyResult.decision === 'deny') {
       const metadataBase: Record<string, unknown> = {
         guardName: guard.name ?? null,
@@ -218,7 +274,13 @@ export async function evaluateGuardRuntime(
         decision: 'deny',
         policyName: policyResult.policyName ?? null,
         policyRule: policyResult.rule ?? null,
-        policySuggestions: policyResult.suggestions
+        policySuggestions: policyResult.suggestions,
+        policyLocked: policyResult.locked === true,
+        guardPrivileged: guard.privileged === true,
+        policyGuard: true,
+        authorizationGuard: policyGuardMode === 'authorization',
+        guardScopeKey: scopeKey,
+        guardActionMatched: true
       };
       deps.logGuardDecisionEvent({
         guard,
@@ -254,7 +316,12 @@ export async function evaluateGuardRuntime(
         scope,
         inputPreview,
         guardContext: contextSnapshotForMetadata,
-        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!
+        guardInput: hasSecretLabel(inputVariable!) ? redactVariableForErrorOutput(inputVariable!) : inputVariable!,
+        guardPrivileged: guard.privileged === true,
+        policyGuard: policyGuardMode === 'policy',
+        authorizationGuard: policyGuardMode === 'authorization',
+        guardScopeKey: scopeKey,
+        guardActionMatched: policyGuardMode === 'authorization'
       }
     };
   }
@@ -269,7 +336,10 @@ export async function evaluateGuardRuntime(
     scope,
     inputPreview,
     guardContext: contextSnapshotForMetadata,
-    guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable
+    guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable,
+    guardPrivileged: guard.privileged === true,
+    policyGuard: false,
+    guardScopeKey: scopeKey
   };
 
   if (!action || action.decision === 'allow') {
@@ -286,7 +356,10 @@ export async function evaluateGuardRuntime(
       timing: 'before',
       replacement,
       hint: allowHint,
-      metadata: metadataBase
+      metadata: {
+        ...metadataBase,
+        guardActionMatched: Boolean(action)
+      }
     };
   }
 
@@ -296,6 +369,7 @@ export async function evaluateGuardRuntime(
     const metadata = {
       ...metadataBase,
       decision: 'env',
+      guardActionMatched: true,
       ...(envConfig !== undefined ? { envConfig } : {}),
       ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {})
     };
@@ -325,7 +399,9 @@ export async function evaluateGuardRuntime(
     attempt: options.attemptNumber,
     tries: options.attemptHistory,
     inputVariable,
-    contextSnapshot: contextSnapshotForMetadata
+    contextSnapshot: contextSnapshotForMetadata,
+    scopeKey,
+    guardActionMatched: true
   });
 
   deps.logGuardDecisionEvent({
@@ -366,7 +442,9 @@ export async function evaluateGuardRuntime(
       attempt: options.attemptNumber,
       tries: updatedHistory,
       inputVariable,
-      contextSnapshot: contextSnapshotForMetadata
+      contextSnapshot: contextSnapshotForMetadata,
+      scopeKey,
+      guardActionMatched: true
     });
     return {
       guardName: guard.name ?? null,

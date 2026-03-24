@@ -87,7 +87,17 @@ impl RequestHandle {
 
     fn update_state(&self, path: &str, value: Value) -> Result<()> {
         self.client
-            .update_state_request(self.request_id, path, value, self.timeout)
+            .update_state_request(self.request_id, path, value, self.timeout, None)
+    }
+
+    fn update_state_with_labels(
+        &self,
+        path: &str,
+        value: Value,
+        labels: Vec<String>,
+    ) -> Result<()> {
+        self.client
+            .update_state_request(self.request_id, path, value, self.timeout, Some(labels))
     }
 
     fn wait_raw(&mut self) -> Result<(Value, Vec<StateWrite>)> {
@@ -131,6 +141,20 @@ impl ProcessHandle {
             .update_state(path, serde_json::to_value(value)?)
     }
 
+    /// Send a labeled state:update request for this in-flight execution.
+    pub fn update_state_with_labels<V, I, S>(&self, path: &str, value: V, labels: I) -> Result<()>
+    where
+        V: Serialize,
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.request.update_state_with_labels(
+            path,
+            serde_json::to_value(value)?,
+            normalize_labels(labels),
+        )
+    }
+
     /// Wait for completion and return output.
     pub fn wait(&mut self) -> Result<String> {
         self.result()
@@ -171,6 +195,20 @@ impl ExecuteHandle {
     pub fn update_state<V: Serialize>(&self, path: &str, value: V) -> Result<()> {
         self.request
             .update_state(path, serde_json::to_value(value)?)
+    }
+
+    /// Send a labeled state:update request for this in-flight execution.
+    pub fn update_state_with_labels<V, I, S>(&self, path: &str, value: V, labels: I) -> Result<()>
+    where
+        V: Serialize,
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.request.update_state_with_labels(
+            path,
+            serde_json::to_value(value)?,
+            normalize_labels(labels),
+        )
     }
 
     /// Wait for completion and return structured output.
@@ -277,6 +315,12 @@ impl Client {
         if let Some(payload) = opts.payload {
             params.insert("payload".to_string(), payload);
         }
+        if let Some(payload_labels) = normalize_label_map(opts.payload_labels) {
+            params.insert(
+                "payloadLabels".to_string(),
+                serde_json::to_value(payload_labels)?,
+            );
+        }
         if let Some(state) = opts.state {
             params.insert("state".to_string(), state);
         }
@@ -338,6 +382,12 @@ impl Client {
 
         if let Some(p) = payload {
             params.insert("payload".to_string(), serde_json::to_value(p)?);
+        }
+        if let Some(payload_labels) = normalize_label_map(opts.payload_labels) {
+            params.insert(
+                "payloadLabels".to_string(),
+                serde_json::to_value(payload_labels)?,
+            );
         }
         if let Some(state) = opts.state {
             params.insert("state".to_string(), state);
@@ -501,6 +551,7 @@ impl Client {
         path: &str,
         value: Value,
         timeout: Option<Duration>,
+        labels: Option<Vec<String>>,
     ) -> Result<()> {
         if path.trim().is_empty() {
             return Err(Error::Transport(
@@ -508,19 +559,27 @@ impl Client {
             ));
         }
 
+        let labels = labels.and_then(|entries| {
+            let normalized = normalize_labels(entries);
+            if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            }
+        });
+
         let max_wait = timeout.unwrap_or(Duration::from_secs(2));
         let deadline = Instant::now() + max_wait;
 
         loop {
-            match self.request(
-                "state:update",
-                json!({
-                    "requestId": request_id,
-                    "path": path,
-                    "value": value
-                }),
-                timeout,
-            ) {
+            let mut params = serde_json::Map::new();
+            params.insert("requestId".to_string(), json!(request_id));
+            params.insert("path".to_string(), json!(path));
+            params.insert("value".to_string(), value.clone());
+            if let Some(labels) = &labels {
+                params.insert("labels".to_string(), json!(labels));
+            }
+            match self.request("state:update", Value::Object(params), timeout) {
                 Ok(_) => return Ok(()),
                 Err(Error::Mlld {
                     code: Some(code), ..
@@ -819,6 +878,44 @@ fn value_to_request_id(value: &Value) -> Option<u64> {
     }
 }
 
+fn normalize_labels<I, S>(labels: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized = Vec::new();
+
+    for label in labels {
+        let trimmed = label.into().trim().to_string();
+        if trimmed.is_empty() || !seen.insert(trimmed.clone()) {
+            continue;
+        }
+        normalized.push(trimmed);
+    }
+
+    normalized
+}
+
+fn normalize_label_map(
+    input: Option<HashMap<String, Vec<String>>>,
+) -> Option<HashMap<String, Vec<String>>> {
+    let mut normalized = HashMap::new();
+
+    for (field, labels) in input.unwrap_or_default() {
+        let deduped = normalize_labels(labels);
+        if !deduped.is_empty() {
+            normalized.insert(field, deduped);
+        }
+    }
+
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
 fn error_from_payload(payload: &Value) -> Error {
     let message = payload
         .get("message")
@@ -890,6 +987,9 @@ pub struct ProcessOptions {
     /// Data injected as @payload.
     pub payload: Option<Value>,
 
+    /// Per-field security labels for @payload object fields.
+    pub payload_labels: Option<HashMap<String, Vec<String>>>,
+
     /// Data injected as @state.
     pub state: Option<Value>,
 
@@ -912,6 +1012,9 @@ pub struct ProcessOptions {
 /// Options for execute().
 #[derive(Debug, Default, Clone)]
 pub struct ExecuteOptions {
+    /// Per-field security labels for @payload object fields.
+    pub payload_labels: Option<HashMap<String, Vec<String>>>,
+
     /// Data injected as @state.
     pub state: Option<Value>,
 
@@ -946,6 +1049,9 @@ pub struct ExecuteResult {
     #[serde(default)]
     pub effects: Vec<Effect>,
 
+    #[serde(default)]
+    pub denials: Vec<GuardDenial>,
+
     pub metrics: Option<Metrics>,
 }
 
@@ -956,6 +1062,20 @@ pub struct Effect {
     pub effect_type: String,
     pub content: Option<String>,
     pub security: Option<Value>,
+}
+
+/// Structured information about a denied guard/policy decision.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct GuardDenial {
+    pub guard: Option<String>,
+    pub operation: String,
+    pub reason: String,
+    pub rule: Option<String>,
+
+    #[serde(default)]
+    pub labels: Vec<String>,
+
+    pub args: Option<Value>,
 }
 
 /// A write to the state:// protocol.
@@ -1254,6 +1374,56 @@ mod tests {
     }
 
     #[test]
+    fn test_sdk_labels_flow_through_payload_and_state_updates() {
+        let cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("dist")
+            .join("cli.cjs");
+        assert!(cli_path.exists(), "expected dist/cli.cjs to exist");
+
+        let client = Client::new()
+            .with_command("node")
+            .with_command_args([cli_path.to_string_lossy().to_string()])
+            .with_timeout(Duration::from_secs(15));
+
+        let mut payload_labels = HashMap::new();
+        payload_labels.insert("history".to_string(), vec!["untrusted".to_string()]);
+
+        let mut handle = client
+            .process_async(
+                "loop(99999, 50ms) until @state.exit [\n  continue\n]\nshow @payload.history.mx.labels.includes(\"untrusted\")\nshow @state.tool_result.mx.labels.includes(\"untrusted\")\nshow @state.tool_result",
+                Some(ProcessOptions {
+                    payload: Some(json!({ "history": "tool transcript" })),
+                    payload_labels: Some(payload_labels),
+                    state: Some(json!({ "exit": false, "tool_result": null })),
+                    mode: Some("strict".to_string()),
+                    timeout: Some(Duration::from_secs(10)),
+                    ..Default::default()
+                }),
+            )
+            .expect("start labeled process request succeeds");
+
+        std::thread::sleep(Duration::from_millis(120));
+        handle
+            .update_state_with_labels("tool_result", "tool output", ["untrusted"])
+            .expect("labeled state update succeeds");
+        handle
+            .update_state("exit", true)
+            .expect("exit state update succeeds");
+
+        let output = handle.result().expect("labeled process succeeds");
+        let lines = output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(lines, vec!["true", "true", "tool output"]);
+
+        client.close();
+    }
+
+    #[test]
     fn test_state_update_fails_after_completion() {
         let cli_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -1272,7 +1442,7 @@ mod tests {
                 "show \"done\"",
                 Some(ProcessOptions {
                     mode: Some("strict".to_string()),
-                    timeout: Some(Duration::from_secs(1)),
+                    timeout: Some(Duration::from_secs(2)),
                     ..Default::default()
                 }),
             )

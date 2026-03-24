@@ -283,9 +283,9 @@ guard @alwaysGuard always op:run = when [* => allow]
 
     expect(result.valid).toBe(true);
     expect(result.guards).toEqual(expect.arrayContaining([
-      { name: 'beforeGuard', timing: 'before' },
-      { name: 'afterGuard', timing: 'after' },
-      { name: 'alwaysGuard', timing: 'always' }
+      expect.objectContaining({ name: 'beforeGuard', timing: 'before', filter: 'op:run' }),
+      expect.objectContaining({ name: 'afterGuard', timing: 'after', filter: 'op:run' }),
+      expect.objectContaining({ name: 'alwaysGuard', timing: 'always', filter: 'op:run' })
     ]));
   });
 
@@ -300,9 +300,247 @@ guard @g before op:run = when [* => allow]
 
     expect(result.valid).toBe(true);
     expect(result.guards).toEqual(expect.arrayContaining([
-      { name: 'g', timing: 'before' }
+      expect.objectContaining({ name: 'g', timing: 'before', filter: 'op:run' })
     ]));
     expect(result.needs?.cmd).toEqual(expect.arrayContaining(['curl']));
+  });
+
+  it('extracts policy details, executable labels, and privileged guard arms', async () => {
+    const modulePath = await writeModule('analyze-policies-guards-labels.mld', `policy @task = {
+  defaults: { rules: ["no-send-to-unknown", "no-destroy-unknown"] },
+  operations: {
+    destructive: ["tool:w"],
+    network: ["net:w"]
+  },
+  locked: false
+}
+policy @merged = union(@task, @org)
+guard privileged @authSendEmail before op:tool:w = when [
+  @mx.op.name == "send_email" && @mx.args.recipients ~= ["alice@example.com"] => allow
+  @mx.op.name == "send_email" => deny "recipients not authorized"
+]
+exe tool:w @send_email(recipients, subject) = cmd { echo "ok" }
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.executables).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'send_email',
+        params: ['recipients', 'subject'],
+        labels: ['tool:w']
+      })
+    ]));
+    expect(result.guards).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'authSendEmail',
+        timing: 'before',
+        filter: 'op:tool:w',
+        privileged: true,
+        arms: expect.arrayContaining([
+          expect.objectContaining({
+            action: 'allow',
+            condition: expect.stringContaining('@mx.args.recipients ~= ["alice@example.com"]')
+          }),
+          expect.objectContaining({
+            action: 'deny',
+            condition: '@mx.op.name == "send_email"',
+            reason: 'recipients not authorized'
+          })
+        ])
+      })
+    ]));
+    expect(result.policies).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'task',
+        rules: ['no-send-to-unknown', 'no-destroy-unknown'],
+        operations: {
+          destructive: ['tool:w'],
+          network: ['net:w']
+        },
+        locked: false
+      }),
+      expect.objectContaining({
+        name: 'merged',
+        refs: ['task', 'org']
+      })
+    ]));
+  });
+
+  it('warns on unknown built-in policy rule names', async () => {
+    const modulePath = await writeModule('analyze-unknown-policy-rule.mld', `policy @task = {
+  defaults: { rules: ["no-send-to-unkown"] }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'unknown-policy-rule'
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('no-send-to-unkown');
+    expect(warnings[0]?.suggestion).toContain('no-send-to-unknown');
+  });
+
+  it('warns on privileged wildcard allow guards', async () => {
+    const modulePath = await writeModule('analyze-privileged-wildcard-allow.mld', `guard privileged @auth before op:tool:w = when [
+  * => allow
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'privileged-wildcard-allow'
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('unconditional allow');
+  });
+
+  it('warns on unreachable guard arms covered by an earlier arm', async () => {
+    const modulePath = await writeModule('analyze-guard-unreachable-arm.mld', `guard @auth before op:tool:w = when [
+  @mx.op.name == "send_email" => deny "all sends blocked"
+  @mx.op.name == "send_email" && @mx.args.recipients ~= ["alice@example.com"] => allow
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'guard-unreachable-arm'
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('earlier condition already covers it');
+  });
+
+  it('warns when privileged guard filters do not match any declared policy operation labels', async () => {
+    const modulePath = await writeModule('analyze-privileged-guard-without-policy-operation.mld', `policy @task = {
+  defaults: { rules: ["no-send-to-unknown"] },
+  operations: { destructive: ["tool:r"] }
+}
+guard privileged @auth before op:tool:w = when [
+  * => deny "blocked"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'privileged-guard-without-policy-operation'
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('op:tool:w');
+  });
+
+  it('validates guard filters, operation names, and arg references against context executables', async () => {
+    const contextPath = await writeModule('analyze-tools-context.mld', `exe tool:w @send_email(recipients, subject) = cmd { echo "ok" }
+`);
+    const guardPath = await writeModule('analyze-guard-context.mld', `guard @sendEmail before @send_email = when [
+  @mx.args.recipients ~= ["alice@example.com"] => allow
+  @mx.args.cc ~= [] => deny "cc not allowed"
+]
+guard @missingFilter before @archive = when [
+  * => deny "missing filter target"
+]
+guard @missingOpLabel before op:tool:x = when [
+  * => deny "missing op label"
+]
+guard @missingOpName before op:tool:w = when [
+  @mx.op.name == "missing_tool" => deny "missing op name"
+]
+`);
+
+    const resultWithoutContext = await analyze(guardPath, { checkVariables: false });
+    expect((resultWithoutContext.antiPatterns ?? []).filter(entry => entry.code.startsWith('guard-context-'))).toHaveLength(0);
+
+    const result = await analyze(guardPath, {
+      checkVariables: false,
+      context: [contextPath]
+    });
+
+    expect(result.valid).toBe(true);
+    const missingExeWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'guard-context-missing-exe'
+    );
+    const missingOpLabelWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'guard-context-missing-op-label'
+    );
+    const missingArgWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'guard-context-missing-arg'
+    );
+
+    expect(missingExeWarnings).toHaveLength(2);
+    expect(missingExeWarnings.map(entry => entry.message).join('\n')).toContain('@archive');
+    expect(missingExeWarnings.map(entry => entry.message).join('\n')).toContain('missing_tool');
+    expect(missingOpLabelWarnings).toHaveLength(1);
+    expect(missingOpLabelWarnings[0]?.message).toContain('tool:x');
+    expect(missingArgWarnings).toHaveLength(1);
+    expect(missingArgWarnings[0]?.message).toContain('@mx.args.cc');
+  });
+
+  it('fails validation when policy.authorizations lacks trusted controlArgs metadata in context', async () => {
+    const contextPath = await writeModule('analyze-authz-context.mld', `exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
+`);
+    const modulePath = await writeModule('analyze-authz-invalid.mld', `var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_email: true
+    }
+  }
+}
+show @taskPolicy
+`);
+
+    const result = await analyze(modulePath, {
+      checkVariables: false,
+      context: [contextPath]
+    });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      'missing trusted controlArgs metadata'
+    );
+  });
+
+  it('accepts policy.authorizations with trusted tool metadata and surfaces normalization warnings', async () => {
+    const modulePath = await writeModule('analyze-authz-valid.mld', `exe tool:w @create_file(title) = cmd { echo "ok" }
+var tools @agentTools = {
+  create_file: {
+    mlld: @create_file,
+    expose: ["title"],
+    controlArgs: []
+  }
+}
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      create_file: {}
+    }
+  }
+}
+show @taskPolicy
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry =>
+        entry.code === 'policy-authorizations-empty-entry' ||
+        entry.code === 'policy-authorizations-unconstrained-tool'
+    );
+    expect(warnings.map(entry => entry.code)).toEqual(
+      expect.arrayContaining([
+        'policy-authorizations-empty-entry',
+        'policy-authorizations-unconstrained-tool'
+      ])
+    );
   });
 
   it('populates needs.cmd with shell commands detected from run directives', async () => {

@@ -1,9 +1,11 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import { logger } from '@core/utils/logger';
+import type { ToolCollection } from '@core/types/tools';
 import type { Variable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import {
   evaluateArrayItems,
   evaluateCollectionObject,
@@ -36,6 +38,7 @@ export type RhsHandlerKey =
   | 'template-array'
   | 'text'
   | 'variable-reference-tail'
+  | 'mcp-tool-source'
   | 'expression'
   | 'execution'
   | 'fallback';
@@ -113,6 +116,77 @@ async function evaluateToolCollectionObject(
   );
 }
 
+function sanitizeDynamicMcpAliasPart(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9_]/g, '_');
+  if (!sanitized) {
+    return 'tool';
+  }
+  return /^[0-9]/.test(sanitized) ? `_${sanitized}` : sanitized;
+}
+
+function createDynamicMcpAlias(
+  env: Environment,
+  identifier: string,
+  toolName: string
+): string {
+  const base = `__mcp_${sanitizeDynamicMcpAliasPart(identifier)}_${sanitizeDynamicMcpAliasPart(toolName)}`;
+  let alias = base;
+  let index = 2;
+  while (env.getVariable(alias)) {
+    alias = `${base}_${index}`;
+    index += 1;
+  }
+  return alias;
+}
+
+async function evaluateDynamicMcpToolCollection(
+  valueNode: { source: unknown },
+  env: Environment,
+  identifier: string,
+  sourceLocation?: SourceLocation
+): Promise<ToolCollection> {
+  const { evaluate } = await import('@interpreter/core/interpreter');
+  const { buildMcpToolIndex, resolveMcpServerSpec } = await import('../import/McpImportResolver');
+  const { McpImportService } = await import('../import/McpImportService');
+  const { extractVariableValue, isVariable } = await import('@interpreter/utils/variable-resolution');
+
+  let resolved = (await evaluate(valueNode.source as any, env, { isExpression: true })).value;
+  if (isVariable(resolved)) {
+    resolved = await extractVariableValue(resolved, env);
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (typeof resolved !== 'string' || resolved.trim().length === 0) {
+    throw new Error('Dynamic MCP tool sources must resolve to a non-empty string');
+  }
+
+  const resolvedSpec = await resolveMcpServerSpec(resolved, env);
+  const tools = await env.getMcpImportManager().listTools(resolvedSpec);
+  const toolIndex = buildMcpToolIndex(tools, resolvedSpec);
+  const importService = new McpImportService(env);
+  const collection: ToolCollection = {};
+
+  for (const tool of toolIndex.tools) {
+    const toolKey = toolIndex.mlldNameByMcp.get(tool.name) ?? tool.name;
+    const alias = createDynamicMcpAlias(env, identifier, toolKey);
+    const variable = importService.createMcpToolVariable({
+      alias,
+      tool,
+      mcpName: tool.name,
+      importPath: resolvedSpec,
+      definedAt: sourceLocation
+    });
+    env.setVariable(alias, variable);
+    collection[toolKey] = {
+      mlld: alias,
+      ...(tool.description ? { description: tool.description } : {})
+    };
+  }
+
+  return collection;
+}
+
 function toRhsResultFromExecution(
   executionResult: ExecutionEvaluationResult
 ): RhsEvaluationResult {
@@ -186,6 +260,10 @@ function resolveHandlerKey(valueNode: unknown): RhsHandlerKey {
 
   if (valueNode && typeof valueNode === 'object' && (valueNode as { type?: string }).type === 'VariableReferenceWithTail') {
     return 'variable-reference-tail';
+  }
+
+  if (valueNode && typeof valueNode === 'object' && (valueNode as { type?: string }).type === 'mcpToolSource') {
+    return 'mcp-tool-source';
   }
 
   if (isExpressionNode(valueNode)) {
@@ -383,6 +461,20 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
           type: 'resolved',
           handler: handlerKey,
           value: referenceResult.resolvedValue
+        };
+      }
+
+      case 'mcp-tool-source': {
+        const value = await evaluateDynamicMcpToolCollection(
+          valueNode as { source: unknown },
+          env,
+          identifier,
+          sourceLocation
+        );
+        return {
+          type: 'resolved',
+          handler: handlerKey,
+          value
         };
       }
 

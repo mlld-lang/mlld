@@ -1,10 +1,15 @@
 import { homedir } from 'os';
 import type { Environment } from '@interpreter/env/Environment';
-import type { PolicyConfig, PolicyFilesystemRules } from '@core/policy/union';
+import type {
+  PolicyConfig,
+  PolicyFileIntegrityRule,
+  PolicyFilesystemRules
+} from '@core/policy/union';
 import type { SourceLocation } from '@core/types';
 import { MlldSecurityError } from '@core/errors';
 import { matchesFsPattern, parseFsPatternEntry } from '@core/policy/capability-patterns';
 import { isDangerAllowedForFilesystem, isDangerousFilesystem, normalizeDangerEntries } from '@core/policy/danger';
+import { matchesAnySignerPattern } from './signer-labels';
 
 export type FilesystemAccessMode = 'read' | 'write';
 
@@ -77,6 +82,40 @@ export async function readFileWithPolicy(
   const resolvedPath = await env.resolvePath(pathOrUrl);
   enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
   return env.readFile(resolvedPath);
+}
+
+export function enforceFileIntegrity(
+  env: Environment,
+  targetPath: string,
+  identity: string,
+  sourceLocation?: SourceLocation
+): void {
+  const policy = env.getPolicySummary();
+  if (!policy?.filesystem_integrity) {
+    return;
+  }
+
+  const matchedRule = findFilesystemIntegrityRule(policy.filesystem_integrity, env, targetPath);
+  if (!matchedRule) {
+    return;
+  }
+
+  if (matchedRule.rule.mutable === false) {
+    throw new MlldSecurityError('Filesystem write denied by integrity policy', {
+      code: 'POLICY_CAPABILITY_DENIED',
+      sourceLocation,
+      env
+    });
+  }
+
+  const authorizedIdentities = matchedRule.rule.authorizedIdentities;
+  if (authorizedIdentities && !matchesAnySignerPattern(identity, authorizedIdentities)) {
+    throw new MlldSecurityError('Filesystem write denied by integrity policy', {
+      code: 'POLICY_CAPABILITY_DENIED',
+      sourceLocation,
+      env
+    });
+  }
 }
 
 function extractFilesystemRules(value: PolicyConfig['allow'] | PolicyConfig['deny'] | undefined): PolicyFilesystemRules | undefined {
@@ -197,4 +236,35 @@ function matchesFilesystemRules(
   const basePath = env.getProjectRoot();
   const homeDir = homedir();
   return patterns.some(pattern => matchesFsPattern(targetPath, pattern, basePath, homeDir));
+}
+
+function findFilesystemIntegrityRule(
+  rules: NonNullable<PolicyConfig['filesystem_integrity']>,
+  env: Environment,
+  targetPath: string
+): { pattern: string; rule: PolicyFileIntegrityRule } | undefined {
+  const basePath = env.getProjectRoot();
+  const homeDir = homedir();
+  let bestMatch:
+    | {
+        index: number;
+        pattern: string;
+        rule: PolicyFileIntegrityRule;
+      }
+    | undefined;
+
+  for (const [index, [pattern, rule]] of Object.entries(rules).entries()) {
+    if (!matchesFsPattern(targetPath, pattern, basePath, homeDir)) {
+      continue;
+    }
+    if (
+      !bestMatch ||
+      pattern.length > bestMatch.pattern.length ||
+      (pattern.length === bestMatch.pattern.length && index > bestMatch.index)
+    ) {
+      bestMatch = { index, pattern, rule };
+    }
+  }
+
+  return bestMatch ? { pattern: bestMatch.pattern, rule: bestMatch.rule } : undefined;
 }

@@ -38,6 +38,8 @@ guard @ensureVerified after llm = when [
 
 The policy auto-signs templates and the enforcement guard ensures LLM exes call `mlld verify` before their output is accepted.
 
+That guard intentionally uses execution-level `@mx.tools.calls`. The question here is "did this LLM run verify during this execution?" rather than "what earlier tools produced this value?".
+
 ```mlld
 >> Signed templates — placeholders are NOT interpolated when signed
 var @extractPrompt = ::
@@ -100,6 +102,7 @@ if !@verdict.safe [
 **Notes:**
 - Privileged guards that can `trusted!` bless tainted data are available to policy guards and user-defined privileged guards — see `guards-privileged`
 - Both calls use autoverify; enforcement guard requires `mlld verify` was called
+- This verify-enforcement check intentionally stays execution-level (`@mx.tools.calls`), not value-level (`@mx.tools.history`)
 - Use `retry` in the enforcement guard for MCP mode (LLM retries with verification); use `deny` for standalone mode (immediate block, as in `main.mld`)
 - See `pattern-audit-guard` for the simpler single-auditor version
 - Autoverify injects verification only when signed variables are @-referenced in the exe command template (e.g., `run cmd { claude -p "@extractPrompt" }`). Passing signed data as parameters alone does not trigger autoverify.

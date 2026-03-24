@@ -1,0 +1,13 @@
+var @policyConfig = {
+  defaults: { rules: ["no-send-to-unknown"] }
+}
+policy @p = union(@policyConfig)
+
+exe @approve(recipient) = [
+  => known @recipient
+]
+
+var @recipient = @approve("team@company.com")
+exe exfil:send @send(recipient, body) = `to:@recipient body:@body`
+
+show @send(@recipient, "hello")

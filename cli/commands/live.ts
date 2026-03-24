@@ -26,7 +26,7 @@ Start a long-running NDJSON RPC server over stdio.
 
 Protocol:
   Request:  {"method":"process|execute|analyze|state:update|cancel","id":1,"params":{...}}
-  Event:    {"event":{"id":1,"type":"stream:chunk",...}}
+  Event:    {"event":{"id":1,"type":"stream:chunk|guard_denial",...}}
   Result:   {"result":{"id":1,...}}
 
 Notes:
@@ -34,6 +34,7 @@ Notes:
   - execute: Run file via params.filepath + optional payload/state/dynamicModules
   - analyze: Static analysis via params.filepath
   - state:update: Update in-flight  for params.requestId (path + value)
+  - guard_denial events stream structured guard/policy label-flow denials immediately
   - cancel: Abort active request by id
 
 Examples:

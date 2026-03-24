@@ -12,13 +12,13 @@ export class StreamExecution implements StreamExecutionInterface {
   private readonly resultPromise: Promise<StructuredResult>;
   private aborted = false;
   private abortFn?: () => void;
-  updateState?: (path: string, value: unknown) => Promise<void>;
+  updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
 
   constructor(
     private readonly emitter: ExecutionEmitter,
     options?: {
       abort?: () => void;
-      updateState?: (path: string, value: unknown) => Promise<void>;
+      updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
     }
   ) {
     this.donePromise = new Promise<void>((resolve, reject) => {
@@ -32,11 +32,11 @@ export class StreamExecution implements StreamExecutionInterface {
     this.abortFn = options?.abort;
 
     if (options?.updateState) {
-      this.updateState = async (path: string, value: unknown): Promise<void> => {
+      this.updateState = async (path: string, value: unknown, labels?: string[]): Promise<void> => {
         if (this.completed) {
           throw new Error('StreamExecution already completed');
         }
-        await options.updateState?.(path, value);
+        await options.updateState?.(path, value, labels);
       };
     }
   }
@@ -105,6 +105,7 @@ export class StreamExecution implements StreamExecutionInterface {
       'stream:progress',
       'execution:complete',
       'state:write',
+      'guard_denial',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',

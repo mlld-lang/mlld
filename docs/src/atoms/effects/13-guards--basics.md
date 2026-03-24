@@ -62,17 +62,48 @@ All guards have access to the full operation context:
 
 | Guard scope | `@input` | `@output` | `@mx` highlights |
 |---|---|---|---|
-| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.guard.try` |
-| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
-| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
+| per-operation | Array of operation inputs | String view of the first input | `@mx.op.type`, `@mx.op.name`, `@mx.op.labels`, `@mx.args.*`, `@mx.guard.try` |
+| per-operation (after) | Array of operation outputs in the current guard scope | String view of the current output | `@mx.op.*`, `@mx.args.*`, `@mx.guard.try`, `@mx.guard.reasons`, `@mx.guard.hintHistory` |
+| per-input | The current labeled value (`string`, `object`, `array`, etc.) | String view of the current value | `@mx.op.*`, `@mx.args.*`, `@mx.labels`, `@mx.taint`, `@mx.sources`, `@mx.guard.try` |
 
-Per-operation guard inputs expose helper metadata for aggregate checks:
+Per-operation guards can access individual arguments by index:
+
+- `@input[0]`, `@input[1]`, etc. — individual argument values
+- `@input[0].mx.labels`, `@input[0].mx.taint` — per-arg security metadata
+
+Per-operation and per-input guards can also access named operation inputs through `@mx.args`:
+
+- `@mx.args.value` — named arg access for identifier-safe parameter names
+- `@mx.args.value.mx.labels`, `@mx.args.value.mx.taint` — per-arg metadata by name
+- `@mx.args["repo-name"]` — bracket access for names that are not dot-safe
+- `@mx.args.names` — list of available arg names
+- `@mx.args["names"]` — access an actual arg named `names` even though `@mx.args.names` is reserved
+
+Per-operation guard inputs also expose helper metadata for aggregate checks:
 
 - `@input.any.mx.labels.includes("secret")`
 - `@input.all.mx.taint.includes("src:file")`
 - `@input.none.mx.labels.includes("pii")`
 - `@input.mx.labels`, `@input.mx.taint`, `@input.mx.sources`
 - `@input.any.text.includes("SSN")` for content-level text inspection
+
+**Per-arg label inspection:**
+
+```mlld
+>> Check whether the first argument to an exe is labeled 'secret'
+guard before op:exe = when [
+  @input[0].mx.labels.includes("secret") => deny "First argument must not be secret"
+  * => allow
+]
+```
+
+```mlld
+>> Check whether a named argument is labeled 'secret'
+guard before op:exe = when [
+  @input.length() > 0 && @mx.args.value.mx.labels.includes("secret") => deny "Named arg must not be secret"
+  * => allow
+]
+```
 
 **Two ways to guard the same flow:**
 

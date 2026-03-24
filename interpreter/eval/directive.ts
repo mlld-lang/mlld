@@ -38,6 +38,7 @@ import { evaluateNeeds } from './needs';
 import { evaluateProfiles } from './profiles';
 import { clearDirectiveReplay } from './directive-replay';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
+import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import { runUserAfterHooks, runUserBeforeHooks } from '../hooks/user-hook-runner';
 import { runUserAfterHooksOnGuardDenial } from '../hooks/guard-denial-after-hooks';
 import { extractSecurityDescriptor } from '../utils/structured-value';
@@ -508,10 +509,11 @@ async function enforcePolicyBeforeGuards(
   context?: EvaluationContext
 ): Promise<boolean> {
   const policy = env.getPolicySummary();
-  if (!policy?.labels) {
+  if (!hasManagedPolicyLabelFlow(policy)) {
     return false;
   }
   const enforcer = new PolicyEnforcer(policy);
+  const deferManagedLabelFlow = true;
   const sourceLocation = directive.location;
 
   if (directive.kind === 'show' || directive.kind === 'stream') {
@@ -520,7 +522,7 @@ async function enforcePolicyBeforeGuards(
     }
     const inputDescriptor = collectInputDescriptor(extractedInputs);
     const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (inputTaint.length > 0) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       const opType = directive.kind === 'stream' ? 'stream' : 'show';
       const opLabels =
         operationContext.opLabels ?? getOperationLabels({ type: opType });
@@ -549,7 +551,7 @@ async function enforcePolicyBeforeGuards(
           })
         : undefined;
       const inputTaint = descriptorToInputTaint(descriptor);
-      if (inputTaint.length > 0) {
+      if (inputTaint.length > 0 && !deferManagedLabelFlow) {
         const opLabels =
           operationContext.opLabels ?? getOperationLabels({ type: 'output' });
         enforcer.checkLabelFlow(
@@ -567,7 +569,7 @@ async function enforcePolicyBeforeGuards(
 
     const inputDescriptor = collectInputDescriptor(extractedInputs);
     const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (inputTaint.length > 0) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       const opType = directive.kind === 'append' ? 'append' : 'output';
       const opLabels =
         operationContext.opLabels ?? getOperationLabels({ type: opType });
@@ -616,7 +618,7 @@ async function enforcePolicyBeforeGuards(
       const commandDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
       const inputTaint = descriptorToInputTaint(commandDescriptor);
       const enclosingExeLabels = Array.from(env.getEnclosingExeLabels());
-      if (inputTaint.length > 0) {
+      if (inputTaint.length > 0 && !deferManagedLabelFlow) {
         enforcer.checkLabelFlow(
           {
             inputTaint,
@@ -630,7 +632,7 @@ async function enforcePolicyBeforeGuards(
       }
       const stdinDescriptor = stdinVar?.mx ? varMxToSecurityDescriptor(stdinVar.mx) : undefined;
       const stdinTaint = descriptorToInputTaint(stdinDescriptor);
-      if (stdinTaint.length > 0) {
+      if (stdinTaint.length > 0 && !deferManagedLabelFlow) {
         enforcer.checkLabelFlow(
           {
             inputTaint: stdinTaint,
@@ -649,7 +651,7 @@ async function enforcePolicyBeforeGuards(
       const opLabels = operationContext.opLabels ?? [];
       const inputDescriptor = collectInputDescriptor(extractedInputs);
       const inputTaint = descriptorToInputTaint(inputDescriptor);
-      if (opLabels.length > 0 && inputTaint.length > 0) {
+      if (opLabels.length > 0 && inputTaint.length > 0 && !deferManagedLabelFlow) {
         enforcer.checkLabelFlow(
           {
             inputTaint,
@@ -699,7 +701,7 @@ async function enforcePolicyBeforeGuards(
           env.updateOpContext({ sources: opSources });
         }
         const inputTaint = descriptorToInputTaint(preview.inputDescriptor);
-        if (inputTaint.length > 0) {
+        if (inputTaint.length > 0 && !deferManagedLabelFlow) {
           enforcer.checkLabelFlow(
             {
               inputTaint,
@@ -725,7 +727,7 @@ async function enforcePolicyBeforeGuards(
             ? env.mergeSecurityDescriptors(...argDescriptors)
             : argDescriptors[0];
         const inputTaint = descriptorToInputTaint(inputDescriptor);
-        if (inputTaint.length > 0) {
+        if (inputTaint.length > 0 && !deferManagedLabelFlow) {
           enforcer.checkLabelFlow(
             {
               inputTaint,

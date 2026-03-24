@@ -16,6 +16,7 @@ import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
+import { parseStateOptions } from '../utils/state-parser';
 import { parseDuration, formatDuration } from '@core/config/utils';
 import chalk from 'chalk';
 import {
@@ -416,9 +417,26 @@ export class FileProcessor {
     );
     const modeConfig = resolveInterpretMode(cliOptions);
     const detachLogging = modeConfig.emitter ? attachEmitterLogging(modeConfig.emitter) : undefined;
-    const dynamicModules = cliOptions.inject
+    const injectModules = cliOptions.inject
       ? await parseInjectOptions(cliOptions.inject, environment.fileSystem, path.dirname(effectivePath))
       : undefined;
+    const stateModule = cliOptions.state
+      ? await parseStateOptions(cliOptions.state, environment.fileSystem, path.dirname(effectivePath))
+      : undefined;
+    let dynamicModules = injectModules ? { ...injectModules } : undefined;
+
+    if (stateModule) {
+      const mergedModules = dynamicModules ?? {};
+      const existingState = mergedModules['@state'];
+
+      if (existingState && typeof existingState === 'object' && !Array.isArray(existingState)) {
+        mergedModules['@state'] = { ...(existingState as Record<string, unknown>), ...stateModule };
+      } else {
+        mergedModules['@state'] = stateModule;
+      }
+
+      dynamicModules = mergedModules;
+    }
 
     const scriptResumeMode =
       extractLeadingResumeDirective(content).resumeMode ?? DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE;
@@ -439,7 +457,7 @@ export class FileProcessor {
     }
 
     let resultEnvironment: Environment | null = null;
-    const interpretResult = await interpret(content, {
+    const interpretOptions = {
       pathContext,
       filePath: effectivePath,
       format: this.normalizeFormat(cliOptions.format),
@@ -468,8 +486,10 @@ export class FileProcessor {
       },
       mode: modeConfig.mode,
       streaming: modeConfig.streaming ?? (cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined),
-      emitter: modeConfig.emitter
-    });
+      emitter: modeConfig.emitter,
+      signingContext: { tier: 'user' as const }
+    };
+    const interpretResult = await interpret(content, interpretOptions as any);
 
     return {
       interpretResult,
@@ -697,7 +717,8 @@ export class FileProcessor {
         } : undefined
       })),
       exports: Object.keys(rest.exports ?? {}),
-      stateWrites: rest.stateWrites ?? []
+      stateWrites: rest.stateWrites ?? [],
+      denials: rest.denials ?? []
     };
 
     return JSON.stringify(structured, null, 2);
@@ -734,6 +755,12 @@ function attachEmitterLogging(emitter: ExecutionEmitter): () => void {
   });
   register('execution:complete', () => {
     log('[execution:complete]');
+  });
+  register('guard_denial', event => {
+    const denial = (event as any).guard_denial;
+    log(
+      `[guard_denial] operation=${denial?.operation ?? ''} guard=${denial?.guard ?? ''} rule=${denial?.rule ?? ''} reason=${denial?.reason ?? ''}`
+    );
   });
 
   return () => {

@@ -1,11 +1,12 @@
 import type { GuardResult, GuardHint } from '@core/types/guard';
-import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { DataLabel, SecurityDescriptor, ToolProvenance } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { GuardDefinition } from '../guards/GuardRegistry';
 import type { PerInputCandidate } from './guard-candidate-selection';
 import { applyDescriptorToVariables, mergeGuardDescriptor } from './guard-post-descriptor';
 import { normalizeReplacementVariables } from './guard-post-output-normalization';
+import type { GuardArgsSnapshot } from '../utils/guard-args';
 
 interface RetryContextSnapshot {
   attempt: number;
@@ -17,6 +18,8 @@ interface RetryContextSnapshot {
 export interface GuardOperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
+  taint: readonly string[];
+  toolsHistory?: readonly ToolProvenance[];
   variables: readonly Variable[];
 }
 
@@ -33,6 +36,7 @@ interface GuardEvaluationInput {
   inputPreviewOverride?: string | null;
   outputRaw?: unknown;
   inputHelper?: GuardInputHelper;
+  args?: GuardArgsSnapshot;
 }
 
 export interface PostGuardDecisionEngineOptions {
@@ -54,6 +58,7 @@ export interface PostGuardDecisionEngineOptions {
     labelModifications: GuardResult['labelModifications'],
     targets: readonly Variable[]
   ) => Promise<void>;
+  guardArgs?: GuardArgsSnapshot;
 }
 
 export interface PostGuardDecisionEngineResult {
@@ -95,7 +100,8 @@ export async function runPostGuardDecisionEngine(
         labelsOverride: currentDescriptor.labels,
         sourcesOverride: currentDescriptor.sources,
         inputPreviewOverride: options.buildVariablePreview(currentInput),
-        outputRaw: options.resolveGuardValue(currentInput, currentInput)
+        outputRaw: options.resolveGuardValue(currentInput, currentInput),
+        args: options.guardArgs
       });
 
       guardTrace.push(resultEntry);
@@ -177,7 +183,8 @@ export async function runPostGuardDecisionEngine(
         labelsOverride: opSnapshot.labels,
         sourcesOverride: opSnapshot.sources,
         inputPreviewOverride: `Array(len=${operationInputSnapshot.variables.length})`,
-        outputRaw: currentOutputValue
+        outputRaw: currentOutputValue,
+        args: options.guardArgs
       });
 
       guardTrace.push(resultEntry);

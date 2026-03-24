@@ -228,21 +228,9 @@ export class ForeachSectionEvaluator {
         // Resolve the path relative to the current file
         const fileContent = await readFileWithPolicy(env, pathValue);
         
-        // Extract the section using llmxml
-        const { llmxmlInstance } = await import('../../utils/llmxml-instance');
-        let sectionContent: string;
-        try {
-          // getSection expects just the title without the # prefix
-          const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
-          sectionContent = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
-            includeNested: true
-          });
-          // Trim trailing whitespace
-          sectionContent = sectionContent.trimEnd();
-        } catch (error) {
-          // Fallback to basic extraction if llmxml fails
-          sectionContent = this.extractSectionBasic(fileContent, sectionName);
-        }
+        const { extractMarkdownSection } = await import('../show/section-utils');
+        const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
+        const sectionContent = extractMarkdownSection(fileContent, titleWithoutHash);
         
         // 8. Apply template with current item context
         const templateResult = await interpolateAndRecord(template.values.content, childEnv);

@@ -145,6 +145,43 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(asText(result.value)).toBe('false');
   });
 
+  it('resolves executable methods through nested object fields', async () => {
+    const src = `
+/exe @deep() = js { return "nested-ok" }
+/var @nested = {
+  child: {
+    func: @deep
+  }
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'nested-field-method',
+      commandRef: {
+        name: 'func',
+        objectReference: {
+          type: 'VariableReference',
+          nodeId: 'nested-field-ref',
+          identifier: 'nested',
+          fields: [
+            {
+              type: 'Field',
+              nodeId: 'nested-child-field',
+              value: 'child'
+            }
+          ]
+        },
+        args: []
+      } as any
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(asText(result.value)).toBe('nested-ok');
+  });
+
   it('pipes RHS variable through inline command pipeline', async () => {
     const src = '/exe @pipe(value) = @value | cmd { cat }';
     const { ast } = await parse(src);
@@ -163,6 +200,44 @@ describe('evaluateExecInvocation (structured)', () => {
 
     const result = await evaluateExecInvocation(invocation, env);
     expect(asText(result.value)).toBe('hello');
+  });
+
+  it('preserves null exec parameters for when guards instead of coercing them to text', async () => {
+    const src = `
+/exe @guard(x) = [
+  when !@x => "missing"
+  => "ok: @x"
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const nullInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'guard-null',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'guard-null-ref',
+        identifier: 'guard',
+        args: [{ type: 'Literal', nodeId: 'null-arg', value: null, valueType: 'null' } as any]
+      }
+    };
+    const helloInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'guard-hello',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'guard-hello-ref',
+        identifier: 'guard',
+        args: [{ type: 'Text', nodeId: 'hello-arg', content: 'hello' } as any]
+      }
+    };
+
+    const nullResult = await evaluateExecInvocation(nullInvocation, env);
+    const helloResult = await evaluateExecInvocation(helloInvocation, env);
+
+    expect(asText(nullResult.value)).toBe('missing');
+    expect(asText(helloResult.value)).toBe('ok: hello');
   });
 
   it('supports legacy run-pipe sugar in exe RHS', async () => {

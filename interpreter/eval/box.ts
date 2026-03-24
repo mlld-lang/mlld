@@ -7,7 +7,7 @@ import type { Variable } from '@core/types/variable';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
 import { evaluate } from '../core/interpreter';
-import { MlldDirectiveError } from '@core/errors';
+import { MlldDirectiveError, MlldSecurityError } from '@core/errors';
 import { normalizeProfilesDeclaration, selectProfile } from '@core/policy/needs';
 import { isExecutableVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
@@ -16,6 +16,10 @@ import { evaluateExeBlock } from './exe';
 import { normalizeMcpConfig, registerMcpToolsFromConfig } from '../mcp/config-spawner';
 import { VirtualFS } from '@services/fs/VirtualFS';
 import { applyEnvironmentDefaults } from '@interpreter/env/environment-provider';
+import {
+  createPolicyAuthorizationValidationError,
+  validateRuntimePolicyAuthorizations
+} from './exec/policy-fragment';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -678,6 +682,13 @@ export async function evaluateBox(
 
   const scopedEnv = env.createChild();
   scopedEnv.setScopedEnvironmentConfig(mergedConfig);
+  const policyAuthorizationValidation = validateRuntimePolicyAuthorizations(
+    scopedEnv.getPolicySummary(),
+    scopedEnv
+  );
+  if (policyAuthorizationValidation && policyAuthorizationValidation.errors.length > 0) {
+    throw createPolicyAuthorizationValidationError(policyAuthorizationValidation);
+  }
 
   const toolScope = normalizeToolScope(resolvedTools, env, directive.location);
   if (toolScope.hasTools) {

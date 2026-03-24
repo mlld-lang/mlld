@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { DataLabel } from '@core/types/security';
 import type { IFileSystemService } from './IFileSystemService';
 
 type StatShape = { isDirectory(): boolean; isFile(): boolean; size?: number };
@@ -15,10 +16,21 @@ export interface VirtualFSChange {
 
 export type VirtualFSPatchOperation = 'write' | 'mkdir' | 'delete';
 
+export interface VirtualFSSigningContext {
+  identity: string;
+  taint: DataLabel[];
+}
+
+export interface VirtualFSShadowEntry {
+  content: string;
+  signingContext?: VirtualFSSigningContext;
+}
+
 export interface VirtualFSPatchWriteEntry {
   path: string;
   op: 'write';
   content: string;
+  signingContext?: VirtualFSSigningContext;
 }
 
 export interface VirtualFSPatchMkdirEntry {
@@ -41,15 +53,21 @@ export interface VirtualFSPatch {
   entries: VirtualFSPatchEntry[];
 }
 
+export type VirtualFSFlushListener = (
+  path: string,
+  signingContext?: VirtualFSSigningContext
+) => Promise<void> | void;
+
 /**
  * VirtualFS is a copy-on-write filesystem overlay.
  * Reads resolve shadow state first, then fall back to optional backing storage.
  * Writes mutate shadow state only.
  */
 export class VirtualFS implements IFileSystemService {
-  private readonly shadowFiles = new Map<string, string>();
+  private readonly shadowFiles = new Map<string, VirtualFSShadowEntry>();
   private readonly deletedPaths = new Set<string>();
   private readonly explicitDirectories = new Set<string>();
+  private readonly flushListeners = new Set<VirtualFSFlushListener>();
 
   private constructor(private readonly backing?: IFileSystemService) {}
 
@@ -59,6 +77,10 @@ export class VirtualFS implements IFileSystemService {
 
   static over(backing: IFileSystemService): VirtualFS {
     return new VirtualFS(backing);
+  }
+
+  getBackingFileSystem(): IFileSystemService | undefined {
+    return this.backing;
   }
 
   async changes(): Promise<VirtualFSChange[]> {
@@ -80,7 +102,7 @@ export class VirtualFS implements IFileSystemService {
       }
 
       if (this.shadowFiles.has(candidatePath)) {
-        const shadowContent = this.shadowFiles.get(candidatePath) as string;
+        const shadowContent = (this.shadowFiles.get(candidatePath) as VirtualFSShadowEntry).content;
         const existsInBacking = await this.existsInBacking(candidatePath);
         if (!existsInBacking) {
           changes.push({
@@ -129,7 +151,7 @@ export class VirtualFS implements IFileSystemService {
     const after = this.deletedPaths.has(normalizedPath)
       ? null
       : this.shadowFiles.has(normalizedPath)
-        ? (this.shadowFiles.get(normalizedPath) as string)
+        ? (this.shadowFiles.get(normalizedPath) as VirtualFSShadowEntry).content
         : before;
 
     if (before === null && after === null) {
@@ -176,7 +198,8 @@ export class VirtualFS implements IFileSystemService {
       entries.push({
         path: filePath,
         op: 'write',
-        content
+        content: content.content,
+        ...(content.signingContext ? { signingContext: content.signingContext } : {})
       });
     }
 
@@ -207,7 +230,10 @@ export class VirtualFS implements IFileSystemService {
     for (const entry of patch.entries) {
       const normalizedPath = this.normalizePath(entry.path);
       if (entry.op === 'write') {
-        this.shadowFiles.set(normalizedPath, entry.content);
+        this.shadowFiles.set(normalizedPath, {
+          content: entry.content,
+          ...(entry.signingContext ? { signingContext: entry.signingContext } : {})
+        });
         this.clearDeletionForPath(normalizedPath);
         continue;
       }
@@ -241,7 +267,9 @@ export class VirtualFS implements IFileSystemService {
 
       if (entry.op === 'write') {
         await this.backing.writeFile(entry.path, entry.content);
+        const shadowEntry = this.shadowFiles.get(entry.path);
         this.shadowFiles.delete(entry.path);
+        await this.notifyFlushListeners(entry.path, shadowEntry?.signingContext);
         continue;
       }
 
@@ -254,6 +282,69 @@ export class VirtualFS implements IFileSystemService {
     return true;
   }
 
+  onFlush(listener: VirtualFSFlushListener): () => void {
+    this.flushListeners.add(listener);
+    return () => {
+      this.flushListeners.delete(listener);
+    };
+  }
+
+  setSigningContext(filePath: string, signingContext?: VirtualFSSigningContext): void {
+    const normalizedPath = this.normalizePath(filePath);
+    const existing = this.shadowFiles.get(normalizedPath);
+    if (!existing) {
+      return;
+    }
+    this.shadowFiles.set(normalizedPath, {
+      content: existing.content,
+      ...(signingContext ? { signingContext } : {})
+    });
+  }
+
+  getShadowEntry(filePath: string): VirtualFSShadowEntry | undefined {
+    const normalizedPath = this.normalizePath(filePath);
+    const entry = this.shadowFiles.get(normalizedPath);
+    if (!entry) {
+      return undefined;
+    }
+    return {
+      content: entry.content,
+      ...(entry.signingContext
+        ? {
+            signingContext: {
+              identity: entry.signingContext.identity,
+              taint: [...entry.signingContext.taint]
+            }
+          }
+        : {})
+    };
+  }
+
+  toJSON(): {
+    shadowFiles: Record<string, string>;
+    deletedPaths: string[];
+    explicitDirectories: string[];
+    shadowSigningContexts?: Record<string, VirtualFSSigningContext>;
+  } {
+    const shadowFiles = Object.fromEntries(
+      Array.from(this.shadowFiles.entries()).map(([filePath, entry]) => [filePath, entry.content])
+    );
+    const shadowSigningContexts = Object.fromEntries(
+      Array.from(this.shadowFiles.entries())
+        .filter(([, entry]) => Boolean(entry.signingContext))
+        .map(([filePath, entry]) => [filePath, entry.signingContext as VirtualFSSigningContext])
+    );
+
+    return {
+      shadowFiles,
+      deletedPaths: Array.from(this.deletedPaths.values()),
+      explicitDirectories: Array.from(this.explicitDirectories.values()),
+      ...(Object.keys(shadowSigningContexts).length > 0
+        ? { shadowSigningContexts }
+        : {})
+    };
+  }
+
   async readFile(filePath: string): Promise<string> {
     const normalizedPath = this.normalizePath(filePath);
     if (this.isDeleted(normalizedPath)) {
@@ -261,7 +352,7 @@ export class VirtualFS implements IFileSystemService {
     }
 
     if (this.shadowFiles.has(normalizedPath)) {
-      return this.shadowFiles.get(normalizedPath) as string;
+      return (this.shadowFiles.get(normalizedPath) as VirtualFSShadowEntry).content;
     }
 
     if (await this.isDirectory(normalizedPath)) {
@@ -297,7 +388,7 @@ export class VirtualFS implements IFileSystemService {
       await this.mkdir(parentDir, { recursive: true });
     }
 
-    this.shadowFiles.set(normalizedPath, content);
+    this.shadowFiles.set(normalizedPath, { content });
     this.explicitDirectories.delete(normalizedPath);
     this.clearDeletionForPath(normalizedPath);
   }
@@ -471,7 +562,7 @@ export class VirtualFS implements IFileSystemService {
     }
 
     if (this.shadowFiles.has(normalizedPath)) {
-      const content = this.shadowFiles.get(normalizedPath) as string;
+      const content = (this.shadowFiles.get(normalizedPath) as VirtualFSShadowEntry).content;
       return {
         isDirectory: () => false,
         isFile: () => true,
@@ -553,7 +644,7 @@ export class VirtualFS implements IFileSystemService {
 
   private async readFileIfExists(targetPath: string): Promise<string> {
     if (this.shadowFiles.has(targetPath)) {
-      return this.shadowFiles.get(targetPath) as string;
+      return (this.shadowFiles.get(targetPath) as VirtualFSShadowEntry).content;
     }
     if (this.isDeleted(targetPath)) {
       return '';
@@ -706,6 +797,20 @@ export class VirtualFS implements IFileSystemService {
 
   private toDiffLabel(targetPath: string): string {
     return targetPath.replace(/^\/+/, '');
+  }
+
+  private async notifyFlushListeners(
+    targetPath: string,
+    signingContext?: VirtualFSSigningContext
+  ): Promise<void> {
+    if (this.flushListeners.size === 0) {
+      return;
+    }
+    await Promise.allSettled(
+      Array.from(this.flushListeners).map(async (listener) => {
+        await listener(targetPath, signingContext);
+      })
+    );
   }
 
   private splitLinesForDiff(content: string): string[] {

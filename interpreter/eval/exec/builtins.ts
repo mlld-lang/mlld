@@ -474,48 +474,28 @@ export async function resolveBuiltinInvocationObject(options: {
     }
 
     const { extractVariableValue, isVariable } = await import('@interpreter/utils/variable-resolution');
-    objectValue = await extractVariableValue(objectVar, env);
+    if (objectRef.fields && objectRef.fields.length > 0) {
+      const { accessFields } = await import('@interpreter/utils/field-access');
+      objectValue = await accessFields(objectVar, normalizeFields(objectRef.fields), {
+        env,
+        preserveContext: false,
+        returnUndefinedForMissing: true,
+        sourceLocation: objectRef.location
+      });
+    } else {
+      objectValue = await extractVariableValue(objectVar, env);
+    }
+
     if (isVariable(objectValue)) {
       objectValue = await extractVariableValue(objectValue, env);
     }
 
-    if (objectRef.fields && objectRef.fields.length > 0) {
-      const normalizedFields = normalizeFields(objectRef.fields);
-      for (const field of normalizedFields) {
-        let targetValue: any = objectValue;
-        let key = field.value;
-
-        if (field.type === 'variableIndex') {
-          key = await resolveVariableIndexValue(field.value, env);
-        }
-
-        if (isStructuredValue(targetValue)) {
-          if (typeof key === 'string' && key in (targetValue as any)) {
-            objectValue = (targetValue as any)[key];
-            continue;
-          }
-          targetValue = asData(targetValue);
-        }
-
-        if (LegacyStructuredValue.isStructuredValue?.(targetValue)) {
-          if (typeof key === 'string' && key in (targetValue as any)) {
-            objectValue = (targetValue as any)[key];
-            continue;
-          }
-          targetValue = (targetValue as any).data;
-        }
-
-        if (typeof targetValue === 'object' && targetValue !== null) {
-          objectValue = (targetValue as any)[key];
-        } else {
-          if (isTypeCheckingBuiltin) {
-            return {
-              kind: 'type-check-fallback',
-              result: handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined)
-            };
-          }
-          throw new MlldInterpreterError(`Cannot access field ${String(key)} on non-object`);
-        }
+    if (objectRef.fields && objectRef.fields.length > 0 && typeof objectValue === 'undefined') {
+      if (isTypeCheckingBuiltin) {
+        return {
+          kind: 'type-check-fallback',
+          result: handleTypeCheckingBuiltin(commandName as TypeCheckingMethod, undefined)
+        };
       }
     }
   } else if (commandRefWithObject.objectSource) {

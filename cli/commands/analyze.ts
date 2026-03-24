@@ -19,6 +19,12 @@ import {
   restorePlainMlldTemplateFences
 } from '@interpreter/eval/template-fence-literals';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
+import {
+  validatePolicyAuthorizations,
+  type AuthorizationToolContext,
+  type PolicyAuthorizationIssue
+} from '@core/policy/authorizations';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -31,6 +37,7 @@ export interface AnalyzeOptions {
   knownTemplateParams?: Map<string, Set<string>>;
   deep?: boolean;
   strictTemplateVariables?: boolean;
+  context?: string[];
 }
 
 export interface AnalysisError {
@@ -53,7 +60,26 @@ export interface ImportInfo {
 export interface GuardInfo {
   name: string;
   timing: string;
+  filter: string;
+  privileged?: boolean;
+  arms?: GuardArmInfo[];
   label?: string;
+}
+
+export interface GuardArmInfo {
+  condition: string;
+  action: 'allow' | 'deny' | 'retry' | 'prompt' | 'env';
+  reason?: string;
+  line?: number;
+  column?: number;
+}
+
+export interface PolicyInfo {
+  name: string;
+  rules?: string[];
+  operations?: Record<string, string[]>;
+  locked?: boolean;
+  refs?: string[];
 }
 
 export interface NeedsInfo {
@@ -85,7 +111,16 @@ export type AntiPatternWarningCode =
   | 'template-strict-for-syntax'
   | 'hyphenated-identifier-in-template'
   | 'for-when-static-condition'
-  | 'direct-text-data-on-exec-result';
+  | 'direct-text-data-on-exec-result'
+  | 'privileged-wildcard-allow'
+  | 'guard-unreachable-arm'
+  | 'unknown-policy-rule'
+  | 'privileged-guard-without-policy-operation'
+  | 'guard-context-missing-exe'
+  | 'guard-context-missing-op-label'
+  | 'guard-context-missing-arg'
+  | 'policy-authorizations-empty-entry'
+  | 'policy-authorizations-unconstrained-tool';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -119,6 +154,7 @@ export interface AnalyzeResult {
   exports?: string[];
   imports?: ImportInfo[];
   guards?: GuardInfo[];
+  policies?: PolicyInfo[];
   needs?: NeedsInfo;
   template?: TemplateInfo;
   ast?: MlldNode[];
@@ -268,7 +304,16 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'deprecated-json-transform',
   'exe-parameter-shadowing',
   'hyphenated-identifier-in-template',
-  'for-when-static-condition'
+  'for-when-static-condition',
+  'privileged-wildcard-allow',
+  'guard-unreachable-arm',
+  'unknown-policy-rule',
+  'privileged-guard-without-policy-operation',
+  'guard-context-missing-exe',
+  'guard-context-missing-op-label',
+  'guard-context-missing-arg',
+  'policy-authorizations-empty-entry',
+  'policy-authorizations-unconstrained-tool'
 ]);
 const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['result', 'status'],
@@ -1484,6 +1529,1008 @@ function detectForWhenStaticConditionWarnings(ast: MlldNode[]): AntiPatternWarni
   return warnings;
 }
 
+function extractSourceSegment(
+  sourceText: string,
+  location?: { start?: { offset?: number }; end?: { offset?: number } } | null
+): string | undefined {
+  const start = location?.start?.offset;
+  const end = location?.end?.offset;
+
+  if (typeof start !== 'number' || typeof end !== 'number' || end < start) {
+    return undefined;
+  }
+
+  const text = sourceText.slice(start, end).trim();
+  return text.length > 0 ? text : undefined;
+}
+
+function fallbackNodeSignature(node: unknown): string {
+  if (!node || typeof node !== 'object') {
+    return String(node);
+  }
+
+  const { location, nodeId, ...rest } = node as Record<string, unknown>;
+  return JSON.stringify(rest);
+}
+
+function getFieldAccessorName(field: unknown): string | null {
+  if (!field || typeof field !== 'object') {
+    return null;
+  }
+
+  const typedField = field as Record<string, unknown>;
+  const direct =
+    (typeof typedField.value === 'string' && typedField.value) ||
+    (typeof typedField.name === 'string' && typedField.name) ||
+    (typeof typedField.identifier === 'string' && typedField.identifier);
+
+  if (direct) {
+    return direct;
+  }
+
+  if (
+    (typedField.type === 'stringIndex' || typedField.type === 'bracketAccess') &&
+    typeof typedField.value === 'string'
+  ) {
+    return typedField.value;
+  }
+
+  return null;
+}
+
+function isMxFieldReference(node: unknown, pathSegments: string[]): boolean {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  if (typedNode.type !== 'VariableReference' || typedNode.identifier !== 'mx' || !Array.isArray(typedNode.fields)) {
+    return false;
+  }
+
+  const fieldNames = typedNode.fields
+    .map(field => getFieldAccessorName(field))
+    .filter((value): value is string => typeof value === 'string');
+
+  return pathSegments.every((segment, index) => fieldNames[index] === segment);
+}
+
+function extractStringLiteralValue(node: unknown): string | null {
+  if (typeof node === 'string') {
+    return node;
+  }
+
+  if (Array.isArray(node)) {
+    if (node.length === 1) {
+      return extractStringLiteralValue(node[0]);
+    }
+    const parts = node
+      .map(part => extractStringLiteralValue(part))
+      .filter((part): part is string => typeof part === 'string');
+    return parts.length === node.length ? parts.join('') : null;
+  }
+
+  if (!node || typeof node !== 'object') {
+    return null;
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  if (typedNode.type === 'Literal' && typeof typedNode.value === 'string') {
+    return typedNode.value;
+  }
+  if (typedNode.type === 'Text' && typeof typedNode.content === 'string') {
+    return typedNode.content;
+  }
+  return null;
+}
+
+function flattenConditionConjunctions(node: unknown): unknown[] {
+  if (
+    node &&
+    typeof node === 'object' &&
+    (node as Record<string, unknown>).type === 'BinaryExpression' &&
+    (node as Record<string, unknown>).operator === '&&'
+  ) {
+    const typedNode = node as Record<string, unknown>;
+    return [
+      ...flattenConditionConjunctions(typedNode.left),
+      ...flattenConditionConjunctions(typedNode.right)
+    ];
+  }
+
+  return [node];
+}
+
+function extractGuardConditionSignatures(condition: unknown, sourceText: string): string[] {
+  const root =
+    Array.isArray(condition) && condition.length === 1
+      ? condition[0]
+      : condition;
+
+  if (!root) {
+    return [];
+  }
+
+  return flattenConditionConjunctions(root).map(node =>
+    extractSourceSegment(sourceText, (node as any)?.location) ?? fallbackNodeSignature(node)
+  );
+}
+
+function extractGuardConditionText(condition: unknown, sourceText: string): string {
+  if (!Array.isArray(condition) || condition.length === 0) {
+    return '*';
+  }
+
+  const first = condition[0] as any;
+  const last = condition[condition.length - 1] as any;
+  const start = first?.location?.start?.offset;
+  const end = last?.location?.end?.offset;
+  if (typeof start === 'number' && typeof end === 'number' && end >= start) {
+    const text = sourceText.slice(start, end).trim();
+    if (text) {
+      return text;
+    }
+  }
+
+  return extractSourceSegment(sourceText, first?.location) ?? fallbackNodeSignature(condition);
+}
+
+function extractStaticValue(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const isSingleAstWrapper =
+      value.length === 1 &&
+      value[0] !== null &&
+      typeof value[0] === 'object' &&
+      !Array.isArray(value[0]) &&
+      'type' in (value[0] as Record<string, unknown>);
+
+    if (isSingleAstWrapper) {
+      return extractStaticValue(value[0]);
+    }
+
+    const parts = value.map(part => extractStaticValue(part));
+    if (parts.every(part => part !== undefined)) {
+      return parts;
+    }
+    return undefined;
+  }
+
+  if (typeof value !== 'object') {
+    return undefined;
+  }
+
+  const typedValue = value as Record<string, unknown>;
+
+  if (Array.isArray(typedValue.content)) {
+    const extractedContent = extractStaticValue(typedValue.content);
+    if (
+      typeof extractedContent === 'string' ||
+      typeof extractedContent === 'number' ||
+      typeof extractedContent === 'boolean'
+    ) {
+      return extractedContent;
+    }
+    if (Array.isArray(extractedContent)) {
+      const stringParts = extractedContent.filter(
+        (part): part is string => typeof part === 'string'
+      );
+      if (stringParts.length === extractedContent.length) {
+        return stringParts.join('');
+      }
+    }
+  }
+
+  if (typedValue.type === 'Literal') {
+    return typedValue.value;
+  }
+
+  if (typedValue.type === 'Text') {
+    return typeof typedValue.content === 'string' ? typedValue.content : undefined;
+  }
+
+  if (typedValue.type === 'VariableReference' && typeof typedValue.identifier === 'string') {
+    return `@${typedValue.identifier}`;
+  }
+
+  if (typedValue.type === 'array' && Array.isArray(typedValue.items)) {
+    return typedValue.items
+      .map(item => extractStaticValue(item))
+      .filter(item => item !== undefined);
+  }
+
+  if (typedValue.type === 'object' && Array.isArray(typedValue.entries)) {
+    const result: Record<string, unknown> = {};
+    for (const entry of typedValue.entries as Array<Record<string, unknown>>) {
+      if (
+        (entry.type === 'pair' || entry.type === 'conditionalPair') &&
+        typeof entry.key === 'string'
+      ) {
+        const extracted = extractStaticValue(entry.value);
+        if (extracted !== undefined) {
+          result[entry.key] = extracted;
+        }
+      }
+    }
+    return result;
+  }
+
+  return undefined;
+}
+
+function getObjectEntryValue(node: unknown, key: string): unknown {
+  if (!node || typeof node !== 'object') {
+    return undefined;
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  if (typedNode.type !== 'object' || !Array.isArray(typedNode.entries)) {
+    return undefined;
+  }
+
+  for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
+    if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
+      return entry.value;
+    }
+  }
+
+  return undefined;
+}
+
+function containsDynamicStaticValueReference(node: unknown): boolean {
+  if (Array.isArray(node)) {
+    return node.some(entry => containsDynamicStaticValueReference(entry));
+  }
+
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  const nodeType = typeof typedNode.type === 'string' ? typedNode.type : null;
+  if (
+    nodeType &&
+    nodeType !== 'Literal' &&
+    nodeType !== 'Text' &&
+    nodeType !== 'array' &&
+    nodeType !== 'object' &&
+    nodeType !== 'pair' &&
+    nodeType !== 'conditionalPair'
+  ) {
+    return true;
+  }
+
+  return Object.values(typedNode).some(value => containsDynamicStaticValueReference(value));
+}
+
+function extractPolicies(ast: MlldNode[]): PolicyInfo[] {
+  const policies: PolicyInfo[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'policy') {
+      return;
+    }
+
+    const policyNode = node as any;
+    const name = extractText(policyNode.values?.name) || policyNode.raw?.name;
+    if (!name) {
+      return;
+    }
+
+    const info: PolicyInfo = { name };
+    const expr = policyNode.values?.expr;
+
+    if (expr?.type === 'union' && Array.isArray(expr.args)) {
+      const refs = expr.args
+        .map((arg: any) => (typeof arg?.name === 'string' ? arg.name : ''))
+        .filter((ref: string) => ref.length > 0);
+      if (refs.length > 0) {
+        info.refs = refs;
+      }
+      policies.push(info);
+      return;
+    }
+
+    const rulesNode = getObjectEntryValue(getObjectEntryValue(expr, 'defaults'), 'rules');
+    if (rulesNode && typeof rulesNode === 'object' && (rulesNode as any).type === 'array' && Array.isArray((rulesNode as any).items)) {
+      const rules = (rulesNode as any).items
+        .map((item: unknown) => extractStaticValue(item))
+        .filter((rule: unknown): rule is string => typeof rule === 'string' && rule.trim().length > 0);
+      if (rules.length > 0) {
+        info.rules = rules;
+      }
+    }
+
+    const operationsNode = getObjectEntryValue(expr, 'operations');
+    if (operationsNode && typeof operationsNode === 'object' && (operationsNode as any).type === 'object' && Array.isArray((operationsNode as any).entries)) {
+      const normalizedOperations: Record<string, string[]> = {};
+      for (const entry of (operationsNode as any).entries as Array<Record<string, unknown>>) {
+        if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+          continue;
+        }
+
+        const extractedLabels = extractStaticValue(entry.value);
+        if (!Array.isArray(extractedLabels)) {
+          continue;
+        }
+
+        const labels = extractedLabels.filter(
+          (label): label is string => typeof label === 'string' && label.trim().length > 0
+        );
+        if (labels.length > 0) {
+          normalizedOperations[entry.key] = labels;
+        }
+      }
+
+      if (Object.keys(normalizedOperations).length > 0) {
+        info.operations = normalizedOperations;
+      }
+    }
+
+    const lockedValue = extractStaticValue(getObjectEntryValue(expr, 'locked'));
+    info.locked = lockedValue === true;
+
+    policies.push(info);
+  });
+
+  return policies;
+}
+
+function parseContextPaths(rawContext: unknown): string[] | undefined {
+  if (Array.isArray(rawContext)) {
+    const values = rawContext
+      .flatMap(value => typeof value === 'string' ? value.split(',') : [])
+      .map(value => value.trim())
+      .filter(value => value.length > 0);
+    return values.length > 0 ? values : undefined;
+  }
+
+  if (typeof rawContext !== 'string') {
+    return undefined;
+  }
+
+  const values = rawContext
+    .split(',')
+    .map(value => value.trim())
+    .filter(value => value.length > 0);
+
+  return values.length > 0 ? values : undefined;
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const matrix = Array.from({ length: rows }, () => Array<number>(cols).fill(0));
+
+  for (let row = 0; row < rows; row += 1) {
+    matrix[row][0] = row;
+  }
+  for (let col = 0; col < cols; col += 1) {
+    matrix[0][col] = col;
+  }
+
+  for (let row = 1; row < rows; row += 1) {
+    for (let col = 1; col < cols; col += 1) {
+      const substitutionCost = left[row - 1] === right[col - 1] ? 0 : 1;
+      matrix[row][col] = Math.min(
+        matrix[row - 1][col] + 1,
+        matrix[row][col - 1] + 1,
+        matrix[row - 1][col - 1] + substitutionCost
+      );
+    }
+  }
+
+  return matrix[rows - 1][cols - 1];
+}
+
+function findClosestBuiltinPolicyRule(ruleName: string): string | null {
+  let bestRule: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const builtinRule of BUILTIN_POLICY_RULES) {
+    const distance = levenshteinDistance(ruleName, builtinRule);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestRule = builtinRule;
+    }
+  }
+
+  return bestDistance <= 6 ? bestRule : null;
+}
+
+function detectUnknownPolicyRuleWarnings(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'policy') {
+      return;
+    }
+
+    const policyNode = node as any;
+    const rulesNode = getObjectEntryValue(getObjectEntryValue(policyNode.values?.expr, 'defaults'), 'rules');
+    if (!rulesNode || typeof rulesNode !== 'object' || (rulesNode as any).type !== 'array' || !Array.isArray((rulesNode as any).items)) {
+      return;
+    }
+
+    for (const item of (rulesNode as any).items as unknown[]) {
+      const ruleName = extractStaticValue(item);
+      if (typeof ruleName !== 'string' || isBuiltinPolicyRuleName(ruleName)) {
+        continue;
+      }
+
+      const closestRule = findClosestBuiltinPolicyRule(ruleName);
+      warnings.push({
+        code: 'unknown-policy-rule',
+        message: closestRule
+          ? `Unknown built-in rule "${ruleName}" — did you mean "${closestRule}"?`
+          : `Unknown built-in rule "${ruleName}".`,
+        line: (item as any)?.location?.start?.line,
+        column: (item as any)?.location?.start?.column,
+        suggestion: closestRule
+          ? `Replace "${ruleName}" with "${closestRule}" if that was the intended built-in policy rule.`
+          : `Use one of: ${BUILTIN_POLICY_RULES.join(', ')}`
+      });
+    }
+  });
+
+  return warnings;
+}
+
+function detectPrivilegedWildcardAllowWarnings(ast: MlldNode[]): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'guard') {
+      return;
+    }
+
+    const guardNode = node as GuardDirectiveNode;
+    if (guardNode.meta?.privileged !== true) {
+      return;
+    }
+
+    const guardName = extractText(guardNode.values?.name) || guardNode.raw?.name || 'anonymous guard';
+    const guardBlock = guardNode.values?.guard?.[0];
+    if (!guardBlock || !Array.isArray(guardBlock.rules)) {
+      return;
+    }
+
+    for (const rule of guardBlock.rules as Array<Record<string, unknown>>) {
+      if (rule.type !== 'GuardRule' || rule.isWildcard !== true || (rule.action as any)?.decision !== 'allow') {
+        continue;
+      }
+
+      warnings.push({
+        code: 'privileged-wildcard-allow',
+        message: `Privileged guard ${guardName} has unconditional allow — this overrides policy for all matching operations.`,
+        line: (rule as any)?.location?.start?.line,
+        column: (rule as any)?.location?.start?.column,
+        suggestion: 'Replace * => allow with a narrower condition or an explicit deny fallback.'
+      });
+    }
+  });
+
+  return warnings;
+}
+
+function detectUnreachableGuardArmWarnings(ast: MlldNode[], sourceText: string): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'guard') {
+      return;
+    }
+
+    const guardNode = node as GuardDirectiveNode;
+    const guardName = extractText(guardNode.values?.name) || guardNode.raw?.name || 'anonymous guard';
+    const guardBlock = guardNode.values?.guard?.[0];
+    if (!guardBlock || !Array.isArray(guardBlock.rules)) {
+      return;
+    }
+
+    const seenConjunctions: Array<{ line?: number; conjuncts: Set<string> }> = [];
+    let wildcardLine: number | undefined;
+
+    for (const entry of guardBlock.rules as Array<Record<string, unknown>>) {
+      if (entry.type !== 'GuardRule') {
+        continue;
+      }
+
+      const line = (entry as any)?.location?.start?.line as number | undefined;
+      const column = (entry as any)?.location?.start?.column as number | undefined;
+
+      if (wildcardLine !== undefined) {
+        warnings.push({
+          code: 'guard-unreachable-arm',
+          message: `Guard arm in ${guardName} is unreachable because an earlier wildcard arm already matches everything.`,
+          line,
+          column,
+          suggestion: `Move this arm before the wildcard arm declared at line ${wildcardLine}.`
+        });
+        continue;
+      }
+
+      if (entry.isWildcard === true) {
+        wildcardLine = line;
+        continue;
+      }
+
+      const conjuncts = extractGuardConditionSignatures(entry.condition, sourceText);
+      if (conjuncts.length === 0) {
+        continue;
+      }
+
+      const conjunctSet = new Set(conjuncts);
+      const coveringArm = seenConjunctions.find(previous =>
+        Array.from(previous.conjuncts).every(signature => conjunctSet.has(signature))
+      );
+
+      if (coveringArm) {
+        warnings.push({
+          code: 'guard-unreachable-arm',
+          message: `Guard arm in ${guardName} is unreachable because an earlier condition already covers it.`,
+          line,
+          column,
+          suggestion: coveringArm.line
+            ? `The broader arm was declared at line ${coveringArm.line}. Reorder the arms or narrow the earlier condition.`
+            : 'Reorder the arms or narrow the earlier condition.'
+        });
+        continue;
+      }
+
+      seenConjunctions.push({ line, conjuncts: conjunctSet });
+    }
+  });
+
+  return warnings;
+}
+
+function collectPolicyOperationLabels(policies: readonly PolicyInfo[]): Set<string> {
+  const labels = new Set<string>();
+  for (const policy of policies) {
+    if (!policy.operations) {
+      continue;
+    }
+    for (const operationLabels of Object.values(policy.operations)) {
+      for (const label of operationLabels) {
+        labels.add(label);
+      }
+    }
+  }
+  return labels;
+}
+
+function detectPrivilegedGuardWithoutPolicyOperationWarnings(
+  ast: MlldNode[],
+  policies: readonly PolicyInfo[]
+): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const declaredOperationLabels = collectPolicyOperationLabels(policies);
+
+  if (declaredOperationLabels.size === 0) {
+    return warnings;
+  }
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'guard') {
+      return;
+    }
+
+    const guardNode = node as GuardDirectiveNode;
+    if (guardNode.meta?.privileged !== true || guardNode.meta?.filterKind !== 'operation') {
+      return;
+    }
+
+    const filterValue = guardNode.meta?.filterValue;
+    if (!filterValue || declaredOperationLabels.has(filterValue)) {
+      return;
+    }
+
+    const guardName = extractText(guardNode.values?.name) || guardNode.raw?.name || 'anonymous guard';
+    warnings.push({
+      code: 'privileged-guard-without-policy-operation',
+      message: `Privileged guard ${guardName} filters on op:${filterValue}, but no policy in this module declares that operation label.`,
+      line: guardNode.location?.start?.line,
+      column: guardNode.location?.start?.column,
+      suggestion: `Add "${filterValue}" to a policy.operations category or remove the privileged override if no policy-managed operation needs it.`
+    });
+  });
+
+  return warnings;
+}
+
+interface ValidationContextExecutable extends AuthorizationToolContext {
+  labels: Set<string>;
+}
+
+function getOrCreateValidationExecutable(
+  byName: Map<string, ValidationContextExecutable>,
+  name: string
+): ValidationContextExecutable {
+  const existing = byName.get(name);
+  if (existing) {
+    return existing;
+  }
+
+  const created: ValidationContextExecutable = {
+    name,
+    params: new Set<string>(),
+    labels: new Set<string>(),
+    controlArgs: new Set<string>(),
+    hasControlArgsMetadata: false
+  };
+  byName.set(name, created);
+  return created;
+}
+
+function mergeValidationContextAst(
+  ast: MlldNode[],
+  byName: Map<string, ValidationContextExecutable>
+): void {
+  for (const executable of extractExecutables(ast)) {
+    const target = getOrCreateValidationExecutable(byName, executable.name);
+    for (const param of executable.params ?? []) {
+      target.params.add(param);
+    }
+    for (const label of executable.labels ?? []) {
+      target.labels.add(label);
+    }
+  }
+
+  walkAST(ast, (node) => {
+    const directiveNode = node as any;
+    if (
+      directiveNode.type !== 'Directive' ||
+      directiveNode.kind !== 'var' ||
+      directiveNode.meta?.isToolsCollection !== true
+    ) {
+      return;
+    }
+
+    const toolObjectNode = Array.isArray(directiveNode.values?.value)
+      ? directiveNode.values.value[0]
+      : undefined;
+    if (!toolObjectNode || typeof toolObjectNode !== 'object' || (toolObjectNode as any).type !== 'object') {
+      return;
+    }
+
+    for (const entry of (toolObjectNode as any).entries as Array<Record<string, unknown>>) {
+      if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+        continue;
+      }
+
+      const toolValue = entry.value;
+      const mlldValue = extractStaticValue(getObjectEntryValue(toolValue, 'mlld'));
+      if (typeof mlldValue !== 'string' || mlldValue.trim().length === 0) {
+        continue;
+      }
+
+      const execName = mlldValue.trim().replace(/^@/, '');
+      if (!execName) {
+        continue;
+      }
+
+      const target = byName.get(execName);
+      if (!target) {
+        continue;
+      }
+
+      const labelsValue = extractStaticValue(getObjectEntryValue(toolValue, 'labels'));
+      if (Array.isArray(labelsValue)) {
+        for (const label of labelsValue) {
+          if (typeof label === 'string' && label.trim().length > 0) {
+            target.labels.add(label.trim());
+          }
+        }
+      }
+
+      const controlArgsNode = getObjectEntryValue(toolValue, 'controlArgs');
+      if (controlArgsNode === undefined) {
+        continue;
+      }
+
+      const controlArgsValue = extractStaticValue(controlArgsNode);
+      if (!Array.isArray(controlArgsValue)) {
+        continue;
+      }
+
+      target.hasControlArgsMetadata = true;
+      for (const controlArg of controlArgsValue) {
+        if (typeof controlArg === 'string' && controlArg.trim().length > 0) {
+          target.controlArgs.add(controlArg.trim());
+        }
+      }
+    }
+  });
+}
+
+async function buildValidationContextExecutables(
+  currentFilepath: string,
+  ast: MlldNode[],
+  contextPaths: readonly string[] | undefined
+): Promise<Map<string, ValidationContextExecutable>> {
+  const byName = new Map<string, ValidationContextExecutable>();
+  mergeValidationContextAst(ast, byName);
+
+  if (!contextPaths || contextPaths.length === 0) {
+    return byName;
+  }
+
+  const resolvedContextFiles = await resolveFilePaths([...contextPaths]);
+  for (const contextFile of resolvedContextFiles) {
+    const resolvedPath = path.resolve(contextFile);
+    if (resolvedPath === path.resolve(currentFilepath) || isTemplateFile(resolvedPath)) {
+      continue;
+    }
+
+    try {
+      const content = await fs.readFile(resolvedPath, 'utf8');
+      const mode = resolvedPath.endsWith('.mld.md') ? 'markdown' : 'strict';
+      mergeValidationContextAst(parseSync(content, { mode }), byName);
+    } catch {
+      // Ignore invalid context files here; validate() will already report their own failures separately.
+    }
+  }
+
+  return byName;
+}
+
+function detectGuardContextWarnings(
+  ast: MlldNode[],
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+
+  const pushWarning = (warning: AntiPatternWarning): void => {
+    const key = `${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    warnings.push(warning);
+  };
+
+  const visitGuardRuleReferences = (
+    value: unknown,
+    opNames: Set<string>,
+    argNames: Array<{ name: string; line?: number; column?: number }>
+  ): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        visitGuardRuleReferences(item, opNames, argNames);
+      }
+      return;
+    }
+
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+
+    const node = value as Record<string, unknown>;
+
+    if (node.type === 'BinaryExpression' && node.operator === '==') {
+      if (isMxFieldReference(node.left, ['op', 'name'])) {
+        const compared = extractStringLiteralValue(node.right);
+        if (compared) {
+          opNames.add(compared);
+        }
+      } else if (isMxFieldReference(node.right, ['op', 'name'])) {
+        const compared = extractStringLiteralValue(node.left);
+        if (compared) {
+          opNames.add(compared);
+        }
+      }
+    }
+
+    if (node.type === 'VariableReference' && node.identifier === 'mx' && Array.isArray(node.fields)) {
+      const fieldNames = node.fields
+        .map(field => getFieldAccessorName(field))
+        .filter((field): field is string => typeof field === 'string');
+
+      if (fieldNames[0] === 'args' && typeof fieldNames[1] === 'string' && fieldNames[1] !== 'names') {
+        argNames.push({
+          name: fieldNames[1],
+          line: (node as any)?.location?.start?.line,
+          column: (node as any)?.location?.start?.column
+        });
+      }
+    }
+
+    for (const nested of Object.values(node)) {
+      visitGuardRuleReferences(nested, opNames, argNames);
+    }
+  };
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'Directive' || node.kind !== 'guard') {
+      return;
+    }
+
+    const guardNode = node as GuardDirectiveNode;
+    const guardName = extractText(guardNode.values?.name) || guardNode.raw?.name || 'anonymous guard';
+
+    if (guardNode.meta?.filterKind === 'function') {
+      const functionName = guardNode.meta?.filterValue;
+      if (functionName && !contextExecutables.has(functionName)) {
+        pushWarning({
+          code: 'guard-context-missing-exe',
+          message: `Guard ${guardName} references @${functionName}, but no executable with that name exists in the validation context.`,
+          line: guardNode.location?.start?.line,
+          column: guardNode.location?.start?.column,
+          suggestion: `Add @${functionName} to the context files or update the guard filter.`
+        });
+      }
+    }
+
+    if (guardNode.meta?.filterKind === 'operation') {
+      const filterValue = guardNode.meta?.filterValue;
+      if (
+        filterValue &&
+        contextExecutables.size > 0 &&
+        !Array.from(contextExecutables.values()).some(executable => executable.labels.has(filterValue))
+      ) {
+        pushWarning({
+          code: 'guard-context-missing-op-label',
+          message: `Guard ${guardName} filters on op:${filterValue}, but no executable in the validation context carries the "${filterValue}" label.`,
+          line: guardNode.location?.start?.line,
+          column: guardNode.location?.start?.column,
+          suggestion: `Add a context module that defines executables labeled "${filterValue}", or update the guard filter.`
+        });
+      }
+    }
+
+    const guardBlock = guardNode.values?.guard?.[0];
+    if (!guardBlock || !Array.isArray(guardBlock.rules)) {
+      return;
+    }
+
+    for (const entry of guardBlock.rules as Array<Record<string, unknown>>) {
+      if (entry.type !== 'GuardRule' || !entry.condition) {
+        continue;
+      }
+
+      const opNames = new Set<string>();
+      const argNames: Array<{ name: string; line?: number; column?: number }> = [];
+      visitGuardRuleReferences(entry.condition, opNames, argNames);
+
+      for (const opName of opNames) {
+        if (!contextExecutables.has(opName)) {
+          pushWarning({
+            code: 'guard-context-missing-exe',
+            message: `Guard ${guardName} references @mx.op.name == "${opName}", but no executable with that name exists in the validation context.`,
+            line: (entry as any)?.location?.start?.line,
+            column: (entry as any)?.location?.start?.column,
+            suggestion: `Add @${opName} to the context files or update the guard condition.`
+          });
+        }
+      }
+
+      const candidateExecutables =
+        opNames.size > 0
+          ? Array.from(opNames)
+              .map(name => contextExecutables.get(name))
+              .filter((executable): executable is ValidationContextExecutable => Boolean(executable))
+          : guardNode.meta?.filterKind === 'function' && guardNode.meta.filterValue
+            ? [contextExecutables.get(guardNode.meta.filterValue)].filter(
+                (executable): executable is ValidationContextExecutable => Boolean(executable)
+              )
+            : [];
+
+      if (candidateExecutables.length === 0) {
+        continue;
+      }
+
+      for (const argRef of argNames) {
+        const argExists = candidateExecutables.some(executable => executable.params.has(argRef.name));
+        if (argExists) {
+          continue;
+        }
+
+        const candidateNames = candidateExecutables.map(executable => `@${executable.name}()`).join(', ');
+        pushWarning({
+          code: 'guard-context-missing-arg',
+          message: `Guard ${guardName} references @mx.args.${argRef.name}, but ${candidateNames} does not declare that parameter.`,
+          line: argRef.line,
+          column: argRef.column,
+          suggestion: `Use a declared parameter name or update the validation context so the guarded executable signature matches the guard.`
+        });
+      }
+    }
+  });
+
+  return warnings;
+}
+
+function mapPolicyAuthorizationWarningCode(
+  issue: PolicyAuthorizationIssue
+): AntiPatternWarningCode | null {
+  switch (issue.code) {
+    case 'authorizations-empty-entry':
+      return 'policy-authorizations-empty-entry';
+    case 'authorizations-unconstrained-tool':
+      return 'policy-authorizations-unconstrained-tool';
+    default:
+      return null;
+  }
+}
+
+function collectPolicyAuthorizationDiagnostics(
+  ast: MlldNode[],
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): {
+  errors: AnalysisError[];
+  warnings: AntiPatternWarning[];
+} {
+  const errors: AnalysisError[] = [];
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+
+  walkAST(ast, (node) => {
+    if (node.type !== 'object') {
+      return;
+    }
+
+    const authorizationsNode = getObjectEntryValue(node, 'authorizations');
+    if (authorizationsNode === undefined || containsDynamicStaticValueReference(authorizationsNode)) {
+      return;
+    }
+
+    const rawAuthorizations = extractStaticValue(authorizationsNode);
+    if (rawAuthorizations === undefined) {
+      return;
+    }
+
+    const validation = validatePolicyAuthorizations(rawAuthorizations, contextExecutables, {
+      requireKnownTools: contextExecutables.size > 0,
+      requireControlArgsMetadata: contextExecutables.size > 0
+    });
+    const line = (authorizationsNode as any)?.location?.start?.line ?? (node as any)?.location?.start?.line;
+    const column =
+      (authorizationsNode as any)?.location?.start?.column ?? (node as any)?.location?.start?.column;
+
+    for (const issue of validation.errors) {
+      const key = `error:${issue.code}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      errors.push({
+        message: issue.message,
+        line,
+        column
+      });
+    }
+
+    for (const issue of validation.warnings) {
+      const warningCode = mapPolicyAuthorizationWarningCode(issue);
+      if (!warningCode) {
+        continue;
+      }
+      const key = `warning:${warningCode}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      warnings.push({
+        code: warningCode,
+        message: issue.message,
+        line,
+        column
+      });
+    }
+  });
+
+  return { errors, warnings };
+}
+
 /**
  * Extract executables from AST
  */
@@ -1511,11 +2558,11 @@ function extractExecutables(ast: MlldNode[]): ExecutableInfo[] {
           }
         }
 
-        // Extract labels if present
-        if (exeNode.values?.labels && Array.isArray(exeNode.values.labels)) {
-          const labels = exeNode.values.labels
-            .filter((l: any) => l.type === 'Label' && l.name)
-            .map((l: any) => l.name);
+        const rawLabels = exeNode.values?.securityLabels ?? exeNode.meta?.securityLabels;
+        if (Array.isArray(rawLabels)) {
+          const labels = rawLabels
+            .filter((label: unknown): label is string => typeof label === 'string' && label.trim().length > 0)
+            .map((label: string) => label.trim());
           if (labels.length > 0) {
             exec.labels = labels;
           }
@@ -1653,7 +2700,7 @@ function extractTemplateReferences(ast: MlldNode[]): TemplateReference[] {
 /**
  * Extract guards from AST
  */
-function extractGuards(ast: MlldNode[]): GuardInfo[] {
+function extractGuards(ast: MlldNode[], sourceText: string): GuardInfo[] {
   const guards: GuardInfo[] = [];
 
   walkAST(ast, (node) => {
@@ -1673,15 +2720,54 @@ function extractGuards(ast: MlldNode[]): GuardInfo[] {
         );
         const guard: GuardInfo = {
           name,
+          filter: typeof guardNode.raw?.filter === 'string' ? guardNode.raw.filter : '',
           timing: typeof timing === 'string'
             ? timing
             : (guardNode.subtype === 'guardBefore' ? 'before' : 'after')
         };
 
+        if (guardNode.meta?.privileged === true) {
+          guard.privileged = true;
+        }
+
         // Extract label if present
         if (guardNode.values?.label) {
           const label = extractText(guardNode.values.label);
           if (label) guard.label = label;
+        }
+
+        const guardBlock = guardNode.values?.guard?.[0];
+        if (guardBlock && Array.isArray(guardBlock.rules)) {
+          const arms: GuardArmInfo[] = [];
+          for (const entry of guardBlock.rules as Array<Record<string, unknown>>) {
+            if (entry.type !== 'GuardRule' || !entry.action || typeof entry.action !== 'object') {
+              continue;
+            }
+
+            const action = entry.action as Record<string, unknown>;
+            const decision = action.decision;
+            if (
+              decision !== 'allow' &&
+              decision !== 'deny' &&
+              decision !== 'retry' &&
+              decision !== 'prompt' &&
+              decision !== 'env'
+            ) {
+              continue;
+            }
+
+            arms.push({
+              condition: entry.isWildcard === true ? '*' : extractGuardConditionText(entry.condition, sourceText),
+              action: decision,
+              reason: typeof action.message === 'string' ? action.message : undefined,
+              line: (entry as any)?.location?.start?.line,
+              column: (entry as any)?.location?.start?.column
+            });
+          }
+
+          if (arms.length > 0) {
+            guard.arms = arms;
+          }
         }
 
         guards.push(guard);
@@ -2730,24 +3816,43 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const executables = extractExecutables(ast);
       const exports = extractExports(ast);
       const imports = extractImports(ast);
-      const guards = extractGuards(ast);
+      const guards = extractGuards(ast, content);
+      const policies = extractPolicies(ast);
       const needs = extractNeeds(content, ast);
       const checkpointErrors = detectCheckpointDirectiveErrors(ast);
+      const contextExecutables = await buildValidationContextExecutables(
+        filepath,
+        ast,
+        options.context
+      );
+      const policyAuthorizationDiagnostics = collectPolicyAuthorizationDiagnostics(
+        ast,
+        contextExecutables
+      );
 
       if (executables.length > 0) result.executables = executables;
       if (exports.length > 0) result.exports = exports;
       if (imports.length > 0) result.imports = imports;
       if (guards.length > 0) result.guards = guards;
+      if (policies.length > 0) result.policies = policies;
       if (needs) result.needs = needs;
       if (checkpointErrors.length > 0) {
         result.valid = false;
         result.errors = checkpointErrors;
         return result;
       }
+      if (policyAuthorizationDiagnostics.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...policyAuthorizationDiagnostics.errors
+        ];
+      }
+
+      const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
 
       // Check for undefined variables (enabled by default)
       if (options.checkVariables !== false) {
-        const suppressedWarningCodes = await loadSuppressedWarningCodes(filepath);
         const resolverPrefixVariables = await loadResolverPrefixVariables(filepath);
 
         const warnings = dedupeUndefinedVariableWarnings([
@@ -2763,17 +3868,30 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         if (redefinitions.length > 0) {
           result.redefinitions = redefinitions;
         }
+      }
 
-        const antiPatterns = [
-          ...detectDeprecatedJsonTransformAntiPatterns(ast),
-          ...detectExeParameterShadowingWarnings(ast),
-          ...detectForWhenStaticConditionWarnings(ast),
-          ...detectDirectTextDataOnExecResult(ast),
-          ...detectHyphenatedIdentifiersInTemplates(ast),
-        ].filter(warning => !suppressedWarningCodes.has(warning.code));
-        if (antiPatterns.length > 0) {
-          result.antiPatterns = antiPatterns;
+      if (options.checkVariables === false) {
+        const redefinitions = detectVariableRedefinitions(ast);
+        if (redefinitions.length > 0) {
+          result.redefinitions = redefinitions;
         }
+      }
+
+      const antiPatterns = dedupeAntiPatternWarnings([
+        ...detectDeprecatedJsonTransformAntiPatterns(ast),
+        ...detectExeParameterShadowingWarnings(ast),
+        ...detectForWhenStaticConditionWarnings(ast),
+        ...detectDirectTextDataOnExecResult(ast),
+        ...detectHyphenatedIdentifiersInTemplates(ast),
+        ...detectPrivilegedWildcardAllowWarnings(ast),
+        ...detectUnreachableGuardArmWarnings(ast, content),
+        ...detectUnknownPolicyRuleWarnings(ast),
+        ...detectPrivilegedGuardWithoutPolicyOperationWarnings(ast, policies),
+        ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : []),
+        ...policyAuthorizationDiagnostics.warnings
+      ]).filter(warning => !suppressedWarningCodes.has(warning.code));
+      if (antiPatterns.length > 0) {
+        result.antiPatterns = antiPatterns;
       }
     }
 
@@ -2836,7 +3954,16 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
   }
 
   if (result.executables && result.executables.length > 0) {
-    console.log(`${label('executables')} ${result.executables.map(e => e.name).join(', ')}`);
+    console.log(`${label('executables')}`);
+    for (const executable of result.executables) {
+      const params = executable.params && executable.params.length > 0
+        ? `(${executable.params.join(', ')})`
+        : '()';
+      const labels = executable.labels && executable.labels.length > 0
+        ? ` ${chalk.dim(`[${executable.labels.join(', ')}]`)}`
+        : '';
+      console.log(`  ${executable.name}${params}${labels}`);
+    }
   }
 
   if (result.exports && result.exports.length > 0) {
@@ -2854,8 +3981,38 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
   if (result.guards && result.guards.length > 0) {
     console.log(`${label('guards')}`);
     for (const guard of result.guards) {
-      const label_text = guard.label ? ` [${guard.label}]` : '';
-      console.log(`  ${guard.name} (${guard.timing})${label_text}`);
+      const labelText = guard.label ? ` [${guard.label}]` : '';
+      const filterText = guard.filter ? ` ${chalk.dim(`filter=${guard.filter}`)}` : '';
+      const privilegedText = guard.privileged ? ` ${chalk.yellow('[privileged]')}` : '';
+      console.log(`  ${guard.name} (${guard.timing})${labelText}${filterText}${privilegedText}`);
+      for (const arm of guard.arms ?? []) {
+        const reasonText = arm.reason ? ` ${chalk.dim(`"${arm.reason}"`)}` : '';
+        console.log(`    ${arm.condition} => ${arm.action}${reasonText}`);
+      }
+    }
+  }
+
+  if (result.policies && result.policies.length > 0) {
+    console.log(`${label('policies')}`);
+    for (const policy of result.policies) {
+      const attributes: string[] = [];
+      if (policy.rules && policy.rules.length > 0) {
+        attributes.push(`rules=${policy.rules.join(', ')}`);
+      }
+      if (policy.locked !== undefined) {
+        attributes.push(`locked=${String(policy.locked)}`);
+      }
+      if (policy.refs && policy.refs.length > 0) {
+        attributes.push(`refs=${policy.refs.join(', ')}`);
+      }
+
+      console.log(`  ${policy.name}${attributes.length > 0 ? ` ${chalk.dim(`(${attributes.join('; ')})`)}` : ''}`);
+
+      if (policy.operations && Object.keys(policy.operations).length > 0) {
+        for (const [operation, labels] of Object.entries(policy.operations)) {
+          console.log(`    ${operation}: ${labels.join(', ')}`);
+        }
+      }
     }
   }
 
@@ -3109,6 +4266,26 @@ function displayResultCompact(result: AnalyzeResult, basePath: string): void {
   }
 }
 
+function dedupeAntiPatternWarnings(
+  warnings: readonly AntiPatternWarning[]
+): AntiPatternWarning[] {
+  const byKey = new Map<string, AntiPatternWarning>();
+  for (const warning of warnings) {
+    const key = `${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, warning);
+    }
+  }
+  return Array.from(byKey.values());
+}
+
+function parseContextFlag(value: unknown): string[] | undefined {
+  if (value === undefined || value === null || value === false) {
+    return undefined;
+  }
+  return parseContextPaths(value);
+}
+
 export async function analyzeMultiple(filepaths: string[], options: AnalyzeOptions = {}): Promise<void> {
   const files = await resolveFilePaths(filepaths);
 
@@ -3207,6 +4384,7 @@ Options:
   --verbose             Show full details for all files (default: concise for directories)
   --format <format>     Output format: json or text (default: text)
   --deep                Follow imports/templates recursively (recommended for entry scripts)
+  --context <paths>     Extra file(s)/dir(s) used to validate guard filters, ops, and args
   --ast                 Include the parsed AST in output (requires --format json)
   --no-check-variables  Skip undefined variable checking
   --error-on-warnings   Exit with code 1 if warnings are found
@@ -3218,6 +4396,8 @@ Examples:
   mlld validate ./my-project/                  # Validate all files recursively
   mlld validate ./my-project/ --verbose        # Full details for all files
   mlld validate llm/run/review/index.mld --deep
+  mlld validate guards.mld --context tools.mld
+  mlld validate guards.mld --context tools/,shared/tooling.mld
   mlld validate module.mld --format json       # JSON output
   mlld validate module.mld --error-on-warnings # Fail on warnings
         `);
@@ -3236,6 +4416,7 @@ Examples:
       const checkVariables = flags['no-check-variables'] !== true && flags.noCheckVariables !== true;
       const errorOnWarnings = flags['error-on-warnings'] === true || flags.errorOnWarnings === true;
       const verbose = flags.verbose === true;
+      const context = parseContextFlag(flags.context);
 
       if (!['json', 'text'].includes(format)) {
         console.error(chalk.red('Invalid format. Must be: json or text'));
@@ -3254,7 +4435,8 @@ Examples:
         errorOnWarnings,
         verbose,
         deep,
-        strictTemplateVariables: deep
+        strictTemplateVariables: deep,
+        context
       };
 
       // Detect if any arg is a directory or if multiple args

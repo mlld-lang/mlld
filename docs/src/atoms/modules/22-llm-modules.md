@@ -57,6 +57,7 @@ exe llm @agent(prompt, config) = [
   >> These are set automatically by the runtime:
   >> @mx.llm.config   — path to generated MCP config file (empty string if no bridges)
   >> @mx.llm.allowed  — unified tool name list for --allowedTools
+  >> @mx.llm.native   — native tool names CSV (empty when no native tools requested)
   >> @mx.llm.inBox    — true when inside a box with active VFS bridge
   >> @mx.llm.hasTools — true when config.tools was specified
 
@@ -111,7 +112,7 @@ var @ws = box [
 ]
 ```
 
-The `@mx.llm.inBox` flag tells module implementations which context they're in. The `@mlld/claude` module uses this to decide whether to pass `--tools ""` (disabling native tools) alongside `--mcp-config` (enabling VFS-proxied tools).
+The `@mx.llm.native` field tells module implementations which native tools are active. When `native` is empty — either because the call is inside a box (all tools route through VFS bridges) or because the tools array contains only exe refs — the module should pass `--tools ""` to suppress the CLI's default built-in tools. The `@mlld/claude` module does this automatically.
 
 ## Streaming
 
@@ -146,8 +147,11 @@ exe llm @myLLM(prompt, config) = [
   let @model = @cfg.model ? @cfg.model : "sonnet"
 
   => when [
-    @mx.llm && @mx.llm.config => @prompt | cmd {
+    @mx.llm && @mx.llm.config && @mx.llm.native => @prompt | cmd {
       my-llm-cli --model @model --mcp-config "@mx.llm.config" --tools "@mx.llm.allowed"
+    }
+    @mx.llm && @mx.llm.config => @prompt | cmd {
+      my-llm-cli --model @model --disable-builtin-tools --mcp-config "@mx.llm.config" --tools "@mx.llm.allowed"
     }
     * => @prompt | cmd {
       my-llm-cli --model @model
@@ -166,6 +170,6 @@ export { @myLLM, @fast, @smart }
 
 - The `llm` label is required — without it, the runtime won't process `config.tools` or populate `@mx.llm`
 - Always default missing config: `let @cfg = @config ? @config : {}`
-- Branch on `@mx.llm.config` to handle both bridged and unbridged invocations
+- Branch on `@mx.llm.config` and `@mx.llm.native` to handle bridged, exe-ref-only, and unbridged invocations
 - Shortcuts should delegate to the core exe, not duplicate the implementation
 - The runtime cleans up bridge temp files automatically when the exe scope exits

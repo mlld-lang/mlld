@@ -49,7 +49,15 @@ export function extractDescriptorsFromTemplateAst(
         const variable = env.getVariable(varName);
         if (variable?.mx) {
           const descriptor = varMxToSecurityDescriptor(variable.mx);
-          if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0 || descriptor.sources.length > 0)) {
+          if (
+            descriptor
+            && (
+              descriptor.labels.length > 0
+              || descriptor.taint.length > 0
+              || descriptor.sources.length > 0
+              || (descriptor.tools?.length ?? 0) > 0
+            )
+          ) {
             descriptors.push(descriptor);
           }
         }
@@ -136,7 +144,15 @@ export function extractDescriptorsFromDataAst(
       const variable = env.getVariable(identifier);
       if (variable?.mx) {
         const descriptor = varMxToSecurityDescriptor(variable.mx);
-        if (descriptor && (descriptor.labels.length > 0 || descriptor.taint.length > 0)) {
+        if (
+          descriptor
+          && (
+            descriptor.labels.length > 0
+            || descriptor.taint.length > 0
+            || descriptor.sources.length > 0
+            || (descriptor.tools?.length ?? 0) > 0
+          )
+        ) {
           descriptors.push(descriptor);
         }
       }

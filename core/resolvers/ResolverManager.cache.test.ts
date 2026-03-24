@@ -120,6 +120,35 @@ describe('ResolverManager with Cache Integration', () => {
       // Resolver should not have been called again
       expect(testResolver.getCallCount()).toBe(1);
     });
+
+    it('should bypass stale cache entries when a different module version is requested', async () => {
+      const first = await manager.resolve('@test/module1@1.0.0');
+
+      expect(first.resolverName).toBe('test');
+      expect(first.content.content).toContain('call #1');
+      expect(testResolver.getCallCount()).toBe(1);
+
+      const second = await manager.resolve('@test/module1@2.0.0');
+
+      expect(second.resolverName).toBe('test');
+      expect(second.content.content).toContain('call #2');
+      expect(testResolver.getCallCount()).toBe(2);
+
+      const lockEntry = lockFile.getModule('@test/module1');
+      expect(lockEntry?.version).toBe('2.0.0');
+      expect(lockEntry?.registryVersion).toBe('2.0.0');
+    });
+
+    it('should reuse cache after refreshing a versioned module entry', async () => {
+      await manager.resolve('@test/module1@1.0.0');
+      await manager.resolve('@test/module1@2.0.0');
+
+      const cached = await manager.resolve('@test/module1@2.0.0');
+
+      expect(cached.resolverName).toBe('cache');
+      expect(cached.content.content).toContain('call #2');
+      expect(testResolver.getCallCount()).toBe(2);
+    });
     
     it('should handle cache miss gracefully', async () => {
       // Manually add a lock entry with non-existent hash

@@ -8,6 +8,7 @@ import {
 import { MlldSecurityError } from '@core/errors';
 import { GuardError } from '@core/errors/GuardError';
 import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
+import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable';
@@ -34,6 +35,10 @@ import {
   materializeGuardInputsWithMapping,
   type GuardInputMappingEntry
 } from '@interpreter/utils/guard-inputs';
+import {
+  mergeGuardArgNamesIntoMetadata,
+  type GuardArgName
+} from '@interpreter/utils/guard-args';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
@@ -70,7 +75,9 @@ export type PrepareExecGuardInputsOptions = {
   evaluatedArgStrings: string[];
   guardVariableCandidates: (Variable | undefined)[];
   expressionSourceVariables: (Variable | undefined)[];
+  inputSecurityDescriptor?: SecurityDescriptor;
   mcpSecurityDescriptor?: SecurityDescriptor;
+  argNames?: readonly GuardArgName[];
 };
 
 export type PreparedExecGuardInputs = {
@@ -84,12 +91,14 @@ export type CreateExecOperationPolicyContextOptions = {
   commandName: string;
   operationName?: string;
   toolLabels: readonly string[];
+  authorizationControlArgs?: readonly string[];
   env: Environment;
   execEnv: Environment;
   policyEnforcer: PolicyEnforcer;
   mcpSecurityDescriptor?: SecurityDescriptor;
   execDescriptor?: SecurityDescriptor;
   services: ExecGuardPolicyServices;
+  guardArgNames?: readonly GuardArgName[];
 };
 
 export type ExecOperationPolicyContext = {
@@ -180,9 +189,10 @@ export function cloneExecVariableWithNewValue(
   value: unknown,
   fallback: string
 ): Variable {
+  const resolvedValue = value !== undefined ? value : fallback;
   const cloned: Variable = {
     ...source,
-    value: value ?? fallback,
+    value: resolvedValue,
     mx: source.mx ? { ...source.mx } : undefined,
     internal: { ...(source.internal ?? {}) }
   };
@@ -248,7 +258,9 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     evaluatedArgStrings,
     guardVariableCandidates,
     expressionSourceVariables,
-    mcpSecurityDescriptor
+    inputSecurityDescriptor,
+    mcpSecurityDescriptor,
+    argNames
   } = options;
 
   for (let i = 0; i < guardVariableCandidates.length; i++) {
@@ -268,17 +280,27 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
       guardVariableCandidates[index] ?? evaluatedArgs[index]
     ),
     {
-      nameHint: '__guard_input__'
+      nameHint: '__guard_input__',
+      argNames
     }
   );
 
-  if (mcpSecurityDescriptor) {
+  const descriptorOverrides = [inputSecurityDescriptor, mcpSecurityDescriptor].filter(
+    (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
+  );
+
+  if (descriptorOverrides.length > 0) {
+    const mergedOverrideDescriptor =
+      descriptorOverrides.length === 1
+        ? descriptorOverrides[0]
+        : env.mergeSecurityDescriptors(...descriptorOverrides);
+
     if (guardInputsWithMapping.length === 0) {
       const syntheticInput = createSimpleTextVariable('__guard_input__', '', DEFAULT_GUARD_INPUT_SOURCE);
       if (!syntheticInput.mx) {
         syntheticInput.mx = {};
       }
-      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mcpSecurityDescriptor);
+      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mergedOverrideDescriptor);
       if ((syntheticInput.mx as any).mxCache) {
         delete (syntheticInput.mx as any).mxCache;
       }
@@ -289,8 +311,8 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
       const base = entry.variable;
       const baseDescriptor = getVariableSecurityDescriptor(base);
       const mergedDescriptor = baseDescriptor
-        ? env.mergeSecurityDescriptors(baseDescriptor, mcpSecurityDescriptor)
-        : mcpSecurityDescriptor;
+        ? env.mergeSecurityDescriptors(baseDescriptor, mergedOverrideDescriptor)
+        : mergedOverrideDescriptor;
       const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
       if (!cloned.mx) {
         cloned.mx = {};
@@ -323,7 +345,8 @@ export async function createExecOperationContextAndEnforcePolicy(
     policyEnforcer,
     mcpSecurityDescriptor,
     execDescriptor,
-    services
+    services,
+    guardArgNames
   } = options;
 
   const mergePolicyInputDescriptor = (
@@ -339,6 +362,8 @@ export async function createExecOperationContextAndEnforcePolicy(
   };
 
   const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
+  const policySummary = env.getPolicySummary();
+  const deferManagedLabelFlow = hasManagedPolicyLabelFlow(policySummary);
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
   const operationContext: OperationContext = {
     type: 'exe',
@@ -348,9 +373,13 @@ export async function createExecOperationContextAndEnforcePolicy(
     metadata: {
       executableType: definition.type,
       command: commandName,
-      sourceRetryable: true
+      sourceRetryable: true,
+      ...(options.authorizationControlArgs
+        ? { authorizationControlArgs: [...options.authorizationControlArgs] }
+        : {})
     }
   };
+  operationContext.metadata = mergeGuardArgNamesIntoMetadata(operationContext.metadata, guardArgNames);
 
   if (isCommandExecutable(definition)) {
     const commandPreview = await services.interpolateWithResultDescriptor(
@@ -374,7 +403,6 @@ export async function createExecOperationContextAndEnforcePolicy(
     const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
     metadata.commandPreview = commandPreview;
     operationContext.metadata = metadata;
-    const policySummary = env.getPolicySummary();
     if (policySummary) {
       const decision = evaluateCommandAccess(policySummary, commandPreview);
       if (!decision.allowed) {
@@ -399,6 +427,11 @@ export async function createExecOperationContextAndEnforcePolicy(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
     if (inputTaint.length > 0) {
+      const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
+      metadata.policyInputTaint = inputTaint;
+      operationContext.metadata = metadata;
+    }
+    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -413,7 +446,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     if (definition.withClause && 'stdin' in definition.withClause) {
       const resolvedStdin = await services.resolveStdinInput(definition.withClause.stdin, execEnv);
       const stdinTaint = descriptorToInputTaint(resolvedStdin.descriptor);
-      if (stdinTaint.length > 0) {
+      if (stdinTaint.length > 0 && !deferManagedLabelFlow) {
         policyEnforcer.checkLabelFlow(
           {
             inputTaint: stdinTaint,
@@ -436,7 +469,6 @@ export async function createExecOperationContextAndEnforcePolicy(
       operationContext.opLabels = opLabels;
     }
     if (opType) {
-      const policySummary = env.getPolicySummary();
       if (policySummary) {
         const decision = evaluateCapabilityAccess(policySummary, opType);
         if (!decision.allowed) {
@@ -454,7 +486,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (opType && inputTaint.length > 0) {
+    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -470,7 +502,6 @@ export async function createExecOperationContextAndEnforcePolicy(
     if (opLabels.length > 0) {
       operationContext.opLabels = opLabels;
     }
-    const policySummary = env.getPolicySummary();
     if (policySummary) {
       const decision = evaluateCapabilityAccess(policySummary, 'node');
       if (!decision.allowed) {
@@ -487,7 +518,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -502,7 +533,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -648,6 +679,9 @@ export async function enforceExecParamLabelFlow(
   } = options;
   const paramInputTaint = descriptorToInputTaint(resultSecurityDescriptor);
   if (paramInputTaint.length === 0) {
+    return null;
+  }
+  if (hasManagedPolicyLabelFlow(env.getPolicySummary())) {
     return null;
   }
   try {

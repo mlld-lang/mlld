@@ -73,10 +73,17 @@ export function createSigFS(fs: IFileSystemService): SigFS {
   };
 }
 
-export function createSigContextForEnv(env: Environment): SigContext {
-  return createSigContext(env.getProjectRoot(), {
-    fs: createSigFS(env.getFileSystemService()),
+export function createSigContextWithFS(
+  projectRoot: string,
+  fs: IFileSystemService
+): SigContext {
+  return createSigContext(projectRoot, {
+    fs: createSigFS(fs),
   });
+}
+
+export function createSigContextForEnv(env: Environment): SigContext {
+  return createSigContextWithFS(env.getProjectRoot(), env.getFileSystemService());
 }
 
 export function normalizeContentVerifyResult(result: ContentVerifyResult): NormalizedVerifyResult {

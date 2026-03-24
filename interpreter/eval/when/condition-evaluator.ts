@@ -1,8 +1,10 @@
 import type { BaseMlldNode } from '@core/types';
+import { normalizeWhenCondition } from '@core/types/when';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { logger } from '@core/utils/logger';
 import { MlldConditionError } from '@core/errors';
+import { assertNoErrorLikeBooleanValue } from '../truthiness-guard';
 
 export interface WhenConditionRuntime {
   evaluateNode(
@@ -21,6 +23,7 @@ export async function evaluateCondition(
   runtime: WhenConditionRuntime,
   variableName?: string
 ): Promise<boolean> {
+  condition = normalizeWhenCondition(condition);
   const deniedContext = env.getContextManager().peekDeniedContext();
   const deniedState = Boolean(deniedContext?.denied);
 
@@ -61,6 +64,25 @@ export async function evaluateCondition(
   return evaluateGenericConditionPath(condition, env, runtime, variableName);
 }
 
+function safeTruthy(
+  value: unknown,
+  runtime: WhenConditionRuntime,
+  options?: { location?: BaseMlldNode['location']; context?: string }
+): boolean {
+  try {
+    assertNoErrorLikeBooleanValue(value, options?.context ?? 'Condition evaluation');
+  } catch (error) {
+    throw new MlldConditionError(
+      error instanceof Error ? error.message : String(error),
+      undefined,
+      options?.location,
+      { originalError: error as Error } as any
+    );
+  }
+
+  return runtime.isTruthy(value);
+}
+
 async function evaluateUnifiedExpressionCondition(
   node: BaseMlldNode,
   env: Environment,
@@ -93,7 +115,10 @@ async function evaluateUnifiedExpressionCondition(
     } as any);
   }
 
-  const truthy = runtime.isTruthy(resultValue);
+  const truthy = safeTruthy(resultValue, runtime, {
+    location: node.location,
+    context: 'Condition evaluation'
+  });
   return truthy;
 }
 
@@ -165,7 +190,10 @@ async function evaluateGenericConditionPath(
 
     if (result.value && typeof result.value === 'object' && result.value.type === 'executable') {
       const finalValue = await resolveTruthinessValue(result.value, childEnv);
-      return runtime.isTruthy(finalValue);
+      return safeTruthy(finalValue, runtime, {
+        location: (condition[0] as any)?.location,
+        context: 'Condition evaluation'
+      });
     }
 
     const actualValue =
@@ -178,7 +206,10 @@ async function evaluateGenericConditionPath(
   }
 
   const finalValue = await resolveTruthinessValue(result.value, childEnv);
-  return runtime.isTruthy(finalValue);
+  return safeTruthy(finalValue, runtime, {
+    location: (condition[0] as any)?.location,
+    context: 'Condition evaluation'
+  });
 }
 
 async function invokeExecCondition(execNode: any, env: Environment): Promise<any> {
@@ -209,14 +240,20 @@ async function evaluateExecResultTruthiness(
 
     if (result.value !== undefined && result.value !== result.stdout) {
       const finalValue = await resolveTruthinessValue(result.value, env);
-      return runtime.isTruthy(finalValue);
+      return safeTruthy(finalValue, runtime, {
+        context: 'Condition evaluation'
+      });
     }
 
-    return runtime.isTruthy(result.stdout.trim());
+    return safeTruthy(result.stdout.trim(), runtime, {
+      context: 'Condition evaluation'
+    });
   }
 
   const finalValue = await resolveTruthinessValue(result.value, env);
-  return runtime.isTruthy(finalValue);
+  return safeTruthy(finalValue, runtime, {
+    context: 'Condition evaluation'
+  });
 }
 
 async function resolveTruthinessValue(value: unknown, env: Environment): Promise<unknown> {

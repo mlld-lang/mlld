@@ -794,7 +794,7 @@ var @result = 5 | while(10) @countdown
 ```
 
 Control keywords:
-- `done @value` - Terminate and return value
+- `done @value` - Exit loop and return value (execution continues after the loop)
 - `continue @value` - Next iteration with new state
 
 While context (`@mx.while`):

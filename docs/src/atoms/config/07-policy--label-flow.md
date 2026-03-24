@@ -5,7 +5,7 @@ brief: Deny/allow rules controlling which data labels can flow to which operatio
 category: config
 parent: policy
 tags: [policy, labels, deny, allow, flow, prefix-matching]
-related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition]
+related: [labels-sensitivity, labels-source-auto, policy-capabilities, security-policies, policy-composition, policy-authorizations]
 related-code: [interpreter/eval/policy.ts, core/security/taint.ts]
 updated: 2026-02-09
 qa_tier: 2
@@ -37,6 +37,8 @@ Label-flow policy evaluates declared labels and taint labels (`src:*`, `dir:*`) 
 
 **Built-in rules vs. explicit deny lists:** For common protection patterns, use `defaults.rules` with built-in rules like `no-secret-exfil` instead of writing explicit deny lists. See `policy-operations` for the two-step classification pattern where semantic labels (e.g., `net:w`) are mapped to risk categories (e.g., `exfil`) via `policy.operations`.
 
+**Privileged guard overrides:** Managed label-flow denials can be overridden by an explicit privileged guard `allow` for specific operations. This enables a pattern where policy sets a broad restriction and a privileged guard punches specific holes. To prevent this, use `locked: true` on the policy.
+
 **In composed policies:** Label deny/allow rules from all composed policy layers merge via union. A `deny` on `secret → op:cmd` from ANY layer blocks that flow in the merged policy. See `policy-composition` for merge rules.
 
 **Complete denial example:**
@@ -53,5 +55,7 @@ show @customerList
 ```
 
 Error: `Label 'secret' cannot flow to 'op:show'` -- the policy blocks secret-labeled data from reaching show.
+
+For per-tool authorization with argument constraints (rather than label-flow rules), see `policy-authorizations`.
 
 See `labels-sensitivity` for declaring labels, `labels-source-auto` for source label rules.

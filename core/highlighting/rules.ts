@@ -72,7 +72,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   
   operators: {
     logical: ['&&', '||', '!'],
-    comparison: ['==', '!=', '<', '>', '<=', '>='],
+    comparison: ['==', '!=', '~=', '!~=', '<', '>', '<=', '>='],
     ternary: ['?', ':'],
     pipe: ['|'],
     assignment: ['='],
@@ -80,14 +80,14 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   },
   
   directives: {
-    current: ['var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path', 'import', 'when', 'if', 'for', 'loop', 'while', 'output', 'append', 'log', 'guard', 'hook', 'export', 'policy', 'sign', 'verify', 'env', 'bail'],
-    deprecated: ['text', 'data', 'add', 'exec']
+    current: ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'sign', 'verify', 'box', 'needs', 'profiles'],
+    deprecated: ['text', 'data', 'add', 'exec', 'path']
   },
   
   keywords: {
-    commands: ['run', 'sh'],
-    languages: ['js', 'node', 'python', 'bash'],
-    special: ['when', 'if', 'else', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node']
+    commands: ['run', 'sh', 'cmd'],
+    languages: ['js', 'node', 'nodejs', 'python', 'py', 'bash', 'sh', 'zsh'],
+    special: ['when', 'if', 'else', 'until', 'endless', 'done', 'continue', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node', 'tools', 'mcp', 'git', 'using', 'env']
   }
 } as const;
 

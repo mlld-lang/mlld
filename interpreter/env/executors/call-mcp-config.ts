@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
+import type { SecurityDescriptor } from '@core/types/security';
 import type { ExecutableVariable } from '@core/types/variable';
 import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
@@ -43,6 +44,7 @@ export interface CallMcpConfigOptions {
   tools: unknown[];
   env: Environment;
   workingDirectory?: string;
+  conversationDescriptor?: SecurityDescriptor;
 }
 
 export interface CallMcpConfig {
@@ -584,7 +586,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
     const functionBridge = await createFunctionMcpBridge({
       env: options.env,
-      functions: functionMap
+      functions: functionMap,
+      conversationDescriptor: options.conversationDescriptor
     });
     cleanupFns.push(functionBridge.cleanup);
     Object.assign(mcpServers, await readMcpServers(functionBridge.mcpConfigPath));

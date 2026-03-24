@@ -1,4 +1,5 @@
 import { MlldError, MlldSecurityError } from '@core/errors';
+import type { FileVerifyResult } from '@core/security';
 import type { SourceLocation } from '@core/types';
 import type { LoadContentResult } from '@core/types/load-content';
 import type { StructuredValue } from '@interpreter/utils/structured-value';
@@ -282,7 +283,8 @@ export class ContentLoaderOrchestrator {
       );
     }
 
-    return this.dependencies.finalizationAdapter.finalizeLoaderResult(astResults, { type: 'array' });
+    const codeText = astResults.filter(Boolean).map(r => r.code).join('\n\n');
+    return this.dependencies.finalizationAdapter.finalizeLoaderResult(astResults, { type: 'array', text: codeText });
   }
 
   private async processGlobBranch(context: {
@@ -350,32 +352,51 @@ export class ContentLoaderOrchestrator {
     const resolvedFilePath = workspaceReference
       ? workspaceReference.absolutePath
       : await context.env.resolvePath(context.pathOrUrl);
-    const fileSecurityDescriptor = await this.dependencies.securityMetadataHelper.buildFileSecurityDescriptor(
-      resolvedFilePath,
-      context.env,
-      context.policyEnforcer
-    );
-    const securityMetadata = this.dependencies.securityMetadataHelper.toFinalizationMetadata(fileSecurityDescriptor);
-
     let workspacePushed = false;
     if (workspaceReference) {
       context.env.pushActiveWorkspace(workspaceReference.workspace);
       workspacePushed = true;
     }
 
-    let result: LoadContentResult | string | string[];
+    let fileLoad!: Awaited<ReturnType<ContentLoaderFileHandler['load']>>;
+    let fileVerifyResult: FileVerifyResult | undefined;
     try {
-      result = await this.dependencies.fileHandler.load({
+      fileLoad = await this.dependencies.fileHandler.load({
         filePath: context.pathOrUrl,
         options: context.options,
         env: context.env,
         resolvedPathOverride: resolvedFilePath,
         sourceLocation: context.sourceLocation
       });
+      fileVerifyResult = await this.dependencies.securityMetadataHelper.verifyFileIntegrity(
+        fileLoad.resolvedPath,
+        fileLoad.rawContent,
+        context.env
+      );
     } finally {
       if (workspacePushed) {
         context.env.popActiveWorkspace();
       }
+    }
+
+    const fileSecurityDescriptor = await this.dependencies.securityMetadataHelper.buildFileSecurityDescriptor(
+      resolvedFilePath,
+      context.env,
+      context.policyEnforcer,
+      fileVerifyResult
+    );
+    const securityMetadata = this.dependencies.securityMetadataHelper.toFinalizationMetadata(
+      fileSecurityDescriptor,
+      fileVerifyResult
+    );
+
+    let result: LoadContentResult | string | string[] = fileLoad.value;
+    if (result && typeof result === 'object' && !Array.isArray(result) && 'content' in result) {
+      result = this.dependencies.securityMetadataHelper.attachSecurity(
+        result as LoadContentResult,
+        fileSecurityDescriptor,
+        fileVerifyResult
+      );
     }
 
     if (Array.isArray(result)) {

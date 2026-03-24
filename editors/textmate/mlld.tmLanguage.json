@@ -95,12 +95,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=/(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|while|env)\\b)",
+      "begin": "^(?=/(var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G/(var|show|stream|run|exe|import|when|if|output|append|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|while|env)\\b"
+          "match": "\\G/(var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -109,6 +109,18 @@
         {
           "name": "keyword.control.when.mlld",
           "match": "when\\s*:"
+        },
+        {
+          "name": "keyword.control.directive.inline.mlld",
+          "match": "\\b(loop|while)\\b(?=\\s*\\()|\\bif\\b(?=\\s*[@\\[(])|\\bbox\\b(?=\\s*(with\\b|\\[|@))|\\b(file|files)\\b(?=\\s*(<|\"|@))|\\b(needs|profiles)\\b(?=\\s*\\{)|\\bauth\\b(?=\\s+@)"
+        },
+        {
+          "name": "keyword.control.flow.mlld",
+          "match": "\\b(until|endless|else)\\b"
+        },
+        {
+          "name": "keyword.control.block.mlld",
+          "match": "\\b(let|done|continue|skip|bail)\\b"
         },
         {
           "name": "keyword.control.parallel.mlld",
@@ -307,7 +319,7 @@
           "patterns": [
             {
               "name": "variable.other.import.mlld",
-              "match": "\\w+"
+              "match": "[A-Za-z_][A-Za-z0-9_-]*"
             },
             {
               "name": "punctuation.separator.comma.mlld",
@@ -517,11 +529,11 @@
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",
-          "match": "\\bop:(var|run|exe|show|output|append|for(?::(iteration|batch))?|loop|import)\\b"
+          "match": "\\bop:(var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",

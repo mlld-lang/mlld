@@ -92,6 +92,7 @@ describe('FileProcessor CLI flag matrix', () => {
   it('default document mode prints output once', async () => {
     interpretHolder.fn.mockImplementation(async (_content, options) => {
       expect(options.mode).toBe('document');
+      expect(options.signingContext).toEqual({ tier: 'user' });
       return 'DOC';
     });
 

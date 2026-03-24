@@ -9,6 +9,7 @@ export interface ToolDefinition {
   bind?: Record<string, unknown>;
   expose?: string[];
   optional?: string[];
+  controlArgs?: string[];
 }
 
 export type ToolCollection = Record<string, ToolDefinition>;

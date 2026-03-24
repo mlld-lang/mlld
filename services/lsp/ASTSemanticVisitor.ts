@@ -59,6 +59,27 @@ interface ASTNode {
 }
 
 export class ASTSemanticVisitor {
+  private static readonly NON_CHILD_KEYS = new Set([
+    'type',
+    'nodeId',
+    'location',
+    'raw',
+    'meta',
+    'kind',
+    'subtype',
+    'source',
+    'valueType',
+    'operator',
+    'name',
+    'text',
+    'expectedType',
+    'error',
+    'isError',
+    'parent',
+    'previousSibling',
+    'nextSibling'
+  ]);
+
   private contextStack: ContextStack;
   private tokenBuilder: TokenBuilder;
   private visitors: Map<string, INodeVisitor>;
@@ -139,6 +160,7 @@ export class ASTSemanticVisitor {
     this.registerVisitor('NewExpression', expressionVisitor);
     this.registerVisitor('WhenExpression', expressionVisitor);
     this.registerVisitor('ForExpression', expressionVisitor);
+    this.registerVisitor('LoopExpression', expressionVisitor);
     this.registerVisitor('Literal', literalVisitor);
     this.registerVisitor('ObjectExpression', structureVisitor);
     this.registerVisitor('object', structureVisitor);
@@ -288,6 +310,24 @@ export class ASTSemanticVisitor {
           case 'LabelModification':
             this.visitChildren(node, actualContext);
             break;
+          case 'path':
+          case 'resolver':
+          case 'file':
+          case 'stream':
+          case 'inlineValue':
+          case 'pair':
+          case 'CondensedPipe':
+          case 'GuardFilter':
+          case 'GuardBlock':
+          case 'GuardRule':
+          case 'GuardAction':
+          case 'section':
+          case 'arraySlice':
+          case 'variableIndex':
+          case 'consumed':
+          case 'string':
+            this.visitChildren(node, actualContext);
+            break;
           case 'PathSeparator':
             break;
           default:
@@ -348,54 +388,29 @@ export class ASTSemanticVisitor {
   visitChildren(node: ASTNode, context?: VisitorContext): void {
     const actualContext = context || this.currentContext;
 
-    // If this is a container object without .type, visit ALL its properties
-    if (!node.type) {
-      for (const key of Object.keys(node)) {
-        const value = node[key];
-        if (Array.isArray(value)) {
-          for (const child of value) {
-            this.visitNode(child as ASTNode, actualContext);
-          }
-        } else if (value && typeof value === 'object') {
-          this.visitNode(value as ASTNode, actualContext);
-        }
+    for (const [key, value] of Object.entries(node)) {
+      if (ASTSemanticVisitor.NON_CHILD_KEYS.has(key)) continue;
+      this.visitChildValue(value, actualContext);
+    }
+  }
+
+  private visitChildValue(value: unknown, context: VisitorContext): void {
+    if (!value || typeof value !== 'object') return;
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        this.visitChildValue(item, context);
       }
       return;
     }
 
-    // For nodes with .type, check specific child properties
-    const childProps = [
-      'values',
-      'value',
-      'variable',
-      'invocation',
-      'withClause',
-      'children',
-      'body',
-      'content',
-      'nodes',
-      'elements'
-    ];
-
-    for (const prop of childProps) {
-      const propVal = node[prop];
-      if (propVal) {
-        if (Array.isArray(propVal)) {
-          for (const child of propVal) {
-            this.visitNode(child as ASTNode, actualContext);
-          }
-        } else if (typeof propVal === 'object') {
-          const propNode = propVal as ASTNode;
-          // Check if it's a node or a container object
-          if (propNode.type) {
-            this.visitNode(propNode, actualContext);
-          } else {
-            // Plain container object - recurse into its properties
-            this.visitChildren(propNode, actualContext);
-          }
-        }
-      }
+    const childNode = value as ASTNode;
+    if (childNode.type) {
+      this.visitNode(childNode, context);
+      return;
     }
+
+    this.visitChildren(childNode, context);
   }
   
   visitText(node: ASTNode, context: VisitorContext): void {
@@ -426,8 +441,11 @@ export class ASTSemanticVisitor {
         const isLikelyQuoted = charBefore === '(' || charBefore === ',' || charBefore === ' ';
         
         if (isLikelyQuoted) {
-          // Use the AST's location span which should include quotes
-          const tokenLength = node.location.end.column - node.location.start.column;
+          // Use offsets so multi-line spans don't produce negative lengths.
+          const tokenLength = Math.max(
+            node.location.end.offset - node.location.start.offset,
+            node.content.length
+          );
           this.tokenBuilder.addToken({
             line: node.location.start.line - 1,
             char: node.location.start.column - 1,

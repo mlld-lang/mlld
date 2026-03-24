@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "An LLM scripting language for orchestrating workflows and building agents with infrastructure-level defense against prompt injection",
   "type": "module",
   "main": "dist/index.cjs",
@@ -53,7 +53,6 @@
     "build:fixtures": "npm run build:errors && npm run build:grammar:fixtures",
     "build:errors": "node ./scripts/build-parse-errors.js && node ./scripts/build-js-errors.js",
     "build:version": "node ./scripts/generate-version.js",
-    "build:python": "node lib/mlld-python/scripts/sync-version.js",
     "build:wasm": "node ./scripts/copy-wasm-files.js",
     "build:docs": "./dist/cli.cjs llm/run/llmstxt.mld",
     "build:verbose": "node ./scripts/build-wrapper.js && npm run sync:mlldx",
@@ -76,8 +75,6 @@
     "validate:tokens:strict": "tsx scripts/validate-tokens.mjs --mode=strict",
     "check:syntax-coverage": "./dist/cli.cjs run check-syntax-coverage",
     "dump:tokens": "tsx scripts/dump-tokens-for-file.mjs",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
     "clean": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\"",
     "postinstall": "node ./scripts/postinstall.cjs",
     "prepublishOnly": "npm run clean && npm run build",
@@ -111,7 +108,7 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
-    "@disreguard/sig": "^0.3.0",
+    "@disreguard/sig": "^0.4.0",
     "@mozilla/readability": "^0.6.0",
     "@octokit/rest": "^22.0.0",
     "@types/js-yaml": "^4.0.9",
@@ -141,15 +138,11 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.24.0",
     "@swc/core": "^1.15.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.17.1",
     "@types/shell-quote": "^1.7.5",
-    "@typescript-eslint/eslint-plugin": "^8.26.1",
-    "@typescript-eslint/parser": "^8.26.1",
     "@vitest/coverage-v8": "^3.2.4",
-    "eslint": "^9.18.0",
     "knip": "^5.62.0",
     "tree-sitter-bash": "^0.23.3",
     "tree-sitter-javascript": "^0.23.1",
@@ -157,7 +150,6 @@
     "tsup": "^8.0.2",
     "tsx": "^4.21.0",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.29.1",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^3.1.1"
   },

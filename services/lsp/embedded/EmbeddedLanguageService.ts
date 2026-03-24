@@ -1,6 +1,39 @@
 import Parser from 'web-tree-sitter';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { ISemanticToken } from '@services/lsp/types';
+
+export function resolveEmbeddedLanguageModuleDir(options: {
+  currentDir?: string;
+  importMetaUrl?: string;
+  argvPath?: string;
+  cwd?: string;
+} = {}): string {
+  const currentDir = Object.prototype.hasOwnProperty.call(options, 'currentDir')
+    ? options.currentDir
+    : (typeof __dirname === 'string' ? __dirname : undefined);
+  if (currentDir) {
+    return currentDir;
+  }
+
+  const importMetaUrl = Object.prototype.hasOwnProperty.call(options, 'importMetaUrl')
+    ? options.importMetaUrl
+    : import.meta.url;
+  if (typeof importMetaUrl === 'string' && importMetaUrl.length > 0) {
+    return path.dirname(fileURLToPath(importMetaUrl));
+  }
+
+  const argvPath = Object.prototype.hasOwnProperty.call(options, 'argvPath')
+    ? options.argvPath
+    : process.argv[1];
+  if (typeof argvPath === 'string' && argvPath.length > 0) {
+    return path.dirname(path.resolve(argvPath));
+  }
+
+  return options.cwd ?? process.cwd();
+}
+
+const MODULE_DIR = resolveEmbeddedLanguageModuleDir();
 
 /**
  * Service for parsing and tokenizing embedded language code blocks
@@ -70,6 +103,8 @@ export class EmbeddedLanguageService {
       '===': 'operator',
       '!=': 'operator',
       '!==': 'operator',
+      '~=': 'operator',
+      '!~=': 'operator',
       '<': 'operator',
       '>': 'operator',
       '<=': 'operator',
@@ -233,14 +268,14 @@ export class EmbeddedLanguageService {
       const possiblePaths = [
         // Production: relative to bundle location (works for global install)
         // cli.cjs is at dist/cli.cjs, wasm is at dist/wasm/*.wasm
-        path.join(__dirname, 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, 'wasm', `tree-sitter-${name}.wasm`),
         // Development: from project root
         path.join(process.cwd(), 'dist', 'wasm', `tree-sitter-${name}.wasm`),
         // Development: from node_modules
         path.join(process.cwd(), 'node_modules', `tree-sitter-${name}`, `tree-sitter-${name}.wasm`),
         // Fallback: go up from bundle
-        path.join(__dirname, '..', 'wasm', `tree-sitter-${name}.wasm`),
-        path.join(__dirname, '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, '..', 'wasm', `tree-sitter-${name}.wasm`),
+        path.join(MODULE_DIR, '..', '..', 'wasm', `tree-sitter-${name}.wasm`),
       ];
       
       let language: Parser.Language | null = null;

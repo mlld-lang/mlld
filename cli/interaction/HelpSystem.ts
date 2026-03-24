@@ -149,6 +149,9 @@ Intentional anti-pattern warnings can be suppressed in mlld-config.json via vali
 
 Options:
   --format <format>     Output format: json or text (default: text)
+  --verbose             Show full details for all files (default: concise for directories)
+  --deep                Follow imports/templates recursively (recommended for entry scripts)
+  --context <paths>     Extra file(s)/dir(s) used to validate guard filters, ops, and args
   --ast                 Include the parsed AST in output (requires --format json)
   --no-check-variables  Skip undefined variable checking
   --error-on-warnings   Exit with code 1 if warnings are found
@@ -158,6 +161,10 @@ Examples:
   mlld validate module.mld                     # Validate a module
   mlld validate template.att                   # Validate a template
   mlld validate ./my-project/                  # Validate all files recursively
+  mlld validate ./my-project/ --verbose        # Full details for all files
+  mlld validate llm/run/review/index.mld --deep
+  mlld validate guards.mld --context tools.mld
+  mlld validate guards.mld --context tools/,shared/tooling.mld
   mlld validate module.mld --format json       # JSON output
   mlld validate module.mld --error-on-warnings # Fail on warnings
 
@@ -599,6 +606,8 @@ Options:
   --inject, --payload KEY=VALUE
                           Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source
+  --state <value>         Inject JSON object data into @state (can use multiple times)
+                          VALUE formats: @file.json, KEY=VALUE, or JSON object
   --no-stream             Disable streaming (document mode only)
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message

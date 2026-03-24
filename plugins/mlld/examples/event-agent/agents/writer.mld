@@ -2,7 +2,7 @@
 >> @meta.name = Writer Agent
 >> @meta.capabilities = Generates written content: summaries, reports, responses, documentation
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 
 exe @taskPrompt(task) = template "./prompts/agents/write.att"
 

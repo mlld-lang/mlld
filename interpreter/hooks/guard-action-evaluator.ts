@@ -32,6 +32,8 @@ export interface BuildDecisionMetadataExtras {
   tries?: GuardAttemptEntry[];
   inputVariable?: Variable;
   contextSnapshot?: GuardContextSnapshot;
+  scopeKey?: string;
+  guardActionMatched?: boolean;
 }
 
 export interface GuardEnvActionResolution {
@@ -182,7 +184,10 @@ export function buildDecisionMetadata(
     guardName: guard.name ?? null,
     guardFilter: `${guard.filterKind}:${guard.filterValue}`,
     scope: guard.scope,
-    decision: action.decision
+    decision: action.decision,
+    guardPrivileged: guard.privileged === true,
+    policyGuard: guard.policyCondition !== undefined,
+    guardActionMatched: extras?.guardActionMatched ?? true
   };
 
   if (extras?.hint !== undefined) {
@@ -213,6 +218,10 @@ export function buildDecisionMetadata(
 
   if (extras?.contextSnapshot) {
     metadata.guardContext = extras.contextSnapshot;
+  }
+
+  if (extras?.scopeKey) {
+    metadata.guardScopeKey = extras.scopeKey;
   }
 
   return metadata;

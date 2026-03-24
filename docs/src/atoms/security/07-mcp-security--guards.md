@@ -7,7 +7,7 @@ parent: mcp-security
 tags: [mcp, guards, for secret, src:mcp, security]
 related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
-updated: 2026-02-17
+updated: 2026-03-23
 qa_tier: 2
 ---
 
@@ -37,7 +37,7 @@ guard @validateMcp after op:exe = when [
 ]
 ```
 
-After-guards run after the tool returns. In the after-guard context, `@mx.taint` reflects the output's taint—including `src:mcp`—and `@mx.sources` includes `mcp:<tool-name>`. The `@output` variable holds the raw return value; `@output.error` applies to tools returning structured JSON objects with an error field. For string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
+After-guards run after the tool returns. In the after-guard context, both `@mx.taint` and `@output.mx.taint` reflect the output's taint—including `src:mcp`—and `@mx.sources` includes `mcp:<tool-name>`. The `@output` variable holds the raw return value; `@output.error` applies to tools returning structured JSON objects with an error field. For string outputs, use a pattern match instead. Guards support single actions (allow, deny, retry) per branch—for complex audit logic with multiple statements like logging, use a wrapper exe function instead of a guard.
 
 **Retry transient MCP failures:**
 
@@ -51,14 +51,33 @@ guard @retryTransientMcp after op:exe = when [
 
 Use `@mx.guard.try` for guard retries. It is 1-based, so the first guard evaluation has `@mx.guard.try == 1`. `@mx.try` is the pipeline retry counter and stays `1` for non-pipeline MCP guard checks.
 
+**Require a specific tool in the current value's lineage:**
+
+```mlld
+guard @requireVerify before publishes = when [
+  !@mx.tools.history[*].name.includes("verify") => deny "Value must be verified first"
+  * => allow
+]
+```
+
+`[*]` projects `.name` across all provenance entries so `.includes()` checks the entire chain regardless of position. Use `@mx.taint.includes("src:mcp")` when any MCP origin is enough. Use `@mx.tools.history` when the guard needs a specific transformation or verifier in the chain that produced the current value.
+
 **Guard context for MCP calls:**
 
 Inside a guard triggered by an MCP tool call:
 - `@mx.op.type` — `"exe"`
 - `@mx.op.name` — the tool function name (e.g., `@createIssue`)
 - `@mx.op.labels` — any labels from the tool definition (e.g., `destructive`)
+- `@mx.args.<param>` — named tool parameters (from the tool's JSON Schema)
+- `@mx.args.names` — list of available parameter names
 - `@mx.guard.try` — current guard retry attempt (1-based)
 - `@mx.taint` — includes `src:mcp`
+- `@output.mx.taint` — mirrors output taint in after-guards
 - `@mx.sources` — includes `mcp:<toolName>`
+- `@mx.tools.history` — value-level tool provenance for the current guarded value
+
+`@mx.tools.calls` is still available alongside `history` when you need execution-level history instead of value lineage.
+
+MCP tool parameters often have non-dot-safe names from JSON Schema property keys. Use bracket access for these: `@mx.args["repo-name"]`.
 
 See `security-guards-basics` for general guard syntax and `mcp-security` for taint details.

@@ -1,9 +1,9 @@
 ---
 id: security
 title: Security
-brief: Guards, labels, policies, signing, environments, and audit logging
+brief: Guards, labels, policies, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-02-15
+updated: 2026-03-23
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -20,9 +20,10 @@ Most detailed security atoms now live in:
 - **Restrict what a module or agent can do** → [policies](#policies): declarative capability rules, label flow restrictions, built-in rules
 - **Inspect, transform, or block data at operation time** → [guards](#guards): imperative per-operation logic with before/after hooks
 - **Track where data came from and what it contains** → [labels](#labels): automatic provenance, explicit sensitivity and trust classification
+- **Authorize specific tools and arguments for a task** → [authorizations](#authorizations): declarative per-tool authorization with control-arg enforcement
 - **Create trust boundaries for LLM instructions** → [signing](#signing): integrity for templates and instructions
 - **Isolate execution with credentials and resource limits** → [environments](#environments): scoped contexts with filesystem, network, and tool restrictions
-- **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, and signing events
+- **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, tool calls, and signing events
 
 ## Labels
 
@@ -34,10 +35,12 @@ Labels are strings attached to values. They are the foundation — guards and po
 |----------|----------|-------------|---------|
 | Sensitivity | `secret`, `sensitive`, `pii` | Declared by developer; `secret` auto-applied from keychain | Classify what data IS |
 | Trust | `trusted`, `untrusted` | Declared by developer or via `defaults.unlabeled` | Classify data reliability |
-| Influence | `influenced` | Auto-applied when LLM produces output with untrusted data in context | Track LLM exposure to tainted data |
+| Influence | `influenced` | Auto-applied when an `llm` executable sees untrusted data in any input, including prompt/config fields like `messages` or `system` | Track LLM exposure to tainted data |
 | Source | `src:mcp`, `src:cmd`, `src:js`, `src:sh`, `src:py`, `src:file`, `src:network`, `src:keychain`, `dir:/path` | Auto-applied by runtime | Track where data CAME FROM |
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.
+
+Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in positional-argument rules below.
 
 **Operation labels** (`op:cmd`, `op:sh`, `op:cmd:git:status`) are ephemeral — they exist only during the operation and do not propagate to the result. This is different from the categories above.
 
@@ -45,6 +48,7 @@ Labels propagate through all transformations — template interpolation, method 
 - `.mx.labels` — user-declared labels (`secret`, `pii`, `untrusted`)
 - `.mx.taint` — union of all labels plus source markers (the full provenance picture)
 - `.mx.sources` — transformation trail (`mcp:createIssue`, `command:curl`)
+- `.mx.tools` — tool lineage for this specific value, with audit references
 
 **Atoms:** `labels-overview` (start here), `labels-sensitivity`, `labels-trust`, `labels-influenced`, `labels-source-auto`, `security-automatic-labels`, `security-label-tracking`, `label-modification`
 
@@ -109,7 +113,8 @@ policy @p = {
 
 | Section | Purpose |
 |---------|---------|
-| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
+| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
+| `authorizations` | Per-tool authorization with argument constraints — compiles to internal privileged guards (see below) |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
 | `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
 | `capabilities.allow` | Allowlist command patterns (general gate) |
@@ -119,9 +124,40 @@ policy @p = {
 
 **Policy composition**: `union()` merges configs with intersection for `allow`, union for `deny`, minimum for `limits` — always resolving toward more restrictive.
 
-**Policy vs. guards:** Policy denials are hard errors — immediate, uncatchable. Guard denials can be handled with `denied =>` handlers for graceful fallback. Use policy for absolute constraints; use guards when you need inspection, transformation, or recovery logic.
+**Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
-**Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-composition`, `policy-auth`
+Positional built-in rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, put the destination/target in `@input[0]`, and require that value to carry `known` (or `known:internal` for internal-only send destinations).
+
+**Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-authorizations`, `policy-composition`, `policy-auth`
+
+## Authorizations
+
+Authorizations declare which `tool:w` operations are authorized for a specific task, with per-argument constraints on control args. A planning LLM produces a JSON authorization fragment; the runtime validates it, merges it via `with { policy }`, and enforces it by compiling internal privileged guards.
+
+```mlld
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_email: { args: { recipients: ["mark@example.com"] } },
+      create_file: true
+    }
+  }
+}
+
+var @result = @agent(@prompt) with { policy: @taskPolicy }
+```
+
+**Default-deny:** `tool:w` operations not listed in `allow` are denied.
+
+**Argument constraints:** Literal values use tolerant comparison (`~=`), `eq` for explicit matching, `oneOf` for multiple candidates.
+
+**Control-arg enforcement:** In phase 1, tools declare security-relevant args on trusted `var tools` entries via `controlArgs`. With tool context, `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. `true` (unconstrained) is only valid for tools with no declared control args.
+
+**Override behavior:** Authorization-generated guards are privileged. They can override managed label-flow denials from `defaults.rules` and `labels` for matching calls — unless the policy is `locked: true`.
+
+**Planner contract:** The planner should produce only `{ authorizations: { ... } }`. The host enforces that restriction before injection. Invalid authorization fragments fail closed during `with { policy }` activation, and no partial authorization layer is installed.
+
+**Atoms:** `policy-authorizations` (full syntax and control-arg enforcement)
 
 ## Signing
 
@@ -138,6 +174,7 @@ Cryptographic signing defends against prompt injection by letting auditor LLMs v
 MCP tool outputs automatically carry `src:mcp` taint. No configuration needed — it happens at the interpreter level.
 
 - **Taint tracking** — `src:mcp` propagates through all transformations and cannot be removed (`mcp-security`)
+- **Tool lineage** — `.mx.tools` and `@mx.tools.history` preserve which MCP/exe calls produced the current value (`mcp-security`, `tool-call-tracking`)
 - **Policy rules** — restrict what MCP-sourced data can do via label flow rules (`mcp-policy`)
 - **Guards** — inspect, block, or retry MCP tool calls using `for secret`, `before op:exe`, or `after op:exe` (`mcp-guards`)
 
@@ -163,10 +200,10 @@ Environments encapsulate execution contexts with credentials, isolation, tool re
 ## Audit Logging
 
 Two JSONL ledgers record security events:
-- `.mlld/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint
+- `.mlld/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint, and `toolCall` events
 - `.sig/audit.jsonl` — signing, verification, and mutable file updates
 
-File reads consult the audit log to restore taint from prior writes, ensuring labels survive persistence.
+Every audit event carries a stable `id`. File reads consult the audit log to restore taint from prior writes, and tool provenance entries keep `auditRef` pointers back to the `toolCall` records. Inside guards, `@mx.tools.history` exposes that value-level lineage alongside the existing execution-level `@mx.tools.calls`.
 
 **Atoms:** `audit-log`, `tool-call-tracking`
 
@@ -187,8 +224,9 @@ Composite patterns that combine multiple security primitives:
 6. `security-policies` — declaring policy objects
 7. `policy-operations` — semantic labels → risk categories
 8. `policy-label-flow` — deny/allow rules for data flow (includes hierarchical op:* matching)
-9. `security-guards-basics` — guard syntax, timing, triggers, and security context
-10. `signing-overview` → `sign-verify` → `autosign-autoverify`
-11. `mcp-security` → `mcp-policy` → `mcp-guards`
-12. `box-overview` → `box-config` → `box-blocks`
-13. `pattern-audit-guard` → `pattern-dual-audit`
+9. `policy-authorizations` — task-scoped per-tool authorization with control-arg enforcement
+10. `security-guards-basics` — guard syntax, timing, triggers, and security context
+11. `signing-overview` → `sign-verify` → `autosign-autoverify`
+12. `mcp-security` → `mcp-policy` → `mcp-guards`
+13. `box-overview` → `box-config` → `box-blocks`
+14. `pattern-audit-guard` → `pattern-dual-audit`

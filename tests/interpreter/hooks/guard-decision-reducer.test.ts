@@ -107,6 +107,75 @@ describe('guard decision reducer', () => {
     expect(state.primaryMetadata).toEqual({ source: 'deny' });
   });
 
+  it('lets explicit privileged allow override an unlocked policy deny', () => {
+    const state = createGuardDecisionState();
+
+    applyGuardDecisionResult(
+      state,
+      guardResult({
+        decision: 'deny',
+        reason: 'policy-blocked',
+        metadata: {
+          policyGuard: true,
+          policyLocked: false,
+          guardScopeKey: 'perInput:0'
+        }
+      }),
+      { retryOverridesDeny: false }
+    );
+    applyGuardDecisionResult(
+      state,
+      guardResult({
+        decision: 'allow',
+        metadata: {
+          guardPrivileged: true,
+          policyGuard: false,
+          guardActionMatched: true,
+          guardScopeKey: 'perOperation'
+        }
+      }),
+      { retryOverridesDeny: true }
+    );
+
+    expect(state.decision).toBe('allow');
+    expect(state.reasons).toEqual([]);
+    expect(state.primaryMetadata).toBeUndefined();
+  });
+
+  it('does not let explicit privileged allow override a locked policy deny', () => {
+    const state = createGuardDecisionState();
+
+    applyGuardDecisionResult(
+      state,
+      guardResult({
+        decision: 'deny',
+        reason: 'policy-blocked',
+        metadata: {
+          policyGuard: true,
+          policyLocked: true,
+          guardScopeKey: 'perInput:0'
+        }
+      }),
+      { retryOverridesDeny: false }
+    );
+    applyGuardDecisionResult(
+      state,
+      guardResult({
+        decision: 'allow',
+        metadata: {
+          guardPrivileged: true,
+          policyGuard: false,
+          guardActionMatched: true,
+          guardScopeKey: 'perOperation'
+        }
+      }),
+      { retryOverridesDeny: true }
+    );
+
+    expect(state.decision).toBe('deny');
+    expect(state.reasons).toEqual(['policy-blocked']);
+  });
+
   it('maps cleanup and hook actions from aggregate decisions', () => {
     expect(shouldClearAttemptState('allow')).toBe(true);
     expect(shouldClearAttemptState('deny')).toBe(true);

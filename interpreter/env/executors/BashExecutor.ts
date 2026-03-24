@@ -350,10 +350,29 @@ export class BashExecutor extends BaseCommandExecutor {
           logStdinError(ioErr, 'end');
         }
 
-        child.on('error', (err) => {
+        child.on('error', (err: NodeJS.ErrnoException) => {
           if (settled) return;
           settled = true;
-          reject(err);
+          if (err.code === 'ENOENT') {
+            const message = `bash is not installed or not in PATH. Install it to use bash { } blocks.`
+              + (process.env.MLLD_BASH_BINARY ? '' : ` You can also set MLLD_BASH_BINARY to specify a custom shell path.`);
+            reject(
+              new MlldCommandExecutionError(
+                message,
+                context?.sourceLocation,
+                {
+                  command: 'bash',
+                  exitCode: 1,
+                  stderr: message,
+                  duration: Date.now() - startTime,
+                  workingDirectory,
+                  directiveType: context?.directiveType || 'run'
+                }
+              )
+            );
+          } else {
+            reject(err);
+          }
         });
 
         child.on('close', (code) => {

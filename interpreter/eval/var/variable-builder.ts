@@ -253,6 +253,20 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
     const { resolvedValue, toolCollection } = input;
 
     const { isVariable } = await import('@interpreter/utils/variable-resolution');
+
+    if (toolCollection) {
+      const options = applySecurityOptions(
+        {
+          internal: {
+            toolCollection,
+            isToolsCollection: true
+          }
+        },
+        resolvedValueDescriptor
+      );
+      return createObjectVariable(identifier, resolvedValue as any, false, source, options);
+    }
+
     const strategyKey = resolveStrategyKey(directive, valueNode, resolvedValue, isVariable);
 
     if (strategyKey === 'existing-variable') {

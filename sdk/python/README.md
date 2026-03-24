@@ -8,6 +8,16 @@ Python wrapper for mlld using a persistent NDJSON RPC transport over `mlld live 
 pip install mlld-sdk
 ```
 
+## Development
+
+For local SDK work, use an editable install so changes in `mlld.py` apply immediately:
+
+```bash
+uv pip install -e /path/to/mlld/sdk/python
+```
+
+If you are already in the repo root, `uv pip install -e ./sdk/python` works too.
+
 ## Requirements
 
 - Python 3.10+
@@ -41,6 +51,46 @@ print(result.output)
 client.close()
 ```
 
+## MCP Server Injection
+
+Pass per-execution MCP server commands so each parallel call gets its own server instance:
+
+```python
+result = client.execute(
+    './agent.mld',
+    payload,
+    mcp_servers={
+        'tools': f'uv run python3 mcp_server.py {config_b64}'
+    },
+)
+```
+
+In the mlld script, `import tools from mcp "tools" as @mcp` resolves `"tools"` to the command provided by the SDK. Each `execute()` call gets an independent server lifecycle.
+
+## Filesystem Integrity
+
+```python
+from mlld import Client
+
+client = Client()
+
+signed = client.sign("docs/note.txt", identity="user:alice")
+verified = client.verify("docs/note.txt")
+content_sig = client.sign_content(
+    "runtime payload",
+    "user:alice",
+    signature_id="payload-1",
+    metadata={"channel": "sdk"},
+)
+
+handle = client.execute_async("./agent.mld", state={"exit": False})
+file_sig = handle.write_file("out.txt", "hello from sdk")
+handle.update_state("exit", True)
+handle.result()
+```
+
+`client.sign_content()` stores signatures under `.sig/content/`. `ExecuteHandle.write_file()` writes relative to the executing script and auto-signs the output as `agent:{script}` with provenance metadata from the live request.
+
 ## In-Flight State Updates
 
 ```python
@@ -61,11 +111,15 @@ print(handle.result())
 ### Client
 
 - `Client(command='mlld', command_args=None, timeout=30.0, working_dir=None)`
-- `process(script, *, file_path=None, payload=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None)`
+- `process(script, *, file_path=None, payload=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None, mcp_servers=None)`
 - `process_async(...) -> ProcessHandle`
-- `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None)`
+- `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None, mcp_servers=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
+- `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
+- `verify(path, *, base_path=None, timeout=None) -> FileVerifyResult`
+- `sign_content(content, identity, *, metadata=None, signature_id=None, base_path=None, timeout=None) -> ContentSignature`
+- `fs_status(glob=None, *, base_path=None, timeout=None) -> list[FilesystemStatus]`
 - `close()`
 
 ### Handle Methods
@@ -75,8 +129,13 @@ print(handle.result())
 - `request_id`
 - `cancel()`
 - `update_state(path, value, *, timeout=None)`
+- `next_event(timeout=None) -> HandleEvent | None`
 - `wait()`
 - `result()`
+
+`ExecuteHandle` also provides:
+
+- `write_file(path, content, *, timeout=None) -> FileVerifyResult`
 
 ### Module-level Convenience Functions
 
@@ -85,9 +144,15 @@ print(handle.result())
 - `mlld.execute(...)`
 - `mlld.execute_async(...)`
 - `mlld.analyze(...)`
+- `mlld.sign(...)`
+- `mlld.verify(...)`
+- `mlld.sign_content(...)`
+- `mlld.fs_status(...)`
 
 ## Notes
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events.
+- `ExecuteResult.denials` collects structured guard/policy label-flow denials seen during execution.
+- `handle.next_event()` can yield `guard_denial` before completion, alongside `state_write` and `complete`.
 - Sync methods remain as wrappers around async handle methods.

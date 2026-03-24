@@ -20,9 +20,9 @@ const externalDependencies = [
   'winston',
   'vscode-languageserver/node',
   'vscode-languageserver',
-  // TypeScript is only used for AST extraction and has CJS code that breaks ESM
+  // TypeScript is lazy-loaded for AST extraction only
   'typescript',
-  
+
   // Node.js built-ins
   'fs',
   'graceful-fs',

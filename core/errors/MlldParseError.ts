@@ -1,6 +1,7 @@
 import type { Location, Position } from '@core/types/index';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
 import { formatLocationForError } from '@core/utils/locationFormatter';
+import { sanitizeErrorDetails } from './errorSerialization';
 
 interface SerializedParseError {
   name: string;
@@ -103,7 +104,7 @@ export class MlldParseError extends MlldError {
       sourceLocation: this.sourceLocation ? formatLocationForError(this.sourceLocation) : undefined,
       filePath: (this.details as Record<string, unknown>)?.filePath as string | undefined,
       cause: cause instanceof Error ? cause.message : String(cause),
-      details: this.details
+      details: sanitizeErrorDetails(this.details)
     } as SerializedParseError;
   }
-} 
+}

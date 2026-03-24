@@ -1,5 +1,6 @@
 import { MlldError, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MlldError';
 import { formatLocationForError } from '@core/utils/locationFormatter';
+import { sanitizeErrorDetails } from './errorSerialization';
 
 // Define options specific to FileSystemError, without extending MlldErrorOptions
 export interface MlldFileSystemErrorOptions { 
@@ -54,8 +55,8 @@ export class MlldFileSystemError extends MlldError {
       cwd: this.cwd,
       filePath: this.details?.filePath,
       cause: cause instanceof Error ? cause.message : String(cause),
-      details: this.details,
+      details: sanitizeErrorDetails(this.details),
       sourceLocation: this.sourceLocation ? formatLocationForError(this.sourceLocation) : undefined
     };
   }
-} 
+}

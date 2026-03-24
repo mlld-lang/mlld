@@ -1,7 +1,5 @@
 import { formatModuleReference } from '../utils/output';
-import { interpret } from '@interpreter/index';
-import { NodeFileSystem } from '@services/fs/NodeFileSystem';
-import { PathService } from '@services/fs/PathService';
+import type { ModuleSource } from '@core/registry/types';
 import chalk from 'chalk';
 
 const REGISTRY_URL = 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json';
@@ -22,6 +20,7 @@ export interface ModuleInfo {
   license?: string;
   repository?: string;
   sourceUrl?: string;
+  docsUrl?: string;
   publishedAt?: string;
 }
 
@@ -34,10 +33,7 @@ interface RegistryModule {
   keywords?: string[];
   license: string;
   repo?: string;
-  source: {
-    url: string;
-    contentHash: string;
-  };
+  source: ModuleSource;
   publishedAt?: string;
 }
 
@@ -57,6 +53,23 @@ async function fetchRegistry(): Promise<Record<string, RegistryModule>> {
   const data = await response.json();
   registryCache = { data, timestamp: Date.now() };
   return data.modules;
+}
+
+function buildSourceUrl(source: ModuleSource): string {
+  return source.type === 'directory'
+    ? `${source.baseUrl}/${source.entryPoint}`
+    : source.url;
+}
+
+function buildDocsUrl(source: ModuleSource): string {
+  if (source.type !== 'directory') {
+    return source.url;
+  }
+
+  const readmePath = source.files.find(file => file === 'README.md')
+    ?? source.files.find(file => file.toLowerCase() === 'readme.md');
+
+  return `${source.baseUrl}/${readmePath || source.entryPoint}`;
 }
 
 export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { sourceUrl: string }> {
@@ -79,7 +92,8 @@ export async function getModuleInfo(moduleRef: string): Promise<ModuleInfo & { s
     keywords: entry.keywords,
     license: entry.license,
     repository: entry.repo,
-    sourceUrl: entry.source.url,
+    sourceUrl: buildSourceUrl(entry.source),
+    docsUrl: buildDocsUrl(entry.source),
     publishedAt: entry.publishedAt
   };
 }
@@ -325,6 +339,15 @@ function highlightMarkdown(text: string): string {
 }
 
 async function fetchSection(sourceUrl: string, section: string, basePath: string): Promise<string | null> {
+  const [
+    { interpret },
+    { NodeFileSystem },
+    { PathService }
+  ] = await Promise.all([
+    import('@interpreter/index'),
+    import('@services/fs/NodeFileSystem'),
+    import('@services/fs/PathService')
+  ]);
   const fileSystem = new NodeFileSystem();
   const pathService = new PathService(basePath, fileSystem);
 
@@ -371,7 +394,7 @@ async function displayInfo(moduleRef: string, options: InfoOptions = {}): Promis
 
   // Fetch and display tldr
   const basePath = options.basePath || process.cwd();
-  const tldr = await fetchSection(info.sourceUrl, 'tldr', basePath);
+  const tldr = await fetchSection(info.docsUrl || info.sourceUrl, 'tldr', basePath);
   if (tldr) {
     console.log();
     console.log(highlightMarkdown(tldr));

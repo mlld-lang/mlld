@@ -132,6 +132,37 @@ describe('MCP tool imports', () => {
     }
   });
 
+  it('exe wrapping a namespace MCP call with the same name does not trigger false recursion', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    // create_event → createEvent via mcpNameToMlldName.
+    // The exe @createEvent delegates to @mcp.createEvent — the recursion guard
+    // must not confuse the namespace-qualified call with a self-call.
+    const source = [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe @createEvent(title, participants) = @mcp.createEvent(@title, @participants)',
+      '/show @createEvent("standup", ["alice"])'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('title="standup"');
+      expect(output).toContain('participants=["alice"]');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('rejects MCP tool imports that collide with local bindings', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

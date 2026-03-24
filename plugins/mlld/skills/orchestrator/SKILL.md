@@ -10,7 +10,7 @@ description: Designing and building mlld orchestrators for LLM workflows. Use wh
 ```bash
 mlld howto intro              # Language fundamentals — read this first
 mlld init                     # Initialize project (enables mlld run)
-mlld install @mlld/claude-poll  # Install the Claude polling module
+mlld install @mlld/claude         # Install the Claude module
 ```
 
 It is *strongly* encouraged to view at least one of the examples in `plugins/mlld/examples/` before writing an orchestrator — `audit/`, `research/`, and `development/` each demonstrate a complete archetype.
@@ -51,10 +51,10 @@ The `llm` label on `exe` marks calls for caching. Checkpointing auto-enables whe
 
 ```mlld
 >> Define once — every invocation is independently cached by argument hash
-exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
 
 >> For one-off calls
-var llm @summary = @claudePoll(@prompt, "sonnet")
+var llm @summary = @claudePoll(@prompt, { model: "sonnet", poll: @outPath })
 ```
 
 ### Crash recovery
@@ -71,8 +71,8 @@ mlld run pipeline              # items 1-46 are instant cache hits, continues fr
 `checkpoint` directives mark phase boundaries. On `--resume "name"`, everything before the checkpoint hits cache; everything after re-executes.
 
 ```mlld
-exe llm @collect(item) = @claudePoll(@collectPrompt(@item), "sonnet", "@root", @tools)
-exe llm @analyze(item, data) = @claudePoll(@analyzePrompt(@item, @data), "opus", "@root", @tools)
+exe llm @collect(item) = @claudePoll(@collectPrompt(@item), { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @analyze(item, data) = @claudePoll(@analyzePrompt(@item, @data), { model: "opus", tools: @tools, poll: @outPath })
 
 checkpoint "collection"
 var @data = for parallel(20) @item in @items => @collect(@item)
@@ -109,7 +109,7 @@ loop(@maxAttempts) [
       => null
     ]
     show `  @item.name: processing...`
-    @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+    @claudePoll(@prompt, { model: "opus", tools: @tools, poll: @outPath })
     let @result = <@outPath>?
     if !@result [
       show `  @item.name: FAILED`
@@ -133,7 +133,7 @@ loop(@maxAttempts) [
 
 AFTER (checkpoint, ~3 lines):
 ```mlld
-exe llm @review(item) = @claudePoll(@buildPrompt(@item), "opus", "@root", @tools)
+exe llm @review(item) = @claudePoll(@buildPrompt(@item), { model: "opus", tools: @tools, poll: @outPath })
 
 checkpoint "phase-1"
 var @results = for parallel(20) @item in @items => @review(@item)
@@ -229,7 +229,7 @@ exe @callAgent() = [
   let @fullPrompt = `@prompt@feedback
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
-  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
+  @claudePoll(@fullPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
   => <@outPath>?
 ]
 
@@ -284,12 +284,12 @@ No decision agent. Linear pipeline. Fastest to build. Demonstrates tool escalati
 
 ```mlld
 >> Phase 1: reviewer sees only the file
-var @reviewTools = "Read,Write"
+var @reviewTools = ["Read", "Write"]
 >> Phase 2: verifier can explore the codebase
-var @verifyTools = "Read,Write,Glob,Grep"
+var @verifyTools = ["Read", "Write", "Glob", "Grep"]
 
-exe llm @review(file) = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @reviewTools)
-exe llm @verify(finding, source) = @claudePoll(@verifyPrompt(@finding, @source), "sonnet", "@root", @verifyTools)
+exe llm @review(file) = @claudePoll(@reviewPrompt(@file), { model: "sonnet", tools: @reviewTools, poll: @outPath })
+exe llm @verify(finding, source) = @claudePoll(@verifyPrompt(@finding, @source), { model: "sonnet", tools: @verifyTools, poll: @outPath })
 
 var @files = <src/**/*.ts>
 
@@ -309,8 +309,8 @@ Decision agent infers phase from filesystem state. Parallel fan-out for batch op
 **See**: [../../examples/research/](../../examples/research/)
 
 ```mlld
-exe llm @assess(source) = @claudePoll(@assessPrompt(@source), "sonnet", "@root", @workerTools)
-exe llm @synthesize(data) = @claudePoll(@synthesizePrompt(@data), "opus", "@root", @workerTools)
+exe llm @assess(source) = @claudePoll(@assessPrompt(@source), { model: "sonnet", tools: @workerTools, poll: @outPath })
+exe llm @synthesize(data) = @claudePoll(@synthesizePrompt(@data), { model: "opus", tools: @workerTools, poll: @outPath })
 
 loop(endless) [
   let @context = @buildContext(@runDir)
@@ -334,8 +334,8 @@ Continuous decision loop with external state (GitHub Issues). Creates issues, di
 **See**: [../../examples/development/](../../examples/development/)
 
 ```mlld
-exe llm @callWorker(prompt, model) = @claudePoll(@prompt, @model, "@root", @workerTools)
-exe llm @callDecisionAgent(context) = @claudePoll(@decisionPrompt(@context), "opus", "@root", @decisionTools)
+exe llm @callWorker(prompt, config) = @claudePoll(@prompt, @config)
+exe llm @callDecisionAgent(context) = @claudePoll(@decisionPrompt(@context), { model: "opus", tools: @decisionTools, poll: @outPath })
 
 loop(endless) [
   let @context = @buildContext(@config, @runDir)
@@ -401,7 +401,7 @@ Label LLM calls and mark phase boundaries. The checkpoint system handles crash r
 
 ```mlld
 >> Label LLM calls — caching is automatic
-exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
 
 >> Mark phase boundaries
 checkpoint "collection"
@@ -461,7 +461,7 @@ let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
-@claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 let @decision = <@outputPath>?
 ```
 
@@ -540,8 +540,8 @@ The orchestrator switches mechanically on `decision.action`. No interpretation.
 Different agents get different tool sets:
 
 ```mlld
-var @decisionTools = "Read,Write,Glob,Grep"
-var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
+var @decisionTools = ["Read", "Write", "Glob", "Grep"]
+var @workerTools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(git:*)", "Bash(npm:*)"]
 ```
 
 Decision agents: read + write (for output file). Workers: full access scoped to needs.
@@ -551,7 +551,7 @@ Decision agents: read + write (for output file). Workers: full access scoped to 
 Use `for parallel(N)` for batch operations. The `llm` label makes each call independently cached — no manual idempotency checks needed.
 
 ```mlld
-exe llm @review(file) = @claudePoll(@reviewPrompt(@file), "sonnet", "@root", @tools)
+exe llm @review(file) = @claudePoll(@reviewPrompt(@file), { model: "sonnet", tools: @tools, poll: @outPath })
 
 var @results = for parallel(20) @file in @files => @review(@file)
 ```

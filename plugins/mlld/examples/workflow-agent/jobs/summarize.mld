@@ -3,7 +3,7 @@
 >>
 >> Stateless: loads all input files, calls LLM, writes combined output, exits.
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import "@payload" as @p
 
 var @inputGlob = @p.inputs ?? "results/*.json"
@@ -30,7 +30,7 @@ if @inputs.length == 0 [
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
   show `Synthesizing @inputs.length inputs...`
-  @claudePoll(@fullPrompt, "opus", "@root", "Read,Write", @outputPath)
+  @claudePoll(@fullPrompt, { model: "opus", tools: ["Read", "Write"], poll: @outputPath })
   let @result = <@outputPath>?
 
   if @result [

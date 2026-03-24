@@ -1,7 +1,14 @@
 import { MlldImportError } from '@core/errors';
 import { mlldNameToMCPName, mcpNameToMlldName } from '@core/mcp/names';
+import {
+  deriveMcpParamInfo as _deriveMcpParamInfo,
+  coerceMcpArgs as _coerceMcpArgs,
+  type McpParamInfo
+} from '@core/mcp/coerce';
 import type { MCPToolSchema } from '../../mcp/McpImportManager';
 import type { Environment } from '../../env/Environment';
+
+export type { McpParamInfo };
 
 export interface McpToolIndex {
   tools: MCPToolSchema[];
@@ -65,18 +72,23 @@ export function resolveMcpTool(
   });
 }
 
-export function deriveMcpParamInfo(tool: MCPToolSchema): { paramNames: string[]; paramTypes: Record<string, string> } {
-  const properties = tool.inputSchema?.properties ?? {};
-  const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
-  const allParams = Object.keys(properties);
-  const optional = allParams.filter(name => !required.includes(name));
-  const paramNames = [...required, ...optional];
-  const paramTypes: Record<string, string> = {};
-  for (const [name, schema] of Object.entries(properties)) {
-    const raw = typeof schema?.type === 'string' ? schema.type.toLowerCase() : 'string';
-    paramTypes[name] = raw;
+export function deriveMcpParamInfo(tool: MCPToolSchema): McpParamInfo {
+  return _deriveMcpParamInfo(tool.inputSchema);
+}
+
+export function coerceMcpArgs(
+  payload: Record<string, unknown>,
+  paramTypesOrInfo: Record<string, string> | McpParamInfo
+): Record<string, unknown> {
+  if ('paramTypes' in paramTypesOrInfo && 'requiredParams' in paramTypesOrInfo) {
+    return _coerceMcpArgs(payload, paramTypesOrInfo as McpParamInfo);
   }
-  return { paramNames, paramTypes };
+  return _coerceMcpArgs(payload, {
+    paramNames: Object.keys(paramTypesOrInfo),
+    paramTypes: paramTypesOrInfo as Record<string, string>,
+    paramNullable: {},
+    requiredParams: Object.keys(paramTypesOrInfo)
+  });
 }
 
 export function buildMcpArgs(paramNames: string[], args: unknown[]): Record<string, unknown> {

@@ -97,6 +97,40 @@ describe('Enhanced Error Display', () => {
     expect(errorString).toContain('       |      ^'); // Pointer at column 6
   });
 
+  it('sanitizes internal manager state in JSON serialization', () => {
+    const error = new MlldError('Cannot access field "model" on non-object value', {
+      code: 'FIELD_ACCESS_ERROR',
+      severity: ErrorSeverity.Recoverable,
+      details: {
+        environment: {
+          securityManagers: {
+            huge: 'x'.repeat(20000)
+          }
+        },
+        resolverManager: {
+          caches: ['stale']
+        },
+        context: {
+          field: 'model'
+        }
+      }
+    });
+
+    expect(error.toJSON()).toMatchObject({
+      details: {
+        environment: '[omitted internal state]',
+        resolverManager: '[omitted internal state]',
+        context: {
+          field: 'model'
+        }
+      }
+    });
+
+    const serialized = JSON.stringify(error.toJSON());
+    expect(serialized).not.toContain('securityManagers');
+    expect(serialized.length).toBeLessThan(500);
+  });
+
   it('should handle missing source gracefully', async () => {
     // Create environment without cached source
     const fileSystem = new MemoryFileSystem();

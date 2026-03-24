@@ -6,11 +6,11 @@
  */
 
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
-import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction } from '@core/types/when';
+import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction, normalizeWhenCondition } from '@core/types/when';
 import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
-import { isBailError, MlldWhenExpressionError } from '@core/errors';
+import { GuardError, isBailError, MlldDenialError, MlldWhenExpressionError } from '@core/errors';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
@@ -20,26 +20,12 @@ import { VariableImporter } from './import/VariableImporter';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
 import { isExeReturnControl } from './exe-return';
-import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
-import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
-
-/**
- * Re-attach a security descriptor to a value after normalization has stripped it.
- * For objects, uses the ExpressionProvenance WeakMap.
- * For strings (primitives that can't be WeakMap keys), wraps as StructuredValue.
- */
-function reattachSecurityDescriptor(value: unknown, descriptor: SecurityDescriptor | undefined): unknown {
-  if (!descriptor) return value;
-  if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) return value;
-  if (value && typeof value === 'object') {
-    setExpressionProvenance(value, descriptor);
-    return value;
-  }
-  if (typeof value === 'string') {
-    return ensureStructuredValue(value, 'text', value, { security: descriptor });
-  }
-  return value;
-}
+import type { SecurityDescriptor } from '@core/types/security';
+import {
+  applySecurityDescriptorToCurrentVariables,
+  attachSecurityDescriptorToValue,
+  mergeOptionalSecurityDescriptors
+} from './control-flow-security';
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
@@ -134,12 +120,13 @@ function getConditionText(condition: BaseMlldNode[], source?: string): string | 
 }
 
 function getConditionPairText(pair: WhenConditionPair, source?: string): string | undefined {
-  if (!source || !Array.isArray(pair.condition) || pair.condition.length === 0) {
+  const condition = normalizeWhenCondition(pair.condition);
+  if (!source || condition.length === 0) {
     return undefined;
   }
 
-  const firstCondition = pair.condition[0];
-  const lastCondition = pair.condition[pair.condition.length - 1];
+  const firstCondition = condition[0];
+  const lastCondition = condition[condition.length - 1];
   const lastAction =
     Array.isArray(pair.action) && pair.action.length > 0
       ? pair.action[pair.action.length - 1]
@@ -160,6 +147,16 @@ function getConditionPairText(pair: WhenConditionPair, source?: string): string 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function isHardDenial(error: unknown): error is MlldDenialError {
+  if (!(error instanceof MlldDenialError)) {
+    return false;
+  }
+  if (!(error instanceof GuardError)) {
+    return true;
+  }
+  return error.context?.blocker?.type === 'policy';
 }
 
 async function evaluateActionNodes(
@@ -301,7 +298,7 @@ function validateNonePlacement(
   let foundWildcard = false;
 
   for (let i = 0; i < conditionPairs.length; i++) {
-    const condition = conditionPairs[i].condition;
+    const condition = normalizeWhenCondition(conditionPairs[i].condition);
 
     if (condition.length === 1 && isNoneCondition(condition[0])) {
       foundNone = true;
@@ -364,9 +361,14 @@ async function evaluateWhenExpressionInternal(
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
   const sourceInfo = getWhenExpressionSource(env);
+  const normalizedEntries = node.conditions.map(entry =>
+    isConditionPair(entry)
+      ? { ...entry, condition: normalizeWhenCondition(entry.condition) }
+      : entry
+  );
 
   // Validate none placement
-  validateNonePlacement(node.conditions, sourceInfo, env);
+  validateNonePlacement(normalizedEntries, sourceInfo, env);
   
   const errors: MlldWhenExpressionError[] = [];
   const denyMode = Boolean(options?.denyMode);
@@ -376,6 +378,8 @@ async function evaluateWhenExpressionInternal(
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
   let boundValue: unknown;
   let boundValueDescriptor: SecurityDescriptor | undefined;
+  let evaluatedConditionDescriptor: SecurityDescriptor | undefined;
+  let boundConditionDescriptor: SecurityDescriptor | undefined;
 
   if (hasBoundValue) {
     const boundResult = await evaluate((node as any).boundValue, env, context);
@@ -414,21 +418,21 @@ async function evaluateWhenExpressionInternal(
   });
   
   // Empty conditions array - return null
-  if (node.conditions.length === 0) {
+  if (normalizedEntries.length === 0) {
     return buildResult(null, env);
   }
 
   // Check if any condition pair has an action (filter out let assignments)
-  const conditionPairs = node.conditions.filter(isConditionPair);
+  const conditionPairs = normalizedEntries.filter(isConditionPair);
   const hasAnyAction = conditionPairs.some(c => c.action && c.action.length > 0);
 
   // Check if we have direct actions (show, log, etc. without condition)
-  const hasDirectActions = node.conditions.some(e => isDirectAction(e));
+  const hasDirectActions = normalizedEntries.some(e => isDirectAction(e));
 
   // Check if this is a "when (condition) [block]" syntax
   // In this case, there are no condition pairs, only let/augmented assignments and/or direct actions
   // The boundValue holds the condition to check
-  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && node.conditions.some(e =>
+  const hasOnlyAssignmentsOrDirectActions = !hasAnyAction && normalizedEntries.some(e =>
     isLetAssignment(e) || isAugmentedAssignment(e) || isDirectAction(e)
   );
 
@@ -444,7 +448,9 @@ async function evaluateWhenExpressionInternal(
     // Use evaluateCondition to properly check truthiness
     const boundValueNode = (node as any).boundValue;
     if (boundValueNode) {
-      boundConditionIsTruthy = await evaluateCondition([boundValueNode], env);
+      const boundConditionEnv = env.createChild();
+      boundConditionIsTruthy = await evaluateCondition([boundValueNode], boundConditionEnv);
+      boundConditionDescriptor = boundConditionEnv.getLocalSecurityDescriptor();
     }
 
     if (!boundConditionIsTruthy) {
@@ -485,8 +491,8 @@ async function evaluateWhenExpressionInternal(
   }
   
   // First pass: Evaluate entries in order (let assignments, direct actions, and non-none conditions)
-  for (let i = 0; i < node.conditions.length; i++) {
-    const entry = node.conditions[i];
+  for (let i = 0; i < normalizedEntries.length; i++) {
+    const entry = normalizedEntries[i];
 
     // Unwrap array-wrapped entries (grammar sometimes wraps actions in arrays)
     const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
@@ -510,14 +516,26 @@ async function evaluateWhenExpressionInternal(
       // The boundConditionIsTruthy check above ensures we only get here if condition passed
       if (hasBoundValue && boundConditionIsTruthy) {
         const actionEnv = accumulatedEnv.createChild();
+        const directActionDescriptor = mergeOptionalSecurityDescriptors(
+          env,
+          boundValueDescriptor,
+          boundConditionDescriptor
+        );
+        if (directActionDescriptor) {
+          actionEnv.recordSecurityDescriptor(directActionDescriptor);
+        }
         setBoundValue(actionEnv);
         // Pass the unwrapped entry (not wrapped in another array)
         const toEvaluate = Array.isArray(entry) ? entry : [unwrappedEntry];
         const actionResult = await evaluateActionNodes(toEvaluate as BaseMlldNode[], actionEnv, context);
         const resultEnv = actionResult.env || actionEnv;
+        applySecurityDescriptorToCurrentVariables(resultEnv, directActionDescriptor);
         if (isExeReturnControl(actionResult.value)) {
           accumulatedEnv.mergeChild(resultEnv);
-          return buildResult(actionResult.value, accumulatedEnv);
+          return buildResult(
+            attachSecurityDescriptorToValue(actionResult.value, directActionDescriptor),
+            accumulatedEnv
+          );
         }
         accumulatedEnv.mergeChild(resultEnv);
         // Direct actions are side effects, don't update the return value
@@ -540,9 +558,15 @@ async function evaluateWhenExpressionInternal(
 
     try {
       // Evaluate the condition
-      const conditionEnv = hasBoundValue ? accumulatedEnv.createChild() : accumulatedEnv;
+      const conditionEnv = accumulatedEnv.createChild();
       if (hasBoundValue) setBoundValue(conditionEnv);
       const conditionResult = await evaluateCondition(pair.condition, conditionEnv);
+      const conditionDescriptor = conditionEnv.getLocalSecurityDescriptor();
+      evaluatedConditionDescriptor = mergeOptionalSecurityDescriptors(
+        env,
+        evaluatedConditionDescriptor,
+        conditionDescriptor
+      );
 
       if (conditionResult) {
         // Condition matched - evaluate the action
@@ -612,6 +636,14 @@ async function evaluateWhenExpressionInternal(
           // evaluate each action in a child env and merge resulting variable
           // bindings back into the accumulatedEnv after evaluation.
           const actionEnv = accumulatedEnv.createChild();
+          const selectionDescriptor = mergeOptionalSecurityDescriptors(
+            env,
+            boundValueDescriptor,
+            evaluatedConditionDescriptor
+          );
+          if (selectionDescriptor) {
+            actionEnv.recordSecurityDescriptor(selectionDescriptor);
+          }
           let actionResult: EvalResult | null = null;
           let value: unknown;
           const wrapperCandidate =
@@ -662,8 +694,12 @@ async function evaluateWhenExpressionInternal(
           }
           const executionEnv = actionResult?.env ?? actionEnv;
           if (actionResult && isExeReturnControl(actionResult.value)) {
+            applySecurityDescriptorToCurrentVariables(executionEnv, selectionDescriptor);
             accumulatedEnv.mergeChild(executionEnv);
-            return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
+            return buildResult(
+              attachSecurityDescriptorToValue(actionResult.value, selectionDescriptor),
+              accumulatedEnv
+            );
           }
           // Extract security descriptor before normalizeActionValue strips it
           const preNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult?.value);
@@ -729,17 +765,20 @@ async function evaluateWhenExpressionInternal(
 
           // Propagate security descriptors from bound value and action result
           // This prevents taint stripping through when-expressions
-          const resultDescriptor = preNormDescriptor && boundValueDescriptor
-            ? mergeDescriptors(preNormDescriptor, boundValueDescriptor)
-            : preNormDescriptor ?? boundValueDescriptor;
+          const resultDescriptor = mergeOptionalSecurityDescriptors(
+            env,
+            preNormDescriptor,
+            selectionDescriptor
+          );
           if (resultDescriptor && value !== null && value !== undefined) {
-            value = reattachSecurityDescriptor(value, resultDescriptor);
+            value = attachSecurityDescriptorToValue(value, resultDescriptor);
           }
 
           // Merge variable assignments from this action back into the
           // accumulated environment so subsequent actions can see them.
           // We use mergeChild to merge variables; since actions are evaluated
           // with isExpression=true, no user-facing nodes are produced.
+          applySecurityDescriptorToCurrentVariables(executionEnv, selectionDescriptor);
           accumulatedEnv.mergeChild(executionEnv);
 
           if (value && typeof value === 'object' && '__whileControl' in (value as Record<string, unknown>)) {
@@ -750,6 +789,9 @@ async function evaluateWhenExpressionInternal(
           return buildResult(value, accumulatedEnv);
         } catch (actionError) {
           if (isBailError(actionError)) {
+            throw actionError;
+          }
+          if (isHardDenial(actionError)) {
             throw actionError;
           }
 
@@ -795,9 +837,11 @@ async function evaluateWhenExpressionInternal(
       if (isBailError(conditionError)) {
         throw conditionError;
       }
+      if (isHardDenial(conditionError)) {
+        throw conditionError;
+      }
       if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
-        errors.push(conditionError);
-        continue;
+        throw conditionError;
       }
 
       // Let the error propagate - it's expected in retry scenarios
@@ -825,8 +869,8 @@ async function evaluateWhenExpressionInternal(
   
   // Second pass: Evaluate none conditions after scanning non-none conditions
   if (!denyMode) {
-    for (let i = 0; i < node.conditions.length; i++) {
-      const entry = node.conditions[i];
+    for (let i = 0; i < normalizedEntries.length; i++) {
+      const entry = normalizedEntries[i];
 
       // Unwrap array-wrapped entries
       const unwrappedEntry = Array.isArray(entry) && entry.length === 1 ? entry[0] : entry;
@@ -856,39 +900,58 @@ async function evaluateWhenExpressionInternal(
       try {
         // Evaluate the action for none condition
         const actionEnv = accumulatedEnv.createChild();
+        const noneSelectionDescriptor = mergeOptionalSecurityDescriptors(
+          env,
+          boundValueDescriptor,
+          evaluatedConditionDescriptor
+        );
+        if (noneSelectionDescriptor) {
+          actionEnv.recordSecurityDescriptor(noneSelectionDescriptor);
+        }
         // FIXED: Suppress side effects in when expressions used in /exe functions
         // Side effects should be handled by the calling context (e.g., /show @func())
         const actionResult = await evaluateActionNodes(pair.action, actionEnv, context);
         if (isExeReturnControl(actionResult.value)) {
+          applySecurityDescriptorToCurrentVariables(actionResult.env || actionEnv, noneSelectionDescriptor);
           accumulatedEnv.mergeChild(actionResult.env || actionEnv);
-          return buildResult(reattachSecurityDescriptor(actionResult.value, boundValueDescriptor), accumulatedEnv);
+          return buildResult(
+            attachSecurityDescriptorToValue(actionResult.value, noneSelectionDescriptor),
+            accumulatedEnv
+          );
         }
 
         let value = actionResult.value;
+        const noneExecutionEnv = actionResult.env || actionEnv;
         // Extract security descriptor before normalizeActionValue strips it
         const nonePreNormDescriptor = extractSecurityDescriptor(value) ?? extractSecurityDescriptor(actionResult.value);
         value = await normalizeActionValue(value, actionEnv);
 
         // Apply tail modifiers if present
         if (node.withClause && node.withClause.pipes) {
-          value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
+          value = await applyTailModifiers(value, node.withClause.pipes, noneExecutionEnv);
         }
 
         // Propagate security descriptors from bound value and action result
-        const noneResultDescriptor = nonePreNormDescriptor && boundValueDescriptor
-          ? mergeDescriptors(nonePreNormDescriptor, boundValueDescriptor)
-          : nonePreNormDescriptor ?? boundValueDescriptor;
+        const noneResultDescriptor = mergeOptionalSecurityDescriptors(
+          env,
+          nonePreNormDescriptor,
+          noneSelectionDescriptor
+        );
         if (noneResultDescriptor && value !== null && value !== undefined) {
-          value = reattachSecurityDescriptor(value, noneResultDescriptor);
+          value = attachSecurityDescriptorToValue(value, noneResultDescriptor);
         }
 
         // Merge variable assignments from this none-action into accumulator
-        accumulatedEnv.mergeChild(actionEnv);
+        applySecurityDescriptorToCurrentVariables(noneExecutionEnv, noneSelectionDescriptor);
+        accumulatedEnv.mergeChild(noneExecutionEnv);
 
         // Return immediately after the first none match
         return buildResult(value, accumulatedEnv);
       } catch (actionError) {
         if (isBailError(actionError)) {
+          throw actionError;
+        }
+        if (isHardDenial(actionError)) {
           throw actionError;
         }
         const conditionText = getConditionText(pair.condition, sourceInfo.source);

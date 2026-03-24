@@ -58,6 +58,7 @@ function createCandidate(
     labels: variable.mx?.labels ?? [],
     sources: variable.mx?.sources ?? [],
     taint: variable.mx?.taint ?? [],
+    toolsHistory: variable.mx?.tools ?? [],
     guards
   };
 }
@@ -69,9 +70,11 @@ function createHint(guardName: string, hint: string): GuardHint {
 function buildOperationSnapshot(inputs: ReturnType<typeof createVariable>[]) {
   const labels = Array.from(new Set(inputs.flatMap(input => input.mx?.labels ?? [])));
   const sources = Array.from(new Set(inputs.flatMap(input => input.mx?.sources ?? [])));
+  const taint = Array.from(new Set(inputs.flatMap(input => input.mx?.taint ?? [])));
   return {
     labels,
     sources,
+    taint,
     variables: inputs
   };
 }

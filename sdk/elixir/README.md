@@ -136,6 +136,7 @@ Returned structs are aligned with other SDK wrappers:
   - `state_writes` (`[Mlld.StateWrite]`)
   - `exports`
   - `effects` (`[Mlld.Effect]`)
+  - `denials` (`[Mlld.GuardDenial]`)
   - `metrics` (`Mlld.Metrics | nil`)
 - `Mlld.AnalyzeResult`
   - `filepath`
@@ -426,6 +427,7 @@ Parity guarantees in this implementation:
 - Live transport command shape: `command + command_args + ["live", "--stdio"]`
 - Request IDs are integers and multiplexed in one live client
 - `state:write` events are merged with final `stateWrites` in execute results
+- `ExecuteResult.denials` collects structured guard/policy label-flow denials observed during execution
 - Timeout behavior cancels request and returns `TIMEOUT`
 - `update_state` retries `REQUEST_NOT_FOUND` with short backoff
 - Transport closure fails pending operations and triggers lazy restart

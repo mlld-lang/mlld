@@ -329,9 +329,15 @@ describe('Semantic Tokens - Unit Tests', () => {
       const code = `/var @msg = \`
 /show {echo "ok"}
 \``;
-      const tokens = await getSemanticTokens(code);
-      const backticks = tokens.filter(t => t.tokenType === 'operator' && t.text === '`');
-      expect(backticks.length).toBeGreaterThanOrEqual(1);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const tokens = await getSemanticTokens(code);
+        const backticks = tokens.filter(t => t.tokenType === 'operator' && t.text === '`');
+        expect(backticks.length).toBeGreaterThanOrEqual(1);
+        expect(errorSpy.mock.calls.some(([message]) => String(message).includes('[TOKEN-ERROR]'))).toBe(false);
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
   });
   
@@ -540,6 +546,63 @@ describe('Semantic Tokens - Unit Tests', () => {
       // Block brackets
       const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
       expect(brackets.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tokenizes box with-clause literals', async () => {
+      const code = '/box with { profile: "readonly" } [show "hello"]';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '"readonly"',
+        tokenType: 'string'
+      });
+    });
+  });
+
+  describe('Loop Expressions', () => {
+    it('tokenizes loop expressions with variable limits and control flow', async () => {
+      const code = 'var @finalResponse = loop(@maxIterations) until @done [ continue ]';
+      const tokens = await getSemanticTokens(code);
+
+      const loopKeyword = tokens.find(t => t.tokenType === 'keyword' && t.text?.includes('loop'));
+      expect(loopKeyword).toBeDefined();
+
+      expectToken(tokens, {
+        text: '@maxIterations',
+        tokenType: 'variableRef'
+      });
+
+      expectToken(tokens, {
+        text: 'until',
+        tokenType: 'keyword'
+      });
+
+      expectToken(tokens, {
+        text: '@done',
+        tokenType: 'variableRef'
+      });
+
+      expectToken(tokens, {
+        text: 'continue',
+        tokenType: 'keyword'
+      });
+    });
+  });
+
+  describe('File Projection Directives', () => {
+    it('tokenizes file and files targets', async () => {
+      const fileTokens = await getSemanticTokens('/file "task.md" = "hello"');
+      const quotedTarget = fileTokens.find(t => t.tokenType === 'string' && t.text?.includes('"task.md"'));
+      expect(quotedTarget).toBeDefined();
+
+      const filesTokens = await getSemanticTokens('/files <@workspace/src/> = []');
+      expectToken(filesTokens, {
+        text: '@workspace',
+        tokenType: 'variableRef'
+      });
+
+      const resolverSuffix = filesTokens.find(t => t.tokenType === 'alligator' && t.text?.includes('/src/'));
+      expect(resolverSuffix).toBeDefined();
     });
   });
 

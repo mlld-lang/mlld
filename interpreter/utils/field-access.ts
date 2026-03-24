@@ -5,6 +5,13 @@
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
+import { mergeDescriptors } from '@core/types/security';
+import { VariableMetadataUtils } from '@core/types/variable';
+import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import {
+  isGuardArgsView,
+  resolveGuardArgsViewProperty
+} from './guard-args';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import path from 'node:path';
 import { isVariable } from './variable-resolution';
@@ -19,7 +26,7 @@ import {
   type StructuredValue
 } from './structured-value';
 import { wrapExecResult } from './structured-exec';
-import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
@@ -282,6 +289,30 @@ function getWorkspaceMxContext(value: unknown): WorkspaceMxContext | undefined {
   };
 }
 
+function getFieldMetadataDescriptor(
+  parentVariable: Variable | undefined,
+  fieldName: string
+) {
+  const namespaceMetadata = parentVariable?.internal &&
+    typeof parentVariable.internal === 'object' &&
+    'namespaceMetadata' in parentVariable.internal
+      ? (parentVariable.internal as Record<string, unknown>).namespaceMetadata
+      : undefined;
+
+  if (!namespaceMetadata || typeof namespaceMetadata !== 'object') {
+    return undefined;
+  }
+
+  const serialized = (namespaceMetadata as Record<string, unknown>)[fieldName];
+  if (!serialized || typeof serialized !== 'object') {
+    return undefined;
+  }
+
+  return VariableMetadataUtils.deserializeSecurityMetadata(
+    serialized as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
+  ).security;
+}
+
 function isIgnorableWorkspaceDiffError(error: unknown): boolean {
   const code = (error as { code?: string } | undefined)?.code;
   return code === 'ENOENT' || code === 'EISDIR';
@@ -421,6 +452,31 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     rawValue = structuredWrapper.data;
   }
 
+  const fieldValue = field.value;
+  const fieldName = String(fieldValue);
+  const missingValue = options?.returnUndefinedForMissing ? undefined : null;
+  const guardArgsMode =
+    field.type === 'field'
+      ? 'field'
+      : field.type === 'stringIndex' || field.type === 'bracketAccess'
+        ? 'bracket'
+        : null;
+
+  if (guardArgsMode && isGuardArgsView(rawValue)) {
+    const resolved = resolveGuardArgsViewProperty(rawValue, fieldName, guardArgsMode);
+    if (resolved.found) {
+      if (options?.preserveContext) {
+        return {
+          value: resolved.value,
+          parentVariable,
+          accessPath: [...(options.parentPath || []), fieldName],
+          isVariable: isVariable(resolved.value)
+        };
+      }
+      return resolved.value;
+    }
+  }
+
   // Special handling for Variable metadata properties
   // IMPORTANT: Check metadata for core properties (.type, .mx, etc.),
   // but allow data precedence for guard quantifiers (.all, .any, .none)
@@ -428,6 +484,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const fieldName = String(field.value);
     const isStructuredVariable = Boolean(structuredWrapper);
     const isUserDataContainer = value.type === 'object' || value.type === 'array';
+    const structuredFieldFallbacks = new Set(['type', 'text', 'data']);
+    const shouldUseStructuredTopLevelFallback =
+      isStructuredVariable &&
+      structuredFieldFallbacks.has(fieldName) &&
+      !(rawValue && typeof rawValue === 'object');
 
     // Core metadata properties always come from Variable, never from data
     const CORE_METADATA = [
@@ -508,17 +569,33 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
 
     // For guard quantifiers and 'type' on user data containers, check data first
-    const shouldCheckDataFirst = GUARD_QUANTIFIERS.includes(fieldName) || fieldName === 'type';
+    const shouldCheckDataFirst =
+      GUARD_QUANTIFIERS.includes(fieldName) ||
+      fieldName === 'type' ||
+      shouldUseStructuredTopLevelFallback;
 
     if (shouldCheckDataFirst) {
       // Check if this field exists in the actual data first
       const fieldExistsInData = rawValue && typeof rawValue === 'object' && fieldName in rawValue;
 
       if (!fieldExistsInData) {
-        if (fieldName === 'type' && isStructuredVariable) {
-          // Structured values expose wrapper type via .mx.type.
-          // Top-level .type resolves through user data only.
-          // Fall through to regular field access behavior.
+        if (shouldUseStructuredTopLevelFallback) {
+          const metadataValue =
+            fieldName === 'type'
+              ? structuredWrapper.type
+              : fieldName === 'text'
+                ? structuredWrapper.text
+                : structuredWrapper.data;
+
+          if (options?.preserveContext) {
+            return {
+              value: metadataValue,
+              parentVariable: value,
+              accessPath: [...(options.parentPath || []), fieldName],
+              isVariable: false
+            };
+          }
+          return metadataValue;
         } else {
         // Field doesn't exist in data, so return metadata property
           const metadataValue = value[fieldName as keyof typeof value];
@@ -536,12 +613,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       }
     }
   }
-  const fieldValue = field.value;
-  const missingValue = options?.returnUndefinedForMissing ? undefined : null;
-
   // Perform the actual field access
   let accessedValue: any;
-  const fieldName = String(fieldValue);
   
   switch (field.type) {
     case 'field':
@@ -572,6 +645,21 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
           break;
         }
+      }
+      if (
+        !structuredWrapper &&
+        name === 'mx' &&
+        rawValue &&
+        typeof rawValue === 'object' &&
+        !('mx' in (rawValue as Record<string, unknown>))
+      ) {
+        const descriptor = extractSecurityDescriptor(rawValue) ?? extractSecurityDescriptor(value);
+        const syntheticMx = descriptor ? {} : undefined;
+        if (syntheticMx) {
+          updateVarMxFromDescriptor(syntheticMx as any, descriptor);
+        }
+        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue);
+        break;
       }
       if (typeof rawValue === 'string') {
         // Support .length on strings (like JavaScript)
@@ -978,16 +1066,27 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
 
   const provenanceSource = parentVariable ?? structuredWrapper ?? value;
-  if (provenanceSource) {
-    const secDescriptor = extractSecurityDescriptor(provenanceSource);
-    if (secDescriptor && ((secDescriptor.labels?.length ?? 0) > 0 || (secDescriptor.taint?.length ?? 0) > 0)
-        && accessedValue != null && typeof accessedValue !== 'object') {
-      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels
+  const provenanceDescriptor = provenanceSource
+    ? extractSecurityDescriptor(provenanceSource)
+    : undefined;
+  const fieldDescriptor = getFieldMetadataDescriptor(parentVariable, fieldName);
+  const effectiveDescriptor =
+    provenanceDescriptor && fieldDescriptor
+      ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
+      : fieldDescriptor ?? provenanceDescriptor;
+
+  if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
+    if (accessedValue != null && typeof accessedValue !== 'object') {
+      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels.
       accessedValue = wrapExecResult(accessedValue);
-      applySecurityDescriptorToStructuredValue(accessedValue, secDescriptor);
+      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
+    } else if (isStructuredValue(accessedValue)) {
+      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
     } else {
-      inheritExpressionProvenance(accessedValue, provenanceSource);
+      setExpressionProvenance(accessedValue, effectiveDescriptor);
     }
+  } else if (provenanceSource) {
+    inheritExpressionProvenance(accessedValue, provenanceSource);
   }
 
   // Check if we need to return context-preserving result
@@ -1021,7 +1120,43 @@ export async function accessFields(
   
   const shouldPreserveContext = options?.preserveContext !== false;
   
-  for (const field of fields) {
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+
+    // Wildcard index: project remaining fields over each array element
+    if (field.type === 'wildcardIndex') {
+      let unwrapped = isVariable(current) ? current.value : current;
+      unwrapped = isStructuredValue(unwrapped) ? asData(unwrapped) : unwrapped;
+      // Handle AST array nodes ({type: 'array', items: [...]})
+      const arrayData = (unwrapped && typeof unwrapped === 'object' && unwrapped.type === 'array' && unwrapped.items)
+        ? unwrapped.items
+        : unwrapped;
+      if (!Array.isArray(arrayData)) {
+        throw new FieldAccessError('Cannot use [*] on non-array value', {
+          baseValue: current,
+          fieldAccessChain: path,
+          failedAtIndex: path.length,
+          failedKey: '*'
+        });
+      }
+      const remaining = fields.slice(i + 1);
+      if (remaining.length === 0) {
+        // [*] with no trailing fields returns the array as-is
+        break;
+      }
+      const projected = await Promise.all(
+        arrayData.map(element =>
+          accessFields(element, remaining, {
+            ...options,
+            preserveContext: false,
+            parentPath: [...path, '*']
+          })
+        )
+      );
+      current = projected;
+      break;
+    }
+
     const result = await accessField(current, field, {
       preserveContext: shouldPreserveContext,
       parentPath: path,

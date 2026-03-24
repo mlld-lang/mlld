@@ -114,7 +114,19 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   // VARIABLES - Can be variable or function (when used in function calls)
   // =============================================================================
   'VariableReference': {
-    expectedTokenTypes: ['variable', 'function'],
+    expectedTokenTypes: (node: any) => {
+      const isSyntheticWhenBinding = node?.valueType === 'identifier' &&
+        typeof node?.identifier === 'string' &&
+        node.identifier.startsWith('__when_bound_');
+      const isZeroWidth = node?.location &&
+        node.location.start?.offset === node.location.end?.offset;
+
+      if (isSyntheticWhenBinding || isZeroWidth) {
+        return [];
+      }
+
+      return ['variable', 'function'];
+    },
     mustBeCovered: true,
     requireExactType: false,
     includeAtSign: true,
@@ -134,6 +146,7 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
     expectedTokenTypes: (node: any) => {
       // Special keyword-like literals
       if (node.valueType === 'wildcard' || node.valueType === 'none' || node.valueType === 'retry') return ['keyword'];
+      if (node.valueType === 'denied') return ['keyword'];
       if (node.valueType === 'done' || node.valueType === 'continue') return ['keyword'];
       if (node.valueType === 'number') return ['number'];
       if (node.valueType === 'boolean') return ['keyword'];
@@ -252,7 +265,21 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   // EXPRESSIONS
   // =============================================================================
   'BinaryExpression': {
-    expectedTokenTypes: ['operator'],
+    expectedTokenTypes: (node: any) => {
+      const left = node?.left;
+      const isSyntheticWhenBinding = left?.type === 'VariableReference' &&
+        left?.valueType === 'identifier' &&
+        typeof left?.identifier === 'string' &&
+        left.identifier.startsWith('__when_bound_');
+      const isZeroWidth = left?.location &&
+        left.location.start?.offset === left.location.end?.offset;
+
+      if (isSyntheticWhenBinding || isZeroWidth) {
+        return [];
+      }
+
+      return ['operator'];
+    },
     mustBeCovered: true,
     visitor: 'ExpressionVisitor'
   },

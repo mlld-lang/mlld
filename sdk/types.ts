@@ -67,6 +67,7 @@ export interface InterpretOptions {
   emitter?: ExecutionEmitter;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
+  payloadLabels?: Record<string, string[]>;
   dynamicModuleMode?: MlldMode;
   ast?: any;
   streamingManager?: any;
@@ -77,12 +78,22 @@ export interface InterpretOptions {
   fork?: string;
   checkpointScriptName?: string;
   checkpointCacheRootDir?: string;
+  mcpServers?: Record<string, string>;
 }
 
 export interface StructuredEffect extends Effect {
   capability?: CapabilityContext;
   security?: SecurityDescriptor;
   provenance?: SecurityDescriptor;
+}
+
+export interface SDKGuardDenial {
+  guard: string | null;
+  operation: string;
+  reason: string;
+  rule: string | null;
+  labels: string[];
+  args: Record<string, unknown> | null;
 }
 
 export interface ExportMetadata {
@@ -104,6 +115,7 @@ export interface StructuredResult {
   effects: StructuredEffect[];
   exports: ExportMap;
   stateWrites: StateWrite[];
+  denials: SDKGuardDenial[];
   metrics?: ExecuteMetrics;
   environment?: Environment;
   streaming?: StreamingResult;
@@ -182,6 +194,12 @@ export type SDKExecutionEvent = {
 export type SDKStateWriteEvent = {
   type: 'state:write';
   write: StateWrite;
+  timestamp: number;
+};
+
+export type SDKGuardDenialEvent = {
+  type: 'guard_denial';
+  guard_denial: SDKGuardDenial;
   timestamp: number;
 };
 
@@ -356,6 +374,7 @@ export type SDKEvent =
   | SDKStreamEvent
   | SDKExecutionEvent
   | SDKStateWriteEvent
+  | SDKGuardDenialEvent
   | SDKDebugEvent
   | SDKStreamingEvent;
 
@@ -369,7 +388,7 @@ export interface StreamExecution extends AsyncIterable<SDKEvent> {
   result: () => Promise<StructuredResult>;
   isComplete: () => boolean;
   abort?: () => void;
-  updateState?: (path: string, value: unknown) => Promise<void>;
+  updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
 }
 
 export interface DebugResult extends StructuredResult {

@@ -121,16 +121,8 @@ export function createRhsContentEvaluator(
     const sectionName = await interpolateWithSecurity(valueNode.section);
     const fileContent = await readFileWithPolicy(env, filePath, sourceLocation ?? undefined);
 
-    let resolvedValue: string;
-    try {
-      const { llmxmlInstance } = await import('@interpreter/utils/llmxml-instance');
-      resolvedValue = await llmxmlInstance.getSection(fileContent, sectionName, {
-        includeNested: true,
-        includeTitle: true
-      });
-    } catch {
-      resolvedValue = extractSectionFallback(fileContent, sectionName);
-    }
+    const { extractMarkdownSection } = await import('../show/section-utils');
+    let resolvedValue = extractMarkdownSection(fileContent, sectionName, { includeTitle: true });
 
     const asSection = resolveAsSection(withClause);
     if (asSection) {

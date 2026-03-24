@@ -47,16 +47,18 @@ class MlldSyntaxGenerator {
       // When expression syntax
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
+      directiveForms: '\\b(loop|while)\\b(?=\\s*\\()|\\bif\\b(?=\\s*[@\\[(])|\\bbox\\b(?=\\s*(with\\b|\\[|@))|\\b(file|files)\\b(?=\\s*(<|"|@))|\\b(needs|profiles)\\b(?=\\s*\\{)|\\bauth\\b(?=\\s+@)',
+      controlKeywords: '\\b(until|endless|else)\\b',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\\b',
       // Block keywords (inside [...] blocks)
       blockKeywords: '\\b(let|done|continue|skip|bail)\\b',
       // Wildcard in when blocks
       wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
       // Object keys in literals: key:
-      objectKey: '(?<=^|[{,\\s])[\\w]+(?=\\s*:(?!:))',
+      objectKey: '(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))',
       // Guard/hook operation filter syntax
-      guardFilter: '\\bop:(var|run|exe|show|output|append|for(?::(iteration|batch))?|loop|import)\\b',
+      guardFilter: '\\bop:(var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b',
       // Type-checking builtin methods
       typeCheckMethods: '\\.(isArray|isObject|isString|isNumber|isBoolean|isNull|isDefined)\\s*\\(',
       // AST selector patterns inside { }
@@ -96,7 +98,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'sign', 'verify', 'box', 'bail'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'sign', 'verify', 'box', 'bail', 'needs', 'profiles'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -106,7 +108,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'checkpoint', 'path', 'import', 'when', 'if', 'for', 'loop', 'while', 'output', 'append', 'file', 'files', 'log', 'guard', 'hook', 'export', 'policy', 'sign', 'verify', 'box', 'bail'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'sign', 'verify', 'box', 'needs', 'profiles'];
   }
 
   generatePrism() {
@@ -127,6 +129,14 @@ Prism.languages.mlld = {
   },
   'when-keyword': {
     pattern: /${this.patterns.whenKeyword}/,
+    alias: 'keyword'
+  },
+  'directive-form': {
+    pattern: /${this.patterns.directiveForms}/,
+    alias: 'keyword'
+  },
+  'control-keyword': {
+    pattern: /${this.patterns.controlKeywords}/,
     alias: 'keyword'
   },
   // Alligator MUST come before comparison operators to match <file.md> as one token
@@ -259,7 +269,7 @@ Prism.languages.mlld = {
   },
   // Object keys in literals (file:, review:, etc) - word followed by : but not ::
   'object-key': {
-    pattern: /[\\w]+(?=\\s*:(?!:))/,
+    pattern: /[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))/,
     greedy: true,
     alias: 'property'
   },
@@ -484,6 +494,20 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         match: this.patterns.whenKeyword
       },
       {
+        // Structural keywords that appear in strict expression/block forms
+        name: 'keyword.control.directive.inline.mlld',
+        match: this.patterns.directiveForms
+      },
+      {
+        // Flow-control words that are not covered by directive matching
+        name: 'keyword.control.flow.mlld',
+        match: this.patterns.controlKeywords
+      },
+      {
+        name: 'keyword.control.block.mlld',
+        match: this.patterns.blockKeywords
+      },
+      {
         // Parallel keyword in /for contexts
         name: 'keyword.control.parallel.mlld',
         match: this.patterns.parallelKeyword
@@ -662,7 +686,7 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         patterns: [
           {
             name: 'variable.other.import.mlld',
-            match: '\\w+'
+            match: '[A-Za-z_][A-Za-z0-9_-]*'
           },
           {
             name: 'punctuation.separator.comma.mlld',
@@ -913,6 +937,14 @@ syn match mlldComment "\\(>>\\|<<\\).*$"
 " Directives - must be at start of line
 syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
 
+" Directive-like keywords in strict expression/block forms
+syn match mlldInlineDirective "\\<\\(loop\\|while\\)\\>\\ze\\s*("
+syn match mlldInlineDirective "\\<if\\>\\ze\\s*[@\\[(]"
+syn match mlldInlineDirective "\\<box\\>\\ze\\s*\\(with\\>\\|\\[\\|@\\)"
+syn match mlldInlineDirective "\\<\\(file\\|files\\)\\>\\ze\\s*\\(<\\|\"\\|@\\)"
+syn match mlldInlineDirective "\\<\\(needs\\|profiles\\)\\>\\ze\\s*{"
+syn match mlldInlineDirective "\\<auth\\>\\ze\\s\\+@"
+
 " Operators (high priority)
 " Logical operators
 syn match mlldLogicalOp "&&\\|||\\|!"
@@ -931,12 +963,15 @@ syn match mlldAssignOp "="
 syn match mlldWhenKeyword "when\\s*:" contains=mlldWhenColon
 syn match mlldWhenColon ":" contained
 
+" Flow-control keywords
+syn keyword mlldControlKeyword until endless else let done continue skip bail
+
 " Reserved variables
 syn match mlldReservedVar "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\|now\\|NOW\\|base\\)\\>"
 syn match mlldReservedVar "@\\."
 
 " Regular variables (lower priority than directives and reserved)
-syn match mlldVariable "@\\w\\+"
+syn match mlldVariable "@[A-Za-z_][A-Za-z0-9_-]*"
 
 " Triple-colon template blocks (with {{var}} interpolation)
 syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
@@ -982,7 +1017,7 @@ syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldRese
 syn match mlldURL "https\\?://[^\\]>]*" contained
 
 " Keywords
-syn keyword mlldKeyword from as foreach with to
+syn keyword mlldKeyword from as foreach with to tools mcp git using
 
 " Numbers
 syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"
@@ -996,6 +1031,7 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
+hi def link mlldInlineDirective Keyword
 hi def link mlldLogicalOp Operator
 hi def link mlldComparisonOp Operator
 hi def link mlldTernaryOp Operator
@@ -1004,6 +1040,7 @@ hi def link mlldPipeOp Operator
 hi def link mlldAssignOp Operator
 hi def link mlldWhenKeyword Keyword
 hi def link mlldWhenColon Keyword
+hi def link mlldControlKeyword Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
 hi def link mlldTripleTemplate String
@@ -1185,8 +1222,9 @@ hi def link markdownMlldDirective mlldDirective
   }
 }
 
-// Run generator
-const generator = new MlldSyntaxGenerator();
-generator.generate();
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  const generator = new MlldSyntaxGenerator();
+  generator.generate();
+}
 
 export default MlldSyntaxGenerator;

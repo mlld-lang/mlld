@@ -3,7 +3,9 @@ import type { VariableTypeDiscriminator } from '@core/types/variable';
 import type { ImportValueComplexityHelpers, ImportVariableFactoryRequest } from './types';
 
 export class ArrayImportStrategy {
-  constructor(private readonly complexityHelpers: Pick<ImportValueComplexityHelpers, 'hasComplexContent'>) {}
+  constructor(
+    private readonly complexityHelpers: Pick<ImportValueComplexityHelpers, 'hasComplexContent' | 'unwrapArraySnapshots'>
+  ) {}
 
   create(
     request: ImportVariableFactoryRequest,
@@ -13,19 +15,20 @@ export class ArrayImportStrategy {
       return undefined;
     }
 
-    const isComplexArray = this.complexityHelpers.hasComplexContent(request.value);
+    const normalizedArray = this.complexityHelpers.unwrapArraySnapshots(request.value, request.importPath);
+    const isComplexArray = this.complexityHelpers.hasComplexContent(normalizedArray);
     if (process.env.MLLD_DEBUG_FIX === 'true') {
       console.error('[VariableImporter] create array variable', {
         name: request.name,
         importPath: request.importPath,
         isComplexArray,
-        sample: request.value.slice(0, 2)
+        sample: normalizedArray.slice(0, 2)
       });
     }
 
     return createArrayVariable(
       request.name,
-      request.value,
+      normalizedArray,
       isComplexArray,
       request.metadata.source,
       request.metadata.buildMetadata({

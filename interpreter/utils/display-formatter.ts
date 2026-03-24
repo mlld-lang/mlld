@@ -28,6 +28,13 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
     const data = value.data;
 
     if (Array.isArray(data)) {
+      if (
+        value.mx?.source === 'load-content' ||
+        Boolean(value.mx?.filename) ||
+        Boolean(value.mx?.url)
+      ) {
+        return value.text;
+      }
       const printableArray = data.map(item => normalizeArrayEntry(item));
       return JSONFormatter.stringify(printableArray, { pretty, indent });
     }

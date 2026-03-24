@@ -10,7 +10,14 @@ import type { Variable } from '@core/types/variable';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
-  | { decision: 'deny'; reason: string; policyName?: string; rule?: string; suggestions?: string[] };
+  | {
+      decision: 'deny';
+      reason: string;
+      policyName?: string;
+      rule?: string;
+      suggestions?: string[];
+      locked?: boolean;
+    };
 
 export type PolicyConditionContext = {
   operation: {
@@ -21,11 +28,17 @@ export type PolicyConditionContext = {
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
+  args?: Readonly<Record<string, unknown>>;
   input?: {
     labels?: readonly string[];
     taint?: readonly string[];
     sources?: readonly string[];
   };
+  inputs?: ReadonlyArray<{
+    labels?: readonly string[];
+    taint?: readonly string[];
+    sources?: readonly string[];
+  }>;
 };
 
 export type PolicyConditionFn = (context: PolicyConditionContext) => PolicyConditionResult;
@@ -43,6 +56,7 @@ export interface GuardDefinition {
   timing: GuardTiming;
   privileged?: boolean;
   policyCondition?: PolicyConditionFn;
+  policyGuardMode?: 'policy' | 'authorization';
   capturedModuleEnv?: Map<string, Variable>;
 }
 
@@ -57,7 +71,12 @@ export interface SerializedGuardDefinition {
   registrationOrder?: number;
   timing?: GuardTiming;
   privileged?: boolean;
+  policyGuardMode?: 'policy' | 'authorization';
   capturedModuleEnv?: Map<string, Variable>;
+}
+
+export interface RegisterGuardOptions {
+  emitWarning?: (message: string) => void;
 }
 
 export class GuardRegistry {
@@ -67,6 +86,7 @@ export class GuardRegistry {
   private readonly guards: GuardDefinition[] = [];
   private readonly dataIndex: Map<string, GuardDefinition[]>;
   private readonly opIndex: Map<string, GuardDefinition[]>;
+  private readonly functionIndex: Map<string, GuardDefinition[]>;
   private readonly definitions = new Map<string, GuardDefinition>();
   private readonly namedDefinitions = new Map<string, GuardDefinition>();
   private readonly guardNames: Set<string>;
@@ -78,11 +98,13 @@ export class GuardRegistry {
       this.nextRegistrationOrder = 1;
       this.dataIndex = new Map();
       this.opIndex = new Map();
+      this.functionIndex = new Map();
       this.guardNames = new Set();
     } else {
       this.nextRegistrationOrder = 0;
       this.dataIndex = this.root.dataIndex;
       this.opIndex = this.root.opIndex;
+      this.functionIndex = this.root.functionIndex;
       this.guardNames = this.root.guardNames;
     }
   }
@@ -91,7 +113,7 @@ export class GuardRegistry {
     return new GuardRegistry(this);
   }
 
-  register(node: GuardDirectiveNode, location?: SourceLocation | null): GuardDefinition {
+  register(node: GuardDirectiveNode, location?: SourceLocation | null, options?: RegisterGuardOptions): GuardDefinition {
     const filterNode = node.values.filter?.[0];
     if (!filterNode) {
       throw new Error('Guard directive missing filter');
@@ -130,6 +152,7 @@ export class GuardRegistry {
       privileged: node.meta?.privileged === true
     };
 
+    this.validateFilter(filterNode.filterKind, filterNode.value, options?.emitWarning);
     this.registerDefinition(definition);
     this.guardNames.add(guardName ?? guardId);
     return definition;
@@ -149,6 +172,10 @@ export class GuardRegistry {
 
   getOperationGuardsForTiming(op: string, timing: GuardTiming): GuardDefinition[] {
     return this.collectGuards(op, 'operation').filter(def => this.matchesTiming(def, timing));
+  }
+
+  getFunctionGuardsForTiming(fnName: string, timing: GuardTiming): GuardDefinition[] {
+    return this.collectGuards(fnName, 'function').filter(def => this.matchesTiming(def, timing));
   }
 
   serializeOwn(): SerializedGuardDefinition[] {
@@ -188,6 +215,7 @@ export class GuardRegistry {
         registrationOrder: def.registrationOrder ?? registrationOrder,
         timing: def.timing ?? 'before',
         privileged: def.privileged,
+        policyGuardMode: def.policyGuardMode,
         capturedModuleEnv: def.capturedModuleEnv
       };
       this.registerDefinition(copy);
@@ -257,6 +285,7 @@ export class GuardRegistry {
       registrationOrder: def.registrationOrder,
       timing: def.timing,
       privileged: def.privileged,
+      policyGuardMode: def.policyGuardMode,
       capturedModuleEnv: def.capturedModuleEnv
     };
   }
@@ -279,7 +308,8 @@ export class GuardRegistry {
       existing.scope === incoming.scope &&
       existing.modifier === incoming.modifier &&
       existing.timing === (incoming.timing ?? 'before') &&
-      existing.privileged === incoming.privileged
+      existing.privileged === incoming.privileged &&
+      existing.policyGuardMode === incoming.policyGuardMode
     );
   }
 
@@ -300,8 +330,26 @@ export class GuardRegistry {
     return undefined;
   }
 
+  private validateFilter(
+    filterKind: GuardFilterKind,
+    filterValue: string,
+    emitWarning?: (message: string) => void
+  ): void {
+    if (!emitWarning || filterKind !== 'data') {
+      return;
+    }
+    if (this.opIndex.has(filterValue)) {
+      emitWarning(
+        `Warning: Guard uses data filter "${filterValue}", but "${filterValue}" is an operation label. ` +
+          `Did you mean "op:${filterValue}"? Without the op: prefix, the guard matches data labeled "${filterValue}", not operations.`
+      );
+    }
+  }
+
   private collectGuards(value: string, kind: GuardFilterKind): GuardDefinition[] {
-    const index = kind === 'operation' ? this.opIndex : this.dataIndex;
+    const index = kind === 'function'
+      ? this.functionIndex
+      : kind === 'operation' ? this.opIndex : this.dataIndex;
     const matches = index.get(value) ?? [];
     return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
   }
@@ -323,7 +371,9 @@ export class GuardRegistry {
     if (definition.name) {
       this.namedDefinitions.set(definition.name, definition);
     }
-    const index = definition.filterKind === 'operation' ? this.opIndex : this.dataIndex;
+    const index = definition.filterKind === 'function'
+      ? this.functionIndex
+      : definition.filterKind === 'operation' ? this.opIndex : this.dataIndex;
     const list = index.get(definition.filterValue);
     if (list) {
       list.push(definition);

@@ -5,9 +5,11 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
+import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { generateToolSchema } from '@cli/mcp/SchemaGenerator';
+import { deriveMcpParamInfo, coerceMcpArgs, type McpParamInfo } from '@core/mcp/coerce';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FUNCTION_SOCKET_ENV = 'MLLD_FUNCTION_MCP_SOCKET';
@@ -32,6 +34,7 @@ interface JsonRpcResponse {
 export interface FunctionMcpBridgeOptions {
   env: Environment;
   functions: Map<string, ExecutableVariable>; // key is exposed MCP tool name
+  conversationDescriptor?: SecurityDescriptor;
 }
 
 export interface FunctionMcpBridge {
@@ -45,16 +48,19 @@ class FunctionMcpBridgeServer {
   private readonly toolEnv: Environment;
   private readonly toolCollection: ToolCollection;
   private readonly toolSchemas: Array<Record<string, unknown>>;
+  private readonly toolParamInfo: Map<string, McpParamInfo>;
   private readonly router: FunctionRouter;
 
   constructor(
     private readonly env: Environment,
     private readonly functions: Map<string, ExecutableVariable>,
-    private readonly socketPath: string
+    private readonly socketPath: string,
+    conversationDescriptor?: SecurityDescriptor
   ) {
     this.toolEnv = env.createChild();
     this.toolCollection = {};
     this.toolSchemas = [];
+    this.toolParamInfo = new Map();
 
     let index = 0;
     for (const [mcpName, executable] of this.functions.entries()) {
@@ -81,12 +87,15 @@ class FunctionMcpBridgeServer {
         mlld: tempName,
         ...(typeof executable.description === 'string' ? { description: executable.description } : {})
       };
-      this.toolSchemas.push(generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]));
+      const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
+      this.toolSchemas.push(schema);
+      this.toolParamInfo.set(mcpName, deriveMcpParamInfo(schema.inputSchema));
     }
 
     this.router = new FunctionRouter({
       environment: this.toolEnv,
-      toolCollection: this.toolCollection
+      toolCollection: this.toolCollection,
+      conversationDescriptor
     });
   }
 
@@ -211,7 +220,9 @@ class FunctionMcpBridgeServer {
         }
 
         try {
-          const text = await this.router.executeFunction(toolName, args);
+          const paramInfo = this.toolParamInfo.get(toolName);
+          const coercedArgs = paramInfo ? coerceMcpArgs(args, paramInfo) : args;
+          const text = await this.router.executeFunction(toolName, coercedArgs);
           return {
             jsonrpc: '2.0',
             id,
@@ -347,7 +358,12 @@ export async function createFunctionMcpBridge(
     `mlld-toolbridge-fn-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
   );
 
-  const server = new FunctionMcpBridgeServer(options.env, options.functions, socketPath);
+  const server = new FunctionMcpBridgeServer(
+    options.env,
+    options.functions,
+    socketPath,
+    options.conversationDescriptor
+  );
   await server.start();
 
   await fs.writeFile(proxyPath, buildProxyScript(), 'utf8');

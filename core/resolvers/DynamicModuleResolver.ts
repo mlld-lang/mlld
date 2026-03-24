@@ -26,6 +26,11 @@ export interface DynamicModuleOptions {
    * Use for user data modules like @payload/@state so @text stays literal.
    */
   literalStrings?: boolean;
+  /**
+   * Optional per-module, per-field labels for object modules.
+   * Example: { '@payload': { query: ['trusted'], tool_result: ['untrusted'] } }
+   */
+  moduleFieldLabels?: Record<string, Record<string, readonly string[]>>;
 }
 
 /**
@@ -49,9 +54,11 @@ export class DynamicModuleResolver implements Resolver {
   private modules: Map<string, string>;
   private source?: string;
   private literalStrings: boolean;
+  private moduleFieldLabels: Record<string, Record<string, readonly string[]>>;
 
   constructor(modules: Record<string, DynamicModuleValue>, options?: DynamicModuleOptions) {
     this.literalStrings = options?.literalStrings ?? false;
+    this.moduleFieldLabels = options?.moduleFieldLabels ?? {};
     this.modules = this.normalizeModules(modules);
     this.source = options?.source;
   }
@@ -126,9 +133,15 @@ export class DynamicModuleResolver implements Resolver {
     this.validateStructuredData(path, data, 1, stats);
 
     const keys = Object.keys(data).sort();
+    const fieldLabels = this.moduleFieldLabels[path] ?? {};
     // Export list uses @ prefix (mlld syntax), but AST extracts identifiers without @
     const exports = keys.map(key => `@${key}`).join(', ');
-    const entries = keys.map(key => `/var @${key} = ${this.serializeValue(path, (data as Record<string, unknown>)[key], 2, stats)}`);
+    const entries = keys.map(key => {
+      const serializedValue = this.serializeValue(path, (data as Record<string, unknown>)[key], 2, stats);
+      const normalizedLabels = this.normalizeFieldLabels(fieldLabels[key]);
+      const labelPrefix = normalizedLabels.length > 0 ? `${normalizedLabels.join(',')} ` : '';
+      return `/var ${labelPrefix}@${key} = ${serializedValue}`;
+    });
 
     const moduleSource = `${entries.join('\n')}\n/export { ${exports} }`;
     if (process.env.MLLD_DEBUG_DYNAMIC) {
@@ -223,5 +236,48 @@ export class DynamicModuleResolver implements Resolver {
 
     const serialized = this.serializeObjectModule(path, content as Record<string, unknown>);
     this.modules.set(path, serialized);
+  }
+
+  setModuleFieldLabels(path: string, fieldLabels: Record<string, readonly string[]> | undefined): void {
+    if (!fieldLabels || typeof fieldLabels !== 'object') {
+      delete this.moduleFieldLabels[path];
+      return;
+    }
+
+    const normalized: Record<string, readonly string[]> = {};
+    for (const [field, labels] of Object.entries(fieldLabels)) {
+      const deduped = this.normalizeFieldLabels(labels);
+      if (deduped.length > 0) {
+        normalized[field] = deduped;
+      }
+    }
+
+    if (Object.keys(normalized).length === 0) {
+      delete this.moduleFieldLabels[path];
+      return;
+    }
+
+    this.moduleFieldLabels[path] = normalized;
+  }
+
+  private normalizeFieldLabels(labels: readonly string[] | undefined): string[] {
+    if (!Array.isArray(labels)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const label of labels) {
+      if (typeof label !== 'string') {
+        continue;
+      }
+      const trimmed = label.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+    }
+    return normalized;
   }
 }

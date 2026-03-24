@@ -720,7 +720,7 @@ describe('for evaluator characterization', () => {
         ephemeral: true,
         useMarkdownFormatter: false
       })
-    ).rejects.toThrow('When expression evaluation failed');
+    ).rejects.toThrow(/Error evaluating action for condition|directive canary failed/);
   });
 
   it('keeps post-canary parallel expression errors as iteration markers', async () => {

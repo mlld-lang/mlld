@@ -62,7 +62,7 @@ Before the generated orchestrator can run, ensure:
 
 ```bash
 mlld init                          # If not already initialized
-mlld install @mlld/claude-poll     # Required for all orchestrators
+mlld install @mlld/claude           # Required for all orchestrators
 ```
 
 ### Guidelines

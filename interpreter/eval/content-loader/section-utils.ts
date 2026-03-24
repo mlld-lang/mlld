@@ -501,17 +501,6 @@ export class ContentLoaderSectionHelper {
   }
 
   private async extractSingleMatchedSection(content: string, sectionName: string): Promise<string> {
-    try {
-      const extracted = await llmxmlInstance.getSection(content, sectionName, {
-        includeNested: true
-      });
-      if (extracted) {
-        return extracted;
-      }
-    } catch {
-      // fall through to regex/range fallback
-    }
-
     return this.extractSectionByHeading(content, sectionName) ?? '';
   }
 

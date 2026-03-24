@@ -12,7 +12,7 @@
 >>   mlld run research --resume @assess   # re-run all assessment calls
 >>   mlld run research --new              # fresh run
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import { @logEvent, @loadRecentEvents, @loadRunState, @saveRunState, @countIterations, @buildContext } from "./lib/context.mld"
 import "@payload" as @p
 
@@ -22,8 +22,8 @@ var @outputPath = @p.output ?? "report.json"
 var @maxIterations = @p.max ? @p.max * 1 : 50
 
 >> Tool permissions
-var @decisionTools = "Read,Write,Glob,Grep"
-var @workerTools = "Read,Write,Glob,Grep"
+var @decisionTools = ["Read", "Write", "Glob", "Grep"]
+var @workerTools = ["Read", "Write", "Glob", "Grep"]
 
 >> Prompt templates
 exe @decisionPrompt(sources, state, recentEvents, lastError) = template "./prompts/decision/core.att"
@@ -32,9 +32,9 @@ exe @synthesizePrompt(assessments, sources, evidenceRules) = template "./prompts
 exe @invalidatePrompt(claim, assessments, evidenceRules) = template "./prompts/workers/invalidate.att"
 
 >> LLM call wrappers — llm label enables automatic caching
-exe llm @callAssess(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-exe llm @callSynthesize(prompt, tools, outPath) = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
-exe llm @callInvalidate(prompt, tools, outPath) = @claudePoll(@prompt, "opus", "@root", @tools, @outPath)
+exe llm @callAssess(prompt, config) = @claudePoll(@prompt, @config)
+exe llm @callSynthesize(prompt, config) = @claudePoll(@prompt, @config)
+exe llm @callInvalidate(prompt, config) = @claudePoll(@prompt, @config)
 
 >> Run directory for intermediate files and decision context
 var @runDir = `@base/runs/research`
@@ -81,7 +81,7 @@ loop(endless) [
 IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool. Write ONLY valid JSON.`
 
   @logEvent(@runDir, "decision_call", { iteration: @iterationCount })
-  @claudePoll(@fullPrompt, "sonnet", "@root", @decisionTools, @decisionOutputPath)
+  @claudePoll(@fullPrompt, { model: "sonnet", tools: @decisionTools, poll: @decisionOutputPath })
   let @decision = <@decisionOutputPath>?
 
   if !@decision [
@@ -125,7 +125,7 @@ IMPORTANT: Write your JSON response to @decisionOutputPath using the Write tool.
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        @callAssess(@fullPrompt, @workerTools, @outPath)
+        @callAssess(@fullPrompt, { model: "sonnet", tools: @workerTools, poll: @outPath })
         let @result = <@outPath>?
         show `    @filename: @result.relevance`
         @logEvent(@runDir, "assess_complete", { source: @filename, relevance: @result.relevance })
@@ -148,7 +148,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
       show `  Synthesizing from @assessmentData.length assessments`
-      @callSynthesize(@fullPrompt, @workerTools, @outPath)
+      @callSynthesize(@fullPrompt, { model: "opus", tools: @workerTools, poll: @outPath })
       let @synthesis = <@outPath>?
 
       if @synthesis [
@@ -178,7 +178,7 @@ IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-        @callInvalidate(@fullPrompt, @workerTools, @outPath)
+        @callInvalidate(@fullPrompt, { model: "opus", tools: @workerTools, poll: @outPath })
         let @result = <@outPath>?
 
         let @status = when @result.verdict [ "supported" => "OK"; * => "FLAGGED" ]

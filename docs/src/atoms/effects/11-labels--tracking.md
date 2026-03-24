@@ -8,7 +8,7 @@ aliases: [label]
 tags: [security, labels, tracking, flow]
 related: [audit-log, security-guards-basics, security-automatic-labels]
 related-code: [core/security/taint.ts]
-updated: 2026-02-05
+updated: 2026-03-16
 qa_tier: 2
 ---
 
@@ -29,12 +29,15 @@ var @msg = `Recipe: @recipe`
 show @msg.mx.labels        // ["secret"]
 ```
 
-**Collections:** Items retain labels; collection has union.
+**Collections:** Items retain labels; arrays and objects carry the union.
 
 ```mlld
 var secret @data = <internal/customers.csv>
 var @arr = [@data, "public"]
+var @obj = { payload: @data }
 show @arr.mx.labels        // ["secret"]
+show @obj.mx.labels        // ["secret"]
+show @obj.payload.mx.labels // ["secret"]
 ```
 
 **Pipelines:** Labels accumulate through stages.

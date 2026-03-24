@@ -16,8 +16,22 @@ import type {
   StreamExecution as StreamExecutionHandle,
   SDKEvent
 } from '@sdk/types';
-import { getExpressionProvenance } from './utils/expression-provenance';
+import { getExpressionProvenance, setExpressionProvenance } from './utils/expression-provenance';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { resolveIdentity, SigService } from '@core/security';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import {
+  createArrayVariable,
+  createObjectVariable,
+  createSimpleTextVariable,
+  type Variable,
+  VariableMetadataUtils
+} from '@core/types/variable';
+import {
+  applySecurityDescriptorToStructuredValue,
+  ensureStructuredValue,
+  isStructuredValue
+} from './utils/structured-value';
 import { ExecutionEmitter } from '@sdk/execution-emitter';
 import { StreamExecution } from '@sdk/stream-execution';
 import { evaluateDirective } from './eval/directive';
@@ -29,6 +43,7 @@ import { resolveCheckpointScriptName } from './checkpoint/script-name';
 import { extractLeadingResumeDirective } from '@core/checkpoint/config';
 import { DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 import { finalizePendingCheckpointScope } from './eval/checkpoint';
+import { VirtualFS } from '@services/fs/VirtualFS';
 
 function validateCheckpointOptions(options: InterpretOptions): void {
   if (options.noCheckpoint !== true) {
@@ -213,6 +228,146 @@ function collectDeclaredCheckpointNames(ast: readonly unknown[]): string[] {
 
   visit(ast, false);
   return names;
+}
+
+function hasPolicyDirective(ast: readonly unknown[]): boolean {
+  return ast.some((node) => {
+    if (!node || typeof node !== 'object') {
+      return false;
+    }
+    const directive = node as { type?: unknown; kind?: unknown };
+    return directive.type === 'Directive' && directive.kind === 'policy';
+  });
+}
+
+function resolveSigFileSystem(fileSystem: IFileSystemService): IFileSystemService {
+  if (fileSystem instanceof VirtualFS) {
+    return fileSystem.getBackingFileSystem() ?? fileSystem;
+  }
+  return fileSystem;
+}
+
+const RUNTIME_OBJECT_SOURCE = {
+  directive: 'var',
+  syntax: 'object',
+  hasInterpolation: false,
+  isMultiLine: false
+} as const;
+
+const RUNTIME_VALUE_SOURCE = {
+  directive: 'var',
+  syntax: 'expression',
+  hasInterpolation: false,
+  isMultiLine: false
+} as const;
+
+function normalizePayloadLabels(
+  payloadLabels?: Record<string, readonly string[]>
+): Record<string, string[]> | undefined {
+  if (!payloadLabels || typeof payloadLabels !== 'object') {
+    return undefined;
+  }
+
+  const normalized: Record<string, string[]> = {};
+  for (const [key, labels] of Object.entries(payloadLabels)) {
+    if (!Array.isArray(labels)) {
+      continue;
+    }
+
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const label of labels) {
+      if (typeof label !== 'string') {
+        continue;
+      }
+      const trimmed = label.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      deduped.push(trimmed);
+    }
+
+    if (deduped.length > 0) {
+      normalized[key] = deduped;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function applyPayloadFieldDescriptor(value: unknown, labels: readonly string[]): unknown {
+  const descriptor = makeSecurityDescriptor({ labels: Array.from(labels) });
+
+  if (isStructuredValue(value)) {
+    applySecurityDescriptorToStructuredValue(value, descriptor);
+    return value;
+  }
+
+  if (value && typeof value === 'object') {
+    setExpressionProvenance(value, descriptor);
+    return value;
+  }
+
+  const structured = ensureStructuredValue(value);
+  applySecurityDescriptorToStructuredValue(structured, descriptor);
+  return structured;
+}
+
+function applyPayloadFieldLabels(
+  payloadValue: unknown,
+  payloadLabels?: Record<string, string[]>
+): unknown {
+  if (!payloadLabels || !payloadValue || typeof payloadValue !== 'object' || Array.isArray(payloadValue)) {
+    return payloadValue;
+  }
+
+  const payloadObject = payloadValue as Record<string, unknown>;
+  const decorated: Record<string, unknown> = { ...payloadObject };
+
+  for (const [field, labels] of Object.entries(payloadLabels)) {
+    if (!(field in decorated)) {
+      continue;
+    }
+    decorated[field] = applyPayloadFieldDescriptor(decorated[field], labels);
+  }
+
+  return decorated;
+}
+
+function createRuntimePayloadVariable(payloadValue: unknown): Variable {
+  if (Array.isArray(payloadValue)) {
+    return createArrayVariable('payload', payloadValue, true, RUNTIME_OBJECT_SOURCE);
+  }
+
+  if (payloadValue && typeof payloadValue === 'object') {
+    return createObjectVariable('payload', payloadValue as Record<string, unknown>, true, RUNTIME_OBJECT_SOURCE);
+  }
+
+  return createSimpleTextVariable(
+    'payload',
+    payloadValue === undefined || payloadValue === null ? '' : String(payloadValue),
+    RUNTIME_VALUE_SOURCE
+  );
+}
+
+function buildPayloadMetadataMap(payloadLabels?: Record<string, string[]>) {
+  if (!payloadLabels) {
+    return undefined;
+  }
+
+  const metadataMap = Object.fromEntries(
+    Object.entries(payloadLabels)
+      .map(([field, labels]) => [
+        field,
+        VariableMetadataUtils.serializeSecurityMetadata({
+          security: makeSecurityDescriptor({ labels })
+        })
+      ])
+      .filter((entry): entry is [string, NonNullable<ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>>] => Boolean(entry[1]))
+  );
+
+  return Object.keys(metadataMap).length > 0 ? metadataMap : undefined;
 }
 
 async function applyResumeTargetInvalidation(
@@ -432,7 +587,24 @@ export async function interpret(
     undefined,
     effectHandler
   );
+  env.setSigService(new SigService(pathContext.projectRoot, resolveSigFileSystem(options.fileSystem)));
+  const signingIdentity = (options as { signingIdentity?: unknown }).signingIdentity;
+  const signingContext = (options as { signingContext?: Record<string, unknown> | undefined }).signingContext;
+  env.setSignerIdentity(
+    typeof signingIdentity === 'string' && signingIdentity.trim().length > 0
+      ? signingIdentity.trim()
+      : await resolveIdentity({
+          tier: 'agent',
+          projectRoot: pathContext.projectRoot,
+          fileSystem: resolveSigFileSystem(options.fileSystem),
+          scriptPath: options.filePath,
+          ...(signingContext && typeof signingContext === 'object' ? signingContext : {})
+        })
+  );
   env.setStreamingManager(options.streamingManager ?? new StreamingManager());
+  if ((options as any).mcpServers) {
+    env.setMcpServerMap((options as any).mcpServers);
+  }
   env.setProvenanceEnabled(provenanceEnabled);
   env.setCheckpointScriptResumeMode(scriptResumeMode);
   env.setCheckpointResumeOverride(options.resume !== undefined);
@@ -508,6 +680,10 @@ export async function interpret(
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();
 
+  if (hasPolicyDirective(ast)) {
+    await env.getSigService()?.init();
+  }
+
   if (options.dynamicModules && Object.keys(options.dynamicModules).length > 0) {
     const userDataModules: Record<string, string | Record<string, unknown>> = {};
     const otherModules: Record<string, string | Record<string, unknown>> = {};
@@ -522,17 +698,47 @@ export async function interpret(
     }
 
     if (Object.keys(userDataModules).length > 0) {
-      env.registerDynamicModules(userDataModules, options.dynamicModuleSource, { literalStrings: true });
+      const payloadKey = Object.prototype.hasOwnProperty.call(userDataModules, '@payload')
+        ? '@payload'
+        : Object.prototype.hasOwnProperty.call(userDataModules, '@Payload')
+          ? '@Payload'
+          : null;
+      const stateKey = Object.prototype.hasOwnProperty.call(userDataModules, '@state')
+        ? '@state'
+        : Object.prototype.hasOwnProperty.call(userDataModules, '@State')
+          ? '@State'
+          : null;
+      const payloadLabels = normalizePayloadLabels(options.payloadLabels);
 
-      // Make @payload directly available as a variable (no import required)
-      const payloadValue = userDataModules['@payload'] ?? userDataModules['@Payload'];
-      if (payloadValue !== undefined) {
-        const payloadVar = typeof payloadValue === 'object' && !Array.isArray(payloadValue)
-          ? { type: 'object' as const, value: payloadValue as Record<string, any> }
-          : Array.isArray(payloadValue)
-            ? { type: 'array' as const, value: payloadValue }
-            : { type: 'simple_text' as const, value: String(payloadValue) };
+      if (payloadKey) {
+        const payloadValue = userDataModules[payloadKey];
+        const payloadMetadataMap = buildPayloadMetadataMap(payloadLabels);
+        env.registerDynamicModules(
+          { [payloadKey]: payloadValue },
+          options.dynamicModuleSource,
+          {
+            literalStrings: true,
+            moduleFieldLabels: payloadLabels ? { [payloadKey]: payloadLabels } : undefined
+          }
+        );
+
+        const decoratedPayloadValue = applyPayloadFieldLabels(payloadValue, payloadLabels);
+        const payloadVar = createRuntimePayloadVariable(decoratedPayloadValue);
+        payloadVar.internal = {
+          ...(payloadVar.internal ?? {}),
+          ...(payloadMetadataMap ? { namespaceMetadata: payloadMetadataMap } : {}),
+          isReserved: true,
+          isSystem: true
+        };
         env.setVariable('payload', payloadVar);
+      }
+
+      if (stateKey) {
+        env.registerDynamicModules(
+          { [stateKey]: userDataModules[stateKey] },
+          options.dynamicModuleSource,
+          { literalStrings: true }
+        );
       }
     }
 
@@ -678,8 +884,8 @@ export async function interpret(
       abort: () => {
         env.cleanup();
       },
-      updateState: async (path: string, value: unknown) => {
-        env.applyExternalStateUpdate(path, value);
+      updateState: async (path: string, value: unknown, labels?: string[]) => {
+        env.applyExternalStateUpdate(path, value, labels);
       }
     });
     env.enableSDKEvents(emitter);
@@ -691,6 +897,7 @@ export async function interpret(
         emitter.emit({ type: 'execution:complete', result: structured, timestamp: Date.now() });
         streamExecution.resolve(structured);
       } catch (error) {
+        env.recordGuardDenialFromError(error);
         streamExecution.reject(error);
       }
     })();
@@ -712,6 +919,7 @@ export async function interpret(
       'stream:progress',
       'execution:complete',
       'state:write',
+      'guard_denial',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',
@@ -727,7 +935,13 @@ export async function interpret(
     env.enableSDKEvents(debugEmitter);
   }
 
-  const output = await runExecution();
+  let output: string;
+  try {
+    output = await runExecution();
+  } catch (error) {
+    env.recordGuardDenialFromError(error);
+    throw error;
+  }
 
   if (mode === 'structured') {
     return buildStructuredResult(env, output, provenanceEnabled);
@@ -770,6 +984,7 @@ function buildStructuredResult(env: Environment, output: string, provenanceEnabl
     effects,
     exports,
     stateWrites: env.getStateWrites(),
+    denials: env.getGuardDenials(),
     environment: env,
     ...(streaming ? { streaming } : {})
   };

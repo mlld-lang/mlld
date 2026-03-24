@@ -4,6 +4,12 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ToolCollection } from '@core/types/tools';
+import { FunctionRouter } from '@cli/mcp/FunctionRouter';
+import { fileURLToPath } from 'url';
+
+const fakeServerPath = fileURLToPath(
+  new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
 
 const pathService = new PathService();
 const pathContext = {
@@ -249,5 +255,172 @@ describe('tool collections', () => {
         /var @result = @agent(@agentTools, "doc-1")
       `)
     ).rejects.toThrow(/blocked/i);
+  });
+
+  it('allows authorized tool:w operations to override unlocked no-send-to-unknown policy denials', async () => {
+    const result = await interpret(`
+      /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+
+      /var tools @agentTools = {
+        send_email: {
+          mlld: @send_email,
+          labels: ["tool:w:send_email"],
+          expose: ["recipients", "cc", "bcc", "subject"],
+          controlArgs: ["recipients", "cc", "bcc"]
+        }
+      }
+
+      /exe @agent(tools) = box with { tools: @tools } [
+        => @send_email(["mark@example.com"], [], [], "hello")
+      ]
+
+      /var @taskPolicy = {
+        defaults: { rules: ["no-send-to-unknown"] },
+        operations: {
+          "exfil:send": ["tool:w:send_email"]
+        },
+        authorizations: {
+          allow: {
+            send_email: {
+              args: {
+                recipients: ["mark@example.com"],
+                cc: [],
+                bcc: []
+              }
+            }
+          }
+        }
+      }
+
+      /show @agent(@agentTools) with { policy: @taskPolicy }
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(result.trim()).toBe('sent:hello');
+  });
+
+  it('denies unlisted tool:w operations under policy.authorizations', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+        /exe tool:w @archive_email(id) = \`archived:@id\`
+
+        /var tools @agentTools = {
+          send_email: {
+            mlld: @send_email,
+            labels: ["tool:w:send_email"],
+            expose: ["recipients", "cc", "bcc", "subject"],
+            controlArgs: ["recipients", "cc", "bcc"]
+          },
+          archive_email: {
+            mlld: @archive_email,
+            labels: ["tool:w:archive_email"],
+            expose: ["id"],
+            controlArgs: ["id"]
+          }
+        }
+
+        /exe @agent(tools) = box with { tools: @tools } [
+          => @archive_email("msg-1")
+        ]
+
+        /var @taskPolicy = {
+          authorizations: {
+            allow: {
+              send_email: {
+                args: {
+                  recipients: ["mark@example.com"],
+                  cc: [],
+                  bcc: []
+                }
+              }
+            }
+          }
+        }
+
+        /var @result = @agent(@agentTools) with { policy: @taskPolicy }
+      `)
+    ).rejects.toThrow(/operation not authorized by policy\.authorizations/i);
+  });
+
+  it('fails closed when with { policy } provides true for a tool with controlArgs', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+
+        /var tools @agentTools = {
+          send_email: {
+            mlld: @send_email,
+            labels: ["tool:w:send_email"],
+            expose: ["recipients", "cc", "bcc", "subject"],
+            controlArgs: ["recipients", "cc", "bcc"]
+          }
+        }
+
+        /exe @agent(tools) = box with { tools: @tools } [
+          => "ready"
+        ]
+
+        /var @taskPolicy = {
+          authorizations: {
+            allow: {
+              send_email: true
+            }
+          }
+        }
+
+        /var @result = @agent(@agentTools) with { policy: @taskPolicy }
+      `)
+    ).rejects.toThrow(/cannot use true in policy\.authorizations/i);
+  });
+
+  it('creates tool collections directly from runtime MCP specs', async () => {
+    const env = await interpretWithEnv(`
+      /var @serverSpec = "${process.execPath} ${fakeServerPath}"
+      /var tools @dynamicTools = mcp @serverSpec
+    `);
+
+    const toolsVar = env.getVariable('dynamicTools');
+    expect(toolsVar?.internal?.isToolsCollection).toBe(true);
+
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(Object.keys(collection)).toEqual(expect.arrayContaining(['echo', 'ping']));
+    expect(collection.echo.mlld).toMatch(/^__mcp_dynamicTools_echo/);
+
+    const router = new FunctionRouter({ environment: env, toolCollection: collection });
+    await expect(router.executeFunction('ping', {})).resolves.toBe('pong');
+  });
+
+  it('rejects dynamic MCP tool sources when the runtime spec is not a string', async () => {
+    await expect(
+      interpretWithEnv(`
+        /var @serverSpec = { cmd: "${process.execPath} ${fakeServerPath}" }
+        /var tools @dynamicTools = mcp @serverSpec
+      `)
+    ).rejects.toThrow(/non-empty string/);
+  });
+
+  it('keeps dynamic MCP proxy aliases isolated per tool collection variable', async () => {
+    const env = await interpretWithEnv(`
+      /var @serverSpec = "${process.execPath} ${fakeServerPath}"
+      /var tools trusted @dynamicToolsA = mcp @serverSpec
+      /var tools @dynamicToolsB = mcp @serverSpec
+    `);
+
+    const dynamicToolsA = env.getVariable('dynamicToolsA');
+    const dynamicToolsB = env.getVariable('dynamicToolsB');
+    const collectionA = dynamicToolsA?.internal?.toolCollection as ToolCollection;
+    const collectionB = dynamicToolsB?.internal?.toolCollection as ToolCollection;
+
+    expect(dynamicToolsA?.mx.labels).toContain('trusted');
+    expect(collectionA.echo.mlld).not.toBe(collectionB.echo.mlld);
+    expect(collectionA.echo.mlld).toMatch(/^__mcp_dynamicToolsA_echo/);
+    expect(collectionB.echo.mlld).toMatch(/^__mcp_dynamicToolsB_echo/);
   });
 });

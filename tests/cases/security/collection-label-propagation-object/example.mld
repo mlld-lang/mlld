@@ -1,3 +1,6 @@
-var secret @key = "sk-123"
-var @obj = { text: @key }
+var untrusted @data = "secret"
+var @obj = { value: @data, nested: { inner: @data } }
 show @obj.mx.labels
+show @obj.value.mx.labels
+show @obj.nested.mx.labels
+show @obj.nested.inner.mx.labels

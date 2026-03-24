@@ -81,9 +81,7 @@ describe('reference evaluator', () => {
     const descriptorState = createDescriptorStateStub();
 
     mocks.resolveVariable.mockResolvedValue({ profile: { name: 'adam' } });
-    mocks.accessField
-      .mockResolvedValueOnce({ value: { name: 'adam' }, accessPath: 'profile' })
-      .mockResolvedValueOnce({ value: 'adam', accessPath: 'profile.name' });
+    mocks.accessFields.mockResolvedValue({ value: 'adam', accessPath: ['profile', 'name'] });
     mocks.processPipeline.mockResolvedValue('ADAM');
 
     const evaluator = createReferenceEvaluator({
@@ -121,7 +119,7 @@ describe('reference evaluator', () => {
     const env = createEnvStub({ tools: sourceVar });
 
     mocks.resolveVariable.mockResolvedValue({ build: executableVariable });
-    mocks.accessField.mockResolvedValue({ value: executableVariable, accessPath: 'build' });
+    mocks.accessFields.mockResolvedValue({ value: executableVariable, accessPath: ['build'] });
 
     const evaluator = createReferenceEvaluator({
       descriptorState: createDescriptorStateStub(),

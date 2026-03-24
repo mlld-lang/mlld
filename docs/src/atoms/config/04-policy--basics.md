@@ -5,9 +5,9 @@ brief: Define and import policy objects
 category: config
 parent: policy
 tags: [security, policies, guards]
-related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, auth, box-config]
+related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, policy-authorizations, auth, box-config]
 related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-04
+updated: 2026-03-18
 qa_tier: 2
 ---
 
@@ -40,7 +40,22 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
+Built-in positional rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires the first positional argument to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
+
+`mlld validate` warns on unknown built-in rule names in `defaults.rules` and suggests the closest known rule when it can.
+
+**`locked`** makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without `locked: true` (the default), a privileged guard can override policy label-flow denials with `allow` for specific operations. Use `locked: true` for absolute constraints that nothing should bypass.
+
+```mlld
+policy @p = {
+  defaults: { rules: ["no-secret-exfil"] },
+  locked: true
+}
+```
+
 **`operations`** groups semantic exe labels under risk categories. You label functions with what they DO (`net:w`, `fs:w`), and policy classifies those as risk types (`exfil`, `destructive`). This is the two-step pattern -- see `policy-operations`.
+
+`mlld analyze --format json` surfaces these mappings under `policies[].operations`, and `mlld validate --context ...` can warn when privileged `op:` guards do not match any declared operation labels in the validation context.
 
 **`auth`** defines caller-side credential mappings for `using auth:name`. It accepts short form (`"API_KEY"`) and object form (`{ from, as }`). Policy auth composes with standalone `auth`; caller policy entries override same-name module bindings.
 
@@ -77,6 +92,23 @@ guard before op:run = when [
 `danger: ["@keychain"]` is required for keychain sources declared in `policy.auth`. Standalone top-level `auth` declarations do not require `danger`.
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
+
+**`authorizations`** declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the active `var tools` collection via `controlArgs`. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing `authorizations`, and the host injects it via `with { policy }`. Invalid authorization fragments fail closed during activation.
+
+```mlld
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_email: { args: { recipients: ["mark@example.com"] } },
+      create_file: true
+    }
+  }
+}
+
+var @result = @worker(@prompt) with { policy: @taskPolicy }
+```
+
+See `policy-authorizations` for full syntax including control-arg enforcement and validation.
 
 **Export/import:** Share policies across scripts:
 

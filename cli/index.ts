@@ -116,6 +116,8 @@ export interface CLIOptions {
   metrics?: boolean;
   // Dynamic module injection
   inject?: string[];  // ['@module=value', '@data=@file.json']
+  // Raw @state inputs from CLI (resolved during execution)
+  state?: string[];   // ['@file.json', '{"messages":[]}', 'key=value']
   _?: string[]; // Remaining args after command
 }
 const globalErrorHandler = new ErrorHandler();
@@ -270,7 +272,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     const streamingOptions = cliOptions.noStream !== undefined ? { enabled: !cliOptions.noStream } : undefined;
     
     // Use the new interpreter
-    const interpretResult = await interpret(content, {
+    const interpretOptions = {
       pathContext: pathContext,
       filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
@@ -296,8 +298,10 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       captureErrors: cliOptions.captureErrors,
       captureEnvironment: env => {
         environment = env;
-      }
-    });
+      },
+      signingContext: { tier: 'user' as const }
+    };
+    const interpretResult = await interpret(content, interpretOptions as any);
 
     // Extract result and environment
     const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;

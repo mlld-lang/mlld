@@ -115,9 +115,47 @@ export class ModuleExportSerializer {
       };
     }
 
+    if (variable.type === 'array') {
+      return this.serializeArrayVariable(variable, context);
+    }
+
     if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
+      const resolved = this.objectResolver.resolveObjectReferences(
+        variable.value,
+        context.childVars,
+        { resolveStrings: context.options?.resolveStrings }
+      );
+      if (variable.internal?.isNamespace && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
+        (resolved as Record<string, unknown>).__namespace = true;
+      }
+      return resolved;
+    }
+
+    return variable.value;
+  }
+
+  private serializeArrayVariable(
+    variable: Variable,
+    context: ModuleExportSerializationContext
+  ): any {
+    if (Array.isArray(variable.value)) {
       return this.objectResolver.resolveObjectReferences(
         variable.value,
+        context.childVars,
+        { resolveStrings: context.options?.resolveStrings }
+      );
+    }
+
+    const rawValue = variable.value as { items?: unknown[]; elements?: unknown[] } | undefined;
+    const items = Array.isArray(rawValue?.items)
+      ? rawValue.items
+      : Array.isArray(rawValue?.elements)
+        ? rawValue.elements
+        : null;
+
+    if (items) {
+      return this.objectResolver.resolveObjectReferences(
+        items,
         context.childVars,
         { resolveStrings: context.options?.resolveStrings }
       );
@@ -174,7 +212,11 @@ export class ModuleExportSerializer {
 
     const result = {
       __executable: true,
+      name: execVar.name,
       value: execVar.value,
+      paramNames: execVar.paramNames,
+      paramTypes: execVar.paramTypes,
+      description: execVar.description,
       executableDef: execVar.internal?.executableDef,
       internal: serializedInternal
     };

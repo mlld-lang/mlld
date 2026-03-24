@@ -4,13 +4,54 @@ import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 
 interface LiteralNode {
   type: string;
-  location?: { start: { line: number; column: number }; end: { line: number; column: number } };
+  location?: {
+    start: { line: number; column: number; offset: number };
+    end: { line: number; column: number; offset: number };
+  };
   value?: unknown;
   valueType?: string;
   meta?: { wrapperType?: string };
 }
 
 export class LiteralVisitor extends BaseVisitor {
+  private addStringToken(
+    location: NonNullable<LiteralNode['location']>,
+    tokenType: string,
+    modifiers: string[],
+    startOffsetAdjustment: number = 0,
+    endOffsetAdjustment: number = 0
+  ): void {
+    const startOffset = location.start.offset + startOffsetAdjustment;
+    const endOffset = location.end.offset + endOffsetAdjustment;
+    if (endOffset <= startOffset) return;
+
+    const source = this.document.getText();
+    const tokenText = source.slice(startOffset, endOffset);
+    if (!tokenText) return;
+
+    const segments = tokenText.split('\n');
+    let absoluteOffset = startOffset;
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      if (segment.length > 0) {
+        const position = this.document.positionAt(absoluteOffset);
+        this.tokenBuilder.addToken({
+          line: position.line,
+          char: position.character,
+          length: segment.length,
+          tokenType,
+          modifiers
+        });
+      }
+
+      absoluteOffset += segment.length;
+      if (i < segments.length - 1) {
+        absoluteOffset += 1;
+      }
+    }
+  }
+
   canHandle(node: unknown): boolean {
     return (node as LiteralNode).type === 'Literal';
   }
@@ -26,6 +67,8 @@ export class LiteralVisitor extends BaseVisitor {
 
     // Handle special keyword literals first
     if (valueType === 'wildcard' || valueType === 'none') {
+      tokenType = 'keyword';
+    } else if (valueType === 'denied') {
       tokenType = 'keyword';
     } else if (valueType === 'retry') {
       tokenType = 'keyword';
@@ -62,6 +105,10 @@ export class LiteralVisitor extends BaseVisitor {
     } else if (value === null) {
       tokenType = 'null';
     } else if (valueType === 'string') {
+      if (context.templateType && context.templateType !== 'string') {
+        tokenType = 'templateContent';
+      }
+
       const text = this.getCachedText(
         { line: n.location.start.line - 1, character: n.location.start.column - 1 },
         { line: n.location.end.line - 1, character: n.location.end.column }
@@ -72,19 +119,22 @@ export class LiteralVisitor extends BaseVisitor {
       }
     }
 
-    // For string literals, we need to include the quotes in the token
-    let startChar = n.location.start.column - 1;
-    let length = n.location.end.column - n.location.start.column;
-
-    if (tokenType === 'string' && n.meta?.wrapperType) {
-      // The AST location is for the content only, but we need to include quotes
-      startChar -= 1; // Move start back to include opening quote
-      length += 2;    // Add 2 for both quotes
+    if (tokenType === 'string' || tokenType === 'templateContent') {
+      const shouldIncludeQuotes = tokenType === 'string' && !!n.meta?.wrapperType;
+      this.addStringToken(
+        n.location,
+        tokenType,
+        modifiers,
+        shouldIncludeQuotes ? -1 : 0,
+        shouldIncludeQuotes ? 1 : 0
+      );
+      return;
     }
 
+    const length = Math.max(n.location.end.offset - n.location.start.offset, 1);
     this.tokenBuilder.addToken({
       line: n.location.start.line - 1,
-      char: startChar,
+      char: n.location.start.column - 1,
       length,
       tokenType,
       modifiers

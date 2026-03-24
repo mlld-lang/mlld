@@ -22,7 +22,6 @@ const steps = [
   { name: 'grammar', display: 'Building grammar' },
   { name: 'typescript', display: 'Compiling TypeScript' },
   { name: 'docs', display: 'Building LLM docs' },
-  { name: 'python', display: 'Building Python wrapper' },
   { name: 'wasm', display: 'Copying WASM files' },
   { name: 'sync', display: 'Syncing mlldx' }
 ];
@@ -178,11 +177,6 @@ async function build() {
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
 
-    showProgress(steps[currentStep].display, 'running');
-    await runCommand('npm run build:python', 'python');
-    showProgress(steps[currentStep].display, 'done');
-    currentStep++;
-    
     showProgress(steps[currentStep].display, 'running');
     if (process.env.CI) {
       console.log(`\n${yellow}[info]${reset} WASM copy step is optional in CI environments.`);

@@ -1,6 +1,6 @@
 >> Router — scores agents and selects the best handler for a task
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 
 exe @scorePrompt(task, agents) = template "./prompts/router/score.att"
 
@@ -14,7 +14,7 @@ exe @classify(task, agentList, defaultAgent) = [
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
 
-  @claudePoll(@fullPrompt, @model, "@root", "Read,Write", @outPath)
+  @claudePoll(@fullPrompt, { model: @model, tools: ["Read", "Write"], poll: @outPath })
   let @result = <@outPath>? | @parse
   when !@result => { agent: @defaultAgent, confidence: "low", reasoning: "router failed, defaulting" }
   => @result

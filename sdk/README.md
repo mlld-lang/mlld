@@ -65,6 +65,8 @@ Each SDK exposes handle APIs for long-running process/execute calls:
 - Start request: `process_async(...)` / `execute_async(...)`
 - Handle operations: `wait`/`result`, `cancel`, `update_state(path, value)`
 
+Live transports can also emit structured `guard_denial` events before a request finishes. The Python SDK exposes these directly via `handle.next_event()`.
+
 `update_state` sends live `state:update` requests to mutate in-flight `@state` for that request.
 
 ## State Writes
@@ -73,6 +75,12 @@ Each SDK exposes handle APIs for long-running process/execute calls:
 
 - final `stateWrites` from the completion payload
 - streamed `state:write` events emitted during execution
+
+Structured execute results also expose `denials`, a list of structured guard/policy label-flow denials observed during the run.
+
+## MCP Server Injection
+
+`execute` and `process` accept an `mcp_servers` map (logical name → shell command). When a script uses `import tools from mcp "name"`, the runtime checks this map before treating the spec as a command. Each execution gets its own server lifecycle, enabling parallel calls with independent MCP server state.
 
 ## Requirements
 

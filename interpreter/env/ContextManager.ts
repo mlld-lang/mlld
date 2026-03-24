@@ -1,6 +1,10 @@
 import type { SourceLocation } from '@core/types';
-import type { DataLabel } from '@core/types/security';
+import type { DataLabel, ToolProvenance } from '@core/types/security';
 import type { GuardHint, GuardResult } from '@core/types/guard';
+import {
+  createGuardArgsView,
+  type GuardArgsSnapshot
+} from '../utils/guard-args';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -53,6 +57,7 @@ export interface GuardContextSnapshot {
   labels?: readonly DataLabel[];
   sources?: readonly string[];
   taint?: readonly string[];
+  toolsHistory?: readonly ToolProvenance[];
   inputPreview?: string | null;
   outputPreview?: string | null;
   timing?: 'before' | 'after';
@@ -63,6 +68,7 @@ export interface GuardContextSnapshot {
   hints?: ReadonlyArray<GuardHint>;
   reasons?: ReadonlyArray<string>;
   decision?: 'allow' | 'deny' | 'retry';
+  args?: GuardArgsSnapshot;
 }
 
 export interface DeniedContextSnapshot {
@@ -76,6 +82,7 @@ export interface SecuritySnapshotLike {
   labels: readonly string[];
   sources: readonly string[];
   taint: readonly string[];
+  tools?: readonly ToolProvenance[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
 }
@@ -103,7 +110,10 @@ export interface ToolsContextSnapshot {
   allowed: ReadonlyArray<string>;
   denied: ReadonlyArray<string>;
   results: Readonly<Record<string, unknown>>;
+  history: ReadonlyArray<ToolProvenance>;
 }
+
+type SigFilesResolver = (pattern: string) => Promise<unknown[]>;
 
 interface BuildContextOptions {
   pipelineContext?: PipelineContextSnapshot;
@@ -129,6 +139,8 @@ export class ContextManager {
   private toolAllowed: string[] = [];
   private toolDenied: string[] = [];
   private toolResults: Record<string, unknown> = {};
+  private sigStatuses: Record<string, unknown> = {};
+  private sigFilesResolver?: SigFilesResolver;
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -292,8 +304,31 @@ export class ContextManager {
       calls: this.toolCalls.map(call => call.name),
       allowed: [...this.toolAllowed],
       denied: [...this.toolDenied],
-      results: { ...this.toolResults }
+      results: { ...this.toolResults },
+      history: []
     };
+  }
+
+  recordSigStatus(keys: readonly string[], status: unknown): void {
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return;
+    }
+
+    const snapshot = this.cloneToolResult(status);
+    for (const key of keys) {
+      if (typeof key !== 'string') {
+        continue;
+      }
+      const normalized = key.trim();
+      if (!normalized) {
+        continue;
+      }
+      this.sigStatuses[normalized] = snapshot;
+    }
+  }
+
+  setSigFilesResolver(resolver?: SigFilesResolver): void {
+    this.sigFilesResolver = resolver;
   }
 
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
@@ -338,6 +373,11 @@ export class ContextManager {
         ? (((normalizedOperation as any).metadata.userHookErrors as unknown[]) ?? [])
         : [];
     const checkpointContext = this.buildCheckpointContext(normalizedOperation);
+    const toolHistory = guardContext?.toolsHistory
+      ? Array.from(guardContext.toolsHistory)
+      : security?.tools
+        ? Array.from(security.tools)
+        : [];
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -367,7 +407,11 @@ export class ContextManager {
       hooks: {
         errors: Array.isArray(hookErrors) ? [...hookErrors] : []
       },
-      tools: this.getToolsSnapshot(),
+      tools: {
+        ...this.getToolsSnapshot(),
+        history: toolHistory
+      },
+      sig: this.buildSigContext(),
       ...(checkpointContext ? { checkpoint: checkpointContext } : {}),
       ...(options.boxContext ? { box: options.boxContext } : {}),
       ...(this.buildLlmContext(options.llmToolConfig) ?? {})
@@ -384,6 +428,9 @@ export class ContextManager {
     }
     if (guardContext?.output !== undefined) {
       mxValue.output = guardContext.output;
+    }
+    if (guardContext) {
+      mxValue.args = createGuardArgsView(guardContext.args);
     }
 
     if (guardContext || deniedContext) {
@@ -447,6 +494,14 @@ export class ContextManager {
       return output;
     }
     return String(value);
+  }
+
+  private buildSigContext(): Record<string, unknown> {
+    const snapshot = { ...this.sigStatuses };
+    if (this.sigFilesResolver) {
+      snapshot.files = async (pattern: string) => await this.sigFilesResolver?.(pattern) ?? [];
+    }
+    return snapshot;
   }
 
   private normalizeOperationContext(
@@ -558,6 +613,7 @@ export class ContextManager {
 
     return {
       ...(guardContext ?? {}),
+      ...(guardContext ? { args: createGuardArgsView(guardContext.args) } : {}),
       trace,
       hints,
       reasons,
@@ -642,12 +698,13 @@ export class ContextManager {
   ): { llm: Record<string, unknown> } | null {
     if (config === undefined) return null;
     if (config === null) {
-      return { llm: { config: '', allowed: '', inBox: false, hasTools: true } };
+      return { llm: { config: '', allowed: '', native: '', inBox: false, hasTools: true } };
     }
     return {
       llm: {
         config: config.mcpConfigPath,
         allowed: config.unifiedAllowedTools,
+        native: config.nativeAllowedTools,
         inBox: config.inBox,
         hasTools: true
       }

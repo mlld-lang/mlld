@@ -1,8 +1,10 @@
+import { randomUUID } from 'crypto';
 import path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { logger } from '@core/utils/logger';
 
 export type AuditEvent = {
+  id?: string;
   ts?: string;
   event: string;
   var?: string;
@@ -17,15 +19,24 @@ export type AuditEvent = {
   taint?: string[];
   writer?: string;
   labels?: string[];
+  sources?: string[];
   resolved?: string;
+  detail?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  resultLength?: number;
+  duration?: number;
+  ok?: boolean;
 };
 
 export async function appendAuditEvent(
   fileSystem: IFileSystemService,
   projectRoot: string,
   event: AuditEvent
-): Promise<void> {
+): Promise<string> {
+  const id = event.id ?? randomUUID();
   const record = {
+    id,
     ts: event.ts ?? new Date().toISOString(),
     event: event.event,
     ...(event.var ? { var: event.var } : {}),
@@ -40,7 +51,14 @@ export async function appendAuditEvent(
     ...(event.taint !== undefined ? { taint: event.taint } : {}),
     ...(event.writer ? { writer: event.writer } : {}),
     ...(event.labels ? { labels: event.labels } : {}),
-    ...(event.resolved ? { resolved: event.resolved } : {})
+    ...(event.sources !== undefined ? { sources: event.sources } : {}),
+    ...(event.resolved ? { resolved: event.resolved } : {}),
+    ...(event.detail ? { detail: event.detail } : {}),
+    ...(event.tool ? { tool: event.tool } : {}),
+    ...(event.args !== undefined ? { args: event.args } : {}),
+    ...(event.resultLength !== undefined ? { resultLength: event.resultLength } : {}),
+    ...(event.duration !== undefined ? { duration: event.duration } : {}),
+    ...(event.ok !== undefined ? { ok: event.ok } : {})
   };
   const logPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
   const dirPath = path.dirname(logPath);
@@ -50,4 +68,5 @@ export async function appendAuditEvent(
   } catch (error) {
     logger.warn('Audit log write failed', { error });
   }
+  return id;
 }

@@ -182,7 +182,13 @@ AtVarInFilter = UnifiedAtVar
 
 // Keep existing array index patterns
 ExistingArrayIndex
-  = "[" _ index:NumberLiteral _ "]" {
+  = "[" _ "*" _ "]" {
+      return {
+        type: 'wildcardIndex',
+        location: location()
+      };
+    }
+  / "[" _ index:NumberLiteral _ "]" {
       return { 
         type: 'arrayIndex', 
         value: index,

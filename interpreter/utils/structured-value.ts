@@ -1,4 +1,4 @@
-import type { SecurityDescriptor, DataLabel } from '@core/types/security';
+import type { SecurityDescriptor, DataLabel, ToolProvenance } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
@@ -81,6 +81,7 @@ export interface StructuredValueContext {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
   sources: readonly string[];
+  tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
   text?: string;
   data?: unknown;
@@ -101,6 +102,7 @@ export interface StructuredValueContext {
   status?: number;
   headers?: Record<string, unknown>;
   html?: string;
+  md?: string;
   source?: string;
   command?: string;
   exitCode?: number;
@@ -126,6 +128,9 @@ function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: 
     labels: mx.labels ? [...mx.labels] : [],
     taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
     sources: mx.sources ? [...mx.sources] : [],
+    tools: Array.isArray((mx as { tools?: readonly ToolProvenance[] }).tools)
+      ? [...((mx as { tools?: readonly ToolProvenance[] }).tools ?? [])]
+      : [],
     policyContext: mx.policy ?? undefined
   });
 }
@@ -142,6 +147,24 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
 
 export function stringifyStructured(value: unknown, space?: number): string {
   return JSON.stringify(value, structuredValueJsonReplacer, space);
+}
+
+function stringifyTextValue(value: unknown): string {
+  try {
+    const text = stringifyStructured(value);
+    if (typeof text === 'string') {
+      return text;
+    }
+  } catch {}
+
+  try {
+    const text = JSON.stringify(value);
+    if (typeof text === 'string') {
+      return text;
+    }
+  } catch {}
+
+  return '[unserializable object]';
 }
 
 function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
@@ -168,6 +191,9 @@ export function asText(value: unknown): string {
   }
   if (value === null || value === undefined) {
     return '';
+  }
+  if (typeof value === 'object') {
+    return stringifyTextValue(value);
   }
   return String(value);
 }
@@ -381,12 +407,10 @@ function deriveText(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value);
   }
-
-  try {
-    return stringifyStructured(value);
-  } catch {
-    return String(value);
+  if (typeof value === 'object') {
+    return stringifyTextValue(value);
   }
+  return String(value);
 }
 
 export const structuredValueUtils = {
@@ -417,6 +441,7 @@ export function applySecurityDescriptorToStructuredValue(
   value.mx.labels = normalized.labels ? [...normalized.labels] : [];
   value.mx.taint = normalized.taint ? [...normalized.taint] : [];
   value.mx.sources = normalized.sources ? [...normalized.sources] : [];
+  value.mx.tools = normalized.tools ? [...normalized.tools] : [];
   value.mx.policy = normalized.policyContext ?? null;
 }
 
@@ -538,6 +563,7 @@ function buildVarMxFromMetadata(
   const flattenedLength =
     (metadata?.length as number | undefined) ?? metrics?.length ?? loadResult?.content?.length;
   const flattenedHtml = metadata?.html as string | undefined;
+  const flattenedMd = metadata?.md as string | undefined;
   const labels = normalizeLabelArray(normalizedDescriptor.labels);
   const taint = normalizeLabelArray(normalizedDescriptor.taint);
   const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
@@ -546,6 +572,7 @@ function buildVarMxFromMetadata(
     labels,
     taint,
     sources,
+    tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
     policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,
@@ -561,6 +588,7 @@ function buildVarMxFromMetadata(
     status: flattenedStatus,
     headers: flattenedHeaders,
     html: flattenedHtml,
+    md: flattenedMd,
     source: metadata?.source,
     command: metadata?.command,
     exitCode: metadata?.exitCode,
@@ -702,7 +730,16 @@ function extractDescriptorInternal(
     return descriptors[0];
   }
 
-  const candidate = value as { metadata?: { security?: SecurityDescriptor }; mx?: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null } };
+  const candidate = value as {
+    metadata?: { security?: SecurityDescriptor };
+    mx?: {
+      labels?: readonly DataLabel[];
+      taint?: string;
+      sources?: readonly string[];
+      tools?: readonly ToolProvenance[];
+      policy?: Readonly<Record<string, unknown>> | null;
+    };
+  };
   const metadataDescriptor = candidate.mx
     ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
     : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize);

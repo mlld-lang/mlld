@@ -213,6 +213,7 @@ export class VariableMetadataUtils {
           labels: options?.labels ?? baseDescriptor.labels,
           taint: options?.taint ?? baseDescriptor.taint,
           sources: options?.sources ?? baseDescriptor.sources,
+          tools: baseDescriptor.tools,
           capability: options?.capabilityKind ?? baseDescriptor.capability,
           policyContext: {
             ...(baseDescriptor.policyContext ?? {}),

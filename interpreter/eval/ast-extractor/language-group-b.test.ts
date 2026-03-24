@@ -8,7 +8,7 @@ function onlyResult(results: Array<{ name: string; type: string } | null>): { na
 }
 
 describe('ast extractor language group B (Rust/Go)', () => {
-  it('keeps Rust impl method extraction and usage matching stable', () => {
+  it('keeps Rust impl method extraction and usage matching stable', async () => {
     const source = [
       'pub struct Service {',
       '  value: i32,',
@@ -25,18 +25,18 @@ describe('ast extractor language group B (Rust/Go)', () => {
       '}'
     ].join('\n');
 
-    const structMatch = onlyResult(extractAst(source, 'service.rs', [{ type: 'definition', name: 'Service' }]));
+    const structMatch = onlyResult(await extractAst(source, 'service.rs', [{ type: 'definition', name: 'Service' }]));
     expect(structMatch.type).toBe('struct');
 
-    const methodMatch = onlyResult(extractAst(source, 'service.rs', [{ type: 'definition', name: 'process' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'service.rs', [{ type: 'definition', name: 'process' }]));
     expect(methodMatch.type).toBe('method');
 
-    const usageMatch = onlyResult(extractAst(source, 'service.rs', [{ type: 'definition', name: 'helper', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'service.rs', [{ type: 'definition', name: 'helper', usage: true }]));
     expect(usageMatch.name).toBe('process');
     expect(usageMatch.type).toBe('method');
   });
 
-  it('keeps Go receiver method and type extraction stable', () => {
+  it('keeps Go receiver method and type extraction stable', async () => {
     const source = [
       'package main',
       '',
@@ -57,16 +57,16 @@ describe('ast extractor language group B (Rust/Go)', () => {
       '}'
     ].join('\n');
 
-    const structMatch = onlyResult(extractAst(source, 'service.go', [{ type: 'definition', name: 'Service' }]));
+    const structMatch = onlyResult(await extractAst(source, 'service.go', [{ type: 'definition', name: 'Service' }]));
     expect(structMatch.type).toBe('struct');
 
-    const interfaceMatch = onlyResult(extractAst(source, 'service.go', [{ type: 'definition', name: 'Reader' }]));
+    const interfaceMatch = onlyResult(await extractAst(source, 'service.go', [{ type: 'definition', name: 'Reader' }]));
     expect(interfaceMatch.type).toBe('interface');
 
-    const methodMatch = onlyResult(extractAst(source, 'service.go', [{ type: 'definition', name: 'Handle' }]));
+    const methodMatch = onlyResult(await extractAst(source, 'service.go', [{ type: 'definition', name: 'Handle' }]));
     expect(methodMatch.type).toBe('method');
 
-    const usageMatch = onlyResult(extractAst(source, 'service.go', [{ type: 'definition', name: 'helper', usage: true }]));
+    const usageMatch = onlyResult(await extractAst(source, 'service.go', [{ type: 'definition', name: 'helper', usage: true }]));
     expect(usageMatch.name).toBe('Handle');
     expect(usageMatch.type).toBe('method');
   });

@@ -18,7 +18,7 @@ import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue } from '../utils/display-materialization';
+import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
@@ -225,9 +225,10 @@ export async function evaluateOutput(
           : '';
       if (rawTarget.startsWith('state://')) {
         const statePath = rawTarget.replace(/^state:\/\//, '');
+        const stateValue = resolveNestedValue(descriptorSource ?? content);
         env.recordStateWrite({
           path: statePath,
-          value: content,
+          value: stateValue,
           operation: 'set',
           security: securityDescriptor ?? makeSecurityDescriptor()
         });
@@ -307,6 +308,9 @@ export async function evaluateOutputSource(
       console.warn('Unexpected literal source format:', source);
       const fallback = String(source);
       return { rawValue: fallback, text: fallback };
+
+    case 'data':
+      return await evaluateDataSource(directive, env);
       
     case 'variable':
       return await evaluateVariableSource(directive, env, context);
@@ -325,6 +329,33 @@ export async function evaluateOutputSource(
         { sourceLocation: directive.location, env }
       );
   }
+}
+
+async function evaluateDataSource(
+  directive: DirectiveNode,
+  env: Environment
+): Promise<OutputSourceResult> {
+  const source = directive.values.source;
+  const rawValue = await evaluateDataValue(source as any, env);
+  const { extractDescriptorsFromDataAst } = await import('./var');
+  const descriptor = extractDescriptorsFromDataAst(source as any, env);
+  if (descriptor) {
+    env.recordSecurityDescriptor(descriptor);
+  }
+
+  if (rawValue === null || rawValue === undefined) {
+    return { rawValue, text: '' };
+  }
+  if (typeof rawValue === 'string') {
+    return { rawValue, text: rawValue };
+  }
+  if (isStructuredValue(rawValue)) {
+    return { rawValue, text: asText(rawValue) };
+  }
+  if (typeof rawValue === 'object') {
+    return { rawValue, text: stringifyStructured(rawValue, 2) };
+  }
+  return { rawValue, text: String(rawValue) };
 }
 
 /**

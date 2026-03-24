@@ -138,6 +138,24 @@ export class OperatorDetector {
           leftNodeType: ['*'],
           rightNodeType: ['*']
         }
+      },
+      {
+        operator: '~=',
+        tokenType: 'operator',
+        contexts: ['BinaryExpression'],
+        findBetween: {
+          leftNodeType: ['*'],
+          rightNodeType: ['*']
+        }
+      },
+      {
+        operator: '!~=',
+        tokenType: 'operator',
+        contexts: ['BinaryExpression'],
+        findBetween: {
+          leftNodeType: ['*'],
+          rightNodeType: ['*']
+        }
       }
     ];
   }

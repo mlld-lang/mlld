@@ -98,6 +98,12 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'file' || node.kind === 'files') {
+      this.visitFileProjectionDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     if (node.kind === 'import') {
       this.visitImportDirective(node, context);
       this.handleDirectiveComment(node);
@@ -1369,6 +1375,156 @@ export class DirectiveVisitor extends BaseVisitor {
       openOffset: startOffset + openRel,
       closeOffset: startOffset + closeRel
     };
+  }
+
+  private visitFileProjectionDirective(directive: LspAstNode, context: VisitorContext): void {
+    const values = directive.values as {
+      target?: {
+        type?: string;
+        raw?: string;
+        path?: LspAstNode[];
+        meta?: { quoted?: boolean };
+      };
+      content?: LspAstNode[];
+      entries?: LspAstNode[];
+    } | undefined;
+
+    if (!values || !directive.location) return;
+
+    this.tokenizeDirectiveAssignment(directive);
+    this.tokenizeFileProjectionTarget(directive, values.target, context);
+
+    const payload = directive.kind === 'files' ? values.entries : values.content;
+    if (Array.isArray(payload)) {
+      for (const child of payload) {
+        this.mainVisitor.visitNode(child, context);
+      }
+    }
+  }
+
+  private tokenizeDirectiveAssignment(directive: LspAstNode): void {
+    if (!directive.location) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+    const equalIndex = directiveText.indexOf('=');
+    if (equalIndex === -1) return;
+
+    this.operatorHelper.addOperatorToken(
+      directive.location.start.offset + equalIndex,
+      1
+    );
+  }
+
+  private tokenizeFileProjectionTarget(
+    directive: LspAstNode,
+    target: {
+      type?: string;
+      raw?: string;
+      path?: LspAstNode[];
+      meta?: { quoted?: boolean };
+    } | undefined,
+    context: VisitorContext
+  ): void {
+    if (!directive.location || !target?.type) return;
+
+    if (target.type === 'path') {
+      const pathParts = Array.isArray(target.path) ? target.path : [];
+      if (target.meta?.quoted && pathParts.length > 0) {
+        const firstPart = pathParts[0];
+        const lastPart = pathParts[pathParts.length - 1];
+        if (firstPart?.location && lastPart?.location) {
+          const startOffset = firstPart.location.start.offset - 1;
+          const endOffset = lastPart.location.end.offset + 1;
+          const startPos = this.document.positionAt(startOffset);
+          this.tokenBuilder.addToken({
+            line: startPos.line,
+            char: startPos.character,
+            length: Math.max(0, endOffset - startOffset),
+            tokenType: 'string',
+            modifiers: []
+          });
+          return;
+        }
+      }
+
+      for (const part of pathParts) {
+        if (!part?.location) continue;
+        if (part.type === 'Text') {
+          this.tokenBuilder.addToken({
+            line: part.location.start.line - 1,
+            char: part.location.start.column - 1,
+            length: part.location.end.offset - part.location.start.offset,
+            tokenType: 'string',
+            modifiers: []
+          });
+          continue;
+        }
+        this.mainVisitor.visitNode(part, context);
+      }
+      return;
+    }
+
+    if (target.type !== 'resolver' || !target.raw) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+    const rawIndex = directiveText.indexOf(target.raw);
+    if (rawIndex === -1) return;
+
+    const targetOffset = directive.location.start.offset + rawIndex;
+    const openPos = this.document.positionAt(targetOffset);
+    this.tokenBuilder.addToken({
+      line: openPos.line,
+      char: openPos.character,
+      length: 1,
+      tokenType: 'alligatorOpen',
+      modifiers: []
+    });
+
+    const resolverMatch = target.raw.match(/^<@([A-Za-z_][A-Za-z0-9_-]*)([^>]*)>$/);
+    if (resolverMatch) {
+      const resolverName = resolverMatch[1];
+      const suffix = resolverMatch[2] || '';
+      const resolverPos = this.document.positionAt(targetOffset + 1);
+
+      this.tokenBuilder.addToken({
+        line: resolverPos.line,
+        char: resolverPos.character,
+        length: resolverName.length + 1,
+        tokenType: 'variableRef',
+        modifiers: []
+      });
+
+      if (suffix.length > 0) {
+        const suffixPos = this.document.positionAt(targetOffset + 2 + resolverName.length);
+        this.tokenBuilder.addToken({
+          line: suffixPos.line,
+          char: suffixPos.character,
+          length: suffix.length,
+          tokenType: 'alligator',
+          modifiers: []
+        });
+      }
+    } else if (target.raw.length > 2) {
+      const innerPos = this.document.positionAt(targetOffset + 1);
+      this.tokenBuilder.addToken({
+        line: innerPos.line,
+        char: innerPos.character,
+        length: target.raw.length - 2,
+        tokenType: 'alligator',
+        modifiers: []
+      });
+    }
+
+    const closePos = this.document.positionAt(targetOffset + target.raw.length - 1);
+    this.tokenBuilder.addToken({
+      line: closePos.line,
+      char: closePos.character,
+      length: 1,
+      tokenType: 'alligatorClose',
+      modifiers: []
+    });
   }
 
   private visitOutputDirective(directive: LspAstNode, context: VisitorContext): void {

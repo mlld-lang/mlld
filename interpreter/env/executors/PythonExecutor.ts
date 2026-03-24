@@ -206,19 +206,22 @@ export class PythonExecutor extends BaseCommandExecutor {
         emitChunk(text, 'stderr');
       });
 
-      child.on('error', (err) => {
+      child.on('error', (err: NodeJS.ErrnoException) => {
         if (settled) return;
         settled = true;
         const duration = Date.now() - startTime;
         fs.promises.unlink(tmpFile).catch(() => {});
+        const message = err.code === 'ENOENT'
+          ? 'Python 3 is not installed. Install it to use py { } blocks: https://python.org/downloads'
+          : `Python execution failed: ${err.message}`;
         reject(
           new MlldCommandExecutionError(
-            `Python execution failed: ${err.message}`,
+            message,
             context?.sourceLocation,
             {
               command: 'python3',
               exitCode: 1,
-              stderr: err.message,
+              stderr: message,
               duration,
               workingDirectory: workingDirectory || this.workingDirectory,
               directiveType: context?.directiveType || 'exec',
@@ -418,6 +421,26 @@ export class PythonExecutor extends BaseCommandExecutor {
       // Fall back to error message if no stderr
       if (!stderr && error instanceof Error) {
         stderr = error.message;
+      }
+
+      // Detect missing python3 binary
+      const isNotFound = (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT')
+        || stderr.includes('ENOENT') || stderr.includes('not found');
+      if (isNotFound) {
+        const notFoundMessage = 'Python 3 is not installed. Install it to use py { } blocks: https://python.org/downloads';
+        throw new MlldCommandExecutionError(
+          notFoundMessage,
+          context?.sourceLocation,
+          {
+            command: 'python3',
+            exitCode,
+            duration,
+            stdout,
+            stderr: notFoundMessage,
+            workingDirectory,
+            directiveType: context?.directiveType || 'exec'
+          }
+        );
       }
 
       // Extract Python error type from stderr for better error messages

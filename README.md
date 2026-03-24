@@ -83,7 +83,7 @@ exe @grade(score) = when [
 show `Grade: @grade(91)`  # A
 
 # Simple condition
-when @debug => log "Debug mode"
+when @verbose => log "Verbose mode"
 
 # Retry until valid
 exe @validate(input) = when [
@@ -192,11 +192,13 @@ when @value.isDefined() => show "Value exists"
 
 ### Payload
 
-Pass data to scripts via CLI flags or SDK:
+Pass data to scripts via CLI flags or SDK. `@payload` is a direct variable — no import required:
 
 ```mlld
-import { topic, count } from @payload
-show `Topic: @topic, Count: @count`
+show `Topic: @payload.topic, Count: @payload.count`
+
+# Import for destructuring
+import { @topic, @count } from @payload
 ```
 
 ```bash
@@ -234,12 +236,12 @@ policy @p = {
       "no-untrusted-destructive",
       "no-untrusted-privileged"
     ],
-    autosign: ["templates"],
+    autosign: ["instructions"],
     autoverify: true
   },
   operations: {
-    "net:w": "exfil",
-    "fs:w": "destructive"
+    exfil: ["net:w"],
+    destructive: ["fs:w"]
   },
   capabilities: {
     allow: ["cmd:git:*", "cmd:npm:*"],
@@ -248,7 +250,7 @@ policy @p = {
 }
 ```
 
-`defaults.rules` enables named rules that block dangerous label-to-operation flows. `operations` maps semantic exe labels to risk categories — you label functions with what they do, and policy classifies those as risk types. `capabilities` controls what operations can run at all; even if an LLM is tricked into attempting `rm -rf /`, the capability check blocks it.
+`defaults.rules` enables named rules that block dangerous label-to-operation flows. `operations` maps risk categories to exe label arrays — policy classifies labeled functions by what they do. `capabilities` controls what operations can run at all; even if an LLM is tricked into attempting `rm -rf /`, the capability check blocks it.
 
 ### Guards
 
@@ -436,7 +438,7 @@ Includes:
 mlld file.mld                      # Output to file.md
 mlld file.mld --stdout             # Output to terminal
 mlld file.mld --watch              # Auto-rerun on changes
-mlld file.mld --env .env.local     # Load env file
+mlld file.mld --mlld-env .env.local # Load env file
 mlld file.mld --flag value         # Pass payload flags
 
 # Scripts (from llm/run/ by default)

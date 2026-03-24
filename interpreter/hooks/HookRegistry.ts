@@ -167,20 +167,12 @@ export class HookRegistry {
   }
 
   private validateFilter(
-    filterKind: HookFilterKind,
-    filterValue: string,
-    emitWarning?: (message: string) => void
+    _filterKind: HookFilterKind,
+    _filterValue: string,
+    _emitWarning?: (message: string) => void
   ): void {
-    if (!emitWarning || filterKind !== 'operation') {
-      return;
-    }
-    if (KNOWN_OPERATION_TYPE_SET.has(filterValue)) {
-      return;
-    }
-    emitWarning(
-      `Warning: Hook "op:${filterValue}" uses unknown operation type "${filterValue}". ` +
-        `Known types: ${KNOWN_OPERATION_TYPE_LIST}.`
-    );
+    // Custom labels (e.g., op:tool:w) are valid operation filters —
+    // they match against exe/operation labels, not just built-in operation types.
   }
 
   private registerDefinition(definition: HookDefinition): void {

@@ -2,13 +2,13 @@
 id: sdk-state
 qa_tier: 2
 title: State Management
-brief: Mutable state via @state, state:// writes, and in-flight updates
+brief: Mutable state via @state, state:// writes, in-flight updates, and boundary labels
 category: sdk
 parent: sdk
 tags: [sdk, state, stateWrites, update_state]
 related: [sdk-execute, sdk-payload, sdk-dynamic-modules]
 related-code: [sdk/execute.ts, sdk/state/StateManager.ts]
-updated: 2026-02-24
+updated: 2026-03-15
 ---
 
 ## @state Module
@@ -79,3 +79,25 @@ output, _ := handle.Result()
 ```
 
 All language SDKs support `update_state` with retry semantics on `REQUEST_NOT_FOUND`.
+
+## Labeled State Updates
+
+Boundary values injected through `update_state` can carry security labels, just like labeled values declared in mlld source.
+
+```python
+handle.update_state("tool_result", result_text, labels=["untrusted"])
+```
+
+```go
+handle.UpdateState("tool_result", resultText, "untrusted")
+```
+
+```rust
+handle.update_state_with_labels("tool_result", result_text, ["untrusted"])?;
+```
+
+Labels applied through SDK state updates:
+
+- are visible on `@state.some_path.mx.labels`
+- propagate through normal mlld label flow
+- are optional; omitting labels preserves unlabeled behavior for that updated path

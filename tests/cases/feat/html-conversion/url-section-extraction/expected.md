@@ -17,6 +17,6 @@ Section extraction should work with HTML files just like it does with markdown f
 
 Here are the key features of section extraction:
 
-- Extract specific sections by header name
-- Works with both markdown and HTML files
-- Returns the content under the specified header
+-   Extract specific sections by header name
+-   Works with both markdown and HTML files
+-   Returns the content under the specified header

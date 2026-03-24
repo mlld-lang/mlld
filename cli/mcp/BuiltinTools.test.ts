@@ -41,6 +41,11 @@ describe('BuiltinTools', () => {
         expect(schema.inputSchema.properties.file).toBeDefined();
         expect(schema.inputSchema.properties.code).toBeDefined();
       }
+
+      const validateSchema = BUILTIN_TOOL_SCHEMAS.find(schema => schema.name === 'mlld_validate');
+      const analyzeSchema = BUILTIN_TOOL_SCHEMAS.find(schema => schema.name === 'mlld_analyze');
+      expect(validateSchema?.inputSchema.properties.context).toBeDefined();
+      expect(analyzeSchema?.inputSchema.properties.context).toBeDefined();
     });
   });
 
@@ -153,6 +158,38 @@ describe('BuiltinTools', () => {
       const response = JSON.parse(result!.content[0].text);
       expect(response.error).toContain('Invalid mode');
     });
+
+    it('validates inline guard code against context executables', async () => {
+      const tempDir = await fs.mkdtemp(join(tmpdir(), 'mlld-builtin-validate-context-'));
+      const contextFile = join(tempDir, 'tools.mld');
+
+      try {
+        await fs.writeFile(
+          contextFile,
+          'exe tool:w @send_email(recipient) = cmd { echo "ok" }\n',
+          'utf8'
+        );
+
+        const result = await executeBuiltinTool('mlld_validate', {
+          code: `guard @auth before @send_email = when [
+  @mx.args.recipients ~= ["alice@example.com"] => allow
+]`,
+          context: [contextFile]
+        });
+
+        expect(result).not.toBeNull();
+        expect(result!.isError).toBeFalsy();
+
+        const response = JSON.parse(result!.content[0].text);
+        expect(response.filepath).toBe('<inline>');
+        expect(response.valid).toBe(true);
+        expect(response.antiPatterns).toEqual(expect.arrayContaining([
+          expect.objectContaining({ code: 'guard-context-missing-arg' })
+        ]));
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('mlld_analyze', () => {
@@ -237,6 +274,48 @@ exe @test() = cmd { echo "test" }
       const response = JSON.parse(result!.content[0].text);
       expect(response.valid).toBe(false);
       expect(response.errors.length).toBeGreaterThan(0);
+    });
+
+    it('surfaces policies, guard arms, and stats for inline code', async () => {
+      const result = await executeBuiltinTool('mlld_analyze', {
+        code: `policy @task = {
+  defaults: { rules: ["no-send-to-unknown"] },
+  operations: { destructive: ["tool:w"] }
+}
+guard privileged @auth before op:tool:w = when [
+  @mx.op.name == "send_email" && @mx.args.recipients ~= ["alice@example.com"] => allow
+  @mx.op.name == "send_email" => deny "recipients not authorized"
+]
+exe tool:w @send_email(recipients) = cmd { echo "ok" }`,
+        includeAst: true
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.isError).toBeFalsy();
+
+      const response = JSON.parse(result!.content[0].text);
+      expect(response.valid).toBe(true);
+      expect(response.stats).toBeDefined();
+      expect(response.stats.directives).toBeGreaterThan(0);
+      expect(response.policies).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          name: 'task',
+          rules: ['no-send-to-unknown'],
+          operations: { destructive: ['tool:w'] }
+        })
+      ]));
+      expect(response.guards).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          name: 'auth',
+          privileged: true,
+          filter: 'op:tool:w',
+          arms: expect.arrayContaining([
+            expect.objectContaining({ action: 'allow' }),
+            expect.objectContaining({ action: 'deny', reason: 'recipients not authorized' })
+          ])
+        })
+      ]));
+      expect(response.ast).toBeDefined();
     });
   });
 

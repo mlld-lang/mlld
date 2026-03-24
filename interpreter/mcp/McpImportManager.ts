@@ -85,7 +85,9 @@ export class McpImportManager {
 
   private async getServer(spec: string): Promise<McpImportServer> {
     const trimmed = spec.trim();
-    const existing = this.servers.get(trimmed);
+    const mapped = this.env.getMcpServerMap()?.[trimmed];
+    const resolvedKey = mapped ?? trimmed;
+    const existing = this.servers.get(resolvedKey);
     if (existing && !existing.isClosed()) {
       return existing;
     }
@@ -95,7 +97,7 @@ export class McpImportManager {
       throw new Error(`MCP import server limit exceeded: ${this.servers.size + 1} > ${this.lifecycle.maxConcurrent}`);
     }
 
-    const spawnSpec = resolveMcpSpawnSpec(trimmed, this.env);
+    const spawnSpec = resolveMcpSpawnSpec(resolvedKey, this.env);
     const server = new McpImportServer(spawnSpec, this.lifecycle.idleTimeoutMs);
     try {
       await withTimeout(
@@ -107,7 +109,7 @@ export class McpImportManager {
       server.close();
       throw error;
     }
-    this.servers.set(trimmed, server);
+    this.servers.set(resolvedKey, server);
     return server;
   }
 
@@ -164,7 +166,7 @@ class McpImportServer {
       const reason = `MCP server '${this.spec.displayName}' exited` +
         (typeof code === 'number' ? ` with code ${code}` : '') +
         (signal ? ` (signal ${signal})` : '');
-      this.rejectPending(new Error(reason));
+      this.rejectPending(new Error(this.decorateError(reason)));
     });
   }
 

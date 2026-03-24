@@ -38,10 +38,16 @@ function cloneGuardCandidateForParameter(
   argValue: unknown,
   fallback: string | undefined
 ): Variable {
+  const resolvedValue =
+    argValue !== undefined
+      ? argValue
+      : fallback !== undefined
+        ? fallback
+        : candidate.value;
   const cloned: Variable = {
     ...candidate,
     name,
-    value: argValue ?? fallback ?? candidate.value,
+    value: resolvedValue,
     mx: candidate.mx ? { ...candidate.mx } : undefined,
     internal: {
       ...(candidate.internal ?? {}),
@@ -53,6 +59,17 @@ function cloneGuardCandidateForParameter(
     delete cloned.mx.mxCache;
   }
   return cloned;
+}
+
+function hasDescriptorSignals(descriptor: SecurityDescriptor | undefined): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  return (
+    (descriptor.labels?.length ?? 0) > 0 ||
+    (descriptor.taint?.length ?? 0) > 0 ||
+    (descriptor.sources?.length ?? 0) > 0
+  );
 }
 
 export function bindExecParameterVariables(options: {
@@ -261,14 +278,42 @@ export async function evaluateExecInvocationArgs(options: {
             const { varMxToSecurityDescriptor } = await import('@core/types/variable/VarMxHelpers');
             if (variable.mx) {
               const varDescriptor = varMxToSecurityDescriptor(variable.mx as any);
-              if (varDescriptor) {
+              if (hasDescriptorSignals(varDescriptor)) {
                 services.mergeResultDescriptor(varDescriptor);
+              }
+            }
+
+            const isWholeVariableReference = !Array.isArray(varRef.fields) || varRef.fields.length === 0;
+            if (
+              isWholeVariableReference &&
+              variable.value &&
+              typeof variable.value === 'object' &&
+              (
+                (variable.value as any).type === 'object' ||
+                (variable.value as any).type === 'array'
+              )
+            ) {
+              const fallbackDescriptor = extractSecurityDescriptor(variable.value, {
+                recursive: true,
+                mergeArrayElements: true
+              });
+              if (hasDescriptorSignals(fallbackDescriptor)) {
+                services.mergeResultDescriptor(fallbackDescriptor);
+              } else {
+                const { extractDescriptorsFromDataAst } = await import('@interpreter/eval/var');
+                const astDescriptor = extractDescriptorsFromDataAst(variable.value, env);
+                if (hasDescriptorSignals(astDescriptor)) {
+                  services.mergeResultDescriptor(astDescriptor);
+                }
               }
             }
 
             let value = variable.value;
             const { isTemplate } = await import('@core/types/variable');
-            if (isTemplate(variable)) {
+            if (varRef.fields && varRef.fields.length > 0) {
+              const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+              value = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+            } else if (isTemplate(variable)) {
               if (Array.isArray(value)) {
                 value = await services.interpolate(value, env, InterpolationContext.Default);
               } else if (variable.internal?.templateAst && Array.isArray(variable.internal.templateAst)) {
@@ -282,11 +327,12 @@ export async function evaluateExecInvocationArgs(options: {
 
             if (varRef.fields && varRef.fields.length > 0) {
               const { accessFields } = await import('@interpreter/utils/field-access');
-              value = await accessFields(value, varRef.fields, {
+              const fieldResult = await accessFields(value, varRef.fields, {
                 env,
-                preserveContext: false,
+                preserveContext: true,
                 sourceLocation: (varRef as any).location
               });
+              value = (fieldResult as { value: unknown }).value;
             }
 
             if (isStructuredValue(value)) {

@@ -8,7 +8,7 @@ parent: labels
 tags: [labels, influenced, llm, untrusted]
 related: [labels-overview, labels-source-auto, pattern-audit-guard, pattern-dual-audit]
 related-code: [core/policy/builtin-rules.ts]
-updated: 2026-02-01
+updated: 2026-03-16
 ---
 
 Mark LLM outputs as `influenced` when they process untrusted data.
@@ -20,14 +20,27 @@ policy @p = {
   }
 }
 
-var untrusted @task = "Review this external input"
-exe llm @process(input) = run cmd { claude -p "@input" }
+var untrusted @messagesJson = "[{\"role\":\"user\",\"content\":\"Review this external input\"}]"
+var @messages = @messagesJson | @parse
+var @config = { model: "gpt-4o", messages: @messages }
+exe llm @process(prompt, config) = run cmd { claude -p "@prompt" }
 
-var @result = @process(@task)
+show @config.mx.labels      >> ["untrusted"]
+show @config.messages.mx.labels  >> ["untrusted"]
+
+var @result = @process("Continue.", @config)
 show @result.mx.labels  >> ["llm", "untrusted", "influenced"]
 ```
 
 The rule only auto-applies the label. Enforcement comes from `policy.labels.influenced`.
+
+The rule is not limited to the first prompt argument. If untrusted data reaches an `llm`-labeled executable through any input surface, the output becomes `influenced`:
+- prompt text
+- structured `messages`
+- `system` prompts
+- tool definitions or other config objects
+
+Object literals and named config variables preserve the union of labels from their nested values. If `@messages` is `untrusted`, then both `@config.mx.labels` and `@config.messages.mx.labels` stay `untrusted`, and the downstream `llm` call still becomes `influenced`.
 
 **Restrict influenced outputs:**
 
@@ -42,10 +55,11 @@ labels: {
 **Requirements for label application:**
 - Policy rule `untrusted-llms-get-influenced` enabled
 - Executable labeled `llm`
-- Input contains `untrusted` label
+- Any executable input contains `untrusted`
 
 **Notes:**
 - Label propagates through interpolation
+- Later config arguments count too; `messages`, `system`, and tool config are part of the LLM's input
 - Trusted inputs don't trigger the label
 - Defense in depth against prompt injection
 - See `labels-overview` for label system basics

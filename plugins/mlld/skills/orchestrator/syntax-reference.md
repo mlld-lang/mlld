@@ -2,27 +2,32 @@
 
 For general mlld syntax, run `mlld howto intro`. This covers orchestrator-specific patterns only.
 
-## @claudePoll (LLM invocation with file polling)
+## @claude / @claudePoll (LLM invocation)
 
 ```mlld
-import { @claudePoll } from @mlld/claude-poll
+import { @claude, @claudePoll } from @mlld/claude
 
-let @result = @claudePoll(
-  @prompt,           >> Prompt text
-  "opus",            >> Model: haiku, sonnet, opus
-  "@root",           >> Working directory
-  "Read,Write,Glob", >> Tool permissions
-  @outputPath        >> Absolute path to file the agent writes
-)
+>> Simple call with config object
+let @result = @claude(@prompt, { model: "sonnet", tools: ["Read", "Write", "Glob"] })
+
+>> Poll-based call (waits for agent to write output file)
+let @result = @claudePoll(@prompt, {
+  model: "opus",
+  tools: ["Read", "Write", "Glob"],
+  poll: @outputPath
+})
 ```
 
-The prompt must instruct the agent to write to the output path. The function polls for that file, then returns its contents.
+Config options for `@claude(prompt, config)`: model, dir, tools, stream, system.
+Config options for `@claudePoll(prompt, config)`: model, tools, poll, timeout, system.
+
+The prompt must instruct the agent to write to the poll path. The function polls for that file, then returns its contents.
 
 ## Checkpoint and Resume
 
 ```mlld
 >> Label expensive calls — caching is automatic
-exe llm @review(prompt) = @claudePoll(@prompt, "sonnet", "@root", @tools)
+exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
 
 >> Named checkpoints between phases
 checkpoint "collection"
@@ -49,7 +54,7 @@ let @fullPrompt = `@prompt
 
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
-@claudePoll(@fullPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 let @decision = <@outputPath>?
 ```
 
@@ -111,14 +116,14 @@ Inside `.att` files, `@args` from the function signature are interpolated. Use X
 ## Tool permissions per role
 
 ```mlld
-var @decisionTools = "Read,Write,Glob,Grep"
-var @workerTools = "Read,Write,Edit,Glob,Grep,Bash(git:*),Bash(npm:*)"
+var @decisionTools = ["Read", "Write", "Glob", "Grep"]
+var @workerTools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(git:*)", "Bash(npm:*)"]
 ```
 
 ## Parallel fan-out
 
 ```mlld
-exe llm @process(file) = @claudePoll(@buildPrompt(@file), "sonnet", "@root", @tools)
+exe llm @process(file) = @claudePoll(@buildPrompt(@file), { model: "sonnet", tools: @tools, poll: @outPath })
 
 >> Each call independently cached by argument hash — no manual idempotency needed
 var @results = for parallel(20) @file in @files => @process(@file)
@@ -152,7 +157,7 @@ exe @callAgent() = [
   let @fullPrompt = `@prompt@feedback
 
 IMPORTANT: Write your JSON response to @outPath using the Write tool.`
-  @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
+  @claudePoll(@fullPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
   => <@outPath>?
 ]
 

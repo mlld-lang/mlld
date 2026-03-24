@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  asText,
   parseAndWrapJson,
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
@@ -102,5 +103,19 @@ describe('collectParameterDescriptors helpers', () => {
     };
 
     expect(collectAndMergeParameterDescriptors(['ghost'], env as any)).toBeUndefined();
+  });
+});
+
+describe('text serialization fallbacks', () => {
+  it('serializes plain objects as JSON instead of [object Object]', () => {
+    expect(asText({ name: 'Ada', active: true })).toBe('{"name":"Ada","active":true}');
+  });
+
+  it('surfaces circular objects as unserializable instead of [object Object]', () => {
+    const value: Record<string, unknown> = {};
+    value.self = value;
+
+    expect(asText(value)).toBe('[unserializable object]');
+    expect(wrapStructured(value, 'object').text).toBe('[unserializable object]');
   });
 });

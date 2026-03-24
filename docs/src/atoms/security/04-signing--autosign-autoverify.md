@@ -8,7 +8,7 @@ parent: signing
 tags: [signing, verification, policy, automation]
 related: [signing-overview, sign-verify]
 related-code: [core/security/sig-adapter.ts, interpreter/eval/auto-sign.ts, interpreter/eval/exec-invocation.ts]
-updated: 2026-02-01
+updated: 2026-03-23
 ---
 
 Policy defaults automatically sign instruction variables and inject verification for LLM exes, eliminating boilerplate while maintaining cryptographic integrity.
@@ -75,6 +75,8 @@ guard @ensureVerified after llm = when [
 ```
 
 Autoverify for the happy path, the guard for enforcement. See `pattern-audit-guard`.
+
+This example intentionally uses `@mx.tools.calls` instead of `@mx.tools.history`. The guard is enforcing behavior of the current `llm` execution. Use `@mx.tools.history` when the rule should follow a specific value's provenance across later steps.
 
 **Why this matters:**
 

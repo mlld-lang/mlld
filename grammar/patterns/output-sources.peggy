@@ -10,6 +10,7 @@ OutputSource "output source"
   = OutputExecInvocation // Exec invocation first to capture @func().method()
   / OutputVariable      // Then plain variable or simple exec calls
   / OutputCommand  
+  / OutputData
   / OutputLiteral
 
 // Context-specific variants for directives with limited source support
@@ -143,5 +144,15 @@ OutputLiteral
           wrapperType: source.wrapperType,
           hasInterpolation: source.hasInterpolation || false
         }
+      };
+    }
+
+OutputData
+  = value:(DataObjectLiteral / ArrayLiteral) {
+      return {
+        type: 'data',
+        subtype: 'outputData',
+        values: value,
+        raw: text()
       };
     }

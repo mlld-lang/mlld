@@ -50,7 +50,6 @@ todo/*
 tsconfig.json
 tsconfig.*.json
 vitest.config.mts
-eslint.config.mjs
 .prettierrc
 .editorconfig
 tsup.config.ts
@@ -97,6 +96,3 @@ pids
 .git/
 .gitignore
 .gitattributes
-
-# Build artifacts not in dist/
-lib/mlld-python/

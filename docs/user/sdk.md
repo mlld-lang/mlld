@@ -722,6 +722,20 @@ Experimental SDK wrappers are available for Go, Python, Rust, and Ruby. These ar
 
 These wrappers require the mlld CLI to be installed (`npm install -g mlld`).
 
+Python live clients also expose filesystem integrity inspection through `fs_status()`:
+
+```python
+from mlld import Client
+
+client = Client()
+entries = client.fs_status("docs/*.txt", base_path="/repo")
+
+for entry in entries:
+    print(entry.relative_path, entry.status, entry.signer, entry.labels)
+```
+
+This uses the same live `fs:status` RPC as `mlld status --json`, returning structured file signature state (`verified`, `modified`, `unsigned`, `corrupted`) plus signer labels and taint metadata.
+
 ## See Also
 
 - [CLI Usage](cli.md) - Command line interface

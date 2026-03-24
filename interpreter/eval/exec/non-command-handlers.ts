@@ -50,6 +50,7 @@ export type NonCommandExecutableHandlerOptions = {
   variable: Variable;
   params: string[];
   evaluatedArgs: unknown[];
+  argSourceNames?: (string | undefined)[];
   resultSecurityDescriptor?: SecurityDescriptor;
   exeLabels?: readonly string[];
   services: NonCommandExecutableHandlerServices;
@@ -169,7 +170,30 @@ async function handleNodeFunctionOrClassExecutable(
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
 
-  const jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+  // For MCP tools: if caller arg names match MCP param names, pass a named
+  // object so buildMcpArgs matches by name instead of position.
+  const isMcpTool = options.variable?.internal?.mcpTool != null;
+  const { params, argSourceNames } = options;
+  let jsArgs: unknown[];
+  if (isMcpTool && argSourceNames && argSourceNames.length > 0) {
+    const mcpParamSet = new Set(params);
+    const hasNameMatch = argSourceNames.some(n => n != null && mcpParamSet.has(n));
+    if (hasNameMatch) {
+      const named: Record<string, unknown> = {};
+      for (let i = 0; i < evaluatedArgs.length; i++) {
+        const argName = argSourceNames[i];
+        const key = argName && mcpParamSet.has(argName) ? argName : params[i];
+        if (key) {
+          named[key] = toJsValue(evaluatedArgs[i]);
+        }
+      }
+      jsArgs = [named];
+    } else {
+      jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+    }
+  } else {
+    jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+  }
   let output = definition.fn.apply(definition.thisArg ?? undefined, jsArgs);
   if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
     output = await output;

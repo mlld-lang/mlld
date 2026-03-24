@@ -10,7 +10,7 @@ description: Building LLM agents with mlld — tool agents (MCP tools), event-dr
 ```bash
 mlld howto intro              # Language fundamentals — read this first
 mlld init                     # Initialize project (enables mlld run)
-mlld install @mlld/claude-poll  # Install the Claude polling module
+mlld install @mlld/claude         # Install the Claude module
 ```
 
 It is *strongly* encouraged to view at least one of the examples in `plugins/mlld/examples/` before writing an agent — `tool-agent/`, `event-agent/`, and `workflow-agent/` each demonstrate a different paradigm.
@@ -200,7 +200,7 @@ exe @routeTask(task, agents) = [
   >> Fast classification with haiku
   let @outPath = `@root/tmp/router-@task.id\.json`
   let @prompt = @scorePrompt(@task, @agentSummary.join("\n"))
-  @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@prompt, { model: "haiku", tools: ["Read", "Write"], poll: @outPath })
   let @result = <@outPath>? | @json
 
   >> Low confidence → refine with stronger model
@@ -226,7 +226,7 @@ The gate checks agent output quality before finalizing:
 exe @checkOutput(task, output) = [
   let @outPath = `@root/tmp/gate-@task.id\.json`
   let @prompt = @checkPrompt(@task, @output)
-  @claudePoll(@prompt, "haiku", "@root", "Read,Write", @outPath)
+  @claudePoll(@prompt, { model: "haiku", tools: ["Read", "Write"], poll: @outPath })
   let @result = <@outPath>? | @json
   when !@result => { pass: true, feedback: null }
   => @result
@@ -291,7 +291,7 @@ A workflow agent is a stateless mlld script invoked by an external system (Rails
 Every workflow agent follows the same shape:
 
 ```mlld
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import "@payload" as @p
 
 >> Parse input
@@ -299,7 +299,7 @@ var @input = <@p.inputFile> | @json
 
 >> Do work (one or more LLM calls)
 var @prompt = @myPrompt(@input)
-@claudePoll(@prompt, "sonnet", "@root", @tools, @outputPath)
+@claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outputPath })
 var @result = <@outputPath>?
 
 >> Write output
@@ -339,12 +339,12 @@ The key pattern for decision jobs. Separating generation from evaluation prevent
 ```mlld
 >> Call 1: Generate options (no bias, no ranking)
 var @genPrompt = @generatePrompt(@context)
-@claudePoll(@genPrompt, "sonnet", "@root", @tools, @optionsPath)
+@claudePoll(@genPrompt, { model: "sonnet", tools: @tools, poll: @optionsPath })
 var @options = <@optionsPath>? | @json
 
 >> Call 2: Evaluate and choose (critical judgment)
 var @evalPrompt = @evaluatePrompt(@context, @options)
-@claudePoll(@evalPrompt, "opus", "@root", @tools, @outputPath)
+@claudePoll(@evalPrompt, { model: "opus", tools: @tools, poll: @outputPath })
 var @decision = <@outputPath>? | @json
 ```
 

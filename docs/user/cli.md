@@ -424,6 +424,24 @@ Suppressible codes: `exe-parameter-shadowing`, `deprecated-json-transform`, `hyp
 
 **JSON output** returns structured data: `executables`, `exports`, `imports`, `guards`, `needs`, `warnings`, `redefinitions`, `antiPatterns`.
 
+### `mlld status`
+
+Inspect filesystem signature state for files tracked by `.sig/` and `policy.filesystem_integrity`.
+
+```bash
+mlld status
+mlld status --glob 'docs/*.txt'
+mlld status --taint
+mlld status --json
+```
+
+**Options:**
+- `--glob <pattern>` - Filter the report to matching paths
+- `--taint` - Show taint labels restored from file signature metadata
+- `--json` - Emit machine-readable status objects
+
+Each entry reports the relative path, verification status (`verified`, `modified`, `unsigned`, `corrupted`), signer identity, and any signer-derived labels.
+
 ### `mlld mcp-dev`
 
 Start an MCP server that provides language introspection tools for development. Use with Claude Code or other MCP clients to validate syntax, analyze modules, and inspect ASTs.
@@ -477,6 +495,7 @@ mlld live --stdio
 - `process` — Execute script text via `params.script`
 - `execute` — Run file via `params.filepath` with optional payload/state/dynamicModules
 - `analyze` — Static analysis via `params.filepath`
+- `fs:status` — Return filesystem signature status for an optional `glob` and `basePath`
 - `state:update` — Update in-flight `@state` for `params.requestId`
 - `cancel` — Abort active request by id
 

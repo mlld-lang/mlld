@@ -61,7 +61,8 @@ export class PythonPackageResolver implements Resolver {
 
   private projectRoot: string;
   private venvManager: VirtualEnvironmentManager;
-  private packageManager: IPythonPackageManager;
+  private _packageManager: IPythonPackageManager | null;
+  private _packageManagerPromise: Promise<IPythonPackageManager> | null = null;
   private lockFile: PythonLockFile;
   private moduleCache: PythonModuleCache;
   private venvContext: VirtualEnvironmentContext | null = null;
@@ -69,11 +70,20 @@ export class PythonPackageResolver implements Resolver {
   constructor(options: PythonPackageResolverOptions = {}) {
     this.projectRoot = options.projectRoot ?? process.cwd();
     this.venvManager = new VirtualEnvironmentManager(this.projectRoot);
-    this.packageManager = options.packageManager ?? PythonPackageManagerFactory.getDefault();
+    this._packageManager = options.packageManager ?? null;
     this.lockFile = options.lockFile ?? new PythonLockFile(
       path.join(this.projectRoot, 'mlld-lock.json')
     );
     this.moduleCache = options.moduleCache ?? new PythonModuleCache();
+  }
+
+  private async getPackageManager(): Promise<IPythonPackageManager> {
+    if (this._packageManager) return this._packageManager;
+    if (!this._packageManagerPromise) {
+      this._packageManagerPromise = PythonPackageManagerFactory.getDefault();
+    }
+    this._packageManager = await this._packageManagerPromise;
+    return this._packageManager;
   }
 
   canResolve(ref: string, config?: any): boolean {
@@ -94,7 +104,8 @@ export class PythonPackageResolver implements Resolver {
       const lockEntry = await this.lockFile.getPackage(packageName);
       const version = lockEntry?.version;
 
-      const installResult = await this.packageManager.install(
+      const packageManager = await this.getPackageManager();
+      const installResult = await packageManager.install(
         [{ name: packageName, version }],
         { venvPath: this.venvContext?.path }
       );

@@ -7,11 +7,11 @@ This test verifies URL content conversion features.
 ## Access different content formats via .mx
 
 ### Raw HTML
-Has HTML: false
+Has HTML: true
 ### Plain text (HTML stripped)
-Has text: false
+Has text: true
 ### Markdown conversion
-Has md: false
+Has md: true
 ## Show URL metadata
 
 URL: https://example.com

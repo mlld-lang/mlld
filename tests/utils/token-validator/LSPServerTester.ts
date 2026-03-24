@@ -6,6 +6,8 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
+import { existsSync } from 'fs';
+import path from 'path';
 import type { SemanticToken } from './types.js';
 
 export class LSPServerTester {
@@ -22,8 +24,13 @@ export class LSPServerTester {
     diagnostics: any[];
     parseErrors: boolean;
   }> {
+    const localWrapper = path.resolve(process.cwd(), 'bin/mlld-wrapper.cjs');
+    const command = existsSync(localWrapper)
+      ? { bin: process.execPath, args: [localWrapper, 'lsp'] }
+      : { bin: 'mlld', args: ['lsp'] };
+
     // Start LSP server
-    this.lsp = spawn('mlld', ['lsp'], {
+    this.lsp = spawn(command.bin, command.args, {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -40,12 +47,10 @@ export class LSPServerTester {
           parseErrors = diagnostics.some(d => d.message.includes('Parse error'));
         }
 
-        if (msg.id && msg.result?.data) {
-          const decoded = this.decodeSemanticTokens(msg.result.data, content);
-          tokens.push(...decoded);
+        if (typeof msg.id === 'number') {
           const resolver = this.pendingRequests.get(msg.id);
           if (resolver) {
-            resolver(msg.result);
+            resolver(msg);
             this.pendingRequests.delete(msg.id);
           }
         }
@@ -53,7 +58,7 @@ export class LSPServerTester {
     });
 
     // Initialize
-    await this.send('initialize', {
+    await this.sendRequest('initialize', {
       capabilities: {
         textDocument: {
           semanticTokens: { requests: { full: true } }
@@ -63,16 +68,14 @@ export class LSPServerTester {
       processId: process.pid
     });
 
-    await this.wait(300);
-
-    await this.send('initialized', {});
+    this.sendNotification('initialized', {});
     await this.wait(300);
 
     // Open document
-    await this.send('textDocument/didOpen', {
+    this.sendNotification('textDocument/didOpen', {
       textDocument: {
         uri: `file://${filePath}`,
-        languageId: 'mld',
+        languageId: 'mlld',
         version: 1,
         text: content
       }
@@ -81,18 +84,16 @@ export class LSPServerTester {
     await this.wait(500);
 
     // Request semantic tokens
-    const tokensPromise = new Promise((resolve) => {
-      const id = this.messageId;
-      this.pendingRequests.set(id, resolve);
-      this.send('textDocument/semanticTokens/full', {
+    const tokenResponse = await Promise.race([
+      this.sendRequest('textDocument/semanticTokens/full', {
         textDocument: { uri: `file://${filePath}` }
-      });
-    });
-
-    await Promise.race([
-      tokensPromise,
+      }),
       this.wait(3000)
     ]);
+
+    if (tokenResponse && typeof tokenResponse === 'object' && 'result' in tokenResponse && tokenResponse.result?.data) {
+      tokens.push(...this.decodeSemanticTokens(tokenResponse.result.data, content));
+    }
 
     this.lsp.kill();
 
@@ -128,9 +129,22 @@ export class LSPServerTester {
   private decodeSemanticTokens(data: number[], content: string): SemanticToken[] {
     const tokens: SemanticToken[] = [];
     const TOKEN_TYPES = [
-      'keyword', 'variable', 'string', 'number', 'operator',
-      'comment', 'function', 'parameter', 'property', 'type',
-      'namespace', 'label', 'interface'
+      'keyword',
+      'variable',
+      'string',
+      'operator',
+      'label',
+      'type',
+      'parameter',
+      'comment',
+      'number',
+      'property',
+      'interface',
+      'typeParameter',
+      'namespace',
+      'function',
+      'modifier',
+      'enum'
     ];
 
     let line = 0, char = 0;
@@ -150,16 +164,32 @@ export class LSPServerTester {
     return tokens;
   }
 
-  private async send(method: string, params: any): Promise<void> {
+  private sendNotification(method: string, params: any): void {
     const message = JSON.stringify({
       jsonrpc: '2.0',
-      id: this.messageId++,
       method,
       params
     });
 
     const headers = `Content-Length: ${message.length}\r\n\r\n`;
     this.lsp?.stdin?.write(headers + message);
+  }
+
+  private sendRequest(method: string, params: any): Promise<any> {
+    const id = this.messageId++;
+    const message = JSON.stringify({
+      jsonrpc: '2.0',
+      id,
+      method,
+      params
+    });
+
+    const headers = `Content-Length: ${message.length}\r\n\r\n`;
+
+    return new Promise((resolve) => {
+      this.pendingRequests.set(id, resolve);
+      this.lsp?.stdin?.write(headers + message);
+    });
   }
 
   private wait(ms: number): Promise<void> {

@@ -10,6 +10,14 @@ import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
 import { interpret } from '@interpreter/index';
 import type { SDKEvent, StreamExecution, StructuredResult } from '@sdk/types';
+import { sanitizeSerializableValue, serializeError } from '@core/errors/errorSerialization';
+import { collectFilesystemStatus } from './status';
+import {
+  createExecutionFileWriter,
+  liveSignContent,
+  liveSignFile,
+  liveVerifyFile
+} from './live-stdio-security';
 
 type RequestId = string | number;
 
@@ -31,6 +39,11 @@ interface LiveStdioServerDependencies {
   interpret: typeof interpret;
   executeFile: typeof execute;
   analyze: typeof analyzeModule;
+  fsStatus: typeof collectFilesystemStatus;
+  signFile: typeof liveSignFile;
+  verifyFile: typeof liveVerifyFile;
+  signContent: typeof liveSignContent;
+  createExecutionFileWriter: typeof createExecutionFileWriter;
   makeFileSystem: () => IFileSystemService;
   makePathService: () => IPathService;
 }
@@ -42,7 +55,8 @@ interface LiveStdioServerIO {
 
 interface ActiveExecution {
   abort: () => void;
-  updateState?: (path: string, value: unknown) => Promise<void>;
+  updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
+  writeFile?: (path: string, content: string) => Promise<unknown>;
 }
 
 interface ProcessRequestParams {
@@ -50,32 +64,68 @@ interface ProcessRequestParams {
   filePath?: string;
   mode?: MlldMode;
   payload?: unknown;
+  payloadLabels?: Record<string, string[]>;
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
   dynamicModuleMode?: MlldMode;
   allowAbsolutePaths?: boolean;
+  mcpServers?: Record<string, string>;
 }
 
 interface ExecuteRequestParams {
   filepath: string;
   payload?: unknown;
+  payloadLabels?: Record<string, string[]>;
   state?: Record<string, unknown>;
   dynamicModules?: Record<string, string | Record<string, unknown>>;
   dynamicModuleSource?: string;
   timeoutMs?: number;
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
+  mcpServers?: Record<string, string>;
 }
 
 interface AnalyzeRequestParams {
   filepath: string;
 }
 
+interface FsStatusRequestParams {
+  basePath?: string;
+  glob?: string;
+}
+
+interface SigSignRequestParams {
+  path: string;
+  basePath?: string;
+  identity?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface SigVerifyRequestParams {
+  path: string;
+  basePath?: string;
+}
+
+interface SigSignContentRequestParams {
+  content: string;
+  identity: string;
+  id?: string;
+  basePath?: string;
+  metadata?: Record<string, string>;
+}
+
+interface FileWriteRequestParams {
+  requestId: RequestId;
+  path: string;
+  content: string;
+}
+
 interface StateUpdateRequestParams {
   requestId: RequestId;
   path: string;
   value: unknown;
+  labels?: string[];
 }
 
 const SDK_EVENT_TYPES: SDKEvent['type'][] = [
@@ -86,6 +136,7 @@ const SDK_EVENT_TYPES: SDKEvent['type'][] = [
   'stream:progress',
   'execution:complete',
   'state:write',
+  'guard_denial',
   'debug:directive:start',
   'debug:directive:complete',
   'debug:variable:create',
@@ -106,6 +157,11 @@ const defaultDependencies: LiveStdioServerDependencies = {
   interpret,
   executeFile: execute,
   analyze: analyzeModule,
+  fsStatus: collectFilesystemStatus,
+  signFile: liveSignFile,
+  verifyFile: liveVerifyFile,
+  signContent: liveSignContent,
+  createExecutionFileWriter,
   makeFileSystem: () => new NodeFileSystem(),
   makePathService: () => new PathService()
 };
@@ -120,54 +176,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function safeStringify(value: unknown): string {
-  const seen = new WeakSet<object>();
-  const text = JSON.stringify(value, (_key, candidate) => {
-    if (typeof candidate === 'function') {
-      return undefined;
+  const text = JSON.stringify(sanitizeSerializableValue(value, {
+    maxDepth: 8,
+    maxObjectKeys: 100,
+    maxArrayLength: 200,
+    errorOptions: {
+      includeStack: true,
+      includeDetails: false,
+      maxCauseDepth: 2,
+      maxDepth: 6,
+      maxObjectKeys: 50,
+      maxArrayLength: 50,
+      maxStringLength: 4000,
+      maxStackLength: 12000
     }
-
-    if (typeof candidate === 'bigint') {
-      return candidate.toString();
-    }
-
-    if (candidate instanceof Map) {
-      return Object.fromEntries(candidate);
-    }
-
-    if (candidate instanceof Set) {
-      return Array.from(candidate);
-    }
-
-    if (candidate instanceof Error) {
-      const errorObject: Record<string, unknown> = {
-        name: candidate.name,
-        message: candidate.message
-      };
-      if (candidate.stack) {
-        errorObject.stack = candidate.stack;
-      }
-      const withMeta = candidate as Error & { code?: unknown; filePath?: unknown; cause?: unknown };
-      if (typeof withMeta.code === 'string') {
-        errorObject.code = withMeta.code;
-      }
-      if (typeof withMeta.filePath === 'string') {
-        errorObject.filePath = withMeta.filePath;
-      }
-      if (withMeta.cause !== undefined) {
-        errorObject.cause = withMeta.cause;
-      }
-      return errorObject;
-    }
-
-    if (candidate && typeof candidate === 'object') {
-      if (seen.has(candidate as object)) {
-        return '[Circular]';
-      }
-      seen.add(candidate as object);
-    }
-
-    return candidate;
-  });
+  }));
 
   return text ?? 'null';
 }
@@ -350,6 +373,11 @@ export class LiveStdioServer {
       return;
     }
 
+    if (method === 'file:write') {
+      await this.handleFileWrite(requestId, request.params);
+      return;
+    }
+
     if (this.active.has(requestId)) {
       await this.writeResult(requestId, {
         error: this.buildError('REQUEST_IN_PROGRESS', `Request ${String(requestId)} is already active`)
@@ -412,11 +440,53 @@ export class LiveStdioServer {
     }
 
     try {
-      await active.updateState(parsed.path, parsed.value);
+      await active.updateState(parsed.path, parsed.value, parsed.labels);
       await this.writeResult(requestId, {
         requestId: parsed.requestId,
         path: parsed.path
       });
+    } catch (error) {
+      await this.writeResult(requestId, {
+        error: this.normalizeError(error)
+      });
+    }
+  }
+
+  private async handleFileWrite(requestId: RequestId, params: unknown): Promise<void> {
+    let parsed: FileWriteRequestParams;
+    try {
+      parsed = this.parseFileWriteParams(params);
+    } catch (error) {
+      await this.writeResult(requestId, {
+        error: this.buildError(
+          'INVALID_REQUEST',
+          error instanceof Error ? error.message : 'file:write params must be an object'
+        )
+      });
+      return;
+    }
+
+    const active = this.active.get(parsed.requestId);
+    if (!active) {
+      await this.writeResult(requestId, {
+        error: this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
+      });
+      return;
+    }
+
+    if (!active.writeFile) {
+      await this.writeResult(requestId, {
+        error: this.buildError(
+          'FILE_WRITE_UNAVAILABLE',
+          `Request ${String(parsed.requestId)} does not support file writes`
+        )
+      });
+      return;
+    }
+
+    try {
+      const result = await active.writeFile(parsed.path, parsed.content);
+      await this.writeResult(requestId, this.toResultPayload(result));
     } catch (error) {
       await this.writeResult(requestId, {
         error: this.normalizeError(error)
@@ -435,6 +505,18 @@ export class LiveStdioServer {
           break;
         case 'analyze':
           await this.runAnalyze(requestId, params);
+          break;
+        case 'fs:status':
+          await this.runFsStatus(requestId, params);
+          break;
+        case 'sig:sign':
+          await this.runSigSign(requestId, params);
+          break;
+        case 'sig:verify':
+          await this.runSigVerify(requestId, params);
+          break;
+        case 'sig:sign-content':
+          await this.runSigSignContent(requestId, params);
           break;
         default:
           await this.writeResult(requestId, {
@@ -474,30 +556,41 @@ export class LiveStdioServer {
       ),
       dynamicModules: Object.keys(dynamicModules).length > 0 ? dynamicModules : undefined,
       dynamicModuleSource: parsed.dynamicModuleSource,
+      payloadLabels: parsed.payloadLabels,
       dynamicModuleMode: parsed.dynamicModuleMode,
-      allowAbsolutePaths: parsed.allowAbsolutePaths
-    })) as StreamExecution;
+      allowAbsolutePaths: parsed.allowAbsolutePaths,
+      mcpServers: parsed.mcpServers
+    } as any)) as StreamExecution;
 
     await this.streamExecution(requestId, streamHandle);
   }
 
   private async runExecute(requestId: RequestId, params: unknown): Promise<void> {
     const parsed = this.parseExecuteParams(params);
+    const fileSystem = this.deps.makeFileSystem();
+    const pathService = this.deps.makePathService();
+    const writeFile = await this.deps.createExecutionFileWriter({
+      requestId,
+      scriptPath: parsed.filepath,
+      fileSystem
+    });
 
     const options: ExecuteOptions = {
       state: parsed.state,
       dynamicModules: parsed.dynamicModules,
       dynamicModuleSource: parsed.dynamicModuleSource,
+      payloadLabels: parsed.payloadLabels,
       timeoutMs: parsed.timeoutMs,
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mode: parsed.mode,
-      fileSystem: this.deps.makeFileSystem(),
-      pathService: this.deps.makePathService(),
+      mcpServers: parsed.mcpServers,
+      fileSystem,
+      pathService,
       stream: true
     };
 
     const streamHandle = (await this.deps.executeFile(parsed.filepath, parsed.payload, options)) as StreamExecution;
-    await this.streamExecution(requestId, streamHandle);
+    await this.streamExecution(requestId, streamHandle, { writeFile });
   }
 
   private async runAnalyze(requestId: RequestId, params: unknown): Promise<void> {
@@ -506,7 +599,55 @@ export class LiveStdioServer {
     await this.writeResult(requestId, this.toResultPayload(result));
   }
 
-  private async streamExecution(requestId: RequestId, execution: StreamExecution): Promise<void> {
+  private async runFsStatus(requestId: RequestId, params: unknown): Promise<void> {
+    const parsed = this.parseFsStatusParams(params);
+    const result = await this.deps.fsStatus({
+      basePath: parsed.basePath,
+      glob: parsed.glob
+    });
+    await this.writeResult(requestId, this.toResultPayload(result));
+  }
+
+  private async runSigSign(requestId: RequestId, params: unknown): Promise<void> {
+    const parsed = this.parseSigSignParams(params);
+    const result = await this.deps.signFile({
+      path: parsed.path,
+      basePath: parsed.basePath,
+      identity: parsed.identity,
+      metadata: parsed.metadata,
+      fileSystem: this.deps.makeFileSystem()
+    });
+    await this.writeResult(requestId, this.toResultPayload(result));
+  }
+
+  private async runSigVerify(requestId: RequestId, params: unknown): Promise<void> {
+    const parsed = this.parseSigVerifyParams(params);
+    const result = await this.deps.verifyFile({
+      path: parsed.path,
+      basePath: parsed.basePath,
+      fileSystem: this.deps.makeFileSystem()
+    });
+    await this.writeResult(requestId, this.toResultPayload(result));
+  }
+
+  private async runSigSignContent(requestId: RequestId, params: unknown): Promise<void> {
+    const parsed = this.parseSigSignContentParams(params);
+    const result = await this.deps.signContent({
+      content: parsed.content,
+      identity: parsed.identity,
+      id: parsed.id,
+      basePath: parsed.basePath,
+      metadata: parsed.metadata,
+      fileSystem: this.deps.makeFileSystem()
+    });
+    await this.writeResult(requestId, this.toResultPayload(result));
+  }
+
+  private async streamExecution(
+    requestId: RequestId,
+    execution: StreamExecution,
+    activeExtensions: Partial<ActiveExecution> = {}
+  ): Promise<void> {
     const listeners: Array<[SDKEvent['type'], (event: SDKEvent) => void]> = [];
 
     const attach = (type: SDKEvent['type']) => {
@@ -524,10 +665,11 @@ export class LiveStdioServer {
     this.active.set(requestId, {
       abort: () => execution.abort?.(),
       updateState: execution.updateState
-        ? async (path: string, value: unknown) => {
-            await execution.updateState?.(path, value);
+        ? async (path: string, value: unknown, labels?: string[]) => {
+            await execution.updateState?.(path, value, labels);
           }
-        : undefined
+        : undefined,
+      ...activeExtensions
     });
 
     try {
@@ -570,13 +712,15 @@ export class LiveStdioServer {
       filePath: typeof params.filePath === 'string' ? params.filePath : undefined,
       mode: this.parseMode(params.mode),
       payload: params.payload,
+      payloadLabels: this.parsePayloadLabels(params.payloadLabels),
       state: isRecord(params.state) ? (params.state as Record<string, unknown>) : undefined,
       dynamicModules: this.parseDynamicModules(params.dynamicModules),
       dynamicModuleSource:
         typeof params.dynamicModuleSource === 'string' ? params.dynamicModuleSource : undefined,
       dynamicModuleMode: this.parseMode(params.dynamicModuleMode),
       allowAbsolutePaths:
-        typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined
+        typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
+      mcpServers: this.parseMcpServers(params.mcpServers)
     };
   }
 
@@ -592,6 +736,7 @@ export class LiveStdioServer {
     return {
       filepath: params.filepath,
       payload: params.payload,
+      payloadLabels: this.parsePayloadLabels(params.payloadLabels),
       state: isRecord(params.state) ? (params.state as Record<string, unknown>) : undefined,
       dynamicModules: this.parseDynamicModules(params.dynamicModules),
       dynamicModuleSource:
@@ -599,8 +744,20 @@ export class LiveStdioServer {
       timeoutMs: typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined,
       allowAbsolutePaths:
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
-      mode: this.parseMode(params.mode)
+      mode: this.parseMode(params.mode),
+      mcpServers: this.parseMcpServers(params.mcpServers)
     };
+  }
+
+  private parseMcpServers(value: unknown): Record<string, string> | undefined {
+    if (!isRecord(value)) return undefined;
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === 'string') {
+        result[k] = v;
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
   }
 
   private parseAnalyzeParams(params: unknown): AnalyzeRequestParams {
@@ -619,6 +776,102 @@ export class LiveStdioServer {
     return { filepath: params.filepath };
   }
 
+  private parseFsStatusParams(params: unknown): FsStatusRequestParams {
+    if (typeof params === 'string') {
+      return { glob: params };
+    }
+
+    if (!isRecord(params)) {
+      return {};
+    }
+
+    return {
+      basePath: typeof params.basePath === 'string' ? params.basePath : undefined,
+      glob: typeof params.glob === 'string' ? params.glob : undefined
+    };
+  }
+
+  private parseSigSignParams(params: unknown): SigSignRequestParams {
+    if (typeof params === 'string') {
+      return { path: params };
+    }
+
+    if (!isRecord(params) || typeof params.path !== 'string') {
+      throw new Error('sig:sign params.path must be a string');
+    }
+
+    return {
+      path: params.path,
+      basePath: typeof params.basePath === 'string' ? params.basePath : undefined,
+      identity: typeof params.identity === 'string' ? params.identity : undefined,
+      metadata: isRecord(params.metadata) ? (params.metadata as Record<string, unknown>) : undefined
+    };
+  }
+
+  private parseSigVerifyParams(params: unknown): SigVerifyRequestParams {
+    if (typeof params === 'string') {
+      return { path: params };
+    }
+
+    if (!isRecord(params) || typeof params.path !== 'string') {
+      throw new Error('sig:verify params.path must be a string');
+    }
+
+    return {
+      path: params.path,
+      basePath: typeof params.basePath === 'string' ? params.basePath : undefined
+    };
+  }
+
+  private parseSigSignContentParams(params: unknown): SigSignContentRequestParams {
+    if (!isRecord(params) || typeof params.content !== 'string') {
+      throw new Error('sig:sign-content params.content must be a string');
+    }
+
+    if (typeof params.identity !== 'string' || params.identity.trim().length === 0) {
+      throw new Error('sig:sign-content params.identity must be a non-empty string');
+    }
+
+    return {
+      content: params.content,
+      identity: params.identity.trim(),
+      id: typeof params.id === 'string' ? params.id : undefined,
+      basePath: typeof params.basePath === 'string' ? params.basePath : undefined,
+      metadata: isRecord(params.metadata)
+        ? Object.fromEntries(
+            Object.entries(params.metadata)
+              .filter(([, value]) => typeof value === 'string')
+              .map(([key, value]) => [key, value as string])
+          )
+        : undefined
+    };
+  }
+
+  private parseFileWriteParams(params: unknown): FileWriteRequestParams {
+    if (!isRecord(params)) {
+      throw new Error('file:write params must be an object');
+    }
+
+    const requestId = this.normalizeId(params.requestId);
+    if (requestId === null) {
+      throw new Error('file:write params.requestId must be a string or number');
+    }
+
+    if (typeof params.path !== 'string' || params.path.trim().length === 0) {
+      throw new Error('file:write params.path must be a non-empty string');
+    }
+
+    if (typeof params.content !== 'string') {
+      throw new Error('file:write params.content must be a string');
+    }
+
+    return {
+      requestId,
+      path: params.path.trim(),
+      content: params.content
+    };
+  }
+
   private parseStateUpdateParams(params: unknown): StateUpdateRequestParams {
     if (!isRecord(params)) {
       throw new Error('state:update params must be an object');
@@ -633,10 +886,15 @@ export class LiveStdioServer {
       throw new Error('state:update params.path must be a non-empty string');
     }
 
+    const labels = Array.isArray(params.labels)
+      ? params.labels.filter((l: unknown) => typeof l === 'string')
+      : undefined;
+
     return {
       requestId,
       path: params.path.trim(),
-      value: params.value
+      value: params.value,
+      labels: labels && labels.length > 0 ? labels : undefined
     };
   }
 
@@ -660,6 +918,39 @@ export class LiveStdioServer {
         parsed[key] = entry;
       } else if (isRecord(entry)) {
         parsed[key] = entry;
+      }
+    }
+
+    return Object.keys(parsed).length > 0 ? parsed : undefined;
+  }
+
+  private parsePayloadLabels(value: unknown): Record<string, string[]> | undefined {
+    if (!isRecord(value)) {
+      return undefined;
+    }
+
+    const parsed: Record<string, string[]> = {};
+    for (const [key, rawLabels] of Object.entries(value)) {
+      if (!Array.isArray(rawLabels)) {
+        continue;
+      }
+
+      const seen = new Set<string>();
+      const labels: string[] = [];
+      for (const label of rawLabels) {
+        if (typeof label !== 'string') {
+          continue;
+        }
+        const trimmed = label.trim();
+        if (!trimmed || seen.has(trimmed)) {
+          continue;
+        }
+        seen.add(trimmed);
+        labels.push(trimmed);
+      }
+
+      if (labels.length > 0) {
+        parsed[key] = labels;
       }
     }
 
@@ -706,13 +997,18 @@ export class LiveStdioServer {
 
   private normalizeError(error: unknown): LiveErrorPayload {
     if (error instanceof Error) {
-      const withMeta = error as Error & { code?: unknown; filePath?: unknown };
+      const summary = serializeError(error, {
+        includeStack: true,
+        includeDetails: false,
+        maxCauseDepth: 0
+      });
+      const withMeta = summary as Record<string, unknown>;
       return {
         code: this.resolveErrorCode(error, withMeta.code),
-        message: error.message || 'Unknown error',
-        name: error.name,
+        message: typeof withMeta.message === 'string' ? withMeta.message : 'Unknown error',
+        name: typeof withMeta.name === 'string' ? withMeta.name : error.name,
         ...(typeof withMeta.filePath === 'string' ? { filePath: withMeta.filePath } : {}),
-        ...(typeof error.stack === 'string' ? { stack: error.stack } : {})
+        ...(typeof withMeta.stack === 'string' ? { stack: withMeta.stack } : {})
       };
     }
 
@@ -773,11 +1069,18 @@ export class LiveStdioServer {
   }
 
   private async writeResult(requestId: RequestId | null, payload: Record<string, unknown>): Promise<void> {
+    const resultPayload = Object.prototype.hasOwnProperty.call(payload, 'id')
+      ? {
+          id: requestId,
+          value: payload
+        }
+      : {
+          id: requestId,
+          ...payload
+        };
+
     await this.writeLine({
-      result: {
-        id: requestId,
-        ...payload
-      }
+      result: resultPayload
     });
   }
 

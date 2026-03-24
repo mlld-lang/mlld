@@ -8,6 +8,7 @@ import { MlldDirectiveError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluate } from '@interpreter/core/interpreter';
+import { extractDescriptorsFromDataAst } from '@interpreter/eval/var/security-descriptor';
 import { toIterable, type ForSourceIterable } from '@interpreter/eval/for-utils';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 
@@ -49,7 +50,8 @@ function resolveForExpressionSourceName(expr: ForExpression): string | undefined
 function resolveSourceDescriptor(
   sourceVarName: string | undefined,
   env: Environment,
-  sourceValue: unknown
+  sourceValue: unknown,
+  sourceNode?: unknown
 ): SecurityDescriptor | undefined {
   let sourceDescriptor = extractSecurityDescriptor(sourceValue, {
     recursive: true,
@@ -59,20 +61,21 @@ function resolveSourceDescriptor(
     return sourceDescriptor;
   }
 
-  if (!sourceVarName) {
-    return undefined;
+  if (sourceVarName) {
+    const sourceVar = env.getVariable(sourceVarName);
+    if (sourceVar?.mx) {
+      const varDescriptor = varMxToSecurityDescriptor(sourceVar.mx);
+      if (varDescriptor.labels.length > 0 || varDescriptor.taint.length > 0) {
+        sourceDescriptor = varDescriptor;
+      }
+    }
   }
 
-  const sourceVar = env.getVariable(sourceVarName);
-  if (!sourceVar?.mx) {
-    return undefined;
+  if (sourceDescriptor) {
+    return sourceDescriptor;
   }
 
-  const varDescriptor = varMxToSecurityDescriptor(sourceVar.mx);
-  if (varDescriptor.labels.length > 0 || varDescriptor.taint.length > 0) {
-    sourceDescriptor = varDescriptor;
-  }
-  return sourceDescriptor;
+  return extractDescriptorsFromDataAst(sourceNode, env);
 }
 
 export async function evaluateForDirectiveSource(
@@ -86,7 +89,7 @@ export async function evaluateForDirectiveSource(
   const sourceVarName = (sourceNode as any)?.identifier ?? (sourceNode as any)?.name;
   return {
     iterable: toIterableOrThrow(sourceResult.value, directive.location),
-    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceResult.value)
+    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceResult.value, sourceNode)
   };
 }
 
@@ -99,6 +102,6 @@ export async function evaluateForExpressionSource(
   const sourceVarName = resolveForExpressionSourceName(expr);
   return {
     iterable: toIterableOrThrow(sourceValue, expr.location),
-    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceValue)
+    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceValue, expr.source)
   };
 }

@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2026-02-23T20:02:15.744Z
+" Latest Revision: 2026-03-12T07:13:50.954Z
 
 if exists("b:current_syntax")
   finish
@@ -18,7 +18,15 @@ syn sync minlines=10
 syn match mlldComment "\(>>\|<<\).*$"
 
 " Directives - must be at start of line
-syn match mlldDirective "^/\(var\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|while\|env\)\>"
+syn match mlldDirective "^/\(var\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|file\|files\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|box\|while\|needs\|profiles\)\>"
+
+" Directive-like keywords in strict expression/block forms
+syn match mlldInlineDirective "\<\(loop\|while\)\>\ze\s*("
+syn match mlldInlineDirective "\<if\>\ze\s*[@\[(]"
+syn match mlldInlineDirective "\<box\>\ze\s*\(with\>\|\[\|@\)"
+syn match mlldInlineDirective "\<\(file\|files\)\>\ze\s*\(<\|"\|@\)"
+syn match mlldInlineDirective "\<\(needs\|profiles\)\>\ze\s*{"
+syn match mlldInlineDirective "\<auth\>\ze\s\+@"
 
 " Operators (high priority)
 " Logical operators
@@ -38,12 +46,15 @@ syn match mlldAssignOp "="
 syn match mlldWhenKeyword "when\s*:" contains=mlldWhenColon
 syn match mlldWhenColon ":" contained
 
+" Flow-control keywords
+syn keyword mlldControlKeyword until endless else let done continue skip bail
+
 " Reserved variables
 syn match mlldReservedVar "@\(INPUT\|TIME\|PROJECTPATH\|STDIN\|input\|time\|projectpath\|stdin\|now\|NOW\|base\)\>"
 syn match mlldReservedVar "@\."
 
 " Regular variables (lower priority than directives and reserved)
-syn match mlldVariable "@\w\+"
+syn match mlldVariable "@[A-Za-z_][A-Za-z0-9_-]*"
 
 " Triple-colon template blocks (with {{var}} interpolation)
 syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
@@ -89,7 +100,7 @@ syn region mlldPath start="\[" end="\]" contains=mlldURL,mlldVariable,mlldReserv
 syn match mlldURL "https\?://[^\]>]*" contained
 
 " Keywords
-syn keyword mlldKeyword from as foreach with to
+syn keyword mlldKeyword from as foreach with to tools mcp git using
 
 " Numbers
 syn match mlldNumber "\<\d\+\(\.\d\+\)\?\>"
@@ -103,6 +114,7 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
+hi def link mlldInlineDirective Keyword
 hi def link mlldLogicalOp Operator
 hi def link mlldComparisonOp Operator
 hi def link mlldTernaryOp Operator
@@ -111,6 +123,7 @@ hi def link mlldPipeOp Operator
 hi def link mlldAssignOp Operator
 hi def link mlldWhenKeyword Keyword
 hi def link mlldWhenColon Keyword
+hi def link mlldControlKeyword Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
 hi def link mlldTripleTemplate String

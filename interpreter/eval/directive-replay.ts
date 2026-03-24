@@ -40,7 +40,17 @@ async function ensureReplayEntry(
     return existing;
   }
   const { evaluateExecInvocation } = await import('./exec-invocation');
-  const result = await evaluateExecInvocation(invocation, env);
+  const pipelineGuardHistory =
+    env.getPipelineContext?.() ? env.getPipelineGuardHistory?.() : undefined;
+  const historyLength = Array.isArray(pipelineGuardHistory) ? pipelineGuardHistory.length : 0;
+  let result: EvalResult;
+  try {
+    result = await evaluateExecInvocation(invocation, env);
+  } finally {
+    if (Array.isArray(pipelineGuardHistory) && pipelineGuardHistory.length > historyLength) {
+      pipelineGuardHistory.splice(historyLength, pipelineGuardHistory.length - historyLength);
+    }
+  }
   const entry: ReplayEntry = { result };
   state.set(invocation, entry);
   return entry;

@@ -10,7 +10,7 @@ import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 import { unwrapStructuredForTest } from './test-helpers';
 import { isStructuredValue, type StructuredValueMetadata } from '../utils/structured-value';
-import { llmxmlInstance } from '../utils/llmxml-instance';
+
 
 function expectLoadContentMetadata(metadata?: StructuredValueMetadata): void {
   expect(metadata?.source).toBe('load-content');
@@ -235,56 +235,49 @@ describe('Content Loader with Glob Support', () => {
     });
 
     it('applies rename templates when extraction falls back to heading matching', async () => {
-      const getSectionSpy = vi.spyOn(llmxmlInstance, 'getSection').mockResolvedValueOnce(null as any);
+      await fileSystem.writeFile(
+        path.join(process.cwd(), 'fallback.md'),
+        [
+          '---',
+          'name: fallback-doc',
+          '---',
+          '',
+          '## Overview',
+          '',
+          'Fallback content.'
+        ].join('\n')
+      );
 
-      try {
-        await fileSystem.writeFile(
-          path.join(process.cwd(), 'fallback.md'),
-          [
-            '---',
-            'name: fallback-doc',
-            '---',
-            '',
-            '## Overview',
-            '',
-            'Fallback content.'
-          ].join('\n')
-        );
-
-        const node = {
-          type: 'load-content',
-          source: {
-            type: 'path',
-            segments: [{ type: 'Text', content: 'fallback.md' }],
-            raw: 'fallback.md'
-          },
-          options: {
-            section: {
-              identifier: { type: 'Text', content: 'Overview' },
-              renamed: {
-                type: 'rename-template',
-                parts: [
-                  { type: 'Text', content: '### ' },
-                  {
-                    type: 'FileReference',
-                    source: { type: 'placeholder' },
-                    fields: [{ type: 'field', value: 'fm' }, { type: 'field', value: 'name' }]
-                  }
-                ]
-              }
+      const node = {
+        type: 'load-content',
+        source: {
+          type: 'path',
+          segments: [{ type: 'Text', content: 'fallback.md' }],
+          raw: 'fallback.md'
+        },
+        options: {
+          section: {
+            identifier: { type: 'Text', content: 'Overview' },
+            renamed: {
+              type: 'rename-template',
+              parts: [
+                { type: 'Text', content: '### ' },
+                {
+                  type: 'FileReference',
+                  source: { type: 'placeholder' },
+                  fields: [{ type: 'field', value: 'fm' }, { type: 'field', value: 'name' }]
+                }
+              ]
             }
           }
-        };
+        }
+      };
 
-        const rawResult = await processContentLoader(node, env);
-        const { data: result } = unwrapStructuredForTest<string>(rawResult);
+      const rawResult = await processContentLoader(node, env);
+      const { data: result } = unwrapStructuredForTest<string>(rawResult);
 
-        expect(getSectionSpy).toHaveBeenCalled();
-        expect(result).toContain('### fallback-doc');
-        expect(result).toContain('Fallback content.');
-      } finally {
-        getSectionSpy.mockRestore();
-      }
+      expect(result).toContain('### fallback-doc');
+      expect(result).toContain('Fallback content.');
     });
 
     it('keeps missing-section diagnostics stable', async () => {

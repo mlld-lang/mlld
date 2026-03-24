@@ -50,6 +50,11 @@ PolicyConfig = {
   deny?: Record<string, ...> | string[];   // Capability denylist
   danger?: string[];                       // Dangerous capability allowlist
   labels?: PolicyLabels;              // Label flow rules
+  signers?: Record<string, string[]>; // Verified signer -> applied labels
+  filesystem_integrity?: Record<string, {
+    mutable?: boolean;
+    authorizedIdentities?: string[];
+  }>;
   env?: { default?: string };         // Default environment provider
   limits?: PolicyLimits;              // Resource constraints
 }
@@ -117,6 +122,49 @@ output.security = {
 }
 ```
 
+### Filesystem Integrity
+
+Filesystem trust is split across three layers:
+
+- `SigService` signs write-executor writes and verifies file bytes on read.
+- Content-loader converts verification results into `SecurityDescriptor` state.
+- `PolicyEnforcer` keeps enforcing normal label-flow rules after labels are attached.
+
+`policy.signers` maps signer identities to labels for verified files. Example:
+
+```mlld
+policy @p = {
+  signers: {
+    "user:*": ["trusted"],
+    "agent:deploy": ["release-authored"]
+  }
+}
+```
+
+`policy.filesystem_integrity` adds identity-aware write restrictions on top of `allow.filesystem`:
+
+```mlld
+policy @p = {
+  filesystem_integrity: {
+    "@base/config/**": {
+      mutable: false
+    },
+    "@base/releases/**": {
+      authorizedIdentities: ["user:*", "agent:release"]
+    }
+  }
+}
+```
+
+Resolution rules:
+
+- Verified file + matching `signers` pattern: apply those labels
+- Verified file + no match: apply `defaults.unlabeled`
+- Modified or corrupted file: force `untrusted`
+- Unsigned file: apply `defaults.unlabeled`
+
+Signer-derived trust labels replace inherited `trusted` / `untrusted` labels from old audit or sig metadata. Source labels such as `src:file` and `dir:*` still merge in additively.
+
 ### Policy Merging
 
 When multiple policies compose:
@@ -124,6 +172,8 @@ When multiple policies compose:
 - `allow`: intersection (allowed by ALL)
 - `auth`: last wins (environment-specific)
 - `default`: most restrictive wins (defer - see mlld-wmzl.15)
+- `signers`: union labels for matching identity patterns
+- `filesystem_integrity`: merge by path, incoming fields override base fields
 
 **Location:** `core/policy/union.ts`
 

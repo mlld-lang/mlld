@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '../env/Environment';
@@ -32,7 +33,12 @@ import {
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
-import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import {
+  makeSecurityDescriptor,
+  normalizeSecurityDescriptor,
+  type SecurityDescriptor,
+  type ToolProvenance
+} from '@core/types/security';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -80,7 +86,41 @@ import {
   runExecPreGuards,
   stringifyExecGuardArg
 } from './exec/guard-policy';
+import {
+  createPolicyAuthorizationValidationError,
+  createInvocationPolicyScope,
+  resolveInvocationPolicyFragment,
+  validateRuntimePolicyAuthorizations
+} from './exec/policy-fragment';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
+import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
+import { logToolCallEvent } from '@interpreter/utils/audit-log';
+
+/**
+ * Resolve a method/field on an object, handling AST-shaped objects
+ * that store fields in `.entries` (pair array) or `.properties` (record).
+ * Returns undefined when the field does not exist.
+ */
+function resolveObjectMethod(obj: unknown, name: string): unknown {
+  if (!obj || typeof obj !== 'object') {
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  // AST entry-based objects (new grammar format)
+  if (Array.isArray(record.entries)) {
+    for (const entry of record.entries) {
+      if (entry && typeof entry === 'object' && entry.type === 'pair' && entry.key === name) {
+        return entry.value;
+      }
+    }
+  }
+  // AST property-based objects (legacy format) — only when entries aren't present
+  if (!Array.isArray(record.entries) && record.type === 'object' && record.properties && typeof record.properties === 'object') {
+    return (record.properties as Record<string, unknown>)[name];
+  }
+  // Plain objects
+  return record[name];
+}
 
 /**
  * Resolve stdin input from expression using shared shell classification.
@@ -149,6 +189,7 @@ function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDes
     labels,
     taint,
     sources: descriptor.sources,
+    tools: descriptor.tools,
     capability: descriptor.capability,
     policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
   });
@@ -200,6 +241,113 @@ function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function buildToolProvenance(
+  toolName: string,
+  args: Record<string, unknown> | undefined,
+  auditRef: string | undefined
+): ToolProvenance | undefined {
+  const name = toolName.trim();
+  if (!name) {
+    return undefined;
+  }
+
+  const argNames = args
+    ? Object.keys(args).filter(key => key.trim().length > 0)
+    : [];
+  return {
+    name,
+    ...(argNames.length > 0 ? { args: argNames } : {}),
+    ...(auditRef ? { auditRef } : {})
+  };
+}
+
+function getToolResultLength(value: unknown): number | undefined {
+  try {
+    return asText(value).length;
+  } catch {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    try {
+      return String(value).length;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function isToolWriteLabelSet(labels: readonly string[]): boolean {
+  return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
+}
+
+function collectScopedToolMetadata(
+  env: Environment,
+  execName: string
+): {
+  labels: string[];
+  controlArgs?: string[];
+  hasControlArgsMetadata: boolean;
+} {
+  const tools = env.getScopedEnvironmentConfig()?.tools;
+  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
+    return {
+      labels: [],
+      hasControlArgsMetadata: false
+    };
+  }
+
+  const labelSet = new Set<string>();
+  const controlArgSet = new Set<string>();
+  let hasControlArgsMetadata = false;
+
+  for (const entry of Object.values(tools as Record<string, any>)) {
+    if (!entry || typeof entry !== 'object' || entry.mlld !== execName) {
+      continue;
+    }
+
+    if (Array.isArray(entry.labels)) {
+      for (const label of entry.labels) {
+        if (typeof label === 'string' && label.length > 0) {
+          labelSet.add(label);
+        }
+      }
+    }
+
+    if (Array.isArray(entry.controlArgs)) {
+      hasControlArgsMetadata = true;
+      for (const controlArg of entry.controlArgs) {
+        if (typeof controlArg === 'string' && controlArg.length > 0) {
+          controlArgSet.add(controlArg);
+        }
+      }
+    }
+  }
+
+  return {
+    labels: Array.from(labelSet),
+    ...(hasControlArgsMetadata ? { controlArgs: Array.from(controlArgSet) } : {}),
+    hasControlArgsMetadata
+  };
+}
+
+function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any> | undefined {
+  const withClause = node.withClause as any;
+  if (!withClause) {
+    return undefined;
+  }
+
+  if (!Array.isArray(withClause)) {
+    return withClause;
+  }
+
+  const inlineValue = withClause[0];
+  if (inlineValue?.type !== 'inlineValue' || inlineValue?.value?.type !== 'object') {
+    return undefined;
+  }
+
+  return convertEntriesToProperties(inlineValue.value.entries ?? []);
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -226,6 +374,7 @@ async function evaluateExecInvocationInternal(
   let commandName: string | undefined; // Declare at function scope for finally block
   let endResolutionTrackingIfNeeded: () => void = () => {};
   const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
+  const invocationWithClause = normalizeInvocationWithClause(node);
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -256,29 +405,42 @@ async function evaluateExecInvocationInternal(
     }
 
     try {
-      const { extractVariableValue } = await import('../utils/variable-resolution');
-      let objectValue = await extractVariableValue(objectVar, env);
+      const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+      let objectValue: unknown;
 
       if (objectRef.fields && objectRef.fields.length > 0) {
         const { accessFields } = await import('../utils/field-access');
-        objectValue = await accessFields(objectValue, normalizeFields(objectRef.fields), {
+        objectValue = await accessFields(objectVar, normalizeFields(objectRef.fields), {
           env,
           preserveContext: false,
           returnUndefinedForMissing: true,
           sourceLocation: objectRef.location ?? sourceLocation
         });
+        // accessFields may return wrapped values — unwrap to the plain object
+        if (isVariable(objectValue)) {
+          objectValue = await extractVariableValue(objectValue as Variable, env);
+        }
+        if (isStructuredValue(objectValue)) {
+          objectValue = objectValue.data;
+        }
+      } else {
+        objectValue = await extractVariableValue(objectVar, env);
       }
 
       if (!objectValue || typeof objectValue !== 'object') {
         return { found: false };
       }
 
-      if (!(methodName in (objectValue as Record<string, unknown>))) {
+      const resolved = resolveObjectMethod(objectValue, methodName);
+      if (typeof resolved === 'undefined') {
         return { found: false };
       }
 
-      const resolved = (objectValue as Record<string, unknown>)[methodName];
-      if (typeof resolved === 'undefined') {
+      // If the resolved value is a native JS function (e.g., Array.prototype.includes
+      // picked up from the prototype chain) and the method name collides with a
+      // builtin, defer to the builtin handler which dispatches properly.
+      // Namespace-exported mlld executables (objects with __executable) take priority.
+      if (isBuiltinMethod(methodName) && typeof resolved === 'function') {
         return { found: false };
       }
 
@@ -303,7 +465,7 @@ async function evaluateExecInvocationInternal(
 
 
   try {
-    const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+    let policyEnforcer: PolicyEnforcer | undefined;
     let resultSecurityDescriptor: SecurityDescriptor | undefined;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
@@ -379,8 +541,8 @@ async function evaluateExecInvocationInternal(
     value: unknown,
     wrapOptions?: { type?: string; text?: string }
   ): Promise<EvalResult> => {
-    if (node.withClause) {
-      if (node.withClause.pipeline) {
+    if (invocationWithClause) {
+      if (invocationWithClause.pipeline) {
         const { processPipeline } = await import('./pipeline/unified-processor');
         const pipelineInputValue = toPipelineInput(value, wrapOptions);
         const pipelineResult = await processPipeline({
@@ -390,9 +552,13 @@ async function evaluateExecInvocationInternal(
           identifier: node.identifier,
           descriptorHint: resultSecurityDescriptor
         });
-        return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+        return applyWithClause(
+          pipelineResult,
+          { ...invocationWithClause, pipeline: undefined },
+          env
+        );
       }
-      return applyWithClause(value, node.withClause, env);
+      return applyWithClause(value, invocationWithClause, env);
     }
     return createEvalResult(value, env, wrapOptions);
   };
@@ -458,7 +624,7 @@ async function evaluateExecInvocationInternal(
   // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
   const isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
     && existingVar.mx.labels.includes('recursive');
-  const shouldTrackResolution = !isBuiltinCommand && !isReservedName;
+  let shouldTrackResolution = !isBuiltinCommand && !isReservedName;
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -475,6 +641,9 @@ async function evaluateExecInvocationInternal(
       if (namespaceCandidate.found) {
         variable = namespaceCandidate.value;
         namespaceMethodPreferred = true;
+        // @mcp.sendEmail is not @sendEmail — namespace-qualified calls must not
+        // participate in recursion tracking for the unqualified method name.
+        shouldTrackResolution = false;
       }
     }
 
@@ -562,7 +731,7 @@ async function evaluateExecInvocationInternal(
 
       chainDebug('applying builtin pipeline', {
         commandName,
-        pipelineLength: node.withClause?.pipeline?.length ?? 0
+        pipelineLength: invocationWithClause?.pipeline?.length ?? 0
       });
       return applyInvocationWithClause(resolvedValue, wrapOptions);
     }
@@ -583,13 +752,11 @@ async function evaluateExecInvocationInternal(
         throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
       }
       
-      // Extract Variable value for object field access - WHY: Need raw object to access fields
-      const { extractVariableValue } = await import('../utils/variable-resolution');
-      const objectValue = await extractVariableValue(objectVar, env);
+      const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+      let objectValue: unknown;
       
-      
-      // Access the field
       if (objectRef.fields && objectRef.fields.length > 0) {
+        objectValue = await extractVariableValue(objectVar, env);
         const { accessFields } = await import('../utils/field-access');
         const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
           env,
@@ -598,22 +765,22 @@ async function evaluateExecInvocationInternal(
           sourceLocation: objectRef.location
         });
 
-        if (typeof accessedObject === 'object' && accessedObject !== null) {
-          const fieldValue = (accessedObject as any)[commandName];
-          variable = fieldValue;
+        objectValue = accessedObject;
+        if (isVariable(objectValue)) {
+          objectValue = await extractVariableValue(objectValue, env);
+        }
+        if (isStructuredValue(objectValue)) {
+          objectValue = objectValue.data;
+        }
+
+        if (typeof objectValue === 'object' && objectValue !== null) {
+          variable = resolveObjectMethod(objectValue, commandName);
         }
       } else {
-        // Direct field access on the object
+        objectValue = await extractVariableValue(objectVar, env);
+
         if (typeof objectValue === 'object' && objectValue !== null) {
-          // Handle AST object structure with type and properties
-          let fieldValue;
-          if (objectValue.type === 'object' && objectValue.properties) {
-            fieldValue = objectValue.properties[commandName];
-          } else {
-            fieldValue = (objectValue as any)[commandName];
-          }
-          
-          variable = fieldValue;
+          variable = resolveObjectMethod(objectValue, commandName);
         }
       }
       
@@ -1210,8 +1377,8 @@ async function evaluateExecInvocationInternal(
 
       endResolutionTrackingIfNeeded();
 
-      if (node.withClause) {
-        if (node.withClause.pipeline) {
+      if (invocationWithClause) {
+        if (invocationWithClause.pipeline) {
           const { processPipeline } = await import('./pipeline/unified-processor');
           const pipelineInputValue = toPipelineInput(resolvedValue, wrapOptions);
           const pipelineResult = await processPipeline({
@@ -1221,9 +1388,13 @@ async function evaluateExecInvocationInternal(
             identifier: node.identifier,
             descriptorHint: resultSecurityDescriptor
           });
-          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+          return applyWithClause(
+            pipelineResult,
+            { ...invocationWithClause, pipeline: undefined },
+            env
+          );
         } else {
-          return applyWithClause(resolvedValue, node.withClause, env);
+          return applyWithClause(resolvedValue, invocationWithClause, env);
         }
       }
       return { value: resolvedValue ?? '', wrapOptions };
@@ -1328,14 +1499,6 @@ async function evaluateExecInvocationInternal(
     }
     whenExprNode = candidate;
   }
-  
-  // Create a child environment for parameter substitution
-  let execEnv = env.createChild();
-
-  // Set captured module environment for variable lookup fallback
-  if (variable?.internal?.capturedModuleEnv instanceof Map) {
-    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
-  }
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
@@ -1349,6 +1512,26 @@ async function evaluateExecInvocationInternal(
       mergeResultDescriptor
     }
   });
+
+  let runtimeEnv = env;
+  const resolvedPolicyFragment =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy')
+      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, env)
+      : undefined;
+  if (resolvedPolicyFragment) {
+    const policyScope = createInvocationPolicyScope(env, resolvedPolicyFragment);
+    runtimeEnv = policyScope.env;
+  }
+
+  policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
+
+  // Create a child environment for parameter substitution
+  let execEnv = runtimeEnv.createChild();
+
+  // Set captured module environment for variable lookup fallback
+  if (variable?.internal?.capturedModuleEnv instanceof Map) {
+    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+  }
 
   // Circular reference / recursion depth guard — runs AFTER argument evaluation.
   //
@@ -1406,7 +1589,8 @@ async function evaluateExecInvocationInternal(
         const callConfig = await createCallMcpConfig({
           tools: normalized,
           env: execEnv,
-          workingDirectory
+          workingDirectory,
+          conversationDescriptor: resultSecurityDescriptor
         });
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
@@ -1418,11 +1602,13 @@ async function evaluateExecInvocationInternal(
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
   const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
   const expressionSourceVariables: (Variable | undefined)[] = new Array(args.length);
+  const argSourceNames: (string | undefined)[] = new Array(args.length);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
       const varRef = arg as any;
       const varName = varRef.identifier;
+      argSourceNames[i] = varName;
       const variable = env.getVariable(varName);
       if (variable && !varRef.fields) {
         // GOTCHA: Don't preserve template variables after interpolation,
@@ -1435,6 +1621,8 @@ async function evaluateExecInvocationInternal(
           originalVariables[i] = variable;
           guardVariableCandidates[i] = variable;
         }
+      } else if (variable && varRef.fields && varRef.fields.length > 0) {
+        expressionSourceVariables[i] = variable;
       }
     } else if (
       arg &&
@@ -1491,6 +1679,7 @@ async function evaluateExecInvocationInternal(
     originalVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     guardVariableCandidates.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     expressionSourceVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+    argSourceNames.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
   }
   
   const guardHelperImpl =
@@ -1514,24 +1703,36 @@ async function evaluateExecInvocationInternal(
       });
     }
   }
+  const inputSecurityDescriptor = normalizeSecurityDescriptor(
+    (node as any).meta?.inputSecurityDescriptor as SecurityDescriptor | undefined
+  );
+  if (inputSecurityDescriptor) {
+    resultSecurityDescriptor = resultSecurityDescriptor
+      ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
+      : inputSecurityDescriptor;
+  }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
   let toolLabels = Array.isArray(mcpToolLabels)
     ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
     : [];
-  if (toolLabels.length === 0) {
-    const scopedConfig = env.getScopedEnvironmentConfig();
-    const tools = scopedConfig?.tools;
-    if (tools && typeof tools === 'object' && !Array.isArray(tools)) {
-      const exeName = variable.name ?? commandName;
-      for (const entry of Object.values(tools as Record<string, any>)) {
-        if (entry && typeof entry === 'object' && entry.mlld === exeName) {
-          const labels = entry.labels;
-          if (Array.isArray(labels)) {
-            toolLabels = labels.filter((l: unknown) => typeof l === 'string' && (l as string).length > 0);
-          }
-          break;
-        }
-      }
+  const scopedToolMetadata = collectScopedToolMetadata(runtimeEnv, variable.name ?? commandName);
+  if (toolLabels.length === 0 && scopedToolMetadata.labels.length > 0) {
+    toolLabels = scopedToolMetadata.labels;
+  }
+  const authorizationControlArgs = scopedToolMetadata.controlArgs;
+  const shouldValidatePolicyAuthorizations =
+    Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
+    (
+      isToolWriteLabelSet(toolLabels) ||
+      (
+        resolvedPolicyFragment !== undefined &&
+        runtimeEnv.getScopedEnvironmentConfig()?.tools !== undefined
+      )
+    );
+  if (shouldValidatePolicyAuthorizations) {
+    const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
+    if (validation && validation.errors.length > 0) {
+      throw createPolicyAuthorizationValidationError(validation);
     }
   }
   const trackedMcpName =
@@ -1539,11 +1740,20 @@ async function evaluateExecInvocationInternal(
       ? (mcpTool as any).name.trim()
       : '';
   const trackedToolName = trackedMcpName || (variable.name ?? commandName ?? '');
+  const toolCallArguments =
+    trackedToolName.length > 0
+      ? buildToolCallArguments(params, evaluatedArgs)
+      : undefined;
+  const toolAuditId = trackedToolName.length > 0 ? randomUUID() : undefined;
+  let toolBodyExecuted = false;
+  let toolBodyStartedAt: number | undefined;
+  let toolBodyEndedAt: number | undefined;
+  const toolProvenance = buildToolProvenance(trackedToolName, toolCallArguments, toolAuditId);
   const toolCallRecordBase =
     !skipInternalToolCallTracking && trackedToolName.length > 0
       ? {
           name: trackedToolName,
-          arguments: buildToolCallArguments(params, evaluatedArgs),
+          arguments: toolCallArguments,
           timestamp: Date.now()
         }
       : null;
@@ -1561,16 +1771,73 @@ async function evaluateExecInvocationInternal(
       error: normalizeToolCallError(error)
     });
   };
+  const recordToolAudit = async (
+    ok: boolean,
+    resultValue?: unknown,
+    error?: unknown
+  ): Promise<void> => {
+    if (
+      !toolAuditId ||
+      trackedToolName.length === 0 ||
+      !toolBodyExecuted ||
+      toolBodyStartedAt === undefined ||
+      toolBodyEndedAt === undefined
+    ) {
+      return;
+    }
+
+    const descriptor =
+      normalizeSecurityDescriptor(
+        ok
+          ? (
+              extractSecurityDescriptor(resultValue, {
+                recursive: true,
+                mergeArrayElements: true
+              }) ?? resultSecurityDescriptor
+            )
+          : resultSecurityDescriptor
+      );
+
+    await logToolCallEvent(runtimeEnv, {
+      id: toolAuditId,
+      tool: trackedToolName,
+      args: toolCallArguments,
+      ok,
+      ...(ok ? {} : { error: normalizeToolCallError(error) }),
+      ...(ok ? { resultLength: getToolResultLength(resultValue) } : {}),
+      duration: Math.max(0, toolBodyEndedAt - toolBodyStartedAt),
+      labels: descriptor?.labels,
+      taint: descriptor?.taint,
+      sources: descriptor?.sources
+    });
+  };
+  const runTrackedToolBody = async <T>(runner: () => Promise<T>): Promise<T> => {
+    toolBodyExecuted = true;
+    toolBodyStartedAt = Date.now();
+    try {
+      return await runner();
+    } finally {
+      toolBodyEndedAt = Date.now();
+    }
+  };
 
   try {
+    const activePolicyEnforcer = policyEnforcer ?? new PolicyEnforcer(runtimeEnv.getPolicySummary());
     const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
-      env,
+      env: runtimeEnv,
       evaluatedArgs,
       evaluatedArgStrings,
       guardVariableCandidates,
       expressionSourceVariables,
-      mcpSecurityDescriptor
+      inputSecurityDescriptor,
+      mcpSecurityDescriptor,
+      argNames: params
     });
+    for (const entry of guardInputsWithMapping) {
+      if (entry.index >= 0 && entry.index < guardVariableCandidates.length) {
+        guardVariableCandidates[entry.index] = entry.variable;
+      }
+    }
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
     const {
@@ -1583,11 +1850,13 @@ async function evaluateExecInvocationInternal(
       commandName,
       operationName: variable.name ?? commandName,
       toolLabels,
-      env,
+      authorizationControlArgs,
+      env: runtimeEnv,
       execEnv,
-      policyEnforcer,
+      policyEnforcer: activePolicyEnforcer,
       mcpSecurityDescriptor,
       execDescriptor,
+      guardArgNames: guardInputsWithMapping.map(entry => entry.name ?? null),
       services: {
         interpolateWithResultDescriptor,
         getResultSecurityDescriptor: () => resultSecurityDescriptor,
@@ -1597,7 +1866,7 @@ async function evaluateExecInvocationInternal(
 
     const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
       runExecPostGuards({
-        env,
+        env: runtimeEnv,
         execEnv,
         node,
         operationContext,
@@ -1606,14 +1875,14 @@ async function evaluateExecInvocationInternal(
         whenExprNode
       });
 
-    const invocationResult = await env.withOpContext(operationContext, async () => {
+    const invocationResult = await runtimeEnv.withOpContext(operationContext, async () => {
       return AutoUnwrapManager.executeWithPreservation(async () => {
       const {
         preDecision,
         postHookInputs: nextPostHookInputs,
         transformedGuardSet
       } = await runExecPreGuards({
-        env,
+        env: runtimeEnv,
         node,
         operationContext,
         guardInputs,
@@ -1655,21 +1924,24 @@ async function evaluateExecInvocationInternal(
       if (sourceTaintLabel) {
         descriptorPieces.push(makeSecurityDescriptor({ taint: [sourceTaintLabel] }));
       }
+      if (toolProvenance) {
+        descriptorPieces.push(makeSecurityDescriptor({ tools: [toolProvenance] }));
+      }
       if (descriptorPieces.length > 0) {
         const descriptorFromPieces =
           descriptorPieces.length === 1
             ? descriptorPieces[0]
-            : env.mergeSecurityDescriptors(...descriptorPieces);
+            : runtimeEnv.mergeSecurityDescriptors(...descriptorPieces);
         resultSecurityDescriptor = resultSecurityDescriptor
-          ? env.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
+          ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, descriptorFromPieces)
           : descriptorFromPieces;
       }
       const paramFlowHandled = await enforceExecParamLabelFlow({
-        env,
+        env: runtimeEnv,
         execEnv,
         node,
         whenExprNode,
-        policyEnforcer,
+        policyEnforcer: activePolicyEnforcer,
         operationContext,
         exeLabels,
         resultSecurityDescriptor
@@ -1678,18 +1950,18 @@ async function evaluateExecInvocationInternal(
         return finalizeResult(paramFlowHandled);
       }
       resultSecurityDescriptor = applyExecOutputPolicyLabels({
-        policyEnforcer,
+        policyEnforcer: activePolicyEnforcer,
         exeLabels,
         resultSecurityDescriptor
       });
       if (resultSecurityDescriptor) {
-        env.recordSecurityDescriptor(resultSecurityDescriptor);
+        runtimeEnv.recordSecurityDescriptor(resultSecurityDescriptor);
       }
 
       const preGuardHandled = await handleExecPreGuardDecision({
         preDecision,
         node,
-        env,
+        env: runtimeEnv,
         execEnv,
         operationContext,
         postHookInputs,
@@ -1718,85 +1990,97 @@ async function evaluateExecInvocationInternal(
   }
 
   try {
-  const nonCommandResult = await executeNonCommandExecutable({
-    definition,
-    commandName,
-    node,
-    nodeSourceLocation,
-    env,
-    execEnv,
-    variable,
-    params,
-    evaluatedArgs,
-    resultSecurityDescriptor,
-    exeLabels,
-    services: {
-      interpolateWithResultDescriptor,
-      toPipelineInput,
-      evaluateExecInvocation
+  const isCommandDefinition = isCommandExecutable(definition);
+  const isCodeDefinition = isCodeExecutable(definition);
+  if (!isCommandDefinition && !isCodeDefinition) {
+    const nonCommandResult = await runTrackedToolBody(() =>
+      executeNonCommandExecutable({
+        definition,
+        commandName,
+        node,
+        nodeSourceLocation,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        argSourceNames,
+        resultSecurityDescriptor,
+        exeLabels,
+        services: {
+          interpolateWithResultDescriptor,
+          toPipelineInput,
+          evaluateExecInvocation
+        }
+      })
+    );
+    if (nonCommandResult === undefined) {
+      throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
     }
-  });
-  if (nonCommandResult !== undefined) {
     result = nonCommandResult;
   }
   // Handle command executables
-  else if (isCommandExecutable(definition)) {
-    result = await executeCommandExecutable({
-      definition,
-      commandName,
-      node,
-      env,
-      execEnv,
-      variable,
-      params,
-      evaluatedArgs,
-      evaluatedArgStrings,
-      originalVariables,
-      exeLabels,
-      preDecisionMetadata: preDecision?.metadata,
-      policyEnforcer,
-      operationContext,
-      mergePolicyInputDescriptor,
-      workingDirectory,
-      streamingEnabled,
-      pipelineId,
-      hasStreamFormat,
-      suppressTerminal: streamingOptions.suppressTerminal === true,
-      chunkEffect,
-      services: {
-        interpolateWithResultDescriptor,
-        mergeResultDescriptor,
-        getResultSecurityDescriptor: () => resultSecurityDescriptor,
-        resolveStdinInput
-      }
-    });
+  else if (isCommandDefinition) {
+    result = await runTrackedToolBody(() =>
+      executeCommandExecutable({
+        definition,
+        commandName,
+        node,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        evaluatedArgStrings,
+        originalVariables,
+        exeLabels,
+        preDecisionMetadata: preDecision?.metadata,
+        policyEnforcer: activePolicyEnforcer,
+        operationContext,
+        mergePolicyInputDescriptor,
+        workingDirectory,
+        streamingEnabled,
+        pipelineId,
+        hasStreamFormat,
+        suppressTerminal: streamingOptions.suppressTerminal === true,
+        chunkEffect,
+        services: {
+          interpolateWithResultDescriptor,
+          mergeResultDescriptor,
+          getResultSecurityDescriptor: () => resultSecurityDescriptor,
+          resolveStdinInput
+        }
+      })
+    );
   }
   // Handle code executables
-  else if (isCodeExecutable(definition)) {
-    const codeResult = await executeCodeExecutable({
-      definition,
-      commandName,
-      node,
-      env,
-      execEnv,
-      variable,
-      params,
-      evaluatedArgs,
-      evaluatedArgStrings,
-      exeLabels,
-      policyEnforcer,
-      operationContext,
-      mergePolicyInputDescriptor,
-      workingDirectory,
-      whenExprNode,
-      services: {
-        interpolateWithResultDescriptor,
-        toPipelineInput,
-        mergeResultDescriptor,
-        getResultSecurityDescriptor: () => resultSecurityDescriptor,
-        finalizeResult
-      }
-    });
+  else if (isCodeDefinition) {
+    const codeResult = await runTrackedToolBody(() =>
+      executeCodeExecutable({
+        definition,
+        commandName,
+        node,
+        env: runtimeEnv,
+        execEnv,
+        variable,
+        params,
+        evaluatedArgs,
+        evaluatedArgStrings,
+        exeLabels,
+        policyEnforcer: activePolicyEnforcer,
+        operationContext,
+        mergePolicyInputDescriptor,
+        workingDirectory,
+        whenExprNode,
+        services: {
+          interpolateWithResultDescriptor,
+          toPipelineInput,
+          mergeResultDescriptor,
+          getResultSecurityDescriptor: () => resultSecurityDescriptor,
+          finalizeResult
+        }
+      })
+    );
     if (codeResult.kind === 'return') {
       return codeResult.evalResult;
     }
@@ -1813,7 +2097,10 @@ async function evaluateExecInvocationInternal(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env, sourceLocation: nodeSourceLocation });
+        current = await accessField(current, f, {
+          env: runtimeEnv,
+          sourceLocation: nodeSourceLocation
+        });
       }
       result = current;
     } catch (e) {
@@ -1856,7 +2143,7 @@ async function evaluateExecInvocationInternal(
     const structured = wrapExecResult(result);
     const existing = getStructuredSecurityDescriptor(structured);
     const merged = existing
-      ? env.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+      ? runtimeEnv.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
       : resultSecurityDescriptor;
     setStructuredSecurityDescriptor(structured, merged);
     result = structured;
@@ -1868,8 +2155,8 @@ async function evaluateExecInvocationInternal(
   endResolutionTrackingIfNeeded();
 
   // Apply withClause transformations if present
-  if (node.withClause) {
-    if (node.withClause.pipeline) {
+  if (invocationWithClause) {
+    if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
       const { executePipeline } = await import('./pipeline');
@@ -1878,7 +2165,10 @@ async function evaluateExecInvocationInternal(
       const sourceFunction = async () => {
         // Re-execute this same ExecInvocation but without the pipeline
         // IMPORTANT: Use execEnv not env, so the function parameters are available
-        const nodeWithoutPipeline = { ...node, withClause: undefined };
+        const nodeWithoutPipeline = {
+          ...node,
+          withClause: { ...invocationWithClause, pipeline: undefined }
+        };
         const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
         return wrapExecResult(freshResult.value);
       };
@@ -1894,7 +2184,7 @@ async function evaluateExecInvocationInternal(
 
       // Attach builtin effects BEFORE prepending synthetic source
       // This ensures effects are attached to user-defined stages, not to __source__
-      let userPipeline = node.withClause.pipeline;
+      let userPipeline = invocationWithClause.pipeline;
       try {
         const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
         const { functionalPipeline } = attachBuiltinEffects(userPipeline as any);
@@ -1914,7 +2204,7 @@ async function evaluateExecInvocationInternal(
         normalizedPipeline,
         execEnv,  // Use execEnv which has merged nodes
         node.location,
-        node.withClause.format,
+        invocationWithClause.format,
         true,  // isRetryable
         sourceFunction,
         true,  // hasSyntheticSource
@@ -1928,7 +2218,7 @@ async function evaluateExecInvocationInternal(
       const pipelineDescriptor = getStructuredSecurityDescriptor(pipelineValue);
       const combinedDescriptor = pipelineDescriptor
         ? (resultSecurityDescriptor
-            ? env.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
+            ? runtimeEnv.mergeSecurityDescriptors(pipelineDescriptor, resultSecurityDescriptor)
             : pipelineDescriptor)
         : resultSecurityDescriptor;
       if (combinedDescriptor) {
@@ -1937,13 +2227,13 @@ async function evaluateExecInvocationInternal(
       }
       const withClauseResult = await applyWithClause(
         pipelineValue,
-        { ...node.withClause, pipeline: undefined },
+        { ...invocationWithClause, pipeline: undefined },
         execEnv
       );
       const finalWithClauseResult = await finalizeResult(withClauseResult);
       return finalWithClauseResult;
     } else {
-      const withClauseResult = await applyWithClause(result, node.withClause, execEnv);
+      const withClauseResult = await applyWithClause(result, invocationWithClause, execEnv);
       const finalWithClauseResult = await finalizeResult(withClauseResult);
       return finalWithClauseResult;
     }
@@ -1959,9 +2249,11 @@ async function evaluateExecInvocationInternal(
   }
       });
     });
+    await recordToolAudit(true, invocationResult.value);
     recordToolCall(true);
     return invocationResult;
   } catch (error) {
+    await recordToolAudit(false, undefined, error);
     recordToolCall(false, error);
     throw error;
   }

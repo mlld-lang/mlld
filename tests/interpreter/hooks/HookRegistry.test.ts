@@ -83,7 +83,7 @@ describe('HookRegistry', () => {
     );
   });
 
-  test('emits warning when registering an unknown operation hook filter', () => {
+  test('does not emit warnings for custom operation label filters', () => {
     const registry = new HookRegistry();
     const warnings: string[] = [];
 
@@ -93,37 +93,7 @@ describe('HookRegistry', () => {
       { emitWarning: message => warnings.push(message) }
     );
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('unknown operation type "nonsense"');
-    expect(warnings[0]).toContain('Known types: exe, var, for, for:iteration, for:batch, loop, import, show, log, output, append, run.');
-  });
-
-  test('does not emit warnings for known operation hook filter values', () => {
-    const registry = new HookRegistry();
-    const warnings: string[] = [];
-    const knownOperationTypes = [
-      'exe',
-      'var',
-      'for',
-      'for:iteration',
-      'for:batch',
-      'loop',
-      'import',
-      'show',
-      'log',
-      'output',
-      'append',
-      'run'
-    ];
-
-    for (const operationType of knownOperationTypes) {
-      registry.register(
-        parseHookDirective(`/hook after op:${operationType} = [ => @output ]`),
-        null,
-        { emitWarning: message => warnings.push(message) }
-      );
-    }
-
+    // Custom labels (e.g., op:tool:w, op:nonsense) are valid — they match exe/operation labels
     expect(warnings).toEqual([]);
   });
 });

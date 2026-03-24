@@ -81,6 +81,7 @@ function createOptions(overrides: Partial<EvaluateGuardRuntimeOptions> = {}): Ev
       labels: [],
       sources: ['source:input'],
       taint: [],
+      toolsHistory: [],
       guards: []
     },
     attemptNumber: 1,
@@ -139,7 +140,18 @@ describe('guard runtime evaluator', () => {
         action: { ...createAction('allow'), warning: 'heads-up' } as any,
         expectedDecision: 'allow',
         expectedTopLevelKeys: ['decision', 'guardName', 'hint', 'metadata', 'replacement', 'timing'],
-        expectedMetadataKeys: ['guardContext', 'guardFilter', 'guardInput', 'guardName', 'inputPreview', 'scope'],
+        expectedMetadataKeys: [
+          'guardActionMatched',
+          'guardContext',
+          'guardFilter',
+          'guardInput',
+          'guardName',
+          'guardPrivileged',
+          'guardScopeKey',
+          'inputPreview',
+          'policyGuard',
+          'scope'
+        ],
         expectedHint: 'heads-up'
       },
       {
@@ -164,7 +176,20 @@ describe('guard runtime evaluator', () => {
         action: createAction('env'),
         expectedDecision: 'env',
         expectedTopLevelKeys: ['decision', 'envConfig', 'guardName', 'metadata', 'timing'],
-        expectedMetadataKeys: ['decision', 'envConfig', 'guardContext', 'guardFilter', 'guardInput', 'guardName', 'inputPreview', 'scope']
+        expectedMetadataKeys: [
+          'decision',
+          'envConfig',
+          'guardActionMatched',
+          'guardContext',
+          'guardFilter',
+          'guardInput',
+          'guardName',
+          'guardPrivileged',
+          'guardScopeKey',
+          'inputPreview',
+          'policyGuard',
+          'scope'
+        ]
       }
     ];
 
@@ -197,6 +222,7 @@ describe('guard runtime evaluator', () => {
         reason: 'policy-block',
         policyName: 'default',
         rule: 'r1',
+        locked: true,
         suggestions: ['fix']
       })
     });
@@ -210,6 +236,7 @@ describe('guard runtime evaluator', () => {
           labels: ['secret'],
           sources: ['source:secret'],
           taint: [],
+          toolsHistory: [],
           guards: []
         }
       }),
@@ -219,6 +246,7 @@ describe('guard runtime evaluator', () => {
     expect(result.decision).toBe('deny');
     expect(result.reason).toBe('policy-block');
     expect(result.metadata?.policyName).toBe('default');
+    expect(result.metadata?.policyLocked).toBe(true);
     expect(evaluateGuardBlock).not.toHaveBeenCalled();
   });
 
@@ -260,5 +288,40 @@ describe('guard runtime evaluator', () => {
     expect(stateAfterSecond?.history).toHaveLength(2);
     expect((first.metadata as any).tries).toHaveLength(1);
     expect((second.metadata as any).tries).toHaveLength(2);
+  });
+
+  it('exposes value-level tool lineage at @mx.tools.history without changing @mx.tools.calls', async () => {
+    const env = createEnv();
+    env.recordToolCall({
+      name: 'sessionTool',
+      timestamp: Date.now(),
+      ok: true
+    });
+
+    const history = [{ name: 'verify', args: ['value'], auditRef: 'audit-1' }] as const;
+    const evaluateGuardBlock = vi.fn(async (_block, guardEnv) => {
+      const ambient = guardEnv.getContextManager().buildAmbientContext();
+      expect((ambient.tools as any).calls).toEqual(['sessionTool']);
+      expect((ambient.tools as any).history).toEqual(history);
+      return createAction('allow');
+    });
+
+    await evaluateGuardRuntime(
+      createOptions({
+        env,
+        perInput: {
+          index: 0,
+          variable: createInput('input'),
+          labels: [],
+          sources: ['source:input'],
+          taint: [],
+          toolsHistory: history,
+          guards: []
+        }
+      }),
+      createDeps({ evaluateGuardBlock })
+    );
+
+    expect(evaluateGuardBlock).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,8 +4,12 @@ import { resolveInputTaint } from './input-taint';
 export const BUILTIN_POLICY_RULES = [
   'no-secret-exfil',
   'no-sensitive-exfil',
+  'no-send-to-unknown',
+  'no-send-to-external',
+  'no-destroy-unknown',
   'no-untrusted-destructive',
   'no-untrusted-privileged',
+  'no-influenced-advice',
   'untrusted-llms-get-influenced'
 ] as const;
 

@@ -167,21 +167,16 @@ export async function resolveVariableReference({
   let resolvedValue = await resolveVariable(variable, env, resolutionContext);
 
   if (node.fields && node.fields.length > 0) {
-    const { accessField } = await import('@interpreter/utils/field-access');
+    const { accessFields } = await import('@interpreter/utils/field-access');
     const fieldAccessLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
 
-    for (const field of node.fields) {
-      const fieldResult = await accessField(resolvedValue, field, {
-        preserveContext: true,
-        returnUndefinedForMissing: context?.isCondition,
-        env,
-        sourceLocation: fieldAccessLocation
-      });
-      resolvedValue = (fieldResult as any).value;
-      if (resolvedValue === undefined || resolvedValue === null) {
-        break;
-      }
-    }
+    const fieldResult = await accessFields(resolvedValue, node.fields, {
+      preserveContext: true,
+      returnUndefinedForMissing: context?.isCondition,
+      env,
+      sourceLocation: fieldAccessLocation
+    });
+    resolvedValue = (fieldResult as any).value;
   }
 
   if (node.pipes && node.pipes.length > 0) {

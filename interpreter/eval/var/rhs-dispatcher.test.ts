@@ -7,11 +7,37 @@ import {
 } from './rhs-dispatcher';
 
 const mocks = vi.hoisted(() => ({
-  evaluateUnifiedExpression: vi.fn()
+  evaluateUnifiedExpression: vi.fn(),
+  evaluateCoreExpression: vi.fn(),
+  buildMcpToolIndex: vi.fn(),
+  resolveMcpServerSpec: vi.fn(),
+  createMcpToolVariable: vi.fn(),
+  extractVariableValue: vi.fn(),
+  isVariable: vi.fn()
 }));
 
 vi.mock('../expressions', () => ({
   evaluateUnifiedExpression: mocks.evaluateUnifiedExpression
+}));
+
+vi.mock('@interpreter/core/interpreter', () => ({
+  evaluate: mocks.evaluateCoreExpression
+}));
+
+vi.mock('../import/McpImportResolver', () => ({
+  buildMcpToolIndex: mocks.buildMcpToolIndex,
+  resolveMcpServerSpec: mocks.resolveMcpServerSpec
+}));
+
+vi.mock('../import/McpImportService', () => ({
+  McpImportService: vi.fn().mockImplementation(() => ({
+    createMcpToolVariable: mocks.createMcpToolVariable
+  }))
+}));
+
+vi.mock('@interpreter/utils/variable-resolution', () => ({
+  extractVariableValue: mocks.extractVariableValue,
+  isVariable: mocks.isVariable
 }));
 
 function createDirectiveStub(wrapperType?: string): DirectiveNode {
@@ -67,6 +93,12 @@ function createDependencies(overrides: Partial<RhsDispatcherDependencies> = {}):
 describe('rhs dispatcher', () => {
   beforeEach(() => {
     mocks.evaluateUnifiedExpression.mockReset();
+    mocks.evaluateCoreExpression.mockReset();
+    mocks.buildMcpToolIndex.mockReset();
+    mocks.resolveMcpServerSpec.mockReset();
+    mocks.createMcpToolVariable.mockReset();
+    mocks.extractVariableValue.mockReset();
+    mocks.isVariable.mockReset();
   });
 
   it('routes FileReference nodes to content evaluator', async () => {
@@ -279,5 +311,82 @@ describe('rhs dispatcher', () => {
     expect(interpolateWithSecurity).toHaveBeenCalledWith([
       { type: 'UnknownNode', payload: true }
     ]);
+  });
+
+  it('routes dynamic MCP tool sources directly to a tool collection', async () => {
+    const registered: Record<string, unknown> = {};
+    const listTools = vi.fn().mockResolvedValue([
+      {
+        name: 'echo',
+        inputSchema: { type: 'object', properties: {}, required: [] }
+      }
+    ]);
+    mocks.evaluateCoreExpression.mockResolvedValue({ value: 'node fake-server' });
+    mocks.isVariable.mockReturnValue(false);
+    mocks.resolveMcpServerSpec.mockResolvedValue('node fake-server');
+    mocks.buildMcpToolIndex.mockReturnValue({
+      tools: [{ name: 'echo', inputSchema: { type: 'object', properties: {}, required: [] } }],
+      mlldNameByMcp: new Map([['echo', 'echo']])
+    });
+    mocks.createMcpToolVariable.mockReturnValue({ type: 'executable', name: '__mcp_assigned_echo' });
+
+    const env = {
+      getVariable: (name: string) => registered[name],
+      setVariable: (name: string, value: unknown) => {
+        registered[name] = value;
+      },
+      getMcpImportManager: () => ({
+        listTools
+      })
+    } as unknown as Environment;
+
+    const dispatcher = createRhsDispatcher(
+      createDependencies({
+        env,
+        isToolsCollection: true
+      })
+    );
+
+    const result = await dispatcher.evaluate({
+      type: 'mcpToolSource',
+      source: { type: 'VariableReference', identifier: 'spec' }
+    });
+
+    expect(result).toEqual({
+      type: 'resolved',
+      handler: 'mcp-tool-source',
+      value: {
+        echo: { mlld: '__mcp_assigned_echo' }
+      }
+    });
+    expect(listTools).toHaveBeenCalledWith('node fake-server');
+    expect(registered.__mcp_assigned_echo).toEqual({ type: 'executable', name: '__mcp_assigned_echo' });
+  });
+
+  it('rejects dynamic MCP tool sources that do not resolve to strings', async () => {
+    mocks.evaluateCoreExpression.mockResolvedValue({ value: { bad: true } });
+    mocks.isVariable.mockReturnValue(false);
+
+    const env = {
+      getVariable: () => undefined,
+      setVariable: () => {},
+      getMcpImportManager: () => ({
+        listTools: vi.fn()
+      })
+    } as unknown as Environment;
+
+    const dispatcher = createRhsDispatcher(
+      createDependencies({
+        env,
+        isToolsCollection: true
+      })
+    );
+
+    await expect(
+      dispatcher.evaluate({
+        type: 'mcpToolSource',
+        source: { type: 'Literal', value: { bad: true } }
+      })
+    ).rejects.toThrow(/non-empty string/);
   });
 });

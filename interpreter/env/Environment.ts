@@ -14,10 +14,12 @@ import {
   isPipelineInput,
   isTextLike,
 } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS';
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
@@ -28,7 +30,12 @@ import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
 import { SecurityManager } from '@security';
-import { TaintTracker } from '@core/security';
+import {
+  TaintTracker,
+  appendAuditEvent,
+  buildFileSigningMetadata,
+  type SigService
+} from '@core/security';
 import {
   makeSecurityDescriptor,
   mergeDescriptors,
@@ -120,12 +127,13 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
-import type { SDKEvent, StreamingResult } from '@sdk/types';
+import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
+import { extractGuardDenial } from '@interpreter/eval/guard-denial-events';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -243,6 +251,7 @@ export class Environment
   private guardRegistry: GuardRegistry;
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
+  private mcpServerMap?: Record<string, string>;
 
   // Shadow environments for language-specific function injection
   private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
@@ -264,9 +273,12 @@ export class Environment
 
   private stateWrites: StateWrite[] = [];
   private stateWriteIndex = 0;
+  private guardDenials: SDKGuardDenial[] = [];
+  private readonly recordedGuardDenialErrors = new WeakSet<object>();
   private stateSnapshot?: Record<string, any>;
   private stateResolver?: DynamicModuleResolver;
   private stateLabels: DataLabel[] = [];
+  private statePathLabels: Record<string, DataLabel[]> = {};
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -302,6 +314,9 @@ export class Environment
   private workspaceStack: WorkspaceValue[] = [];
   private bridgeStack: WorkspaceMcpBridgeHandle[] = [];
   private scopeCleanups: Array<() => Promise<void>> = [];
+  private sigService?: SigService;
+  private signerIdentity = 'unknown';
+  private readonly registeredSigAwareFileSystems = new WeakSet<VirtualFS>();
 
   // Auto-bridged LLM tool config, set by exe llm invocations with config.tools
   private llmToolConfig?: import('./executors/call-mcp-config').CallMcpConfig | null;
@@ -567,7 +582,10 @@ export class Environment
   registerDynamicModules(
     modules: Record<string, string | Record<string, unknown>>,
     source?: string,
-    options?: { literalStrings?: boolean }
+    options?: {
+      literalStrings?: boolean;
+      moduleFieldLabels?: Record<string, Record<string, readonly string[]>>;
+    }
   ): void {
     if (!this.resolverManager) {
       throw new Error('ResolverManager not available');
@@ -579,7 +597,8 @@ export class Environment
     if (existing instanceof DynamicModuleResolver) {
       const normalized = new DynamicModuleResolver(modules, {
         source,
-        literalStrings: options?.literalStrings
+        literalStrings: options?.literalStrings,
+        moduleFieldLabels: options?.moduleFieldLabels
       });
 
       for (const [path, content] of normalized.getSerializedModules()) {
@@ -589,7 +608,11 @@ export class Environment
       resolver = existing;
       logger.debug(`Updated dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
     } else {
-      resolver = new DynamicModuleResolver(modules, { source, literalStrings: options?.literalStrings });
+      resolver = new DynamicModuleResolver(modules, {
+        source,
+        literalStrings: options?.literalStrings,
+        moduleFieldLabels: options?.moduleFieldLabels
+      });
       this.resolverManager.registerResolver(resolver);
       logger.debug(`Registered dynamic modules: ${Object.keys(modules).length}${source ? ` (source: ${source})` : ''}`);
     }
@@ -817,6 +840,10 @@ export class Environment
   getPolicySummary(): PolicyConfig | undefined {
     if (this.policySummary) return this.policySummary;
     return this.parent?.getPolicySummary();
+  }
+
+  setPolicySummary(policy?: PolicyConfig | null): void {
+    this.policySummary = policy ?? undefined;
   }
 
   getStandaloneAuthSummary(): Record<string, AuthConfig> | undefined {
@@ -1070,6 +1097,7 @@ export class Environment
         labels: this.securityRuntime.descriptor.labels,
         sources: this.securityRuntime.descriptor.sources,
         taint: this.securityRuntime.descriptor.taint,
+        tools: this.securityRuntime.descriptor.tools,
         policy: this.securityRuntime.policy,
         operation: top?.operation
       };
@@ -1082,7 +1110,12 @@ export class Environment
     if (!descriptor) {
       return undefined;
     }
-    if (descriptor.labels.length === 0 && descriptor.taint.length === 0 && descriptor.sources.length === 0) {
+    if (
+      descriptor.labels.length === 0
+      && descriptor.taint.length === 0
+      && descriptor.sources.length === 0
+      && (descriptor.tools?.length ?? 0) === 0
+    ) {
       return undefined;
     }
     return descriptor;
@@ -1096,6 +1129,7 @@ export class Environment
       labels: snapshot.labels,
       taint: snapshot.taint,
       sources: snapshot.sources,
+      tools: snapshot.tools,
       policyContext: snapshot.policy
     });
   }
@@ -1177,11 +1211,57 @@ export class Environment
     return this.getRootEnvironment().stateWrites;
   }
 
+  recordGuardDenial(denial: SDKGuardDenial): void {
+    const root = this.getRootEnvironment();
+    const entry: SDKGuardDenial = {
+      ...denial,
+      labels: Array.isArray(denial.labels) ? [...denial.labels] : [],
+      args: denial.args ? { ...denial.args } : null
+    };
+    root.guardDenials.push(entry);
+
+    if (root.hasSDKEmitter()) {
+      root.emitSDKEvent({
+        type: 'guard_denial',
+        guard_denial: entry,
+        timestamp: Date.now()
+      } as SDKEvent);
+    }
+  }
+
+  recordGuardDenialFromError(error: unknown): void {
+    if (!error || typeof error !== 'object') {
+      return;
+    }
+
+    const root = this.getRootEnvironment();
+    if (root.recordedGuardDenialErrors.has(error as object)) {
+      return;
+    }
+
+    const denial = extractGuardDenial(error);
+    if (!denial) {
+      return;
+    }
+
+    root.recordedGuardDenialErrors.add(error as object);
+    root.recordGuardDenial(denial);
+  }
+
+  getGuardDenials(): SDKGuardDenial[] {
+    const root = this.getRootEnvironment();
+    return root.guardDenials.map(denial => ({
+      ...denial,
+      labels: [...denial.labels],
+      args: denial.args ? { ...denial.args } : null
+    }));
+  }
+
   hasDynamicStateSnapshot(): boolean {
     return this.getRootEnvironment().stateSnapshot !== undefined;
   }
 
-  applyExternalStateUpdate(path: string, value: unknown): void {
+  applyExternalStateUpdate(path: string, value: unknown, labels?: string[]): void {
     const root = this.getRootEnvironment();
     if (!root.stateSnapshot) {
       throw new Error('No dynamic @state snapshot is available for this execution');
@@ -1190,6 +1270,8 @@ export class Environment
     if (!root.setStateSnapshotValue(path, value)) {
       throw new Error('State update path is required');
     }
+
+    root.setStatePathLabels(path, root.normalizeStateUpdateLabels(labels));
 
     root.refreshStateVariable();
   }
@@ -1202,6 +1284,15 @@ export class Environment
     // Get from this environment or parent
     if (this.registryManager) return this.registryManager;
     return this.parent?.getRegistryManager();
+  }
+
+  setMcpServerMap(map: Record<string, string>): void {
+    this.mcpServerMap = map;
+  }
+
+  getMcpServerMap(): Record<string, string> | undefined {
+    if (this.mcpServerMap) return this.mcpServerMap;
+    return this.parent?.getMcpServerMap();
   }
 
   getMcpImportManager(): McpImportManager {
@@ -1222,6 +1313,85 @@ export class Environment
 
   getFileSystemService(): IFileSystemService {
     return this.fileSystem;
+  }
+
+  setSigService(service: SigService | undefined): void {
+    const root = this.getRootEnvironment();
+    root.sigService = service;
+    if (!service) {
+      return;
+    }
+    root.registerSigAwareFileSystem(root.fileSystem);
+    for (const workspace of root.workspaceStack) {
+      root.registerSigAwareFileSystem(workspace.fs);
+    }
+  }
+
+  getSigService(): SigService | undefined {
+    return this.getRootEnvironment().sigService;
+  }
+
+  setSignerIdentity(identity: string): void {
+    const root = this.getRootEnvironment();
+    const normalized = identity.trim();
+    root.signerIdentity = normalized.length > 0 ? normalized : 'unknown';
+  }
+
+  getSignerIdentity(): string {
+    return this.getRootEnvironment().signerIdentity;
+  }
+
+  canDirectlySignFileSystem(fileSystem: IFileSystemService): boolean {
+    if (fileSystem.isVirtual?.()) {
+      return false;
+    }
+    return fileSystem === this.getRootEnvironment().fileSystem;
+  }
+
+  registerSigAwareFileSystem(fileSystem?: IFileSystemService): void {
+    const root = this.getRootEnvironment();
+    if (!root.sigService) {
+      return;
+    }
+    if (!(fileSystem instanceof VirtualFS)) {
+      return;
+    }
+    if (root.registeredSigAwareFileSystems.has(fileSystem)) {
+      return;
+    }
+
+    root.registeredSigAwareFileSystems.add(fileSystem);
+    fileSystem.onFlush(async (targetPath, signingContext) => {
+      if (!signingContext) {
+        return;
+      }
+      await root.signFileIntegrity(targetPath, signingContext);
+    });
+  }
+
+  async signFileIntegrity(
+    filePath: string,
+    signingContext: VirtualFSSigningContext
+  ): Promise<void> {
+    const root = this.getRootEnvironment();
+    const sigService = root.sigService;
+    if (!sigService || sigService.isExcluded(filePath)) {
+      return;
+    }
+
+    try {
+      await sigService.sign(
+        filePath,
+        signingContext.identity,
+        buildFileSigningMetadata(signingContext.taint)
+      );
+    } catch (error: any) {
+      await appendAuditEvent(root.fileSystem, root.getProjectRoot(), {
+        event: 'sign-error',
+        path: filePath,
+        detail: error?.message ?? 'Unknown signing error'
+      });
+    }
   }
   
   // --- File Interpolation Support ---
@@ -2426,6 +2596,7 @@ export class Environment
 
   pushActiveWorkspace(workspace: WorkspaceValue): void {
     this.workspaceStack.push(workspace);
+    this.registerSigAwareFileSystem(workspace.fs);
   }
 
   popActiveWorkspace(): WorkspaceValue | undefined {
@@ -3033,6 +3204,7 @@ export class Environment
       labels.push(`src:${source}` as DataLabel);
     }
     root.stateLabels = labels;
+    root.statePathLabels = {};
     root.refreshStateVariable();
   }
 
@@ -3045,6 +3217,7 @@ export class Environment
       return;
     }
 
+    this.setStatePathLabels(write.path, this.normalizeStateUpdateLabels(write.security?.labels));
     this.refreshStateVariable();
   }
 
@@ -3072,10 +3245,89 @@ export class Environment
     return true;
   }
 
+  private normalizeStateUpdateLabels(labels?: readonly string[]): DataLabel[] {
+    if (!Array.isArray(labels)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const normalized: DataLabel[] = [];
+    for (const label of labels) {
+      if (typeof label !== 'string') {
+        continue;
+      }
+      const trimmed = label.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed as DataLabel);
+    }
+
+    return normalized;
+  }
+
+  private setStatePathLabels(pathValue: string, labels: readonly DataLabel[]): void {
+    const normalizedPath = (pathValue || '').trim();
+    if (!normalizedPath) {
+      return;
+    }
+
+    if (labels.length === 0) {
+      delete this.statePathLabels[normalizedPath];
+      return;
+    }
+
+    this.statePathLabels[normalizedPath] = [...labels];
+  }
+
+  private buildStateFieldLabelMap(): Record<string, DataLabel[]> {
+    const fieldLabels: Record<string, DataLabel[]> = {};
+
+    for (const [pathValue, labels] of Object.entries(this.statePathLabels)) {
+      const topLevelField = (pathValue || '').split('.').filter(Boolean)[0];
+      if (!topLevelField || labels.length === 0) {
+        continue;
+      }
+
+      const existing = fieldLabels[topLevelField] ?? [];
+      const seen = new Set(existing);
+      const merged = [...existing];
+      for (const label of labels) {
+        if (seen.has(label)) {
+          continue;
+        }
+        seen.add(label);
+        merged.push(label);
+      }
+      fieldLabels[topLevelField] = merged;
+    }
+
+    return fieldLabels;
+  }
+
+  private buildStateNamespaceMetadataMap(fieldLabels: Record<string, DataLabel[]>) {
+    const metadataMap = Object.fromEntries(
+      Object.entries(fieldLabels)
+        .map(([field, labels]) => [
+          field,
+          VariableMetadataUtils.serializeSecurityMetadata({
+            security: makeSecurityDescriptor({ labels })
+          })
+        ])
+        .filter((entry): entry is [string, NonNullable<ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>>] => Boolean(entry[1]))
+    );
+
+    return Object.keys(metadataMap).length > 0 ? metadataMap : undefined;
+  }
+
   private refreshStateVariable(): void {
     if (!this.stateSnapshot) {
       return;
     }
+
+    const fieldLabels = this.buildStateFieldLabelMap();
+    const namespaceMetadata = this.buildStateNamespaceMetadataMap(fieldLabels);
 
     const stateVar = createObjectVariable(
       'state',
@@ -3097,6 +3349,7 @@ export class Environment
 
     stateVar.internal = {
       ...(stateVar.internal ?? {}),
+      ...(namespaceMetadata ? { namespaceMetadata } : {}),
       isReserved: true,
       isSystem: true
     };
@@ -3109,6 +3362,7 @@ export class Environment
 
     if (this.stateResolver) {
       try {
+        this.stateResolver.setModuleFieldLabels('@state', fieldLabels);
         this.stateResolver.updateModule('@state', this.stateSnapshot);
       } catch (error) {
         logger.warn('Failed to update dynamic @state module after state write', { error });

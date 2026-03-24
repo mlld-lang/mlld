@@ -26,6 +26,26 @@ var @result = loop(10) [
 - `continue @value` - Next iteration with new `@input`
 - `continue` - Next iteration with unchanged `@input`
 
+`done` exits the loop, not the entire script. Execution continues with the next statement after the loop. To capture the exit value and act on it conditionally:
+
+```mlld
+var @result = loop(10) [
+  let @count = (@input ?? 0) + 1
+  when @count >= 3 => done @count
+  continue @count
+]
+when @result => show "Loop returned: @result"
+```
+
+To halt execution entirely, use `bail`:
+
+```mlld
+loop(10) [
+  when @mx.loop.iteration > 5 => bail "Too many iterations"
+  continue
+]
+```
+
 `@input` starts as null and updates only via `continue @value`.
 
 **Loop context** (`@mx.loop`):

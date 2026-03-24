@@ -1,0 +1,9 @@
+var @policyConfig = {
+  defaults: { rules: ["no-destroy-unknown"] }
+}
+policy @p = union(@policyConfig)
+
+var @fileId = "13"
+exe destructive:targeted @deleteFile(fileId) = `delete:@fileId`
+
+show @deleteFile(@fileId)

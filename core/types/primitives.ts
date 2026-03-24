@@ -33,7 +33,7 @@ export interface TextNode extends BaseMlldNode {
 
 // Field access node - represents a single field/array access in a chain
 export interface FieldAccessNode {
-  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex' | 'bracketAccess' | 'variableIndex' | 'arraySlice' | 'arrayFilter';
+  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex' | 'bracketAccess' | 'variableIndex' | 'arraySlice' | 'arrayFilter' | 'wildcardIndex';
   value?: string | number;  // The field name or index value (optional for slice/filter)
   // 'field': .name (value is string)
   // 'numericField': .123 (value is number) 
@@ -393,7 +393,23 @@ export interface FileReferenceNode extends BaseMlldNode {
 // Expression nodes for logical operators
 export interface BinaryExpression extends BaseMlldNode {
   type: 'BinaryExpression';
-  operator: '&&' | '||' | '==' | '!=' | '<' | '>' | '<=' | '>=';
+  operator:
+    | '&&'
+    | '||'
+    | '??'
+    | '=='
+    | '!='
+    | '~='
+    | '!~='
+    | '<'
+    | '>'
+    | '<='
+    | '>='
+    | '+'
+    | '-'
+    | '*'
+    | '/'
+    | '%';
   left: Expression;
   right: Expression;
 }

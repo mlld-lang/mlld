@@ -20,6 +20,7 @@ import {
   type StructuredValueMetadata,
   type StructuredValueType
 } from './structured-value';
+import type { FileVerifyResult } from '@core/security';
 
 function detectStructuredType(value: unknown): StructuredValueType {
   if (Array.isArray(value)) {
@@ -167,6 +168,10 @@ function extractLoadContentMetadata(result: LoadContentResult): StructuredValueM
       length: typeof result.content === 'string' ? result.content.length : undefined
     }
   };
+  const sigResult = (result as { __sig?: FileVerifyResult }).__sig;
+  if (sigResult) {
+    metadata.sig = sigResult;
+  }
 
   if ('url' in result && result.url) {
     const urlResult = result as LoadContentResultURL;
@@ -176,6 +181,10 @@ function extractLoadContentMetadata(result: LoadContentResult): StructuredValueM
     if (urlResult.description) metadata.description = urlResult.description;
     if (urlResult.status !== undefined) metadata.status = urlResult.status;
     if (urlResult.headers) metadata.headers = urlResult.headers;
+    const urlImpl = urlResult as any;
+    if (urlImpl.html !== undefined) metadata.html = urlImpl.html;
+    if (urlImpl.text !== undefined) metadata.text = urlImpl.text;
+    if (urlImpl.md !== undefined) metadata.md = urlImpl.md;
   }
 
   if ('html' in result && !(result as LoadContentResultURL).url) {

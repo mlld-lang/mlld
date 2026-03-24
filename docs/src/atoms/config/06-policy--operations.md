@@ -6,9 +6,9 @@ brief: Label exe functions with risk categories for policy enforcement
 category: config
 parent: policy
 tags: [labels, operations, exfil, destructive, privileged, security]
-related: [labels-sensitivity, labels-trust, security-guards-basics]
+related: [labels-sensitivity, labels-trust, security-guards-basics, policy-authorizations]
 related-code: [core/policy/label-flow.ts, core/policy/builtin-rules.ts]
-updated: 2026-02-09
+updated: 2026-03-16
 ---
 
 Classify operations by risk using the two-step pattern: label exe functions with semantic labels describing WHAT they do, then map those to risk categories in policy.
@@ -44,6 +44,8 @@ Now `secret` data cannot flow to `@postToSlack` (exfil rule) and `untrusted` dat
 | `destructive` | Deletes or modifies data irreversibly |
 | `privileged` | Requires elevated permissions |
 
+Risk labels can be hierarchical. `exfil:send` is a child of `exfil`, so `no-secret-exfil` still blocks secrets sent through it, while `no-send-to-unknown` can add a destination check on `@input[0]`. `destructive:targeted` is a child of `destructive`, so `no-untrusted-destructive` still applies while `no-destroy-unknown` adds a positive check that the target in `@input[0]` is `known`.
+
 **Multiple labels:** Combine when an operation has multiple risks:
 
 ```mlld
@@ -62,6 +64,8 @@ exe destructive @deleteFile(path) = run cmd { rm -rf "@path" }
 ```
 
 This is simpler but couples exe definitions to risk categories. The two-step pattern is preferred for maintainability.
+
+See `policy-authorizations` for how operations interact with per-tool authorization and control-arg enforcement.
 
 **Complete example:**
 

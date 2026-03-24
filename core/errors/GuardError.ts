@@ -170,9 +170,14 @@ function buildPolicyDenialContext(options: GuardErrorOptions, reason: string): D
     options.operation?.target ??
     options.operation?.name ??
     '';
+  const policyRule = options.policyRule ?? undefined;
+  const code =
+    policyRule && (policyRule.startsWith('policy.labels.') || policyRule.startsWith('policy.defaults.rules.'))
+      ? 'POLICY_LABEL_FLOW_DENIED'
+      : 'POLICY_CAPABILITY_DENIED';
 
   return {
-    code: 'POLICY_CAPABILITY_DENIED',
+    code,
     operation: {
       type: operationType,
       description: description
@@ -180,7 +185,7 @@ function buildPolicyDenialContext(options: GuardErrorOptions, reason: string): D
     blocker: {
       type: 'policy',
       name: options.policyName ?? 'policy',
-      rule: options.policyRule ?? undefined
+      rule: policyRule
     },
     reason,
     suggestions: options.policySuggestions

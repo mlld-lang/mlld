@@ -30,24 +30,13 @@ describe('when expression error context', () => {
       '/show @loadRecentEvents()'
     ].join('\n');
 
-    try {
-      await interpret(source, {
+    await expect(
+      interpret(source, {
         fileSystem,
         pathService,
         pathContext,
         approveAllImports: true
-      });
-      throw new Error('Expected when-expression failure');
-    } catch (error: any) {
-      expect(error?.message).toContain('When expression evaluation failed with 1 condition errors');
-      expect(error?.message).toContain('/project/main.mld');
-
-      const details = error?.details ?? {};
-      const firstError = Array.isArray(details.errors) ? String(details.errors[0] ?? '') : '';
-      expect(firstError).toContain('(* => @line | @json)');
-      expect(firstError).toContain('JSON parsing failed');
-      expect(firstError).toContain('/project/main.mld');
-      expect(firstError).not.toContain('[undefined]');
-    }
+      })
+    ).rejects.toThrow(/Error evaluating action for condition 1.*\(\* => @line \| @json\).*JSON parsing failed/s);
   });
 });

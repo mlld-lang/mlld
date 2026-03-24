@@ -5,7 +5,7 @@ import type { VariableSource, Variable } from '@core/types/variable';
 import { MlldImportError } from '@core/errors';
 import type { Environment } from '../../env/Environment';
 import type { MCPToolSchema } from '../../mcp/McpImportManager';
-import { buildMcpArgs, deriveMcpParamInfo } from './McpImportResolver';
+import { buildMcpArgs, coerceMcpArgs, deriveMcpParamInfo } from './McpImportResolver';
 
 interface McpToolVariableOptions {
   alias: string;
@@ -23,7 +23,7 @@ export class McpImportService {
     const paramInfo = deriveMcpParamInfo(tool);
     const manager = this.env.getMcpImportManager();
     const execFn = async (...args: unknown[]) => {
-      const payload = buildMcpArgs(paramInfo.paramNames, args);
+      const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
       return await manager.callTool(importPath, mcpName, payload);
     };
     const execDef: NodeFunctionExecutable = {

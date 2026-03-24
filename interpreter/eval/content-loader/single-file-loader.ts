@@ -30,19 +30,29 @@ export interface SingleFileLoaderInput {
   resolvedPathOverride?: string;
 }
 
+export interface SingleFileLoadOutput {
+  value: LoadContentResult | string | string[];
+  rawContent: string;
+  resolvedPath: string;
+}
+
 export class ContentLoaderFileHandler {
   constructor(private readonly dependencies: SingleFileLoaderDependencies) {}
 
-  async load(input: SingleFileLoaderInput): Promise<LoadContentResult | string | string[]> {
+  async load(input: SingleFileLoaderInput): Promise<SingleFileLoadOutput> {
     const resolvedPath = input.resolvedPathOverride ?? (await input.env.resolvePath(input.filePath));
     enforceFilesystemAccess(input.env, 'read', resolvedPath, input.sourceLocation);
     const rawContent = await input.env.readFile(resolvedPath);
+    const value =
+      resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')
+        ? await this.loadHtmlFile(rawContent, resolvedPath, input.options, input.env)
+        : await this.loadTextFile(rawContent, resolvedPath, input.options, input.env);
 
-    if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
-      return this.loadHtmlFile(rawContent, resolvedPath, input.options, input.env);
-    }
-
-    return this.loadTextFile(rawContent, resolvedPath, input.options, input.env);
+    return {
+      value,
+      rawContent,
+      resolvedPath
+    };
   }
 
   private async loadHtmlFile(

@@ -38,35 +38,61 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Extract a section from markdown content.
+ * Extract a section from markdown content by heading name.
+ * Preserves all content as-is (no markdown parsing/re-serialization).
  */
 export function extractSection(content: string, sectionName: string): string {
-  const lines = content.split('\\n');
-  const normalizedName = sectionName.replace(/^#+\\s*/, '').trim();
+  return extractMarkdownSection(content, sectionName, { includeTitle: true });
+}
+
+export interface ExtractSectionOptions {
+  includeTitle?: boolean;
+}
+
+/**
+ * Text-based markdown section extraction that preserves all content verbatim.
+ * Finds the heading matching sectionName and returns everything up to the next
+ * same-or-higher-level heading.
+ */
+export function extractMarkdownSection(
+  content: string,
+  sectionName: string,
+  options: ExtractSectionOptions = {}
+): string {
+  const { includeTitle = true } = options;
+  const lines = content.split('\n');
+  const normalizedName = sectionName.replace(/^#+\s*/, '').trim();
   const escapedName = escapeRegExp(normalizedName);
-  const sectionRegex = new RegExp(`^#{1,6}\\s+${escapedName}\\s*$`, 'i');
+  const sectionRegex = new RegExp(`^\\s{0,3}#{1,6}\\s+${escapedName}\\s*$`, 'i');
 
-  let inSection = false;
+  let sectionStart = -1;
   let sectionLevel = 0;
-  const sectionLines: string[] = [];
 
-  for (const line of lines) {
-    const lineForMatch = line.trimEnd();
-    if (!inSection && sectionRegex.test(lineForMatch)) {
-      inSection = true;
-      sectionLevel = lineForMatch.match(/^#+/)?.[0].length || 0;
-      sectionLines.push(lineForMatch);
-      continue;
-    }
-
-    if (inSection) {
-      const headerMatch = lineForMatch.match(/^(#{1,6})\\s+/);
-      if (headerMatch && headerMatch[1].length <= sectionLevel) {
-        break;
-      }
-      sectionLines.push(lineForMatch);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
+    if (sectionRegex.test(line)) {
+      sectionStart = i;
+      sectionLevel = line.match(/^#{1,6}/)?.[0].length || 0;
+      break;
     }
   }
 
-  return sectionLines.join('\\n').trim();
+  if (sectionStart === -1) {
+    return '';
+  }
+
+  const startLine = includeTitle ? sectionStart : sectionStart + 1;
+  const sectionLines: string[] = [];
+
+  for (let i = startLine; i < lines.length; i++) {
+    if (i > sectionStart) {
+      const match = lines[i].match(/^\s{0,3}(#{1,6})\s+/);
+      if (match && match[1].length <= sectionLevel) {
+        break;
+      }
+    }
+    sectionLines.push(lines[i]);
+  }
+
+  return sectionLines.join('\n').trim();
 }

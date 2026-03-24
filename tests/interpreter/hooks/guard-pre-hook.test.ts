@@ -7,7 +7,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
@@ -881,6 +881,71 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateExecInvocation(sendInvocation, env)).rejects.toThrow('expressions blocked');
   });
 
+  it('exposes named exec args in guard context', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard before op:exe = when [ @input.length() > 0 && @mx.args.value.mx.labels.includes("secret") => deny "named args blocked" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const varDirective = parseSync('/var secret @apiKey = "sk-test-abc"')[0] as DirectiveNode;
+    await evaluateDirective(varDirective, env);
+
+    const exeDirective = parseSync('/exe @send(value) = when [ * => show "sent" ]')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        identifier: [{ type: 'VariableReference', identifier: 'send' }],
+        args: [{ type: 'VariableReference', identifier: 'apiKey' }]
+      }
+    };
+
+    await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow('named args blocked');
+  });
+
+  it('reserves @mx.args.names while allowing bracket access to arg named names', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard before op:exe = when [ @input.length() > 0 && @mx.args.names.includes("names") && @mx.args["names"].mx.labels.includes("secret") => deny "reserved names work" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const varDirective = parseSync('/var secret @payload = "classified"')[0] as DirectiveNode;
+    await evaluateDirective(varDirective, env);
+
+    const exeDirective = parseSync('/exe @echo(names) = ::@names::')[0] as DirectiveNode;
+    await evaluateDirective(exeDirective, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        identifier: [{ type: 'VariableReference', identifier: 'echo' }],
+        args: [{ type: 'VariableReference', identifier: 'payload' }]
+      }
+    };
+
+    await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow('reserved names work');
+  });
+
+  it('exposes named pipeline stage args in guard context', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard for secret = when [ @mx.op.type == "pipeline-stage" && @mx.args.input.mx.labels.includes("secret") && @mx.args.suffix == "tail" => deny "pipeline named args blocked" \n * => allow ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    await evaluateDirective(parseSync('/var secret @token = "seed"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe @combine(input, suffix) = ::@input:@suffix::')[0] as DirectiveNode,
+      env
+    );
+
+    const pipelineDirective = parseSync('/var @result = @token | @combine("tail")')[0] as DirectiveNode;
+    await expect(evaluateDirective(pipelineDirective, env)).rejects.toThrow('pipeline named args blocked');
+  });
+
   it('increments @mx.guard.try across retries', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
@@ -1451,6 +1516,203 @@ it('applies op:exe guards to bare run-exec statements and var-assigned exec call
 
   const assignedInvocation = parseSync('/var @result = @handler(@key)')[0] as DirectiveNode;
   await expect(evaluateDirective(assignedInvocation, env)).rejects.toThrow(/blocked exec/);
+});
+
+it('fires before guards for exec arguments reached through field access', async () => {
+  const env = createEnv();
+  const labelGuard = parseSync(
+    '/guard before @byLabel for untrusted = when [ * => deny "blocked untrusted" ]'
+  )[0] as DirectiveNode;
+  const exeDirective = parseSync('/exe @emit(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(labelGuard, env);
+  await evaluateDirective(exeDirective, env);
+  env.setVariable(
+    'bad',
+    createSimpleTextVariable(
+      'bad',
+      'danger',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['untrusted'] })
+      }
+    )
+  );
+  env.setVariable(
+    'args',
+    createObjectVariable(
+      'args',
+      { data: 'danger' },
+      false,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        security: makeSecurityDescriptor({ labels: ['untrusted'] })
+      }
+    )
+  );
+
+  const bareInvocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'bad' }]
+    }
+  };
+  const fieldInvocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [
+        {
+          type: 'VariableReference',
+          identifier: 'args',
+          fields: [{ type: 'field', value: 'data', optional: false }]
+        }
+      ]
+    }
+  };
+
+  await expect(evaluateExecInvocation(bareInvocation, env)).rejects.toThrow('blocked untrusted');
+  await expect(evaluateExecInvocation(fieldInvocation, env)).rejects.toThrow('blocked untrusted');
+});
+
+it('lets a privileged allow override an unlocked policy defaults denial', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { defaults: { rules: ["no-untrusted-destructive"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var untrusted @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive @emit(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('allow-me');
+});
+
+it('lets a privileged allow override an unlocked no-destroy-unknown denial', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { defaults: { rules: ["no-destroy-unknown"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive:targeted = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive:targeted @destroy(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'destroy' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('allow-me');
+});
+
+it('lets a privileged allow override an unlocked policy label denial', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { labels: { untrusted: { deny: ["destructive"] } } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var untrusted @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive @emit(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  const result = await evaluateExecInvocation(invocation, env);
+  const value = isStructuredValue(result.value) ? result.value.text : result.value;
+  expect(String(value)).toBe('allow-me');
+});
+
+it('keeps locked policy denials above privileged allows', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { locked: true, defaults: { rules: ["no-untrusted-destructive"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var untrusted @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive @emit(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'emit' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow(
+    "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'"
+  );
+});
+
+it('keeps locked no-destroy-unknown denials above privileged allows', async () => {
+  const env = createEnv();
+  await evaluateDirective(
+    parseSync('/policy @task = { locked: true, defaults: { rules: ["no-destroy-unknown"] } }')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(
+    parseSync('/guard privileged @allowKnown before destructive:targeted = when [ @input[0] == "allow-me" => allow ]')[0] as DirectiveNode,
+    env
+  );
+  await evaluateDirective(parseSync('/var @payload = "allow-me"')[0] as DirectiveNode, env);
+  await evaluateDirective(parseSync('/exe destructive:targeted @destroy(value) = ::@value::')[0] as DirectiveNode, env);
+
+  const invocation: ExecInvocation = {
+    type: 'ExecInvocation',
+    commandRef: {
+      identifier: [{ type: 'VariableReference', identifier: 'destroy' }],
+      args: [{ type: 'VariableReference', identifier: 'payload' }]
+    }
+  };
+
+  await expect(evaluateExecInvocation(invocation, env)).rejects.toThrow(
+    "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'"
+  );
 });
 
 describe('secret redaction in guard error messages', () => {

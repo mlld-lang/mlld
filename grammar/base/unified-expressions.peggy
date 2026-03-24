@@ -89,7 +89,7 @@ UnifiedComparison
     }
 
 UnifiedComparisonOp
-  = "==" / "!=" / "~=" / "<=" / ">=" / "<" !("=" / "<") / ">" !("=" / ">")
+  = "==" / "!=" / "!~=" / "~=" / "<=" / ">=" / "<" !("=" / "<") / ">" !("=" / ">")
 
 // Arithmetic operators — mandatory whitespace around operators
 // Required to disambiguate from hyphenated identifiers (e.g. @a-b is identifier, @a - @b is subtraction)

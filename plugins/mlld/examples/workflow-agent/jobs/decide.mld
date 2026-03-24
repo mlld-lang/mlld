@@ -5,13 +5,11 @@
 >> Call 1: Generate options with reasoning (no personality, no bias)
 >> Call 2: Evaluate options against criteria and pick the best one
 
-import { @claudePoll } from @mlld/claude-poll
+import { @claudePoll } from @mlld/claude
 import "@payload" as @p
 
 var @inputPath = @p.input
 var @outputPath = @p.output ?? "decision.json"
-var @tools = "Read,Write"
-
 >> Load context
 var @context = <@inputPath> | @parse
 
@@ -34,7 +32,7 @@ var @genFull = `@genPrompt
 IMPORTANT: Write your JSON response to @optionsPath using the Write tool.`
 
 show `Generating options...`
-@claudePoll(@genFull, "sonnet", "@root", @tools, @optionsPath)
+@claudePoll(@genFull, { model: "sonnet", tools: ["Read", "Write"], poll: @optionsPath })
 var @options = <@optionsPath>?
 
 if !@options [
@@ -55,7 +53,7 @@ if !@options [
 IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
 
   show `Evaluating options...`
-  @claudePoll(@evalFull, "opus", "@root", @tools, @outputPath)
+  @claudePoll(@evalFull, { model: "opus", tools: ["Read", "Write"], poll: @outputPath })
   let @decision = <@outputPath>?
 
   if @decision [

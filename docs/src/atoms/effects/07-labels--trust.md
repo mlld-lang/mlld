@@ -41,6 +41,8 @@ policy @p = {
 | `no-untrusted-destructive` | `untrusted` → `destructive` operations |
 | `no-untrusted-privileged` | `untrusted` → `privileged` operations |
 
+These rules generate managed label-flow denials that can be overridden by an explicit privileged guard `allow` for specific operations — enabling a "broad rule + specific exception" pattern. Use `locked: true` on the policy to make them absolute.
+
 **Flow blocked:**
 
 ```mlld

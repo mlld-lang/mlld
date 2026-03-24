@@ -4,6 +4,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { MlldDenialError } from '@core/errors';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { WhenBlockNode, WhenMatchNode, WhenSimpleNode, AugmentedAssignmentNode } from '@core/types/when';
 import type { ExeBlockNode, ExeReturnNode, ExecInvocation } from '@core/types';
@@ -235,6 +236,19 @@ describe('when evaluator characterization', () => {
 
     expect(emptyResult).toBe(false);
     expect(textResult).toBe(true);
+  });
+
+  it('fails closed when a condition receives error marker payloads', async () => {
+    const { ast } = await parse([
+      '/exe @maybeFail(n) = js {',
+      '  if (Number(n) === 2) throw new Error("boom");',
+      '  return "ok";',
+      '}',
+      '/var @items = for parallel(2) @n in [1, 2] => @maybeFail(@n)',
+      '/when @items => show "should not run"'
+    ].join('\n'));
+
+    await expect(evaluate(ast, env)).rejects.toThrow('Condition evaluation received an error-like value');
   });
 
   it('keeps denied literal condition handling stable', async () => {
@@ -592,5 +606,80 @@ describe('when evaluator characterization', () => {
 
     const value = await extractVariableValue(env.getVariable('x')!, env);
     expect(value).toEqual({ type: 'hello' });
+  });
+
+  it('propagates conditional when-expression labels onto matched branches', async () => {
+    const { ast } = await parse([
+      '/var untrusted @x = "hello"',
+      '/var @result = when [',
+      '  @x == "hello" => "matched"',
+      '  * => "fallback"',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    expect(env.getVariable('result')?.mx?.labels).toContain('untrusted');
+  });
+
+  it('propagates conditional when-expression labels onto fallback branches', async () => {
+    const { ast } = await parse([
+      '/var untrusted @x = "goodbye"',
+      '/var @result = when [',
+      '  @x == "hello" => "matched"',
+      '  * => "fallback"',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    expect(env.getVariable('result')?.mx?.labels).toContain('untrusted');
+  });
+
+  it('propagates policy denials from matched when-expression actions inside executables', async () => {
+    const { ast } = await parse([
+      '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+      '/policy @p = union(@policyConfig)',
+      '/exe destructive @writeOp(data) = `wrote: @data`',
+      '/exe @dispatch(name, data) = when @name [',
+      '  "write" => @writeOp(@data)',
+      '  * => "unknown"',
+      ']',
+      '/var untrusted @data = "external"',
+      '/show @dispatch("write", @data)'
+    ].join('\n'));
+
+    const evaluation = evaluate(ast, env);
+    await expect(evaluation).rejects.toBeInstanceOf(MlldDenialError);
+    await expect(evaluation).rejects.toMatchObject({
+      context: expect.objectContaining({
+        code: 'POLICY_LABEL_FLOW_DENIED'
+      })
+    });
+  });
+
+  it('propagates policy denials from matched when-expression actions inside loop bodies', async () => {
+    const { ast } = await parse([
+      '/var @policyConfig = { labels: { "untrusted": { deny: ["destructive"] } } }',
+      '/policy @p = union(@policyConfig)',
+      '/exe destructive @writeOp(data) = `wrote: @data`',
+      '/var untrusted @data = "external"',
+      '/var @result = loop(1) [',
+      '  let @next = when @data [',
+      '    "external" => @writeOp(@data)',
+      '    * => "unknown"',
+      '  ]',
+      '  done @next',
+      ']',
+      '/show @result'
+    ].join('\n'));
+
+    const evaluation = evaluate(ast, env);
+    await expect(evaluation).rejects.toBeInstanceOf(MlldDenialError);
+    await expect(evaluation).rejects.toMatchObject({
+      context: expect.objectContaining({
+        code: 'POLICY_LABEL_FLOW_DENIED'
+      })
+    });
   });
 });

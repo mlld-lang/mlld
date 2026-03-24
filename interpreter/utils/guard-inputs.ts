@@ -1,10 +1,13 @@
 import type { Variable, VariableSource } from '@core/types/variable';
-import { createSimpleTextVariable } from '@core/types/variable';
+import {
+  createArrayVariable,
+  createObjectVariable,
+  createSimpleTextVariable
+} from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
 import { extractSecurityDescriptor } from './structured-value';
-import { makeSecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 const FALLBACK_SOURCE: VariableSource = {
@@ -16,11 +19,13 @@ const FALLBACK_SOURCE: VariableSource = {
 
 export interface GuardInputOptions {
   nameHint?: string;
+  argNames?: readonly (string | null | undefined)[];
 }
 
 export interface GuardInputMappingEntry {
   index: number;
   variable: Variable;
+  name?: string | null;
 }
 
 export function materializeGuardInputs(
@@ -29,24 +34,7 @@ export function materializeGuardInputs(
 ): Variable[] {
   const nameHint = options?.nameHint ?? '__guard_input__';
   return values
-    .map(value => {
-      if (isVariable(value)) {
-        return value;
-      }
-      const normalized = resolveNestedValue(value, { preserveProvenance: true });
-      const materialized = materializeExpressionValue(normalized, { name: nameHint });
-      if (materialized) {
-        return materialized;
-      }
-      const fallback = createSimpleTextVariable(
-        nameHint,
-        formatGuardInputValue(normalized),
-        FALLBACK_SOURCE,
-        { mx: {} }
-      );
-      applyDescriptorFromValue(normalized, fallback);
-      return fallback;
-    })
+    .map(value => materializeGuardInput(value, nameHint))
     .filter((value): value is Variable => Boolean(value));
 }
 
@@ -55,31 +43,22 @@ export function materializeGuardInputsWithMapping(
   options?: GuardInputOptions
 ): GuardInputMappingEntry[] {
   const nameHint = options?.nameHint ?? '__guard_input__';
+  const argNames = options?.argNames;
   const results: GuardInputMappingEntry[] = [];
 
   for (let index = 0; index < values.length; index++) {
     const value = values[index];
-    const variable = (() => {
-      if (isVariable(value)) {
-        return value;
+    const variable = materializeGuardInput(value, nameHint);
+    const argName = (() => {
+      if (!Array.isArray(argNames)) {
+        return null;
       }
-      const normalized = resolveNestedValue(value, { preserveProvenance: true });
-      const materialized = materializeExpressionValue(normalized, { name: nameHint });
-      if (materialized) {
-        return materialized;
-      }
-      const fallback = createSimpleTextVariable(
-        nameHint,
-        formatGuardInputValue(normalized),
-        FALLBACK_SOURCE,
-        { mx: {} }
-      );
-      applyDescriptorFromValue(normalized, fallback);
-      return fallback;
+      const candidate = argNames[index];
+      return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
     })();
 
     if (variable) {
-      results.push({ index, variable });
+      results.push({ index, variable, name: argName });
     }
   }
 
@@ -106,10 +85,54 @@ function formatGuardInputValue(value: unknown): string {
   return String(value);
 }
 
+function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function materializeGuardInput(value: unknown, nameHint: string): Variable | undefined {
+  if (isVariable(value)) {
+    return value;
+  }
+
+  const normalized = resolveNestedValue(value, { preserveProvenance: true });
+  if (Array.isArray(normalized)) {
+    const variable = createArrayVariable(nameHint, normalized, false, FALLBACK_SOURCE, { mx: {} });
+    applyDescriptorFromValue(value, variable);
+    return variable;
+  }
+
+  if (isPlainObjectValue(normalized)) {
+    const variable = createObjectVariable(nameHint, normalized, false, FALLBACK_SOURCE, { mx: {} });
+    applyDescriptorFromValue(value, variable);
+    return variable;
+  }
+
+  const materialized = materializeExpressionValue(normalized, { name: nameHint });
+  if (materialized) {
+    applyDescriptorFromValue(value, materialized);
+    return materialized;
+  }
+
+  const fallback = createSimpleTextVariable(
+    nameHint,
+    formatGuardInputValue(normalized),
+    FALLBACK_SOURCE,
+    { mx: {} }
+  );
+  applyDescriptorFromValue(value, fallback);
+  return fallback;
+}
+
 function applyDescriptorFromValue(value: unknown, target: Variable): void {
-  const descriptor =
-    extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true }) ??
-    makeSecurityDescriptor();
+  const descriptor = extractSecurityDescriptor(value, { recursive: true, mergeArrayElements: true });
+  if (!descriptor) {
+    return;
+  }
   if (!target.mx) {
     target.mx = {};
   }

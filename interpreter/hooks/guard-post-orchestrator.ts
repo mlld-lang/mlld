@@ -55,6 +55,10 @@ import { appendGuardHistory } from './guard-shared-history';
 import { GuardError } from '@core/errors/GuardError';
 import { getExpressionProvenance } from '../utils/expression-provenance';
 import { formatGuardWarning } from '../eval/guard-denial-handler';
+import {
+  buildGuardArgsSnapshot,
+  getGuardArgNamesFromMetadata
+} from '../utils/guard-args';
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -112,6 +116,17 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   const baseOutputValue = normalizeRawOutput(result.value);
   const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
   const inputVariables = materializeGuardInputs(inputs ?? [], { nameHint: '__guard_input__' });
+  const guardArgs = buildGuardArgsSnapshot(
+    inputVariables,
+    getGuardArgNamesFromMetadata(operation.metadata)
+  );
+  const showSubtype =
+    operation?.metadata && typeof operation.metadata === 'object'
+      ? (operation.metadata as Record<string, unknown>).showSubtype
+      : undefined;
+  const shouldSkipDataLabelSelection =
+    (operation.type === 'show' || operation.type === 'stream') &&
+    (showSubtype === 'show' || showSubtype === 'showLiteral' || showSubtype === 'showTemplate');
   if (outputVariables.length === 0) {
     const fallbackValue = normalizeFallbackOutputValue(baseOutputValue);
     const fallbackOutput = createSimpleTextVariable(
@@ -126,8 +141,10 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   let currentDescriptor = extractOutputDescriptor(result, activeOutputs[0]);
   let usedInputFallback = false;
 
-  let perInputCandidates = buildPerInputCandidates(registry, outputVariables, guardOverride, 'after');
-  if (perInputCandidates.length === 0 && inputVariables.length > 0) {
+  let perInputCandidates = shouldSkipDataLabelSelection
+    ? []
+    : buildPerInputCandidates(registry, outputVariables, guardOverride, 'after');
+  if (!shouldSkipDataLabelSelection && perInputCandidates.length === 0 && inputVariables.length > 0) {
     currentDescriptor = mergeDescriptorWithFallbackInputs(currentDescriptor, inputVariables);
     perInputCandidates = buildPerInputCandidates(registry, inputVariables, guardOverride, 'after');
     usedInputFallback = perInputCandidates.length > 0;
@@ -218,6 +235,7 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     buildOperationSnapshot,
     resolveGuardValue: resolvePostGuardValue,
     buildVariablePreview: buildPostVariablePreview,
+    guardArgs,
     logLabelModifications: async (guard, labelModifications, targets) => {
       await logGuardLabelModifications(env, guard, labelModifications, targets);
     }
@@ -363,6 +381,7 @@ function buildOperationSnapshot(inputs: readonly Variable[]): GuardOperationSnap
   return {
     labels: aggregate.labels,
     sources: aggregate.sources,
+    taint: aggregate.taint,
     variables: inputs
   };
 }

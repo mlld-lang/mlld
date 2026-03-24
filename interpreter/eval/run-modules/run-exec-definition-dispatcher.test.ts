@@ -15,6 +15,7 @@ import {
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { executeProseExecutable } from '@interpreter/eval/prose-execution';
 import { parse } from '@grammar/parser';
+import { createSimpleTextVariable } from '@core/types/variable/VariableFactories';
 
 vi.mock('@interpreter/eval/exec-invocation', () => ({
   evaluateExecInvocation: vi.fn()
@@ -102,6 +103,13 @@ function createServices(
   };
 }
 
+const baseSource = {
+  directive: 'var',
+  syntax: 'literal',
+  hasInterpolation: false,
+  isMultiLine: false
+} as const;
+
 function buildParams(
   overrides: Partial<RunExecDefinitionDispatchParams> = {}
 ): RunExecDefinitionDispatchParams {
@@ -131,6 +139,8 @@ function buildParams(
     argValues: overrides.argValues ?? {},
     argRuntimeValues: overrides.argRuntimeValues ?? {},
     argDescriptors: overrides.argDescriptors ?? [],
+    argOriginalVariables: overrides.argOriginalVariables ?? {},
+    argBindingDescriptors: overrides.argBindingDescriptors ?? {},
     exeLabels: overrides.exeLabels ?? [],
     services: overrides.services ?? createServices(env)
   };
@@ -335,6 +345,74 @@ describe('run exec definition dispatcher', () => {
     );
     expect(recursiveResult.value).toBe('recursive-output');
     expect(recursiveEval).toHaveBeenCalled();
+  });
+
+  it('preserves parameter labels when commandRef AST dispatch forwards run exec args', async () => {
+    const env = createEnv();
+    const dataVar = createSimpleTextVariable(
+      'data',
+      'secret',
+      baseSource,
+      {
+        mx: {
+          labels: ['untrusted'],
+          taint: ['untrusted'],
+          sources: []
+        }
+      }
+    );
+    env.setVariable('data', dataVar);
+
+    const directive = createDirective([
+      {
+        type: 'VariableReference',
+        valueType: 'varIdentifier',
+        identifier: 'data'
+      }
+    ]);
+    const definition = {
+      type: 'commandRef',
+      commandRef: 'ignored',
+      commandRefAst: {
+        type: 'ExecInvocation',
+        commandRef: {
+          type: 'VariableReference',
+          identifier: 'tool'
+        }
+      },
+      paramNames: ['input'],
+      sourceDirective: 'exec'
+    } as unknown as ExecutableDefinition;
+
+    const extracted = await extractRunExecArguments({
+      directive,
+      definition,
+      env,
+      interpolateWithPendingDescriptor: createServices(env).interpolateWithPendingDescriptor
+    });
+
+    const mockedEvaluateExecInvocation = vi.mocked(evaluateExecInvocation);
+    mockedEvaluateExecInvocation.mockImplementation(async (_invocation, targetEnv: Environment) => {
+      const input = targetEnv.getVariable('input');
+      expect(input?.mx?.labels ?? []).toContain('untrusted');
+      return { value: 'ast-output', env: targetEnv } as any;
+    });
+
+    const result = await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        directive,
+        definition,
+        execVar: createExecutable('tool', definition),
+        argValues: extracted.argValues,
+        argRuntimeValues: extracted.argRuntimeValues,
+        argDescriptors: extracted.argDescriptors,
+        argOriginalVariables: extracted.argOriginalVariables,
+        argBindingDescriptors: extracted.argBindingDescriptors
+      })
+    );
+
+    expect(result.value).toBe('ast-output');
   });
 
   it('preserves circular commandRef detection and builtin keychain argument failures', async () => {

@@ -62,7 +62,8 @@ export class PolicyEnforcer {
     const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
     const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
     const sources = Array.isArray(descriptor.sources) ? descriptor.sources : [];
-    if (labels.length === 0 && taint.length === 0 && sources.length === 0) {
+    const tools = Array.isArray(descriptor.tools) ? descriptor.tools : [];
+    if (labels.length === 0 && taint.length === 0 && sources.length === 0 && tools.length === 0) {
       return descriptor;
     }
     const hasUserLabel = [...labels, ...taint].some(label => {
@@ -146,6 +147,10 @@ function buildLabelFlowSuggestions(label?: string): string[] {
     if (!label.startsWith('src:')) {
       if (label === 'untrusted') {
         suggestions.push(`Remove '${label}' label if data has been validated`);
+      } else if (label === 'known') {
+        suggestions.push("Add the 'known' label only to approved destinations or targets");
+      } else if (label === 'known:internal') {
+        suggestions.push("Add the 'known:internal' label only to approved internal destinations");
       } else if (label === 'secret' || label === 'sensitive' || label === 'pii') {
         suggestions.push(`Remove '${label}' label if data is not sensitive`);
       } else {

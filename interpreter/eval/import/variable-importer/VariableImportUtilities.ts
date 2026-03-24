@@ -74,8 +74,12 @@ export class VariableImportUtilities {
           hasInterpolation: false,
           isMultiLine: false
         };
+        const executableName =
+          typeof (value as any).name === 'string' && (value as any).name.length > 0
+            ? (value as any).name
+            : 'property';
         return this.dependencies.createExecutableFromImport(
-          'property',
+          executableName,
           value,
           source,
           { isImported: true, importPath }

@@ -22,6 +22,8 @@ defmodule Mlld.Client do
     "filePath" => :file_path,
     "file_path" => :file_path,
     "payload" => :payload,
+    "payloadLabels" => :payload_labels,
+    "payload_labels" => :payload_labels,
     "state" => :state,
     "dynamicModules" => :dynamic_modules,
     "dynamic_modules" => :dynamic_modules,
@@ -48,6 +50,7 @@ defmodule Mlld.Client do
   @type process_option ::
           {:file_path, String.t()}
           | {:payload, term()}
+          | {:payload_labels, %{optional(String.t()) => [String.t()]}}
           | {:state, map()}
           | {:dynamic_modules, map()}
           | {:dynamic_module_source, String.t()}
@@ -56,7 +59,8 @@ defmodule Mlld.Client do
           | {:timeout, non_neg_integer() | nil}
 
   @type execute_option ::
-          {:state, map()}
+          {:payload_labels, %{optional(String.t()) => [String.t()]}}
+          | {:state, map()}
           | {:dynamic_modules, map()}
           | {:dynamic_module_source, String.t()}
           | {:mode, :strict | :markdown | String.t()}
@@ -106,6 +110,7 @@ defmodule Mlld.Client do
       %{"script" => script}
       |> put_if_present("filePath", Keyword.get(opts, :file_path))
       |> put_if_present("payload", Keyword.get(opts, :payload))
+      |> put_if_present("payloadLabels", normalize_payload_labels(Keyword.get(opts, :payload_labels)))
       |> put_if_present("state", Keyword.get(opts, :state))
       |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
       |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
@@ -153,6 +158,7 @@ defmodule Mlld.Client do
     params =
       %{"filepath" => filepath}
       |> put_if_present("payload", payload)
+      |> put_if_present("payloadLabels", normalize_payload_labels(Keyword.get(opts, :payload_labels)))
       |> put_if_present("state", Keyword.get(opts, :state))
       |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
       |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
@@ -231,7 +237,15 @@ defmodule Mlld.Client do
       resolved_timeout = resolve_timeout_for_update(client, Keyword.get(opts, :timeout))
       max_wait = resolved_timeout || 2_000
       deadline = System.monotonic_time(:millisecond) + max_wait
-      do_update_state(client, request_id, path, value, resolved_timeout, deadline)
+      do_update_state(
+        client,
+        request_id,
+        path,
+        value,
+        normalize_labels(Keyword.get(opts, :labels)),
+        resolved_timeout,
+        deadline
+      )
     end
   end
 
@@ -429,8 +443,10 @@ defmodule Mlld.Client do
     :ok
   end
 
-  defp do_update_state(client, request_id, path, value, timeout_ms, deadline_ms) do
-    params = %{"requestId" => request_id, "path" => path, "value" => value}
+  defp do_update_state(client, request_id, path, value, labels, timeout_ms, deadline_ms) do
+    params =
+      %{"requestId" => request_id, "path" => path, "value" => value}
+      |> put_if_present("labels", labels)
 
     case call_request(client, "state:update", params, timeout_ms) do
       {:ok, _result, _state_writes} ->
@@ -441,7 +457,7 @@ defmodule Mlld.Client do
           {:error, error}
         else
           Process.sleep(25)
-          do_update_state(client, request_id, path, value, timeout_ms, deadline_ms)
+          do_update_state(client, request_id, path, value, labels, timeout_ms, deadline_ms)
         end
 
       {:error, %Error{} = error} ->
@@ -455,6 +471,41 @@ defmodule Mlld.Client do
       {:ok, result, state_writes}
     end
   end
+
+  defp normalize_payload_labels(nil), do: nil
+
+  defp normalize_payload_labels(payload_labels) when is_map(payload_labels) do
+    payload_labels
+    |> Enum.reduce(%{}, fn {key, labels}, acc ->
+      case normalize_labels(labels) do
+        nil -> acc
+        normalized -> Map.put(acc, to_string(key), normalized)
+      end
+    end)
+    |> case do
+      labels when map_size(labels) == 0 -> nil
+      labels -> labels
+    end
+  end
+
+  defp normalize_payload_labels(_), do: nil
+
+  defp normalize_labels(nil), do: nil
+
+  defp normalize_labels(labels) when is_list(labels) do
+    labels
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> case do
+      [] -> nil
+      normalized -> normalized
+    end
+  end
+
+  defp normalize_labels(label) when is_binary(label), do: normalize_labels([label])
+  defp normalize_labels(_), do: nil
 
   defp start_request(client, method, params, timeout_ms) do
     GenServer.call(client, {:start_request, method, params, timeout_ms}, :infinity)

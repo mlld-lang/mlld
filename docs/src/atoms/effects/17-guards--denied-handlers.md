@@ -7,7 +7,7 @@ parent: guards
 tags: [security, guards, denied, error-handling]
 related: [security-guards-basics, when]
 related-code: [interpreter/eval/guard.ts, interpreter/eval/when.ts]
-updated: 2026-02-17
+updated: 2026-03-16
 qa_tier: 2
 ---
 
@@ -28,7 +28,9 @@ exe @safe(value) = when [
 ]
 ```
 
-`denied` handlers catch denials from guards in both per-operation and per-input scope. When a guard denies an operation, the exe's `when` block can match `denied` and provide a fallback value.
+`denied` handlers catch denials from guards and managed policy label-flow denials (`defaults.rules`, `labels` deny/allow) in both per-operation and per-input scope. When a guard or policy denies an operation, the exe's `when` block can match `denied` and provide a fallback value. Capability denials (`capabilities.deny`, environment constraints) are hard errors and cannot be caught.
+
+When you run mlld through the SDK or `mlld live --stdio`, the same denial is also surfaced as structured observability data. Streamed executions emit a `guard_denial` event immediately, and structured execute results collect the payload in `result.denials`, whether the denial was handled by `denied =>` or terminated the call.
 
 **Accessing guard context:**
 
@@ -38,6 +40,15 @@ exe @handler(value) = when [
   denied => show "Guard: @mx.guard.name"
   denied => show "Labels: @mx.labels.join(', ')"
   * => show @value
+]
+```
+
+Named operation inputs are available in denied handlers through `@mx.args`, just like in guard bodies:
+
+```mlld
+exe @send(url, payload) = when [
+  denied => show "Denied sending to @mx.args.url: @mx.guard.reason"
+  * => cmd curl -X POST @url -d @payload
 ]
 ```
 

@@ -1,16 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { accessField, accessFields } from './field-access';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import {
   createObjectVariable,
   createSimpleTextVariable,
   createStructuredValueVariable
 } from '@core/types/variable/VariableFactories';
-import { wrapStructured } from './structured-value';
+import { applySecurityDescriptorToStructuredValue, wrapStructured } from './structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { VirtualFS } from '@services/fs/VirtualFS';
+import { buildGuardArgsSnapshot, createGuardArgsView } from './guard-args';
 
 const source = {
   directive: 'var' as const,
@@ -76,6 +78,27 @@ describe('object mx utilities', () => {
       { type: 'field', value: 'entries' } as const
     ], { preserveContext: false });
     expect(entries).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+  });
+
+  it('exposes labels on nested object results backed by provenance', async () => {
+    const structured = wrapStructured(
+      { nested: { value: 1 } },
+      'object',
+      '{"nested":{"value":1}}'
+    );
+    applySecurityDescriptorToStructuredValue(
+      structured,
+      makeSecurityDescriptor({ labels: ['untrusted'] })
+    );
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const labels = await accessFields(variable, [
+      { type: 'field', value: 'nested' } as const,
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'labels' } as const
+    ], { preserveContext: false });
+
+    expect(labels).toEqual(['untrusted']);
   });
 });
 
@@ -173,6 +196,39 @@ describe('missing field access', () => {
   });
 });
 
+describe('guard args field access', () => {
+  it('resolves dot-safe named args through field access', async () => {
+    const variable = createSimpleTextVariable('value', 'classified', source);
+    variable.mx = { labels: ['secret'] } as any;
+    const view = createGuardArgsView(buildGuardArgsSnapshot([variable], ['value']));
+
+    const argValue = await accessField(view, { type: 'field', value: 'value' }, { preserveContext: false });
+    const labels = await accessFields(view, [
+      { type: 'field', value: 'value' } as const,
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'labels' } as const
+    ], { preserveContext: false });
+
+    expect(argValue).toBe(variable);
+    expect(labels).toEqual(['secret']);
+  });
+
+  it('resolves reserved and bracket-only guard arg names', async () => {
+    const reserved = createSimpleTextVariable('names', 'classified', source);
+    reserved.mx = { labels: ['secret'] } as any;
+    const dashed = createSimpleTextVariable('repo-name', 'docs', source);
+    const view = createGuardArgsView(buildGuardArgsSnapshot([reserved, dashed], ['names', 'repo-name']));
+
+    const names = await accessField(view, { type: 'field', value: 'names' }, { preserveContext: false });
+    const reservedValue = await accessField(view, { type: 'bracketAccess', value: 'names' }, { preserveContext: false });
+    const dashedValue = await accessField(view, { type: 'bracketAccess', value: 'repo-name' }, { preserveContext: false });
+
+    expect(names).toEqual(['names', 'repo-name']);
+    expect(reservedValue).toBe(reserved);
+    expect(dashedValue).toBe(dashed);
+  });
+});
+
 describe('structured value mx accessors', () => {
   it('maps .mx.text and .mx.data to wrapper-level views', async () => {
     const payload = { stance: 'approved', mx: 'user-mx' };
@@ -230,6 +286,32 @@ describe('structured value mx accessors', () => {
 
     expect(mxText).toBe('hello');
     expect(mxData).toBe('hello');
+  });
+
+  it('falls back to wrapper text/data/type for primitive structured wrappers', async () => {
+    const structured = wrapStructured('hello', 'text', 'hello');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topText = await accessField(variable, { type: 'field', value: 'text' }, { preserveContext: false });
+    const topData = await accessField(variable, { type: 'field', value: 'data' }, { preserveContext: false });
+    const topType = await accessField(variable, { type: 'field', value: 'type' }, { preserveContext: false });
+
+    expect(topText).toBe('hello');
+    expect(topData).toBe('hello');
+    expect(topType).toBe('text');
+  });
+
+  it('keeps top-level text/data/type user-data-first for structured object wrappers', async () => {
+    const structured = wrapStructured({ stance: 'approved' }, 'object', '{"stance":"approved"}');
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const topText = await accessField(variable, { type: 'field', value: 'text' }, { preserveContext: false });
+    const topData = await accessField(variable, { type: 'field', value: 'data' }, { preserveContext: false });
+    const topType = await accessField(variable, { type: 'field', value: 'type' }, { preserveContext: false });
+
+    expect(topText).toBeNull();
+    expect(topData).toBeNull();
+    expect(topType).toBe('structured');
   });
 
   it('does not expose wrapper metadata as top-level fields', async () => {
@@ -404,5 +486,68 @@ describe('workspace metadata accessors', () => {
     expect(edits).toEqual([
       { path: '/repo/project/task.md', type: 'created', entity: 'file' }
     ]);
+  });
+
+  describe('wildcardIndex [*]', () => {
+    it('projects a field across array elements', async () => {
+      const items = [
+        { name: 'readData', auditRef: 'a1' },
+        { name: 'debiasedEval', auditRef: 'a2' },
+        { name: 'sendEmail', auditRef: 'a3' }
+      ];
+      const variable = createObjectVariable('history', { items }, true, source);
+
+      const names = await accessFields(
+        variable,
+        [
+          { type: 'field', value: 'items' } as const,
+          { type: 'wildcardIndex' } as const,
+          { type: 'field', value: 'name' } as const
+        ],
+        { preserveContext: false }
+      );
+      expect(names).toEqual(['readData', 'debiasedEval', 'sendEmail']);
+    });
+
+    it('projects nested fields across array elements', async () => {
+      const items = [
+        { meta: { id: 1 } },
+        { meta: { id: 2 } },
+        { meta: { id: 3 } }
+      ];
+      const variable = createObjectVariable('deep', { items }, true, source);
+
+      const ids = await accessFields(
+        variable,
+        [
+          { type: 'field', value: 'items' } as const,
+          { type: 'wildcardIndex' } as const,
+          { type: 'field', value: 'meta' } as const,
+          { type: 'field', value: 'id' } as const
+        ],
+        { preserveContext: false }
+      );
+      expect(ids).toEqual([1, 2, 3]);
+    });
+
+    it('returns the array as-is when [*] has no trailing fields', async () => {
+      const arr = [1, 2, 3];
+      const result = await accessFields(
+        arr,
+        [{ type: 'wildcardIndex' } as const],
+        { preserveContext: false }
+      );
+      expect(result).toEqual([1, 2, 3]);
+    });
+
+    it('throws on non-array values', async () => {
+      await expect(
+        accessFields(
+          'not-an-array',
+          [{ type: 'wildcardIndex' } as const, { type: 'field', value: 'x' } as const],
+          { preserveContext: false }
+        )
+      ).rejects.toThrow('Cannot use [*] on non-array value');
+    });
   });
 });

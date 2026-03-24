@@ -7,6 +7,7 @@ import {
   type EvaluatorResult
 } from '../utils/evaluator-result';
 import { executeParallelExecInvocations } from './helpers/parallel-exec';
+import { assertNoErrorLikeBooleanValue } from './truthiness-guard';
 import type { Variable } from '@core/types/variable';
 import {
   isTextLike,
@@ -118,16 +119,197 @@ export function isTruthy(value: any): boolean {
  * Extract the raw value from a Variable or return the value as-is
  */
 function extractValue(value: unknown): unknown {
-  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'name' in value &&
+    'source' in value &&
+    'value' in value
+  ) {
     const variable = value as Variable;
     return extractValue(variable.value);
   }
   if (isStructuredValue(value)) {
-    return value.data ?? value.text;
+    return extractValue(value.data ?? value.text);
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => extractValue(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  if ((value as { type?: string }).type === 'Literal' && 'value' in value) {
+    return extractValue((value as { value: unknown }).value);
+  }
+  if ((value as { type?: string }).type === 'Text' && 'content' in value) {
+    const content = (value as { content: unknown }).content;
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content.map(part => String(extractValue(part) ?? '')).join('');
+    }
+  }
+  if ((value as { type?: string }).type === 'array') {
+    const items = ((value as { items?: unknown[]; elements?: unknown[] }).items ??
+      (value as { items?: unknown[]; elements?: unknown[] }).elements ??
+      []);
+    return items.map(item => extractValue(item));
   }
   return value;
 }
 
+function arraysAreEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((item, index) => isEqual(item, b[index]));
+}
+
+function isNullLikeForTolerantMatch(value: unknown): boolean {
+  const extracted = extractValue(value);
+
+  if (extracted === null || extracted === undefined) {
+    return true;
+  }
+
+  if (Array.isArray(extracted)) {
+    return extracted.length === 0;
+  }
+
+  return typeof extracted === 'string' && extracted.trim().toLowerCase() === 'null';
+}
+
+function coerceNumericString(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const numeric = Number(trimmed);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function toTolerantArray(value: unknown): unknown[] | null {
+  const extracted = extractValue(value);
+
+  if (Array.isArray(extracted)) {
+    return extracted.map(item => extractValue(item));
+  }
+
+  if (extracted === null || extracted === undefined) {
+    return [];
+  }
+
+  if (typeof extracted === 'string') {
+    const trimmed = extracted.trim();
+
+    if (trimmed.toLowerCase() === 'null') {
+      return [];
+    }
+
+    if (trimmed.includes(',')) {
+      return trimmed
+        .split(',')
+        .map(part => part.trim())
+        .filter(part => part.length > 0);
+    }
+
+    return [trimmed];
+  }
+
+  return null;
+}
+
+function isTolerantScalarMatch(actual: unknown, expected: unknown): boolean {
+  const actualValue = extractValue(actual);
+  const expectedValue = extractValue(expected);
+
+  if (actualValue === null || actualValue === undefined || expectedValue === null || expectedValue === undefined) {
+    return actualValue === expectedValue;
+  }
+
+  if (typeof actualValue === 'number' && typeof expectedValue === 'string') {
+    const expectedNumber = coerceNumericString(expectedValue);
+    return expectedNumber !== null && actualValue === expectedNumber;
+  }
+
+  if (typeof actualValue === 'string' && typeof expectedValue === 'number') {
+    const actualNumber = coerceNumericString(actualValue);
+    return actualNumber !== null && actualNumber === expectedValue;
+  }
+
+  if (Array.isArray(actualValue) || Array.isArray(expectedValue)) {
+    return Array.isArray(actualValue) && Array.isArray(expectedValue) && arraysAreEqual(actualValue, expectedValue);
+  }
+
+  return Object.is(actualValue, expectedValue);
+}
+
+function isTolerantArrayMatch(actualItems: readonly unknown[], expectedItems: readonly unknown[]): boolean {
+  if (expectedItems.length === 0) {
+    return actualItems.length === 0;
+  }
+
+  if (actualItems.length === 0) {
+    return false;
+  }
+
+  const remainingExpected = [...expectedItems];
+
+  for (const actualItem of actualItems) {
+    const matchIndex = remainingExpected.findIndex(expectedItem => isTolerantScalarMatch(actualItem, expectedItem));
+    if (matchIndex === -1) {
+      return false;
+    }
+    remainingExpected.splice(matchIndex, 1);
+  }
+
+  return true;
+}
+
+/**
+ * Tolerant semantic comparison for LLM-produced values.
+ *
+ * Differences from ==:
+ * - string <-> array coercion for flat lists
+ * - comma-separated string <-> array coercion
+ * - order-independent array matching
+ * - subset semantics for actual ~= expected array comparisons
+ * - null / [] / "null" equivalence only when the expected side is empty
+ */
+export function isTolerantMatch(actual: unknown, expected: unknown): boolean {
+  if (isNullLikeForTolerantMatch(expected)) {
+    return isNullLikeForTolerantMatch(actual);
+  }
+
+  if (isNullLikeForTolerantMatch(actual)) {
+    return false;
+  }
+
+  const expectedArray = toTolerantArray(expected);
+  if (expectedArray) {
+    const actualArray = toTolerantArray(actual);
+    if (actualArray) {
+      return isTolerantArrayMatch(actualArray, expectedArray);
+    }
+
+    return expectedArray.length === 1 && isTolerantScalarMatch(actual, expectedArray[0]);
+  }
+
+  const actualArray = toTolerantArray(actual);
+  if (actualArray) {
+    return actualArray.length === 1 && isTolerantScalarMatch(actualArray[0], expected);
+  }
+
+  return isTolerantScalarMatch(actual, expected);
+}
 /**
  * mlld equality comparison
  * Follows mlld's type coercion rules:
@@ -148,6 +330,11 @@ export function isEqual(a: unknown, b: unknown): boolean {
   }
   if (bValue === null || bValue === undefined) {
     return false;
+  }
+
+  // Collections compare structurally so literal equality works in guards and expressions.
+  if (Array.isArray(aValue) || Array.isArray(bValue)) {
+    return Array.isArray(aValue) && Array.isArray(bValue) && arraysAreEqual(aValue, bValue);
   }
 
   // Handle boolean string coercion
@@ -314,32 +501,54 @@ export async function evaluateUnifiedExpression(
   }
 }
 
+function normalizeBinaryOperator(operator: unknown): string {
+  return Array.isArray(operator) ? operator[0] : String(operator);
+}
+
+function isParallelStreamExecInvocation(node: any): boolean {
+  return node?.type === 'ExecInvocation' && node?.withClause?.stream === true;
+}
+
+function collectParallelStreamExecInvocations(node: any): any[] | null {
+  if (isParallelStreamExecInvocation(node)) {
+    return [node];
+  }
+
+  if (!node || node.type !== 'BinaryExpression') {
+    return null;
+  }
+
+  if (normalizeBinaryOperator(node.operator) !== '||') {
+    return null;
+  }
+
+  const left = collectParallelStreamExecInvocations(node.left);
+  const right = collectParallelStreamExecInvocations(node.right);
+  if (!left || !right) {
+    return null;
+  }
+
+  return [...left, ...right];
+}
+
 /**
- * Evaluate binary expressions (&&, ||, ==, !=, <, >, <=, >=, ~=)
+ * Evaluate binary expressions (&&, ||, ==, !=, ~=, !~=, <, >, <=, >=)
  */
 async function evaluateBinaryExpression(
   node: any,
   env: Environment,
   context: EvaluationContext
 ): Promise<EvaluatorResult> {
-  let { operator } = node;
-  
-  // Handle operator being an array (from PEG.js negative lookahead)
-  if (Array.isArray(operator)) {
-    operator = operator[0];
-  }
-  
+  const operator = normalizeBinaryOperator(node.operator);
+
   const isConditionContext =
     Boolean(context?.isCondition) ||
     Boolean(node?.meta?.isWhenCondition) ||
     Boolean(node?.meta?.isBooleanContext);
-  const isExecParallel =
-    operator === '||' &&
-    !isConditionContext &&
-    node.left?.type === 'ExecInvocation' &&
-    node.right?.type === 'ExecInvocation';
-  if (isExecParallel) {
-    const { value, descriptor } = await executeParallelExecInvocations(node.left, node.right, env);
+  const parallelStreamNodes =
+    operator === '||' && !isConditionContext ? collectParallelStreamExecInvocations(node) : null;
+  if (parallelStreamNodes && parallelStreamNodes.length > 1) {
+    const { value, descriptor } = await executeParallelExecInvocations(parallelStreamNodes, env);
     return createEvaluatorResult(value, descriptor);
   }
   
@@ -348,6 +557,7 @@ async function evaluateBinaryExpression(
   
   // Short-circuit evaluation for logical operators  
   if (operator === '&&') {
+    assertNoErrorLikeBooleanValue(leftValue, 'Logical && evaluation');
     const leftTruthy = isTruthy(leftValue);
     if (!leftTruthy) {
       // Short-circuit: if left is falsy, return left value
@@ -359,6 +569,7 @@ async function evaluateBinaryExpression(
   }
   
   if (operator === '||') {
+    assertNoErrorLikeBooleanValue(leftValue, 'Logical || evaluation');
     const leftTruthy = isTruthy(leftValue);
     if (leftTruthy) {
       // Short-circuit: if left is truthy, return left value
@@ -391,9 +602,9 @@ async function evaluateBinaryExpression(
     case '!=':
       return createEvaluatorResult(!isEqual(leftValue, rightValue), mergedDescriptor);
     case '~=':
-      // Regex match operator
-      const regex = new RegExp(String(rightValue));
-      return createEvaluatorResult(regex.test(String(leftValue)), mergedDescriptor);
+      return createEvaluatorResult(isTolerantMatch(leftValue, rightValue), mergedDescriptor);
+    case '!~=':
+      return createEvaluatorResult(!isTolerantMatch(leftValue, rightValue), mergedDescriptor);
     case '<':
       const leftNum = toNumber(leftValue);
       const rightNum = toNumber(rightValue);
@@ -462,6 +673,7 @@ async function evaluateUnaryExpression(
   
   switch (node.operator) {
     case '!':
+      assertNoErrorLikeBooleanValue(operandValue, 'Unary ! evaluation');
       return createEvaluatorResult(!isTruthy(operandValue), operandResult.descriptor);
     case '-':
       return createEvaluatorResult(-toNumber(operandValue), operandResult.descriptor);
@@ -483,6 +695,7 @@ async function evaluateTernaryExpression(
   // Pass isCondition: true so missing field access returns undefined instead of throwing
   const conditionResult = await evaluateUnifiedExpression(node.condition, env, { ...context, isCondition: true });
   const conditionValue = conditionResult.value;
+  assertNoErrorLikeBooleanValue(conditionValue, 'Ternary condition evaluation');
   
   return isTruthy(conditionValue)
     ? await evaluateUnifiedExpression(node.trueBranch, env, context)

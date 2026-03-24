@@ -12,7 +12,7 @@ export type AstExtractorKey =
   | 'cpp'
   | 'csharp';
 
-export type AstExtractorFn = (content: string, filePath: string) => Definition[];
+export type AstExtractorFn = (content: string, filePath: string) => Definition[] | Promise<Definition[]>;
 
 export interface AstExtractorRegistry {
   ts: AstExtractorFn;
@@ -59,11 +59,11 @@ export function resolveAstExtractorKey(filePath: string): AstExtractorKey {
   return 'ts';
 }
 
-export function extractDefinitionsForFile(
+export async function extractDefinitionsForFile(
   content: string,
   filePath: string,
   registry: AstExtractorRegistry
-): Definition[] {
+): Promise<Definition[]> {
   const extractorKey = resolveAstExtractorKey(filePath);
   return registry[extractorKey](content, filePath);
 }

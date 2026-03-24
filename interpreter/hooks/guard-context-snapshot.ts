@@ -1,6 +1,7 @@
 import type { GuardContextSnapshot } from '../env/ContextManager';
 import type { Variable } from '@core/types/variable';
 import { isVariable } from '../utils/variable-resolution';
+import { cloneGuardArgsSnapshot } from '../utils/guard-args';
 import {
   cloneVariableForGuard,
   hasSecretLabel,
@@ -32,7 +33,10 @@ export function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardC
     tries: context.tries ? context.tries.map(entry => ({ ...entry })) : undefined,
     labels: context.labels ? [...context.labels] : undefined,
     sources: context.sources ? [...context.sources] : undefined,
-    hintHistory: context.hintHistory ? [...context.hintHistory] : undefined
+    taint: context.taint ? [...context.taint] : undefined,
+    toolsHistory: context.toolsHistory ? [...context.toolsHistory] : undefined,
+    hintHistory: context.hintHistory ? [...context.hintHistory] : undefined,
+    args: cloneGuardArgsSnapshot(context.args)
   };
   if (context.input !== undefined) {
     cloned.input = redactOrCloneGuardContextInput(context.input);

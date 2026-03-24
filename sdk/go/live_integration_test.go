@@ -154,6 +154,80 @@ func TestLiveLoopStopsViaStateUpdate(t *testing.T) {
 	}
 }
 
+func TestSDKLabelsFlowThroughPayloadAndStateUpdates(t *testing.T) {
+	cliPath, err := filepath.Abs(filepath.Join("..", "..", "dist", "cli.cjs"))
+	if err != nil {
+		t.Fatalf("resolve cli path: %v", err)
+	}
+	if _, err := os.Stat(cliPath); err != nil {
+		t.Fatalf("dist cli is required: %v", err)
+	}
+
+	client := New()
+	client.Command = "node"
+	client.CommandArgs = []string{cliPath}
+	client.Timeout = 15 * time.Second
+	defer func() {
+		_ = client.Close()
+	}()
+
+	script := strings.Join([]string{
+		"loop(99999, 50ms) until @state.exit [",
+		"  continue",
+		"]",
+		"show @payload.history.mx.labels.includes(\"untrusted\")",
+		"show @state.tool_result.mx.labels.includes(\"untrusted\")",
+		"show @state.tool_result",
+	}, "\n")
+
+	handle, err := client.ProcessAsync(script, &ProcessOptions{
+		Payload: map[string]any{
+			"history": "tool transcript",
+		},
+		PayloadLabels: map[string][]string{
+			"history": []string{"untrusted"},
+		},
+		State: map[string]any{
+			"exit":        false,
+			"tool_result": nil,
+		},
+		Mode:    "strict",
+		Timeout: 10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("start labeled process failed: %v", err)
+	}
+
+	time.Sleep(120 * time.Millisecond)
+	if err := handle.UpdateState("tool_result", "tool output", "untrusted"); err != nil {
+		t.Fatalf("labeled state update failed: %v", err)
+	}
+	if err := handle.UpdateState("exit", true); err != nil {
+		t.Fatalf("exit state update failed: %v", err)
+	}
+
+	output, err := handle.Result()
+	if err != nil {
+		t.Fatalf("labeled process wait failed: %v", err)
+	}
+
+	rawLines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := make([]string, 0, len(rawLines))
+	for _, line := range rawLines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("unexpected labeled output: %q", output)
+	}
+	if lines[0] != "true" || lines[1] != "true" || lines[2] != "tool output" {
+		t.Fatalf("unexpected labeled output fields: %q", output)
+	}
+}
+
 func findStateWrite(writes []StateWrite, path string) (StateWrite, bool) {
 	for _, write := range writes {
 		if write.Path == path {
