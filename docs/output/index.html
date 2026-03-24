@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Output - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" aria-current=&quot;page&quot;>Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p><code>output</code> writes to files and stdout. <code>file</code>/<code>files</code> project one or many files. <code>log</code> writes to stderr. <code>append</code> adds to existing files. <code>stream</code> enables real-time token-by-token output from LLM calls.</p>
+<h2 id="output-directive" tabindex="-1"><a class="header-anchor" href="#output-directive"><span>Output Directive</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">output</span> <span class="token variable variable">@content</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>out.txt<span class="token punctuation">"</span></span>
+<span class="token directive keyword">output</span> <span class="token variable variable">@data</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>config.json<span class="token punctuation">"</span></span>
+<span class="token directive keyword">output</span> <span class="token variable variable">@message</span> <span class="token operator">to</span> stdout
+<span class="token directive keyword">output</span> <span class="token variable variable">@error</span> <span class="token operator">to</span> stderr
+</code></pre>
+<p>Objects and arrays are automatically serialized to JSON when writing to <code>.json</code> files. For other file types, the value is converted to a string.</p>
+<h3 id="see-also" tabindex="-1"><a class="header-anchor" href="#see-also"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./append.md">Append Directive</a> - Append structured or text output incrementally.</li>
+<li><a href="./log.md">Log Directive</a> - Emit output to stderr.</li>
+<li><a href="../syntax/pipelines-basics.md">Pipelines Basics</a> - Attach <code>output</code> as a pipeline effect stage.</li>
+</ul>
+<h2 id="log-directive" tabindex="-1"><a class="header-anchor" href="#log-directive"><span>Log Directive</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@debugMode</span> <span class="token assignment-operator operator">=</span> <span class="token boolean">true</span>
+
+<span class="token directive keyword">log</span> <span class="token variable variable">@message</span>                        <span class="token comment">>> same as output @message to stderr</span>
+<span class="token directive keyword">log</span> <span class="token backtick-template"><span class="token punctuation">`</span>Processing: <span class="token variable">@item</span><span class="token punctuation">`</span></span>
+
+<span class="token comment">>> In action contexts</span>
+<span class="token directive keyword">for</span> <span class="token variable variable">@item</span> <span class="token operator">in</span> <span class="token variable variable">@items</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">log</span> <span class="token variable variable">@item</span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@debugMode</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">log</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Debug info<span class="token punctuation">"</span></span>
+</code></pre>
+<h3 id="see-also-1" tabindex="-1"><a class="header-anchor" href="#see-also-1"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./output.md">Output Directive</a> - File/stdout/stderr output patterns and formatting.</li>
+<li><a href="../syntax/pipelines-basics.md">Pipelines Basics</a> - Use <code>| log</code> as a pipeline effect stage.</li>
+</ul>
+<h2 id="append-directive" tabindex="-1"><a class="header-anchor" href="#append-directive"><span>Append Directive</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">append</span> <span class="token variable variable">@record</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>events.jsonl<span class="token punctuation">"</span></span>        <span class="token comment">>> JSON object per line</span>
+<span class="token directive keyword">append</span> <span class="token string-interpolated"><span class="token punctuation">"</span>raw line<span class="token punctuation">"</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>events.log<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> In pipelines</span>
+<span class="token variable variable">@data</span> <span class="token pipe-operator operator">|</span> <span class="token directive keyword">append</span> <span class="token string-interpolated"><span class="token punctuation">"</span>audit.jsonl<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> In loops</span>
+<span class="token directive keyword">for</span> <span class="token variable variable">@name</span> <span class="token operator">in</span> <span class="token variable variable">@runs</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">append</span> <span class="token variable variable">@name</span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>pipeline.log<span class="token punctuation">"</span></span>
+</code></pre>
+<p><code>.jsonl</code> enforces JSON serialization. Other extensions write text. <code>.json</code> blocked.</p>
+<h2 id="streaming" tabindex="-1"><a class="header-anchor" href="#streaming"><span>Streaming</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> In definition (recommended)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@llm</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">stream</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@prompt</span><span class="token punctuation">"</span></span> --<span class="token directive keyword">output</span>-<span class="token operator">format</span> <span class="token directive keyword">stream</span>-json --verbose --include-partial-messages
+<span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">streamFormat</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>claude-code<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@llm</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Explain TCP/IP<span class="token punctuation">"</span></span><span class="token punctuation">)</span>           <span class="token comment">>> streams tokens as they arrive</span>
+
+<span class="token comment">>> At invocation</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@raw</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@prompt</span><span class="token punctuation">"</span></span> --<span class="token directive keyword">output</span>-<span class="token operator">format</span> <span class="token directive keyword">stream</span>-json --verbose --include-partial-messages<span class="token punctuation">}</span>
+<span class="token directive keyword">run</span> <span class="token directive keyword">stream</span> <span class="token variable variable">@raw</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">streamFormat</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>claude-code<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Definition-level <code>stream</code> and <code>streamFormat</code> are inherited by both <code>run @exe()</code> and <code>show @exe()</code>.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+<span class="token directive keyword">show</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Explain TCP/IP<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token directive keyword">stream</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="format-adapters" tabindex="-1"><a class="header-anchor" href="#format-adapters"><span>Format Adapters</span></a></h3>
+<p>NDJSON streams require a format adapter to parse and display incrementally.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Built-in adapter (string shorthand)</span>
+<span class="token directive keyword">run</span> <span class="token directive keyword">stream</span> @<span class="token directive keyword">exe</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>prompt<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">streamFormat</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>claude-code<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Installable adapter</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claudeAgentSdkAdapter</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/<span class="token directive keyword">stream</span>-claude-agent-sdk
+<span class="token directive keyword">run</span> <span class="token directive keyword">stream</span> @<span class="token directive keyword">exe</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>prompt<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">streamFormat</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@claudeAgentSdkAdapter</span> <span class="token punctuation">}</span>
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Adapter</th>
+<th>Aliases</th>
+<th>Parses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ndjson</code></td>
+<td>—</td>
+<td>Generic NDJSON (default)</td>
+</tr>
+<tr>
+<td><code>claude-code</code></td>
+<td><code>claude-agent-sdk</code></td>
+<td>Claude CLI stream-json events</td>
+</tr>
+</tbody>
+</table>
+<p>Without an adapter, raw NDJSON passes through unformatted.</p>
+<h3 id="shell-streaming" tabindex="-1"><a class="header-anchor" href="#shell-streaming"><span>Shell Streaming</span></a></h3>
+<p>Non-NDJSON commands stream raw stdout:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@build</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">stream</span> sh <span class="token punctuation">{</span>npm <span class="token directive keyword">run</span> build<span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@build</span><span class="token punctuation">(</span><span class="token punctuation">)</span>                          <span class="token comment">>> live build output</span>
+</code></pre>
+<h3 id="parallel" tabindex="-1"><a class="header-anchor" href="#parallel"><span>Parallel</span></a></h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">stream</span> <span class="token variable variable">@a</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token logical-operator operator">||</span> <span class="token directive keyword">stream</span> <span class="token variable variable">@b</span><span class="token punctuation">(</span><span class="token punctuation">)</span>            <span class="token comment">>> concurrent, buffered per-task</span>
+</code></pre>
+<h3 id="suppress" tabindex="-1"><a class="header-anchor" href="#suppress"><span>Suppress</span></a></h3>
+<pre class="language-bash"><code class="language-bash">mlld script.mld --no-stream
+<span class="token assign-left variable">MLLD_NO_STREAM</span><span class="token operator">=</span>true mlld script.mld
+</code></pre>
+<h3 id="debug" tabindex="-1"><a class="header-anchor" href="#debug"><span>Debug</span></a></h3>
+<pre class="language-bash"><code class="language-bash">mlld script.mld --show-json           <span class="token operator">>></span> mirror NDJSON to stderr
+mlld script.mld --append-json out.jsonl  <span class="token operator">>></span> save events to <span class="token function">file</span>
+</code></pre>
+<h3 id="limitations" tabindex="-1"><a class="header-anchor" href="#limitations"><span>Limitations</span></a></h3>
+<ul>
+<li>After-guards conflict with streaming (output must be complete for validation)</li>
+<li>Pipeline stages buffer between stages; streaming is within each stage</li>
+</ul>
+<h2 id="file-directive" tabindex="-1"><a class="header-anchor" href="#file-directive"><span>File Directive</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@task</span>
+<span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>notes/today.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>## Notes\n<span class="token variable">@summary</span><span class="token punctuation">`</span></span>
+</code></pre>
+<p><code>file</code> writes exactly one file. Paths must be relative (no leading <code>/</code>) and cannot use <code>..</code>.</p>
+<p><strong>Inside a box block</strong> — writes to the box's workspace VFS:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@task</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>src/main.js<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@source</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Files written this way are scoped to the box. ShellSession commands can read them. No resolver is created.</p>
+<p><strong>Outside a box block</strong> — writes to the real filesystem, relative to project root.</p>
+<p><strong>Immutability:</strong> A path can only be written once per scope. Writing the same path again throws an error. Commands inside box blocks (via ShellSession) can modify files — the one-shot rule applies only to <code>file</code> directive writes.</p>
+<h2 id="files-directive" tabindex="-1"><a class="header-anchor" href="#files-directive"><span>Files Directive</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token string-interpolated"><span class="token punctuation">"</span>src/<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>index.js<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@source</span><span class="token punctuation">,</span> <span class="token object-key property">desc</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Entry point<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>config.json<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@config</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Each entry is an object with one file key mapped to content, and optional <code>desc</code> for metadata.</p>
+<p><strong>Named resolver — workspace creation:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@task</span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+<span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/src/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>main.js<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@code</span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@content</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/task.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@content</span>
+</code></pre>
+<p>The <code>&lt;@name/&gt;</code> syntax creates a VFS-backed resolver on first use. Subsequent <code>files &lt;@name/subdir&gt;</code> writes extend the same VFS. Read files back with <code>&lt;@name/path&gt;</code>.</p>
+<p><strong>Descriptions:</strong></p>
+<p>The <code>desc</code> field populates <code>workspace.descriptions</code> — a map of path to description. Agents can inspect file purposes without reading content:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@ws/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@task</span><span class="token punctuation">,</span> <span class="token object-key property">desc</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Current task specification<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>context.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@ctx</span><span class="token punctuation">,</span> <span class="token object-key property">desc</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Background context<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@ws</span>
+</code></pre>
+<p><strong>Inside a box block</strong> — writes to the active workspace VFS without creating a resolver:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">files</span> <span class="token string-interpolated"><span class="token punctuation">"</span>src/<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+    <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>index.js<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@source</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>util.js<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@utils</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> ls src/ <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Git hydration:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token operator">git</span> <span class="token string-interpolated"><span class="token punctuation">"</span>https://github.com/user/repo<span class="token punctuation">"</span></span> <span class="token object-key property">branch</span><span class="token ternary-operator operator">:</span><span class="token string-interpolated"><span class="token punctuation">"</span>main<span class="token punctuation">"</span></span>
+<span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/docs/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token operator">git</span> <span class="token string-interpolated"><span class="token punctuation">"</span>https://github.com/user/repo<span class="token punctuation">"</span></span> <span class="token object-key property">path</span><span class="token ternary-operator operator">:</span><span class="token string-interpolated"><span class="token punctuation">"</span>docs/<span class="token punctuation">"</span></span> <span class="token object-key property">depth</span><span class="token ternary-operator operator">:</span><span class="token number">1</span>
+</code></pre>
+<p>Clones text files into VFS. Binary files and symlinks are skipped. Options: <code>auth:</code> (keychain ref), <code>branch:</code> (branch/tag/commit), <code>path:</code> (subdirectory), <code>depth:</code> (default 1). Git-sourced files carry <code>src:git</code> taint.</p>
+<p><strong>Workspace inspection:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@ws/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>file.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>draft<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@ws</span><span class="token field-access property">.mx</span><span class="token field-access property">.edits</span>
+<span class="token directive keyword">show</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@ws/file.md<span class="token punctuation">></span></span><span class="token field-access property">.mx</span><span class="token field-access property">.diff</span>
+</code></pre>
+<p><code>.mx.edits</code> returns the change list. <code>&lt;@ws/path&gt;.mx.diff</code> returns a unified diff string.</p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

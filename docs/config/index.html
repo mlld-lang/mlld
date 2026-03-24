@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" aria-current=&quot;page&quot;>Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>Configuration includes project settings, environment variables, frontmatter, SDK modes, and checkpoint/resume for caching LLM call results.</p>
+<h2 id="config-files" tabindex="-1"><a class="header-anchor" href="#config-files"><span>Config Files</span></a></h2>
+<p>mlld uses dual configuration:</p>
+<ul>
+<li><code>mlld-config.json</code> - Your project settings (edit manually)</li>
+<li><code>mlld-lock.json</code> - Auto-generated locks (don't edit)</li>
+</ul>
+<p><code>mlld validate</code> warning suppression lives in <code>mlld-config.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"validate"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"suppressWarnings"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"exe-parameter-shadowing"</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Use suppression when a warning is intentional and reviewed.</p>
+<h2 id="paths-and-urls" tabindex="-1"><a class="header-anchor" href="#paths-and-urls"><span>Paths and URLs</span></a></h2>
+<p>Paths can be literal, interpolated, or resolver-based.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@dir</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./docs<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@userFile</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>data/<span class="token variable">@username</span>/profile.json<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@template</span> <span class="token assignment-operator operator">=</span> <span class="token string-literal">'templates/@var.html'</span>  <span class="token comment">>> literal '@'</span>
+
+<span class="token comment">>> URLs as sources</span>
+<span class="token directive keyword">show</span> <span class="token alligator"><span class="token punctuation">&lt;</span><span class="token url string">https://raw.githubusercontent.com/org/repo/main/README.md</span><span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@remote</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span><span class="token url string">https://example.com/README.md</span><span class="token punctuation">></span></span>
+</code></pre>
+<p><strong><code>@root</code> resolution</strong>: <code>@root</code> (alias: <code>@base</code>) resolves to the project root by walking up from the current file's directory looking for <code>mlld-config.json</code>, <code>mlld-lock.json</code>, <code>package.json</code>, <code>.git</code>, or similar project markers. Use <code>&lt;@root/path&gt;</code> for project-absolute paths. See <code>mlld howto builtins-reserved-variables</code> for the full resolution algorithm.</p>
+<h2 id="environment-variables" tabindex="-1"><a class="header-anchor" href="#environment-variables"><span>Environment Variables</span></a></h2>
+<p>Allow env vars in config, then import via <code>@input</code>.</p>
+<p><strong>mlld-config.json:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"security"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"allowedEnvVars"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"MLLD_NODE_ENV"</span><span class="token punctuation">,</span> <span class="token string">"MLLD_API_KEY"</span><span class="token punctuation">,</span> <span class="token string">"MLLD_GITHUB_TOKEN"</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Usage:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@MLLD_NODE_ENV</span><span class="token punctuation">,</span> <span class="token variable variable">@MLLD_API_KEY</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token reserved-variable builtin">@input</span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Running in <span class="token variable">@MLLD_NODE_ENV</span><span class="token punctuation">`</span></span>
+</code></pre>
+<p>All env vars must be prefixed with <code>MLLD_</code>.</p>
+<h2 id="policy" tabindex="-1"><a class="header-anchor" href="#policy"><span>policy</span></a></h2>
+<p>A policy object combines all security configuration into a single declaration.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span>no-secret-exfil<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span>no-sensitive-exfil<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span>no-untrusted-destructive<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span>no-untrusted-privileged<span class="token punctuation">"</span></span>
+    <span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">operations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">exfil</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>net:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">destructive</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>fs:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">privileged</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sys:admin<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">danger</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@keychain</span><span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong><code>defaults</code></strong> sets baseline behavior. <code>rules</code> enables built-in security rules that block dangerous label-to-operation flows. <code>unlabeled</code> optionally auto-labels all data that has no user-assigned labels -- set to <code>&quot;untrusted&quot;</code> to treat unlabeled data as untrusted, or <code>&quot;trusted&quot;</code> to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.</p>
+<p>Built-in positional rules use the same <code>defaults.rules</code> list. <code>no-send-to-unknown</code> checks operations labeled <code>exfil:send</code> and requires the first positional argument to carry <code>known</code>. <code>no-send-to-external</code> is the stricter send variant and requires <code>known:internal</code>. <code>no-destroy-unknown</code> checks operations labeled <code>destructive:targeted</code> and requires the first positional argument to carry <code>known</code>, which is useful for delete/cancel/remove flows where the target must be explicitly approved.</p>
+<p><code>mlld validate</code> warns on unknown built-in rule names in <code>defaults.rules</code> and suggests the closest known rule when it can.</p>
+<p><strong><code>locked</code></strong> makes all managed label-flow denials from this policy non-overridable, even by explicit privileged guards. Without <code>locked: true</code> (the default), a privileged guard can override policy label-flow denials with <code>allow</code> for specific operations. Use <code>locked: true</code> for absolute constraints that nothing should bypass.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>no-secret-exfil<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">locked</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong><code>operations</code></strong> groups semantic exe labels under risk categories. You label functions with what they DO (<code>net:w</code>, <code>fs:w</code>), and policy classifies those as risk types (<code>exfil</code>, <code>destructive</code>). This is the two-step pattern -- see <code>policy-operations</code>.</p>
+<p><code>mlld analyze --format json</code> surfaces these mappings under <code>policies[].operations</code>, and <code>mlld validate --context ...</code> can warn when privileged <code>op:</code> guards do not match any declared operation labels in the validation context.</p>
+<p><strong><code>auth</code></strong> defines caller-side credential mappings for <code>using auth:name</code>. It accepts short form (<code>&quot;API_KEY&quot;</code>) and object form (<code>{ from, as }</code>). Policy auth composes with standalone <code>auth</code>; caller policy entries override same-name module bindings.</p>
+<p><strong><code>capabilities</code></strong> controls what operations are allowed at all. <code>allow</code> whitelists command patterns. <code>danger</code> marks capabilities that require explicit opt-in.</p>
+<p><strong><code>env</code></strong> defines execution-environment constraints as policy (provider defaults, provider allow/deny rules, tools/mcps/network allowlists). These constraints attenuate runtime box/env configs and cannot be bypassed by local config.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">env</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">default</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@provider</span>/sandbox<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">providers</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@provider</span>/sandbox<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allowed</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@provider</span>/raw<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allowed</span><span class="token ternary-operator operator">:</span> <span class="token boolean">false</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">mcps</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>github.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Guards can also return policy fragments through <code>env</code> actions. The fragment is merged into active policy for that operation before environment config is derived:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">run</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> env <span class="token punctuation">{</span>
+    <span class="token object-key property">env</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">env</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><code>danger: [&quot;@keychain&quot;]</code> is required for keychain sources declared in <code>policy.auth</code>. Standalone top-level <code>auth</code> declarations do not require <code>danger</code>.</p>
+<p><code>needs</code> declarations are module requirement checks. They do not replace capability policy rules.</p>
+<p><strong><code>authorizations</code></strong> declares which <code>tool:w</code> operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to <code>tool:w</code>, and trusted control-arg metadata comes from the active <code>var tools</code> collection via <code>controlArgs</code>. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing <code>authorizations</code>, and the host injects it via <code>with { policy }</code>. Invalid authorization fragments fail closed during activation.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@taskPolicy</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">authorizations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">args</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">recipients</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mark<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token object-key property">create_file</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@worker</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@taskPolicy</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>See <code>policy-authorizations</code> for full syntax including control-arg enforcement and validation.</p>
+<p><strong>Export/import:</strong> Share policies across scripts:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@p</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> In another file</span>
+<span class="token directive keyword">import</span> <span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./policies.mld<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Policies compose with <code>union()</code> -- combine multiple config objects into one policy. The most restrictive rules win.</p>
+<h3 id="policy-capabilities" tabindex="-1"><a class="header-anchor" href="#policy-capabilities"><span>Policy Capabilities</span></a></h3>
+<p>The <code>capabilities</code> object controls what operations can run.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cmd:npm:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:r:**<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:w:<span class="token variable">@root</span>/tmp/**<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">danger</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@keychain</span><span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:r:~/.ssh/*<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sh<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> <span class="token operator">git</span> status <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Tool restrictions:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cmd:git:*</code></td>
+<td>git with any subcommands</td>
+</tr>
+<tr>
+<td><code>cmd:npm:install:*</code></td>
+<td>npm install with any args</td>
+</tr>
+<tr>
+<td><code>sh</code></td>
+<td>Shell access</td>
+</tr>
+</tbody>
+</table>
+<p>Command allow/deny patterns evaluate against the interpolated command text, including <code>@var</code> substitutions.</p>
+<p><strong>Filesystem patterns:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Access</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fs:r:**</code></td>
+<td>Read any path</td>
+</tr>
+<tr>
+<td><code>fs:w:@root/tmp/**</code></td>
+<td>Write under tmp (implies read)</td>
+</tr>
+<tr>
+<td><code>fs:r:~/.config/*</code></td>
+<td>Read home config files</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Flat syntax (shorthand):</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:echo:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:r:**<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span> <span class="token object-key property">network</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Both forms are equivalent. The nested form (<code>capabilities: { ... }</code>) is more explicit; the flat form places <code>allow</code>/<code>deny</code> at the top level as shorthand.</p>
+<p><strong>How allow and danger interact:</strong></p>
+<p><code>allow</code> and <code>danger</code> are two independent gates. <code>allow</code> is the general whitelist: it controls whether an operation is permitted at all. <code>danger</code> is a separate opt-in gate for sensitive operations that mlld considers inherently risky — reading SSH keys, force-pushing, running <code>sudo</code>, accessing the keychain, and similar. Both gates must pass for an operation to proceed.</p>
+<p>mlld ships with a built-in default danger list (defined in <code>core/policy/danger.ts</code>) covering credential files, destructive commands, and security-bypass flags. When an operation matches the default danger list, policy blocks it <em>unless</em> the policy's <code>danger</code> array explicitly includes a matching pattern. This check runs independently of <code>allow</code> — an operation that matches <code>allow</code> but falls on the danger list is still blocked.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:r:**<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sh<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> allow matches cmd:git:* — but git push --force is on the</span>
+<span class="token comment">>> default danger list. Without danger: ["cmd:git:push:*:--force"],</span>
+<span class="token comment">>> this is blocked with "Dangerous capability requires allow.danger".</span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> <span class="token operator">git</span> push origin main --force <span class="token punctuation">}</span>
+</code></pre>
+<p>To unblock it, add the matching pattern to <code>danger</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fs:r:**<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">danger</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:push:*:--force<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sh<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>The same double-gate applies to filesystem access. <code>allow: [&quot;fs:r:**&quot;]</code> permits reading all files, but reading <code>~/.ssh/id_rsa</code> still requires <code>danger: [&quot;fs:r:~/.ssh/*&quot;]</code> because that path matches the default danger list.</p>
+<p><strong>Danger list:</strong> Operations matching <code>danger</code> require explicit opt-in. Without <code>danger: [&quot;@keychain&quot;]</code>, keychain access is blocked even if other rules allow it.</p>
+<p>Keychain allow/deny patterns live under <code>policy.keychain</code> and match <code>service/account</code> paths (with <code>{projectname}</code> from <code>mlld-config.json</code>).</p>
+<p><strong>Common mistakes:</strong></p>
+<ul>
+<li><code>tools</code> in env config enforces runtime tool access (<code>Bash</code> for shell commands, tool names for MCP calls)</li>
+<li><code>capabilities.deny</code> handles command-pattern policy rules (for example <code>cmd:git:push</code>)</li>
+<li>Keychain access requires both <code>danger: [&quot;@keychain&quot;]</code> in capabilities AND <code>projectname</code> in <code>mlld-config.json</code></li>
+<li><code>no-secret-exfil</code> doesn't block <code>show</code>/<code>log</code> — add label flow rules for <code>op:show</code> and <code>op:log</code> (see <code>policy-auth</code>)</li>
+</ul>
+<p>See <code>policy-auth</code> for credential flow, <code>box-config</code> for environment restrictions.</p>
+<h3 id="operation-risk-labels" tabindex="-1"><a class="header-anchor" href="#operation-risk-labels"><span>Operation Risk Labels</span></a></h3>
+<p>Classify operations by risk using the two-step pattern: label exe functions with semantic labels describing WHAT they do, then map those to risk categories in policy.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Step 1: Semantic labels describe the operation</span>
+<span class="token directive keyword">exe</span> <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span>w <span class="token variable variable">@postToSlack</span><span class="token punctuation">(</span>msg<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> slack-cli <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@msg</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span>w <span class="token variable variable">@deleteFile</span><span class="token punctuation">(</span>path<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> rm -rf <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@path</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Step 2: Policy groups semantic labels under risk categories</span>
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>no-secret-exfil<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>no-untrusted-destructive<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">operations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">exfil</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>net:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">destructive</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>fs:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Now <code>secret</code> data cannot flow to <code>@postToSlack</code> (exfil rule) and <code>untrusted</code> data cannot flow to <code>@deleteFile</code> (destructive rule).</p>
+<p><strong>Why two steps?</strong></p>
+<ul>
+<li><strong>Reusability:</strong> Many functions share the same semantic label (<code>net:w</code> applies to Slack, email, webhooks). Changing the risk classification of <code>net:w</code> updates all of them at once.</li>
+<li><strong>Flexibility:</strong> The same exe definition works under different policies. A dev policy might allow <code>net:w</code>; a production policy classifies it as <code>exfil</code>.</li>
+<li><strong>Composability:</strong> Semantic labels are stable across teams and libraries. Risk classifications are a policy decision, not a code decision.</li>
+</ul>
+<p><strong>Risk categories:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>exfil</code></td>
+<td>Sends data outside the system</td>
+</tr>
+<tr>
+<td><code>destructive</code></td>
+<td>Deletes or modifies data irreversibly</td>
+</tr>
+<tr>
+<td><code>privileged</code></td>
+<td>Requires elevated permissions</td>
+</tr>
+</tbody>
+</table>
+<p>Risk labels can be hierarchical. <code>exfil:send</code> is a child of <code>exfil</code>, so <code>no-secret-exfil</code> still blocks secrets sent through it, while <code>no-send-to-unknown</code> can add a destination check on <code>@input[0]</code>. <code>destructive:targeted</code> is a child of <code>destructive</code>, so <code>no-untrusted-destructive</code> still applies while <code>no-destroy-unknown</code> adds a positive check that the target in <code>@input[0]</code> is <code>known</code>.</p>
+<p><strong>Multiple labels:</strong> Combine when an operation has multiple risks:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span>w<span class="token punctuation">,</span> <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span>w <span class="token variable variable">@exportAndDelete</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> backup_and_delete <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@data</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">operations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">exfil</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>net:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">destructive</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>fs:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Alternative -- direct risk labeling:</strong> You can label exe functions directly with risk categories, skipping the mapping step:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> exfil <span class="token variable variable">@sendToServer</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> curl -d <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@data</span><span class="token punctuation">"</span></span> <span class="token object-key property">https</span><span class="token ternary-operator operator">:</span>//api<span class="token field-access property">.example</span><span class="token field-access property">.com</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> destructive <span class="token variable variable">@deleteFile</span><span class="token punctuation">(</span>path<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> rm -rf <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@path</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>This is simpler but couples exe definitions to risk categories. The two-step pattern is preferred for maintainability.</p>
+<p>See <code>policy-authorizations</code> for how operations interact with per-tool authorization and control-arg enforcement.</p>
+<p><strong>Complete example:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>no-secret-exfil<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">operations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">exfil</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>net:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@patientRecords</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>clinic/patients.csv<span class="token punctuation">></span></span>
+<span class="token directive keyword">exe</span> <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span>w <span class="token variable variable">@post</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> curl -d <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@data</span><span class="token punctuation">"</span></span> <span class="token object-key property">https</span><span class="token ternary-operator operator">:</span>//api<span class="token field-access property">.example</span><span class="token field-access property">.com</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@post</span><span class="token punctuation">(</span><span class="token variable variable">@patientRecords</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Error: <code>Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'</code></p>
+<h3 id="policy-label-flow-rules" tabindex="-1"><a class="header-anchor" href="#policy-label-flow-rules"><span>Policy Label Flow Rules</span></a></h3>
+<p>The <code>labels</code> block in policy defines which data labels can flow to which operations.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">secret</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>op:cmd<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>op:show<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>net:w<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token string-interpolated"><span class="token punctuation">"</span>src:mcp<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>op:cmd:git:push<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>op:cmd:git:reset<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>destructive<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+      <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>op:cmd:git:status<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>op:cmd:git:log<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Deny/allow targets</strong> are operation labels -- both auto-applied (<code>op:cmd</code>, <code>op:show</code>) and user-declared (<code>net:w</code>, <code>destructive</code>, <code>safe</code>).</p>
+<p><strong>Prefix matching:</strong> A deny on <code>op:cmd:git</code> blocks all git subcommands (<code>op:cmd:git:push</code>, <code>op:cmd:git:reset</code>, etc.).</p>
+<p><strong>Most-specific-wins:</strong> When deny covers a prefix but allow covers a more specific path, the specific rule wins. Given <code>deny: [&quot;op:cmd:git&quot;]</code> and <code>allow: [&quot;op:cmd:git:status&quot;]</code>, <code>git status</code> is allowed but <code>git push</code> is blocked.</p>
+<p>Label-flow policy evaluates declared labels and taint labels (<code>src:*</code>, <code>dir:*</code>) attached to values.</p>
+<p><strong>Built-in rules vs. explicit deny lists:</strong> For common protection patterns, use <code>defaults.rules</code> with built-in rules like <code>no-secret-exfil</code> instead of writing explicit deny lists. See <code>policy-operations</code> for the two-step classification pattern where semantic labels (e.g., <code>net:w</code>) are mapped to risk categories (e.g., <code>exfil</code>) via <code>policy.operations</code>.</p>
+<p><strong>Privileged guard overrides:</strong> Managed label-flow denials can be overridden by an explicit privileged guard <code>allow</code> for specific operations. This enables a pattern where policy sets a broad restriction and a privileged guard punches specific holes. To prevent this, use <code>locked: true</code> on the policy.</p>
+<p><strong>In composed policies:</strong> Label deny/allow rules from all composed policy layers merge via union. A <code>deny</code> on <code>secret → op:cmd</code> from ANY layer blocks that flow in the merged policy. See <code>policy-composition</code> for merge rules.</p>
+<p><strong>Complete denial example:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">secret</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>op:show<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> secret <span class="token variable variable">@customerList</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>internal/customers.csv<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@customerList</span>
+</code></pre>
+<p>Error: <code>Label 'secret' cannot flow to 'op:show'</code> -- the policy blocks secret-labeled data from reaching show.</p>
+<p>For per-tool authorization with argument constraints (rather than label-flow rules), see <code>policy-authorizations</code>.</p>
+<p>See <code>labels-sensitivity</code> for declaring labels, <code>labels-source-auto</code> for source label rules.</p>
+<h3 id="policy-composition" tabindex="-1"><a class="header-anchor" href="#policy-composition"><span>Policy Composition</span></a></h3>
+<p>Multiple policies compose automatically when imported or declared.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Team policy allows echo and git</span>
+/<span class="token directive keyword">policy</span> <span class="token variable variable">@p1</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:echo:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cmd:git:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Project policy allows echo and node</span>
+/<span class="token directive keyword">policy</span> <span class="token variable variable">@p2</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:echo:*<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cmd:node:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Effective: only echo (intersection of both policies)</span>
+/<span class="token directive keyword">run</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>allowed by both<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Import pattern:</strong></p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">import</span> <span class="token directive keyword">policy</span> <span class="token variable variable">@baseline</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./baseline.mld<span class="token punctuation">"</span></span>
+/<span class="token directive keyword">import</span> <span class="token directive keyword">policy</span> <span class="token variable variable">@company</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./company.mld<span class="token punctuation">"</span></span>
+/<span class="token directive keyword">policy</span> <span class="token variable variable">@localPolicy</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Composition rules:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Rule</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allow</code></td>
+<td>Intersection</td>
+<td>Must be allowed by ALL policies</td>
+</tr>
+<tr>
+<td><code>deny</code></td>
+<td>Union</td>
+<td>Denied by ANY policy</td>
+</tr>
+<tr>
+<td><code>danger</code></td>
+<td>Intersection</td>
+<td>Must be opted into by ALL</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td>Minimum</td>
+<td>Most restrictive wins</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Note:</strong> If allow lists have no overlap, the intersection is empty and all operations are blocked. Ensure shared baseline commands appear in all layers.</p>
+<p><strong>Profile selection</strong> considers composed policy. The first profile whose <code>requires</code> all pass is selected:</p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+
+/<span class="token directive keyword">profiles</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">full</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> sh <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">readonly</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> Selects "readonly" because sh is denied</span>
+/<span class="token directive keyword">show</span> <span class="token variable variable">@mx</span><span class="token field-access property">.profile</span>
+</code></pre>
+<p>Label deny rules and auth configs from all layers merge via union — a <code>deny</code> on <code>secret → op:cmd</code> from ANY layer blocks that flow in the merged policy.</p>
+<p><strong>Authorizations</strong> merge with the same &quot;most restrictive wins&quot; principle. In the current phase this only governs <code>tool:w</code> operations:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Rule</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allow</code> (operations)</td>
+<td>Intersection</td>
+<td>Must be authorized by ALL layers</td>
+</tr>
+<tr>
+<td><code>args</code> (constraints)</td>
+<td>Conjunction</td>
+<td>All constraints from every layer must pass</td>
+</tr>
+</tbody>
+</table>
+<p><code>true</code> merged with a constrained entry becomes the constrained entry (stricter wins). Incompatible constraints on the same arg remain valid config but no runtime value can satisfy them — the call is denied.</p>
+<p>See <code>security-policies</code> for basic definition, <code>policy-capabilities</code> for capability syntax, <code>policy-label-flow</code> for label rules, <code>policy-authorizations</code> for authorization syntax.</p>
+<h3 id="policy-auth" tabindex="-1"><a class="header-anchor" href="#policy-auth"><span>Policy Auth</span></a></h3>
+<p><code>using auth:*</code> injects credentials as environment variables using sealed paths.</p>
+<p>Why sealed paths matter: injected credentials bypass string interpolation. They are set at process env level and do not pass through prompt-controlled template text.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">github</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>env:GH_TOKEN<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>GH_TOKEN<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">brave</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>claude <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@p</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Standalone <code>auth</code> and <code>policy.auth</code> use the same mapping shape. Use <code>policy.auth</code> when callers need to remap module auth names.</p>
+<h4 id="config-forms" tabindex="-1"><a class="header-anchor" href="#config-forms"><span>Config forms</span></a></h4>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>from</code></td>
+<td>Source: <code>&quot;keychain:path&quot;</code>, <code>&quot;keychain&quot;</code>, or <code>&quot;env:VAR&quot;</code></td>
+</tr>
+<tr>
+<td><code>as</code></td>
+<td>Target environment variable name</td>
+</tr>
+</tbody>
+</table>
+<p>Short form examples:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">brave</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Expansion rules:</p>
+<ul>
+<li><code>&quot;BRAVE_API_KEY&quot;</code> -&gt; <code>{ from: &quot;keychain:mlld-box-{projectname}/BRAVE_API_KEY&quot;, as: &quot;BRAVE_API_KEY&quot; }</code></li>
+<li><code>{ from: &quot;keychain&quot;, as: &quot;ANTHROPIC_API_KEY&quot; }</code> -&gt; <code>{ from: &quot;keychain:mlld-box-{projectname}/ANTHROPIC_API_KEY&quot;, as: &quot;ANTHROPIC_API_KEY&quot; }</code></li>
+</ul>
+<h4 id="resolution-order" tabindex="-1"><a class="header-anchor" href="#resolution-order"><span>Resolution order</span></a></h4>
+<p>For <code>using auth:name</code>, mlld resolves in this order:</p>
+<ol>
+<li>Auth captured on the executable where it was defined</li>
+<li>Caller <code>policy.auth</code></li>
+<li>Caller standalone <code>auth</code></li>
+</ol>
+<p>Caller bindings override same-name captured bindings.</p>
+<h4 id="keychain-behavior" tabindex="-1"><a class="header-anchor" href="#keychain-behavior"><span>Keychain behavior</span></a></h4>
+<p>Keychain paths use <code>service/account</code> and support <code>{projectname}</code> from <code>mlld-config.json</code>.</p>
+<p>Resolution for <code>from: &quot;keychain:...&quot;</code>:</p>
+<ol>
+<li>Read keychain entry</li>
+<li>If missing, read <code>process.env[as]</code></li>
+<li>If both missing, throw</li>
+</ol>
+<p>Unsupported provider schemes (for example <code>op://...</code>) fail with an explicit error.</p>
+<p><code>policy.keychain.allow</code> and <code>policy.keychain.deny</code> still gate keychain access.</p>
+<p><code>danger: [&quot;@keychain&quot;]</code> is required for <code>policy.auth</code> keychain sources. Standalone <code>auth</code> declares keychain intent directly and does not require <code>danger</code>.</p>
+<p>Linux keychain access uses <code>secret-tool</code> (libsecret). Ensure <code>secret-tool</code> is on PATH.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain:mlld-box-{projectname}/claude<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">keychain</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mlld-box-{projectname}/*<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>system/*<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">danger</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@keychain</span><span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>claude <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@p</span> <span class="token punctuation">}</span>
+</code></pre>
+<h4 id="label-flow-checks-for-using-auth%3A*" tabindex="-1"><a class="header-anchor" href="#label-flow-checks-for-using-auth%3A*"><span>Label flow checks for using auth:*</span></a></h4>
+<p>Auth injection keeps secrets out of command strings, but policy label flow checks still apply to env injection. Secrets injected via <code>using auth:*</code> are treated as <code>secret</code> input for policy checks, and <code>using @var as ENV</code> uses the variable's labels.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">api</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>env:SECRET<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">secret</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>exfil<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> BLOCKED: secret flows to exfil-labeled operation</span>
+<span class="token directive keyword">exe</span> exfil <span class="token variable variable">@send</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> curl -H <span class="token string-interpolated"><span class="token punctuation">"</span>Auth: $API_KEY<span class="token punctuation">"</span></span> ... <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>api
+<span class="token directive keyword">show</span> <span class="token variable variable">@send</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+<h4 id="explicit-variable-injection" tabindex="-1"><a class="header-anchor" href="#explicit-variable-injection"><span>Explicit variable injection</span></a></h4>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> secret <span class="token variable variable">@token</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>computed-value<span class="token punctuation">"</span></span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> tool <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token variable variable">@token</span> <span class="token operator">as</span> TOOL_KEY
+</code></pre>
+<p>Direct keychain access in templates/commands is blocked; use <code>auth</code> or <code>policy.auth</code> with <code>using auth:*</code> instead.</p>
+<p>Note: <code>no-secret-exfil</code> blocks secrets flowing through <code>exfil</code>-labeled operations. To also block direct <code>show</code> or <code>log</code> of secrets, add label flow rules:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">secret</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>op:show<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>op:log<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="box" tabindex="-1"><a class="header-anchor" href="#box"><span>Box</span></a></h2>
+<p>Boxes are mlld's primitive for scoped execution contexts. They encapsulate credentials, isolation, capabilities, and state.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>     <span class="token comment">>> Docker container for process isolation</span>
+  <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>.:/app<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>  <span class="token comment">>> Mount host . as /app, allow writes to /tmp</span>
+  <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>none<span class="token punctuation">"</span></span>                        <span class="token comment">>> No network access</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> npm test <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Why boxes matter for security:</strong></p>
+<ul>
+<li><strong>Credential isolation</strong> - Auth injected via sealed paths, not exposed as strings</li>
+<li><strong>Capability restriction</strong> - Limit what tools and operations agents can use</li>
+<li><strong>Blast radius</strong> - Contain failures within box boundaries</li>
+</ul>
+<p><strong>Boxes are values:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@task</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Review code<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>claude<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@readonly</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> ...<span class="token variable variable">@cfg</span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@readonly</span> <span class="token punctuation">[</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span> <span class="token punctuation">]</span>
+</code></pre>
+<p>Compute, compose, and pass boxes like any other value.<br>
+Use object spread for plain object derivation. The <code>with { ... }</code> clause is box-directive config syntax (for <code>box @cfg with { ... } [ ... ]</code>).<br>
+For enforcement boundaries (what mlld enforces locally vs what requires a sandbox provider), see the table in <code>box-config</code>.</p>
+<p><strong>Providers add isolation:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Isolation</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(none)</td>
+<td>Local execution</td>
+<td>Dev with specific auth</td>
+</tr>
+<tr>
+<td><code>@mlld/env-docker</code></td>
+<td>Container</td>
+<td>Process isolation</td>
+</tr>
+<tr>
+<td><code>@mlld/env-sprites</code></td>
+<td>Cloud sandbox</td>
+<td>Full isolation + state</td>
+</tr>
+</tbody>
+</table>
+<p>Without a provider, commands run locally with specified credentials.</p>
+<p><strong>Complete sandbox example:</strong></p>
+<p>Combine box config with policy to restrict an agent:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">capabilities</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>cmd:claude:*<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>         <span class="token comment">>> Only allow claude commands</span>
+    <span class="token object-key property">deny</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sh<span class="token punctuation">"</span></span><span class="token punctuation">]</span>                     <span class="token comment">>> Block shell access</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Glob<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Grep<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>  <span class="token comment">>> Allow tools for agent use</span>
+  <span class="token object-key property">mcps</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>                           <span class="token comment">>> Block MCP servers in this block</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>Analyze code<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>For a complete working example with Docker isolation, credentials, and guards, see <code>sandbox-demo</code> in <code>llm/run/j2bd/security/impl/sandbox-demo.mld</code>.</p>
+<p>Reading order: <code>box-config</code> for configuration fields, <code>box-blocks</code> for scoped execution, <code>policy-capabilities</code> for restrictions, <code>policy-auth</code> for credentials.</p>
+<h3 id="box-directive" tabindex="-1"><a class="header-anchor" href="#box-directive"><span>Box Directive</span></a></h3>
+<p>The <code>box</code> directive creates scoped execution contexts that combine process isolation, credential management, and capability control.</p>
+<p>For concepts and configuration details, see <code>box-overview</code>, <code>box-config</code>, and <code>box-blocks</code>.</p>
+<p><strong>Sandboxed execution with credentials:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>.:/app<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>none<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token object-key property">mcps</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>Analyze the codebase<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>claude
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The provider runs commands in a Docker container. <code>fs</code> restricts filesystem mounts, <code>net</code> blocks network access, <code>tools</code> limits runtime tool availability, and <code>mcps: []</code> blocks MCP servers. Credentials flow through sealed paths via <code>using auth:*</code> — never interpolated into command strings.</p>
+<p><strong>Local execution with different auth:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>claude-alt<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@cfg</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>claude-alt
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Without a <code>provider</code>, commands run locally. Use this for credential rotation across calls (e.g., multiple API keys to avoid per-account rate limits).</p>
+<p><strong>Config fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code></td>
+<td>Isolation provider (<code>&quot;@mlld/env-docker&quot;</code>, <code>&quot;@mlld/env-sprites&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td>Authentication reference from policy</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>Runtime tool allowlist</td>
+</tr>
+<tr>
+<td><code>mcps</code></td>
+<td>MCP server allowlist (<code>[]</code> blocks all)</td>
+</tr>
+<tr>
+<td><code>fs</code></td>
+<td>Filesystem access (passed to provider)</td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td>Network restrictions (passed to provider)</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td>Resource limits (passed to provider)</td>
+</tr>
+<tr>
+<td><code>profile</code></td>
+<td>Explicit profile selection</td>
+</tr>
+<tr>
+<td><code>profiles</code></td>
+<td>Profile definitions for policy-based selection</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Capability attenuation with <code>with</code>:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token comment">>> Only Read is available here</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><code>with</code> derives a restricted child inline. Children can only narrow parent capabilities, never extend them.</p>
+<p><strong>VFS resolver shorthand:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>checklist<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@workspace</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><code>box @workspace</code> is shorthand for <code>box { fs: @workspace } [...]</code>.</p>
+<p><strong>Anonymous VFS box:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>inside box<span class="token punctuation">"</span></span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>All box forms provide an in-memory workspace. <code>box { tools: [&quot;Read&quot;, &quot;Bash&quot;] } [ ... ]</code> restricts tools while still using workspace VFS. Use <code>box { fs: @workspace } [ ... ]</code> to bind an existing resolver-backed filesystem instead.</p>
+<p><strong>Tool scope formats:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span>
+<span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>read, write<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span>
+<span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>*<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@subset</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@readTool</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@writeTool</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@subset</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Profile selection:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">profiles</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">full</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">readonly</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@cfg</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">profile</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>readonly<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected.</p>
+<p><strong>Return values:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> fetch-data <span class="token punctuation">}</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@data</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Scoped environment:</strong></p>
+<p>The box block creates a child environment. Variables defined inside don't leak out, but the block can access parent scope variables.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token reserved-variable builtin">@input</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>test<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@config</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@processed</span> <span class="token assignment-operator operator">=</span> <span class="token reserved-variable builtin">@input</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@transform</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@processed</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="box-configuration" tabindex="-1"><a class="header-anchor" href="#box-configuration"><span>Box Configuration</span></a></h3>
+<p>Box configuration objects control isolation, credentials, and resource limits.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">provider</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mlld</span>/env-docker<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>.:/app<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>none<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">limits</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">mem</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>512m<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">cpu</span><span class="token ternary-operator operator">:</span> <span class="token number">1</span><span class="token field-access property">.0</span><span class="token punctuation">,</span> <span class="token object-key property">timeout</span><span class="token ternary-operator operator">:</span> <span class="token number">30000</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> npm test <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>VFS-backed local mode:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>todo<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@workspace</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat <span class="token variable variable">@root</span>/task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>These forms create a VirtualFS-backed runtime for local execution:</p>
+<ul>
+<li><code>box @workspace [ ... ]</code></li>
+<li><code>box { fs: @workspace } [ ... ]</code></li>
+<li><code>box [ ... ]</code> (anonymous workspace)</li>
+</ul>
+<p>In VFS mode, defaults are applied unless overridden:</p>
+<ul>
+<li><code>tools: [&quot;Bash&quot;, &quot;Read&quot;, &quot;Write&quot;, &quot;Glob&quot;, &quot;Grep&quot;]</code></li>
+<li><code>mcps: []</code></li>
+<li><code>net: { allow: [] }</code></li>
+</ul>
+<p>VFS defaults apply when the box has a workspace (anonymous <code>box [...]</code>, <code>box @workspace [...]</code>, or <code>box { fs: @workspace } [...]</code>) and no explicit <code>tools</code> field is provided. Explicit <code>with { tools: [...] }</code> overrides the defaults. Active <code>policy.env</code> constraints are then applied to the resolved box config — local box config can only be attenuated by policy (for example, requested tools are intersected with <code>policy.env.tools.allow</code>, and denied providers throw).</p>
+<p><strong>Configuration fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Values</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>provider</code></td>
+<td><code>&quot;@mlld/env-docker&quot;</code>, etc.</td>
+<td>Isolation provider</td>
+</tr>
+<tr>
+<td><code>fs</code></td>
+<td><code>{ read: [...], write: [...] }</code></td>
+<td>Filesystem access</td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td><code>&quot;none&quot;</code>, <code>&quot;host&quot;</code>, <code>&quot;limited&quot;</code></td>
+<td>Network restrictions</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td><code>{ mem, cpu, timeout }</code></td>
+<td>Resource limits</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td><code>&quot;credential-name&quot;</code></td>
+<td>Auth reference from policy</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td><code>[&quot;Read&quot;, &quot;Write&quot;, &quot;Bash&quot;, &quot;Glob&quot;, &quot;Grep&quot;]</code></td>
+<td>Runtime tool allowlist for commands and MCP tools</td>
+</tr>
+<tr>
+<td><code>mcps</code></td>
+<td><code>[]</code>, <code>[server-config]</code></td>
+<td>Runtime MCP server allowlist</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Important:</strong> <code>tools</code> and <code>mcps</code> enforce runtime access inside <code>box</code> blocks.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Enforced locally by mlld?</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tools</code></td>
+<td>Yes</td>
+<td>mlld restricts available tools</td>
+</tr>
+<tr>
+<td><code>mcps</code></td>
+<td>Yes</td>
+<td>mlld restricts available MCP servers</td>
+</tr>
+<tr>
+<td><code>fs</code></td>
+<td>No - requires container provider</td>
+<td>mlld passes config but cannot enforce filesystem restrictions without a sandbox</td>
+</tr>
+<tr>
+<td><code>net</code></td>
+<td>No - requires container provider</td>
+<td>mlld passes config but cannot enforce network restrictions without a sandbox</td>
+</tr>
+<tr>
+<td><code>limits</code></td>
+<td>No - requires container provider</td>
+<td>mlld passes config but cannot enforce resource limits without a sandbox</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Include <code>Bash</code> in <code>tools</code> to allow <code>run cmd</code>, <code>run sh</code>, and shell-backed command executables.</li>
+<li>Set <code>mcps: []</code> to block all MCP tool calls, or list servers to allow specific MCP sources.</li>
+<li>Use <code>capabilities.deny</code> for command-pattern policy rules (for example <code>cmd:git:push</code>).</li>
+</ul>
+<p><strong>Advanced: MCP configuration via <code>@mcpConfig()</code>:</strong></p>
+<p>Define an <code>@mcpConfig()</code> function to provide profile-based MCP server configuration:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">profiles</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">full</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">readonly</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">requires</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@mcpConfig</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.profile</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>full<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span>
+    <span class="token object-key property">servers</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token object-key property">command</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mcp-server<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>*<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.profile</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>readonly<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span>
+    <span class="token object-key property">servers</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token object-key property">command</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mcp-server<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>list<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>get<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span> <span class="token object-key property">servers</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@cfg</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">profile</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>readonly<span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">show</span> <span class="token variable variable">@list</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The function is called when a <code>box</code> block spawns, with <code>@mx.profile</code> set from the <code>with { profile }</code> clause. When no profile is specified, the first profile whose requirements are satisfied by the active policy is selected. Explicit <code>with { profile: &quot;name&quot; }</code> overrides this automatic selection.</p>
+<p><strong>Compose with object spread:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@readonly</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  ...<span class="token variable variable">@sandbox</span><span class="token punctuation">,</span>
+  <span class="token object-key property">fs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> ...<span class="token variable variable">@sandbox</span><span class="token field-access property">.fs</span><span class="token punctuation">,</span> <span class="token object-key property">read</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>.:/app<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">write</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>See <code>box-overview</code> for concepts, <code>box-directive</code> for block syntax.</p>
+<h3 id="box-blocks" tabindex="-1"><a class="header-anchor" href="#box-blocks"><span>Box Blocks</span></a></h3>
+<p>Execute directives within a scoped environment using <code>box @config [ ... ]</code>.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>inside sandbox<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The environment is active only within the block and released on exit.</p>
+<p><strong>Anonymous workspace block:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>inside box<span class="token punctuation">"</span></span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>All box blocks create an in-memory workspace for the block. <code>box [ ... ]</code>, <code>box @config [ ... ]</code>, and <code>box @workspace [ ... ]</code> all support <code>file</code>/<code>files</code> directives and shell commands via ShellSession with cwd at the project root.</p>
+<p><strong>Named workspace block:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>from resolver<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@workspace</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat task<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Use <code>box @workspace</code> to bind an existing resolver-backed workspace as the active box filesystem.</p>
+<p><strong>Inspect workspace edits and diffs:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token string-interpolated"><span class="token punctuation">"</span>task.md<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>draft<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">]</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@workspace</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>notes.md<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>review complete<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@workspace</span><span class="token field-access property">.mx</span><span class="token field-access property">.edits</span>
+<span class="token directive keyword">show</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/notes.md<span class="token punctuation">></span></span><span class="token field-access property">.mx</span><span class="token field-access property">.diff</span>
+</code></pre>
+<ul>
+<li><code>@workspace.mx.edits</code> — array of <code>{path, type, entity}</code> where type is <code>created</code>/<code>modified</code>/<code>deleted</code></li>
+<li><code>&lt;@workspace/path&gt;.mx.diff</code> — unified diff string for a single file</li>
+</ul>
+<p><strong>Git hydration with <code>files = git</code>:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">files</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@workspace/<span class="token punctuation">></span></span> <span class="token assignment-operator operator">=</span> <span class="token operator">git</span> <span class="token string-interpolated"><span class="token punctuation">"</span>https://github.com/mlld-lang/mlld<span class="token punctuation">"</span></span> <span class="token object-key property">branch</span><span class="token ternary-operator operator">:</span><span class="token string-interpolated"><span class="token punctuation">"</span>main<span class="token punctuation">"</span></span> <span class="token object-key property">path</span><span class="token ternary-operator operator">:</span><span class="token string-interpolated"><span class="token punctuation">"</span>docs/<span class="token punctuation">"</span></span> <span class="token object-key property">depth</span><span class="token ternary-operator operator">:</span><span class="token number">1</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@workspace</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token object-key property">net</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>github.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> ls . <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Use <code>git</code> as a <code>files</code> source to clone text files into workspace VFS.</p>
+<p>Supported git options:</p>
+<ul>
+<li><code>auth:</code> token or keychain ref (for private repos)</li>
+<li><code>branch:</code> branch/tag/commit</li>
+<li><code>path:</code> subdirectory within the repo</li>
+<li><code>depth:</code> shallow clone depth (default <code>1</code>)</li>
+</ul>
+<p>Hydration behavior:</p>
+<ul>
+<li>Text files are imported into workspace VFS</li>
+<li>Binary files and symlinks are skipped with warnings</li>
+<li>Imported files are tainted with <code>src:git</code> provenance metadata</li>
+<li><code>box.net</code> allow rules are enforced for remote git hosts</li>
+</ul>
+<p><strong>Return values and workspace binding:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>data.txt<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>completed<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@result</span>                <span class="token comment">>> "completed" — box returned a value via =></span>
+</code></pre>
+<p>When a box uses <code>=&gt;</code>, the variable gets the returned value, not the workspace.</p>
+<p>To access workspace files after the box exits, omit <code>=&gt;</code> so the variable binds to the workspace:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@ws</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>data.txt<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@ws/data.txt<span class="token punctuation">></span></span>         <span class="token comment">>> "hello" — reads from workspace via resolver</span>
+</code></pre>
+<p>The <code>&lt;@name/path&gt;</code> resolver syntax reads from the workspace VFS after the box exits. Inside the box body, use <code>run cmd { cat file.txt }</code> to read via the ShellSession — bare <code>&lt;file.txt&gt;</code> reads from the real filesystem, not the active workspace.</p>
+<p><strong>Inline derivation with <code>with</code>:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token variable variable">@sandbox</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>read-only mode<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@result</span>
+</code></pre>
+<p>Derives a restricted environment inline without naming it.</p>
+<p><strong>Named child environments:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@sandbox</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@readOnly</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> ...<span class="token variable variable">@sandbox</span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">box</span> <span class="token variable variable">@readOnly</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat README<span class="token field-access property">.md</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Child environments can only restrict parent capabilities, never extend them.</p>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>Directives inside blocks use bare syntax (no <code>/</code> prefix)</li>
+<li>Environment resources are released when the block exits</li>
+<li><code>with { ... }</code> is box directive config syntax (<code>box @cfg with { ... } [ ... ]</code>), not a general object-modifier expression</li>
+<li>Ambient <code>@mx.box</code> includes active bridge metadata (<code>mcpConfigPath</code>, <code>socketPath</code>) while inside the box scope</li>
+<li>See <code>box-overview</code> for concepts, <code>box-config</code> for configuration fields</li>
+</ul>
+<p><strong>Per-call tool configuration via <code>config.tools</code>:</strong></p>
+<p>When an <code>exe llm</code> is invoked with a <code>config.tools</code> array, the runtime automatically creates MCP bridges and exposes the result on <code>@mx.llm</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> llm <span class="token variable variable">@agent</span><span class="token punctuation">(</span>prompt<span class="token punctuation">,</span> config<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@config</span> <span class="token ternary-operator operator">?</span> @<span class="token object-key property">config</span> <span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span>
+  <span class="token comment">>> @mx.llm.config   — MCP config file path (empty string if no bridges)</span>
+  <span class="token comment">>> @mx.llm.allowed  — unified tool names for --allowedTools or equivalent</span>
+  <span class="token comment">>> @mx.llm.native   — native tool names CSV (empty when no native tools requested)</span>
+  <span class="token comment">>> @mx.llm.inBox    — true when an active VFS bridge exists</span>
+  <span class="token comment">>> @mx.llm.hasTools  — true when config.tools was specified</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p --allowedTools <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.allowed<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Inside a box, string tools (like <code>&quot;Read&quot;</code>) route through a filtered VFS bridge proxy. Outside a box, string tools pass through as native CLI tool names. Exe refs always get their own function MCP bridge. The runtime handles all of this — module authors just read <code>@mx.llm</code>.</p>
+<p>Function tools (exe refs) get their own MCP server:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@double</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo $<span class="token punctuation">(</span><span class="token punctuation">(</span> <span class="token variable variable">@n</span><span class="token wildcard keyword"> *</span> <span class="token number">2</span> <span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@r</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@answer</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Double 21<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token variable variable">@double</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@answer</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The runtime combines both the VFS bridge (for Read) and a function bridge (for @double) into a single MCP config file, exposed via <code>@mx.llm.config</code>.</p>
+<h2 id="auth" tabindex="-1"><a class="header-anchor" href="#auth"><span>Auth</span></a></h2>
+<p>Use <code>auth</code> to declare credentials at module scope without requiring callers to import policy objects.</p>
+<h3 id="standalone-auth" tabindex="-1"><a class="header-anchor" href="#standalone-auth"><span>Standalone auth</span></a></h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@search</span><span class="token punctuation">(</span>q<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> /* uses process<span class="token field-access property">.env</span><span class="token field-access property">.BRAVE_API_KEY</span> */ <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>brave
+</code></pre>
+<p>Short form expands to:</p>
+<ul>
+<li><code>from: &quot;keychain:mlld-box-{projectname}/BRAVE_API_KEY&quot;</code></li>
+<li><code>as: &quot;BRAVE_API_KEY&quot;</code></li>
+<li>runtime resolution: keychain first, then <code>process.env.BRAVE_API_KEY</code></li>
+</ul>
+<h3 id="long-forms" tabindex="-1"><a class="header-anchor" href="#long-forms"><span>Long forms</span></a></h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain:custom-service/custom-account<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">auth</span> <span class="token variable variable">@brave</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>env:SOME_OTHER_VAR<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p><code>from: &quot;keychain&quot;</code> expands to <code>keychain:mlld-box-{projectname}/&lt;as&gt;</code>.</p>
+<p>Unknown provider schemes (for example <code>op://...</code>) fail with a clear error until provider support is added.</p>
+<h3 id="policy-composition-1" tabindex="-1"><a class="header-anchor" href="#policy-composition-1"><span>Policy composition</span></a></h3>
+<p><code>policy.auth</code> still works and accepts the same short/long forms:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">brave</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>BRAVE_API_KEY<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Resolution order for <code>using auth:name</code>:</p>
+<ol>
+<li>Auth captured on the executable where it was defined</li>
+<li>Caller <code>policy.auth</code></li>
+<li>Caller standalone <code>auth</code></li>
+</ol>
+<p>Caller definitions override same-name module auth.</p>
+<h3 id="keychain-cli" tabindex="-1"><a class="header-anchor" href="#keychain-cli"><span>Keychain CLI</span></a></h3>
+<pre class="language-bash"><code class="language-bash">mlld keychain <span class="token function">add</span> BRAVE_API_KEY
+mlld keychain get BRAVE_API_KEY
+mlld keychain list
+mlld keychain <span class="token function">rm</span> BRAVE_API_KEY
+mlld keychain <span class="token function">import</span> .env
+</code></pre>
+<p>Entries are stored as <code>service=mlld-box-{projectname}</code> / <code>account=&lt;name&gt;</code>.</p>
+<h2 id="07b-policy" tabindex="-1"><a class="header-anchor" href="#07b-policy"><span>07b Policy</span></a></h2>
+<h3 id="policy-authorizations" tabindex="-1"><a class="header-anchor" href="#policy-authorizations"><span>Policy Authorizations</span></a></h3>
+<p>The <code>authorizations</code> section in policy declares which <code>tool:w</code> operations are authorized for a task, with per-argument constraints on control args. In the current phase it applies only to <code>tool:w</code>. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@base</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">defaults</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">rules</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>no-send-to-unknown<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>no-destroy-unknown<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">operations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token string-interpolated"><span class="token punctuation">"</span>exfil:send<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>tool:w:send_email<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>tool:w:share_file<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token string-interpolated"><span class="token punctuation">"</span>destructive:targeted<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>tool:w:delete_file<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@taskPolicy</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">authorizations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+        <span class="token object-key property">args</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+          <span class="token object-key property">recipients</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mark<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token object-key property">create_file</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@worker</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@taskPolicy</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The <code>with { policy }</code> merge combines <code>@taskPolicy</code> with the ambient <code>@base</code> policy. The merged config activates authorization enforcement for the call chain.</p>
+<h4 id="tool-metadata" tabindex="-1"><a class="header-anchor" href="#tool-metadata"><span>Tool Metadata</span></a></h4>
+<p>Phase 1 reads trusted control-arg metadata from the active tool collection. Declare write-tool labels and control args on <code>var tools</code> entries:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@send_email</span><span class="token punctuation">,</span>
+    <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>tool:w:send_email<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>recipients<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cc<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>bcc<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>subject<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">controlArgs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>recipients<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cc<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>bcc<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">create_file</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@create_file</span><span class="token punctuation">,</span>
+    <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>tool:w:create_file<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>title<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">controlArgs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><code>controlArgs</code> must reference visible tool parameters. <code>mlld validate --context tools.mld</code> and runtime activation both use this trusted metadata when checking <code>policy.authorizations</code>.</p>
+<h4 id="entries" tabindex="-1"><a class="header-anchor" href="#entries"><span>Entries</span></a></h4>
+<p>Keys under <code>authorizations.allow</code> are exact operation names matching <code>@mx.op.name</code>. For MCP-backed tools, use the mlld-side canonical name, not the provider's raw tool name.</p>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Omitted (but in scope)</td>
+<td>Denied. Default-deny for unlisted <code>tool:w</code> operations.</td>
+</tr>
+<tr>
+<td><code>create_file: true</code></td>
+<td>Authorized with no argument constraints. Only valid for tools with no declared control args.</td>
+</tr>
+<tr>
+<td><code>send_email: { args: { ... } }</code></td>
+<td>Authorized. Listed args must satisfy constraints.</td>
+</tr>
+</tbody>
+</table>
+<p><code>{}</code> and <code>{ args: {} }</code> are accepted but normalized to <code>true</code> with a warning. The canonical form for unconstrained authorization is <code>true</code>.</p>
+<h4 id="argument-constraints" tabindex="-1"><a class="header-anchor" href="#argument-constraints"><span>Argument Constraints</span></a></h4>
+<p>Each constrained argument accepts:</p>
+<p><strong>Literal value</strong> — uses tolerant comparison (<code>~=</code>):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@taskPolicy</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">authorizations</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">allow</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+      <span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+        <span class="token object-key property">args</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+          <span class="token object-key property">recipients</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mark<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Explicit eq</strong> — equivalent to bare literal, for clarity:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">args</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">recipients</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">eq</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mark<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>One-of</strong> — arg must match any candidate:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">send_email</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">args</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">recipients</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">oneOf</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>mark<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>sarah<span class="token variable">@example</span>.com<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Tolerant comparison (<code>~=</code>) handles string-vs-array, ordering, null equivalence, and subset matching. The worker can do <em>less</em> than authorized (fewer recipients) but not <em>more</em> (additional unauthorized recipients).</p>
+<h4 id="control-arg-enforcement" tabindex="-1"><a class="header-anchor" href="#control-arg-enforcement"><span>Control-Arg Enforcement</span></a></h4>
+<p>Tools declare which arguments are security-relevant (control args) on the trusted tool collection entry via <code>controlArgs</code>. The runtime consumes this metadata to enforce that planners constrain all control args.</p>
+<p><strong>Two enforcement layers:</strong></p>
+<p><strong>Validation (with tool context):</strong> <code>mlld validate --context tools.mld</code> catches missing constraints before execution:</p>
+<ul>
+<li>A declared control arg that is NOT constrained in the <code>authorizations</code> entry is a <strong>validation error</strong>. The planner must pin it with a literal, <code>eq</code>, or <code>oneOf</code> constraint.</li>
+<li>A tool with declared control args authorized as <code>true</code> (unconstrained) is a <strong>validation error</strong>. <code>true</code> is only valid for tools with no declared control args.</li>
+</ul>
+<p><strong>Runtime (always):</strong> Whether or not validation ran, the runtime enforces that args not mentioned in the constraint must be empty/null. If the planner doesn't mention <code>cc</code> on <code>send_email</code>, the runtime enforces that <code>cc</code> must be null, <code>[]</code>, or absent. This prevents silent omission from becoming an open hole.</p>
+<ul>
+<li>Arguments not declared as control args are unconstrained data args — the worker fills them freely.</li>
+</ul>
+<p><strong>Example:</strong> <code>send_email</code> declares <code>recipients</code>, <code>cc</code>, <code>bcc</code> as control args. <code>subject</code>, <code>body</code>, <code>attachments</code> are data args.</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"authorizations"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"allow"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"send_email"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        <span class="token property">"args"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+          <span class="token property">"recipients"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"mark@example.com"</span><span class="token punctuation">]</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>This authorizes <code>send_email</code> with <code>recipients</code> pinned to <code>mark@example.com</code>. Because <code>cc</code> and <code>bcc</code> are declared control args but omitted from the constraint, they are enforced as empty/null at runtime. The planner doesn't need to mention <code>subject</code> or <code>body</code> — those are data args.</p>
+<p>If the planner had written <code>&quot;send_email&quot;: true</code>, validation would reject it because <code>send_email</code> has declared control args.</p>
+<h4 id="enforcement" tabindex="-1"><a class="header-anchor" href="#enforcement"><span>Enforcement</span></a></h4>
+<p><code>authorizations</code> compiles to internal privileged guards. These are the same guards that <code>defaults.rules</code> and <code>labels</code> produce — they participate in the standard guard override mechanism:</p>
+<ul>
+<li>Matching <code>allow</code> can override managed label-flow denials from <code>defaults.rules</code> and <code>labels</code> (unless <code>locked: true</code>)</li>
+<li><code>locked: true</code> disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials</li>
+<li>Capability denials (<code>capabilities.allow/deny/danger</code>), <code>env</code> restrictions, <code>auth</code>, and <code>limits</code> are separate enforcement paths and are not affected by <code>authorizations</code></li>
+</ul>
+<p>Authorization denials behave like any other guard denial — they can be caught with <code>denied =&gt;</code> handlers and are surfaced through the SDK's existing denial reporting.</p>
+<h4 id="planner-use" tabindex="-1"><a class="header-anchor" href="#planner-use"><span>Planner Use</span></a></h4>
+<p>The primary use case is planner-authorized agent execution. A planning LLM produces a JSON authorization fragment. The step script parses it and injects it via <code>with { policy }</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@plannerOutput</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@planner</span><span class="token punctuation">(</span><span class="token variable variable">@task</span><span class="token punctuation">)</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@agent</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">)</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">policy</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@plannerOutput</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The planner's output should contain only <code>authorizations</code> — not <code>defaults</code>, <code>rules</code>, <code>locked</code>, <code>labels</code>, <code>operations</code>, or other policy sections. Those are developer-controlled. The runtime treats <code>with { policy }</code> as a generic policy merge path, so the host is responsible for restricting planner output before injection.</p>
+<h4 id="validation" tabindex="-1"><a class="header-anchor" href="#validation"><span>Validation</span></a></h4>
+<p><code>mlld validate --context tools.mld</code> checks authorizations fragments:</p>
+<ul>
+<li>Every <code>authorizations.allow</code> key must resolve to a known exe in context</li>
+<li>Every constrained arg name must exist on that exe's parameter list</li>
+<li>A declared control arg omitted from the <code>args</code> constraint is an error</li>
+<li>A tool with declared control args authorized as <code>true</code> is an error</li>
+<li><code>{}</code> and <code>{ args: {} }</code> produce normalization warnings</li>
+</ul>
+<p>Invalid fragments fail closed: if validation fails, the policy is not activated, the exe call fails with a structured error, and the host decides recovery.</p>
+<h4 id="composition" tabindex="-1"><a class="header-anchor" href="#composition"><span>Composition</span></a></h4>
+<p>When multiple active policy layers have <code>authorizations</code>, they compose via the standard &quot;most restrictive wins&quot; rule:</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Allowed operations</td>
+<td>Intersection (both must authorize)</td>
+</tr>
+<tr>
+<td>Constraints per operation</td>
+<td>Conjunction (all must pass)</td>
+</tr>
+</tbody>
+</table>
+<p><code>true</code> merged with a constrained entry becomes the constrained entry. Incompatible constraints (e.g., <code>eq: &quot;a&quot;</code> and <code>eq: &quot;b&quot;</code>) are valid config but no runtime value can satisfy them — the call is denied.</p>
+<p>See <code>policy-composition</code> for general merge rules. See <code>guards-privileged</code> for the override mechanism.</p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

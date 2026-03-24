@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Start - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" aria-current=&quot;page&quot;>Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <h1 id="quick-start" tabindex="-1"><a class="header-anchor" href="#quick-start"><span>Quick Start</span></a></h1>
+<p>Get running with mlld in 5 minutes.</p>
+<h2 id="install" tabindex="-1"><a class="header-anchor" href="#install"><span>Install</span></a></h2>
+<pre class="language-bash"><code class="language-bash"><span class="token function">npm</span> <span class="token function">install</span> <span class="token parameter variable">-g</span> mlld
+</code></pre>
+<h2 id="set-up-your-tools" tabindex="-1"><a class="header-anchor" href="#set-up-your-tools"><span>Set Up Your Tools</span></a></h2>
+<p>Install the mlld skill so your LLM coding assistant can help you write mlld:</p>
+<pre class="language-bash"><code class="language-bash">mlld skill <span class="token function">install</span>
+</code></pre>
+<p>This gives Claude Code (and other supported tools) the ability to understand mlld syntax, generate scripts, and help you debug.</p>
+<p>Two other commands you'll use constantly:</p>
+<pre class="language-bash"><code class="language-bash">mlld howto <span class="token operator">&lt;</span>keyword<span class="token operator">></span>       <span class="token comment"># Search docs by keyword (fuzzy matches titles, tags, content)</span>
+mlld validate <span class="token operator">&lt;</span>file<span class="token operator">|</span>dir<span class="token operator">></span>   <span class="token comment"># Instant syntax check — catches errors before you run</span>
+</code></pre>
+<p><code>mlld howto</code> is your go-to reference. Try <code>mlld howto import</code>, <code>mlld howto for</code>, <code>mlld howto security</code> — it covers everything.</p>
+<h2 id="your-first-script" tabindex="-1"><a class="header-anchor" href="#your-first-script"><span>Your First Script</span></a></h2>
+<p>Create <code>hello.mld</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>World<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+</code></pre>
+<p>Run it:</p>
+<pre class="language-bash"><code class="language-bash">mlld hello.mld
+</code></pre>
+<p>Output:</p>
+<pre><code>Hello, World!
+</code></pre>
+<p>That's it. <code>var</code> creates variables (always <code>@</code>-prefixed), backticks do string interpolation, <code>show</code> prints output.</p>
+<h2 id="load-files" tabindex="-1"><a class="header-anchor" href="#load-files"><span>Load Files</span></a></h2>
+<p>Angle brackets load file contents:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@readme</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>README.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>package.json<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Project: <span class="token variable">@config</span>.name<span class="token punctuation">`</span></span>
+</code></pre>
+<p>Globs load multiple files:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@docs</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>src/**/*.ts<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Found <span class="token variable">@docs</span>.length() files<span class="token punctuation">`</span></span>
+</code></pre>
+<h2 id="call-an-llm" tabindex="-1"><a class="header-anchor" href="#call-an-llm"><span>Call an LLM</span></a></h2>
+<p>This is what mlld is for. Install the Claude module and call it:</p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token function">install</span> @mlld/claude
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@haiku</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@code</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>src/app.ts<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@review</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@haiku</span><span class="token punctuation">(</span><span class="token backtick-template"><span class="token punctuation">`</span>Review this code for bugs:\n\n<span class="token variable">@code</span><span class="token punctuation">`</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@review</span>
+</code></pre>
+<p><code>@haiku</code> and <code>@sonnet</code> are callable functions. You pass them a prompt, they return the response.</p>
+<h2 id="functions" tabindex="-1"><a class="header-anchor" href="#functions"><span>Functions</span></a></h2>
+<p>Define reusable functions with <code>exe</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return a + b <span class="token punctuation">}</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>World<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Add the <code>llm</code> label to functions that call an LLM — this enables automatic caching and resume:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@haiku</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@summarize</span><span class="token punctuation">(</span><span class="token directive keyword">file</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@haiku</span><span class="token punctuation">(</span><span class="token backtick-template"><span class="token punctuation">`</span>Summarize in one sentence:\n\n<span class="token variable">@file</span><span class="token punctuation">`</span></span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="control-flow" tabindex="-1"><a class="header-anchor" href="#control-flow"><span>Control Flow</span></a></h2>
+<p>Iterate with <code>for</code>, branch with <code>when</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@names</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bob<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Charlie<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token directive keyword">for</span> <span class="token variable variable">@name</span> <span class="token operator">in</span> <span class="token variable variable">@names</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@score</span> <span class="token assignment-operator operator">=</span> <span class="token number">85</span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@score</span> <span class="token comparison-operator operator">>=</span> <span class="token number">90</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Excellent!<span class="token punctuation">"</span></span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@score</span> <span class="token comparison-operator operator">>=</span> <span class="token number">70</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Good job!<span class="token punctuation">"</span></span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@score</span> <span class="token comparison-operator operator">&lt;</span> <span class="token number">70</span>  <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Keep trying!<span class="token punctuation">"</span></span>
+</code></pre>
+<h2 id="run-shell-commands" tabindex="-1"><a class="header-anchor" href="#run-shell-commands"><span>Run Shell Commands</span></a></h2>
+<p>Execute shell commands and capture results:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@branch</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span><span class="token operator">git</span> branch --<span class="token directive keyword">show</span>-current<span class="token punctuation">}</span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>On branch: <span class="token variable">@branch</span><span class="token punctuation">`</span></span>
+
+<span class="token directive keyword">run</span> sh <span class="token punctuation">{</span>
+  npm test <span class="token logical-operator operator">&amp;&amp;</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>Tests passed!<span class="token punctuation">"</span></span> <span class="token logical-operator operator">||</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>Tests failed!<span class="token punctuation">"</span></span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><code>cmd</code> for simple pipe-safe commands, <code>sh</code> for full shell scripts. Also <code>js</code>, <code>node</code>, and <code>py</code> for other languages.</p>
+<h2 id="a-real-example" tabindex="-1"><a class="header-anchor" href="#a-real-example"><span>A Real Example</span></a></h2>
+<p>Put it together — summarize every TypeScript file in a project:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@haiku</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@summarize</span><span class="token punctuation">(</span><span class="token directive keyword">file</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@haiku</span><span class="token punctuation">(</span><span class="token backtick-template"><span class="token punctuation">`</span>Summarize in one sentence:\n\n<span class="token variable">@file</span><span class="token punctuation">`</span></span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">var</span> @<span class="token directive keyword">files</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>src/*.ts<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@summaries</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">for</span> <span class="token variable variable">@f</span> <span class="token operator">in</span> @<span class="token directive keyword">files</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@summary</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span><span class="token variable variable">@f</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token backtick-template"><span class="token punctuation">`</span>- **<span class="token variable">@f</span>.mx.filename**: <span class="token variable">@summary</span><span class="token punctuation">`</span></span>
+<span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@summaries</span><span class="token field-access property">.join</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>\n<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>This loads every <code>.ts</code> file, sends each to an LLM, and collects the results. The <code>llm</code> label on <code>@summarize</code> means results are cached — rerun the script and only new/changed files get re-processed.</p>
+<h2 id="next-steps" tabindex="-1"><a class="header-anchor" href="#next-steps"><span>Next Steps</span></a></h2>
+<p>You know enough to start building. When you need more:</p>
+<pre class="language-bash"><code class="language-bash">mlld howto <span class="token operator">&lt;</span>keyword<span class="token operator">></span>       <span class="token comment"># Search any topic</span>
+mlld howto <span class="token function">import</span>          <span class="token comment"># Modules and imports</span>
+mlld howto security        <span class="token comment"># Prompt injection defense</span>
+mlld howto mcp             <span class="token comment"># MCP tool integration</span>
+mlld howto                 <span class="token comment"># Browse all topics</span>
+mlld validate <span class="token builtin class-name">.</span>            <span class="token comment"># Validate your whole project</span>
+</code></pre>
+<p>Run <code>mlld qs</code> anytime to see a condensed syntax reference.</p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patterns - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" aria-current=&quot;page&quot;>Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>Proven patterns for tool orchestration, data pipelines, conditional workflows, agent definitions, lifecycle hooks for observability, and checkpoint/resume for long-running LLM workflows.</p>
+<h2 id="ralph-loop-pattern" tabindex="-1"><a class="header-anchor" href="#ralph-loop-pattern"><span>Ralph Loop Pattern</span></a></h2>
+<p>Autonomous coding loop based on the <a href="https://ghuntley.com/ralph/">Ralph Wiggum technique</a> by Geoff Huntley. Each iteration: reload context from disk, pick one task, execute it, test, commit on green. The loop is the outer process; the LLM decides what to work on.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> ralph.mld - autonomous coding agent loop</span>
+
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claudePoll</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@tools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Edit<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Glob<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Grep<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash(git:*)<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Bash(npm:*)<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+
+<span class="token comment">>> Cheap model picks the most important task from current plan</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@pickTask</span><span class="token punctuation">(</span>plan<span class="token punctuation">,</span> specs<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@prompt</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Given this plan and these specs, identify the SINGLE most
+important next task. Search before assuming something isn't implemented.
+Return JSON: { "task": "...", "type": "implement|fix|test", "files": [...] }
+
+&lt;plan>
+<span class="token variable">@plan</span>
+<span class="token alligator"><span class="token punctuation">&lt;</span><span class="token file-path">/plan</span><span class="token punctuation">></span></span>
+
+&lt;specs>
+<span class="token variable">@specs</span>
+<span class="token alligator"><span class="token punctuation">&lt;</span><span class="token file-path">/specs</span><span class="token punctuation">></span></span>
+
+IMPORTANT: Write your JSON response to <span class="token variable">@mx</span>.outPath using the Write tool.<span class="token punctuation">`</span></span>
+  <span class="token variable variable">@claudePoll</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Glob<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Grep<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">poll</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@mx</span><span class="token field-access property">.outPath</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token alligator"><span class="token punctuation">&lt;</span>@mx.outPath<span class="token punctuation">></span></span><span class="token ternary-operator operator">?</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span><span class="token field-access property">.llm</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> Worker executes the task with full agent capabilities</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@doTask</span><span class="token punctuation">(</span>task<span class="token punctuation">,</span> specs<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@prompt</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span># Task
+<span class="token variable">@task</span>.task
+
+## Specs
+<span class="token variable">@specs</span>
+
+Implement this task. Search the codebase before assuming anything is
+not implemented. After implementing, run tests for just this change.
+
+IMPORTANT: Write your result JSON to <span class="token variable">@mx</span>.outPath using the Write tool.<span class="token punctuation">`</span></span>
+  <span class="token variable variable">@claudePoll</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sonnet<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@tools</span><span class="token punctuation">,</span>
+    <span class="token object-key property">poll</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@mx</span><span class="token field-access property">.outPath</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token alligator"><span class="token punctuation">&lt;</span>@mx.outPath<span class="token punctuation">></span></span><span class="token ternary-operator operator">?</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> Validate with tests</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@test</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@out</span> <span class="token assignment-operator operator">=</span> sh <span class="token punctuation">{</span> npm test <span class="token number">2</span><span class="token comparison-operator operator">></span>&amp;<span class="token number">1</span> <span class="token punctuation">}</span>
+  <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span> <span class="token object-key property">pass</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@out</span><span class="token field-access property">.exitCode</span> <span class="token comparison-operator operator">==</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token directive keyword">output</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@out</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> The loop</span>
+<span class="token directive keyword">loop</span><span class="token punctuation">(</span><span class="token control-keyword keyword">endless</span><span class="token punctuation">)</span> <span class="token punctuation">[</span>
+  <span class="token comment">>> Fresh context every iteration — the context IS the history</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@plan</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>fix_plan.md<span class="token punctuation">></span></span>
+  <span class="token directive keyword">when</span> <span class="token variable variable">@plan</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token block-keyword keyword">done</span> <span class="token string-interpolated"><span class="token punctuation">"</span>complete<span class="token punctuation">"</span></span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@specs</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>specs/*.md<span class="token punctuation">></span></span>
+
+  <span class="token comment">>> One task per loop — trust the LLM to pick what matters</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@task</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@pickTask</span><span class="token punctuation">(</span><span class="token variable variable">@plan</span><span class="token punctuation">,</span> <span class="token variable variable">@specs</span><span class="token punctuation">)</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@doTask</span><span class="token punctuation">(</span><span class="token variable variable">@task</span><span class="token punctuation">,</span> <span class="token variable variable">@specs</span><span class="token punctuation">)</span>
+
+  <span class="token comment">>> Test backpressure — only commit what passes</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@check</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@test</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token directive keyword">when</span> <span class="token variable variable">@check</span><span class="token field-access property">.pass</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">run</span> sh <span class="token punctuation">{</span> <span class="token operator">git</span> commit -am <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@task</span>.task<span class="token punctuation">"</span></span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token operator">git</span> push <span class="token punctuation">}</span>
+
+  <span class="token block-keyword keyword">continue</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>Core principles:</strong></p>
+<ul>
+<li><strong>One task per loop</strong> — Each iteration picks a single task and executes it. Narrowing scope keeps context usage low and outcomes predictable.</li>
+<li><strong>Fresh context from disk</strong> — Plan and specs reload every iteration. No chat history carried forward. The filesystem is the state.</li>
+<li><strong>Test backpressure</strong> — Tests gate commits. Failing iterations aren't fatal; the next iteration sees the current state and adapts.</li>
+<li><strong>LLM picks the work</strong> — The cheap classifier decides priority. The orchestrator doesn't encode task selection logic.</li>
+</ul>
+<p><strong>Crash recovery</strong> — The <code>llm</code> label on <code>@pickTask</code> and <code>@doTask</code> enables automatic caching. If the loop crashes mid-iteration, re-running the script replays completed LLM calls from cache.</p>
+<pre class="language-bash"><code class="language-bash">mlld run ralph                     <span class="token comment"># auto-resumes via cache</span>
+mlld run ralph <span class="token parameter variable">--resume</span> @doTask    <span class="token comment"># re-run all worker calls</span>
+mlld run ralph <span class="token parameter variable">--new</span>               <span class="token comment"># fresh run, clear cache</span>
+</code></pre>
+<p><strong>Hook telemetry:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">hook</span> <span class="token variable variable">@progress</span> <span class="token operator">after</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">loop</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">log</span> <span class="token backtick-template"><span class="token punctuation">`</span>iteration <span class="token variable">@mx</span>.loop.iteration<span class="token punctuation">`</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>With pacing</strong> — Add a delay between iterations to avoid hammering APIs:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">loop</span><span class="token punctuation">(</span><span class="token control-keyword keyword">endless</span><span class="token punctuation">,</span> 5s<span class="token punctuation">)</span> <span class="token punctuation">[</span>
+  ...
+<span class="token punctuation">]</span>
+</code></pre>
+<p><strong>With a cap</strong> — Limit total iterations:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">loop</span><span class="token punctuation">(</span><span class="token number">50</span><span class="token punctuation">)</span> <span class="token punctuation">[</span>
+  ...
+<span class="token punctuation">]</span>
+</code></pre>
+<h2 id="guarded-tool-export" tabindex="-1"><a class="header-anchor" href="#guarded-tool-export"><span>Guarded Tool Export</span></a></h2>
+<p>Expose mlld functions as MCP tools with fixed context parameters and security guards. The agent sees a narrow interface; guards enforce what data can flow through.</p>
+<p><strong>Define the function, guard, and tool collection:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@searchIssues</span><span class="token punctuation">(</span><span class="token object-key property">org</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">query</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  gh issue list -R <span class="token variable variable">@org</span>/<span class="token variable variable">@repo</span> --search <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@query</span><span class="token punctuation">"</span></span> --json number<span class="token punctuation">,</span>title
+<span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search GitHub issues<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">guard</span> <span class="token variable variable">@noSecrets</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token reserved-variable builtin">@input</span><span class="token field-access property">.any</span><span class="token field-access property">.mx</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>secret<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Secret data cannot flow to tools<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">searchIssues</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@searchIssues</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">org</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld-lang<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>query<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search mlld issues by keyword<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@searchIssues</span><span class="token punctuation">,</span> <span class="token variable variable">@agentTools</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The agent sees one parameter (<code>query</code>). The bound <code>org</code> and <code>repo</code> are invisible and fixed. The guard blocks any call carrying <code>secret</code>-labeled data.</p>
+<p><strong>Serve it:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld --tools-collection @agentTools
+</code></pre>
+<p>The <code>--tools-collection</code> flag tells the MCP server to use the reshaped tool definitions instead of raw exports.</p>
+<p><strong>Give it to an agent:</strong></p>
+<p>Point any MCP client at the command. For Claude Code:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"mcpServers"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"my-tools"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"command"</span><span class="token operator">:</span> <span class="token string">"npx"</span><span class="token punctuation">,</span>
+      <span class="token property">"args"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"mlld"</span><span class="token punctuation">,</span> <span class="token string">"mcp"</span><span class="token punctuation">,</span> <span class="token string">"tools.mld"</span><span class="token punctuation">,</span> <span class="token string">"--tools-collection"</span><span class="token punctuation">,</span> <span class="token string">"@agentTools"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Add operation labels for policy:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">searchIssues</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@searchIssues</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">org</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld-lang<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>query<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>read-only<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search mlld issues<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">createIssue</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@createIssue</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">org</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld-lang<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>title<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>body<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>destructive<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Create an mlld issue<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Guards can then check <code>@mx.op.labels.includes(&quot;destructive&quot;)</code> to block or require approval for write operations. See <code>mcp-guards</code> for after-guard patterns that validate tool outputs.</p>
+<h2 id="prose-execution" tabindex="-1"><a class="header-anchor" href="#prose-execution"><span>Prose Execution</span></a></h2>
+<p>The <code>prose {}</code> syntax executes LLM-interpreted DSL skills. By default it uses <strong>OpenProse</strong>, but any custom interpreter can be configured.</p>
+<h3 id="what-is-prose-execution%3F" tabindex="-1"><a class="header-anchor" href="#what-is-prose-execution%3F"><span>What is Prose Execution?</span></a></h3>
+<p>Prose execution invokes skills that an LLM interprets at runtime. Unlike <code>run js {}</code> which executes deterministically, <code>prose {}</code> sends content to an LLM with specific skills enabled. This enables complex multi-agent workflows defined in a domain-specific language.</p>
+<h3 id="setup" tabindex="-1"><a class="header-anchor" href="#setup"><span>Setup</span></a></h3>
+<ol>
+<li>
+<p>Install the OpenProse plugin in Claude Code:</p>
+<pre><code>/plugin marketplace add git@github.com:openprose/prose.git
+/plugin install open-prose@prose
+</code></pre>
+</li>
+<li>
+<p>Restart Claude Code and boot OpenProse:</p>
+<pre><code>/prose-boot
+</code></pre>
+</li>
+<li>
+<p>Skills will prompt for approval on first use.</p>
+</li>
+</ol>
+<h3 id="basic-usage" tabindex="-1"><a class="header-anchor" href="#basic-usage"><span>Basic Usage</span></a></h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@research</span><span class="token punctuation">(</span>topic<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span>
+  session <span class="token string-interpolated"><span class="token punctuation">"</span>Research <span class="token variable">@topic</span><span class="token punctuation">"</span></span>
+  agent researcher <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> sonnet<span class="token punctuation">,</span> <span class="token object-key property">skills</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span>web-search<span class="token punctuation">]</span> <span class="token punctuation">}</span>
+  <span class="token object-key property">researcher</span><span class="token ternary-operator operator">:</span> find current information about <span class="token variable variable">@topic</span>
+  <span class="token directive keyword">output</span> findings
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">run</span> <span class="token variable variable">@research</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>quantum computing trends<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="key-concepts" tabindex="-1"><a class="header-anchor" href="#key-concepts"><span>Key Concepts</span></a></h3>
+<p><strong>session</strong> - Names the workflow for context</p>
+<p><strong>agent</strong> - Defines an agent with model and skills</p>
+<p><strong>loop until</strong> - Iterates with semantic exit conditions:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@refine</span><span class="token punctuation">(</span>draft<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span>
+  session <span class="token string-interpolated"><span class="token punctuation">"</span>Refine document<span class="token punctuation">"</span></span>
+  <span class="token directive keyword">loop</span> <span class="token control-keyword keyword">until</span> **the draft meets publication standards** <span class="token punctuation">{</span>
+    critique <span class="token variable variable">@draft</span>
+    revise based on critique
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>parallel</strong> - Run tasks concurrently:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@gather</span><span class="token punctuation">(</span>topics<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span>
+  session <span class="token string-interpolated"><span class="token punctuation">"</span>Research multiple topics<span class="token punctuation">"</span></span>
+  <span class="token operator">parallel</span> <span class="token directive keyword">for</span> each topic <span class="token operator">in</span> <span class="token variable variable">@topics</span> <span class="token punctuation">{</span>
+    research topic
+  <span class="token punctuation">}</span>
+  combine results
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="template-files" tabindex="-1"><a class="header-anchor" href="#template-files"><span>Template Files</span></a></h3>
+<p>For complex workflows, use external files:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@workflow</span><span class="token punctuation">(</span>ctx<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./workflow.prose<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@workflow</span><span class="token punctuation">(</span>ctx<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./workflow.prose.att<span class="token punctuation">"</span></span>  <span class="token comment">>> ATT interpolation</span>
+</code></pre>
+<h3 id="custom-interpreters" tabindex="-1"><a class="header-anchor" href="#custom-interpreters"><span>Custom Interpreters</span></a></h3>
+<p>Use any LLM-interpreted DSL by configuring different skills:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token comment">>> Create a custom model executor</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@myModel</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>opus<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+
+<span class="token comment">>> Configure with custom skills</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@myDSL</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@myModel</span><span class="token punctuation">,</span>
+  <span class="token object-key property">skills</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>my-custom:boot<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>my-custom:run<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@myDSL</span> <span class="token punctuation">{</span>
+  <span class="token comment">>> Your custom DSL syntax here</span>
+  analyze <span class="token variable variable">@data</span>
+  <span class="token directive keyword">output</span> result
+<span class="token punctuation">}</span>
+</code></pre>
+<p>The skill determines how the LLM interprets the prose content. OpenProse is one implementation - you can create your own DSL skills or use other prose interpreters.</p>
+<h3 id="openprose-requirements" tabindex="-1"><a class="header-anchor" href="#openprose-requirements"><span>OpenProse Requirements</span></a></h3>
+<p>For OpenProse specifically:</p>
+<ul>
+<li><strong>Claude Code</strong> with Opus (only model that reliably interprets OpenProse syntax)</li>
+<li><strong>OpenProse skills</strong> approved: <code>open-prose:prose-boot</code>, <code>open-prose:prose-compile</code>, <code>open-prose:prose-run</code></li>
+</ul>
+<p>See <code>mlld howto exe-prose</code> for syntax details. OpenProse docs: <a href="https://prose.md">https://prose.md</a></p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

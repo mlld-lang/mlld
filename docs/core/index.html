@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Core - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" aria-current=&quot;page&quot;>Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>Variables, templates, file loading, executables, and built-in methods form mlld's core syntax. <code>exe</code> defines reusable functions (js, node, python, shell, prose). <code>run</code> invokes them. <code>=&gt;</code> returns values from scripts and blocks.</p>
+<h2 id="variables" tabindex="-1"><a class="header-anchor" href="#variables"><span>Variables</span></a></h2>
+<p><strong>var vs exe:</strong> <code>var</code> creates values (no parameters). <code>exe</code> creates functions (takes parameters).</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span>            <span class="token comment">>> value - no params</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>who<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hi <span class="token variable">@who</span>!<span class="token punctuation">`</span></span>   <span class="token comment">>> function - takes params</span>
+
+<span class="token comment">>> Use var for computed values, exe for reusable functions</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token variable variable">@name</span><span class="token punctuation">)</span>    <span class="token comment">>> "Hi Alice!"</span>
+</code></pre>
+<p><strong>Primitives, arrays, objects:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@n</span> <span class="token assignment-operator operator">=</span> <span class="token number">42</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@price</span> <span class="token assignment-operator operator">=</span> <span class="token number">19</span><span class="token field-access property">.99</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@ok</span> <span class="token assignment-operator operator">=</span> <span class="token boolean">true</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@arr</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">]</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@obj</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>key<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>value<span class="token punctuation">"</span></span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@merged</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> ...<span class="token variable variable">@obj</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>extra<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token number">1</span> <span class="token punctuation">}</span>    <span class="token comment">>> object spread</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return a + b <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@sum</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span><span class="token variable variable">@n</span><span class="token punctuation">,</span> <span class="token number">8</span><span class="token punctuation">)</span>         <span class="token comment">>> 50 (number preserved)</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@date</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>date<span class="token punctuation">}</span>         <span class="token comment">>> command result</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@readme</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>README.md<span class="token punctuation">></span></span>      <span class="token comment">>> file contents</span>
+</code></pre>
+<h3 id="see-also" tabindex="-1"><a class="header-anchor" href="#see-also"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./variables-conditional.md">Conditional Inclusion</a> - <code>@var?</code> omission and nullish fallback patterns.</li>
+<li><a href="./templates-basics.md">Templates Basics</a> - Variable interpolation in template strings.</li>
+<li><a href="../commands/exe-simple.md">Exe Simple Forms</a> - When to switch from <code>var</code> values to reusable <code>exe</code> functions.</li>
+</ul>
+<h3 id="conditional-inclusion" tabindex="-1"><a class="header-anchor" href="#conditional-inclusion"><span>Conditional Inclusion</span></a></h3>
+<p><strong>Conditional inclusion</strong> (<code>@var?</code>): omit content when a variable is falsy.<br>
+<strong>Nullish fallback in templates</strong> (<code>@var??&quot;default&quot;</code>): use tight <code>??</code> binding in template interpolation.<br>
+<strong>Nullish fallback in expressions</strong> (<code>@a ?? @b</code>): use spaced <code>??</code> in <code>var</code>/<code>let</code> expressions and chains.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@tools</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>json<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@empty</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token punctuation">"</span></span>
+
+<span class="token comment">>> In commands: @var?`...`</span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> echo <span class="token variable variable">@tools</span><span class="token ternary-operator operator">?</span><span class="token backtick-template"><span class="token punctuation">`</span>--tools "<span class="token variable">@tools</span>"<span class="token punctuation">`</span></span> <span class="token variable variable">@empty</span><span class="token ternary-operator operator">?</span><span class="token backtick-template"><span class="token punctuation">`</span>--empty<span class="token punctuation">`</span></span> <span class="token punctuation">}</span>
+<span class="token comment">>> Output: --tools json (--empty omitted)</span>
+
+<span class="token comment">>> In templates: omit the variable itself</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@title</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>MyTitle<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@msg</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>DEBUG:<span class="token variable">@title</span>?<span class="token punctuation">`</span></span>
+
+<span class="token comment">>> In templates: tight null coalescing</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@missing</span> <span class="token assignment-operator operator">=</span> <span class="token null">null</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@hello</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello,<span class="token variable">@missing</span>??"friend"<span class="token punctuation">`</span></span>
+
+<span class="token comment">>> In expressions: spaced null coalescing (chaining works)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@primary</span> <span class="token assignment-operator operator">=</span> <span class="token null">null</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@secondary</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>backup<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@chosen</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@primary</span> <span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">?</span> <span class="token variable variable">@secondary</span> <span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">?</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fallback<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> In arrays</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@list</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token variable variable">@a</span><span class="token punctuation">,</span> <span class="token variable variable">@b</span><span class="token ternary-operator operator">?</span><span class="token punctuation">,</span> <span class="token variable variable">@c</span><span class="token punctuation">]</span>   <span class="token comment">>> @b omitted if falsy</span>
+
+<span class="token comment">>> In objects</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@obj</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@n</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>title<span class="token punctuation">"</span></span><span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@t</span><span class="token punctuation">}</span>   <span class="token comment">>> title omitted if @t falsy</span>
+</code></pre>
+<h3 id="truthiness-rules" tabindex="-1"><a class="header-anchor" href="#truthiness-rules"><span>Truthiness Rules</span></a></h3>
+<p>Truthiness: falsy = <code>null</code>, <code>undefined</code>, <code>&quot;&quot;</code>, <code>&quot;false&quot;</code>, <code>&quot;0&quot;</code>, <code>0</code>, <code>NaN</code>, <code>[]</code>, <code>{}</code></p>
+<h2 id="templates" tabindex="-1"><a class="header-anchor" href="#templates"><span>Templates</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@message</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello <span class="token variable">@name</span>, welcome!<span class="token punctuation">`</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@doc</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>Use <span class="token backtick-template"><span class="token punctuation">`</span>mlld<span class="token punctuation">`</span></span> <span class="token operator">to</span> orchestrate<span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+
+<span class="token comment">>> Multi-line</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@report</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>
+Status: <span class="token variable">@status</span>
+Config: &lt;<span class="token variable">@root</span>/config.json>
+Data: <span class="token variable">@data</span>|<span class="token variable">@parse</span>
+<span class="token punctuation">`</span></span>
+</code></pre>
+<h3 id="external-template-files-(.att)" tabindex="-1"><a class="header-anchor" href="#external-template-files-(.att)"><span>External Template Files (.att)</span></a></h3>
+<p>For templates longer than a simple paragraph, use <code>.att</code> files with the <code>exe ... = template</code> pattern:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@welcome</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> role<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./prompts/welcome.att<span class="token punctuation">"</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@systemPrompt</span><span class="token punctuation">(</span>context<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./prompts/system.att<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Call like any other function</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@welcome</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>admin<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>The <code>.att</code> file uses <code>@var</code> for interpolation and supports full mlld syntax inside:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> prompts/welcome.att</span>
+Hello <span class="token variable variable">@name</span><span class="token logical-operator operator">!</span>
+
+Your <span class="token object-key property">role</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@role</span>
+
+/<span class="token directive keyword">for</span> <span class="token variable variable">@perm</span> <span class="token operator">in</span> <span class="token variable variable">@role</span><span class="token field-access property">.permissions</span>
+- <span class="token variable variable">@perm</span>
+/end
+</code></pre>
+<p><strong>Key points:</strong></p>
+<ul>
+<li>Parameters from <code>exe @func(params)</code> are automatically available as <code>@param</code> in the template</li>
+<li><code>.att</code> supports <code>&lt;file.md&gt;</code> references and <code>/for ... /end</code> template loops</li>
+<li>In template content, use condensed pipe syntax (<code>@value|@pipe</code>) to avoid ambiguity</li>
+<li>Relative <code>&lt;file&gt;</code> paths inside a template file resolve from that template file's directory</li>
+<li>Use <code>@@</code> or <code>\@</code> to output a literal <code>@</code> symbol (e.g., <code>user@@example.com</code>)</li>
+<li>Never load <code>.att</code> files with angle brackets - use <code>exe ... = template</code> instead</li>
+</ul>
+<p><strong>When to use external templates:</strong></p>
+<ul>
+<li>Prompts longer than 2-3 lines</li>
+<li>Templates with complex structure or loops</li>
+<li>Reusable prompt components</li>
+<li>Agent system prompts</li>
+</ul>
+<p><strong>Alternative syntax - .mtt files:</strong></p>
+<p>If <code>.att</code> syntax conflicts with your content, use <code>.mtt</code> files instead. Common case: prompts that include <code>@path/to/file</code> references for LLMs to interpret:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@codeReview</span><span class="token punctuation">(</span><span class="token directive keyword">files</span><span class="token punctuation">,</span> instructions<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./prompts/review.mtt<span class="token punctuation">"</span></span>
+</code></pre>
+<pre class="language-text"><code class="language-text">>> prompts/review.mtt - uses {{var}} syntax
+Review these files: {{files}}
+
+{{instructions}}
+
+Reference @src/utils.ts and @tests/utils.test.ts for context.
+</code></pre>
+<p>The <code>@src/utils.ts</code> stays literal - mlld won't try to interpolate it.</p>
+<table>
+<thead>
+<tr>
+<th>Extension</th>
+<th>Variable syntax</th>
+<th>File refs</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.att</code></td>
+<td><code>@var</code></td>
+<td><code>&lt;file.md&gt;</code></td>
+<td>Default, mlld-style</td>
+</tr>
+<tr>
+<td><code>.mtt</code></td>
+<td><code>{{var}}</code></td>
+<td>None</td>
+<td>Content has <code>@path</code> or <code>&lt;tag&gt;</code> meant for LLMs</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th><code>.att</code></th>
+<th><code>.mtt</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pipes in template body</td>
+<td>Condensed only (`@var</td>
+<td>@pipe`)</td>
+</tr>
+<tr>
+<td>Loops</td>
+<td><code>/for ... /end</code></td>
+<td>Not supported</td>
+</tr>
+</tbody>
+</table>
+<h3 id="loops-in-templates" tabindex="-1"><a class="header-anchor" href="#loops-in-templates"><span>Loops in Templates</span></a></h3>
+<p><strong>Template-embedded vs top-level:</strong> Control flow inside templates uses <code>/for</code> and <code>/end</code> with slash prefix. Top-level directives are separate statements.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> TOP-LEVEL: for as a directive (produces output directly)</span>
+<span class="token directive keyword">for</span> <span class="token variable variable">@item</span> <span class="token operator">in</span> <span class="token variable variable">@items</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>- <span class="token variable">@item</span>.name<span class="token punctuation">`</span></span>
+
+<span class="token comment">>> TEMPLATE-EMBEDDED: /for inside template body</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@items</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>alpha<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>beta<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>gamma<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@toc</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+/<span class="token directive keyword">for</span> <span class="token variable variable">@item</span> <span class="token operator">in</span> <span class="token variable variable">@items</span>
+- <span class="token variable variable">@item</span>
+/end
+<span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@toc</span>
+</code></pre>
+<p><strong>Key/value form in templates:</strong></p>
+<pre class="language-mlld"><code class="language-mlld">/<span class="token directive keyword">for</span> <span class="token variable variable">@k</span><span class="token punctuation">,</span> <span class="token variable variable">@v</span> <span class="token operator">in</span> <span class="token variable variable">@items</span>
+- @<span class="token object-key property">k</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@v</span>
+/end
+</code></pre>
+<p><strong>Key differences:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Context</th>
+<th>Syntax</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Top-level</td>
+<td><code>for @x in @y =&gt; action</code></td>
+<td>Directive on own line</td>
+</tr>
+<tr>
+<td>In template</td>
+<td><code>/for @x in @y</code> ... <code>/end</code></td>
+<td>Slash prefix required at line start</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Template-embedded rules:</strong></p>
+<ul>
+<li><code>/for</code> and <code>/end</code> must start at column 1 of their line inside the template</li>
+<li>No <code>=&gt;</code> arrow - the lines between <code>/for</code> and <code>/end</code> are the body</li>
+<li>Only <code>/for</code> and <code>/end</code> are valid inside templates - no other directives</li>
+</ul>
+<h2 id="file-loading" tabindex="-1"><a class="header-anchor" href="#file-loading"><span>File Loading</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Basic loading</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@content</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>README.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@config</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>config.json<span class="token punctuation">></span></span>          <span class="token comment">>> auto-parsed as object</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@events</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>events.jsonl<span class="token punctuation">></span></span>         <span class="token comment">>> auto-parsed as array of JSON objects</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@author</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>package.json<span class="token punctuation">></span></span><span class="token field-access property">.author</span>  <span class="token comment">>> field access</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@events</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token field-access property">.event</span>                <span class="token comment">>> first JSONL record</span>
+
+<span class="token comment">>> Globs (returns array)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@docs</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>docs/**/*.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@docs</span><span class="token field-access property">.length</span>
+<span class="token directive keyword">for</span> <span class="token variable variable">@doc</span> <span class="token operator">in</span> <span class="token variable variable">@docs</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token variable variable">@doc</span><span class="token field-access property">.mx</span><span class="token field-access property">.filename</span>
+
+<span class="token comment">>> JSON globs - each item is auto-parsed</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@configs</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>configs/*.json<span class="token punctuation">></span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@first</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@configs</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@first</span><span class="token field-access property">.name</span>                     <span class="token comment">>> access parsed JSON</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@first</span><span class="token field-access property">.mx</span><span class="token field-access property">.data</span><span class="token field-access property">.name</span>             <span class="token comment">>> explicit parsed-data view</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@first</span><span class="token field-access property">.mx</span><span class="token field-access property">.text</span>                  <span class="token comment">>> raw file text</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@first</span><span class="token field-access property">.mx</span><span class="token field-access property">.filename</span>              <span class="token comment">>> file metadata still available</span>
+
+<span class="token comment">>> With "as" template</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@toc</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>docs/*.md<span class="token punctuation">></span></span> <span class="token operator">as</span> <span class="token string-interpolated"><span class="token punctuation">"</span>- [&lt;>.mx.fm.title](&lt;>.mx.relative)<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Structured values loaded from files are data-first:</p>
+<ul>
+<li><code>@config.apiUrl</code> and <code>@config.mx.data.apiUrl</code> are equivalent.</li>
+<li><code>@config.mx.text</code> is the raw text representation.</li>
+<li><code>.mx</code> stays reserved for wrapper metadata; if payload data has an <code>mx</code> key, use <code>@config.mx.data.mx</code>.</li>
+</ul>
+<p><strong>Section selection</strong> - extract markdown heading blocks:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Single section (includes child headings)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@overview</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>guide.md # Overview<span class="token punctuation">></span></span>
+
+<span class="token comment">>> Multi-section include list (comma-separated)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@selected</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>guide.md # "Quick Start", Other<span class="token punctuation">></span></span>
+
+<span class="token comment">>> Include/exclude sets</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@filtered</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>guide.md # "TL;DR", "Titled section", Other; !# tldr, "Another section title"<span class="token punctuation">></span></span>
+
+<span class="token comment">>> Optional include (no error if missing)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@maybe</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>guide.md # "Migration Notes"?, "Quick Start"<span class="token punctuation">></span></span>
+
+<span class="token comment">>> Fuzzy heading matching (case/punctuation-insensitive, prefix-based)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@tldr</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>guide.md # tldr<span class="token punctuation">></span></span>        <span class="token comment">>> matches heading "TL;DR"</span>
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li>Include items are comma-separated after <code>#</code>.</li>
+<li>Exclude items are comma-separated after <code>; !#</code> (or <code>; #</code>).</li>
+<li>Use quotes for multi-word titles and punctuation-heavy titles.</li>
+<li>Add trailing <code>?</code> to an include selector to avoid errors when missing.</li>
+<li>Missing non-optional include selectors throw an error.</li>
+<li>Heading matching is fuzzy prefix-based and picks the first heading match.</li>
+<li>Renaming with <code>as</code> is only supported when one section is selected.</li>
+<li>Use <code>; !#</code> to start excludes. <code>&lt;file.md # tl;dr !# later&gt;</code> is invalid.</li>
+</ul>
+<p><strong>Optional load</strong> - returns null for missing files, empty array for empty globs:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Missing file returns null</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@optional</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>config.json<span class="token punctuation">></span></span><span class="token ternary-operator operator">?</span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@optional</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Config loaded<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Empty glob returns []</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@matches</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>*.nonexistent<span class="token punctuation">></span></span><span class="token ternary-operator operator">?</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@matches</span><span class="token field-access property">.length</span>                 <span class="token comment">>> 0</span>
+
+<span class="token comment">>> Existing file works normally</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@readme</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>README.md<span class="token punctuation">></span></span><span class="token ternary-operator operator">?</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@readme</span>                         <span class="token comment">>> file content</span>
+</code></pre>
+<h3 id="see-also-1" tabindex="-1"><a class="header-anchor" href="#see-also-1"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./file-loading-metadata.md">File Loading Metadata</a> - Access <code>.mx.filename</code>, <code>.mx.relative</code>, and related metadata.</li>
+<li><a href="./file-loading-ast.md">File Loading AST</a> - Parse source into AST for structural analysis.</li>
+<li><a href="./variables-basics.md">Variables Basics</a> - Combine file-loaded values with standard variable patterns.</li>
+</ul>
+<h3 id="ast-selection" tabindex="-1"><a class="header-anchor" href="#ast-selection"><span>AST Selection</span></a></h3>
+<p><strong>AST Selection</strong> (extract code from files):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Exact names</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@handler</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>src/api.ts { createUser }<span class="token punctuation">></span></span>
+
+<span class="token comment">>> Wildcards</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@handlers</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>api.ts { handle* }<span class="token punctuation">></span></span>         <span class="token comment">>> prefix match</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@validators</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>api.ts { *Validator }<span class="token punctuation">></span></span>    <span class="token comment">>> suffix match</span>
+
+<span class="token comment">>> Type filters</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@funcs</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>service.ts { *fn }<span class="token punctuation">></span></span>            <span class="token comment">>> all functions</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@classes</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>service.ts { *class }<span class="token punctuation">></span></span>       <span class="token comment">>> all classes</span>
+
+<span class="token comment">>> Name listing (returns string arrays)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@names</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>api.ts { ?? }<span class="token punctuation">></span></span>                 <span class="token comment">>> all definition names</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@funcNames</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>api.ts { fn?? }<span class="token punctuation">></span></span>           <span class="token comment">>> function names only</span>
+</code></pre>
+<p>Supported: <code>.js</code>, <code>.ts</code>, <code>.jsx</code>, <code>.tsx</code>, <code>.py</code>, <code>.go</code>, <code>.rs</code>, <code>.java</code>, <code>.rb</code><br>
+Type keywords: <code>fn</code>, <code>var</code>, <code>class</code>, <code>interface</code>, <code>type</code>, <code>enum</code>, <code>struct</code></p>
+<h3 id="file-metadata" tabindex="-1"><a class="header-anchor" href="#file-metadata"><span>File Metadata</span></a></h3>
+<p><strong>Metadata fields</strong> (via <code>.mx</code>):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> @<span class="token directive keyword">file</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>README.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.filename</span>      <span class="token comment">>> "README.md"</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.relative</span>      <span class="token comment">>> relative path from cwd</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.absolute</span>      <span class="token comment">>> absolute path</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.path</span>          <span class="token comment">>> alias for absolute path</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.dirname</span>       <span class="token comment">>> parent directory name</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.relativeDir</span>   <span class="token comment">>> relative path to directory</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.absoluteDir</span>   <span class="token comment">>> absolute path to directory</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.tokens</span>        <span class="token comment">>> token count estimate</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.fm</span><span class="token field-access property">.title</span>      <span class="token comment">>> frontmatter field</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.text</span>          <span class="token comment">>> raw text representation</span>
+<span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.fm</span>            <span class="token comment">>> frontmatter object</span>
+</code></pre>
+<p>For frontmatter metadata, use <code>.mx.fm</code>:</p>
+<ul>
+<li><code>@file.mx.fm.title</code> accesses the <code>title</code> frontmatter field.</li>
+<li>Use <code>.mx.text</code> and <code>.mx.fm</code> when you need explicit control.</li>
+<li>If frontmatter has an <code>mx</code> key, access it with <code>@file.mx.fm.mx</code>.</li>
+</ul>
+<p><strong>In loops</strong> - metadata works directly:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> @<span class="token directive keyword">files</span> <span class="token assignment-operator operator">=</span> <span class="token alligator"><span class="token punctuation">&lt;</span>docs/*.md<span class="token punctuation">></span></span>
+<span class="token directive keyword">for</span> @<span class="token directive keyword">file</span> <span class="token operator">in</span> @<span class="token directive keyword">files</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.filename</span>
+<span class="token directive keyword">for</span> @<span class="token directive keyword">file</span> <span class="token operator">in</span> @<span class="token directive keyword">files</span> <span class="token arrow-operator operator">=></span> <span class="token directive keyword">show</span> @<span class="token directive keyword">file</span><span class="token field-access property">.mx</span><span class="token field-access property">.fm</span><span class="token field-access property">.status</span>
+</code></pre>
+<h3 id="json-parsing" tabindex="-1"><a class="header-anchor" href="#json-parsing"><span>JSON Parsing</span></a></h3>
+<p><strong>Parse JSON explicitly with transforms:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> When you have a JSON string and need to parse it</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@jsonStr</span> <span class="token assignment-operator operator">=</span> <span class="token string-literal">'[{"name":"Alice"},{"name":"Bob"}]'</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@parsed</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@jsonStr</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@parsed</span><span class="token field-access property">.0</span><span class="token field-access property">.name</span>                  <span class="token comment">>> "Alice"</span>
+
+<span class="token comment">>> When you have an object and need the JSON string</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@obj</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Alice<span class="token punctuation">"</span></span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@str</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@obj</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@str</span>                            <span class="token comment">>> '{"name":"Alice"}'</span>
+
+<span class="token comment">>> Common in pipelines with LLM responses</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@response</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@llm</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>return JSON<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span><span class="token field-access property">.llm</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@items</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@response</span>
+</code></pre>
+<h3 id="frontmatter" tabindex="-1"><a class="header-anchor" href="#frontmatter"><span>Frontmatter</span></a></h3>
+<p>YAML metadata block at the top of any mlld file:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">name</span><span class="token punctuation">:</span> my<span class="token punctuation">-</span>module
+<span class="token key atrule">author</span><span class="token punctuation">:</span> alice
+<span class="token key atrule">version</span><span class="token punctuation">:</span> 1.0.0
+<span class="token key atrule">about</span><span class="token punctuation">:</span> Brief description
+<span class="token key atrule">license</span><span class="token punctuation">:</span> CC0
+<span class="token punctuation">---</span>
+</code></pre>
+<p>Access via <code>@fm</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@id</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@fm</span><span class="token field-access property">.id</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@version</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@fm</span><span class="token field-access property">.version</span>
+
+<span class="token comment">>> Build a metadata object</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@meta</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">id</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fm</span><span class="token field-access property">.id</span><span class="token punctuation">,</span>
+  <span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fm</span><span class="token field-access property">.name</span><span class="token punctuation">,</span>
+  <span class="token object-key property">version</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fm</span><span class="token field-access property">.version</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="exe" tabindex="-1"><a class="header-anchor" href="#exe"><span>exe</span></a></h2>
+<p><strong>exe vs var:</strong> <code>exe</code> defines functions (takes parameters). <code>var</code> creates values (no parameters). Use <code>exe</code> when you need to pass arguments; use <code>var</code> for computed values.</p>
+<p><code>mlld validate</code> warns when exe parameters use generic names such as <code>result</code>, <code>output</code>, or <code>data</code> because they can shadow caller variables. Prefer specific names such as <code>status</code>, <code>finalOutput</code>, or <code>inputData</code>.</p>
+<p><strong>Simple forms:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Command</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@list</span><span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>ls -la <span class="token variable variable">@dir</span> <span class="token pipe-operator operator">|</span> head -<span class="token number">5</span><span class="token punctuation">}</span>
+
+<span class="token comment">>> JavaScript (in-process)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return a + b <span class="token punctuation">}</span>
+
+<span class="token comment">>> Node.js (VM-isolated)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@hash</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">node</span> <span class="token punctuation">{</span>
+  const crypto <span class="token assignment-operator operator">=</span> require<span class="token punctuation">(</span><span class="token string-literal">'crypto'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  return crypto<span class="token field-access property">.createHash</span><span class="token punctuation">(</span><span class="token string-literal">'sha256'</span><span class="token punctuation">)</span><span class="token field-access property">.update</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span><span class="token field-access property">.digest</span><span class="token punctuation">(</span><span class="token string-literal">'hex'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> Python</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span> print<span class="token punctuation">(</span>a + b<span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@calculate</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span> y<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+result <span class="token assignment-operator operator">=</span> x ** <span class="token number">2</span> + y ** <span class="token number">2</span>
+print<span class="token punctuation">(</span>result<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> Template</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+
+<span class="token comment">>> External template file</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@welcome</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> role<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>./prompts/welcome.att<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Prose (requires config)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@analyze</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@config</span> <span class="token punctuation">{</span> session <span class="token string-interpolated"><span class="token punctuation">"</span>Analyze <span class="token variable">@data</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Python notes:</strong></p>
+<ul>
+<li>Use <code>print()</code> to return values (captured as string output)</li>
+<li>Parameters preserve their original mlld types (<code>int</code>, <code>float</code>, <code>bool</code>, <code>str</code>, <code>list</code>, <code>dict</code>, <code>None</code>)</li>
+<li>Standard library available: <code>import json</code>, <code>import math</code>, etc.</li>
+<li>Cast only when you intentionally need conversion</li>
+</ul>
+<p><strong>Labels</strong>: Add labels before the name for runtime behavior. The <code>llm</code> label enables automatic checkpointing:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> llm <span class="token variable variable">@review</span><span class="token punctuation">(</span><span class="token directive keyword">file</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> template <span class="token string-interpolated"><span class="token punctuation">"</span>review.att<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Cached results persist across runs. Use <code>--resume @review</code> to selectively re-call. See <code>mlld howto checkpoint</code>.</p>
+<h3 id="see-also-2" tabindex="-1"><a class="header-anchor" href="#see-also-2"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./exe-blocks.md">Exe Blocks</a> - More <code>exe</code> body styles including multi-step blocks.</li>
+<li><a href="./run-basics.md">Run Basics</a> - <code>run</code> directive patterns and when to prefer <code>run</code> over <code>exe</code>.</li>
+<li><a href="./run-params.md">Run Params</a> - Parameter passing semantics for command and shell execution.</li>
+</ul>
+<h3 id="script-return" tabindex="-1"><a class="header-anchor" href="#script-return"><span>Script Return</span></a></h3>
+<p><code>=&gt; @value</code> terminates script execution immediately. When <code>=&gt;</code> appears inside a top-level <code>if</code> or <code>when</code> block, it terminates the script, not just the block.</p>
+<p><strong>Basic script return:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Strict mode</span>
+<span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>final result<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>unreachable<span class="token punctuation">"</span></span>
+</code></pre>
+<p><strong>Script return from conditionals:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">if</span> <span class="token variable variable">@condition</span> <span class="token punctuation">[</span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>early exit<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+<span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>fallback<span class="token punctuation">"</span></span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@mode</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fast<span class="token punctuation">"</span></span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@mode</span> <span class="token comparison-operator operator">==</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fast<span class="token punctuation">"</span></span> <span class="token arrow-operator operator">=></span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">if</span> <span class="token variable variable">@ready</span> <span class="token punctuation">[</span>
+    <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>immediate<span class="token punctuation">"</span></span>
+  <span class="token punctuation">]</span>
+<span class="token punctuation">]</span>
+<span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>deferred<span class="token punctuation">"</span></span>
+</code></pre>
+<p><strong>Module default export:</strong></p>
+<p>Imported <code>.mld</code> modules expose script return values through <code>default</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> module.mld</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@status</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>active<span class="token punctuation">"</span></span>
+<span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span> <span class="token object-key property">code</span><span class="token ternary-operator operator">:</span> <span class="token number">200</span><span class="token punctuation">,</span> <span class="token object-key property">status</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@status</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@unreachable</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>never runs<span class="token punctuation">"</span></span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> main.mld</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> default <span class="token operator">as</span> <span class="token variable variable">@result</span><span class="token punctuation">,</span> status <span class="token operator">as</span> <span class="token variable variable">@s</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./module.mld<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@result</span><span class="token field-access property">.code</span>     <span class="token comment">>> 200</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@s</span>               <span class="token comment">>> "active"</span>
+</code></pre>
+<p>Scripts without <code>=&gt;</code> do not emit implicit final return output. Use <code>=&gt;</code> explicitly when module consumers need a default export value.</p>
+<p><strong>In exe blocks:</strong></p>
+<p><code>=&gt; @value</code> returns from the function body. See exe-blocks for function return syntax.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@validate</span><span class="token punctuation">(</span>input<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">if</span> <span class="token logical-operator operator">!</span><span class="token reserved-variable builtin">@input</span> <span class="token punctuation">[</span>
+    <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span> <span class="token object-key property">error</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>missing<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span>
+  <span class="token arrow-operator operator">=></span> <span class="token punctuation">{</span> <span class="token object-key property">ok</span><span class="token ternary-operator operator">:</span> <span class="token reserved-variable builtin">@input</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="exe-metadata" tabindex="-1"><a class="header-anchor" href="#exe-metadata"><span>Exe Metadata</span></a></h3>
+<p>Executables can include metadata for tooling and type safety.</p>
+<p><strong>Typed parameters:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">times</span><span class="token ternary-operator operator">:</span> number<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>Hello <span class="token punctuation">"</span></span> + name<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token object-key property">data</span><span class="token ternary-operator operator">:</span> object<span class="token punctuation">,</span> <span class="token object-key property">format</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return data<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@count</span><span class="token punctuation">(</span><span class="token object-key property">items</span><span class="token ternary-operator operator">:</span> array<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return items<span class="token field-access property">.length</span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Type annotations use <code>: type</code> syntax after the parameter name. Supported types: <code>string</code>, <code>number</code>, <code>boolean</code>, <code>object</code>, <code>array</code>.</p>
+<p><strong>Description metadata:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>Hello <span class="token punctuation">"</span></span> + name<span class="token punctuation">;</span> <span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Greet a user by name<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The <code>with { description: &quot;...&quot; }</code> clause adds a description that appears in MCP tool listings.</p>
+<p><strong>Combined example:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@searchIssues</span><span class="token punctuation">(</span><span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">query</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">limit</span><span class="token ternary-operator operator">:</span> number<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  gh issue list -R <span class="token variable variable">@repo</span> --search <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@query</span><span class="token punctuation">"</span></span> -L <span class="token variable variable">@limit</span> --json number<span class="token punctuation">,</span>title
+<span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search GitHub issues by query<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>MCP integration:</strong></p>
+<p>When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. See <code>mcp-export</code> for serving and <code>mcp-tool-gateway</code> for tool collections.</p>
+<p><strong>Parameter types vs runtime:</strong></p>
+<p>Type annotations are metadata for tooling. At runtime, parameters arrive as their actual types from the caller.</p>
+<h3 id="exe-block-syntax" tabindex="-1"><a class="header-anchor" href="#exe-block-syntax"><span>Exe Block Syntax</span></a></h3>
+<p><strong>Block syntax</strong> (multi-statement bodies):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@validated</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@validate</span><span class="token punctuation">(</span><span class="token variable variable">@data</span><span class="token punctuation">)</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@transformed</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@transform</span><span class="token punctuation">(</span><span class="token variable variable">@validated</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@transformed</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> With accumulation</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@countItems</span><span class="token punctuation">(</span>items<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@count</span> <span class="token assignment-operator operator">=</span> <span class="token number">0</span>
+  <span class="token directive keyword">for</span> <span class="token variable variable">@item</span> <span class="token operator">in</span> <span class="token variable variable">@items</span> <span class="token punctuation">[</span>
+    <span class="token block-keyword keyword">let</span> <span class="token variable variable">@count</span> +<span class="token assignment-operator operator">=</span> <span class="token number">1</span>
+  <span class="token punctuation">]</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@count</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Block rules:</p>
+<ul>
+<li>Use <code>[...]</code> for multi-statement bodies</li>
+<li><code>let @var = value</code> for block-scoped variables</li>
+<li><code>let @var += value</code> for accumulation (arrays/strings/objects)</li>
+<li><code>=&gt; value</code> required as last statement for return</li>
+</ul>
+<h3 id="exe-when" tabindex="-1"><a class="header-anchor" href="#exe-when"><span>Exe When</span></a></h3>
+<p><strong>When in exe</strong> (first match wins):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@classify</span><span class="token punctuation">(</span>score<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@score</span> <span class="token comparison-operator operator">>=</span> <span class="token number">90</span> <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>A<span class="token punctuation">"</span></span>
+  <span class="token variable variable">@score</span> <span class="token comparison-operator operator">>=</span> <span class="token number">80</span> <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>B<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>F<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Use <code>if</code> for imperative flow where multiple branches can run.</p>
+<p>When <code>when</code> appears as a statement inside an <code>exe</code> block, matched value actions return from the enclosing <code>exe</code>.<br>
+Use block-form return to make that intent explicit:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> @<span class="token directive keyword">guard</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">when</span> <span class="token logical-operator operator">!</span><span class="token variable variable">@x</span> <span class="token arrow-operator operator">=></span> <span class="token punctuation">[</span>
+    <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>missing<span class="token punctuation">"</span></span>
+  <span class="token punctuation">]</span>
+  <span class="token arrow-operator operator">=></span> <span class="token string-interpolated"><span class="token punctuation">"</span>ok<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="exe-shadow-environments" tabindex="-1"><a class="header-anchor" href="#exe-shadow-environments"><span>Exe Shadow Environments</span></a></h3>
+<p><strong>Shadow environments</strong> expose helpers to all code blocks of that language:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> JavaScript shadow environment</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@double</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return n<span class="token wildcard keyword"> *</span> <span class="token number">2</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@cap</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return s<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token field-access property">.toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span> + s<span class="token field-access property">.slice</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> js <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> double<span class="token punctuation">,</span> cap <span class="token punctuation">}</span>  <span class="token comment">>> expose to all js blocks</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@out</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> cap<span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span> + <span class="token string-interpolated"><span class="token punctuation">"</span>: <span class="token punctuation">"</span></span> + double<span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>  <span class="token comment">>> "Hello: 10"</span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Python shadow environment</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@square</span><span class="token punctuation">(</span>x<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+result <span class="token assignment-operator operator">=</span> int<span class="token punctuation">(</span>x<span class="token punctuation">)</span> ** <span class="token number">2</span>
+print<span class="token punctuation">(</span>result<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+print<span class="token punctuation">(</span>f<span class="token string-interpolated"><span class="token punctuation">"</span>Hello, {name}!<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> py <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> square<span class="token punctuation">,</span> greet <span class="token punctuation">}</span>  <span class="token comment">>> expose to all py blocks</span>
+
+<span class="token directive keyword">run</span> py <span class="token punctuation">{</span>
+square<span class="token punctuation">(</span><span class="token number">4</span><span class="token punctuation">)</span>      <span class="token comment">>> prints 16</span>
+greet<span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>World<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token comment">>> prints Hello, World!</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Cross-function calls:</strong> Shadow functions can call each other:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span> print<span class="token punctuation">(</span>int<span class="token punctuation">(</span>a<span class="token punctuation">)</span> + int<span class="token punctuation">(</span>b<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@multiply</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span> y<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span> print<span class="token punctuation">(</span>int<span class="token punctuation">(</span>x<span class="token punctuation">)</span><span class="token wildcard keyword"> *</span> int<span class="token punctuation">(</span>y<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> py <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> add<span class="token punctuation">,</span> multiply <span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@calculate</span><span class="token punctuation">(</span>n<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+sum_result <span class="token assignment-operator operator">=</span> add<span class="token punctuation">(</span>n<span class="token punctuation">,</span> <span class="token number">10</span><span class="token punctuation">)</span>   <span class="token comment">>> calls shadow function</span>
+product <span class="token assignment-operator operator">=</span> multiply<span class="token punctuation">(</span>n<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">)</span>  <span class="token comment">>> calls shadow function</span>
+print<span class="token punctuation">(</span>f<span class="token string-interpolated"><span class="token punctuation">"</span>Sum: {sum_result}, Product: {product}<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> py <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> add<span class="token punctuation">,</span> multiply<span class="token punctuation">,</span> calculate <span class="token punctuation">}</span>  <span class="token comment">>> update to include calculate</span>
+</code></pre>
+<p><strong>Supported languages:</strong> <code>js</code>, <code>node</code>, <code>py</code>/<code>python</code></p>
+<h3 id="exe-prose-syntax" tabindex="-1"><a class="header-anchor" href="#exe-prose-syntax"><span>Exe Prose Syntax</span></a></h3>
+<p><strong>Prose execution</strong> invokes LLM-interpreted DSL skills (OpenProse or custom):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@opus</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/prose
+
+<span class="token comment">>> Inline (interpolates like templates)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token punctuation">{</span> summarize <span class="token variable variable">@text</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> File reference (.prose files do NOT interpolate)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@review</span><span class="token punctuation">(</span>code<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./review.prose<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Template files (.prose.att or .prose.mtt interpolate)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token object-key property">prose</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@opus</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./greet.prose.att<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Interpolation rules:</p>
+<ul>
+<li><code>prose:@config { inline }</code> - interpolates <code>@var</code> like templates</li>
+<li><code>&quot;file.prose&quot;</code> - no interpolation, raw content</li>
+<li><code>&quot;file.prose.att&quot;</code> - ATT interpolation (<code>@var</code>)</li>
+<li><code>&quot;file.prose.mtt&quot;</code> - MTT interpolation (<code>{{var}}</code>)</li>
+</ul>
+<p>See <code>mlld howto prose</code> for setup, OpenProse syntax, and custom interpreters.</p>
+<h2 id="run" tabindex="-1"><a class="header-anchor" href="#run"><span>run</span></a></h2>
+<p><strong>Decision tree:</strong></p>
+<ul>
+<li>Single line + pipes only → <code>cmd { ... }</code> (safe, recommended)</li>
+<li>Needs <code>&amp;&amp;</code>, <code>||</code>, control flow → <code>sh { ... }</code> (full shell)</li>
+<li>JavaScript code → <code>js { ... }</code> (in-process) or <code>node { ... }</code> (VM-isolated)</li>
+<li>Python code → <code>py { ... }</code> or <code>python { ... }</code> (subprocess)</li>
+</ul>
+<p><strong>Executable call statement sugar:</strong></p>
+<ul>
+<li>Strict mode (<code>.mld</code>): <code>@task()</code> executes with the same behavior as <code>run @task()</code></li>
+<li>Markdown mode (<code>.md</code>): <code>/@task()</code> executes with the same behavior as <code>/run @task()</code></li>
+<li><code>show @task()</code> still displays output explicitly</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> cmd (pipes only, safe)</span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>echo Hello <span class="token pipe-operator operator">|</span> tr <span class="token string-literal">'[:lower:]'</span> <span class="token string-literal">'[:upper:]'</span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@date</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>date<span class="token punctuation">}</span>
+
+<span class="token comment">>> sh (full shell scripts)</span>
+<span class="token directive keyword">run</span> sh <span class="token punctuation">{</span>
+  npm test <span class="token logical-operator operator">&amp;&amp;</span> npm <span class="token directive keyword">run</span> build <span class="token logical-operator operator">||</span> echo <span class="token string-interpolated"><span class="token punctuation">"</span>Build failed<span class="token punctuation">"</span></span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> JavaScript (in-process, fast)</span>
+<span class="token directive keyword">run</span> js <span class="token punctuation">{</span>console.<span class="token directive keyword">log</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>return <span class="token number">42</span><span class="token punctuation">}</span>
+
+<span class="token comment">>> Node.js (VM-isolated, full API)</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@hash</span> <span class="token assignment-operator operator">=</span> <span class="token operator">node</span> <span class="token punctuation">{</span>
+  const crypto <span class="token assignment-operator operator">=</span> require<span class="token punctuation">(</span><span class="token string-literal">'crypto'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  return crypto<span class="token field-access property">.createHash</span><span class="token punctuation">(</span><span class="token string-literal">'md5'</span><span class="token punctuation">)</span><span class="token field-access property">.update</span><span class="token punctuation">(</span><span class="token string-literal">'hello'</span><span class="token punctuation">)</span><span class="token field-access property">.digest</span><span class="token punctuation">(</span><span class="token string-literal">'hex'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> Python (subprocess)</span>
+<span class="token directive keyword">run</span> py <span class="token punctuation">{</span>print<span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello from python<span class="token punctuation">"</span></span><span class="token punctuation">)</span><span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@sum</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+result <span class="token assignment-operator operator">=</span> <span class="token number">2</span> + <span class="token number">2</span>
+print<span class="token punctuation">(</span>result<span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Language comparison:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Isolation</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>js</code></td>
+<td>None (in-process)</td>
+<td>Fast calculations, simple transforms</td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td>VM context</td>
+<td>Full Node.js API, require()</td>
+</tr>
+<tr>
+<td><code>py</code>/<code>python</code></td>
+<td>Subprocess</td>
+<td>Python libraries, data science</td>
+</tr>
+</tbody>
+</table>
+<h3 id="run-command-working-directory" tabindex="-1"><a class="header-anchor" href="#run-command-working-directory"><span>Run Command Working Directory</span></a></h3>
+<p><strong>Working directory override:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">run</span> <span class="token object-key property">cmd</span><span class="token ternary-operator operator">:</span>/ <span class="token punctuation">{</span>pwd<span class="token punctuation">}</span>                    <span class="token comment">>> runs in /</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@myPath</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>/tmp<span class="token punctuation">"</span></span>
+<span class="token directive keyword">run</span> <span class="token object-key property">cmd</span><span class="token ternary-operator operator">:</span><span class="token variable variable">@myPath</span> <span class="token punctuation">{</span>pwd<span class="token punctuation">}</span>              <span class="token comment">>> runs in /tmp</span>
+<span class="token directive keyword">run</span> <span class="token object-key property">cmd</span><span class="token ternary-operator operator">:</span>~ <span class="token punctuation">{</span>pwd<span class="token punctuation">}</span>                    <span class="token comment">>> runs in home directory</span>
+<span class="token directive keyword">run</span> <span class="token object-key property">sh</span><span class="token ternary-operator operator">:</span>/tmp <span class="token punctuation">{</span>pwd<span class="token punctuation">}</span>                  <span class="token comment">>> runs in /tmp</span>
+<span class="token directive keyword">run</span> <span class="token object-key property">js</span><span class="token ternary-operator operator">:</span>/tmp <span class="token punctuation">{</span>console.<span class="token directive keyword">log</span><span class="token punctuation">(</span>process<span class="token field-access property">.cwd</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">}</span>
+</code></pre>
+<p><code>run</code> cwd supports absolute paths, <code>@var</code> references, and <code>~</code> home expansion.</p>
+<h3 id="run-command-stdin" tabindex="-1"><a class="header-anchor" href="#run-command-stdin"><span>Run Command Stdin</span></a></h3>
+<p><strong>Stdin support:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@data</span> <span class="token assignment-operator operator">=</span> <span class="token string-literal">'[{"name":"Alice"}]'</span>
+<span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat <span class="token pipe-operator operator">|</span> jq <span class="token string-literal">'.[]'</span> <span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">stdin</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@data</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Pipe sugar (equivalent)</span>
+<span class="token directive keyword">run</span> <span class="token variable variable">@data</span> <span class="token pipe-operator operator">|</span> <span class="token punctuation">{</span> cat <span class="token pipe-operator operator">|</span> jq <span class="token string-literal">'.[]'</span> <span class="token punctuation">}</span>
+</code></pre>
+<h3 id="run-parameter-syntax" tabindex="-1"><a class="header-anchor" href="#run-parameter-syntax"><span>Run Parameter Syntax</span></a></h3>
+<p><strong>Parameter syntax by language:</strong></p>
+<ul>
+<li><code>cmd</code>: interpolate with <code>@param</code></li>
+<li><code>sh</code>: use shell variables as <code>$param</code></li>
+<li><code>js</code>/<code>node</code>: parameters as JavaScript variables</li>
+<li><code>py</code>/<code>python</code>: parameters as Python variables (typed values)</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> JavaScript - parameters are typed values</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>items<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return items<span class="token field-access property">.map</span><span class="token punctuation">(</span>x <span class="token arrow-operator operator">=></span> x<span class="token wildcard keyword"> *</span> <span class="token number">2</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span>  <span class="token comment">>> [2, 4, 6]</span>
+
+<span class="token comment">>> Python - parameters are typed values</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span>a<span class="token punctuation">,</span> b<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span> print<span class="token punctuation">(</span>a + b<span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@sum</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@add</span><span class="token punctuation">(</span><span class="token number">5</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span>  <span class="token comment">>> 8</span>
+
+<span class="token comment">>> Python with complex types (metadata preserved)</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@analyze</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> py <span class="token punctuation">{</span>
+<span class="token directive keyword">import</span> json
+print<span class="token punctuation">(</span>json<span class="token field-access property">.dumps</span><span class="token punctuation">(</span>data<span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Python variable helpers</strong> (available as <code>mlld</code> global, no import needed):</p>
+<ul>
+<li><code>mlld.is_variable(x)</code> - check if value is a wrapped mlld Variable</li>
+<li>Variables have <code>__mlld_type__</code> and <code>__mlld_metadata__</code> attributes</li>
+<li>Arrays/lists and dicts pass through with metadata preserved</li>
+</ul>
+<h2 id="builtins" tabindex="-1"><a class="header-anchor" href="#builtins"><span>Builtins</span></a></h2>
+<h3 id="reserved-variables" tabindex="-1"><a class="header-anchor" href="#reserved-variables"><span>Reserved Variables</span></a></h3>
+<ul>
+<li><code>@root</code> / <code>@base</code> - project root path</li>
+<li><code>@now</code> - current ISO timestamp</li>
+<li><code>@input</code> - stdin/env (must be allowed in config)</li>
+<li><code>@state</code> - mutable state for SDK integrations</li>
+<li><code>@debug</code> - environment info</li>
+<li><code>@fm</code> - current file's frontmatter (in modules)</li>
+<li><code>@mx</code> - metadata accessor (labels, taint, guard context)</li>
+</ul>
+<p><code>@root</code>/<code>@base</code> resolution algorithm:</p>
+<ol>
+<li>Start at the current file directory and walk upward.</li>
+<li>Check mlld markers first (in order):
+<ul>
+<li><code>mlld-config.json</code></li>
+<li><code>mlld-lock.json</code></li>
+<li><code>mlld.lock.json</code></li>
+</ul>
+</li>
+<li>If none are found, check fallback project markers:
+<ul>
+<li><code>package.json</code></li>
+<li><code>.git</code></li>
+<li><code>pyproject.toml</code></li>
+<li><code>Cargo.toml</code></li>
+</ul>
+</li>
+<li>The first directory containing any marker becomes <code>@root</code> (<code>@base</code> is an alias).</li>
+</ol>
+<p>Built-in transformer/helper names are available for <code>var</code>/<code>let</code> declarations and are shadowable per scope:</p>
+<ul>
+<li><code>@exists</code>, <code>@fileExists</code>, <code>@typeof</code></li>
+<li><code>@parse</code>, <code>@json</code> (deprecated alias), <code>@xml</code>, <code>@csv</code>, <code>@md</code></li>
+<li><code>@upper</code>, <code>@lower</code>, <code>@trim</code>, <code>@pretty</code>, <code>@sort</code></li>
+<li><code>@keep</code>, <code>@keepStructured</code></li>
+</ul>
+<p><code>mlld validate</code> reports builtin shadowing as informational output.</p>
+<h3 id="transformers" tabindex="-1"><a class="header-anchor" href="#transformers"><span>Transformers</span></a></h3>
+<p>Used with <code>|</code> in pipelines. Each receives the previous value.</p>
+<ul>
+<li><code>@parse</code> - parse JSON (default mode)</li>
+<li><code>@parse.strict</code> - strict JSON only</li>
+<li><code>@parse.loose</code> - single quotes, trailing commas</li>
+<li><code>@parse.llm</code> - extract JSON from LLM response text</li>
+<li><code>@xml</code> - parse XML</li>
+<li><code>@csv</code> - parse CSV</li>
+<li><code>@md</code> - parse markdown</li>
+<li><code>@upper</code> - uppercase string</li>
+<li><code>@lower</code> - lowercase string</li>
+<li><code>@trim</code> - strip whitespace</li>
+<li><code>@pretty</code> - pretty-print JSON</li>
+<li><code>@sort</code> - sort array</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@users</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> cat users<span class="token field-access property">.json</span> <span class="token punctuation">}</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@extracted</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@llmResponse</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@parse</span><span class="token field-access property">.llm</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@clean</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@raw</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@trim</span> <span class="token pipe-operator operator">|</span> <span class="token variable variable">@lower</span>
+</code></pre>
+<h3 id="checks" tabindex="-1"><a class="header-anchor" href="#checks"><span>Checks</span></a></h3>
+<ul>
+<li><code>@exists(target)</code> - returns <code>true</code>/<code>false</code>. Works with file paths, variables, object fields, array indices, and globs. Note: <code>@exists(@var)</code> checks if the <em>variable</em> is defined, not if a file at that path exists.</li>
+<li><code>@fileExists(path)</code> - returns <code>true</code>/<code>false</code>. Always resolves argument to a path string, then checks filesystem. Unlike <code>@exists(@var)</code>, <code>@fileExists(@var)</code> resolves the variable and checks the <em>file</em>.</li>
+<li><code>@typeof(value)</code> - returns type as string</li>
+<li><code>@typeInfo(value)</code> - returns rich type/provenance details for debugging</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> File existence (literal paths)</span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@exists</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>config.json<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>config found<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@exists</span><span class="token punctuation">(</span><span class="token alligator"><span class="token punctuation">&lt;</span>src/**/*.ts<span class="token punctuation">></span></span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>has ts files<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+
+<span class="token comment">>> Variable/field existence</span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@exists</span><span class="token punctuation">(</span><span class="token variable variable">@obj</span><span class="token field-access property">.field</span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>field defined<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@exists</span><span class="token punctuation">(</span><span class="token variable variable">@arr</span><span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>index 5 exists<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+
+<span class="token comment">>> File existence with dynamic paths</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@configPath</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>config.json<span class="token punctuation">"</span></span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@fileExists</span><span class="token punctuation">(</span><span class="token variable variable">@configPath</span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>config found<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+<span class="token directive keyword">if</span> <span class="token variable variable">@fileExists</span><span class="token punctuation">(</span><span class="token variable variable">@settings</span><span class="token field-access property">.configPath</span><span class="token punctuation">)</span> <span class="token punctuation">[</span> <span class="token directive keyword">show</span> <span class="token string-interpolated"><span class="token punctuation">"</span>found<span class="token punctuation">"</span></span> <span class="token punctuation">]</span>
+</code></pre>
+<h4 id="type-checks" tabindex="-1"><a class="header-anchor" href="#type-checks"><span>Type Checks</span></a></h4>
+<ul>
+<li><code>.isArray()</code> / <code>.isObject()</code> / <code>.isString()</code></li>
+<li><code>.isNumber()</code> / <code>.isBoolean()</code> / <code>.isNull()</code> / <code>.isDefined()</code></li>
+</ul>
+<h3 id="methods" tabindex="-1"><a class="header-anchor" href="#methods"><span>Methods</span></a></h3>
+<p><strong>String methods:</strong></p>
+<ul>
+<li><code>@str.length</code> - string length</li>
+<li><code>@str.includes(sub)</code> - true if contains substring</li>
+<li><code>@str.indexOf(sub)</code> - index or -1</li>
+<li><code>@str.startsWith(prefix)</code> / <code>endsWith(suffix)</code></li>
+<li><code>@str.toLowerCase()</code> / <code>toUpperCase()</code></li>
+<li><code>@str.trim()</code> - remove whitespace</li>
+<li><code>@str.split(separator)</code> - split to array</li>
+<li><code>@str.slice(start, end?)</code> - extract substring by position</li>
+<li><code>@str.substring(start, end?)</code> - extract substring (no negative indices)</li>
+<li><code>@str.replace(search, replacement)</code> - replace first match (accepts string or regex)</li>
+<li><code>@str.replaceAll(search, replacement)</code> - replace all matches (accepts string or regex)</li>
+<li><code>@str.replaceAll({&quot;old&quot;: &quot;new&quot;, ...})</code> - bulk replacement via object map (applied sequentially)</li>
+<li><code>@str.match(pattern)</code> - match against string or regex, returns match array or null</li>
+<li><code>@str.padStart(length, char?)</code> / <code>padEnd(length, char?)</code> - pad to target length</li>
+<li><code>@str.repeat(count)</code> - repeat string N times</li>
+</ul>
+<p><strong>Array methods:</strong></p>
+<ul>
+<li><code>@arr.length</code> - array length</li>
+<li><code>@arr.includes(value)</code> - true if contains value</li>
+<li><code>@arr.indexOf(value)</code> - index or -1</li>
+<li><code>@arr.join(separator)</code> - join to string</li>
+<li><code>@arr.slice(start, end?)</code> - extract sub-array by position</li>
+<li><code>@arr.concat(other)</code> - combine arrays</li>
+<li><code>@arr.reverse()</code> - reverse order (returns new array)</li>
+<li><code>@arr.sort()</code> - sort alphabetically (returns new array)</li>
+<li><code>@arr.flat(depth?)</code> - flatten nested arrays (default depth 1)</li>
+<li><code>@arr.at(index)</code> - element at index (supports negative indices)</li>
+</ul>
+<p><strong>Wildcard projection:</strong></p>
+<ul>
+<li><code>@arr[*].field</code> - extract <code>.field</code> from every element, producing a flat array</li>
+</ul>
+<p><strong>Helpers:</strong></p>
+<ul>
+<li><code>@keep(obj, [...keys])</code> - keep only specified keys from object</li>
+<li><code>@keepStructured(obj, schema)</code> - keep keys matching a schema structure</li>
+</ul>
+<p>Method chains can continue across lines when continuation lines start with <code>.</code></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@fruits</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>apple<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cherry<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@message</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Hello World<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@fruits</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>banana<span class="token punctuation">"</span></span><span class="token punctuation">)</span>    <span class="token comment">>> true</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@fruits</span><span class="token field-access property">.join</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span> and <span class="token punctuation">"</span></span><span class="token punctuation">)</span>         <span class="token comment">>> "apple and banana and cherry"</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@message</span><span class="token field-access property">.toLowerCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span>        <span class="token comment">>> "hello world"</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@message</span><span class="token field-access property">.split</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span> <span class="token punctuation">"</span></span><span class="token punctuation">)</span>           <span class="token comment">>> ["Hello", "World"]</span>
+
+<span class="token comment">>> Method chaining</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@message</span><span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token field-access property">.toLowerCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token field-access property">.startsWith</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span>  <span class="token comment">>> true</span>
+
+<span class="token comment">>> Multiline method chaining</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@normalize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@text</span>
+  <span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token field-access property">.toLowerCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token field-access property">.replace</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>hi<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+
+<span class="token comment">>> Wildcard projection</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@tools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span><span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>readData<span class="token punctuation">"</span></span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>verify<span class="token punctuation">"</span></span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token string-interpolated"><span class="token punctuation">"</span>name<span class="token punctuation">"</span></span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sendEmail<span class="token punctuation">"</span></span><span class="token punctuation">}</span><span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@tools</span><span class="token punctuation">[</span>*<span class="token punctuation">]</span><span class="token field-access property">.name</span>                       <span class="token comment">>> ["readData", "verify", "sendEmail"]</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@tools</span><span class="token punctuation">[</span>*<span class="token punctuation">]</span><span class="token field-access property">.name</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>verify<span class="token punctuation">"</span></span><span class="token punctuation">)</span>    <span class="token comment">>> true</span>
+</code></pre>
+<h2 id="comments" tabindex="-1"><a class="header-anchor" href="#comments"><span>Comments</span></a></h2>
+<p>Use <code>&gt;&gt;</code> at start of line or <code>&lt;&lt;</code> at end.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> This is a comment</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@x</span> <span class="token assignment-operator operator">=</span> <span class="token number">5</span>    <span class="token comment">&lt;&lt; end-of-line comment</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@x</span>       <span class="token comment">>> also works here</span>
+</code></pre>
+<h2 id="escaping" tabindex="-1"><a class="header-anchor" href="#escaping"><span>Escaping</span></a></h2>
+<p><strong>Special characters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Character</th>
+<th>In templates</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@</code></td>
+<td>Variable interpolation</td>
+<td><code>\@</code> or helper function</td>
+</tr>
+<tr>
+<td><code>`</code></td>
+<td>Template delimiter</td>
+<td>Use <code>::...::</code> syntax</td>
+</tr>
+<tr>
+<td><code>::</code></td>
+<td>Alternate delimiter</td>
+<td>Use triple-colon <code>:::...:::</code></td>
+</tr>
+<tr>
+<td><code>{{}}</code></td>
+<td>Object expression</td>
+<td>Use triple-colon escape</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Escape hatch templates:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Triple-colon disables all @ interpolation — treats @ as literal text</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@xml</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token alligator"><span class="token punctuation">&lt;</span>USER id="@id"<span class="token punctuation">></span></span><span class="token variable variable">@name</span><span class="token alligator"><span class="token punctuation">&lt;</span>/USER<span class="token punctuation">></span></span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+
+<span class="token comment">>> Useful for XML/HTML with @ attributes</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@elem</span> <span class="token assignment-operator operator">=</span> <span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token alligator"><span class="token punctuation">&lt;</span>input type="email" placeholder="user@example.com"<span class="token punctuation">></span></span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span><span class="token ternary-operator operator">:</span>
+</code></pre>
+<p><strong>When to use each:</strong></p>
+<ul>
+<li><strong>Backticks</strong> <code>`...`</code> - Default template, simple interpolation</li>
+<li><strong>Double-colon</strong> <code>::...::</code> - When content has backticks</li>
+<li><strong>Triple-colon</strong> <code>:::...:::</code> - When content triggers file detection (has @ with dots/slashes)</li>
+</ul>
+<h3 id="see-also-3" tabindex="-1"><a class="header-anchor" href="#see-also-3"><span>See Also</span></a></h3>
+<ul>
+<li><a href="./escaping-at.md">Escaping @ Symbols</a> - <code>\@</code> and <code>@@</code> patterns for literal at-sign output.</li>
+<li><a href="./escaping-defaults.md">Escaping Defaults</a> - Default interpolation/escape behavior.</li>
+<li><a href="./templates-basics.md">Templates Basics</a> - Template forms and interpolation rules.</li>
+</ul>
+<h3 id="escaping-%40-symbol" tabindex="-1"><a class="header-anchor" href="#escaping-%40-symbol"><span>Escaping @ Symbol</span></a></h3>
+<p>Use <code>\@</code> or <code>@@</code> to output a literal <code>@</code>. Works in all string and template contexts.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@email</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>user\<span class="token variable">@example</span>.com<span class="token punctuation">`</span></span>  <span class="token comment">>> "user@example.com"</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@email</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>user@<span class="token variable">@example</span>.com<span class="token punctuation">`</span></span>  <span class="token comment">>> "user@example.com"</span>
+</code></pre>
+<p>In <code>.att</code> template files:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">Contact</span><span class="token ternary-operator operator">:</span> user@<span class="token variable variable">@example</span><span class="token field-access property">.com</span>
+Follow @<span class="token variable variable">@username</span> on Twitter
+</code></pre>
+<p>The exception is <code>sh {}</code> / <code>bash {}</code> blocks — content is passed to the shell verbatim with no <code>@</code> processing.</p>
+<h3 id="default-values" tabindex="-1"><a class="header-anchor" href="#default-values"><span>Default Values</span></a></h3>
+<p><strong>Problem:</strong> Need default values when data might be missing.</p>
+<p><strong>Solutions:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> 1. Ternary expressions</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@user</span><span class="token field-access property">.name</span> <span class="token ternary-operator operator">?</span> <span class="token variable variable">@user</span>.<span class="token object-key property">name</span> <span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Anonymous<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> 2. JavaScript helper for safe access</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@safe</span><span class="token punctuation">(</span>obj<span class="token punctuation">,</span> field<span class="token punctuation">,</span> fallback<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  return <span class="token punctuation">(</span>obj <span class="token logical-operator operator">&amp;&amp;</span> obj<span class="token punctuation">[</span>field<span class="token punctuation">]</span> <span class="token comparison-operator operator">!=</span><span class="token assignment-operator operator">=</span> undefined<span class="token punctuation">)</span> <span class="token ternary-operator operator">?</span> obj<span class="token punctuation">[</span>field<span class="token punctuation">]</span> <span class="token ternary-operator operator">:</span> <span class="token punctuation">(</span>fallback <span class="token logical-operator operator">||</span> <span class="token null">null</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@title</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@safe</span><span class="token punctuation">(</span><span class="token variable variable">@item</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>title<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Untitled<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+
+<span class="token comment">>> 3. Safe array access</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@safeArr</span><span class="token punctuation">(</span>obj<span class="token punctuation">,</span> field<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  return <span class="token punctuation">(</span>obj <span class="token logical-operator operator">&amp;&amp;</span> Array<span class="token field-access property">.isArray</span><span class="token punctuation">(</span>obj<span class="token punctuation">[</span>field<span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token ternary-operator operator">?</span> obj<span class="token punctuation">[</span>field<span class="token punctuation">]</span> <span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@tags</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@safeArr</span><span class="token punctuation">(</span><span class="token variable variable">@post</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>tags<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+
+<span class="token comment">>> 4. Conditional inclusion with @var?</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@subtitle</span><span class="token ternary-operator operator">?</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@item</span><span class="token field-access property">.subtitle</span>      <span class="token comment">>> omit if falsy</span>
+<span class="token directive keyword">show</span> <span class="token backtick-template"><span class="token punctuation">`</span>Title: <span class="token variable">@item</span>.title <span class="token variable">@subtitle</span>?<span class="token punctuation">`</span></span> <span class="token comment">>> subtitle only if present</span>
+</code></pre>
+<p><strong>Common patterns:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Optional chaining equivalent</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@get</span><span class="token punctuation">(</span>obj<span class="token punctuation">,</span> path<span class="token punctuation">,</span> fallback<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span>
+  const keys <span class="token assignment-operator operator">=</span> path<span class="token field-access property">.split</span><span class="token punctuation">(</span><span class="token string-literal">'.'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token block-keyword keyword">let</span> val <span class="token assignment-operator operator">=</span> obj<span class="token punctuation">;</span>
+  <span class="token directive keyword">for</span> <span class="token punctuation">(</span>const k of keys<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token directive keyword">if</span> <span class="token punctuation">(</span>val <span class="token comparison-operator operator">==</span> <span class="token null">null</span><span class="token punctuation">)</span> return fallback<span class="token punctuation">;</span>
+    val <span class="token assignment-operator operator">=</span> val<span class="token punctuation">[</span>k<span class="token punctuation">]</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+  return val <span class="token ternary-operator operator">?</span><span class="token ternary-operator operator">?</span> fallback<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@city</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@get</span><span class="token punctuation">(</span><span class="token variable variable">@user</span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>address.city<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Unknown<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

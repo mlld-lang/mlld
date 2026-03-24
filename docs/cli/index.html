@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLI - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" aria-current=&quot;page&quot;>CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>The <code>mlld</code> CLI runs scripts, validates syntax, manages checkpoints for LLM call caching, and serves MCP tool endpoints. <code>mlld run</code> executes named scripts from the script directory. <code>mlld &lt;file&gt;</code> runs any file directly with payload injection.</p>
+<h2 id="direct-file-invocation" tabindex="-1"><a class="header-anchor" href="#direct-file-invocation"><span>Direct File Invocation</span></a></h2>
+<p>Run any mlld file directly with <code>mlld &lt;file&gt;</code>. Supports the same payload injection as <code>mlld run</code>, plus timeout and metrics flags.</p>
+<pre class="language-bash"><code class="language-bash">mlld script.mld                        <span class="token comment"># Run a file</span>
+mlld script.mld <span class="token parameter variable">--topic</span> foo <span class="token parameter variable">--count</span> <span class="token number">5</span>  <span class="token comment"># Pass payload fields</span>
+mlld script.mld <span class="token parameter variable">--timeout</span> 5m           <span class="token comment"># Limit execution time</span>
+mlld script.mld <span class="token parameter variable">--metrics</span>              <span class="token comment"># Show timing on stderr</span>
+</code></pre>
+<p><strong>Payload injection</strong>: Unknown flags become <code>@payload</code> fields. <code>@payload</code> is always available as <code>{}</code> even with no flags:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">show</span> <span class="token variable variable">@payload</span><span class="token field-access property">.topic</span>
+</code></pre>
+<pre class="language-bash"><code class="language-bash">mlld script.mld <span class="token parameter variable">--topic</span> hello    <span class="token comment"># @payload = {"topic":"hello"}</span>
+mlld script.mld                  <span class="token comment"># @payload = {}</span>
+</code></pre>
+<p><strong>Options</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--timeout &lt;duration&gt;</code></td>
+<td>Overall execution timeout (e.g., 5m, 1h, 30s)</td>
+</tr>
+<tr>
+<td><code>--metrics</code></td>
+<td>Show execution timing on stderr</td>
+</tr>
+<tr>
+<td><code>--&lt;name&gt; &lt;value&gt;</code></td>
+<td>Payload field (unknown flags become <code>@payload</code> fields)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Difference from <code>mlld run</code></strong>: Direct invocation takes a file path. <code>mlld run</code> discovers scripts from the configured script directory (default: <code>llm/run/</code>) and supports AST caching across runs.</p>
+<h2 id="mlld-run-command" tabindex="-1"><a class="header-anchor" href="#mlld-run-command"><span>mlld run Command</span></a></h2>
+<p>Run mlld scripts from a configured directory with automatic payload injection.</p>
+<pre class="language-bash"><code class="language-bash">mlld run                     <span class="token comment"># List available scripts</span>
+mlld run hello               <span class="token comment"># Run llm/run/hello.mld</span>
+mlld run qa <span class="token parameter variable">--topic</span> vars     <span class="token comment"># Pass payload: @payload.topic = "vars"</span>
+</code></pre>
+<p><strong>Payload injection</strong>: Unknown flags become <code>@payload</code> fields:</p>
+<pre class="language-bash"><code class="language-bash">mlld run build <span class="token parameter variable">--env</span> prod <span class="token parameter variable">--fast</span> <span class="token boolean">true</span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> In build.mld — @payload is available directly</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@env</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@payload</span><span class="token field-access property">.env</span> <span class="token ternary-operator operator">?</span> <span class="token variable variable">@payload</span>.<span class="token object-key property">env</span> <span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>dev<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@fast</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@payload</span><span class="token field-access property">.fast</span> <span class="token ternary-operator operator">?</span> <span class="token variable variable">@payload</span>.<span class="token object-key property">fast</span> <span class="token ternary-operator operator">:</span> <span class="token boolean">false</span>
+</code></pre>
+<p><strong>Reserved flags</strong>: <code>--mlld-env</code> is reserved for agent environment loading. <code>--env</code> now flows through as <code>@payload.env</code>.</p>
+<p><strong>Script directory</strong>: Configured in <code>mlld-config.json</code>, defaults to <code>llm/run/</code>.</p>
+<p><strong>Options</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--timeout &lt;duration&gt;</code></td>
+<td>Script timeout (e.g., 5m, 1h, 30s) - default: unlimited</td>
+</tr>
+<tr>
+<td><code>--debug</code></td>
+<td>Show execution metrics</td>
+</tr>
+<tr>
+<td><code>--fresh</code> / <code>--new</code></td>
+<td>Clear checkpoint cache before running</td>
+</tr>
+<tr>
+<td><code>--no-checkpoint</code></td>
+<td>Disable checkpoint reads/writes for this run</td>
+</tr>
+<tr>
+<td><code>--resume [target]</code></td>
+<td>Enable checkpoint replay for this run; optional target invalidates entries</td>
+</tr>
+<tr>
+<td><code>--fork &lt;script&gt;</code></td>
+<td>Seed cache from another script's checkpoints (read-only)</td>
+</tr>
+<tr>
+<td><code>--mlld-env &lt;env&gt;</code></td>
+<td>Load agent env file(s) or inline KEY=VALUE overrides</td>
+</tr>
+<tr>
+<td><code>--&lt;name&gt; &lt;value&gt;</code></td>
+<td>Payload field</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Checkpoint/resume</strong>: <code>llm</code>-labeled exes are checkpointed automatically. Scripts default to manual replay unless they declare <code>resume: auto</code>, so use <code>--resume</code> to opt into hits or targeted invalidation:</p>
+<pre class="language-bash"><code class="language-bash">mlld run pipeline <span class="token parameter variable">--resume</span>                  <span class="token comment"># use cached hits for this run</span>
+mlld run pipeline <span class="token parameter variable">--resume</span> @review          <span class="token comment"># invalidate all @review entries</span>
+mlld run pipeline <span class="token parameter variable">--resume</span> @review:2        <span class="token comment"># invalidate 3rd invocation (0-based)</span>
+mlld run pipeline <span class="token parameter variable">--resume</span> @review<span class="token punctuation">(</span><span class="token string">"src/"</span><span class="token punctuation">)</span>  <span class="token comment"># invalidate by arg prefix</span>
+</code></pre>
+<p>See <code>mlld howto checkpoint</code> for resume modes, named checkpoints, TTL/complete policies, cache inspection, and workspace VFS replay behavior.</p>
+<h2 id="validate-features" tabindex="-1"><a class="header-anchor" href="#validate-features"><span>Validate Features</span></a></h2>
+<p>The <code>mlld validate</code> command detects common mistakes before runtime. Supports <code>.mld</code>, <code>.mld.md</code>, <code>.att</code>, and <code>.mtt</code> files. Pass a directory to validate all files recursively.</p>
+<pre class="language-bash"><code class="language-bash">mlld validate ./my-project/                   <span class="token comment"># Validate all files recursively (recommended)</span>
+mlld validate ./my-project/ <span class="token parameter variable">--verbose</span>         <span class="token comment"># Full details for all files</span>
+mlld validate module.mld                      <span class="token comment"># Validate a single module</span>
+mlld validate template.att                    <span class="token comment"># Validate a template</span>
+mlld validate app/index.mld <span class="token parameter variable">--deep</span>            <span class="token comment"># Follow imports and templates from an entry file</span>
+mlld validate guards.mld <span class="token parameter variable">--context</span> tools.mld  <span class="token comment"># Validate guards against tool declarations</span>
+mlld validate module.mld --error-on-warnings  <span class="token comment"># Fail on warnings</span>
+mlld validate module.mld <span class="token parameter variable">--format</span> json        <span class="token comment"># JSON output</span>
+</code></pre>
+<p><strong>Undefined variable detection:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>alice<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@nmae</span>
+<span class="token comment">>> Warning: @nmae undefined</span>
+</code></pre>
+<p>Warns about typos like <code>@mx.now</code> (should be <code>@now</code>).</p>
+<p><strong>Optional parameter pass-through warnings:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@inner</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span> timeout<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> sh <span class="token punctuation">{</span> echo <span class="token variable variable">@timeout</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@outer</span><span class="token punctuation">(</span>x<span class="token punctuation">,</span> timeout<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@inner</span><span class="token punctuation">(</span><span class="token variable variable">@x</span><span class="token punctuation">,</span> <span class="token variable variable">@timeout</span><span class="token punctuation">)</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@result</span>
+<span class="token punctuation">]</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@r</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@outer</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token comment">>> Warning: @timeout may be omitted by callsites and fail when passed to @inner</span>
+</code></pre>
+<p>This catches wrapper patterns where trailing exe parameters are omitted by callers and then forwarded into nested function calls.</p>
+<p><strong>Variable redefinition detection:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@count</span> <span class="token assignment-operator operator">=</span> <span class="token number">0</span>
+<span class="token directive keyword">when</span> <span class="token variable variable">@condition</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">var</span> <span class="token variable variable">@count</span> <span class="token assignment-operator operator">=</span> <span class="token number">1</span>
+  <span class="token comment">>> Error: cannot redefine @count in nested scope</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>mlld variables are immutable. Use <code>let</code> for block-scoped values or <code>+=</code> for accumulation.</p>
+<p><strong>Reserved name conflicts:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token reserved-variable builtin">@now</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>custom<span class="token punctuation">"</span></span>
+<span class="token comment">>> Error: cannot redefine reserved @now</span>
+</code></pre>
+<p>Reserved names: <code>@now</code>, <code>@base</code>, <code>@mx</code>, <code>@p</code>, <code>@env</code>, <code>@payload</code>, <code>@state</code>.</p>
+<p><strong>Builtin shadowing:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@transform</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@parse</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>not-a-transformer<span class="token punctuation">"</span></span>
+  <span class="token comment">>> Info: @parse shadows built-in transform in this scope</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Shadowable builtins: <code>@parse</code>, <code>@exists</code>, <code>@upper</code>, <code>@lower</code>, etc. Reported as info, not errors.</p>
+<p><strong>Exe parameter shadowing:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@process</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@result</span>
+<span class="token punctuation">]</span>
+<span class="token comment">>> Warning: @result can shadow caller variables</span>
+<span class="token comment">>> Suggestion: use @status instead</span>
+</code></pre>
+<p>Generic parameter names (<code>result</code>, <code>output</code>, <code>data</code>, <code>value</code>, <code>response</code>) warn about collision risk.</p>
+<p><strong>Suppressing warnings:</strong></p>
+<p>Add <code>mlld-config.json</code> to suppress intentional patterns:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"validate"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"suppressWarnings"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"exe-parameter-shadowing"</span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Suppressible codes include <code>exe-parameter-shadowing</code>, <code>deprecated-json-transform</code>, <code>hyphenated-identifier-in-template</code>, <code>privileged-wildcard-allow</code>, <code>guard-unreachable-arm</code>, <code>unknown-policy-rule</code>, <code>privileged-guard-without-policy-operation</code>, <code>guard-context-missing-exe</code>, <code>guard-context-missing-op-label</code>, and <code>guard-context-missing-arg</code>.</p>
+<p><strong>Policy / guard validation:</strong></p>
+<p><code>mlld validate --format json</code> now surfaces policy declarations, exe labels, and richer guard structure:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"executables"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"send_email"</span><span class="token punctuation">,</span> <span class="token property">"params"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"recipients"</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token property">"labels"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"tool:w"</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"policies"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"task"</span><span class="token punctuation">,</span> <span class="token property">"rules"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"no-send-to-unknown"</span><span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token property">"operations"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"destructive"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"tool:w"</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token property">"locked"</span><span class="token operator">:</span> <span class="token boolean">false</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"guards"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span>
+    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"authSendEmail"</span><span class="token punctuation">,</span>
+    <span class="token property">"timing"</span><span class="token operator">:</span> <span class="token string">"before"</span><span class="token punctuation">,</span>
+    <span class="token property">"filter"</span><span class="token operator">:</span> <span class="token string">"op:tool:w"</span><span class="token punctuation">,</span>
+    <span class="token property">"privileged"</span><span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    <span class="token property">"arms"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+      <span class="token punctuation">{</span> <span class="token property">"condition"</span><span class="token operator">:</span> <span class="token string">"@mx.args.recipients ~= [\"alice@example.com\"]"</span><span class="token punctuation">,</span> <span class="token property">"action"</span><span class="token operator">:</span> <span class="token string">"allow"</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">{</span> <span class="token property">"condition"</span><span class="token operator">:</span> <span class="token string">"@mx.op.name == \"send_email\""</span><span class="token punctuation">,</span> <span class="token property">"action"</span><span class="token operator">:</span> <span class="token string">"deny"</span><span class="token punctuation">,</span> <span class="token property">"reason"</span><span class="token operator">:</span> <span class="token string">"recipients not authorized"</span> <span class="token punctuation">}</span>
+    <span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>This is useful when validating LLM-generated policies/guards before execution.</p>
+<p><strong>Semantic guard/policy warnings:</strong></p>
+<p><code>mlld validate</code> also warns about likely-authoring mistakes that are syntactically valid:</p>
+<ul>
+<li><code>unknown-policy-rule</code> for typos in built-in rule names</li>
+<li><code>privileged-wildcard-allow</code> for <code>guard privileged ... when [ * =&gt; allow ]</code></li>
+<li><code>guard-unreachable-arm</code> when an earlier guard arm already covers a later one</li>
+<li><code>privileged-guard-without-policy-operation</code> when a privileged <code>op:</code> guard does not match any policy operation label</li>
+</ul>
+<p>These stay warnings, not errors.</p>
+<p><strong>Context-aware guard validation:</strong></p>
+<p>Use <code>--context</code> to validate guards against one or more tool modules:</p>
+<pre class="language-bash"><code class="language-bash">mlld validate guards.mld <span class="token parameter variable">--context</span> tools/workspace.mld
+mlld validate guards.mld <span class="token parameter variable">--context</span> tools/,shared/tooling.mld <span class="token parameter variable">--format</span> json
+</code></pre>
+<p>With context, validation warns when:</p>
+<ul>
+<li>a function filter references an exe that does not exist</li>
+<li>an <code>op:</code> filter does not match any exe label in the context</li>
+<li><code>@mx.args.someName</code> references a parameter not declared on the guarded exe</li>
+</ul>
+<p><strong>Template validation (.att / .mtt):</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld validate prompts/welcome.att
+</code></pre>
+<p>Reports all <code>@variable</code> and <code>@function()</code> references found in the template. When validating a directory, parameters are resolved from <code>exe</code> declarations across the entire project tree. For single-file validation, sibling <code>.mld</code> files are scanned. Discovered parameters are shown and undefined references are flagged:</p>
+<pre><code>Valid template (.att)
+
+variables    @name, @role, @unknownVar
+params       name, role (from exe declarations)
+
+Warnings (1):
+  @unknownVar (line 5:1) - undefined variable
+    hint: @unknownVar is not a known parameter. Known: name, role
+</code></pre>
+<p><strong>Template <code>@for</code> anti-pattern:</strong></p>
+<p><code>.att</code> templates using strict-mode <code>@for</code> syntax are flagged — use <code>/for ... /end</code> instead:</p>
+<pre><code>⚠ prompts/report.att
+    &quot;@for&quot; is not valid in templates. Use &quot;/for ... /end&quot; instead. (line 8)
+      hint: In .att templates, use /for @var in @collection ... /end (slash prefix, no brackets).
+</code></pre>
+<p><strong>Directory validation:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld validate ./my-project/
+mlld validate ./my-project/ <span class="token parameter variable">--verbose</span>
+</code></pre>
+<p>Recursively validates all <code>.mld</code>, <code>.mld.md</code>, <code>.att</code>, and <code>.mtt</code> files. Default output is concise — clean files get a green checkmark, only files with issues show details:</p>
+<pre><code>  ✓ lib/utils.mld
+  ✓ lib/helpers.mld
+  ⚠ prompts/welcome.att
+      @unknownVar (line 5) - undefined variable
+  ✗ broken.mld
+      Expected directive (line 3:1)
+
+4 files: 3 passed, 1 failed, 1 with warnings
+</code></pre>
+<p>Use <code>--verbose</code> for full per-file details. Exit code 1 if any file fails.</p>
+<p><strong>Exit codes:</strong></p>
+<ul>
+<li>Exit 0: valid syntax, no errors</li>
+<li>Exit 1: parse errors or hard validation errors</li>
+<li>Exit 1 with <code>--error-on-warnings</code>: any warnings present</li>
+</ul>
+<p><strong>JSON output:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld validate module.mld <span class="token parameter variable">--format</span> json
+</code></pre>
+<p>Returns structured data: <code>executables</code>, <code>exports</code>, <code>imports</code>, <code>guards</code>, <code>policies</code>, <code>needs</code>, <code>warnings</code>, <code>redefinitions</code>, <code>antiPatterns</code>. For templates, includes <code>template</code> with <code>type</code>, <code>variables</code>, and <code>discoveredParams</code>.</p>
+<h2 id="checkpoint-%26-resume" tabindex="-1"><a class="header-anchor" href="#checkpoint-%26-resume"><span>Checkpoint &amp; Resume</span></a></h2>
+<p>Checkpointing automatically persists results from <code>llm</code>-labeled executables so you can resume interrupted runs without re-calling LLMs. Cache writes are automatic; cache reads follow the script's resume policy.</p>
+<p><strong>Auto-detection</strong>: <code>exe</code> and <code>run</code> operations with the <code>llm</code> label that make external calls (cmd, sh, prose, node) are checkpoint-eligible. No opt-in flag needed.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> auto
+
+<span class="token comment">>> This call is automatically checkpointed</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@review</span><span class="token punctuation">(</span><span class="token directive keyword">file</span><span class="token punctuation">,</span> model<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>claude -p <span class="token string-interpolated"><span class="token punctuation">"</span>Review <span class="token variable">@file</span><span class="token punctuation">"</span></span> --model <span class="token variable variable">@model</span><span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@review</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>main.ts<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sonnet<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>Second run with <code>resume: auto</code> or <code>mlld run ... --resume</code>: <code>@review(&quot;main.ts&quot;, &quot;sonnet&quot;)</code> returns the cached result instantly.</p>
+<h3 id="resume-modes" tabindex="-1"><a class="header-anchor" href="#resume-modes"><span>Resume Modes</span></a></h3>
+<p>Set a top-of-file <code>resume:</code> header to control when cached hits are allowed:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> manual   <span class="token comment">>> default if omitted</span>
+<span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> auto     <span class="token comment">>> serve checkpoint hits by default</span>
+<span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> never    <span class="token comment">>> skip checkpoint reads/writes unless --resume is used</span>
+</code></pre>
+<p>Quoted and unquoted forms are both accepted: <code>resume: auto</code> and <code>resume: &quot;auto&quot;</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>manual</code></td>
+<td>Default for scripts. Writes checkpoints, but only serves hits when <code>--resume</code> is passed</td>
+</tr>
+<tr>
+<td><code>auto</code></td>
+<td>Writes checkpoints and serves hits automatically</td>
+</tr>
+<tr>
+<td><code>never</code></td>
+<td>Skips checkpoint reads and writes for normal runs</td>
+</tr>
+</tbody>
+</table>
+<p><code>--resume</code> overrides the script-level mode for the current run.</p>
+<h3 id="cli-flags" tabindex="-1"><a class="header-anchor" href="#cli-flags"><span>CLI Flags</span></a></h3>
+<pre class="language-bash"><code class="language-bash">mlld run pipeline                        <span class="token comment"># writes checkpoints; default replay is manual unless script says resume:auto</span>
+mlld run pipeline <span class="token parameter variable">--fresh</span>                <span class="token comment"># clear cache, rebuild from scratch</span>
+mlld run pipeline --no-checkpoint        <span class="token comment"># disable caching entirely</span>
+mlld run pipeline <span class="token parameter variable">--resume</span>               <span class="token comment"># use existing hits without invalidating a target</span>
+mlld run pipeline <span class="token parameter variable">--resume</span> @review       <span class="token comment"># invalidate @review's cache entries, re-run</span>
+mlld run pipeline <span class="token parameter variable">--fork</span> other-script    <span class="token comment"># seed cache from another script's results</span>
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--fresh</code> / <code>--new</code></td>
+<td>Clear this script's cache before running</td>
+</tr>
+<tr>
+<td><code>--no-checkpoint</code></td>
+<td>Disable all checkpoint reads and writes</td>
+</tr>
+<tr>
+<td><code>--resume</code></td>
+<td>Enable checkpoint replay for this run without invalidating a specific target</td>
+</tr>
+<tr>
+<td><code>--resume @fn</code></td>
+<td>Invalidate all entries for <code>@fn</code>, re-execute</td>
+</tr>
+<tr>
+<td><code>--resume @fn:2</code></td>
+<td>Invalidate only the 3rd invocation (0-based)</td>
+</tr>
+<tr>
+<td><code>--resume @fn(&quot;src/&quot;)</code></td>
+<td>Invalidate entries where first arg starts with <code>&quot;src/&quot;</code></td>
+</tr>
+<tr>
+<td><code>--fork &lt;script&gt;</code></td>
+<td>Read hits from another script's cache (read-only); misses write to current cache</td>
+</tr>
+</tbody>
+</table>
+<h3 id="inspecting-the-cache" tabindex="-1"><a class="header-anchor" href="#inspecting-the-cache"><span>Inspecting the Cache</span></a></h3>
+<pre class="language-bash"><code class="language-bash">mlld checkpoint list <span class="token operator">&lt;</span>script<span class="token operator">></span>       <span class="token comment"># list cached entries</span>
+mlld checkpoint inspect <span class="token operator">&lt;</span>script<span class="token operator">></span>    <span class="token comment"># full JSON dump (manifest + records)</span>
+mlld checkpoint clean <span class="token operator">&lt;</span>script<span class="token operator">></span>      <span class="token comment"># delete cache for a script</span>
+</code></pre>
+<p>Cache lives in <code>.mlld/checkpoints/&lt;script-name&gt;/</code>.</p>
+<h3 id="named-checkpoints-%26-policies" tabindex="-1"><a class="header-anchor" href="#named-checkpoints-%26-policies"><span>Named Checkpoints &amp; Policies</span></a></h3>
+<p>The <code>checkpoint</code> directive registers a named marker for resume targeting and can override resume behavior for the checkpoint scope that follows it:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">checkpoint</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fetch-api<span class="token punctuation">"</span></span> <span class="token operator">with</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> auto<span class="token punctuation">,</span>
+  <span class="token object-key property">ttl</span><span class="token ternary-operator operator">:</span> 1h<span class="token punctuation">,</span>
+  <span class="token object-key property">complete</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fetchDone</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment">>> Later:</span>
+<span class="token comment">>> mlld run pipeline --resume "fetch-api"</span>
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>`resume: auto</td>
+<td>manual</td>
+</tr>
+<tr>
+<td><code>ttl: 1h</code></td>
+<td>Expire automatic hits after the duration</td>
+</tr>
+<tr>
+<td><code>complete: &lt;expr&gt;</code></td>
+<td>Record completion state when the checkpoint scope closes; automatic hits are only served after a prior run marked it complete</td>
+</tr>
+</tbody>
+</table>
+<p>Named checkpoints are discovered from source before execution starts, so <code>--resume &quot;name&quot;</code> works even if a prior run failed before that checkpoint was reached.</p>
+<p><code>--resume</code> still overrides <code>resume</code>, <code>ttl</code>, and <code>complete</code> for the current run.</p>
+<h3 id="context-variables" tabindex="-1"><a class="header-anchor" href="#context-variables"><span>Context Variables</span></a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@mx.checkpoint.hit</code></td>
+<td><code>true</code> when current operation was served from cache</td>
+</tr>
+<tr>
+<td><code>@mx.checkpoint.key</code></td>
+<td>Cache key for the current operation</td>
+</tr>
+</tbody>
+</table>
+<p>Use in hooks for observability:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">hook</span> <span class="token variable variable">@cacheLog</span> <span class="token operator">after</span> <span class="token variable variable">@review</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">append</span> <span class="token backtick-template"><span class="token punctuation">`</span><span class="token variable">@mx</span>.op.name hit=<span class="token variable">@mx</span>.checkpoint.hit<span class="token punctuation">`</span></span> <span class="token operator">to</span> <span class="token string-interpolated"><span class="token punctuation">"</span>cache.log<span class="token punctuation">"</span></span>
+<span class="token punctuation">]</span>
+</code></pre>
+<h3 id="how-it-works" tabindex="-1"><a class="header-anchor" href="#how-it-works"><span>How It Works</span></a></h3>
+<ul>
+<li>Cache key = SHA-256 hash of function name + normalized args</li>
+<li>On hit: execution short-circuits, guards are skipped, post-hooks still run, and workspace snapshots are restored when available</li>
+<li>On miss: result is cached after post-hooks complete</li>
+<li>Automatic hits obey script/checkpoint resume policy, TTL, and completion gates</li>
+<li>Cache read/write errors are isolated (logged as warnings, never abort execution)</li>
+</ul>
+<h3 id="workspace-vfs-side-effects-are-replayed" tabindex="-1"><a class="header-anchor" href="#workspace-vfs-side-effects-are-replayed"><span>Workspace VFS Side Effects Are Replayed</span></a></h3>
+<p>Checkpoint resume now captures and restores VFS workspace state for checkpointed operations running inside an active <code>box</code> workspace. If an LLM call writes files via tools like <code>Write</code> or <code>Bash</code>, those files are restored on cache hits.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token object-key property">resume</span><span class="token ternary-operator operator">:</span> auto
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@ws</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@dummy</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Write results to output.txt<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Write<span class="token punctuation">"</span></span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token punctuation">]</span>
+<span class="token directive keyword">show</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@ws/output.txt<span class="token punctuation">></span></span>   <span class="token comment">>> works on resume — workspace snapshot is restored</span>
+</code></pre>
+<p>Current limits:</p>
+<ul>
+<li>Restore only applies when the matching workspace is active at replay time</li>
+<li>Restoring a snapshot clears any stale <code>shellSession</code> so later shell commands see the restored VFS state</li>
+<li>Malformed snapshots fail soft with a warning</li>
+<li>External side effects outside the workspace are still not replayed</li>
+</ul>
+<h2 id="live-stdio-transport" tabindex="-1"><a class="header-anchor" href="#live-stdio-transport"><span>Live STDIO Transport</span></a></h2>
+<p>Persistent NDJSON RPC transport for long-running SDK operations.</p>
+<pre class="language-bash"><code class="language-bash">mlld live <span class="token parameter variable">--stdio</span>
+</code></pre>
+<p><strong>Protocol format:</strong></p>
+<pre class="language-json"><code class="language-json">>> Request
+<span class="token punctuation">{</span><span class="token property">"method"</span><span class="token operator">:</span><span class="token string">"process"</span><span class="token punctuation">,</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token property">"params"</span><span class="token operator">:</span><span class="token punctuation">{</span><span class="token property">"script"</span><span class="token operator">:</span><span class="token string">"show 'hello'"</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+
+>> Event stream (during execution)
+<span class="token punctuation">{</span><span class="token property">"event"</span><span class="token operator">:</span><span class="token punctuation">{</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token property">"type"</span><span class="token operator">:</span><span class="token string">"stream:chunk"</span><span class="token punctuation">,</span><span class="token property">"content"</span><span class="token operator">:</span><span class="token string">"hello"</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token punctuation">{</span><span class="token property">"event"</span><span class="token operator">:</span><span class="token punctuation">{</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token property">"type"</span><span class="token operator">:</span><span class="token string">"state:write"</span><span class="token punctuation">,</span><span class="token property">"path"</span><span class="token operator">:</span><span class="token string">"key"</span><span class="token punctuation">,</span><span class="token property">"value"</span><span class="token operator">:</span><span class="token string">"val"</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+
+>> Result
+<span class="token punctuation">{</span><span class="token property">"result"</span><span class="token operator">:</span><span class="token punctuation">{</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token property">"output"</span><span class="token operator">:</span><span class="token string">"hello"</span><span class="token punctuation">,</span><span class="token property">"exports"</span><span class="token operator">:</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>process</code> — Execute script text via <code>params.script</code></li>
+<li><code>execute</code> — Run file via <code>params.filepath</code> with optional payload/state/dynamicModules</li>
+<li><code>analyze</code> — Static analysis via <code>params.filepath</code></li>
+<li><code>state:update</code> — Update in-flight <code>@state</code> for <code>params.requestId</code> (path + value)</li>
+<li><code>cancel</code> — Abort active request by id</li>
+</ul>
+<p><strong>Process params:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"script"</span><span class="token operator">:</span> <span class="token string">"show 'hello'"</span><span class="token punctuation">,</span>
+  <span class="token property">"filePath"</span><span class="token operator">:</span> <span class="token string">"/example/context.mld"</span><span class="token punctuation">,</span>
+  <span class="token property">"mode"</span><span class="token operator">:</span> <span class="token string">"strict"</span><span class="token punctuation">,</span>
+  <span class="token property">"payload"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"key"</span><span class="token operator">:</span> <span class="token string">"value"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"state"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"sessionId"</span><span class="token operator">:</span> <span class="token string">"123"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"dynamicModules"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"@custom"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"data"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"mcpServers"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"tools"</span><span class="token operator">:</span> <span class="token string">"uv run python3 server.py"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"allowAbsolutePaths"</span><span class="token operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Execute params:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"filepath"</span><span class="token operator">:</span> <span class="token string">"./agent.mld"</span><span class="token punctuation">,</span>
+  <span class="token property">"payload"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"task"</span><span class="token operator">:</span> <span class="token string">"analyze"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"state"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"conversationId"</span><span class="token operator">:</span> <span class="token string">"abc"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"dynamicModules"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"@tools"</span><span class="token operator">:</span> <span class="token string">"export @search = ..."</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"mcpServers"</span><span class="token operator">:</span> <span class="token punctuation">{</span><span class="token property">"tools"</span><span class="token operator">:</span> <span class="token string">"uv run python3 server.py --config abc"</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"timeoutMs"</span><span class="token operator">:</span> <span class="token number">30000</span><span class="token punctuation">,</span>
+  <span class="token property">"mode"</span><span class="token operator">:</span> <span class="token string">"markdown"</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><code>mcpServers</code> maps logical names to MCP server commands. <code>import tools from mcp &quot;tools&quot;</code> in the script resolves against this map before treating the spec as a shell command. Each request gets its own server lifecycle.</p>
+<p><strong>State updates</strong> (during execution):</p>
+<pre class="language-json"><code class="language-json">>> Request to update in-flight state
+<span class="token punctuation">{</span><span class="token property">"method"</span><span class="token operator">:</span><span class="token string">"state:update"</span><span class="token punctuation">,</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token property">"params"</span><span class="token operator">:</span><span class="token punctuation">{</span>
+  <span class="token property">"requestId"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+  <span class="token property">"path"</span><span class="token operator">:</span> <span class="token string">"loopControl.stop"</span><span class="token punctuation">,</span>
+  <span class="token property">"value"</span><span class="token operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span><span class="token punctuation">}</span>
+
+>> Response
+<span class="token punctuation">{</span><span class="token property">"result"</span><span class="token operator">:</span><span class="token punctuation">{</span><span class="token property">"id"</span><span class="token operator">:</span><span class="token number">2</span><span class="token punctuation">,</span><span class="token property">"requestId"</span><span class="token operator">:</span><span class="token number">1</span><span class="token punctuation">,</span><span class="token property">"path"</span><span class="token operator">:</span><span class="token string">"loopControl.stop"</span><span class="token punctuation">}</span><span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Lifecycle:</strong></p>
+<ul>
+<li>Server runs until stdin EOF, SIGINT, or SIGTERM</li>
+<li>Each request uses fresh interpreter environment</li>
+<li>AST caching persists across requests (mtime-based invalidation)</li>
+<li>Active requests abort on shutdown or explicit <code>cancel</code></li>
+</ul>
+<p><strong>SDK integration:</strong></p>
+<p>Go, Python, Rust, and Ruby SDKs maintain persistent <code>mlld live --stdio</code> subprocesses. Each provides async handle APIs:</p>
+<pre class="language-python"><code class="language-python">handle <span class="token operator">=</span> client<span class="token punctuation">.</span>execute_async<span class="token punctuation">(</span><span class="token string">"./script.mld"</span><span class="token punctuation">,</span> payload<span class="token punctuation">)</span>
+handle<span class="token punctuation">.</span>update_state<span class="token punctuation">(</span><span class="token string">"flag"</span><span class="token punctuation">,</span> <span class="token boolean">True</span><span class="token punctuation">)</span>  <span class="token comment"># In-flight state mutation</span>
+result <span class="token operator">=</span> handle<span class="token punctuation">.</span>wait<span class="token punctuation">(</span><span class="token punctuation">)</span>
+</code></pre>
+<p><strong>Error codes:</strong></p>
+<ul>
+<li><code>INVALID_JSON</code> — Malformed request</li>
+<li><code>INVALID_REQUEST</code> — Missing required fields</li>
+<li><code>REQUEST_IN_PROGRESS</code> — Duplicate request id</li>
+<li><code>REQUEST_NOT_FOUND</code> — Cancel/state:update for unknown id</li>
+<li><code>STATE_UNAVAILABLE</code> — No dynamic <code>@state</code> to update</li>
+<li><code>METHOD_NOT_FOUND</code> — Unknown method</li>
+<li><code>RUNTIME_ERROR</code> — Execution failure</li>
+<li><code>ABORTED</code> — Canceled request</li>
+<li><code>TIMEOUT</code> — Execution exceeded limit</li>
+</ul>
+<h2 id="mlld-mcp-dev-command" tabindex="-1"><a class="header-anchor" href="#mlld-mcp-dev-command"><span>mlld mcp-dev Command</span></a></h2>
+<p>Start an MCP server that provides language introspection tools for development. Use with Claude Code or other MCP clients to validate syntax, analyze modules, and inspect ASTs during development.</p>
+<pre class="language-bash"><code class="language-bash">mlld mcp-dev
+</code></pre>
+<p>Configure in <code>claude_desktop_config.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"mcpServers"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"mlld-dev"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"command"</span><span class="token operator">:</span> <span class="token string">"mlld"</span><span class="token punctuation">,</span>
+      <span class="token property">"args"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"mcp-dev"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Tools provided:</strong></p>
+<p><code>mlld_validate</code> — Validate syntax and static semantics, including context-aware guard checks:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"var @x = \"hello\""</span><span class="token punctuation">,</span>
+  <span class="token property">"mode"</span><span class="token operator">:</span> <span class="token string">"strict"</span><span class="token punctuation">,</span>
+  <span class="token property">"context"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"./tools.mld"</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Returns the same structured validation shape as <code>mlld validate --format json</code>, including <code>errors</code>, <code>warnings</code>, <code>redefinitions</code>, <code>antiPatterns</code>, and module metadata such as <code>executables</code>, <code>guards</code>, <code>policies</code>, and <code>needs</code>.</p>
+<p><code>mlld_analyze</code> — Full module analysis with exports, executables, imports, guards, policies, and statistics:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"exe @greet(name) = cmd { echo \"hello\" }\nexport { @greet }"</span><span class="token punctuation">,</span>
+  <span class="token property">"includeAst"</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+  <span class="token property">"context"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"./tools.mld"</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Returns structured data about the module: <code>{ exports: [...], executables: [...], imports: [...], guards: [...], policies: [...], variables: [...], stats: {...} }</code>.</p>
+<p>For guard/policy authoring, <code>mlld_analyze</code> now includes:</p>
+<ul>
+<li>exe <code>labels</code></li>
+<li>guard <code>privileged</code>, <code>filter</code>, and <code>arms</code></li>
+<li>policy <code>rules</code>, <code>operations</code>, <code>locked</code>, and <code>refs</code></li>
+</ul>
+<p><code>mlld_ast</code> — Get the raw parsed AST:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"var @x = \"hello\""</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Returns <code>{ success: true, ast: [...] }</code> or parse error details.</p>
+<p><strong>Input modes:</strong></p>
+<p>All tools accept either <code>file</code> (path to <code>.mld</code> file) or <code>code</code> (inline string):</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span> <span class="token property">"file"</span><span class="token operator">:</span> <span class="token string">"./script.mld"</span> <span class="token punctuation">}</span>
+<span class="token punctuation">{</span> <span class="token property">"code"</span><span class="token operator">:</span> <span class="token string">"var @x = 1"</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Mode inference: <code>.mld</code> files use strict mode, <code>.mld.md</code> files use markdown mode. Override with <code>&quot;mode&quot;: &quot;strict&quot;</code> or <code>&quot;mode&quot;: &quot;markdown&quot;</code>.</p>
+<p><strong>Separate from user tools:</strong></p>
+<p><code>mlld mcp-dev</code> serves built-in language introspection tools. <code>mlld mcp</code> serves user-defined functions as MCP tools. The two commands run independent servers with different purposes.</p>
+<h2 id="claude-code-plugin" tabindex="-1"><a class="header-anchor" href="#claude-code-plugin"><span>Claude Code Plugin</span></a></h2>
+<p>Install the mlld Claude Code plugin for orchestrator authoring skills, the <code>/mlld:scaffold</code> command, language server integration, and MCP dev tools.</p>
+<pre class="language-bash"><code class="language-bash">mlld plugin <span class="token function">install</span>                  <span class="token comment"># Install for current user</span>
+mlld plugin <span class="token function">install</span> <span class="token parameter variable">--scope</span> project  <span class="token comment"># Install for current project only</span>
+mlld plugin status                   <span class="token comment"># Check if installed</span>
+mlld plugin uninstall                <span class="token comment"># Remove the plugin</span>
+</code></pre>
+<p>Requires the <code>claude</code> CLI to be installed. The command adds the mlld marketplace (<code>mlld-lang/mlld</code>) and installs the plugin through Claude Code's plugin system.</p>
+<p><strong>What's included</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Orchestrator skill</td>
+<td>Patterns for audit, research, and development pipelines</td>
+</tr>
+<tr>
+<td>Agent skill</td>
+<td>Tool agents, event-driven agents, workflow agents</td>
+</tr>
+<tr>
+<td><code>/mlld:scaffold</code></td>
+<td>Generate starter orchestrator projects</td>
+</tr>
+<tr>
+<td>Language server</td>
+<td><code>.mld</code> syntax highlighting and diagnostics</td>
+</tr>
+<tr>
+<td>MCP dev tools</td>
+<td><code>mlld mcp-dev</code> for development</td>
+</tr>
+</tbody>
+</table>
+<p>Restart Claude Code after installing to activate the plugin.</p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

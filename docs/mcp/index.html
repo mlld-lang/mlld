@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" aria-current=&quot;page&quot;>MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" >Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>mlld speaks MCP in both directions: serve your exe functions as tools for any MCP client, or import tools from external servers as callable functions. Tool collections control what agents see. Reshaping customizes tool interfaces.</p>
+<h2 id="mcp" tabindex="-1"><a class="header-anchor" href="#mcp"><span>MCP</span></a></h2>
+<p>mlld speaks MCP in both directions: serve your functions as tools, or import tools from external servers.</p>
+<p><strong>Export — serve functions as MCP tools:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>Hello <span class="token punctuation">"</span></span> + name<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@greet</span> <span class="token punctuation">}</span>
+</code></pre>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld
+</code></pre>
+<p>Any MCP client can now call <code>greet</code>. See <code>mcp-export</code>.</p>
+<p><strong>Import — use external MCP tools as functions:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">tools</span> <span class="token punctuation">{</span> <span class="token variable variable">@echo</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token operator">mcp</span> <span class="token string-interpolated"><span class="token punctuation">"</span>npx -y <span class="token variable">@modelcontextprotocol</span>/server-everything<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@echo</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>Imported tool outputs carry <code>src:mcp</code> taint automatically. See <code>mcp-import</code>.</p>
+<p><strong>Reading order:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Want to...</th>
+<th>Read</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Serve functions as tools</td>
+<td><code>mcp-export</code></td>
+</tr>
+<tr>
+<td>Import external MCP tools</td>
+<td><code>mcp-import</code></td>
+</tr>
+<tr>
+<td>Control what agents see</td>
+<td><code>mcp-tool-gateway</code>, <code>tool-reshaping</code></td>
+</tr>
+<tr>
+<td>Secure MCP data flows</td>
+<td><code>mcp-security</code>, <code>mcp-policy</code>, <code>mcp-guards</code></td>
+</tr>
+<tr>
+<td>Track tool usage</td>
+<td><code>tool-call-tracking</code></td>
+</tr>
+<tr>
+<td>End-to-end example</td>
+<td><code>pattern-guarded-tool-export</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="exporting-mcp-tools" tabindex="-1"><a class="header-anchor" href="#exporting-mcp-tools"><span>Exporting MCP Tools</span></a></h3>
+<p>Export <code>exe</code> functions, run <code>mlld mcp</code>. Every exported function becomes an MCP tool.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@status</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>ok<span class="token punctuation">"</span></span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>Hello <span class="token punctuation">"</span></span> + name<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@status</span><span class="token punctuation">,</span> <span class="token variable variable">@greet</span> <span class="token punctuation">}</span>
+</code></pre>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld
+</code></pre>
+<p>Clients see two tools: <code>status</code> (no params) and <code>greet</code> (one string param). Name conversion is automatic — <code>@greetUser</code> becomes <code>greet_user</code> over MCP.</p>
+<p><strong>Type annotations generate JSON Schema:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@search</span><span class="token punctuation">(</span><span class="token object-key property">query</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">limit</span><span class="token ternary-operator operator">:</span> number<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  gh issue list --search <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@query</span><span class="token punctuation">"</span></span> -L <span class="token variable variable">@limit</span> --json number<span class="token punctuation">,</span>title
+<span class="token punctuation">}</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search issues<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@search</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The <code>with { description }</code> clause populates the tool description. Type annotations (<code>string</code>, <code>number</code>, <code>boolean</code>, <code>object</code>, <code>array</code>) generate the input schema. See <code>exe-metadata</code>.</p>
+<p><strong>Serve a directory:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp llm/mcp/
+mlld mcp <span class="token string">"llm/mcp/*.mld.md"</span>
+</code></pre>
+<p>If <code>llm/mcp/</code> exists, <code>mlld mcp</code> with no arguments serves every module in it.</p>
+<p><strong>Environment overrides:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld <span class="token parameter variable">--env</span> <span class="token assign-left variable">MLLD_GITHUB_TOKEN</span><span class="token operator">=</span>ghp_xxx
+</code></pre>
+<p>Keys must start with <code>MLLD_</code>. Modules read them with <code>import { @MLLD_GITHUB_TOKEN } from @input</code>.</p>
+<p><strong>Filter tools:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld <span class="token parameter variable">--tools</span> status,greet
+</code></pre>
+<p><strong>Serve reshaped tool collections:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld --tools-collection @agentTools
+</code></pre>
+<p>Uses <code>bind</code>/<code>expose</code> definitions from a <code>var tools</code> collection instead of raw exports. See <code>mcp-tool-gateway</code> and <code>tool-reshaping</code>.</p>
+<p><strong>Client configuration (Claude Code):</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"mcpServers"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"my-tools"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"command"</span><span class="token operator">:</span> <span class="token string">"npx"</span><span class="token punctuation">,</span>
+      <span class="token property">"args"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"mlld"</span><span class="token punctuation">,</span> <span class="token string">"mcp"</span><span class="token punctuation">,</span> <span class="token string">"tools.mld"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Security:</strong> MCP-served tool inputs keep the caller's existing labels/taint; they do not gain synthetic <code>src:mcp</code>. <code>src:mcp</code> is applied to values returned from imported MCP tools. See <code>mcp-security</code>.</p>
+<h3 id="tool-collections" tabindex="-1"><a class="header-anchor" href="#tool-collections"><span>Tool Collections</span></a></h3>
+<p><code>var tools</code> defines a named collection of tools with metadata. Use it to control what an agent sees and attach labels for guards.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@readData</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>ok<span class="token punctuation">"</span></span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@deleteData</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return <span class="token string-interpolated"><span class="token punctuation">"</span>deleted<span class="token punctuation">"</span></span><span class="token punctuation">;</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">safeRead</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@readData</span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token object-key property">dangerousDelete</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@deleteData</span><span class="token punctuation">,</span>
+    <span class="token object-key property">labels</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>destructive<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Deletes records<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Tool definition fields:</strong></p>
+<ul>
+<li><code>mlld</code> — executable reference</li>
+<li><code>labels</code> — guard/policy signals (<code>destructive</code>, <code>net:w</code>)</li>
+<li><code>bind</code> — pre-fill parameters (see <code>tool-reshaping</code>)</li>
+<li><code>expose</code> — limit visible parameters (see <code>tool-reshaping</code>)</li>
+<li><code>description</code> — override tool description</li>
+</ul>
+<p><strong>Scope tools to an agent with <code>env</code>:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">box</span> <span class="token variable variable">@agent</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@agentTools</span> <span class="token punctuation">}</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token variable variable">@task</span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The agent only sees tools in <code>@agentTools</code>. Guards check <code>@mx.op.labels</code> on each call.</p>
+<p><strong>Serve a collection over MCP:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld mcp tools.mld --tools-collection @agentTools
+</code></pre>
+<p>The <code>--tools-collection</code> flag serves the reshaped collection instead of raw exports. Bound parameters are hidden; only exposed parameters appear in the tool schema. See <code>mcp-export</code> for basic serving, <code>pattern-guarded-tool-export</code> for a complete example.</p>
+<p><strong>Guard on labels:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">guard</span> <span class="token variable variable">@blockDestructive</span> <span class="token operator">before</span> <span class="token object-key property">op</span><span class="token ternary-operator operator">:</span><span class="token directive keyword">exe</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+  <span class="token variable variable">@mx</span><span class="token field-access property">.op</span><span class="token field-access property">.labels</span><span class="token field-access property">.includes</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>destructive<span class="token punctuation">"</span></span><span class="token punctuation">)</span> <span class="token arrow-operator operator">=></span> <span class="token operator">deny</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Blocked<span class="token punctuation">"</span></span>
+ <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token operator">allow</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>Labels from the tool definition flow to <code>@mx.op.labels</code> in guard context. See <code>mcp-guards</code>.</p>
+<p><strong>Create a collection directly from a runtime MCP spec:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@serverSpec</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>node ./calendar-server.cjs<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> trusted <span class="token variable variable">@calendarTools</span> <span class="token assignment-operator operator">=</span> <span class="token operator">mcp</span> <span class="token variable variable">@serverSpec</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@calendarTools</span><span class="token field-access property">.createEvent</span><span class="token field-access property">.description</span>
+</code></pre>
+<p>This asks the MCP server for its tool schema and builds the <code>ToolCollection</code> directly from the discovered tools. It is not object-literal normalization:</p>
+<ul>
+<li>Use object literals when you want <code>bind</code>, <code>expose</code>, <code>optional</code>, <code>controlArgs</code>, or per-tool labels.</li>
+<li>Use <code>var tools @t = mcp @expr</code> when the server command is only known at runtime and you want the discovered collection as a value.</li>
+<li>Normal <code>var</code> labels still apply to the collection variable itself, as in <code>trusted @calendarTools</code>.</li>
+</ul>
+<p>Use <code>import tools from mcp &quot;...&quot;</code> when you want callable functions or a namespace in the current scope. Use <code>var tools @t = mcp @expr</code> when you want to pass a runtime-built collection into <code>box with { tools: @t }</code> or other tool-collection APIs.</p>
+<h3 id="tool-reshaping" tabindex="-1"><a class="header-anchor" href="#tool-reshaping"><span>Tool Reshaping</span></a></h3>
+<p>Reshape tool interfaces using <code>bind</code> and <code>expose</code> to control what parameters agents see. Used in <code>var tools</code> collections (see <code>mcp-tool-gateway</code>).</p>
+<p><strong>bind - Pre-fill parameters:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@createIssue</span><span class="token punctuation">(</span><span class="token object-key property">owner</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">title</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">body</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  gh issue create -R <span class="token variable variable">@owner</span>/<span class="token variable variable">@repo</span> -t <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@title</span><span class="token punctuation">"</span></span> -b <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@body</span><span class="token punctuation">"</span></span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">createIssue</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@createIssue</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">owner</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>infra<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>The agent sees only <code>title</code> and <code>body</code>. The bound parameters <code>owner</code> and <code>repo</code> are fixed.</p>
+<p><strong>expose - Limit visible parameters:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">createIssue</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@createIssue</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">owner</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>infra<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>title<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>body<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Explicitly list which parameters appear in the tool schema. Parameters not in <code>expose</code> are hidden from the agent.</p>
+<p><strong>Default behavior:</strong></p>
+<p>Without <code>expose</code>, all parameters except those in <code>bind</code> are visible. Adding <code>expose</code> overrides this - only listed parameters appear.</p>
+<p><strong>Variable binding:</strong></p>
+<p>Bound values can reference variables:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@org</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>mlld<span class="token punctuation">"</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@defaultRepo</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>main<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">createIssue</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@createIssue</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">owner</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@org</span><span class="token punctuation">,</span> <span class="token object-key property">repo</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@defaultRepo</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Variables are resolved when the tool collection is defined, not when called.</p>
+<p><strong>Nested objects in bind:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">configure</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@configure</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">config</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">timeout</span><span class="token ternary-operator operator">:</span> <span class="token number">30</span><span class="token punctuation">,</span> <span class="token object-key property">retries</span><span class="token ternary-operator operator">:</span> <span class="token number">3</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Complete example:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@searchDocs</span><span class="token punctuation">(</span><span class="token object-key property">index</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">query</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">,</span> <span class="token object-key property">limit</span><span class="token ternary-operator operator">:</span> number<span class="token punctuation">,</span> <span class="token object-key property">format</span><span class="token ternary-operator operator">:</span> string<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+  search-tool --index <span class="token variable variable">@index</span> -q <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@query</span><span class="token punctuation">"</span></span> -n <span class="token variable variable">@limit</span> --<span class="token operator">format</span> <span class="token variable variable">@format</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token operator">tools</span> <span class="token variable variable">@agentTools</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">searchDocs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">mlld</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@searchDocs</span><span class="token punctuation">,</span>
+    <span class="token object-key property">bind</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">index</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>production<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">format</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>json<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">,</span>
+    <span class="token object-key property">expose</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>query<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>limit<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+    <span class="token object-key property">description</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Search documentation<span class="token punctuation">"</span></span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>The agent sees:</p>
+<ul>
+<li><code>query</code> (string, required)</li>
+<li><code>limit</code> (number, required)</li>
+</ul>
+<p>Hidden from agent:</p>
+<ul>
+<li><code>index</code> (always &quot;production&quot;)</li>
+<li><code>format</code> (always &quot;json&quot;)</li>
+</ul>
+<h3 id="importing-mcp-tools" tabindex="-1"><a class="header-anchor" href="#importing-mcp-tools"><span>Importing MCP Tools</span></a></h3>
+<p>Import tools from an MCP server as callable <code>exe</code> functions. The server spec is a shell command that launches the server.</p>
+<p><strong>Selected import:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">tools</span> <span class="token punctuation">{</span> <span class="token variable variable">@echo</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token operator">mcp</span> <span class="token string-interpolated"><span class="token punctuation">"</span>npx -y <span class="token variable">@modelcontextprotocol</span>/server-everything<span class="token punctuation">"</span></span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@echo</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>hello<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p><strong>Namespace import:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">tools</span> <span class="token operator">from</span> <span class="token operator">mcp</span> <span class="token string-interpolated"><span class="token punctuation">"</span>npx -y <span class="token variable">@modelcontextprotocol</span>/server-filesystem /workspace<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@fs</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@fs</span><span class="token field-access property">.listDirectory</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>/workspace<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p>Namespace import requires <code>as @alias</code>.</p>
+<p><strong>Dynamic specs already worked through interpolation:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@serverSpec</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>node ./calendar-server.cjs<span class="token punctuation">"</span></span>
+<span class="token directive keyword">import</span> <span class="token operator">tools</span> <span class="token operator">from</span> <span class="token operator">mcp</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@serverSpec</span><span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@calendar</span>
+</code></pre>
+<p>That form remains useful when you want imported functions or a namespace in the current scope.</p>
+<p><strong>Name conversion</strong> is automatic. MCP's <code>list_directory</code> becomes mlld's <code>@listDirectory</code>. The mapping works in both directions.</p>
+<p><strong>Type coercion</strong> is automatic. Arguments are coerced to match the MCP tool's <code>inputSchema</code> types before dispatch. A string where the schema expects an array is wrapped (<code>&quot;x&quot;</code> → <code>[&quot;x&quot;]</code>), string numbers are parsed, <code>&quot;true&quot;</code>/<code>&quot;false&quot;</code> become booleans, and JSON strings are parsed for object/array types.</p>
+<p><strong>Name-based argument matching:</strong> When calling an MCP tool with variable references whose names match schema properties, arguments are matched by name instead of position:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> createEvent<span class="token punctuation">(</span>title<span class="token punctuation">,</span> participants<span class="token punctuation">,</span> date<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span>
+  <span class="token variable variable">@mcp</span><span class="token field-access property">.createCalendarEvent</span><span class="token punctuation">(</span><span class="token variable variable">@title</span><span class="token punctuation">,</span> <span class="token variable variable">@participants</span><span class="token punctuation">,</span> <span class="token variable variable">@date</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Even if the MCP schema declares <code>participants</code> before <code>title</code>, mlld matches <code>@title</code> to the <code>title</code> property and <code>@participants</code> to <code>participants</code>. Falls back to positional mapping when arg names don't match.</p>
+<p><strong>SDK server injection:</strong> When using the SDK, <code>mcpServers</code> maps logical names to commands per-execution. <code>import tools from mcp &quot;name&quot;</code> checks the map before treating the spec as a shell command:</p>
+<pre class="language-python"><code class="language-python">client<span class="token punctuation">.</span>execute<span class="token punctuation">(</span><span class="token string">'./agent.mld'</span><span class="token punctuation">,</span> payload<span class="token punctuation">,</span>
+    mcp_servers<span class="token operator">=</span><span class="token punctuation">{</span><span class="token string">'tools'</span><span class="token punctuation">:</span> <span class="token string-interpolation"><span class="token string">f'uv run python3 server.py </span><span class="token interpolation"><span class="token punctuation">{</span>config<span class="token punctuation">}</span></span><span class="token string">'</span></span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">tools</span> <span class="token operator">from</span> <span class="token operator">mcp</span> <span class="token string-interpolated"><span class="token punctuation">"</span>tools<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@t</span>
+</code></pre>
+<p>Each <code>execute()</code> call gets an independent server lifecycle, enabling parallel executions with isolated MCP state.</p>
+<p><strong><code>import tools</code> vs <code>var tools = mcp @expr</code>:</strong></p>
+<ul>
+<li><code>import tools ...</code> imports callable functions or a namespace into the current scope.</li>
+<li><code>var tools @t = mcp @expr</code> builds a <code>ToolCollection</code> value from runtime discovery.</li>
+<li>Use the <code>var tools</code> form when you want to hand a discovered collection to <code>box with { tools: @t }</code> or another API that expects a tool collection object.</li>
+</ul>
+<p><strong>Security:</strong> All MCP tool outputs carry <code>src:mcp</code> taint automatically. See <code>mcp-security</code> for propagation details, <code>mcp-guards</code> for filtering, <code>mcp-policy</code> for flow restrictions.</p>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

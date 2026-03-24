@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modules - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Instrument+Serif:ital@0;1&family=Outfit:wght@100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a href="/" class="logo">mlld</a>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+
+  <div class="docs-overlay" id="docs-overlay"></div>
+
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        
+          
+        
+          
+            <li><a href="/docs/introduction/" >Introduction to mlld</a></li>
+          
+        
+          
+            <li><a href="/docs/quickstart/" >Quick Start</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+      <h3>Reference</h3>
+      <ul class="nav-list" id="ref-nav">
+        
+          
+        
+          
+        
+          
+        
+          
+            <li>
+              <a href="/docs/cli/" >CLI</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/config/" >Configuration</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/core/" >Core</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/effects/" >Effects</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/flow-control/" >Flow Control</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/mcp/" >MCP</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/modules/" aria-current=&quot;page&quot;>Modules</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/output/" >Output</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/patterns/" >Patterns</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/sdk/" >SDK</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="/docs/security/" >Security</a>
+            </li>
+          
+        
+      </ul>
+    </nav>
+  </aside>
+
+  <div class="docs-content">
+    <p>Modules enable code reuse through imports and exports. Registry provides public sharing.</p>
+<h2 id="importing" tabindex="-1"><a class="header-anchor" href="#importing"><span>Importing</span></a></h2>
+<p><strong>Registry modules:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@sortBy</span><span class="token punctuation">,</span> <span class="token variable variable">@unique</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/array
+<span class="token directive keyword">import</span> <span class="token variable variable">@corp</span>/utils <span class="token operator">as</span> <span class="token variable variable">@corp</span>
+
+<span class="token comment">>> With version</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/utils@<span class="token number">1</span><span class="token field-access property">.0</span><span class="token field-access property">.0</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/utils@^<span class="token number">1</span><span class="token field-access property">.0</span><span class="token field-access property">.0</span>   <span class="token comment">>> semver range</span>
+</code></pre>
+<h3 id="importing-local-files" tabindex="-1"><a class="header-anchor" href="#importing-local-files"><span>Importing Local Files</span></a></h3>
+<p><strong>Local files (selected exports):</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./utils.mld<span class="token punctuation">"</span></span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@config</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token alligator"><span class="token punctuation">&lt;</span>@root/config.mld<span class="token punctuation">></span></span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@prompt</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>../prompts/main.mld<span class="token punctuation">"</span></span>
+
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span>
+  <span class="token variable variable">@renderHeader</span><span class="token punctuation">,</span>
+  <span class="token variable variable">@renderBody</span>
+<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./templates.mld<span class="token punctuation">"</span></span>
+</code></pre>
+<p><strong>Local files (namespace import):</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./utils.mld<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@utils</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@utils</span><span class="token field-access property">.helper</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>report<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+</code></pre>
+<p><strong>Path resolution:</strong></p>
+<ul>
+<li><code>./</code> and <code>../</code> paths resolve from the importing file's directory, not the shell cwd.</li>
+<li><code>&lt;@root/...&gt;</code> resolves from the project root.</li>
+</ul>
+<h3 id="namespace-imports" tabindex="-1"><a class="header-anchor" href="#namespace-imports"><span>Namespace Imports</span></a></h3>
+<p><strong>Namespace imports:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token variable variable">@alice</span>/utils <span class="token operator">as</span> <span class="token variable variable">@alice</span>
+<span class="token directive keyword">import</span> <span class="token variable variable">@bob</span>/utils <span class="token operator">as</span> <span class="token variable variable">@bob</span>
+
+<span class="token directive keyword">show</span> <span class="token variable variable">@alice</span><span class="token field-access property">.format</span><span class="token punctuation">(</span><span class="token variable variable">@data</span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@bob</span><span class="token field-access property">.format</span><span class="token punctuation">(</span><span class="token variable variable">@data</span><span class="token punctuation">)</span>   <span class="token comment">>> no collision</span>
+</code></pre>
+<h3 id="directory-imports" tabindex="-1"><a class="header-anchor" href="#directory-imports"><span>Directory Imports</span></a></h3>
+<p><strong>Directory imports:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@agents</span><span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@agentRegistry</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@agentRegistry</span><span class="token field-access property">.alice</span><span class="token field-access property">.tldr</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@agentRegistry</span><span class="token field-access property">.support</span><span class="token field-access property">.helper</span><span class="token field-access property">.name</span>
+
+<span class="token comment">>> With options</span>
+<span class="token directive keyword">import</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./agents<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@agents</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token object-key property">skipDirs</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>Directories auto-load <code>*/index.mld</code>. Default <code>skipDirs: [&quot;_*&quot;, &quot;.*&quot;]</code>.</p>
+<p>Use directory imports when you want a namespace object.<br>
+If you want selected exports, import the entry file directly:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./agents/index.mld<span class="token punctuation">"</span></span>
+</code></pre>
+<p>Relative directory paths resolve from the importing file's directory, not the shell cwd.</p>
+<h3 id="template-collections" tabindex="-1"><a class="header-anchor" href="#template-collections"><span>Template Collections</span></a></h3>
+<p><strong>Template collections</strong> import an entire directory of <code>.att</code> files as a callable namespace:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> templates <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@root</span>/agents<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@agents</span><span class="token punctuation">(</span>message<span class="token punctuation">,</span> context<span class="token punctuation">)</span>
+
+<span class="token comment">>> Access templates by name (bracket or dot notation)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@agents</span><span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>alice<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">(</span><span class="token variable variable">@msg</span><span class="token punctuation">,</span> <span class="token variable variable">@ctx</span><span class="token punctuation">)</span>           <span class="token comment">>> agents/alice.att</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@agents</span><span class="token field-access property">.support</span><span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>helper<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">(</span><span class="token variable variable">@msg</span><span class="token punctuation">,</span> <span class="token variable variable">@ctx</span><span class="token punctuation">)</span>  <span class="token comment">>> agents/support/helper.att</span>
+</code></pre>
+<p><strong>Directory structure example:</strong></p>
+<pre><code>agents/
+  alice.att          &gt;&gt; @agents[&quot;alice&quot;](msg, ctx)
+  bob.att            &gt;&gt; @agents[&quot;bob&quot;](msg, ctx)
+  support/
+    helper.att       &gt;&gt; @agents.support[&quot;helper&quot;](msg, ctx)
+    escalate.att     &gt;&gt; @agents.support[&quot;escalate&quot;](msg, ctx)
+</code></pre>
+<p><strong>Key rules:</strong></p>
+<ul>
+<li>All templates in a collection share the same parameter signature</li>
+<li>Filenames with hyphens become underscores: <code>json-pretty.att</code> → <code>@tpl[&quot;json_pretty&quot;]</code></li>
+<li>Use dot notation for directories, brackets for template names</li>
+<li>Collections require parameters in the <code>as @name(params)</code> clause</li>
+</ul>
+<p><strong>When to use collections:</strong></p>
+<ul>
+<li>Multiple templates with the same interface (agent prompts, formatters)</li>
+<li>Dynamic template selection based on runtime values</li>
+<li>Organizing related templates by category</li>
+</ul>
+<p>For single templates, use <code>exe @func(params) = template &quot;file.att&quot;</code> instead.</p>
+<h3 id="importing-node-modules" tabindex="-1"><a class="header-anchor" href="#importing-node-modules"><span>Importing Node Modules</span></a></h3>
+<p><strong>Basic node imports:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> basename <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token operator">node</span> <span class="token variable variable">@path</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@name</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@basename</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp/file.txt<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@name</span>
+</code></pre>
+<p><strong>Namespace imports:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> posix <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token operator">node</span> <span class="token variable variable">@path</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@dir</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@posix</span><span class="token field-access property">.dirname</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>/tmp/file.txt<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@dir</span>
+</code></pre>
+<p><strong>Constructor expressions:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> URL <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token operator">node</span> <span class="token variable variable">@url</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@site</span> <span class="token assignment-operator operator">=</span> <span class="token operator">new</span> <span class="token variable variable">@URL</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>https://example.com/path?x=1<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@site</span><span class="token field-access property">.hostname</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@site</span><span class="token field-access property">.pathname</span>
+</code></pre>
+<p><strong>Automatic wrapping:</strong></p>
+<ul>
+<li>Functions are wrapped to accept and return mlld values</li>
+<li>Method binding is preserved (correct <code>this</code> context)</li>
+<li>Classes support <code>new @Constructor()</code> syntax</li>
+<li>Async iterables are wrapped as streams</li>
+<li>Promises work transparently</li>
+<li>Callback-style functions trigger warnings</li>
+</ul>
+<p><strong>Module resolution:</strong></p>
+<ul>
+<li>Uses Node.js module resolution from the importing file's directory</li>
+<li>Supports both CommonJS and ES modules</li>
+<li>Built-in modules: <code>node @path</code>, <code>node @fs</code>, <code>node @url</code>, etc.</li>
+<li>NPM packages: Use package name without leading <code>@</code> (e.g., <code>node @chalk</code>)</li>
+</ul>
+<h3 id="import-types" tabindex="-1"><a class="header-anchor" href="#import-types"><span>Import Types</span></a></h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Behavior</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>module</code></td>
+<td>Content-addressed cache</td>
+<td>Registry modules (default)</td>
+</tr>
+<tr>
+<td><code>static</code></td>
+<td>Embedded at parse time</td>
+<td>Prompts, templates</td>
+</tr>
+<tr>
+<td><code>live</code></td>
+<td>Always fresh</td>
+<td>Status APIs</td>
+</tr>
+<tr>
+<td><code>cached(TTL)</code></td>
+<td>Time-based cache</td>
+<td>Feeds, configs</td>
+</tr>
+<tr>
+<td><code>local</code></td>
+<td>Dev modules (llm/modules/)</td>
+<td>Development</td>
+</tr>
+<tr>
+<td><code>templates</code></td>
+<td>Directory of .att files</td>
+<td>Template collections</td>
+</tr>
+</tbody>
+</table>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">module</span> <span class="token punctuation">{</span> <span class="token variable variable">@api</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@corp</span>/<span class="token operator">tools</span>
+<span class="token directive keyword">import</span> <span class="token operator">static</span> <span class="token punctuation">{</span> <span class="token variable variable">@prompt</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./prompt.md<span class="token punctuation">"</span></span>
+<span class="token directive keyword">import</span> <span class="token operator">live</span> <span class="token alligator"><span class="token punctuation">&lt;</span><span class="token url string">https://status.io</span><span class="token punctuation">></span></span> <span class="token operator">as</span> <span class="token variable variable">@status</span>
+<span class="token directive keyword">import</span> <span class="token operator">cached</span><span class="token punctuation">(</span>1h<span class="token punctuation">)</span> <span class="token alligator"><span class="token punctuation">&lt;</span><span class="token url string">https://feed.xml</span><span class="token punctuation">></span></span> <span class="token operator">as</span> <span class="token variable variable">@feed</span>
+<span class="token directive keyword">import</span> <span class="token operator">local</span> <span class="token punctuation">{</span> <span class="token variable variable">@dev</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/experimental
+</code></pre>
+<h2 id="custom-resolvers" tabindex="-1"><a class="header-anchor" href="#custom-resolvers"><span>Custom Resolvers</span></a></h2>
+<p><strong>Built-in:</strong></p>
+<ul>
+<li><code>@author/module</code> → Registry</li>
+<li><code>@root/file</code> → Project root (preferred)</li>
+<li><code>@base/file</code> → Project root (alias for @root)</li>
+<li><code>./file.mld</code> → Local (with fuzzy extension matching)</li>
+</ul>
+<p><strong>Custom prefixes</strong> (mlld-config.json):</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"resolvers"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"prefixes"</span><span class="token operator">:</span> <span class="token punctuation">[</span>
+      <span class="token punctuation">{</span>
+        <span class="token property">"prefix"</span><span class="token operator">:</span> <span class="token string">"@lib/"</span><span class="token punctuation">,</span>
+        <span class="token property">"resolver"</span><span class="token operator">:</span> <span class="token string">"LOCAL"</span><span class="token punctuation">,</span>
+        <span class="token property">"config"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"basePath"</span><span class="token operator">:</span> <span class="token string">"./src/lib"</span> <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span><span class="token punctuation">,</span>
+      <span class="token punctuation">{</span>
+        <span class="token property">"prefix"</span><span class="token operator">:</span> <span class="token string">"@company/"</span><span class="token punctuation">,</span>
+        <span class="token property">"resolver"</span><span class="token operator">:</span> <span class="token string">"GITHUB"</span><span class="token punctuation">,</span>
+        <span class="token property">"config"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+          <span class="token property">"repository"</span><span class="token operator">:</span> <span class="token string">"company/private-modules"</span><span class="token punctuation">,</span>
+          <span class="token property">"branch"</span><span class="token operator">:</span> <span class="token string">"main"</span>
+        <span class="token punctuation">}</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">]</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><code>mlld</code> reads <code>resolvers.prefixes</code> for resolver mappings. It also reads top-level <code>resolverPrefixes</code> when present, and CLI writers persist the nested <code>resolvers.prefixes</code> shape.</p>
+<p><strong>Quick setup:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token builtin class-name">alias</span> <span class="token parameter variable">--name</span> notes <span class="token parameter variable">--path</span> ~/notes
+mlld <span class="token builtin class-name">alias</span> <span class="token parameter variable">--name</span> shared <span class="token parameter variable">--path</span> <span class="token punctuation">..</span>/shared <span class="token parameter variable">--global</span>
+mlld setup <span class="token parameter variable">--github</span>   <span class="token comment"># private repo wizard</span>
+</code></pre>
+<h2 id="lock-file" tabindex="-1"><a class="header-anchor" href="#lock-file"><span>Lock File</span></a></h2>
+<p>When you install modules, mlld creates <code>mlld-lock.json</code> to ensure reproducible imports. This file tracks exact versions and content hashes.</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"lockfileVersion"</span><span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span>
+  <span class="token property">"modules"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@alice/utils"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"version"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span><span class="token punctuation">,</span>
+      <span class="token property">"resolved"</span><span class="token operator">:</span> <span class="token string">"abc123def456..."</span><span class="token punctuation">,</span>
+      <span class="token property">"source"</span><span class="token operator">:</span> <span class="token string">"@alice/utils"</span><span class="token punctuation">,</span>
+      <span class="token property">"sourceUrl"</span><span class="token operator">:</span> <span class="token string">"https://registry.mlld.org/modules/@alice/utils/1.0.0"</span><span class="token punctuation">,</span>
+      <span class="token property">"integrity"</span><span class="token operator">:</span> <span class="token string">"sha256:abc123..."</span><span class="token punctuation">,</span>
+      <span class="token property">"fetchedAt"</span><span class="token operator">:</span> <span class="token string">"2024-01-15T10:00:00Z"</span><span class="token punctuation">,</span>
+      <span class="token property">"registryVersion"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Lock entry fields:</strong></p>
+<ul>
+<li><strong>version</strong> - The exact version installed (from registry version.json)</li>
+<li><strong>resolved</strong> - Content hash used for cache lookup (SHA256)</li>
+<li><strong>source</strong> - Original module specifier from your imports</li>
+<li><strong>sourceUrl</strong> - URL where the module was fetched from</li>
+<li><strong>integrity</strong> - Content hash for verification (sha256:...)</li>
+<li><strong>fetchedAt</strong> - Timestamp when module was installed</li>
+<li><strong>registryVersion</strong> - Version from registry metadata (only for registry modules)</li>
+</ul>
+<p><strong>Behavior:</strong></p>
+<ul>
+<li><strong>Auto-generated</strong> - Created/updated by <code>mlld install</code></li>
+<li><strong>Version control</strong> - Commit to git for reproducible builds</li>
+<li><strong>Never edit manually</strong> - Use CLI commands to update</li>
+<li><strong>Registry-only validation</strong> - Lock file only enforces version matches for registry modules</li>
+<li><strong>Version pinning</strong> - <code>version: &quot;latest&quot;</code> updates to newest on <code>mlld update</code>; exact version (e.g. <code>&quot;1.2.0&quot;</code>) stays pinned until manually changed</li>
+</ul>
+<h2 id="module-philosophy" tabindex="-1"><a class="header-anchor" href="#module-philosophy"><span>Module Philosophy</span></a></h2>
+<p>Module-first design: keep <code>.mld</code> files readable; move complexity into focused modules. Avoid &quot;kitchen sink&quot; modules or side effects on import.</p>
+<h2 id="creating-modules" tabindex="-1"><a class="header-anchor" href="#creating-modules"><span>Creating Modules</span></a></h2>
+<pre class="language-mlld"><code class="language-mlld">---
+<span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> text-utils
+<span class="token object-key property">author</span><span class="token ternary-operator operator">:</span> alice
+<span class="token object-key property">version</span><span class="token ternary-operator operator">:</span> <span class="token number">1</span><span class="token field-access property">.0</span><span class="token field-access property">.0</span>
+<span class="token object-key property">about</span><span class="token ternary-operator operator">:</span> String helpers
+<span class="token object-key property">license</span><span class="token ternary-operator operator">:</span> CC0
+---
+
+<span class="token directive keyword">needs</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">js</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@upper</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return s<span class="token field-access property">.toUpperCase</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@trim</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> js <span class="token punctuation">{</span> return s<span class="token field-access property">.trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">}</span>
+
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@upper</span><span class="token punctuation">,</span> <span class="token variable variable">@trim</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Frontmatter fields:</strong></p>
+<ul>
+<li><code>name</code> - Module name (required for registry)</li>
+<li><code>author</code> - Your username (required for registry)</li>
+<li><code>version</code> - Semver version</li>
+<li><code>about</code> - Brief description</li>
+<li><code>license</code> - License (CC0 recommended)</li>
+</ul>
+<h2 id="exporting-from-modules" tabindex="-1"><a class="header-anchor" href="#exporting-from-modules"><span>Exporting from Modules</span></a></h2>
+<p>Modules only expose items listed in <code>export { }</code>. Unexported items stay private.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Hello, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@farewell</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token backtick-template"><span class="token punctuation">`</span>Goodbye, <span class="token variable">@name</span>!<span class="token punctuation">`</span></span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@_helper</span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>internal<span class="token punctuation">"</span></span>
+
+<span class="token comment">>> Only @greet and @farewell are visible to importers</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@greet</span><span class="token punctuation">,</span> <span class="token variable variable">@farewell</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Why explicit exports:</strong> Encapsulation. Importers see a clean API surface. Internal helpers, intermediate variables, and implementation details stay hidden. Rename or remove internals without breaking callers.</p>
+<p><strong>Wildcard export:</strong> Export everything (same as no <code>export</code> directive):</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">export</span> <span class="token punctuation">{</span><span class="token wildcard keyword"> *</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Environment module pattern:</strong> Modules that wrap credentials export executables and let callers import the policy separately for credential configuration:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">policy</span> <span class="token variable variable">@p</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span>
+  <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">claude</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span> <span class="token object-key property">from</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>keychain:mlld-box-{projectname}/claude-dev<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token object-key property">as</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>ANTHROPIC_API_KEY<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token directive keyword">exe</span> <span class="token variable variable">@spawn</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">run</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@prompt</span><span class="token punctuation">"</span></span> <span class="token punctuation">}</span> <span class="token operator">using</span> <span class="token directive keyword">auth</span><span class="token ternary-operator operator">:</span>claude
+
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@spawn</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>Accessing unexported items via namespace import raises a runtime error</li>
+<li>Exported executables do not expose captured module internals through field access</li>
+<li>Guards can be exported alongside variables</li>
+<li>Without an <code>export</code> directive, all module-level items are auto-exported</li>
+</ul>
+<h2 id="module-structure" tabindex="-1"><a class="header-anchor" href="#module-structure"><span>Module Structure</span></a></h2>
+<p>Modules are directories with an entry point, manifest, and optional supporting files.</p>
+<structure>
+```
+mymodule/
+├── index.mld          # Entry point
+├── module.yml         # Manifest (or .yaml, .json)
+├── README.md          # Documentation
+└── lib/               # Optional supporting files
+```
+</structure>
+<manifest>
+module.yml format:
+```yaml
+name: myapp
+author: alice
+type: app               # library | app | command | skill
+about: "Description"
+version: 1.0.0
+license: CC0
+```
+</manifest>
+<p>&lt;metadata_sources&gt;<br>
+Directory modules use two metadata sources:</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Lives In</th>
+<th>Used For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frontmatter</td>
+<td>Entry <code>.mld</code> file (<code>--- ... ---</code>)</td>
+<td>Runtime metadata (<code>@fm</code>, imported namespace <code>.__meta__</code>)</td>
+</tr>
+<tr>
+<td><code>module.yml</code></td>
+<td>Module directory root</td>
+<td>Packaging metadata (<code>type</code>, publish/install metadata)</td>
+</tr>
+</tbody>
+</table>
+<p>Keep shared identity fields (<code>name</code>, <code>author</code>, <code>version</code>, <code>about</code>) aligned between frontmatter and <code>module.yml</code>.<br>
+&lt;/metadata_sources&gt;</p>
+<p>&lt;module_types&gt;</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Purpose</th>
+<th>Local Path</th>
+<th>Global Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>library</td>
+<td>Importable code</td>
+<td>llm/lib/{name}/</td>
+<td>~/.mlld/lib/{name}/</td>
+</tr>
+<tr>
+<td>app</td>
+<td>Runnable scripts</td>
+<td>llm/run/{name}/</td>
+<td>~/.mlld/run/{name}/</td>
+</tr>
+<tr>
+<td>command</td>
+<td>Claude slash cmd</td>
+<td>.claude/commands/{name}/</td>
+<td>~/.claude/commands/{name}/</td>
+</tr>
+<tr>
+<td>skill</td>
+<td>Claude skill</td>
+<td>.claude/skills/{name}/</td>
+<td>~/.claude/skills/{name}/</td>
+</tr>
+<tr>
+<td>&lt;/module_types&gt;</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>&lt;scaffold_commands&gt;</p>
+<pre class="language-bash"><code class="language-bash">mlld module app myapp              <span class="token comment"># Create app in llm/run/myapp/</span>
+mlld module library utils          <span class="token comment"># Create library in llm/lib/utils/</span>
+mlld module <span class="token builtin class-name">command</span> review         <span class="token comment"># Create command in .claude/commands/review/</span>
+mlld module skill helper           <span class="token comment"># Create skill in .claude/skills/helper/</span>
+mlld module app myapp <span class="token parameter variable">--global</span>     <span class="token comment"># Create in ~/.mlld/run/myapp/</span>
+</code></pre>
+<p>&lt;/scaffold_commands&gt;</p>
+<p>&lt;run_apps&gt;</p>
+<pre class="language-bash"><code class="language-bash">mlld run myapp                     <span class="token comment"># Runs llm/run/myapp/index.mld</span>
+mlld run                           <span class="token comment"># Lists available scripts including apps</span>
+</code></pre>
+<p>Use <code>index.mld</code> as the module entry point convention.<br>
+&lt;/run_apps&gt;</p>
+<p>&lt;install_global&gt;</p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token function">install</span> @author/my-app <span class="token parameter variable">--global</span>    <span class="token comment"># Install to ~/.mlld/run/my-app/</span>
+mlld <span class="token function">install</span> @author/my-lib <span class="token parameter variable">-g</span>          <span class="token comment"># Install to ~/.mlld/lib/my-lib/</span>
+</code></pre>
+<p>&lt;/install_global&gt;</p>
+<p>&lt;packed_format&gt;<br>
+Packed modules are single-file bundles created by <code>mlld pack</code> (future feature).<br>
+Use packed format for gist publishing; standard module format otherwise.<br>
+&lt;/packed_format&gt;</p>
+<h2 id="module-patterns" tabindex="-1"><a class="header-anchor" href="#module-patterns"><span>Module Patterns</span></a></h2>
+<p><strong>Module patterns:</strong></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> Library module (wraps a core exe with shortcuts)</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@haiku</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@sonnet</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sonnet<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@haiku</span><span class="token punctuation">,</span> <span class="token variable variable">@sonnet</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Config/agent module</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@meta</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">id</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fm</span><span class="token field-access property">.id</span><span class="token punctuation">,</span> <span class="token object-key property">name</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@fm</span><span class="token field-access property">.name</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@prompts</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">{</span> <span class="token object-key property">primary</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@primaryPrompt</span><span class="token punctuation">,</span> <span class="token object-key property">optional</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@optionalPrompt</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@meta</span><span class="token punctuation">,</span> <span class="token variable variable">@prompts</span> <span class="token punctuation">}</span>
+
+<span class="token comment">>> Gate module</span>
+<span class="token directive keyword">exe</span> <span class="token variable variable">@gate</span><span class="token punctuation">(</span>response<span class="token punctuation">,</span> instruction<span class="token punctuation">,</span> message<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>...<span class="token punctuation">]</span>
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@gate</span> <span class="token punctuation">}</span>
+</code></pre>
+<h2 id="local-development-modules" tabindex="-1"><a class="header-anchor" href="#local-development-modules"><span>Local Development Modules</span></a></h2>
+<pre><code>llm/modules/
+├── my-utils.mld.md    # author: alice, name: experimental
+└── helpers.mld        # author: bob, name: tools
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">local</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/experimental
+</code></pre>
+<p>Matched by frontmatter <code>author</code> and <code>name</code> fields.</p>
+<h2 id="publishing" tabindex="-1"><a class="header-anchor" href="#publishing"><span>Publishing</span></a></h2>
+<h3 id="publishing-public-modules" tabindex="-1"><a class="header-anchor" href="#publishing-public-modules"><span>Publishing Public Modules</span></a></h3>
+<h4 id="prerequisites" tabindex="-1"><a class="header-anchor" href="#prerequisites"><span>Prerequisites</span></a></h4>
+<ol>
+<li><strong>GitHub account</strong> - You'll authenticate via GitHub</li>
+<li><strong>mlld CLI</strong> - Install via <code>npm install -g mlld</code></li>
+<li><strong>Module file</strong> - Your <code>.mld</code>/<code>.mld.md</code> file with frontmatter and <code>needs</code></li>
+</ol>
+<h4 id="required-metadata" tabindex="-1"><a class="header-anchor" href="#required-metadata"><span>Required Metadata</span></a></h4>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">name</span><span class="token punctuation">:</span> my<span class="token punctuation">-</span>tool              <span class="token comment"># or use title: My Tool (name falls back from title)</span>
+<span class="token key atrule">author</span><span class="token punctuation">:</span> yourname
+<span class="token key atrule">version</span><span class="token punctuation">:</span> 1.0.0
+<span class="token key atrule">about</span><span class="token punctuation">:</span> Brief description   <span class="token comment"># description: ... also supported</span>
+<span class="token key atrule">tags</span><span class="token punctuation">:</span> <span class="token punctuation">[</span>utils<span class="token punctuation">,</span> strings<span class="token punctuation">]</span>     <span class="token comment"># optional (keywords also supported)</span>
+<span class="token key atrule">license</span><span class="token punctuation">:</span> CC0
+<span class="token punctuation">---</span>
+</code></pre>
+<p>Required: module name/title, author, version, and about/description. License must be CC0.<br>
+<code>mlld publish</code> now reads these frontmatter fields as metadata defaults, and CLI metadata flags override them when provided.</p>
+<h4 id="authentication" tabindex="-1"><a class="header-anchor" href="#authentication"><span>Authentication</span></a></h4>
+<pre class="language-bash"><code class="language-bash">mlld auth login     <span class="token comment"># Opens GitHub OAuth flow</span>
+mlld auth status    <span class="token comment"># Check auth status</span>
+mlld auth <span class="token builtin class-name">logout</span>    <span class="token comment"># Logout</span>
+</code></pre>
+<p>Grants <code>gist</code> scope (create Gists for module source) and <code>public_repo</code> scope (create PRs to registry).</p>
+<h4 id="first-time-module-(pr-workflow)" tabindex="-1"><a class="header-anchor" href="#first-time-module-(pr-workflow)"><span>First-Time Module (PR Workflow)</span></a></h4>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<ol>
+<li><strong>Validation</strong> - Checks syntax, exports, metadata</li>
+<li><strong>Source Creation</strong> - Creates Gist or references repo</li>
+<li><strong>PR Creation</strong> - Opens PR to mlld-lang/registry</li>
+<li><strong>Automated Review</strong> - LLM reviews for no hardcoded secrets, safe operations, real utility, proper licensing</li>
+<li><strong>Manual Review</strong> (if needed) - Maintainer approval</li>
+<li><strong>Merge</strong> - Module becomes available</li>
+<li><strong>Publish Rights</strong> - You can update directly going forward</li>
+</ol>
+<h4 id="module-updates-(direct-publish)" tabindex="-1"><a class="header-anchor" href="#module-updates-(direct-publish)"><span>Module Updates (Direct Publish)</span></a></h4>
+<p>After first module is merged:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md
+</code></pre>
+<ol>
+<li><strong>Version Bump</strong> - Prompts for patch/minor/major</li>
+<li><strong>Validation</strong> - Same checks as first-time</li>
+<li><strong>Direct Publish</strong> - No PR needed (if authenticated)</li>
+<li><strong>Registry Update</strong> - New version available immediately</li>
+</ol>
+<p>Force PR workflow: <code>mlld publish --pr my-tool.mld.md</code></p>
+<h4 id="module-source" tabindex="-1"><a class="header-anchor" href="#module-source"><span>Module Source</span></a></h4>
+<p><strong>GitHub Repository</strong> — If your module is in a git repo, <code>mlld publish</code> detects the repository URL, current commit SHA, module file path, and whether repo is clean. Source references the commit SHA, ensuring immutability.</p>
+<p><strong>Gist</strong> — If not in a repo, creates a GitHub Gist automatically with module content, versioned via Gist revisions.</p>
+<h4 id="validation" tabindex="-1"><a class="header-anchor" href="#validation"><span>Validation</span></a></h4>
+<p>Your module must pass validation before publishing:</p>
+<ul>
+<li><strong>Syntax</strong> - No syntax errors, no reserved word conflicts, valid directives</li>
+<li><strong>Exports</strong> - <code>export</code> directive present, exported names exist, no duplicates</li>
+<li><strong>Imports</strong> - Valid module references, no circular dependencies</li>
+<li><strong>Metadata</strong> - All required fields present, author matches GitHub username, license is CC0, version follows semver</li>
+</ul>
+<h4 id="automated-review" tabindex="-1"><a class="header-anchor" href="#automated-review"><span>Automated Review</span></a></h4>
+<p>LLM reviews check for no secrets, safe operations, real utility, proper licensing, accurate metadata. Review posts as PR comment with APPROVE, REQUEST_CHANGES, or COMMENT.</p>
+<p>Push new commits to trigger re-review. Trusted authors in allowlist skip LLM review and auto-merge if CI passes.</p>
+<h4 id="direct-publish-via-api" tabindex="-1"><a class="header-anchor" href="#direct-publish-via-api"><span>Direct Publish via API</span></a></h4>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md                    <span class="token comment"># Via CLI (recommended)</span>
+
+<span class="token function">curl</span> <span class="token parameter variable">-X</span> POST https://registry-api.mlld.org/api/publish <span class="token punctuation">\</span>
+  <span class="token parameter variable">-H</span> <span class="token string">"Authorization: Bearer <span class="token variable">$TOKEN</span>"</span> <span class="token punctuation">\</span>
+  <span class="token parameter variable">-F</span> <span class="token string">"module=@my-tool.mld.md"</span>                  <span class="token comment"># Via API directly</span>
+</code></pre>
+<h4 id="commands" tabindex="-1"><a class="header-anchor" href="#commands"><span>Commands</span></a></h4>
+<pre class="language-bash"><code class="language-bash">mlld publish my-tool.mld.md                    <span class="token comment"># Publish to registry</span>
+mlld publish <span class="token parameter variable">--pr</span> my-tool.mld.md               <span class="token comment"># Force PR workflow</span>
+mlld publish <span class="token parameter variable">--tag</span> beta my-tool.mld.md         <span class="token comment"># Publish with tag</span>
+mlld publish --dry-run my-tool.mld.md          <span class="token comment"># Validate without publishing</span>
+mlld publish my-tool.mld.md <span class="token parameter variable">--title</span> <span class="token string">"My Tool"</span> <span class="token parameter variable">--tags</span> utils,strings
+</code></pre>
+<h3 id="publishing-private-modules" tabindex="-1"><a class="header-anchor" href="#publishing-private-modules"><span>Publishing Private Modules</span></a></h3>
+<p>For private or internal modules, use local imports or custom resolvers instead of the public registry.</p>
+<h4 id="local-filesystem" tabindex="-1"><a class="header-anchor" href="#local-filesystem"><span>Local Filesystem</span></a></h4>
+<p>Distribute modules via git or file sharing:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./shared/utils.mld<span class="token punctuation">"</span></span>
+<span class="token directive keyword">import</span> <span class="token string-interpolated"><span class="token punctuation">"</span>./lib/internal<span class="token punctuation">"</span></span> <span class="token operator">as</span> <span class="token variable variable">@internal</span>
+</code></pre>
+<h4 id="custom-resolvers-1" tabindex="-1"><a class="header-anchor" href="#custom-resolvers-1"><span>Custom Resolvers</span></a></h4>
+<p>Configure custom <code>@</code> prefixes for private registries or internal repos:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"resolvers"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@company"</span><span class="token operator">:</span> <span class="token string">"https://internal-registry.company.com/modules"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> @<span class="token directive keyword">auth</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@company</span>/<span class="token directive keyword">auth</span>-utils
+</code></pre>
+<p>See <code>mlld howto resolvers</code> for resolver configuration.</p>
+<h4 id="development-modules" tabindex="-1"><a class="header-anchor" href="#development-modules"><span>Development Modules</span></a></h4>
+<p>Use <code>llm/modules/</code> for in-development modules:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token operator">local</span> <span class="token punctuation">{</span> <span class="token variable variable">@tool</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/dev-<span class="token operator">module</span>
+</code></pre>
+<p>These are resolved from the local <code>llm/modules/</code> directory without registry lookup.</p>
+<h2 id="updating-modules" tabindex="-1"><a class="header-anchor" href="#updating-modules"><span>Updating Modules</span></a></h2>
+<p><strong>Check installed modules:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld <span class="token function">ls</span>                          <span class="token comment"># list all installed modules with versions</span>
+</code></pre>
+<p><strong>Update a specific module:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld update @alice/utils         <span class="token comment"># fetch latest version</span>
+</code></pre>
+<p><strong>Update all modules:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld update                      <span class="token comment"># updates everything in mlld-lock.json</span>
+</code></pre>
+<p><strong>Check module info:</strong></p>
+<pre class="language-bash"><code class="language-bash">mlld registry info @alice/utils  <span class="token comment"># show module details from registry</span>
+</code></pre>
+<p><strong>Version pinning:</strong></p>
+<p>The lock file (<code>mlld-lock.json</code>) tracks installed versions:</p>
+<ul>
+<li><code>version: &quot;latest&quot;</code> - updates to newest on <code>mlld update</code></li>
+<li><code>version: &quot;1.2.0&quot;</code> - stays pinned until manually changed</li>
+</ul>
+<p><strong>After updating:</strong></p>
+<p>Verify new exports are available:</p>
+<pre class="language-bash"><code class="language-bash">mlld validate your-file.mld      <span class="token comment"># check imports resolve</span>
+</code></pre>
+<h2 id="versioning" tabindex="-1"><a class="header-anchor" href="#versioning"><span>Versioning</span></a></h2>
+<h3 id="semantic-versioning" tabindex="-1"><a class="header-anchor" href="#semantic-versioning"><span>Semantic Versioning</span></a></h3>
+<p>Follow semver (major.minor.patch):</p>
+<ul>
+<li><strong>1.0.0</strong> - Initial release</li>
+<li><strong>1.0.1</strong> - Bug fix (backward compatible)</li>
+<li><strong>1.1.0</strong> - New feature (backward compatible)</li>
+<li><strong>2.0.0</strong> - Breaking change</li>
+</ul>
+<h3 id="version-tags" tabindex="-1"><a class="header-anchor" href="#version-tags"><span>Version Tags</span></a></h3>
+<p>Publish with tags:</p>
+<pre class="language-bash"><code class="language-bash">mlld publish <span class="token parameter variable">--tag</span> beta my-tool.mld.md
+</code></pre>
+<p>Import via tag:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/my-tool<span class="token variable variable">@beta</span>
+<span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@helper</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@alice</span>/utils@^<span class="token number">1</span><span class="token field-access property">.0</span><span class="token field-access property">.0</span>
+</code></pre>
+<p>Common tags:</p>
+<ul>
+<li><code>latest</code> - Most recent stable (default)</li>
+<li><code>stable</code> - Recommended version</li>
+<li><code>beta</code> - Beta testing</li>
+<li><code>alpha</code> - Alpha testing</li>
+</ul>
+<h3 id="version-ranges" tabindex="-1"><a class="header-anchor" href="#version-ranges"><span>Version Ranges</span></a></h3>
+<p>Specify ranges in <code>mlld-config.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"@alice/my-tool"</span><span class="token operator">:</span> <span class="token string">"^1.0.0"</span><span class="token punctuation">,</span>
+    <span class="token property">"@bob/utils"</span><span class="token operator">:</span> <span class="token string">"~1.2.0"</span><span class="token punctuation">,</span>
+    <span class="token property">"@eve/lib"</span><span class="token operator">:</span> <span class="token string">">=1.0.0 &lt;2.0.0"</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Lock file pins exact versions.</p>
+<h3 id="version-resolution-in-imports" tabindex="-1"><a class="header-anchor" href="#version-resolution-in-imports"><span>Version Resolution in Imports</span></a></h3>
+<table>
+<thead>
+<tr>
+<th>Import</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>import ... from @alice/utils</code></td>
+<td>latest</td>
+</tr>
+<tr>
+<td><code>import ... from @alice/utils@1.0.0</code></td>
+<td>exact</td>
+</tr>
+<tr>
+<td><code>import ... from @alice/utils@^1.0.0</code></td>
+<td>compatible</td>
+</tr>
+<tr>
+<td><code>import ... from @alice/utils@beta</code></td>
+<td>tag</td>
+</tr>
+</tbody>
+</table>
+<h2 id="registry-metadata" tabindex="-1"><a class="header-anchor" href="#registry-metadata"><span>Registry Metadata</span></a></h2>
+<h3 id="registry-structure" tabindex="-1"><a class="header-anchor" href="#registry-structure"><span>Registry Structure</span></a></h3>
+<p>Modules are stored with version history:</p>
+<pre><code>registry/
+└── modules/
+    └── alice/
+        └── my-tool/
+            ├── metadata.json      # Core info, owners
+            ├── 1.0.0.json         # Version 1.0.0
+            ├── 1.0.1.json         # Version 1.0.1
+            └── tags.json          # latest, stable, etc.
+</code></pre>
+<h3 id="metadata.json" tabindex="-1"><a class="header-anchor" href="#metadata.json"><span>metadata.json</span></a></h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"my-tool"</span><span class="token punctuation">,</span>
+  <span class="token property">"author"</span><span class="token operator">:</span> <span class="token string">"alice"</span><span class="token punctuation">,</span>
+  <span class="token property">"about"</span><span class="token operator">:</span> <span class="token string">"Brief description"</span><span class="token punctuation">,</span>
+  <span class="token property">"owners"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"alice"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"maintainers"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"created"</span><span class="token operator">:</span> <span class="token string">"2024-01-01T00:00:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"createdBy"</span><span class="token operator">:</span> <span class="token number">12345</span><span class="token punctuation">,</span>
+  <span class="token property">"firstPublishPR"</span><span class="token operator">:</span> <span class="token number">123</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="%7Bversion%7D.json" tabindex="-1"><a class="header-anchor" href="#%7Bversion%7D.json"><span>{version}.json</span></a></h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"version"</span><span class="token operator">:</span> <span class="token string">"1.0.0"</span><span class="token punctuation">,</span>
+  <span class="token property">"needs"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"js"</span><span class="token punctuation">,</span> <span class="token string">"sh"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"license"</span><span class="token operator">:</span> <span class="token string">"CC0"</span><span class="token punctuation">,</span>
+  <span class="token property">"mlldVersion"</span><span class="token operator">:</span> <span class="token string">">=1.0.0"</span><span class="token punctuation">,</span>
+  <span class="token property">"source"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"github"</span><span class="token punctuation">,</span>
+    <span class="token property">"url"</span><span class="token operator">:</span> <span class="token string">"https://raw.githubusercontent.com/..."</span><span class="token punctuation">,</span>
+    <span class="token property">"contentHash"</span><span class="token operator">:</span> <span class="token string">"sha256:abc123..."</span><span class="token punctuation">,</span>
+    <span class="token property">"repository"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"type"</span><span class="token operator">:</span> <span class="token string">"git"</span><span class="token punctuation">,</span>
+      <span class="token property">"url"</span><span class="token operator">:</span> <span class="token string">"https://github.com/alice/repo"</span><span class="token punctuation">,</span>
+      <span class="token property">"commit"</span><span class="token operator">:</span> <span class="token string">"abc123"</span><span class="token punctuation">,</span>
+      <span class="token property">"path"</span><span class="token operator">:</span> <span class="token string">"my-tool.mld.md"</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"dependencies"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"js"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"packages"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"lodash"</span><span class="token punctuation">]</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span><span class="token punctuation">,</span>
+  <span class="token property">"keywords"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"utility"</span><span class="token punctuation">,</span> <span class="token string">"automation"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"publishedAt"</span><span class="token operator">:</span> <span class="token string">"2024-01-01T00:00:00Z"</span><span class="token punctuation">,</span>
+  <span class="token property">"publishedBy"</span><span class="token operator">:</span> <span class="token number">12345</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Key fields:</p>
+<ul>
+<li><strong>publishedBy</strong> - GitHub user ID of the publisher (numeric ID, not username)</li>
+<li><strong>publishedAt</strong> - ISO timestamp when this version was published</li>
+<li><strong>source.type</strong> - Source type: <code>github</code>, <code>gist</code>, or <code>private-repo</code></li>
+<li><strong>source.contentHash</strong> - SHA256 hash for content verification</li>
+<li><strong>source.repository</strong> - Git repository metadata (for github/private-repo sources)</li>
+</ul>
+<h3 id="tags.json" tabindex="-1"><a class="header-anchor" href="#tags.json"><span>tags.json</span></a></h3>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"latest"</span><span class="token operator">:</span> <span class="token string">"1.0.1"</span><span class="token punctuation">,</span>
+  <span class="token property">"stable"</span><span class="token operator">:</span> <span class="token string">"1.0.1"</span><span class="token punctuation">,</span>
+  <span class="token property">"beta"</span><span class="token operator">:</span> <span class="token string">"2.0.0-beta.1"</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="registry-api" tabindex="-1"><a class="header-anchor" href="#registry-api"><span>Registry API</span></a></h3>
+<pre class="language-bash"><code class="language-bash"><span class="token comment">## Resolve version</span>
+<span class="token function">curl</span> https://registry-api.mlld.org/api/resolve?module<span class="token operator">=</span>@alice/my-tool
+
+<span class="token comment">## Direct publish</span>
+<span class="token function">curl</span> <span class="token parameter variable">-X</span> POST https://registry-api.mlld.org/api/publish <span class="token punctuation">\</span>
+  <span class="token parameter variable">-H</span> <span class="token string">"Authorization: Bearer <span class="token variable">$TOKEN</span>"</span> <span class="token punctuation">\</span>
+  <span class="token parameter variable">-F</span> <span class="token string">"module=@my-tool.mld.md"</span>
+</code></pre>
+<h2 id="ownership-and-permissions" tabindex="-1"><a class="header-anchor" href="#ownership-and-permissions"><span>Ownership and Permissions</span></a></h2>
+<h3 id="module-owners" tabindex="-1"><a class="header-anchor" href="#module-owners"><span>Module Owners</span></a></h3>
+<p>After your first PR merges, you become module owner:</p>
+<ul>
+<li>Can publish updates directly (no PR needed)</li>
+<li>Can add maintainers</li>
+<li>Module namespaced under your GitHub username</li>
+</ul>
+<h3 id="maintainers" tabindex="-1"><a class="header-anchor" href="#maintainers"><span>Maintainers</span></a></h3>
+<p>Add collaborators to <code>metadata.json</code>:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"owners"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"alice"</span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token property">"maintainers"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token string">"bob"</span><span class="token punctuation">,</span> <span class="token string">"eve"</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Maintainers can also publish updates.</p>
+<h3 id="organization-modules" tabindex="-1"><a class="header-anchor" href="#organization-modules"><span>Organization Modules</span></a></h3>
+<p>Publish under org namespace:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token punctuation">---</span>
+<span class="token key atrule">author</span><span class="token punctuation">:</span> company
+<span class="token key atrule">name</span><span class="token punctuation">:</span> auth<span class="token punctuation">-</span>tool
+<span class="token punctuation">---</span>
+</code></pre>
+<p>Requires write access to <code>@company</code> in registry.</p>
+<h2 id="llm-modules" tabindex="-1"><a class="header-anchor" href="#llm-modules"><span>LLM Modules</span></a></h2>
+<p>LLM modules follow a <code>(prompt, config)</code> calling convention. The first argument is always the prompt text. The second is an optional config object that controls model selection, tool access, streaming, and other behavior.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">import</span> <span class="token punctuation">{</span> <span class="token variable variable">@claude</span><span class="token punctuation">,</span> <span class="token variable variable">@haiku</span> <span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token variable variable">@mlld</span>/claude
+
+<span class="token comment">>> Simple — model shortcut, no config</span>
+<span class="token directive keyword">show</span> <span class="token variable variable">@haiku</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>What is REST?<span class="token punctuation">"</span></span><span class="token punctuation">)</span>
+
+<span class="token comment">>> Full control — config object</span>
+<span class="token directive keyword">var</span> <span class="token variable variable">@result</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Review the auth module<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>opus<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Grep<span class="token punctuation">"</span></span><span class="token punctuation">]</span><span class="token punctuation">,</span>
+  <span class="token directive keyword">stream</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="the-config-object" tabindex="-1"><a class="header-anchor" href="#the-config-object"><span>The config object</span></a></h3>
+<p>The <code>@mlld/claude</code> module defines these config fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td><code>&quot;sonnet&quot;</code></td>
+<td>Model name: <code>haiku</code>, <code>sonnet</code>, <code>opus</code></td>
+</tr>
+<tr>
+<td><code>dir</code></td>
+<td>string</td>
+<td><code>@root</code></td>
+<td>Working directory for tool operations</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>array</td>
+<td>—</td>
+<td>Tool access list (see below)</td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td>boolean</td>
+<td>—</td>
+<td>Enable token streaming</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>string</td>
+<td>—</td>
+<td>Appended system prompt</td>
+</tr>
+</tbody>
+</table>
+<p>Poll variants (<code>@claudePoll</code>, <code>@claudePollJsonl</code>, <code>@claudePollEvent</code>) extend the config with additional fields like <code>poll</code>, <code>timeout</code>, <code>pattern</code>, <code>event</code>, and <code>itemId</code>. See the <code>@mlld/claude</code> module README for details.</p>
+<p><strong>Convention, not schema:</strong> The runtime recognizes <code>tools</code> and <code>dir</code> from the config object (see next section). Everything else — <code>model</code>, <code>system</code>, <code>stream</code> — is handled by the module implementation, not the runtime. Module authors can add their own fields.</p>
+<h3 id="runtime-support-for-config.tools" tabindex="-1"><a class="header-anchor" href="#runtime-support-for-config.tools"><span>Runtime support for <code>config.tools</code></span></a></h3>
+<p>When an <code>exe llm</code> function is invoked with a config object containing a <code>tools</code> property, the runtime automatically:</p>
+<ol>
+<li><strong>Detects</strong> the second argument as a config object (plain object with a <code>tools</code> key)</li>
+<li><strong>Normalizes</strong> the tools array (strings for built-in tools, exe refs for mlld functions)</li>
+<li><strong>Reads <code>config.dir</code></strong> if present, to set the working directory for bridge operations</li>
+<li><strong>Creates MCP bridges</strong> — temporary servers that expose the requested tools</li>
+<li><strong>Populates <code>@mx.llm</code></strong> with bridge metadata for the exe body to consume</li>
+</ol>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> llm <span class="token variable variable">@agent</span><span class="token punctuation">(</span>prompt<span class="token punctuation">,</span> config<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token comment">>> These are set automatically by the runtime:</span>
+  <span class="token comment">>> @mx.llm.config   — path to generated MCP config file (empty string if no bridges)</span>
+  <span class="token comment">>> @mx.llm.allowed  — unified tool name list for --allowedTools</span>
+  <span class="token comment">>> @mx.llm.native   — native tool names CSV (empty when no native tools requested)</span>
+  <span class="token comment">>> @mx.llm.inBox    — true when inside a box with active VFS bridge</span>
+  <span class="token comment">>> @mx.llm.hasTools — true when config.tools was specified</span>
+
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p --model sonnet --allowedTools <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.allowed<span class="token punctuation">"</span></span> <span class="token punctuation">}</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>This is why <code>exe llm</code> functions don't need to manually construct <code>--mcp-config</code> flags or manage bridge lifecycles — the runtime handles it.</p>
+<h4 id="tool-types-in-the-array" tabindex="-1"><a class="header-anchor" href="#tool-types-in-the-array"><span>Tool types in the array</span></a></h4>
+<p>The <code>tools</code> array accepts a mix of string names and exe references:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> <span class="token variable variable">@summarize</span><span class="token punctuation">(</span>text<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> ... <span class="token punctuation">}</span>
+
+<span class="token directive keyword">var</span> <span class="token variable variable">@r</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Analyze this codebase<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+  <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token string-interpolated"><span class="token punctuation">"</span>Grep<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token variable variable">@summarize</span><span class="token punctuation">]</span>
+<span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Entry type</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>String (<code>&quot;Read&quot;</code>)</td>
+<td>Routed to built-in capability. Inside a box, proxied through VFS bridge. Outside a box, passed as native CLI tool name.</td>
+</tr>
+<tr>
+<td>Exe ref (<code>@summarize</code>)</td>
+<td>Wrapped as an MCP tool via a function bridge. The runtime generates a JSON schema from the function signature.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="empty-tools" tabindex="-1"><a class="header-anchor" href="#empty-tools"><span>Empty tools</span></a></h4>
+<p>Passing an empty array signals &quot;no tools&quot; — the runtime sets <code>@mx.llm.hasTools = true</code> but provides no bridges. The module can use this to pass <code>--tools &quot;&quot;</code> to disable all default tools:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@r</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Pure text generation<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<h3 id="box-interaction" tabindex="-1"><a class="header-anchor" href="#box-interaction"><span>Box interaction</span></a></h3>
+<p>Tool routing changes based on whether the call happens inside a <code>box</code>:</p>
+<p><strong>Outside a box:</strong> String tools pass through as native names. The child process uses them directly.</p>
+<p><strong>Inside a box:</strong> String tools are proxied through the workspace VFS bridge. File operations route through the box's in-memory filesystem, and the child process cannot access the real filesystem.</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">var</span> <span class="token variable variable">@ws</span> <span class="token assignment-operator operator">=</span> <span class="token directive keyword">box</span> <span class="token punctuation">[</span>
+  <span class="token directive keyword">file</span> <span class="token string-interpolated"><span class="token punctuation">"</span>data.csv<span class="token punctuation">"</span></span> <span class="token assignment-operator operator">=</span> <span class="token string-interpolated"><span class="token punctuation">"</span>id,name\n1,Alice\n2,Bob<span class="token punctuation">"</span></span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@r</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Summarize the CSV file<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span>
+    <span class="token object-key property">tools</span><span class="token ternary-operator operator">:</span> <span class="token punctuation">[</span><span class="token string-interpolated"><span class="token punctuation">"</span>Read<span class="token punctuation">"</span></span><span class="token punctuation">]</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span>
+  <span class="token comment">>> @claude's Read tool sees data.csv in the VFS, not the real filesystem</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@r</span>
+<span class="token punctuation">]</span>
+</code></pre>
+<p>The <code>@mx.llm.native</code> field tells module implementations which native tools are active. When <code>native</code> is empty — either because the call is inside a box (all tools route through VFS bridges) or because the tools array contains only exe refs — the module should pass <code>--tools &quot;&quot;</code> to suppress the CLI's default built-in tools. The <code>@mlld/claude</code> module does this automatically.</p>
+<h3 id="streaming" tabindex="-1"><a class="header-anchor" href="#streaming"><span>Streaming</span></a></h3>
+<p>Streaming is wired at the exe definition level using <code>with { stream, streamFormat }</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">exe</span> llm <span class="token variable variable">@myLLM</span><span class="token punctuation">(</span>prompt<span class="token punctuation">,</span> config<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@config</span> <span class="token ternary-operator operator">?</span> @<span class="token object-key property">config</span> <span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span>
+  <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span> claude -p --model sonnet <span class="token punctuation">}</span>
+<span class="token punctuation">]</span> <span class="token operator">with</span> <span class="token punctuation">{</span> <span class="token directive keyword">stream</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@cfg</span>.<span class="token directive keyword">stream</span><span class="token punctuation">,</span> <span class="token object-key property">streamFormat</span><span class="token ternary-operator operator">:</span> <span class="token variable variable">@myAdapter</span> <span class="token punctuation">}</span>
+</code></pre>
+<p>The <code>@mlld/claude</code> module does this internally — when you pass <code>stream: true</code> in config, the underlying exe's <code>with</code> clause activates streaming. You don't need to configure this when using the module:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">show</span> <span class="token variable variable">@claude</span><span class="token punctuation">(</span><span class="token string-interpolated"><span class="token punctuation">"</span>Explain TCP/IP<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>haiku<span class="token punctuation">"</span></span><span class="token punctuation">,</span> <span class="token directive keyword">stream</span><span class="token ternary-operator operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+</code></pre>
+<p>See <code>stream</code> for format adapters and streaming details.</p>
+<h3 id="writing-your-own-llm-module" tabindex="-1"><a class="header-anchor" href="#writing-your-own-llm-module"><span>Writing your own LLM module</span></a></h3>
+<p>An LLM module follows this pattern:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token comment">>> 1. Label with llm so the runtime processes config.tools</span>
+<span class="token comment">>> 2. Accept (prompt, config) as the calling convention</span>
+<span class="token comment">>> 3. Read @mx.llm for bridge metadata set by the runtime</span>
+
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@myLLM</span><span class="token punctuation">(</span>prompt<span class="token punctuation">,</span> config<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token punctuation">[</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@cfg</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@config</span> <span class="token ternary-operator operator">?</span> @<span class="token object-key property">config</span> <span class="token ternary-operator operator">:</span> <span class="token punctuation">{</span><span class="token punctuation">}</span>
+  <span class="token block-keyword keyword">let</span> <span class="token variable variable">@model</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@cfg</span><span class="token field-access property">.model</span> <span class="token ternary-operator operator">?</span> <span class="token variable variable">@cfg</span>.<span class="token object-key property">model</span> <span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>sonnet<span class="token punctuation">"</span></span>
+
+  <span class="token arrow-operator operator">=></span> <span class="token directive keyword">when</span> <span class="token punctuation">[</span>
+    <span class="token variable variable">@mx</span><span class="token field-access property">.llm</span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span><span class="token field-access property">.llm</span><span class="token field-access property">.config</span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span><span class="token field-access property">.llm</span><span class="token field-access property">.native</span> <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+      my-llm-cli --model <span class="token variable variable">@model</span> --<span class="token operator">mcp</span>-config <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.config<span class="token punctuation">"</span></span> --<span class="token operator">tools</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.allowed<span class="token punctuation">"</span></span>
+    <span class="token punctuation">}</span>
+    <span class="token variable variable">@mx</span><span class="token field-access property">.llm</span> <span class="token logical-operator operator">&amp;&amp;</span> <span class="token variable variable">@mx</span><span class="token field-access property">.llm</span><span class="token field-access property">.config</span> <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+      my-llm-cli --model <span class="token variable variable">@model</span> --disable-builtin-<span class="token operator">tools</span> --<span class="token operator">mcp</span>-config <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.config<span class="token punctuation">"</span></span> --<span class="token operator">tools</span> <span class="token string-interpolated"><span class="token punctuation">"</span><span class="token variable">@mx</span>.llm.allowed<span class="token punctuation">"</span></span>
+    <span class="token punctuation">}</span>
+   <span class="token wildcard keyword"> *</span> <span class="token arrow-operator operator">=></span> <span class="token variable variable">@prompt</span> <span class="token pipe-operator operator">|</span> <span class="token operator">cmd</span> <span class="token punctuation">{</span>
+      my-llm-cli --model <span class="token variable variable">@model</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">]</span>
+<span class="token punctuation">]</span>
+
+<span class="token comment">>> Model shortcuts</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@fast</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@myLLM</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>fast<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token directive keyword">exe</span> llm <span class="token variable variable">@smart</span><span class="token punctuation">(</span>prompt<span class="token punctuation">)</span> <span class="token assignment-operator operator">=</span> <span class="token variable variable">@myLLM</span><span class="token punctuation">(</span><span class="token variable variable">@prompt</span><span class="token punctuation">,</span> <span class="token punctuation">{</span> <span class="token object-key property">model</span><span class="token ternary-operator operator">:</span> <span class="token string-interpolated"><span class="token punctuation">"</span>smart<span class="token punctuation">"</span></span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">export</span> <span class="token punctuation">{</span> <span class="token variable variable">@myLLM</span><span class="token punctuation">,</span> <span class="token variable variable">@fast</span><span class="token punctuation">,</span> <span class="token variable variable">@smart</span> <span class="token punctuation">}</span>
+</code></pre>
+<p><strong>Key points:</strong></p>
+<ul>
+<li>The <code>llm</code> label is required — without it, the runtime won't process <code>config.tools</code> or populate <code>@mx.llm</code></li>
+<li>Always default missing config: <code>let @cfg = @config ? @config : {}</code></li>
+<li>Branch on <code>@mx.llm.config</code> and <code>@mx.llm.native</code> to handle bridged, exe-ref-only, and unbridged invocations</li>
+<li>Shortcuts should delegate to the core exe, not duplicate the implementation</li>
+<li>The runtime cleans up bridge temp files automatically when the exe scope exits</li>
+</ul>
+
+  </div>
+
+  <aside class="docs-toc" id="docs-toc">
+    <nav>
+      <h4>On this page</h4>
+      <ul id="page-outline"></ul>
+    </nav>
+  </aside>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var toggleButton = document.querySelector('.docs-sidebar-toggle');
+    var sidebar = document.getElementById('docs-sidebar');
+    var overlay = document.getElementById('docs-overlay');
+
+    function toggleSidebar() {
+      var isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+      if (window.innerWidth <= 960) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+
+    sidebar.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 960 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 960 &&
+          sidebar.classList.contains('open') &&
+          !sidebar.contains(event.target) &&
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+
+    // Build page outline
+    var outline = document.getElementById('page-outline');
+    if (outline) {
+      var content = document.querySelector('.docs-content');
+      var headings = content.querySelectorAll('h2, h3');
+      var tocLinks = [];
+      headings.forEach(function(h) {
+        if (!h.id) return;
+        var li = document.createElement('li');
+        if (h.tagName === 'H3') li.classList.add('outline-nested');
+        var a = document.createElement('a');
+        a.href = '#' + h.id;
+        a.textContent = h.textContent;
+        li.appendChild(a);
+        outline.appendChild(li);
+        tocLinks.push({ id: h.id, el: a });
+      });
+
+      // Scroll spy
+      if (tocLinks.length > 0 && 'IntersectionObserver' in window) {
+        var currentId = null;
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              currentId = entry.target.id;
+            }
+          });
+          tocLinks.forEach(function(link) {
+            if (link.id === currentId) {
+              link.el.classList.add('active');
+            } else {
+              link.el.classList.remove('active');
+            }
+          });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0.1 });
+        headings.forEach(function(h) {
+          if (h.id) observer.observe(h);
+        });
+      }
+    }
+  });
+</script>
+
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-copy">&copy; 2026 mlld</p>
+      <nav>
+        <ul>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="https://disreguard.com">Research</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
