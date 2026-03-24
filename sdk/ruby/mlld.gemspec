@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = 'mlld'
-  spec.version = '2.0.4'
+  spec.version = '2.0.5'
   spec.summary = 'Ruby wrapper for the mlld CLI'
   spec.description = 'Persistent live --stdio SDK wrapper for mlld from Ruby.'
   spec.authors = ['mlld-lang']

@@ -1,7 +1,7 @@
 defmodule Mlld.MixProject do
   use Mix.Project
 
-  @version "2.0.4"
+  @version "2.0.5"
   @source_url "https://github.com/mlld-lang/mlld/tree/main/sdk/elixir"
 
   def project do
