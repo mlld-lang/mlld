@@ -43,9 +43,18 @@ jobs:
         working-directory: website
         run: npm ci
       
-      - name: Build
+      - name: Build website
         working-directory: website
         run: npm run build
+
+      - name: Install project dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Build llms docs
+        run: npm run build:docs
 
       - name: Copy llms.txt files to site root
         run: |
