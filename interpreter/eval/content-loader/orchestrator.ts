@@ -283,7 +283,8 @@ export class ContentLoaderOrchestrator {
       );
     }
 
-    return this.dependencies.finalizationAdapter.finalizeLoaderResult(astResults, { type: 'array' });
+    const codeText = astResults.filter(Boolean).map(r => r.code).join('\n\n');
+    return this.dependencies.finalizationAdapter.finalizeLoaderResult(astResults, { type: 'array', text: codeText });
   }
 
   private async processGlobBranch(context: {

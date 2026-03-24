@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Guard and managed policy label-flow denials now surface as structured SDK observability data. Streamed executions emit immediate `guard_denial` events, structured execute results collect `denials`, and the live stdio / Python / Ruby / Go / Rust / Elixir SDK layers now preserve that payload without string parsing.
 
 ### Fixed
+- Brace-syntax AST selectors (`<file.py { ClassName }>`) now return source code as text instead of JSON metadata objects, matching the behavior of markdown `#` section selectors. Metadata fields remain accessible via `.data` (e.g., `@result[0].name`, `@result[0].type`).
 - `toolCall` audit events are now emitted only when an executable/tool body actually runs. Early returns from pre-guards or parameter label-flow checks no longer create false tool-call records, and `duration` now measures body execution only.
 - After-guards now preserve taint-only provenance on both `@mx.taint` and `@output.mx.taint`, so source markers such as `src:mcp` and `src:js` remain visible in after-guard checks.
 - TypeScript AST extractor is now lazy-loaded, so `npm install -g mlld` no longer requires a globally installed `typescript` package. The `typescript` module is only imported when extracting definitions from `.ts` files.
