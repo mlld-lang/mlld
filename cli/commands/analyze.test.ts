@@ -484,7 +484,7 @@ guard @missingOpName before op:tool:w = when [
     expect(missingArgWarnings[0]?.message).toContain('@mx.args.cc');
   });
 
-  it('fails validation when policy.authorizations lacks trusted controlArgs metadata in context', async () => {
+  it('fails validation closed when policy.authorizations omits exe-level controlArgs constraints', async () => {
     const contextPath = await writeModule('analyze-authz-context.mld', `exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
 `);
     const modulePath = await writeModule('analyze-authz-invalid.mld', `var @taskPolicy = {
@@ -504,12 +504,12 @@ show @taskPolicy
 
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
-      'missing trusted controlArgs metadata'
+      'cannot use true in policy.authorizations'
     );
   });
 
-  it('accepts policy.authorizations with trusted tool metadata and surfaces normalization warnings', async () => {
-    const modulePath = await writeModule('analyze-authz-valid.mld', `exe tool:w @create_file(title) = cmd { echo "ok" }
+  it('accepts policy.authorizations with exe-level controlArgs metadata and surfaces normalization warnings', async () => {
+    const modulePath = await writeModule('analyze-authz-valid.mld', `exe tool:w @create_file(title) = cmd { echo "ok" } with { controlArgs: [] }
 var tools @agentTools = {
   create_file: {
     mlld: @create_file,
@@ -541,6 +541,27 @@ show @taskPolicy
         'policy-authorizations-unconstrained-tool'
       ])
     );
+  });
+
+  it('accepts exe-declared controlArgs without requiring a tools wrapper', async () => {
+    const modulePath = await writeModule('analyze-authz-exe-control-args.mld', `exe tool:w @send_money(recipient, amount) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+var @taskPolicy = {
+  authorizations: {
+    allow: {
+      send_money: {
+        args: {
+          recipient: "acct-1"
+        }
+      }
+    }
+  }
+}
+show @taskPolicy
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
   });
 
   it('populates needs.cmd with shell commands detected from run directives', async () => {

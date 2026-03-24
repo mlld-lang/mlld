@@ -3,11 +3,22 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvironmentCapture';
 
 export function buildExecOperationPreview(node: ExecInvocation): OperationContext | undefined {
-  const identifier = (node.commandRef as any)?.identifier;
+  const rawIdentifier = (node.commandRef as any)?.identifier;
+  const identifier =
+    typeof rawIdentifier === 'string'
+      ? rawIdentifier
+      : Array.isArray(rawIdentifier) && rawIdentifier[0]?.identifier
+        ? rawIdentifier[0].identifier
+        : undefined;
+  const operationName =
+    typeof (node as any)?.meta?.toolOperationName === 'string' &&
+    (node as any).meta.toolOperationName.trim().length > 0
+      ? (node as any).meta.toolOperationName.trim()
+      : undefined;
   if (typeof identifier === 'string' && identifier.length > 0) {
     return {
       type: 'exe',
-      name: identifier,
+      name: operationName ?? identifier,
       location: node.location ?? null,
       metadata: { sourceRetryable: true }
     };

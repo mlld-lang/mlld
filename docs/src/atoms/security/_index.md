@@ -40,7 +40,7 @@ Labels are strings attached to values. They are the foundation — guards and po
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.
 
-Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in positional-argument rules below.
+Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in destination/target rules below.
 
 **Operation labels** (`op:cmd`, `op:sh`, `op:cmd:git:status`) are ephemeral — they exist only during the operation and do not propagate to the result. This is different from the categories above.
 
@@ -126,7 +126,7 @@ policy @p = {
 
 **Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
-Positional built-in rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, put the destination/target in `@input[0]`, and require that value to carry `known` (or `known:internal` for internal-only send destinations).
+Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the named destination/target args to carry `known` (or `known:internal` for internal-only send destinations).
 
 **Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-authorizations`, `policy-composition`, `policy-auth`
 
@@ -151,9 +151,9 @@ var @result = @agent(@prompt) with { policy: @taskPolicy }
 
 **Argument constraints:** Literal values use tolerant comparison (`~=`), `eq` for explicit matching, `oneOf` for multiple candidates.
 
-**Control-arg enforcement:** In phase 1, tools declare security-relevant args on trusted `var tools` entries via `controlArgs`. With tool context, `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. `true` (unconstrained) is only valid for tools with no declared control args.
+**Control-arg enforcement:** Write executables declare security-relevant args with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. If trusted control-arg metadata is missing for a `tool:w` executable, every declared parameter is treated as a control arg. `true` (unconstrained) is only valid for tools with no effective control args.
 
-**Override behavior:** Authorization-generated guards are privileged. They can override managed label-flow denials from `defaults.rules` and `labels` for matching calls — unless the policy is `locked: true`.
+**Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. `locked: true` still prevents all overrides.
 
 **Planner contract:** The planner should produce only `{ authorizations: { ... } }`. The host enforces that restriction before injection. Invalid authorization fragments fail closed during `with { policy }` activation, and no partial authorization layer is installed.
 

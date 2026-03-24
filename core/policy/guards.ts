@@ -1,6 +1,6 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
 import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
-import type { PolicyConditionFn } from '../../interpreter/guards';
+import type { PolicyArgDescriptor, PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import {
@@ -23,6 +23,15 @@ export interface PolicyGuardSpec {
   policyCondition: PolicyConditionFn;
 }
 
+export interface AuthorizationInheritedPolicyCheckFailure {
+  reason: string;
+  rule: string;
+  suggestions?: string[];
+}
+
+const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
+const TARGET_ARG_SELECTORS = ['id'] as const;
+
 export type CommandAccessDecision = {
   allowed: boolean;
   commandName: string;
@@ -39,6 +48,189 @@ export type CapabilityAccessDecision = {
   allowed: boolean;
   reason?: string;
 };
+
+function isEmptyAuthorizationValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
+  return normalizeList([
+    ...(descriptor?.labels ?? []),
+    ...(descriptor?.taint ?? [])
+  ]);
+}
+
+function getExpandedPolicyOperationLabels(
+  operation: {
+    opLabels?: readonly string[];
+    labels?: readonly string[];
+  },
+  operations?: PolicyOperations
+): string[] {
+  return expandOperationLabels([
+    ...(operation.opLabels ?? []),
+    ...(operation.labels ?? [])
+  ], operations);
+}
+
+function selectNamedArgs(
+  args: Readonly<Record<string, unknown>> | undefined,
+  selectors: readonly string[],
+  options?: { ignoreEmpty?: boolean }
+): string[] {
+  if (!args) {
+    return [];
+  }
+
+  const selected: string[] = [];
+  for (const selector of selectors) {
+    if (!Object.prototype.hasOwnProperty.call(args, selector)) {
+      continue;
+    }
+    if (options?.ignoreEmpty === true && isEmptyAuthorizationValue(args[selector])) {
+      continue;
+    }
+    selected.push(selector);
+  }
+  return selected;
+}
+
+function buildInheritedPositiveCheckFailure(options: {
+  reason: string;
+  rule: string;
+  missingLabelSuggestion: string;
+}): AuthorizationInheritedPolicyCheckFailure {
+  return {
+    reason: options.reason,
+    rule: options.rule,
+    suggestions: [
+      options.missingLabelSuggestion,
+      'Review active policies with @mx.policy.activePolicies'
+    ]
+  };
+}
+
+export function evaluateAuthorizationInheritedPolicyChecks(options: {
+  policy: PolicyConfig;
+  operation: {
+    opLabels?: readonly string[];
+    labels?: readonly string[];
+  };
+  args?: Readonly<Record<string, unknown>>;
+  argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
+}): AuthorizationInheritedPolicyCheckFailure | undefined {
+  const enabledRules = normalizeRuleList(options.policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  if (enabledRules.length === 0) {
+    return undefined;
+  }
+
+  const expandedOperationLabels = getExpandedPolicyOperationLabels(
+    options.operation,
+    options.policy.operations
+  );
+
+  if (
+    enabledRules.includes('no-send-to-unknown') &&
+    hasMatchingLabel(expandedOperationLabels, 'exfil:send')
+  ) {
+    const destinationArgs = selectNamedArgs(options.args, SEND_DESTINATION_ARG_SELECTORS, {
+      ignoreEmpty: true
+    });
+    if (destinationArgs.length === 0) {
+      return buildInheritedPositiveCheckFailure({
+        reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
+        rule: 'policy.defaults.rules.no-send-to-unknown',
+        missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source"
+      });
+    }
+
+    for (const argName of destinationArgs) {
+      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known')) {
+        return buildInheritedPositiveCheckFailure({
+          reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
+          rule: 'policy.defaults.rules.no-send-to-unknown',
+          missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source"
+        });
+      }
+    }
+  }
+
+  if (
+    enabledRules.includes('no-send-to-external') &&
+    hasMatchingLabel(expandedOperationLabels, 'exfil:send')
+  ) {
+    const destinationArgs = selectNamedArgs(options.args, SEND_DESTINATION_ARG_SELECTORS, {
+      ignoreEmpty: true
+    });
+    if (destinationArgs.length === 0) {
+      return buildInheritedPositiveCheckFailure({
+        reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
+        rule: 'policy.defaults.rules.no-send-to-external',
+        missingLabelSuggestion:
+          "Mark the destination with 'known:internal' or use an approved internal destination source"
+      });
+    }
+
+    for (const argName of destinationArgs) {
+      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known:internal')) {
+        return buildInheritedPositiveCheckFailure({
+          reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
+          rule: 'policy.defaults.rules.no-send-to-external',
+          missingLabelSuggestion:
+            "Mark the destination with 'known:internal' or use an approved internal destination source"
+        });
+      }
+    }
+  }
+
+  if (
+    enabledRules.includes('no-destroy-unknown') &&
+    hasMatchingLabel(expandedOperationLabels, 'destructive:targeted')
+  ) {
+    const targetArgs = selectNamedArgs(options.args, TARGET_ARG_SELECTORS);
+    if (targetArgs.length === 0) {
+      return buildInheritedPositiveCheckFailure({
+        reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
+        rule: 'policy.defaults.rules.no-destroy-unknown',
+        missingLabelSuggestion: "Mark the target with 'known' or use an approved target source"
+      });
+    }
+
+    for (const argName of targetArgs) {
+      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known')) {
+        return buildInheritedPositiveCheckFailure({
+          reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
+          rule: 'policy.defaults.rules.no-destroy-unknown',
+          missingLabelSuggestion: "Mark the target with 'known' or use an approved target source"
+        });
+      }
+    }
+  }
+
+  if (
+    enabledRules.includes('no-untrusted-privileged') &&
+    hasMatchingLabel(expandedOperationLabels, 'privileged')
+  ) {
+    for (const descriptor of Object.values(options.argDescriptors ?? {})) {
+      if (hasMatchingLabel(collectDescriptorLabels(descriptor), 'untrusted')) {
+        return {
+          reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
+          rule: 'policy.defaults.rules.no-untrusted-privileged',
+          suggestions: [
+            'Review active policies with @mx.policy.activePolicies'
+          ]
+        };
+      }
+    }
+  }
+
+  return undefined;
+}
 
 function makeGuardAction(decision: 'allow' | 'deny', message?: string): GuardActionNode {
   return {

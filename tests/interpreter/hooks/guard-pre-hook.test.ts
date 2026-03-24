@@ -3,6 +3,7 @@ import { parseSync } from '@grammar/parser';
 import type { DirectiveNode, ExecInvocation } from '@core/types';
 import type { WhenExpressionNode } from '@core/types/when';
 import { GuardError } from '@core/errors/GuardError';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
@@ -944,6 +945,60 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
     const pipelineDirective = parseSync('/var @result = @token | @combine("tail")')[0] as DirectiveNode;
     await expect(evaluateDirective(pipelineDirective, env)).rejects.toThrow('pipeline named args blocked');
+  });
+
+  it('denies authorization guards when inherited no-send-to-unknown checks fail', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var @recipient = "acct-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] },
+      authorizations: {
+        allow: {
+          sendMoney: {
+            args: {
+              recipient: 'acct-1'
+            }
+          }
+        }
+      }
+    })!);
+
+    const directive = parseSync('/show @sendMoney(@recipient, 5)')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
+  it('allows authorization guards when inherited no-send-to-unknown checks pass', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var known @recipient = "acct-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] },
+      authorizations: {
+        allow: {
+          sendMoney: {
+            args: {
+              recipient: 'acct-1'
+            }
+          }
+        }
+      }
+    })!);
+
+    const directive = parseSync('/show @sendMoney(@recipient, 5)')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
   it('increments @mx.guard.try across retries', async () => {

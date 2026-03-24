@@ -103,6 +103,13 @@ function addIssue(
   collection.push(issue);
 }
 
+function getEffectiveControlArgs(tool: AuthorizationToolContext): Set<string> {
+  if (tool.hasControlArgsMetadata) {
+    return tool.controlArgs;
+  }
+  return tool.params;
+}
+
 function isNormalizedConstraintClause(value: unknown): value is AuthorizationConstraintClause {
   if (!isPlainObject(value)) {
     return false;
@@ -462,29 +469,16 @@ function validateNormalizedPolicyAuthorizationsInto(
       }
     }
 
-    if (requireControlArgsMetadata && !tool.hasControlArgsMetadata) {
-      addIssue(errors, {
-        code: 'authorizations-missing-tool-context',
-        severity: 'error',
-        tool: toolName,
-        path: `authorizations.allow.${toolName}`,
-        message: `Tool '${toolName}' is missing trusted controlArgs metadata for policy.authorizations`
-      });
-      continue;
-    }
-
-    if (!tool.hasControlArgsMetadata) {
-      continue;
-    }
+    const effectiveControlArgs = getEffectiveControlArgs(tool);
 
     if (entry.kind === 'unconstrained') {
-      if (tool.controlArgs.size > 0) {
+      if (effectiveControlArgs.size > 0) {
         addIssue(errors, {
           code: 'authorizations-unconstrained-control-args',
           severity: 'error',
           tool: toolName,
           path: `authorizations.allow.${toolName}`,
-          message: `Tool '${toolName}' cannot use true in policy.authorizations because it has control args: ${Array.from(tool.controlArgs).join(', ')}`
+          message: `Tool '${toolName}' cannot use true in policy.authorizations because it has control args: ${Array.from(effectiveControlArgs).join(', ')}`
         });
       } else {
         addIssue(warnings, {
@@ -498,7 +492,7 @@ function validateNormalizedPolicyAuthorizationsInto(
       continue;
     }
 
-    for (const controlArg of tool.controlArgs) {
+    for (const controlArg of effectiveControlArgs) {
       if (!Object.prototype.hasOwnProperty.call(entry.args, controlArg)) {
         addIssue(errors, {
           code: 'authorizations-missing-control-arg',

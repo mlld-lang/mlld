@@ -89,7 +89,7 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 
 `defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
-For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires `@input[0]` to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the first argument to be a `known` pinned target.
+For destination-aware sends, use the narrower `exfil:send` label and put the destination first. `no-send-to-unknown` requires the destination to carry `known`, which works well for contact lists, directory lookups, or user-provided recipient fields you explicitly trust. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the target argument to be a `known` pinned target.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 
@@ -160,11 +160,11 @@ The planner's output is a JSON fragment like:
 }
 ```
 
-Tools not listed in `allow` are denied by default. Argument constraints use tolerant comparison (`~=`). Args not mentioned in the constraint are enforced as empty/null at runtime, so silent omission never becomes an open hole. With tool context, `mlld validate` additionally catches unconstrained control args as errors before execution. The host validates planner output before injection.
+Tools not listed in `allow` are denied by default. Argument constraints use tolerant comparison (`~=`). Args not mentioned in the constraint are enforced as empty/null at runtime, so silent omission never becomes an open hole. `mlld validate` additionally catches unconstrained control args as errors before execution, and `tool:w` executables fail closed by treating every declared parameter as a control arg when trusted metadata is missing. The host validates planner output before injection.
 
-In phase 1, that tool context comes from the worker's trusted `var tools` collection via `controlArgs`. Invalid authorization fragments fail closed during `with { policy }` activation, so no partial authorization envelope is installed.
+Declare control args on the write executable itself with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. Invalid authorization fragments fail closed during `with { policy }` activation, so no partial authorization envelope is installed.
 
-Authorization entries generate privileged guards that can override managed label-flow denials for matching calls. `locked: true` on the base policy prevents all overrides.
+Authorization entries generate privileged guards, but matching entries still inherit positive checks from active defaults rules. A pinned send must still use a `known` destination, and privileged operations still reject `untrusted` inputs. `locked: true` on the base policy prevents all overrides.
 
 See `policy-authorizations` for full syntax and control-arg enforcement.
 

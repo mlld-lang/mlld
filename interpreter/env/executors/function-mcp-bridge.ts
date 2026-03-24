@@ -83,14 +83,23 @@ class FunctionMcpBridgeServer {
         }
       };
       this.toolEnv.setVariable(tempName, cloned as any);
+      const clonedExecutableDef = (cloned.internal?.executableDef ?? cloned.value) as any;
       this.toolCollection[mcpName] = {
         mlld: tempName,
+        ...(Array.isArray(executable.mx?.labels) ? { labels: executable.mx.labels } : {}),
+        ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
         ...(typeof executable.description === 'string' ? { description: executable.description } : {})
       };
       const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
       this.toolSchemas.push(schema);
       this.toolParamInfo.set(mcpName, deriveMcpParamInfo(schema.inputSchema));
     }
+
+    const inheritedScopedConfig = this.toolEnv.getScopedEnvironmentConfig();
+    this.toolEnv.setScopedEnvironmentConfig({
+      ...(inheritedScopedConfig ?? {}),
+      tools: this.toolCollection
+    });
 
     this.router = new FunctionRouter({
       environment: this.toolEnv,

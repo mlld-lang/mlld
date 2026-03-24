@@ -18,6 +18,7 @@ import {
   maskPlainMlldTemplateFences,
   restorePlainMlldTemplateFences
 } from '@interpreter/eval/template-fence-literals';
+import { getWithClauseField } from '@interpreter/utils/with-clause';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
 import {
@@ -50,6 +51,7 @@ export interface ExecutableInfo {
   name: string;
   params?: string[];
   labels?: string[];
+  controlArgs?: string[];
 }
 
 export interface ImportInfo {
@@ -2182,6 +2184,12 @@ function mergeValidationContextAst(
     for (const label of executable.labels ?? []) {
       target.labels.add(label);
     }
+    if (Array.isArray(executable.controlArgs)) {
+      target.hasControlArgsMetadata = true;
+      for (const controlArg of executable.controlArgs) {
+        target.controlArgs.add(controlArg);
+      }
+    }
   }
 
   walkAST(ast, (node) => {
@@ -2217,9 +2225,23 @@ function mergeValidationContextAst(
         continue;
       }
 
-      const target = byName.get(execName);
-      if (!target) {
+      const executableTarget = byName.get(execName);
+      if (!executableTarget) {
         continue;
+      }
+
+      const target = getOrCreateValidationExecutable(byName, entry.key);
+      for (const paramName of executableTarget.params) {
+        target.params.add(paramName);
+      }
+      for (const label of executableTarget.labels) {
+        target.labels.add(label);
+      }
+      if (executableTarget.hasControlArgsMetadata) {
+        target.hasControlArgsMetadata = true;
+        for (const controlArg of executableTarget.controlArgs) {
+          target.controlArgs.add(controlArg);
+        }
       }
 
       const labelsValue = extractStaticValue(getObjectEntryValue(toolValue, 'labels'));
@@ -2566,6 +2588,15 @@ function extractExecutables(ast: MlldNode[]): ExecutableInfo[] {
           if (labels.length > 0) {
             exec.labels = labels;
           }
+        }
+
+        const rawControlArgs = getWithClauseField(exeNode.values?.withClause, 'controlArgs');
+        const controlArgsValue = extractStaticValue(rawControlArgs);
+        if (Array.isArray(controlArgsValue)) {
+          const controlArgs = controlArgsValue
+            .filter((entry: unknown): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+            .map((entry: string) => entry.trim());
+          exec.controlArgs = controlArgs;
         }
 
         executables.push(exec);

@@ -1,0 +1,16 @@
+/var @recipient = "acct-1"
+/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }
+/var @taskPolicy = {
+  defaults: { rules: ["no-send-to-unknown"] },
+  operations: { "exfil:send": ["tool:w"] },
+  authorizations: {
+    allow: {
+      sendMoney: {
+        args: {
+          recipient: "acct-1"
+        }
+      }
+    }
+  }
+}
+/show @sendMoney(@recipient, 5) with { policy: @taskPolicy }

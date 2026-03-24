@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import { Environment } from '@interpreter/env/Environment';
+import { interpret } from '@interpreter/index';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable, VariableSource } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
@@ -20,8 +21,45 @@ function createEnv(): Environment {
   return new Environment(new NodeFileSystem(), new PathService(), process.cwd());
 }
 
+async function createInterpretedEnv(source: string): Promise<Environment> {
+  let environment: Environment | undefined;
+  await interpret(source.trim(), {
+    fileSystem: new NodeFileSystem(),
+    pathService: new PathService(),
+    pathContext: {
+      projectRoot: process.cwd(),
+      fileDirectory: process.cwd(),
+      executionDirectory: process.cwd(),
+      invocationDirectory: process.cwd(),
+      filePath: '/bridge-test.mld'
+    },
+    filePath: '/bridge-test.mld',
+    format: 'markdown',
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
+
+  if (!environment) {
+    throw new Error('Failed to capture environment');
+  }
+
+  return environment;
+}
+
 function createFunctionTool(name: string, command = 'printf hello'): ExecutableVariable {
-  return createExecutableVariable(name, 'command', command, [], 'sh', SOURCE);
+  return {
+    type: 'executable',
+    name,
+    value: {
+      type: 'command',
+      template: command,
+      language: 'sh'
+    },
+    paramNames: [],
+    mx: {},
+    internal: {}
+  } as ExecutableVariable;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -174,6 +212,90 @@ describe('createFunctionMcpBridge', () => {
       const configPath = bridge.mcpConfigPath;
       await bridge.cleanup();
       expect(await fileExists(configPath)).toBe(false);
+      env.cleanup();
+    }
+  });
+
+  it('preserves exposed tool names for policy.authorizations on the bridge path', async () => {
+    const env = await createInterpretedEnv(`
+      /exe tool:w @sendMoney(recipient, amount) = \`sent:@amount\` with { controlArgs: ["recipient"] }
+    `);
+    env.setPolicySummary(normalizePolicyConfig({
+      authorizations: {
+        allow: {
+          send_money_alias: {
+            args: {
+              recipient: 'acct-1'
+            }
+          }
+        }
+      }
+    })!);
+
+    const functionTool = env.getVariable('sendMoney') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['send_money_alias', functionTool]])
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'send_money_alias',
+          arguments: {
+            recipient: 'acct-1',
+            amount: 25
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe('sent:25');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('rejects unconstrained policy.authorizations on the bridge path when exe controlArgs are declared', async () => {
+    const env = await createInterpretedEnv(`
+      /exe tool:w @sendMoney(recipient, amount) = \`sent:@amount\` with { controlArgs: ["recipient"] }
+    `);
+    env.setPolicySummary(normalizePolicyConfig({
+      authorizations: {
+        allow: {
+          send_money: true
+        }
+      }
+    })!);
+
+    const functionTool = env.getVariable('sendMoney') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['send_money', functionTool]])
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'send_money',
+          arguments: {
+            recipient: 'acct-1',
+            amount: 25
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toMatch(/cannot use true in policy\.authorizations/i);
+    } finally {
+      await bridge.cleanup();
       env.cleanup();
     }
   });

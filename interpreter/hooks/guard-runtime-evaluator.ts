@@ -18,6 +18,7 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import type { PerInputCandidate } from './guard-candidate-selection';
 import type { OperationSnapshot } from './guard-operation-keys';
 import type { GuardAttemptEntry, GuardAttemptState } from './guard-retry-state';
+import type { PolicyArgDescriptor } from '../guards';
 import {
   buildInputPreview,
   buildVariablePreview,
@@ -129,6 +130,30 @@ function snapshotPolicyArgs(args?: GuardArgsSnapshot): Readonly<Record<string, u
   }
 
   return Object.freeze(values);
+}
+
+function snapshotPolicyArgDescriptors(
+  args?: GuardArgsSnapshot
+): Readonly<Record<string, PolicyArgDescriptor>> | undefined {
+  if (!args || args.names.length === 0) {
+    return undefined;
+  }
+
+  const descriptors = Object.create(null) as Record<string, PolicyArgDescriptor>;
+  for (const name of args.names) {
+    const variable = args.values[name];
+    if (!variable) {
+      continue;
+    }
+
+    descriptors[name] = Object.freeze({
+      labels: Array.isArray(variable.mx?.labels) ? Object.freeze(variable.mx.labels.slice()) : undefined,
+      taint: Array.isArray(variable.mx?.taint) ? Object.freeze(variable.mx.taint.slice()) : undefined,
+      sources: Array.isArray(variable.mx?.sources) ? Object.freeze(variable.mx.sources.slice()) : undefined
+    });
+  }
+
+  return Object.keys(descriptors).length > 0 ? Object.freeze(descriptors) : undefined;
 }
 
 export async function evaluateGuardRuntime(
@@ -259,6 +284,7 @@ export async function evaluateGuardRuntime(
     const policyResult = guard.policyCondition({
       operation,
       args: snapshotPolicyArgs(options.args),
+      argDescriptors: snapshotPolicyArgDescriptors(options.args),
       input: policyInput,
       inputs: policyInputs
     });

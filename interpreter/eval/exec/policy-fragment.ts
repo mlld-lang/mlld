@@ -1,16 +1,14 @@
 import {
   validateNormalizedPolicyAuthorizations,
   validatePolicyAuthorizations,
-  type AuthorizationToolContext,
   type PolicyAuthorizationValidationResult
 } from '@core/policy/authorizations';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
-import type { ToolCollection } from '@core/types/tools';
-import { isExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -99,56 +97,6 @@ export function createInvocationPolicyScope(
   });
 
   return { env: child, effectivePolicy };
-}
-
-export function buildRuntimeAuthorizationToolContext(
-  env: Environment
-): Map<string, AuthorizationToolContext> {
-  const scopedTools = env.getScopedEnvironmentConfig()?.tools;
-  if (!scopedTools || !isPlainObject(scopedTools)) {
-    return new Map();
-  }
-
-  const byExecutable = new Map<string, AuthorizationToolContext>();
-  const toolCollection = scopedTools as ToolCollection;
-
-  for (const definition of Object.values(toolCollection)) {
-    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
-    if (!execName) {
-      continue;
-    }
-
-    const execVar = env.getVariable(execName);
-    if (!execVar || !isExecutableVariable(execVar)) {
-      continue;
-    }
-
-    const existing = byExecutable.get(execName);
-    const params = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
-    const controlArgs = Array.isArray(definition.controlArgs) ? definition.controlArgs : undefined;
-
-    if (!existing) {
-      byExecutable.set(execName, {
-        name: execName,
-        params: new Set(params),
-        controlArgs: new Set(controlArgs ?? []),
-        hasControlArgsMetadata: Array.isArray(definition.controlArgs)
-      });
-      continue;
-    }
-
-    for (const paramName of params) {
-      existing.params.add(paramName);
-    }
-    if (Array.isArray(definition.controlArgs)) {
-      existing.hasControlArgsMetadata = true;
-      for (const controlArg of definition.controlArgs) {
-        existing.controlArgs.add(controlArg);
-      }
-    }
-  }
-
-  return byExecutable;
 }
 
 export function validateRuntimePolicyAuthorizations(

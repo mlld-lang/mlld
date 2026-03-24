@@ -94,6 +94,7 @@ export class FunctionRouter {
         execName,
         execVar,
         resolvedArgs,
+        toolKey,
         definition.labels,
         this.shouldUseObjectArgs(execVar),
         toolCallSecurity
@@ -123,6 +124,7 @@ export class FunctionRouter {
         execName,
         execVar,
         args,
+        toolName,
         undefined,
         this.shouldUseObjectArgs(execVar),
         toolCallSecurity
@@ -251,6 +253,7 @@ export class FunctionRouter {
     name: string,
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
+    operationName: string,
     toolLabels?: string[],
     argsAsObject?: boolean,
     inputSecurityDescriptor?: SecurityDescriptor
@@ -277,6 +280,7 @@ export class FunctionRouter {
       commandRef,
       meta: {
         toolCallTracking: 'router',
+        toolOperationName: operationName,
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {}),
         ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {})
       }

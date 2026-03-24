@@ -10,6 +10,7 @@ import {
   checkLabelFlow,
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
+import { evaluateAuthorizationInheritedPolicyChecks } from '@core/policy/guards';
 import { guardSnapshotDescriptor } from './guard-utils';
 import { isVariable } from '../utils/variable-resolution';
 import { MlldSecurityError } from '@core/errors';
@@ -236,7 +237,7 @@ function createAuthorizationGuard(
     timing: 'before',
     privileged: true,
     policyGuardMode: policy.locked === true ? 'policy' : 'authorization',
-    policyCondition: ({ args }) => {
+    policyCondition: ({ args, argDescriptors, operation: policyOperation }) => {
       const decision = evaluatePolicyAuthorizationDecision({
         authorizations: policy.authorizations!,
         operationName: operation.name!,
@@ -244,7 +245,23 @@ function createAuthorizationGuard(
         controlArgs
       });
       if (decision.decision === 'allow') {
-        return { decision: 'allow' };
+        const inheritedCheckFailure = evaluateAuthorizationInheritedPolicyChecks({
+          policy,
+          operation: policyOperation,
+          args,
+          argDescriptors
+        });
+        if (!inheritedCheckFailure) {
+          return { decision: 'allow' };
+        }
+        return {
+          decision: 'deny',
+          reason: inheritedCheckFailure.reason,
+          policyName: getActivePolicyName(env),
+          rule: inheritedCheckFailure.rule,
+          suggestions: inheritedCheckFailure.suggestions,
+          locked: true
+        };
       }
       return {
         decision: 'deny',

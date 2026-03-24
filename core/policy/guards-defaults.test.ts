@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generatePolicyGuards } from './guards';
+import { evaluateAuthorizationInheritedPolicyChecks, generatePolicyGuards } from './guards';
 import type { PolicyConfig } from './union';
 
 describe('generatePolicyGuards defaults rules', () => {
@@ -118,5 +118,67 @@ describe('generatePolicyGuards defaults rules', () => {
         inputs: [{ labels: [] }]
       })
     ).toEqual({ decision: 'allow' });
+  });
+
+  it('requires named destination args to keep known checks when authorization guards match', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown', 'no-send-to-external'] },
+      operations: { 'exfil:send': ['tool:w:send_money'] }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:send_money'] },
+        args: { recipient: 'acct-1', cc: [], bcc: [] },
+        argDescriptors: {
+          recipient: { labels: ['known:internal'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:send_money'] },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { labels: [] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-send-to-unknown'
+    });
+  });
+
+  it('requires named target args to keep destroy-known checks when authorization guards match', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] },
+      operations: { 'destructive:targeted': ['tool:w:cancel_transaction'] }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:cancel_transaction'] },
+        args: { id: 'tx-1' },
+        argDescriptors: {
+          id: { labels: ['known'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:cancel_transaction'] },
+        args: { id: 'tx-1' },
+        argDescriptors: {
+          id: { labels: [] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-destroy-unknown'
+    });
   });
 });

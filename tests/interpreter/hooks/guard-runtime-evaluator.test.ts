@@ -6,6 +6,7 @@ import type { GuardDefinition } from '@interpreter/guards';
 import type { GuardActionNode } from '@core/types/guard';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { buildGuardArgsSnapshot } from '@interpreter/utils/guard-args';
 import {
   evaluateGuardRuntime,
   type EvaluateGuardRuntimeDependencies,
@@ -248,6 +249,42 @@ describe('guard runtime evaluator', () => {
     expect(result.metadata?.policyName).toBe('default');
     expect(result.metadata?.policyLocked).toBe(true);
     expect(evaluateGuardBlock).not.toHaveBeenCalled();
+  });
+
+  it('passes named arg descriptors into policy guards', async () => {
+    const recipient = createInput('recipient', 'acct-1', ['known']);
+    const guard = createGuard({
+      scope: 'perOperation',
+      filterKind: 'operation',
+      filterValue: 'tool:w',
+      policyCondition: ({ argDescriptors }) => {
+        if (argDescriptors?.recipient?.labels?.includes('known')) {
+          return { decision: 'allow' };
+        }
+        return { decision: 'deny', reason: 'missing labels' };
+      }
+    });
+
+    const result = await evaluateGuardRuntime(
+      createOptions({
+        guard,
+        scope: 'perOperation',
+        operationSnapshot: {
+          variables: [recipient],
+          aggregate: {
+            labels: [],
+            sources: ['source:recipient']
+          },
+          taint: [],
+          toolsHistory: []
+        } as any,
+        perInput: undefined,
+        args: buildGuardArgsSnapshot([recipient], ['recipient'])
+      }),
+      createDeps()
+    );
+
+    expect(result.decision).toBe('allow');
   });
 
   it('keeps retry-attempt metadata isolated across sequential attempts', async () => {

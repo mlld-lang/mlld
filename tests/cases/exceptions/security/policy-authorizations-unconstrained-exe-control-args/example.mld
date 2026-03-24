@@ -1,0 +1,9 @@
+/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }
+/var @taskPolicy = {
+  authorizations: {
+    allow: {
+      sendMoney: true
+    }
+  }
+}
+/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }

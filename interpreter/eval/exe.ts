@@ -5,6 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   extractParamTypes,
+  resolveExeControlArgs,
   resolveExeDescription
 } from './exe/definition-helpers';
 import { buildCoreExecutableFamily } from './exe/core-definition-builders';
@@ -14,6 +15,7 @@ import {
   createExeSecurityContext,
   materializeExecutableVariable
 } from './exe/variable-assembly';
+import { getWithClauseField } from '@interpreter/utils/with-clause';
 export { evaluateExeBlock } from './exe/block-execution';
 export type { ExeBlockOptions } from './exe/block-execution';
 
@@ -90,7 +92,14 @@ export async function evaluateExe(
     executableDef.paramTypes = paramTypes;
   }
 
-  const description = await resolveExeDescription(directive.values?.withClause?.description, env);
+  const rawControlArgs = getWithClauseField(directive.values?.withClause, 'controlArgs');
+  const controlArgs = await resolveExeControlArgs(rawControlArgs, env, executableDef.paramNames);
+  if (controlArgs !== undefined) {
+    executableDef.controlArgs = controlArgs;
+  }
+
+  const rawDescription = getWithClauseField(directive.values?.withClause, 'description');
+  const description = await resolveExeDescription(rawDescription, env);
   if (description !== undefined) {
     executableDef.description = description;
   }

@@ -1,7 +1,7 @@
 ---
 id: exe-metadata
 title: Exe Metadata
-brief: Add descriptions and typed parameters to executables
+brief: Add descriptions, typed parameters, and control args to executables
 category: core
 parent: exe
 tags: [functions, metadata, types, mcp, tools]
@@ -11,7 +11,7 @@ updated: 2026-01-24
 qa_tier: 2
 ---
 
-Executables can include metadata for tooling and type safety.
+Executables can include metadata for tooling, type safety, and authorization enforcement.
 
 **Typed parameters:**
 
@@ -31,6 +31,16 @@ exe @greet(name: string) = js { return "Hello " + name; } with { description: "G
 
 The `with { description: "..." }` clause adds a description that appears in MCP tool listings.
 
+**Authorization control args:**
+
+```mlld
+exe tool:w @sendMoney(recipient, amount, memo) = js {
+  return `sent ${amount} to ${recipient}`;
+} with { controlArgs: ["recipient"] }
+```
+
+`controlArgs` marks security-relevant parameters for `policy.authorizations`. A planner must pin every declared control arg in the matching authorization entry. Tool collections can restate or tighten these args for a specific exposure, but the exe declaration is the base trusted metadata.
+
 **Combined example:**
 
 ```mlld
@@ -41,7 +51,7 @@ exe @searchIssues(repo: string, query: string, limit: number) = cmd {
 
 **MCP integration:**
 
-When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. See `mcp-export` for serving and `mcp-tool-gateway` for tool collections.
+When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. Exe-level `controlArgs` also flow through the native function-tool bridge for `policy.authorizations`. See `mcp-export` for serving and `mcp-tool-gateway` for tool collections.
 
 **Parameter types vs runtime:**
 

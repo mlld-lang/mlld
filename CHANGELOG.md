@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6]
+
+### Added
+- Executables can now declare authorization control args directly with `with { controlArgs: [...] }`. `policy.authorizations`, `mlld validate`, and `mlld analyze` now consume that metadata without requiring a `var tools` wrapper, and native function-tool / MCP bridge calls carry it through at runtime.
+
+### Fixed
+- `policy.authorizations` now fails closed on native `tool:w` paths. Unconstrained or incomplete authorizations are rejected for bridged tool calls, and when trusted control-arg metadata is missing, every declared parameter is treated as a control arg.
+- Authorization-generated privileged guards now preserve built-in positive checks for destination/target trust and untrusted privileged inputs. Matching authorizations no longer punch through rules like `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, or `no-untrusted-privileged`.
+- Native bridged tool calls now key `policy.authorizations.allow` against the exposed tool name instead of an internal temporary bridge executable name.
+
 ## [2.0.5]
 
 ### Added

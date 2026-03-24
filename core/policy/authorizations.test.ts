@@ -82,6 +82,15 @@ describe('policy authorizations', () => {
           controlArgs: new Set<string>(),
           hasControlArgsMetadata: true
         }
+      ],
+      [
+        'send_money',
+        {
+          name: 'send_money',
+          params: new Set(['recipient', 'amount']),
+          controlArgs: new Set<string>(),
+          hasControlArgsMetadata: false
+        }
       ]
     ]);
 
@@ -89,7 +98,8 @@ describe('policy authorizations', () => {
       {
         allow: {
           send_email: true,
-          create_file: {}
+          create_file: {},
+          send_money: true
         }
       },
       toolContext,
@@ -102,8 +112,49 @@ describe('policy authorizations', () => {
     expect(validation.errors.map(issue => issue.code)).toContain(
       'authorizations-unconstrained-control-args'
     );
+    expect(validation.errors.map(issue => issue.message).join('\n')).toContain(
+      "send_money"
+    );
     expect(validation.warnings.map(issue => issue.code)).toEqual(
       expect.arrayContaining(['authorizations-empty-entry', 'authorizations-unconstrained-tool'])
+    );
+  });
+
+  it('fails closed by treating all params as control args when metadata is absent', () => {
+    const toolContext = new Map([
+      [
+        'send_money',
+        {
+          name: 'send_money',
+          params: new Set(['recipient', 'amount']),
+          controlArgs: new Set<string>(),
+          hasControlArgsMetadata: false
+        }
+      ]
+    ]);
+
+    const validation = validatePolicyAuthorizations(
+      {
+        allow: {
+          send_money: {
+            args: {
+              recipient: 'acct-1'
+            }
+          }
+        }
+      },
+      toolContext,
+      {
+        requireKnownTools: true,
+        requireControlArgsMetadata: true
+      }
+    );
+
+    expect(validation.errors.map(issue => issue.code)).toContain(
+      'authorizations-missing-control-arg'
+    );
+    expect(validation.errors.map(issue => issue.message).join('\n')).toContain(
+      "must constrain control arg 'amount'"
     );
   });
 
@@ -161,6 +212,49 @@ describe('policy authorizations', () => {
     ).toMatchObject({
       decision: 'deny',
       code: 'unlisted'
+    });
+  });
+
+  it('treats all params as effective control args when runtime metadata is absent', () => {
+    const authorizations = normalizePolicyAuthorizations({
+      allow: {
+        send_money: {
+          args: {
+            recipient: 'acct-1',
+            amount: 100
+          }
+        }
+      }
+    });
+    if (!authorizations) {
+      throw new Error('Expected normalized authorizations');
+    }
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'send_money',
+        args: {
+          recipient: 'acct-1',
+          amount: 100
+        },
+        controlArgs: ['recipient', 'amount']
+      })
+    ).toEqual({ decision: 'allow', matched: true });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'send_money',
+        args: {
+          recipient: 'acct-1',
+          amount: 200
+        },
+        controlArgs: ['recipient', 'amount']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      code: 'args_mismatch'
     });
   });
 });

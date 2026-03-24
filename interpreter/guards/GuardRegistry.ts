@@ -19,16 +19,24 @@ export type PolicyConditionResult =
       locked?: boolean;
     };
 
+export type PolicyArgDescriptor = {
+  labels?: readonly string[];
+  taint?: readonly string[];
+  sources?: readonly string[];
+};
+
 export type PolicyConditionContext = {
   operation: {
     type?: string;
     subtype?: string;
+    name?: string;
     command?: string;
     metadata?: Record<string, unknown>;
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
   args?: Readonly<Record<string, unknown>>;
+  argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
   input?: {
     labels?: readonly string[];
     taint?: readonly string[];

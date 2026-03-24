@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DirectiveNode, ExeBlockNode } from '@core/types';
+import { parseSync } from '@grammar/parser';
 import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -63,6 +64,35 @@ function getExecutableDef(env: Environment, identifier: string): any {
 }
 
 describe('exe evaluator characterization', () => {
+  it('materializes exe-level controlArgs from with-clause metadata', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @sendMoney(recipient, amount) = run { echo ok } with { controlArgs: ["recipient"] }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'sendMoney').controlArgs).toEqual(['recipient']);
+  });
+
+  it('preserves explicit empty exe-level controlArgs lists', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @createFile(title) = run { echo ok } with { controlArgs: [] }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'createFile').controlArgs).toEqual([]);
+  });
+
+  it('rejects exe-level controlArgs that are not declared parameters', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @sendMoney(recipient, amount) = run { echo ok } with { controlArgs: ["missing"] }'
+    )[0] as DirectiveNode;
+
+    await expect(evaluateExe(directive, env)).rejects.toThrow(/controlArgs entry 'missing'/i);
+  });
+
   it('keeps subtype-to-definition mapping stable across representative exec forms', async () => {
     const env = createEnvironment();
     await env.getFileSystemService().writeFile('/snippet.att', 'Hello @name');

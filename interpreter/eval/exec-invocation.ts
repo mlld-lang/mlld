@@ -92,6 +92,7 @@ import {
   resolveInvocationPolicyFragment,
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
+import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
@@ -278,56 +279,6 @@ function getToolResultLength(value: unknown): number | undefined {
 
 function isToolWriteLabelSet(labels: readonly string[]): boolean {
   return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
-}
-
-function collectScopedToolMetadata(
-  env: Environment,
-  execName: string
-): {
-  labels: string[];
-  controlArgs?: string[];
-  hasControlArgsMetadata: boolean;
-} {
-  const tools = env.getScopedEnvironmentConfig()?.tools;
-  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
-    return {
-      labels: [],
-      hasControlArgsMetadata: false
-    };
-  }
-
-  const labelSet = new Set<string>();
-  const controlArgSet = new Set<string>();
-  let hasControlArgsMetadata = false;
-
-  for (const entry of Object.values(tools as Record<string, any>)) {
-    if (!entry || typeof entry !== 'object' || entry.mlld !== execName) {
-      continue;
-    }
-
-    if (Array.isArray(entry.labels)) {
-      for (const label of entry.labels) {
-        if (typeof label === 'string' && label.length > 0) {
-          labelSet.add(label);
-        }
-      }
-    }
-
-    if (Array.isArray(entry.controlArgs)) {
-      hasControlArgsMetadata = true;
-      for (const controlArg of entry.controlArgs) {
-        if (typeof controlArg === 'string' && controlArg.length > 0) {
-          controlArgSet.add(controlArg);
-        }
-      }
-    }
-  }
-
-  return {
-    labels: Array.from(labelSet),
-    ...(hasControlArgsMetadata ? { controlArgs: Array.from(controlArgSet) } : {}),
-    hasControlArgsMetadata
-  };
 }
 
 function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any> | undefined {
@@ -1712,23 +1663,27 @@ async function evaluateExecInvocationInternal(
       : inputSecurityDescriptor;
   }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
-  let toolLabels = Array.isArray(mcpToolLabels)
-    ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
-    : [];
-  const scopedToolMetadata = collectScopedToolMetadata(runtimeEnv, variable.name ?? commandName);
-  if (toolLabels.length === 0 && scopedToolMetadata.labels.length > 0) {
-    toolLabels = scopedToolMetadata.labels;
-  }
-  const authorizationControlArgs = scopedToolMetadata.controlArgs;
+  const toolOperationName =
+    typeof (node as any).meta?.toolOperationName === 'string' &&
+    (node as any).meta.toolOperationName.trim().length > 0
+      ? (node as any).meta.toolOperationName.trim()
+      : undefined;
+  const effectiveToolMetadata = resolveEffectiveToolMetadata({
+    env: runtimeEnv,
+    executable: variable,
+    operationName: toolOperationName ?? variable.name ?? commandName,
+    additionalLabels: Array.isArray(mcpToolLabels)
+      ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
+      : undefined
+  });
+  const toolLabels = effectiveToolMetadata.labels;
+  const authorizationControlArgs =
+    effectiveToolMetadata.hasControlArgsMetadata
+      ? effectiveToolMetadata.controlArgs ?? []
+      : effectiveToolMetadata.params;
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
-    (
-      isToolWriteLabelSet(toolLabels) ||
-      (
-        resolvedPolicyFragment !== undefined &&
-        runtimeEnv.getScopedEnvironmentConfig()?.tools !== undefined
-      )
-    );
+    isToolWriteLabelSet(toolLabels);
   if (shouldValidatePolicyAuthorizations) {
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
@@ -1848,7 +1803,7 @@ async function evaluateExecInvocationInternal(
       node,
       definition,
       commandName,
-      operationName: variable.name ?? commandName,
+      operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs,
       env: runtimeEnv,

@@ -22,6 +22,8 @@ export interface BaseExecutable {
   paramNames: string[];
   /** Parameter types keyed by name */
   paramTypes?: Record<string, string>;
+  /** Security-relevant args that must be pinned by policy.authorizations */
+  controlArgs?: string[];
   /** Human-readable summary for tool metadata */
   description?: string;
   /** Original directive type this came from (exec or text) */

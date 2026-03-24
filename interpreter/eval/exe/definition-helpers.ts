@@ -65,6 +65,52 @@ export async function resolveExeDescription(raw: unknown, env: Environment): Pro
   return undefined;
 }
 
+export async function resolveExeControlArgs(
+  raw: unknown,
+  env: Environment,
+  paramNames: readonly string[]
+): Promise<string[] | undefined> {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  let value = raw;
+  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    value = result.value;
+  }
+
+  if (isStructuredValue(value)) {
+    value = asData(value);
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error('Executable controlArgs must be an array of parameter names');
+  }
+
+  const knownParams = new Set(paramNames);
+  const normalized: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      throw new Error('Executable controlArgs entries must be strings');
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      throw new Error('Executable controlArgs entries must be non-empty strings');
+    }
+    if (!knownParams.has(trimmed)) {
+      throw new Error(`Executable controlArgs entry '${trimmed}' is not a declared parameter`);
+    }
+    if (!normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+
+  return normalized;
+}
+
 export function extractParamNames(params: unknown[]): string[] {
   return params
     .map(param => {

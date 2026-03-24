@@ -257,8 +257,8 @@ describe('tool collections', () => {
     ).rejects.toThrow(/blocked/i);
   });
 
-  it('allows authorized tool:w operations to override unlocked no-send-to-unknown policy denials', async () => {
-    const result = await interpret(`
+  it('keeps no-send-to-unknown enforced even when policy.authorizations matches', async () => {
+    await expect(interpret(`
       /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
 
       /var tools @agentTools = {
@@ -300,9 +300,7 @@ describe('tool collections', () => {
       filePath: pathContext.filePath,
       format: 'markdown',
       normalizeBlankLines: true
-    });
-
-    expect(result.trim()).toBe('sent:hello');
+    })).rejects.toThrow(/destination must carry 'known'/i);
   });
 
   it('denies unlisted tool:w operations under policy.authorizations', async () => {

@@ -8,7 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto]
 related-code: [core/policy/authorizations.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/eval/var/tool-scope.ts, interpreter/hooks/guard-pre-hook.ts]
-updated: 2026-03-18
+updated: 2026-03-24
 ---
 
 The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. In the current phase it applies only to `tool:w`. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
@@ -42,7 +42,18 @@ The `with { policy }` merge combines `@taskPolicy` with the ambient `@base` poli
 
 ## Tool Metadata
 
-Phase 1 reads trusted control-arg metadata from the active tool collection. Declare write-tool labels and control args on `var tools` entries:
+The base trusted metadata now lives on the executable declaration itself:
+
+```mlld
+exe tool:w @send_email(recipients, cc, bcc, subject) = @sendMailApi(
+  @recipients,
+  @cc,
+  @bcc,
+  @subject
+) with { controlArgs: ["recipients", "cc", "bcc"] }
+```
+
+Tool collections can restate or tighten that metadata for a specific exposure:
 
 ```mlld
 var tools @agentTools = {
@@ -61,7 +72,7 @@ var tools @agentTools = {
 }
 ```
 
-`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`.
+`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge.
 
 ## Entries
 
@@ -119,14 +130,15 @@ Tolerant comparison (`~=`) handles string-vs-array, ordering, null equivalence, 
 
 ## Control-Arg Enforcement
 
-Tools declare which arguments are security-relevant (control args) on the trusted tool collection entry via `controlArgs`. The runtime consumes this metadata to enforce that planners constrain all control args.
+Tools declare which arguments are security-relevant (control args) via `controlArgs`. The runtime consumes exe metadata plus any active tool-collection overrides to enforce that planners constrain all control args.
 
 **Two enforcement layers:**
 
-**Validation (with tool context):** `mlld validate --context tools.mld` catches missing constraints before execution:
+**Validation:** `mlld validate --context tools.mld` catches missing constraints before execution:
 
 - A declared control arg that is NOT constrained in the `authorizations` entry is a **validation error**. The planner must pin it with a literal, `eq`, or `oneOf` constraint.
-- A tool with declared control args authorized as `true` (unconstrained) is a **validation error**. `true` is only valid for tools with no declared control args.
+- A tool with declared control args authorized as `true` (unconstrained) is a **validation error**. `true` is only valid for tools with no effective control args.
+- If trusted control-arg metadata is absent for a `tool:w` executable, validation fails closed by treating every declared parameter as a control arg.
 
 **Runtime (always):** Whether or not validation ran, the runtime enforces that args not mentioned in the constraint must be empty/null. If the planner doesn't mention `cc` on `send_email`, the runtime enforces that `cc` must be null, `[]`, or absent. This prevents silent omission from becoming an open hole.
 
@@ -156,7 +168,7 @@ If the planner had written `"send_email": true`, validation would reject it beca
 
 `authorizations` compiles to internal privileged guards. These are the same guards that `defaults.rules` and `labels` produce — they participate in the standard guard override mechanism:
 
-- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` (unless `locked: true`)
+- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires the named destination args to carry `known`, and `no-untrusted-privileged` still blocks untrusted privileged calls.
 - `locked: true` disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials
 - Capability denials (`capabilities.allow/deny/danger`), `env` restrictions, `auth`, and `limits` are separate enforcement paths and are not affected by `authorizations`
 
@@ -181,6 +193,7 @@ The planner's output should contain only `authorizations` — not `defaults`, `r
 - Every constrained arg name must exist on that exe's parameter list
 - A declared control arg omitted from the `args` constraint is an error
 - A tool with declared control args authorized as `true` is an error
+- If trusted `controlArgs` are missing for a `tool:w` exe, every declared parameter is treated as a control arg
 - `{}` and `{ args: {} }` produce normalization warnings
 
 Invalid fragments fail closed: if validation fails, the policy is not activated, the exe call fails with a structured error, and the host decides recovery.
