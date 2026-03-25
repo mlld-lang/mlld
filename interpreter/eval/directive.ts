@@ -45,6 +45,7 @@ import { extractSecurityDescriptor } from '../utils/structured-value';
 import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { evaluatePolicy } from './policy';
 import { evaluateAuth } from './auth';
+import { evaluateRecord } from './record';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
@@ -137,6 +138,12 @@ function extractTraceInfo(directive: DirectiveNode): {
       const policyName = getTextContent(policyNameNode);
       if (policyName) {
         info.varName = policyName;
+      }
+      break;
+    case 'record':
+      const recordNameNode = directive.values?.identifier?.[0];
+      if (recordNameNode?.type === 'VariableReference' && 'identifier' in recordNameNode) {
+        info.varName = `@${recordNameNode.identifier}`;
       }
       break;
     case 'auth':
@@ -858,6 +865,9 @@ async function dispatchDirective(
 
     case 'profiles':
       return await evaluateProfiles(directive, env);
+
+    case 'record':
+      return await evaluateRecord(directive as any, env);
 
     case 'policy':
       return await evaluatePolicy(directive as PolicyDirectiveNode, env);

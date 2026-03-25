@@ -233,6 +233,7 @@ Directive
     [ \t]*                        // allow leading tabs/spaces
     dir:(
       SlashExeReturn
+    / SlashRecord   // Record directives (schema/classification definitions)
     / SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)

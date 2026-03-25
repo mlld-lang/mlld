@@ -247,6 +247,7 @@ export interface FormattingMetadata {
 // Directive types
 export type DirectiveKind =
   | 'run'
+  | 'record'
   | 'import'
   | 'export'
   | 'var'
@@ -323,6 +324,8 @@ export type DirectiveSubtype =
   | 'auth'
   // Policy subtype
   | 'policy'
+  // Record subtype
+  | 'record'
   // Signing subtypes
   | 'sign'
   | 'verify'

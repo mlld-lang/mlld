@@ -1,0 +1,7 @@
+/record @contact = {
+  facts: [email: string, @input.organization as org: string?],
+  data: [{ display: `@input.first @input.last` }: string],
+  validate: "demote"
+}
+
+/show "records basics ok"

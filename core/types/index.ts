@@ -41,6 +41,7 @@ export * from './checkpoint'; // Checkpoint directives
 export * from './auth'; // Auth directives
 export * from './policy'; // Policy directives
 export * from './box'; // Box directives
+export * from './record'; // Record directives and runtime types
 export * from './load-content'; // Load content types and utilities including URL metadata
 export * from './while'; // While directives and stages
 export * from './control'; // Control literals (done/continue)

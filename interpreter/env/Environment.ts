@@ -118,6 +118,7 @@ import {
 } from './ContextManager';
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
+import type { RecordDefinition } from '@core/types/record';
 import type { CheckpointManager } from '../checkpoint/CheckpointManager';
 import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
 import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
@@ -253,6 +254,7 @@ export class Environment
   private pipelineGuardHistoryStore: { entries?: GuardHistoryEntry[] };
   private mcpImportManager?: McpImportManager;
   private mcpServerMap?: Record<string, string>;
+  private recordDefinitions?: Map<string, RecordDefinition>;
 
   // Shadow environments for language-specific function injection
   private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
@@ -1104,6 +1106,25 @@ export class Environment
       ...((existing as any).environment ? { environment: (existing as any).environment } : {})
     };
     this.setPolicyContext(nextContext);
+  }
+
+  registerRecordDefinition(name: string, definition: RecordDefinition): void {
+    const recordName = typeof name === 'string' ? name.trim() : '';
+    if (!recordName) {
+      return;
+    }
+    if (!this.recordDefinitions) {
+      this.recordDefinitions = new Map();
+    }
+    this.recordDefinitions.set(recordName, definition);
+  }
+
+  getRecordDefinition(name: string): RecordDefinition | undefined {
+    const recordName = typeof name === 'string' ? name.trim() : '';
+    if (!recordName) {
+      return undefined;
+    }
+    return this.recordDefinitions?.get(recordName) ?? this.parent?.getRecordDefinition(recordName);
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {

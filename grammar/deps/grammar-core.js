@@ -28,6 +28,7 @@ export const NodeType = {
 };
 export const DirectiveKind = {
     run: 'run',
+    record: 'record',
     var: 'var', // NEW: Replaces text/data
     show: 'show', // NEW: Replaces add
     file: 'file',
@@ -334,6 +335,20 @@ export const helpers = {
             throw new Error(`Location is required for createVariableReferenceNode (valueType: ${valueType}, identifier: ${data.identifier || 'unknown'})`);
         }
         return this.createNode(NodeType.VariableReference, { valueType, ...data, location });
+    },
+    recordFieldSourceName(source) {
+        if (!source || typeof source !== 'object') {
+            return 'value';
+        }
+        const fields = Array.isArray(source.fields) ? source.fields : [];
+        const lastField = fields[fields.length - 1];
+        if (lastField && typeof lastField.value === 'string' && lastField.value.length > 0) {
+            return lastField.value;
+        }
+        if (typeof source.identifier === 'string' && source.identifier.length > 0) {
+            return source.identifier;
+        }
+        return 'value';
     },
     normalizePathVar(id) {
         return id;

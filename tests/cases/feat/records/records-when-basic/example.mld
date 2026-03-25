@@ -1,0 +1,10 @@
+/record @contact = {
+  facts: [email: string],
+  data: [notes: string?],
+  when [
+    internal => :internal
+    * => data
+  ]
+}
+
+/show "records when ok"

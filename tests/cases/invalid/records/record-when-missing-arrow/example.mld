@@ -1,0 +1,6 @@
+/record @contact = {
+  facts: [email: string],
+  when [
+    internal
+  ]
+}

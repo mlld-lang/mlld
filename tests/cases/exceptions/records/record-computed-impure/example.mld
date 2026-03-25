@@ -1,0 +1,3 @@
+/record @contact = {
+  facts: [{ recipient: @lookup() }]
+}
