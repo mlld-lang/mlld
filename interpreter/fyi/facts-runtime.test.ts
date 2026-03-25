@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest';
+import { parse } from '@grammar/parser';
+import { evaluate } from '@interpreter/core/interpreter';
+import { Environment } from '@interpreter/env/Environment';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { evaluateFyiFacts } from './facts-runtime';
+
+async function createContactsEnv(): Promise<Environment> {
+  const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+  const source = `
+/record @contact = {
+  facts: [email: string, id: string],
+  data: [name: string]
+}
+/exe @emitContact() = js {
+  return {
+    name: "Ada Lovelace",
+    email: "ada@example.com",
+    id: "contact-1"
+  };
+} => contact
+/var @contact = @emitContact()
+`;
+  const { ast } = await parse(source);
+  await evaluate(ast, env);
+  const contact = env.getVariable('contact');
+  if (!contact) {
+    throw new Error('Expected @contact to be defined');
+  }
+  env.setScopedEnvironmentConfig({
+    fyi: {
+      facts: [contact]
+    }
+  });
+  return env;
+}
+
+describe('evaluateFyiFacts', () => {
+  it('returns bounded fact candidates without exposing raw values', async () => {
+    const env = await createContactsEnv();
+
+    const result = await evaluateFyiFacts(undefined, env);
+
+    expect(result.type).toBe('array');
+    expect(result.data).toHaveLength(2);
+    expect(result.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'ada@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      },
+      {
+        handle: 'h_2',
+        label: 'contact-1',
+        field: 'id',
+        fact: 'fact:@contact.id'
+      }
+    ]);
+    for (const candidate of result.data) {
+      expect(candidate).not.toHaveProperty('value');
+    }
+  });
+
+  it('filters send destinations to email facts by arg semantics', async () => {
+    const env = await createContactsEnv();
+
+    const result = await evaluateFyiFacts(
+      { op: 'op:@email.send', arg: 'recipient' },
+      env
+    );
+
+    expect(result.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'ada@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
+  });
+
+  it('filters destructive targets to id facts', async () => {
+    const env = await createContactsEnv();
+
+    const result = await evaluateFyiFacts(
+      { op: 'op:@crm.delete', arg: 'id' },
+      env
+    );
+
+    expect(result.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'contact-1',
+        field: 'id',
+        fact: 'fact:@contact.id'
+      }
+    ]);
+  });
+});

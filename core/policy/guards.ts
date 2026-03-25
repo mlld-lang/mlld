@@ -33,6 +33,9 @@ export interface AuthorizationInheritedPolicyCheckFailure {
 
 const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
 const TARGET_ARG_SELECTORS = ['id'] as const;
+const SEND_KNOWN_PATTERNS = ['known', 'fact:*.email'] as const;
+const SEND_INTERNAL_PATTERNS = ['known:internal', 'fact:internal:*.email'] as const;
+const TARGET_KNOWN_PATTERNS = ['known', 'fact:*.id'] as const;
 
 export type CommandAccessDecision = {
   allowed: boolean;
@@ -192,7 +195,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
         ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
       ]);
-      if (!hasMatchingLabel(effectiveAttestations, 'known')) {
+      if (!hasAnyMatchingLabel(effectiveAttestations, SEND_KNOWN_PATTERNS)) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
           rule: 'policy.defaults.rules.no-send-to-unknown',
@@ -223,7 +226,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
         ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
       ]);
-      if (!hasMatchingLabel(effectiveAttestations, 'known:internal')) {
+      if (!hasAnyMatchingLabel(effectiveAttestations, SEND_INTERNAL_PATTERNS)) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
           rule: 'policy.defaults.rules.no-send-to-external',
@@ -254,7 +257,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
         ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
       ]);
-      if (!hasMatchingLabel(effectiveAttestations, 'known')) {
+      if (!hasAnyMatchingLabel(effectiveAttestations, TARGET_KNOWN_PATTERNS)) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
           rule: 'policy.defaults.rules.no-destroy-unknown',
@@ -341,6 +344,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         operationLabel: 'exfil:send',
         selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known',
+        acceptedPatterns: SEND_KNOWN_PATTERNS,
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
         missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source",
         operations: policy.operations,
@@ -354,6 +358,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         operationLabel: 'exfil:send',
         selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known:internal',
+        acceptedPatterns: SEND_INTERNAL_PATTERNS,
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
         missingLabelSuggestion:
           "Mark the destination with 'known:internal' or use an approved internal destination source",
@@ -368,6 +373,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         operationLabel: 'destructive:targeted',
         selectors: TARGET_ARG_SELECTORS,
         requiredLabel: 'known',
+        acceptedPatterns: TARGET_KNOWN_PATTERNS,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
         missingLabelSuggestion: "Mark the target with 'known' or use an approved target source",
         fallbackToFirstProvided: true,
@@ -958,6 +964,13 @@ function hasMatchingLabel(values: readonly string[] | undefined, label: string):
   return values.some(value => matchesLabelPattern(label, value));
 }
 
+function hasAnyMatchingLabel(
+  values: readonly string[] | undefined,
+  labels: readonly string[]
+): boolean {
+  return labels.some(label => hasMatchingLabel(values, label));
+}
+
 function makeDataRuleGuard(options: {
   name: string;
   label: string;
@@ -999,6 +1012,7 @@ function makeNamedArgAttestationGuard(options: {
   operationLabel: string;
   selectors: readonly string[];
   requiredLabel: string;
+  acceptedPatterns?: readonly string[];
   reason: string;
   missingLabelSuggestion: string;
   fallbackToFirstProvided?: boolean;
@@ -1047,7 +1061,10 @@ function makeNamedArgAttestationGuard(options: {
 
       for (const argName of selectedArgs) {
         const attestations = collectDescriptorAttestations(argDescriptors?.[argName]);
-        if (!hasMatchingLabel(attestations, options.requiredLabel)) {
+        if (!hasAnyMatchingLabel(
+          attestations,
+          options.acceptedPatterns ?? [options.requiredLabel]
+        )) {
           return {
             decision: 'deny',
             reason: options.reason,

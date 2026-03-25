@@ -23,6 +23,7 @@ import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
+  asData,
   asText,
   isStructuredValue,
   wrapStructured,
@@ -98,6 +99,8 @@ import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mc
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
+import { resolveFyiConfig } from '@interpreter/fyi/config';
+import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -1545,7 +1548,7 @@ async function evaluateExecInvocationInternal(
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
-  const { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
+  let { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
     args,
     env,
     commandName,
@@ -1564,6 +1567,19 @@ async function evaluateExecInvocationInternal(
   if (resolvedPolicyFragment) {
     const policyScope = createInvocationPolicyScope(env, resolvedPolicyFragment);
     runtimeEnv = policyScope.env;
+  }
+
+  if (invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'fyi')) {
+    const resolvedFyi = await resolveFyiConfig(invocationWithClause.fyi, env);
+    if (resolvedFyi !== undefined) {
+      const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
+      const scopedEnv = runtimeEnv.createChild();
+      scopedEnv.setScopedEnvironmentConfig({
+        ...(scopedConfig ?? {}),
+        fyi: resolvedFyi
+      });
+      runtimeEnv = scopedEnv;
+    }
   }
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
@@ -1612,37 +1628,6 @@ async function evaluateExecInvocationInternal(
     env.endResolving(commandName);
     resolutionTrackingActive = false;
   };
-
-  // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
-  // and expose the result on @mx.llm for the exe body to consume.
-  const variableLabels = variable.mx?.labels;
-  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
-  if (hasLlmLabel && evaluatedArgs.length >= 2) {
-    const rawConfig = evaluatedArgs[1];
-    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
-      // config.tools selects capabilities for the bridge; it is not model-visible input and
-      // must not seed the conversation descriptor used for policy/attestation checks.
-      resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
-      const toolsValue = (rawConfig as Record<string, unknown>).tools;
-      const normalized = normalizeToolsArg(toolsValue);
-      if (normalized.length === 0) {
-        execEnv.setLlmToolConfig(null);
-      } else {
-        const dirValue = (rawConfig as Record<string, unknown>).dir;
-        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
-          ? dirValue.trim()
-          : execEnv.getProjectRoot();
-        const callConfig = await createCallMcpConfig({
-          tools: normalized,
-          env: execEnv,
-          workingDirectory,
-          conversationDescriptor: resultSecurityDescriptor
-        });
-        execEnv.registerScopeCleanup(callConfig.cleanup);
-        execEnv.setLlmToolConfig(callConfig);
-      }
-    }
-  }
 
   // Track original Variables for arguments
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
@@ -1726,6 +1711,42 @@ async function evaluateExecInvocationInternal(
     guardVariableCandidates.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     expressionSourceVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
     argSourceNames.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
+  }
+
+  evaluatedArgs = await Promise.all(
+    evaluatedArgs.map(arg => resolveValueHandles(arg, runtimeEnv))
+  );
+  evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+
+  // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
+  // and expose the result on @mx.llm for the exe body to consume.
+  const variableLabels = variable.mx?.labels;
+  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  if (hasLlmLabel && evaluatedArgs.length >= 2) {
+    const rawConfig = evaluatedArgs[1];
+    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
+      // config.tools selects capabilities for the bridge; it is not model-visible input and
+      // must not seed the conversation descriptor used for policy/attestation checks.
+      resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
+      const toolsValue = (rawConfig as Record<string, unknown>).tools;
+      const normalized = normalizeToolsArg(toolsValue);
+      if (normalized.length === 0) {
+        execEnv.setLlmToolConfig(null);
+      } else {
+        const dirValue = (rawConfig as Record<string, unknown>).dir;
+        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
+          ? dirValue.trim()
+          : execEnv.getProjectRoot();
+        const callConfig = await createCallMcpConfig({
+          tools: normalized,
+          env: execEnv,
+          workingDirectory,
+          conversationDescriptor: resultSecurityDescriptor
+        });
+        execEnv.registerScopeCleanup(callConfig.cleanup);
+        execEnv.setLlmToolConfig(callConfig);
+      }
+    }
   }
   
   const guardHelperImpl =

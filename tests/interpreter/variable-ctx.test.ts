@@ -55,6 +55,17 @@ describe('variable .mx namespace', () => {
     expect(arrVar.mx).toBeDefined();
     expect(textVar.mx?.length).toBe(10);
   });
+
+  it('exposes fact-aware has_label matching on mx contexts', () => {
+    const source = VariableMetadataUtils.createSource('quoted', false, false);
+    const emailVar = createSimpleTextVariable('email', 'ada@example.com', source, {
+      security: makeSecurityDescriptor({ labels: ['fact:internal:@contact.email'] })
+    });
+
+    expect(emailVar.mx?.has_label?.('fact:*.email')).toBe(true);
+    expect(emailVar.mx?.has_label?.('fact:internal:*.email')).toBe(true);
+    expect(emailVar.mx?.has_label?.('fact:*.id')).toBe(false);
+  });
 });
 
 describe('guard input helper', () => {

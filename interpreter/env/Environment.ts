@@ -126,6 +126,7 @@ import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
+import { createFyiVariable } from './builtins/fyi';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
@@ -135,6 +136,10 @@ import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 import { extractGuardDenial } from '@interpreter/eval/guard-denial-events';
+import {
+  ValueHandleRegistry,
+  type IssueValueHandleOptions
+} from './ValueHandleRegistry';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -255,6 +260,7 @@ export class Environment
   private mcpImportManager?: McpImportManager;
   private mcpServerMap?: Record<string, string>;
   private recordDefinitions?: Map<string, RecordDefinition>;
+  private valueHandleRegistry?: ValueHandleRegistry;
 
   // Shadow environments for language-specific function injection
   private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
@@ -408,6 +414,7 @@ export class Environment
     this.basePath = normalizedPathContext.basePath;
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
+    this.valueHandleRegistry = parent?.valueHandleRegistry ?? new ValueHandleRegistry();
     if (parent) {
       this.streamingOptions = { ...parent.streamingOptions };
     }
@@ -445,6 +452,7 @@ export class Environment
       // Inherit fuzzy match configuration from parent
       this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
+    this.reservedNames.add('fyi');
     
     // Initialize security/registry/resolver bootstrap for root environments only
     if (!parent) {
@@ -897,6 +905,26 @@ export class Environment
 
   setExeLabels(labels: readonly string[]): void {
     this._exeLabels = labels;
+  }
+
+  issueHandle(value: unknown, options: IssueValueHandleOptions = {}) {
+    const root = this.getRootEnvironment();
+    if (!root.valueHandleRegistry) {
+      root.valueHandleRegistry = new ValueHandleRegistry();
+    }
+    return root.valueHandleRegistry.issue(value, options);
+  }
+
+  resolveHandle(handle: string): unknown {
+    const root = this.getRootEnvironment();
+    const entry = root.valueHandleRegistry?.resolve(handle);
+    if (!entry) {
+      throw new MlldSecurityError(`Unknown handle '${handle}'`, {
+        code: 'HANDLE_NOT_FOUND',
+        details: { handle }
+      });
+    }
+    return entry.value;
   }
 
   getExeLabels(): readonly string[] | undefined {
@@ -1560,7 +1588,10 @@ export class Environment
   }
 
   getVariable(name: string): Variable | undefined {
-    const variable = this.variableManager.getVariable(name);
+    const variable =
+      name === 'fyi'
+        ? createFyiVariable(this)
+        : this.variableManager.getVariable(name);
     if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
@@ -1603,6 +1634,10 @@ export class Environment
       return undefined;
     }
 
+    if (name === 'fyi') {
+      return createFyiVariable(this);
+    }
+
     if (name === 'keychain') {
       throw new MlldInterpreterError(
         'Direct keychain access is not available. Use policy.auth with using auth:*.',
@@ -1637,6 +1672,9 @@ export class Environment
   }
   
   hasVariable(name: string): boolean {
+    if (name === 'fyi') {
+      return true;
+    }
     return this.variableManager.hasVariable(name);
   }
   

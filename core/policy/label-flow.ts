@@ -47,6 +47,10 @@ const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-influenced-advice'
 ]);
 
+const SEND_KNOWN_PATTERNS = ['known', 'fact:*.email'] as const;
+const SEND_INTERNAL_PATTERNS = ['known:internal', 'fact:internal:*.email'] as const;
+const TARGET_KNOWN_PATTERNS = ['known', 'fact:*.id'] as const;
+
 function normalizeList(values?: readonly string[]): string[] {
   if (!values) {
     return [];
@@ -279,9 +283,15 @@ function hasTargetLabel(targets: readonly string[], label: string): boolean {
   return Boolean(findBestMatch(targets, [label]));
 }
 
+function hasAnyTargetLabel(targets: readonly string[], labels: readonly string[]): boolean {
+  return labels.some(label => hasTargetLabel(targets, label));
+}
+
 function collectInputAttestations(input?: FlowInputDescriptor): string[] {
   return normalizeList([
     ...(input?.attestations ?? []),
+    ...(input?.labels ?? []),
+    ...(input?.taint ?? []),
     ...((input?.labels ?? []).filter(isAttestationLabel))
   ]);
 }
@@ -309,8 +319,9 @@ function checkBuiltinPolicyRules(
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
   const primaryInput = ctx.inputs?.[0];
   const primaryInputAttestations = collectInputAttestations(primaryInput);
-  const primaryInputKnown = hasTargetLabel(primaryInputAttestations, 'known');
-  const primaryInputKnownInternal = hasTargetLabel(primaryInputAttestations, 'known:internal');
+  const primaryInputKnown = hasAnyTargetLabel(primaryInputAttestations, SEND_KNOWN_PATTERNS);
+  const primaryInputKnownInternal = hasAnyTargetLabel(primaryInputAttestations, SEND_INTERNAL_PATTERNS);
+  const primaryInputKnownTarget = hasAnyTargetLabel(primaryInputAttestations, TARGET_KNOWN_PATTERNS);
 
   for (const rule of enabledRules) {
     if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {
@@ -349,7 +360,7 @@ function checkBuiltinPolicyRules(
         matched: 'exfil:send'
       };
     }
-    if (rule === 'no-destroy-unknown' && hasTargetedDestructive && !primaryInputKnown) {
+    if (rule === 'no-destroy-unknown' && hasTargetedDestructive && !primaryInputKnownTarget) {
       return {
         allowed: false,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",

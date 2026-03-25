@@ -291,6 +291,26 @@ describe('checkLabelFlow operations mapping', () => {
     expect(result.allowed).toBe(true);
   });
 
+  it('treats email facts as satisfying no-send-to-unknown', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['fact:@contact.email'], taint: [] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
   it('requires known:internal when no-send-to-external is enabled', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-send-to-external'] }
@@ -324,6 +344,26 @@ describe('checkLabelFlow operations mapping', () => {
     );
 
     expect(allowed.allowed).toBe(true);
+  });
+
+  it('treats internal email facts as satisfying no-send-to-external', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-external'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['exfil:send'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['fact:internal:@contact.email'], taint: [] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
   });
 
   it('requires the first destructive:targeted argument to carry known', () => {
@@ -361,6 +401,26 @@ describe('checkLabelFlow operations mapping', () => {
         exeLabels: [],
         inputs: [
           { labels: ['known:internal'], taint: ['known:internal'] }
+        ]
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it('treats id facts as satisfying no-destroy-unknown', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-destroy-unknown'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['destructive:targeted:file'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['fact:@task.id'], taint: [] }
         ]
       },
       policy

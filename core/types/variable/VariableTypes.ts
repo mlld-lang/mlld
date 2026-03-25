@@ -122,6 +122,7 @@ export interface VariableContext {
   tools?: readonly ToolProvenance[];
   exported?: boolean;
   policy?: Readonly<Record<string, unknown>> | null;
+  has_label?: (pattern: string) => boolean;
   totalTokens?: () => number;
   maxTokens?: () => number;
   filename?: string;

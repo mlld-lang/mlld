@@ -6,6 +6,7 @@ import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
 import type { RecordSchemaMetadata } from '@core/types/record';
 import type { FactSourceHandle } from '@core/types/handle';
+import { matchesLabelPattern } from '@core/policy/fact-labels';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
@@ -90,6 +91,7 @@ export interface StructuredValueContext {
   sources: readonly string[];
   tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
+  has_label?: (pattern: string) => boolean;
   text?: string;
   data?: unknown;
   keys?: readonly string[];
@@ -580,7 +582,7 @@ function buildVarMxFromMetadata(
   const attestations = normalizeLabelArray(normalizedDescriptor.attestations);
   const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
 
-  return {
+  const context: StructuredValueContext = {
     labels,
     taint,
     attestations,
@@ -617,6 +619,18 @@ function buildVarMxFromMetadata(
     length: flattenedLength,
     type
   };
+  context.has_label = (pattern: string): boolean => {
+    if (typeof pattern !== 'string' || pattern.trim().length === 0) {
+      return false;
+    }
+    const values = [
+      ...(context.labels ?? []),
+      ...(context.taint ?? []),
+      ...(context.attestations ?? [])
+    ];
+    return values.some(value => matchesLabelPattern(pattern, value));
+  };
+  return context;
 }
 
 function extractLoadResult(

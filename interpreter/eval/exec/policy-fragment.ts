@@ -13,6 +13,7 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -78,7 +79,11 @@ async function resolveConstraintSourceValue(
   if (value && typeof value === 'object') {
     const candidate = value as Record<string, unknown>;
     if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
-      return env.getVariable(candidate.identifier) ?? candidate;
+      const variable = env.getVariable(candidate.identifier);
+      if (!variable) {
+        return candidate;
+      }
+      return resolveValueHandles(variable, env);
     }
     if (isAstArrayNode(value)) {
       const items: unknown[] = [];
@@ -101,9 +106,9 @@ async function resolveConstraintSourceValue(
   if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
-    return result.value;
+    return resolveValueHandles(result.value, env);
   }
-  return value;
+  return resolveValueHandles(value, env);
 }
 
 async function extractConstraintAttestations(
@@ -259,6 +264,7 @@ export async function resolveInvocationPolicyFragment(
     attestationSource = value;
   }
   const rawResolvedValue = attestationSource;
+  value = await resolveValueHandles(value, env);
   if (isStructuredValue(value)) {
     value = asData(value);
   }

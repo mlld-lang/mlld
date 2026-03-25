@@ -14,6 +14,7 @@ import { createExecutableVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { accessField } from '../utils/field-access';
+import { evaluateFyiFacts } from '@interpreter/fyi/facts-runtime';
 
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
@@ -148,6 +149,161 @@ describe('evaluateExecInvocation (structured)', () => {
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
     expect(isStructuredValue(display)).toBe(true);
     expect(display.text).toBe('Ada Lovelace');
+  });
+
+  it('resolves exact handle wrappers back to live values before execution', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string]
+}
+/exe @emitContact() = js {
+  return { email: 'ada@example.com' };
+} => contact
+/var @contact = @emitContact()
+/exe @echo(value) = @value
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+    const contact = env.getVariable('contact');
+    expect(contact).toBeDefined();
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [contact!]
+      }
+    });
+
+    const facts = await evaluateFyiFacts({ op: 'op:@email.send', arg: 'recipient' }, env);
+    const handle = facts.data[0]?.handle;
+    expect(handle).toBe('h_1');
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'echo-handle',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'echo-handle-ref',
+          identifier: 'echo',
+          args: [{ handle } as any]
+        }
+      },
+      env
+    );
+
+    expect(asText(result.value)).toBe('ada@example.com');
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.mx.has_label?.('fact:*.email')).toBe(true);
+  });
+
+  it('rejects unknown handle wrappers instead of passing them through', async () => {
+    const src = '/exe @echo(value) = @value';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    await expect(
+      evaluateExecInvocation(
+        {
+          type: 'ExecInvocation',
+          nodeId: 'echo-missing-handle',
+          commandRef: {
+            type: 'CommandReference',
+            nodeId: 'echo-missing-handle-ref',
+            identifier: 'echo',
+            args: [{ handle: 'h_missing' } as any]
+          }
+        },
+        env
+      )
+    ).rejects.toThrow(/unknown handle/i);
+  });
+
+  it('does not treat objects with extra keys as handle wrappers', async () => {
+    const src = '/exe @echo(value) = @value';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'echo-extra-keys',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'echo-extra-keys-ref',
+          identifier: 'echo',
+          args: [{ handle: 'h_1', label: 'not-a-wrapper' } as any]
+        }
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual({ handle: 'h_1', label: 'not-a-wrapper' });
+  });
+
+  it('lets call-site fyi roots override inherited scoped roots for a specific invocation', async () => {
+    const src = `
+/record @contact = { facts: [email: string] }
+/exe @emitA() = js { return { email: 'ada@example.com' }; } => contact
+/exe @emitB() = js { return { email: 'grace@example.com' }; } => contact
+/var @contactA = @emitA()
+/var @contactB = @emitB()
+/exe @discover() = @fyi.facts({ op: "op:@email.send", arg: "recipient" })
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+    const contactA = env.getVariable('contactA');
+    expect(contactA).toBeDefined();
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [contactA!]
+      }
+    });
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'discover-override',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'discover-override-ref',
+          identifier: 'discover',
+          args: []
+        },
+        withClause: {
+          fyi: {
+            type: 'object',
+            entries: [
+              {
+                type: 'pair',
+                key: 'facts',
+                value: {
+                  type: 'array',
+                  items: [
+                    {
+                      type: 'VariableReference',
+                      nodeId: 'contact-b-ref',
+                      identifier: 'contactB',
+                      fields: []
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        } as any
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'grace@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
   });
 
   it('returns false for isDefined on missing variables', async () => {

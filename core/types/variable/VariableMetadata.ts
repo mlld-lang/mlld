@@ -20,6 +20,7 @@ import {
   createCapabilityContext
 } from '../security';
 import { buildTokenMetrics, type TokenEstimationOptions, type TokenMetrics } from '@core/utils/token-metrics';
+import { matchesLabelPattern } from '@core/policy/fact-labels';
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 
@@ -354,8 +355,9 @@ export class VariableMetadataUtils {
     }
     const descriptor = Object.getOwnPropertyDescriptor(variable, 'mx');
     if (descriptor && !descriptor.get && !descriptor.set) {
+      const attachedMx = VariableMetadataUtils.attachHasLabelHelper(variable.mx);
       Object.defineProperty(variable, 'mx', {
-        value: variable.mx,
+        value: attachedMx,
         enumerable: false,
         configurable: true,
         writable: true
@@ -413,6 +415,7 @@ export class VariableMetadataUtils {
       exported: Boolean(mxSnapshot.exported),
       policy: mxSnapshot.policy ?? null
     };
+    VariableMetadataUtils.attachHasLabelHelper(context);
     if (variable.type === 'array' && variable.internal) {
       const aggregate = (variable.internal as any).arrayHelperAggregate;
       if (aggregate) {
@@ -428,6 +431,25 @@ export class VariableMetadataUtils {
       }
     }
     variable.internal.mxCache = context;
+    return context;
+  }
+
+  private static attachHasLabelHelper<T extends VariableContextSnapshot>(context: T | undefined): T | undefined {
+    if (!context) {
+      return context;
+    }
+    context.has_label = (pattern: string): boolean => {
+      if (typeof pattern !== 'string' || pattern.trim().length === 0) {
+        return false;
+      }
+      const taintValues = Array.isArray(context.taint) ? context.taint : [];
+      const values = [
+        ...(context.labels ?? []),
+        ...taintValues,
+        ...(context.attestations ?? [])
+      ];
+      return values.some(value => matchesLabelPattern(pattern, value));
+    };
     return context;
   }
 

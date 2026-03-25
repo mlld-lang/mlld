@@ -56,6 +56,16 @@ describe('generatePolicyGuards defaults rules', () => {
         operation: { name: 'send', labels: ['mail:send'] },
         args: { recipient: 'acct-1' },
         argDescriptors: {
+          recipient: { attestations: ['fact:@contact.email'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      sendUnknown?.policyCondition?.({
+        operation: { name: 'send', labels: ['mail:send'] },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
           recipient: { attestations: ['known'] }
         }
       })
@@ -92,6 +102,16 @@ describe('generatePolicyGuards defaults rules', () => {
         operation: { name: 'send', labels: ['mail:send'] },
         args: { recipient: 'acct-1' },
         argDescriptors: {
+          recipient: { attestations: ['fact:internal:@contact.email'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      sendExternal?.policyCondition?.({
+        operation: { name: 'send', labels: ['mail:send'] },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
           recipient: { attestations: ['known:internal'] }
         }
       })
@@ -106,6 +126,16 @@ describe('generatePolicyGuards defaults rules', () => {
 
     const guards = generatePolicyGuards(policy);
     const destroyGuard = guards.find(guard => guard.name === '__policy_rule_no_destroy_unknown');
+
+    expect(
+      destroyGuard?.policyCondition?.({
+        operation: { name: 'delete', labels: ['tool:w:delete'] },
+        args: { id: 'tx-1' },
+        argDescriptors: {
+          id: { attestations: ['fact:@task.id'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
 
     expect(
       destroyGuard?.policyCondition?.({
@@ -226,6 +256,38 @@ describe('generatePolicyGuards defaults rules', () => {
         },
         authorizedArgAttestations: {
           recipient: ['known']
+        }
+      })
+    ).toBeUndefined();
+  });
+
+  it('allows fact attestations to satisfy inherited positive checks', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown', 'no-send-to-external', 'no-destroy-unknown'] },
+      operations: {
+        'exfil:send': ['tool:w:send_mail'],
+        'destructive:targeted': ['tool:w:delete_record']
+      }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:send_mail'] },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { attestations: ['fact:internal:@contact.email'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:delete_record'] },
+        args: { id: 'tx-1' },
+        argDescriptors: {
+          id: { attestations: ['fact:@task.id'] }
         }
       })
     ).toBeUndefined();

@@ -16,6 +16,7 @@ import { evaluateExeBlock } from './exe';
 import { normalizeMcpConfig, registerMcpToolsFromConfig } from '../mcp/config-spawner';
 import { VirtualFS } from '@services/fs/VirtualFS';
 import { applyEnvironmentDefaults } from '@interpreter/env/environment-provider';
+import { resolveFyiConfig } from '@interpreter/fyi/config';
 import {
   createPolicyAuthorizationValidationError,
   validateRuntimePolicyAuthorizations
@@ -628,6 +629,15 @@ export async function evaluateBox(
   const config = resolvedConfig.config;
   const withClauseTools = directive.values?.withClause?.tools;
   const withClauseProfile = (directive.values?.withClause as any)?.profile;
+  const withClauseFyi = (directive.values?.withClause as any)?.fyi;
+  const resolvedConfigFyi = await resolveFyiConfig((config as any).fyi, env);
+  const resolvedWithClauseFyi =
+    withClauseFyi !== undefined
+      ? await resolveFyiConfig(withClauseFyi, env)
+      : undefined;
+  const inheritedScopedConfig = env.getScopedEnvironmentConfig() as
+    | (EnvironmentConfig & { fyi?: unknown })
+    | undefined;
   let resolvedTools =
     withClauseTools !== undefined
       ? await resolveToolsValue(withClauseTools, env, context)
@@ -645,6 +655,27 @@ export async function evaluateBox(
           ...(withClauseProfile !== undefined ? { profile: resolvedProfileOverride } : {})
         }
       : config;
+
+  if (resolvedConfigFyi !== undefined) {
+    mergedConfig = {
+      ...mergedConfig,
+      fyi: resolvedConfigFyi
+    };
+  }
+
+  if (inheritedScopedConfig?.fyi !== undefined && withClauseFyi === undefined) {
+    mergedConfig = {
+      ...mergedConfig,
+      fyi: inheritedScopedConfig.fyi
+    };
+  }
+
+  if (resolvedWithClauseFyi !== undefined) {
+    mergedConfig = {
+      ...mergedConfig,
+      fyi: resolvedWithClauseFyi
+    };
+  }
 
   let workspace = resolvedConfig.workspace;
   if (!workspace) {
