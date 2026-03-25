@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { existsSync, mkdirSync, cpSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, cpSync, writeFileSync, rmSync, readFileSync, readdirSync, renameSync } from 'fs';
 import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
 import { findClaude, pluginInstall, pluginUninstall, pluginStatus, getPackageRoot } from './plugin';
@@ -132,6 +132,22 @@ function copySkills(sourceDir: string, targetDir: string): void {
   writeFileSync(join(skillsTarget, '.version'), version, 'utf8');
 }
 
+function fixSkillNamesForPi(dir: string): void {
+  if (!existsSync(dir)) return;
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillFile = join(dir, entry.name, 'SKILL.md');
+    if (!existsSync(skillFile)) continue;
+    const content = readFileSync(skillFile, 'utf8');
+    const fixed = content.replace(/^(name:\s*)mlld:/m, `$1mlld-`);
+    if (fixed !== content) {
+      writeFileSync(skillFile, fixed, 'utf8');
+    }
+    renameSync(join(dir, entry.name), join(dir, `mlld-${entry.name}`));
+  }
+}
+
 function removeSkills(targetDir: string): void {
   const skillsTarget = join(targetDir, 'skills', 'mlld');
   if (existsSync(skillsTarget)) {
@@ -164,6 +180,9 @@ async function installHarness(harness: HarnessInfo, sourceDir: string, scope: st
       const skillsSource = join(sourceDir, 'skills');
       const examplesSource = join(sourceDir, 'examples');
       const target = join(agentDir, 'skills', 'mlld');
+      if (existsSync(target)) {
+        rmSync(target, { recursive: true, force: true });
+      }
       mkdirSync(target, { recursive: true });
       if (existsSync(skillsSource)) {
         cpSync(skillsSource, join(target, 'skills'), { recursive: true });
@@ -171,6 +190,7 @@ async function installHarness(harness: HarnessInfo, sourceDir: string, scope: st
       if (existsSync(examplesSource)) {
         cpSync(examplesSource, join(target, 'examples'), { recursive: true });
       }
+      fixSkillNamesForPi(join(target, 'skills'));
       writeFileSync(join(target, '.version'), version, 'utf8');
       console.log(chalk.green(`  Pi skills installed to ${agentDir}/skills/mlld/`));
       return true;
