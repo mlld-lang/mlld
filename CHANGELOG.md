@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `policy.authorizations` now fails closed on native `tool:w` paths. Unconstrained or incomplete authorizations are rejected for bridged tool calls, and when trusted control-arg metadata is missing, every declared parameter is treated as a control arg.
 - Authorization-generated privileged guards now preserve built-in positive checks for destination/target trust and untrusted privileged inputs. Matching authorizations no longer punch through rules like `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, or `no-untrusted-privileged`.
 - Native bridged tool calls now key `policy.authorizations.allow` against the exposed tool name instead of an internal temporary bridge executable name.
+- `with { policy: ... }` now activates managed `policy.defaults.rules` even when the applied policy fragment has no `authorizations` block. Base policy rules like `no-send-to-unknown` and `no-untrusted-destructive` now enforce correctly on fallback task-policy paths.
 
 ## [2.0.5]
 

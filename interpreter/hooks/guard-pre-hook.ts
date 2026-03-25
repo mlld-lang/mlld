@@ -10,7 +10,10 @@ import {
   checkLabelFlow,
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
-import { evaluateAuthorizationInheritedPolicyChecks } from '@core/policy/guards';
+import {
+  evaluateAuthorizationInheritedPolicyChecks,
+  generatePolicyGuards
+} from '@core/policy/guards';
 import { guardSnapshotDescriptor } from './guard-utils';
 import { isVariable } from '../utils/variable-resolution';
 import { MlldSecurityError } from '@core/errors';
@@ -21,7 +24,8 @@ import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { appendGuardHistory } from './guard-shared-history';
 import {
   extractGuardOverride,
-  normalizeGuardOverride
+  normalizeGuardOverride,
+  applyGuardOverrideFilter
 } from './guard-override-utils';
 import {
   buildPerInputCandidates,
@@ -206,6 +210,130 @@ function getAuthorizationControlArgs(operation: NonNullable<Parameters<PreHook>[
   return controlArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
 }
 
+function getGuardKey(guard: GuardDefinition): string {
+  return guard.name ?? guard.id;
+}
+
+function isRegistryPolicyGuard(guard: GuardDefinition): boolean {
+  return typeof guard.policyCondition === 'function' && guard.policyGuardMode !== 'authorization';
+}
+
+function sortGuards(guards: readonly GuardDefinition[]): GuardDefinition[] {
+  return [...guards].sort((left, right) => left.registrationOrder - right.registrationOrder);
+}
+
+function buildRuntimePolicyGuards(env: Parameters<PreHook>[2]): GuardDefinition[] {
+  if (!env.shouldSynthesizePolicyGuards()) {
+    return [];
+  }
+
+  const policy = env.getPolicySummary();
+  if (!policy) {
+    return [];
+  }
+
+  return generatePolicyGuards(policy, getActivePolicyName(env)).map((guard, index) => ({
+    ...guard,
+    id: guard.name ?? `__runtime_policy_guard_${index}`,
+    modifier: guard.block.modifier ?? 'default',
+    location: null,
+    registrationOrder: Number.MIN_SAFE_INTEGER + index,
+    policyGuardMode: 'policy'
+  }));
+}
+
+function getInputGuardLabels(input: Variable): string[] {
+  const labels = Array.isArray(input.mx?.labels) ? input.mx.labels : [];
+  const taint = Array.isArray(input.mx?.taint) ? input.mx.taint : [];
+  return Array.from(new Set([...labels, ...taint].filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)));
+}
+
+function guardMatchesInput(guard: GuardDefinition, input: Variable): boolean {
+  if (guard.scope !== 'perInput') {
+    return false;
+  }
+  if (guard.filterKind !== 'data') {
+    return true;
+  }
+  return getInputGuardLabels(input).includes(guard.filterValue);
+}
+
+function mergeRuntimePerInputPolicyGuards(
+  candidates: readonly PerInputCandidate[],
+  inputs: readonly Variable[],
+  runtimePolicyGuards: readonly GuardDefinition[],
+  override: ReturnType<typeof normalizeGuardOverride>
+): PerInputCandidate[] {
+  if (runtimePolicyGuards.length === 0) {
+    return candidates.map(candidate => ({
+      ...candidate,
+      guards: applyGuardOverrideFilter(candidate.guards, override)
+    })).filter(candidate => candidate.guards.length > 0);
+  }
+
+  const runtimeGuardKeys = new Set(runtimePolicyGuards.map(getGuardKey));
+  const perInputRuntimeGuards = runtimePolicyGuards.filter(guard => guard.scope === 'perInput');
+  const byIndex = new Map<number, PerInputCandidate>();
+
+  for (const candidate of candidates) {
+    const retained = candidate.guards.filter(guard =>
+      !isRegistryPolicyGuard(guard) || !runtimeGuardKeys.has(getGuardKey(guard))
+    );
+    byIndex.set(candidate.index, {
+      ...candidate,
+      guards: retained
+    });
+  }
+
+  for (let index = 0; index < inputs.length; index += 1) {
+    const input = inputs[index]!;
+    const matchedRuntimeGuards = perInputRuntimeGuards.filter(guard => guardMatchesInput(guard, input));
+    if (matchedRuntimeGuards.length === 0 && !byIndex.has(index)) {
+      continue;
+    }
+
+    const existing = byIndex.get(index);
+    const mergedGuards = sortGuards([
+      ...(existing?.guards ?? []),
+      ...matchedRuntimeGuards
+    ]);
+    const filteredGuards = applyGuardOverrideFilter(mergedGuards, override);
+    if (filteredGuards.length === 0) {
+      byIndex.delete(index);
+      continue;
+    }
+
+    byIndex.set(index, {
+      index,
+      variable: input,
+      labels: Array.isArray(input.mx?.labels) ? input.mx.labels : [],
+      sources: Array.isArray(input.mx?.sources) ? input.mx.sources : [],
+      taint: Array.isArray(input.mx?.taint) ? input.mx.taint : [],
+      toolsHistory: Array.isArray(input.mx?.tools) ? input.mx.tools : [],
+      guards: filteredGuards
+    });
+  }
+
+  return Array.from(byIndex.values()).sort((left, right) => left.index - right.index);
+}
+
+function mergeRuntimeOperationPolicyGuards(
+  guards: readonly GuardDefinition[],
+  runtimePolicyGuards: readonly GuardDefinition[],
+  override: ReturnType<typeof normalizeGuardOverride>
+): GuardDefinition[] {
+  if (runtimePolicyGuards.length === 0) {
+    return applyGuardOverrideFilter(guards, override);
+  }
+
+  const runtimeGuardKeys = new Set(runtimePolicyGuards.map(getGuardKey));
+  const retained = guards.filter(guard =>
+    !isRegistryPolicyGuard(guard) || !runtimeGuardKeys.has(getGuardKey(guard))
+  );
+  const runtimeOperationGuards = runtimePolicyGuards.filter(guard => guard.scope === 'perOperation');
+  return applyGuardOverrideFilter(sortGuards([...retained, ...runtimeOperationGuards]), override);
+}
+
 function createAuthorizationGuard(
   env: Parameters<PreHook>[2],
   operation: NonNullable<Parameters<PreHook>[3]>
@@ -318,14 +446,25 @@ export const guardPreHook: PreHook = async (
     const registry = env.getGuardRegistry();
     const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
 
-    const perInputCandidates = buildPerInputCandidates(registry, variableInputs, guardOverride);
-    const operationGuards = collectOperationGuards(registry, operation, guardOverride, {
-      excludeGuardIds: collectCandidateGuardIds(perInputCandidates),
-      includeDataIndexForOperationKeys: variableInputs.length > 0
-    });
+    const runtimePolicyGuards = buildRuntimePolicyGuards(env);
+    const perInputCandidates = mergeRuntimePerInputPolicyGuards(
+      buildPerInputCandidates(registry, variableInputs, guardOverride),
+      variableInputs,
+      runtimePolicyGuards,
+      guardOverride
+    );
+    const operationGuards = mergeRuntimeOperationPolicyGuards(
+      collectOperationGuards(registry, operation, guardOverride, {
+        excludeGuardIds: collectCandidateGuardIds(perInputCandidates),
+        includeDataIndexForOperationKeys: variableInputs.length > 0
+      }),
+      runtimePolicyGuards,
+      guardOverride
+    );
     const authorizationGuard = createAuthorizationGuard(env, operation);
     if (authorizationGuard) {
       operationGuards.push(authorizationGuard);
+      operationGuards.sort((left, right) => left.registrationOrder - right.registrationOrder);
     }
     const policySummary = env.getPolicySummary();
     const hasSyntheticLabelPolicies = Boolean(

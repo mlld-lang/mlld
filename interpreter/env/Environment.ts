@@ -219,6 +219,7 @@ export class Environment
   private securityRuntime?: SecurityRuntimeState;
   private policyCapabilities: PolicyCapabilities = ALLOW_ALL_POLICY;
   private policySummary?: PolicyConfig;
+  private policySummaryRequiresRuntimeGuards?: boolean;
   private standaloneAuthSummary?: Record<string, AuthConfig>;
   private allowedTools?: Set<string>;
   private allowedMcpServers?: Set<string>;
@@ -842,8 +843,23 @@ export class Environment
     return this.parent?.getPolicySummary();
   }
 
-  setPolicySummary(policy?: PolicyConfig | null): void {
+  setPolicySummary(
+    policy?: PolicyConfig | null,
+    options?: { synthesizeGuards?: boolean }
+  ): void {
     this.policySummary = policy ?? undefined;
+    if (policy) {
+      this.policySummaryRequiresRuntimeGuards = options?.synthesizeGuards ?? true;
+      return;
+    }
+    this.policySummaryRequiresRuntimeGuards = false;
+  }
+
+  shouldSynthesizePolicyGuards(): boolean {
+    if (this.policySummaryRequiresRuntimeGuards !== undefined) {
+      return this.policySummaryRequiresRuntimeGuards;
+    }
+    return this.parent?.shouldSynthesizePolicyGuards() ?? false;
   }
 
   getStandaloneAuthSummary(): Record<string, AuthConfig> | undefined {

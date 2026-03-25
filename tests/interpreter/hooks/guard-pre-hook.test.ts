@@ -1001,6 +1001,37 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
+  it('activates no-send-to-unknown for with { policy } without authorizations', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("evil-iban", 100) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
+  it('activates no-untrusted-destructive for with { policy } without authorizations', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @payload = "doc-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id) = `deleted:@id` with { controlArgs: ["id"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc(@payload) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+  });
+
   it('increments @mx.guard.try across retries', async () => {
     const env = createEnv();
     const guardDirective = parseSync(
