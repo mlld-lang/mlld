@@ -309,6 +309,7 @@ function mergeRuntimePerInputPolicyGuards(
       labels: Array.isArray(input.mx?.labels) ? input.mx.labels : [],
       sources: Array.isArray(input.mx?.sources) ? input.mx.sources : [],
       taint: Array.isArray(input.mx?.taint) ? input.mx.taint : [],
+      attestations: Array.isArray(input.mx?.attestations) ? input.mx.attestations : [],
       toolsHistory: Array.isArray(input.mx?.tools) ? input.mx.tools : [],
       guards: filteredGuards
     });
@@ -377,7 +378,8 @@ function createAuthorizationGuard(
           policy,
           operation: policyOperation,
           args,
-          argDescriptors
+          argDescriptors,
+          authorizedArgAttestations: decision.matchedAttestations
         });
         if (!inheritedCheckFailure) {
           return { decision: 'allow' };

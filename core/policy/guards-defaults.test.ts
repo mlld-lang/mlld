@@ -41,7 +41,7 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(destroyGuard?.privileged).toBe(true);
   });
 
-  it('checks the first positional input for send destination labels', () => {
+  it('checks named destination arg attestations for send rules', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-send-to-unknown', 'no-send-to-external'] },
       operations: { 'exfil:send': ['mail:send'] }
@@ -54,14 +54,20 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       sendUnknown?.policyCondition?.({
         operation: { name: 'send', labels: ['mail:send'] },
-        inputs: [{ labels: ['known'] }]
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { attestations: ['known'] }
+        }
       })
     ).toEqual({ decision: 'allow' });
 
     expect(
       sendUnknown?.policyCondition?.({
         operation: { name: 'send', labels: ['mail:send'] },
-        inputs: [{ labels: [] }, { labels: ['known'] }]
+        args: { recipient: 'acct-1', subject: 'ok' },
+        argDescriptors: {
+          subject: { attestations: ['known'] }
+        }
       })
     ).toMatchObject({
       decision: 'deny',
@@ -71,7 +77,10 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       sendExternal?.policyCondition?.({
         operation: { name: 'send', labels: ['mail:send'] },
-        inputs: [{ labels: ['known'] }]
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { attestations: ['known'] }
+        }
       })
     ).toMatchObject({
       decision: 'deny',
@@ -81,12 +90,15 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       sendExternal?.policyCondition?.({
         operation: { name: 'send', labels: ['mail:send'] },
-        inputs: [{ labels: ['known:internal'] }]
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { attestations: ['known:internal'] }
+        }
       })
     ).toEqual({ decision: 'allow' });
   });
 
-  it('checks the first positional input for destructive:targeted labels', () => {
+  it('checks named target arg attestations for destructive:targeted rules', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-destroy-unknown'] },
       operations: { 'destructive:targeted': ['tool:w:delete'] }
@@ -98,14 +110,30 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       destroyGuard?.policyCondition?.({
         operation: { name: 'delete', labels: ['tool:w:delete'] },
-        inputs: [{ labels: ['known'] }]
+        args: { id: 'tx-1' },
+        argDescriptors: {
+          id: { attestations: ['known'] }
+        }
       })
     ).toEqual({ decision: 'allow' });
 
     expect(
       destroyGuard?.policyCondition?.({
         operation: { name: 'delete', labels: ['tool:w:delete'] },
-        inputs: [{ labels: [] }, { labels: ['known'] }]
+        args: { fileId: 'tx-1' },
+        argDescriptors: {
+          fileId: { attestations: ['known'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      destroyGuard?.policyCondition?.({
+        operation: { name: 'delete', labels: ['tool:w:delete'] },
+        args: { id: 'tx-1', note: 'x' },
+        argDescriptors: {
+          note: { attestations: ['known'] }
+        }
       })
     ).toMatchObject({
       decision: 'deny',
@@ -132,7 +160,7 @@ describe('generatePolicyGuards defaults rules', () => {
         operation: { labels: ['tool:w:send_money'] },
         args: { recipient: 'acct-1', cc: [], bcc: [] },
         argDescriptors: {
-          recipient: { labels: ['known:internal'] }
+          recipient: { attestations: ['known:internal'] }
         }
       })
     ).toBeUndefined();
@@ -163,7 +191,7 @@ describe('generatePolicyGuards defaults rules', () => {
         operation: { labels: ['tool:w:cancel_transaction'] },
         args: { id: 'tx-1' },
         argDescriptors: {
-          id: { labels: ['known'] }
+          id: { attestations: ['known'] }
         }
       })
     ).toBeUndefined();
@@ -180,5 +208,26 @@ describe('generatePolicyGuards defaults rules', () => {
     ).toMatchObject({
       rule: 'policy.defaults.rules.no-destroy-unknown'
     });
+  });
+
+  it('allows authorization-carried attestations to satisfy inherited positive checks', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w:send_money'] }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: { labels: ['tool:w:send_money'] },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { labels: [] }
+        },
+        authorizedArgAttestations: {
+          recipient: ['known']
+        }
+      })
+    ).toBeUndefined();
   });
 });

@@ -15,6 +15,7 @@ export interface PerInputCandidate {
   labels: readonly DataLabel[];
   sources: readonly string[];
   taint: readonly string[];
+  attestations: readonly DataLabel[];
   toolsHistory: readonly ToolProvenance[];
   guards: GuardDefinition[];
 }
@@ -32,6 +33,7 @@ export function buildPerInputCandidates(
     const labels = Array.isArray(variable.mx?.labels) ? variable.mx.labels : [];
     const sources = Array.isArray(variable.mx?.sources) ? variable.mx.sources : [];
     const taint = Array.isArray(variable.mx?.taint) ? variable.mx.taint : [];
+    const attestations = Array.isArray(variable.mx?.attestations) ? variable.mx.attestations : [];
     const toolsHistory = Array.isArray(variable.mx?.tools) ? variable.mx.tools : [];
 
     const seen = new Set<string>();
@@ -49,7 +51,7 @@ export function buildPerInputCandidates(
 
     const filteredGuards = applyGuardOverrideFilter(guards, override);
     if (filteredGuards.length > 0) {
-      results.push({ index, variable, labels, sources, taint, toolsHistory, guards: filteredGuards });
+      results.push({ index, variable, labels, sources, taint, attestations, toolsHistory, guards: filteredGuards });
     }
   }
 

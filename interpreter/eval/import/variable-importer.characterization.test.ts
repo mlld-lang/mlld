@@ -5,6 +5,7 @@ import { PathService } from '@services/fs/PathService';
 import { VariableImporter } from './VariableImporter';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import {
+  createArrayVariable,
   createExecutableVariable,
   createSimpleTextVariable,
   isExecutableVariable
@@ -222,6 +223,55 @@ describe('VariableImporter characterization', () => {
     expect((restored as any).internal?.capturedShadowEnvs?.js instanceof Map).toBe(true);
     expect((restored as any).internal?.capturedModuleEnv instanceof Map).toBe(true);
     expect((restored as any).internal?.capturedModuleEnv.get('dep')?.value).toBe('ok');
+  });
+
+  it('preserves executable security metadata for executables exported inside arrays', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const childVars = new Map();
+    const sendEmail = createExecutableVariable(
+      'sendEmail',
+      'command',
+      'echo send',
+      ['recipient', 'subject', 'body'],
+      'sh',
+      SOURCE,
+      {
+        mx: {
+          labels: ['exfil:send', 'tool:w'],
+          taint: ['exfil:send', 'tool:w'],
+          attestations: ['known']
+        },
+        internal: {
+          executableDef: {
+            type: 'command',
+            template: 'echo send',
+            language: 'sh',
+            paramNames: ['recipient', 'subject', 'body'],
+            controlArgs: ['recipient']
+          } as any
+        }
+      }
+    );
+
+    childVars.set('sendEmail', sendEmail);
+    childVars.set(
+      'toolList',
+      createArrayVariable('toolList', [sendEmail], true, SOURCE)
+    );
+
+    const exportsResult = importer.processModuleExports(childVars, {}, false, null);
+    const exportedToolList = exportsResult.moduleObject.toolList;
+    expect(Array.isArray(exportedToolList)).toBe(true);
+    expect(exportedToolList[0]?.__executable).toBe(true);
+
+    const restored = importer.createVariableFromValue('toolList', exportedToolList, '/project/module.mld');
+    expect(restored.type).toBe('array');
+
+    const restoredTool = (restored as any).value?.[0];
+    expect(isExecutableVariable(restoredTool)).toBe(true);
+    expect(restoredTool.mx?.labels).toEqual(expect.arrayContaining(['exfil:send', 'tool:w']));
+    expect(restoredTool.mx?.attestations).toEqual(expect.arrayContaining(['known']));
+    expect((restoredTool.internal?.executableDef as any)?.controlArgs).toEqual(['recipient']);
   });
 
   it('keeps variable factory routing behavior stable for array/object/primitive imports', () => {

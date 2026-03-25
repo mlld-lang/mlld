@@ -8,6 +8,7 @@ export interface OperationSnapshot {
   labels: readonly DataLabel[];
   sources: readonly string[];
   taint: readonly string[];
+  attestations: readonly DataLabel[];
   toolsHistory: readonly ToolProvenance[];
   aggregate: ArrayAggregateSnapshot;
   variables: readonly Variable[];
@@ -19,10 +20,21 @@ export function buildOperationSnapshot(inputs: readonly Variable[]): OperationSn
     labels: aggregate.labels,
     sources: aggregate.sources,
     taint: aggregate.taint,
+    attestations: collectAttestations(inputs),
     toolsHistory: collectToolHistory(inputs),
     aggregate,
     variables: inputs
   };
+}
+
+function collectAttestations(inputs: readonly Variable[]): readonly DataLabel[] {
+  const labels = new Set<DataLabel>();
+  for (const variable of inputs) {
+    for (const attestation of variable.mx?.attestations ?? []) {
+      labels.add(attestation);
+    }
+  }
+  return Array.from(labels);
 }
 
 function collectToolHistory(inputs: readonly Variable[]): readonly ToolProvenance[] {

@@ -1001,6 +1001,57 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
+  it('carries planner-time known attestations through with { policy } authorizations', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var known @approvedRecipient = "acct-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: @approvedRecipient } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:5');
+  });
+
+  it('lets explicit authorization attestations satisfy managed positive checks', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: { eq: "acct-1", attestations: ["known"] } } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:5');
+  });
+
+  it('does not let unattested pinned values override inherited known checks in with { policy }', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var @approvedRecipient = "acct-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: @approvedRecipient } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
   it('activates no-send-to-unknown for with { policy } without authorizations', async () => {
     const env = createEnv();
     await evaluateDirective(

@@ -6,9 +6,9 @@ category: effects
 parent: guards
 aliases: [guard]
 tags: [security, guards, labels, policies]
-related: [labels-overview, security-guard-composition, security-denied-handlers]
+related: [labels-overview, labels-attestations, security-guard-composition, security-denied-handlers]
 related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]
-updated: 2026-02-17
+updated: 2026-03-24
 qa_tier: 2
 ---
 
@@ -55,6 +55,7 @@ All guards have access to the full operation context:
 
 - `@mx.labels` - semantic classification (what it is): `secret`, `pii`, `untrusted`
 - `@mx.taint` - provenance (where it came from): `src:mcp`, `src:cmd`, `src:js`, `src:file`
+- `@mx.attestations` - value-scoped approvals such as `known` and `known:*`
 - `@mx.sources` - transformation trail (how it got here): `mcp:createIssue`, `command:curl`
 - `@mx.op.labels` - operation labels, including exe labels like `destructive` or `net:w`
 
@@ -69,12 +70,12 @@ All guards have access to the full operation context:
 Per-operation guards can access individual arguments by index:
 
 - `@input[0]`, `@input[1]`, etc. — individual argument values
-- `@input[0].mx.labels`, `@input[0].mx.taint` — per-arg security metadata
+- `@input[0].mx.labels`, `@input[0].mx.taint`, `@input[0].mx.attestations` — per-arg security metadata
 
 Per-operation and per-input guards can also access named operation inputs through `@mx.args`:
 
 - `@mx.args.value` — named arg access for identifier-safe parameter names
-- `@mx.args.value.mx.labels`, `@mx.args.value.mx.taint` — per-arg metadata by name
+- `@mx.args.value.mx.labels`, `@mx.args.value.mx.taint`, `@mx.args.value.mx.attestations` — per-arg metadata by name
 - `@mx.args["repo-name"]` — bracket access for names that are not dot-safe
 - `@mx.args.names` — list of available arg names
 - `@mx.args["names"]` — access an actual arg named `names` even though `@mx.args.names` is reserved
@@ -83,8 +84,9 @@ Per-operation guard inputs also expose helper metadata for aggregate checks:
 
 - `@input.any.mx.labels.includes("secret")`
 - `@input.all.mx.taint.includes("src:file")`
+- `@input.any.mx.attestations.includes("known")`
 - `@input.none.mx.labels.includes("pii")`
-- `@input.mx.labels`, `@input.mx.taint`, `@input.mx.sources`
+- `@input.mx.labels`, `@input.mx.taint`, `@input.mx.attestations`, `@input.mx.sources`
 - `@input.any.text.includes("SSN")` for content-level text inspection
 
 **Per-arg label inspection:**

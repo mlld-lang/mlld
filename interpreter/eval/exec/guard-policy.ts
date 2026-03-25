@@ -76,6 +76,7 @@ export type PrepareExecGuardInputsOptions = {
   guardVariableCandidates: (Variable | undefined)[];
   expressionSourceVariables: (Variable | undefined)[];
   inputSecurityDescriptor?: SecurityDescriptor;
+  argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
   mcpSecurityDescriptor?: SecurityDescriptor;
   argNames?: readonly GuardArgName[];
 };
@@ -259,6 +260,7 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     guardVariableCandidates,
     expressionSourceVariables,
     inputSecurityDescriptor,
+    argSecurityDescriptors,
     mcpSecurityDescriptor,
     argNames
   } = options;
@@ -285,24 +287,29 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     }
   );
 
-  const descriptorOverrides = [inputSecurityDescriptor, mcpSecurityDescriptor].filter(
-    (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
-  );
+  const hasPerArgOverrides = Array.isArray(argSecurityDescriptors) && argSecurityDescriptors.some(Boolean);
+  const hasAnyOverride = hasPerArgOverrides || Boolean(inputSecurityDescriptor) || Boolean(mcpSecurityDescriptor);
 
-  if (descriptorOverrides.length > 0) {
-    const mergedOverrideDescriptor =
-      descriptorOverrides.length === 1
-        ? descriptorOverrides[0]
-        : env.mergeSecurityDescriptors(...descriptorOverrides);
-
+  if (hasAnyOverride) {
     if (guardInputsWithMapping.length === 0) {
+      const syntheticOverrides = [inputSecurityDescriptor, mcpSecurityDescriptor].filter(
+        (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
+      );
+      const syntheticDescriptor =
+        syntheticOverrides.length === 0
+          ? undefined
+          : syntheticOverrides.length === 1
+            ? syntheticOverrides[0]
+            : env.mergeSecurityDescriptors(...syntheticOverrides);
       const syntheticInput = createSimpleTextVariable('__guard_input__', '', DEFAULT_GUARD_INPUT_SOURCE);
       if (!syntheticInput.mx) {
         syntheticInput.mx = {};
       }
-      updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, mergedOverrideDescriptor);
-      if ((syntheticInput.mx as any).mxCache) {
-        delete (syntheticInput.mx as any).mxCache;
+      if (syntheticDescriptor) {
+        updateVarMxFromDescriptor(syntheticInput.mx as VariableContext, syntheticDescriptor);
+        if ((syntheticInput.mx as any).mxCache) {
+          delete (syntheticInput.mx as any).mxCache;
+        }
       }
       guardInputsWithMapping.push({ index: evaluatedArgs.length, variable: syntheticInput });
     }
@@ -310,9 +317,28 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     for (const entry of guardInputsWithMapping) {
       const base = entry.variable;
       const baseDescriptor = getVariableSecurityDescriptor(base);
-      const mergedDescriptor = baseDescriptor
+      const descriptorOverrides = [
+        entry.index >= 0 && Array.isArray(argSecurityDescriptors)
+          ? argSecurityDescriptors[entry.index]
+          : undefined,
+        !hasPerArgOverrides ? inputSecurityDescriptor : undefined,
+        mcpSecurityDescriptor
+      ].filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+      const mergedOverrideDescriptor =
+        descriptorOverrides.length === 0
+          ? undefined
+          : descriptorOverrides.length === 1
+            ? descriptorOverrides[0]
+            : env.mergeSecurityDescriptors(...descriptorOverrides);
+      if (!mergedOverrideDescriptor && !baseDescriptor) {
+        continue;
+      }
+      const mergedDescriptor = baseDescriptor && mergedOverrideDescriptor
         ? env.mergeSecurityDescriptors(baseDescriptor, mergedOverrideDescriptor)
-        : mergedOverrideDescriptor;
+        : baseDescriptor ?? mergedOverrideDescriptor;
+      if (!mergedDescriptor) {
+        continue;
+      }
       const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
       if (!cloned.mx) {
         cloned.mx = {};

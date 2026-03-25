@@ -233,6 +233,67 @@ describe('FunctionRouter', () => {
     expect(securitySnapshot?.sources ?? []).not.toContain('mcp:getTime');
   });
 
+  it('rebinds known attestations only for exact native tool arg matches', async () => {
+    const environment = await createEnvironment(`
+      /exe known @getIban() = js {
+        return 'acct-good';
+      }
+
+      /exe exfil:send, tool:w @sendMoney(recipient, amount) = js {
+        return 'sent ' + amount + ' to ' + recipient;
+      } with { controlArgs: ["recipient"] }
+
+      /export { @getIban, @sendMoney }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+
+    const router = new FunctionRouter({
+      environment,
+      toolNames: ['getIban', 'sendMoney']
+    });
+
+    await expect(router.executeFunction('get_iban', {})).resolves.toBe('acct-good');
+    await expect(
+      router.executeFunction('send_money', { recipient: 'acct-good', amount: 100 })
+    ).resolves.toBe('sent 100 to acct-good');
+    await expect(
+      router.executeFunction('send_money', { recipient: 'attacker-iban', amount: 100 })
+    ).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
+  it('does not smear known attestations from one native tool result onto unrelated later args', async () => {
+    const environment = await createEnvironment(`
+      /exe known @getIban() = js {
+        return 'acct-good';
+      }
+
+      /exe exfil:send, tool:w @sendMoney(recipient, amount) = js {
+        return 'sent ' + amount + ' to ' + recipient;
+      } with { controlArgs: ["recipient"] }
+
+      /export { @getIban, @sendMoney }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+
+    const router = new FunctionRouter({
+      environment,
+      toolNames: ['getIban', 'sendMoney']
+    });
+
+    await router.executeFunction('get_iban', {});
+    await expect(
+      router.executeFunction('send_money', { recipient: 'evil-iban', amount: 25 })
+    ).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
   it('does not expose src:mcp taint to guards for MCP-served inputs', async () => {
     const environment = await createEnvironment(`
       /guard @blockMcp before op:exe = when [

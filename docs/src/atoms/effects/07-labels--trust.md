@@ -6,12 +6,14 @@ brief: trusted and untrusted - blocking dangerous flows from unverified data
 category: effects
 parent: labels
 tags: [labels, trust, untrusted, security, policy]
-related: [labels-overview, labels-sensitivity, labels-source-auto, policy-label-flow, policy-operations]
+related: [labels-overview, labels-sensitivity, labels-source-auto, labels-attestations, policy-label-flow, policy-operations]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
-updated: 2026-02-09
+updated: 2026-03-24
 ---
 
 Trust labels classify data reliability: `trusted` or `untrusted`.
+
+These are taint-style labels. They are different from attestation labels such as `known` and `known:*`, which answer a narrower question: "was this specific value approved by a trusted source?" See `labels-attestations`.
 
 ```mlld
 >> Declare untrusted variable
@@ -27,6 +29,8 @@ policy @p = {
 ```
 
 **Trust asymmetry:** `untrusted` is sticky. Adding `trusted` to untrusted data creates a conflict (both labels are kept). Removing `untrusted` requires privilege via `=> trusted! @var`.
+
+Use trust labels for conservative risk propagation. Use `known` / `known:*` for positive checks such as approved send destinations or approved destructive targets.
 
 **Built-in rules:** Enable in policy defaults:
 

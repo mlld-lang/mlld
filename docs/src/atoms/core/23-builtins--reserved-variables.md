@@ -8,7 +8,7 @@ parent: builtins
 tags: [builtins, variables, reserved, system]
 related: [variables-basics, file-loading-frontmatter, builtins-transformers]
 related-code: [interpreter/env/Environment.ts, core/reserved-vars.ts]
-updated: 2026-02-24
+updated: 2026-03-24
 ---
 
 - `@root` / `@base` - project root path
@@ -17,7 +17,7 @@ updated: 2026-02-24
 - `@state` - mutable state for SDK integrations
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
-- `@mx` - metadata accessor (labels, taint, guard context)
+- `@mx` - metadata accessor (labels, taint, attestations, guard context)
 
 `@root`/`@base` resolution algorithm:
 

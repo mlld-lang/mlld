@@ -44,6 +44,7 @@ import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/type
 import type { WhenExpressionNode } from '@core/types/when';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
+import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import {
@@ -238,8 +239,98 @@ function buildToolCallArguments(
   return argsRecord;
 }
 
+function mergeAuthorizationAttestationsIntoArgDescriptors(options: {
+  env: Environment;
+  paramNames: readonly string[];
+  argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+  matchedAttestations?: Readonly<Record<string, readonly string[]>>;
+}): readonly (SecurityDescriptor | undefined)[] | undefined {
+  const { env, paramNames, argSecurityDescriptors, matchedAttestations } = options;
+  if (!matchedAttestations || Object.keys(matchedAttestations).length === 0) {
+    return argSecurityDescriptors;
+  }
+
+  const descriptorCount = Math.max(paramNames.length, argSecurityDescriptors?.length ?? 0);
+  if (descriptorCount === 0) {
+    return argSecurityDescriptors;
+  }
+
+  const descriptors = Array.from({ length: descriptorCount }, (_unused, index) => argSecurityDescriptors?.[index]);
+  let changed = false;
+
+  for (const [argName, labels] of Object.entries(matchedAttestations)) {
+    const paramIndex = paramNames.indexOf(argName);
+    if (paramIndex === -1 || !Array.isArray(labels) || labels.length === 0) {
+      continue;
+    }
+
+    const attestationDescriptor = makeSecurityDescriptor({
+      attestations: labels
+    });
+    descriptors[paramIndex] = descriptors[paramIndex]
+      ? env.mergeSecurityDescriptors(descriptors[paramIndex]!, attestationDescriptor)
+      : attestationDescriptor;
+    changed = true;
+  }
+
+  return changed ? descriptors : argSecurityDescriptors;
+}
+
 function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function collectConversationInputDescriptor(value: unknown): SecurityDescriptor | undefined {
+  return extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+}
+
+function sanitizeLlmConfigSecurityInput(config: unknown): unknown {
+  let candidate = config;
+  if (isStructuredValue(candidate)) {
+    candidate = asData(candidate);
+  }
+
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return candidate;
+  }
+
+  const record = candidate as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, 'tools')) {
+    return candidate;
+  }
+
+  const sanitized = { ...record };
+  delete sanitized.tools;
+  return sanitized;
+}
+
+function buildLlmConversationDescriptor(
+  env: Environment,
+  evaluatedArgs: readonly unknown[]
+): SecurityDescriptor | undefined {
+  const descriptors: SecurityDescriptor[] = [];
+
+  for (let index = 0; index < evaluatedArgs.length; index += 1) {
+    const candidate =
+      index === 1
+        ? sanitizeLlmConfigSecurityInput(evaluatedArgs[index])
+        : evaluatedArgs[index];
+    const descriptor = collectConversationInputDescriptor(candidate);
+    if (descriptor) {
+      descriptors.push(descriptor);
+    }
+  }
+
+  if (descriptors.length === 0) {
+    return undefined;
+  }
+
+  return descriptors.length === 1
+    ? descriptors[0]
+    : env.mergeSecurityDescriptors(...descriptors);
 }
 
 function buildToolProvenance(
@@ -1528,6 +1619,9 @@ async function evaluateExecInvocationInternal(
   if (hasLlmLabel && evaluatedArgs.length >= 2) {
     const rawConfig = evaluatedArgs[1];
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
+      // config.tools selects capabilities for the bridge; it is not model-visible input and
+      // must not seed the conversation descriptor used for policy/attestation checks.
+      resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
       const toolsValue = (rawConfig as Record<string, unknown>).tools;
       const normalized = normalizeToolsArg(toolsValue);
       if (normalized.length === 0) {
@@ -1657,6 +1751,10 @@ async function evaluateExecInvocationInternal(
   const inputSecurityDescriptor = normalizeSecurityDescriptor(
     (node as any).meta?.inputSecurityDescriptor as SecurityDescriptor | undefined
   );
+  const argSecurityDescriptors = Array.isArray((node as any).meta?.argSecurityDescriptors)
+    ? ((node as any).meta.argSecurityDescriptors as Array<SecurityDescriptor | undefined>)
+        .map(descriptor => normalizeSecurityDescriptor(descriptor))
+    : undefined;
   if (inputSecurityDescriptor) {
     resultSecurityDescriptor = resultSecurityDescriptor
       ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
@@ -1684,10 +1782,27 @@ async function evaluateExecInvocationInternal(
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels);
+  let effectiveArgSecurityDescriptors = argSecurityDescriptors;
   if (shouldValidatePolicyAuthorizations) {
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
       throw createPolicyAuthorizationValidationError(validation);
+    }
+
+    const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
+    const authorizationDecision = evaluatePolicyAuthorizationDecision({
+      authorizations: runtimeEnv.getPolicySummary()!.authorizations!,
+      operationName: toolOperationName ?? variable.name ?? commandName,
+      args: authorizationArgs,
+      controlArgs: authorizationControlArgs
+    });
+    if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
+      effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
+        env: runtimeEnv,
+        paramNames: params,
+        argSecurityDescriptors,
+        matchedAttestations: authorizationDecision.matchedAttestations
+      });
     }
   }
   const trackedMcpName =
@@ -1785,6 +1900,7 @@ async function evaluateExecInvocationInternal(
       guardVariableCandidates,
       expressionSourceVariables,
       inputSecurityDescriptor,
+      argSecurityDescriptors: effectiveArgSecurityDescriptors,
       mcpSecurityDescriptor,
       argNames: params
     });

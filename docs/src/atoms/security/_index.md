@@ -3,7 +3,7 @@ id: security
 title: Security
 brief: Guards, labels, policies, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-03-23
+updated: 2026-03-24
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -34,19 +34,21 @@ Labels are strings attached to values. They are the foundation — guards and po
 | Category | Examples | Applied How | Purpose |
 |----------|----------|-------------|---------|
 | Sensitivity | `secret`, `sensitive`, `pii` | Declared by developer; `secret` auto-applied from keychain | Classify what data IS |
-| Trust | `trusted`, `untrusted` | Declared by developer or via `defaults.unlabeled` | Classify data reliability |
+| Trust | `trusted`, `untrusted` | Declared by developer or via `defaults.unlabeled` | Classify data reliability and risk |
+| Attestation | `known`, `known:internal`, `known:*` | Declared by developer, trusted tool results, planner-pinned approved values | Record that a specific value was approved by a trusted source |
 | Influence | `influenced` | Auto-applied when an `llm` executable sees untrusted data in any input, including prompt/config fields like `messages` or `system` | Track LLM exposure to tainted data |
 | Source | `src:mcp`, `src:cmd`, `src:js`, `src:sh`, `src:py`, `src:file`, `src:network`, `src:keychain`, `dir:/path` | Auto-applied by runtime | Track where data CAME FROM |
 
 Labels propagate through all transformations — template interpolation, method calls, pipelines, collections. You cannot accidentally strip a label by transforming data.
 
-Custom labels are common too. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in destination/target rules below.
+Attestations are value-scoped, unlike taint-style labels such as `untrusted`. A frequent pattern is `known` / `known:internal` for approved send destinations and targeted destructive operations, which pairs with the built-in destination/target rules below.
 
 **Operation labels** (`op:cmd`, `op:sh`, `op:cmd:git:status`) are ephemeral — they exist only during the operation and do not propagate to the result. This is different from the categories above.
 
 **Label metadata** is accessible via `@value.mx`:
 - `.mx.labels` — user-declared labels (`secret`, `pii`, `untrusted`)
 - `.mx.taint` — union of all labels plus source markers (the full provenance picture)
+- `.mx.attestations` — value-scoped approvals such as `known` and `known:*`
 - `.mx.sources` — transformation trail (`mcp:createIssue`, `command:curl`)
 - `.mx.tools` — tool lineage for this specific value, with audit references
 
@@ -153,7 +155,7 @@ var @result = @agent(@prompt) with { policy: @taskPolicy }
 
 **Control-arg enforcement:** Write executables declare security-relevant args with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. If trusted control-arg metadata is missing for a `tool:w` executable, every declared parameter is treated as a control arg. `true` (unconstrained) is only valid for tools with no effective control args.
 
-**Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. `locked: true` still prevents all overrides.
+**Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. Planner-pinned approved values can carry `known` attestations into that override path; raw literals cannot. `locked: true` still prevents all overrides.
 
 **Planner contract:** The planner should produce only `{ authorizations: { ... } }`. The host enforces that restriction before injection. Invalid authorization fragments fail closed during `with { policy }` activation, and no partial authorization layer is installed.
 

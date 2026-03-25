@@ -1,6 +1,7 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
 import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
 import type { PolicyArgDescriptor, PolicyConditionFn } from '../../interpreter/guards';
+import { isAttestationLabel } from '@core/types/security';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import {
@@ -65,6 +66,21 @@ function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
   ]);
 }
 
+function collectDescriptorAttestations(descriptor?: PolicyArgDescriptor): string[] {
+  return normalizeList([
+    ...(descriptor?.attestations ?? []),
+    ...collectDescriptorLabels(descriptor).filter(isAttestationLabel)
+  ]);
+}
+
+function collectAuthorizedAttestations(
+  authorizedArgAttestations: Readonly<Record<string, readonly string[]>> | undefined,
+  argName: string
+): string[] {
+  const labels = authorizedArgAttestations?.[argName];
+  return normalizeList(Array.isArray(labels) ? [...labels] : []);
+}
+
 function getExpandedPolicyOperationLabels(
   operation: {
     opLabels?: readonly string[];
@@ -100,6 +116,26 @@ function selectNamedArgs(
   return selected;
 }
 
+function selectNamedArgsWithFallback(
+  args: Readonly<Record<string, unknown>> | undefined,
+  selectors: readonly string[],
+  options?: { ignoreEmpty?: boolean; fallbackToFirstProvided?: boolean }
+): string[] {
+  const selected = selectNamedArgs(args, selectors, options);
+  if (selected.length > 0 || !args || options?.fallbackToFirstProvided !== true) {
+    return selected;
+  }
+
+  for (const [argName, value] of Object.entries(args)) {
+    if (options?.ignoreEmpty === true && isEmptyAuthorizationValue(value)) {
+      continue;
+    }
+    return [argName];
+  }
+
+  return [];
+}
+
 function buildInheritedPositiveCheckFailure(options: {
   reason: string;
   rule: string;
@@ -123,6 +159,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   };
   args?: Readonly<Record<string, unknown>>;
   argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
+  authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
   const enabledRules = normalizeRuleList(options.policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
   if (enabledRules.length === 0) {
@@ -150,7 +187,11 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     }
 
     for (const argName of destinationArgs) {
-      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known')) {
+      const effectiveAttestations = normalizeList([
+        ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
+        ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
+      ]);
+      if (!hasMatchingLabel(effectiveAttestations, 'known')) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
           rule: 'policy.defaults.rules.no-send-to-unknown',
@@ -177,7 +218,11 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     }
 
     for (const argName of destinationArgs) {
-      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known:internal')) {
+      const effectiveAttestations = normalizeList([
+        ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
+        ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
+      ]);
+      if (!hasMatchingLabel(effectiveAttestations, 'known:internal')) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
           rule: 'policy.defaults.rules.no-send-to-external',
@@ -192,7 +237,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     enabledRules.includes('no-destroy-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'destructive:targeted')
   ) {
-    const targetArgs = selectNamedArgs(options.args, TARGET_ARG_SELECTORS);
+    const targetArgs = selectNamedArgsWithFallback(options.args, TARGET_ARG_SELECTORS, {
+      fallbackToFirstProvided: true
+    });
     if (targetArgs.length === 0) {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
@@ -202,7 +249,11 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     }
 
     for (const argName of targetArgs) {
-      if (!hasMatchingLabel(collectDescriptorLabels(options.argDescriptors?.[argName]), 'known')) {
+      const effectiveAttestations = normalizeList([
+        ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
+        ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
+      ]);
+      if (!hasMatchingLabel(effectiveAttestations, 'known')) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
           rule: 'policy.defaults.rules.no-destroy-unknown',
@@ -284,9 +335,10 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
     }
     if (rule === 'no-send-to-unknown') {
-      guards.push(makeFirstInputLabelGuard({
+      guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_unknown',
         operationLabel: 'exfil:send',
+        selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known',
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
         missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source",
@@ -296,9 +348,10 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       }));
     }
     if (rule === 'no-send-to-external') {
-      guards.push(makeFirstInputLabelGuard({
+      guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_external',
         operationLabel: 'exfil:send',
+        selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known:internal',
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
         missingLabelSuggestion:
@@ -309,12 +362,14 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       }));
     }
     if (rule === 'no-destroy-unknown') {
-      guards.push(makeFirstInputLabelGuard({
+      guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_destroy_unknown',
         operationLabel: 'destructive:targeted',
+        selectors: TARGET_ARG_SELECTORS,
         requiredLabel: 'known',
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
         missingLabelSuggestion: "Mark the target with 'known' or use an approved target source",
+        fallbackToFirstProvided: true,
         operations: policy.operations,
         policyDisplayName,
         locked: policyLocked
@@ -909,16 +964,6 @@ function hasMatchingLabel(values: readonly string[] | undefined, label: string):
   return values.some(value => matchesPrefix(label, value));
 }
 
-function collectPolicyInputLabels(input: {
-  labels?: readonly string[];
-  taint?: readonly string[];
-} | undefined): string[] {
-  return normalizeList([
-    ...(input?.labels ?? []),
-    ...(input?.taint ?? [])
-  ]);
-}
-
 function makeDataRuleGuard(options: {
   name: string;
   label: string;
@@ -955,12 +1000,14 @@ function makeDataRuleGuard(options: {
   };
 }
 
-function makeFirstInputLabelGuard(options: {
+function makeNamedArgAttestationGuard(options: {
   name: string;
   operationLabel: string;
+  selectors: readonly string[];
   requiredLabel: string;
   reason: string;
   missingLabelSuggestion: string;
+  fallbackToFirstProvided?: boolean;
   operations?: PolicyOperations;
   policyDisplayName?: string;
   locked?: boolean;
@@ -973,7 +1020,7 @@ function makeFirstInputLabelGuard(options: {
     block: makeGuardBlock(),
     timing: 'before',
     privileged: true,
-    policyCondition: ({ operation, inputs }) => {
+    policyCondition: ({ operation, args, argDescriptors }) => {
       if (typeof operation.name !== 'string' || operation.name.length === 0) {
         return { decision: 'allow' };
       }
@@ -987,21 +1034,40 @@ function makeFirstInputLabelGuard(options: {
         return { decision: 'allow' };
       }
 
-      const primaryInputLabels = collectPolicyInputLabels(inputs?.[0]);
-      if (hasMatchingLabel(primaryInputLabels, options.requiredLabel)) {
-        return { decision: 'allow' };
+      const selectedArgs = selectNamedArgsWithFallback(args, options.selectors, {
+        ignoreEmpty: true,
+        fallbackToFirstProvided: options.fallbackToFirstProvided === true
+      });
+      if (selectedArgs.length === 0) {
+        return {
+          decision: 'deny',
+          reason: options.reason,
+          policyName: options.policyDisplayName,
+          locked: options.locked === true,
+          suggestions: [
+            options.missingLabelSuggestion,
+            'Review active policies with @mx.policy.activePolicies'
+          ]
+        };
       }
 
-      return {
-        decision: 'deny',
-        reason: options.reason,
-        policyName: options.policyDisplayName,
-        locked: options.locked === true,
-        suggestions: [
-          options.missingLabelSuggestion,
-          'Review active policies with @mx.policy.activePolicies'
-        ]
-      };
+      for (const argName of selectedArgs) {
+        const attestations = collectDescriptorAttestations(argDescriptors?.[argName]);
+        if (!hasMatchingLabel(attestations, options.requiredLabel)) {
+          return {
+            decision: 'deny',
+            reason: options.reason,
+            policyName: options.policyDisplayName,
+            locked: options.locked === true,
+            suggestions: [
+              options.missingLabelSuggestion,
+              'Review active policies with @mx.policy.activePolicies'
+            ]
+          };
+        }
+      }
+
+      return { decision: 'allow' };
     }
   };
 }

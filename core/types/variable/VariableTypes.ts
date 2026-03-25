@@ -106,6 +106,7 @@ export interface VariableContext {
   definedAt?: SourceLocation;
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
+  attestations?: readonly DataLabel[];
   keys?: readonly string[];
   values?: readonly unknown[];
   entries?: readonly (readonly [string, unknown])[];

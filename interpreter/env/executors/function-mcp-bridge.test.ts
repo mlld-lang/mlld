@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
+import { fileURLToPath } from 'url';
 import { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { normalizePolicyConfig } from '@core/policy/union';
@@ -9,6 +10,10 @@ import { PathService } from '@services/fs/PathService';
 import type { ExecutableVariable, VariableSource } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
+
+const fakeServerPath = fileURLToPath(
+  new URL('../../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
 
 const SOURCE: VariableSource = {
   directive: 'var',
@@ -296,6 +301,50 @@ describe('createFunctionMcpBridge', () => {
       expect((called.result as any)?.content?.[0]?.text).toMatch(/cannot use true in policy\.authorizations/i);
     } finally {
       await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('enforces scoped no-send-to-unknown policies for MCP-backed wrapper exes on the bridge path', async () => {
+    const env = await createInterpretedEnv([
+      `/import tools from mcp "${process.execPath} ${fakeServerPath}" as @mcp`,
+      '/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = [',
+      '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+      '] with { controlArgs: ["recipient"] }'
+    ].join('\n'));
+
+    const scopedEnv = env.createChild();
+    scopedEnv.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    })!);
+
+    const functionTool = scopedEnv.getVariable('sendEmail') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env: scopedEnv,
+      functions: new Map([['send_email', functionTool]])
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'evil@example.com',
+            subject: 'hi',
+            body: 'test'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toMatch(/destination must carry 'known'/i);
+    } finally {
+      await bridge.cleanup();
+      scopedEnv.cleanup();
       env.cleanup();
     }
   });

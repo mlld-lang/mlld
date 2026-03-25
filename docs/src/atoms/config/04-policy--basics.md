@@ -7,7 +7,7 @@ parent: policy
 tags: [security, policies, guards]
 related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, policy-authorizations, auth, box-config]
 related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-18
+updated: 2026-03-24
 qa_tier: 2
 ---
 
@@ -40,7 +40,7 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
-Built-in positional rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires the first positional argument to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires the first positional argument to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
+Built-in destination/target rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires named destination args to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires named target args to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
 
 `mlld validate` warns on unknown built-in rule names in `defaults.rules` and suggests the closest known rule when it can.
 
@@ -93,7 +93,9 @@ guard before op:run = when [
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
 
-**`authorizations`** declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the active `var tools` collection via `controlArgs`. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing `authorizations`, and the host injects it via `with { policy }`. Invalid authorization fragments fail closed during activation.
+**`authorizations`** declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the executable's `with { controlArgs: [...] }` declaration, optionally tightened by an active tool collection. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing `authorizations`, and the host injects it via `with { policy }`. Invalid authorization fragments fail closed during activation.
+
+Pinned planner values can also carry attestation requirements. If a planner pins a `known` recipient, the matching authorization can satisfy inherited positive checks. Pinning the same raw literal without that attestation is not enough to bypass rules such as `no-send-to-unknown`.
 
 ```mlld
 var @taskPolicy = {

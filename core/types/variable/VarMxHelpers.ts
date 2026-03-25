@@ -32,6 +32,7 @@ export function varMxToSecurityDescriptor(mx: VariableContext): SecurityDescript
   return makeSecurityDescriptor({
     labels: mx.labels ? [...mx.labels] : [],
     taint: mx.taint ? [...mx.taint] : [],
+    attestations: mx.attestations ? [...mx.attestations] : [],
     sources: mx.sources ? [...mx.sources] : [],
     tools: mx.tools ? [...mx.tools] : [],
     policyContext: mx.policy ?? undefined
@@ -48,6 +49,7 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
   const mx: VariableContext = {
     labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
     taint: descriptor.taint ? cloneArray(descriptor.taint) : [],
+    attestations: descriptor.attestations ? cloneArray(descriptor.attestations) : EMPTY_LABELS,
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
     tools: descriptor.tools ? cloneArray(descriptor.tools) : EMPTY_TOOLS,
     policy: descriptor.policyContext ?? null,
@@ -114,6 +116,7 @@ export function updateVarMxFromDescriptor(
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
   mx.labels = normalized.labels ? [...normalized.labels] : [];
   mx.taint = normalized.taint ? [...normalized.taint] : [];
+  mx.attestations = normalized.attestations ? [...normalized.attestations] : [];
   mx.sources = normalized.sources ? [...normalized.sources] : [];
   mx.tools = normalized.tools ? [...normalized.tools] : [];
   mx.policy = normalized.policyContext ?? null;
@@ -123,6 +126,7 @@ export function hasSecurityVarMx(mx: VariableContext): boolean {
   return (
     (mx.labels?.length ?? 0) > 0
     || (mx.taint?.length ?? 0) > 0
+    || (mx.attestations?.length ?? 0) > 0
     || (mx.tools?.length ?? 0) > 0
   );
 }
@@ -132,6 +136,7 @@ export function serializeSecurityVarMx(
 ): {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
+  attestations: readonly DataLabel[];
   sources: readonly string[];
   tools: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
@@ -139,6 +144,7 @@ export function serializeSecurityVarMx(
   return {
     labels: mx.labels ?? EMPTY_LABELS,
     taint: mx.taint ?? [],
+    attestations: mx.attestations ?? EMPTY_LABELS,
     sources: mx.sources ?? EMPTY_SOURCES,
     tools: mx.tools ?? EMPTY_TOOLS,
     policy: mx.policy ?? null

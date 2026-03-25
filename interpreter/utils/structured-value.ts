@@ -80,6 +80,7 @@ export interface StructuredValue<T = unknown> {
 export interface StructuredValueContext {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
+  attestations?: readonly DataLabel[];
   sources: readonly string[];
   tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
@@ -127,6 +128,9 @@ function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: 
   return makeSecurityDescriptor({
     labels: mx.labels ? [...mx.labels] : [],
     taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
+    attestations: Array.isArray((mx as { attestations?: readonly DataLabel[] }).attestations)
+      ? [...((mx as { attestations?: readonly DataLabel[] }).attestations ?? [])]
+      : [],
     sources: mx.sources ? [...mx.sources] : [],
     tools: Array.isArray((mx as { tools?: readonly ToolProvenance[] }).tools)
       ? [...((mx as { tools?: readonly ToolProvenance[] }).tools ?? [])]
@@ -440,6 +444,7 @@ export function applySecurityDescriptorToStructuredValue(
   };
   value.mx.labels = normalized.labels ? [...normalized.labels] : [];
   value.mx.taint = normalized.taint ? [...normalized.taint] : [];
+  value.mx.attestations = normalized.attestations ? [...normalized.attestations] : [];
   value.mx.sources = normalized.sources ? [...normalized.sources] : [];
   value.mx.tools = normalized.tools ? [...normalized.tools] : [];
   value.mx.policy = normalized.policyContext ?? null;
@@ -566,11 +571,13 @@ function buildVarMxFromMetadata(
   const flattenedMd = metadata?.md as string | undefined;
   const labels = normalizeLabelArray(normalizedDescriptor.labels);
   const taint = normalizeLabelArray(normalizedDescriptor.taint);
+  const attestations = normalizeLabelArray(normalizedDescriptor.attestations);
   const sources = normalizedDescriptor.sources ?? EMPTY_SOURCES;
 
   return {
     labels,
     taint,
+    attestations,
     sources,
     tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
     policy: normalizedDescriptor.policyContext ?? null,
@@ -735,6 +742,7 @@ function extractDescriptorInternal(
     mx?: {
       labels?: readonly DataLabel[];
       taint?: string;
+      attestations?: readonly DataLabel[];
       sources?: readonly string[];
       tools?: readonly ToolProvenance[];
       policy?: Readonly<Record<string, unknown>> | null;

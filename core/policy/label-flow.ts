@@ -1,12 +1,14 @@
 import type { PolicyConfig, PolicyLabels, PolicyOperations } from './union';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { resolveInputTaint } from './input-taint';
+import { isAttestationLabel } from '@core/types/security';
 
 export type FlowChannel = 'arg' | 'stdin' | 'using';
 
 export interface FlowInputDescriptor {
   labels?: readonly string[];
   taint?: readonly string[];
+  attestations?: readonly string[];
   sources?: readonly string[];
 }
 
@@ -246,6 +248,13 @@ function hasTargetLabel(targets: readonly string[], label: string): boolean {
   return Boolean(findBestMatch(targets, [label]));
 }
 
+function collectInputAttestations(input?: FlowInputDescriptor): string[] {
+  return normalizeList([
+    ...(input?.attestations ?? []),
+    ...((input?.labels ?? []).filter(isAttestationLabel))
+  ]);
+}
+
 function checkBuiltinPolicyRules(
   ctx: FlowContext,
   inputTaint: readonly string[],
@@ -268,12 +277,9 @@ function checkBuiltinPolicyRules(
   const hasTargetedDestructive = hasTargetLabel(opTargets, 'destructive:targeted');
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
   const primaryInput = ctx.inputs?.[0];
-  const primaryInputTaint = normalizeList([
-    ...(primaryInput?.labels ?? []),
-    ...(primaryInput?.taint ?? [])
-  ]);
-  const primaryInputKnown = hasTargetLabel(primaryInputTaint, 'known');
-  const primaryInputKnownInternal = hasTargetLabel(primaryInputTaint, 'known:internal');
+  const primaryInputAttestations = collectInputAttestations(primaryInput);
+  const primaryInputKnown = hasTargetLabel(primaryInputAttestations, 'known');
+  const primaryInputKnownInternal = hasTargetLabel(primaryInputAttestations, 'known:internal');
 
   for (const rule of enabledRules) {
     if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {

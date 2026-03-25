@@ -5,8 +5,13 @@ import {
 } from '@core/policy/authorizations';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
+import { isAttestationLabel } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  asData,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
 
@@ -22,6 +27,181 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
     return value.config as PolicyConfig;
   }
   return value as PolicyConfig;
+}
+
+function normalizeAttestationLabels(labels: readonly string[] | undefined): string[] {
+  if (!Array.isArray(labels)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      labels.filter((entry): entry is string => typeof entry === 'string' && isAttestationLabel(entry))
+    )
+  );
+}
+
+function isAstObjectNode(value: unknown): value is {
+  type: 'object';
+  entries?: Array<{ key?: string; value?: unknown }>;
+} {
+  return Boolean(
+    value
+      && typeof value === 'object'
+      && (value as { type?: unknown }).type === 'object'
+      && Array.isArray((value as { entries?: unknown }).entries)
+  );
+}
+
+function isAstArrayNode(value: unknown): value is {
+  type: 'array';
+  items?: unknown[];
+} {
+  return Boolean(
+    value
+      && typeof value === 'object'
+      && (value as { type?: unknown }).type === 'array'
+      && Array.isArray((value as { items?: unknown }).items)
+  );
+}
+
+function getAstObjectEntryValue(node: unknown, key: string): unknown {
+  if (!isAstObjectNode(node)) {
+    return undefined;
+  }
+  return node.entries?.find(entry => entry?.key === key)?.value;
+}
+
+async function resolveConstraintSourceValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
+      return env.getVariable(candidate.identifier) ?? candidate;
+    }
+    if (isAstArrayNode(value)) {
+      const items: unknown[] = [];
+      for (const item of value.items ?? []) {
+        items.push(await resolveConstraintSourceValue(item, env));
+      }
+      return items;
+    }
+    if (isAstObjectNode(value)) {
+      const result: Record<string, unknown> = {};
+      for (const entry of value.entries ?? []) {
+        if (typeof entry?.key !== 'string') {
+          continue;
+        }
+        result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
+      }
+      return result;
+    }
+  }
+  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    return result.value;
+  }
+  return value;
+}
+
+async function extractConstraintAttestations(
+  value: unknown,
+  env: Environment
+): Promise<string[]> {
+  const resolvedValue = await resolveConstraintSourceValue(value, env);
+  const descriptor = extractSecurityDescriptor(resolvedValue, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  return normalizeAttestationLabels(descriptor?.attestations ?? descriptor?.labels);
+}
+
+async function compileAuthorizationAttestations(
+  rawPolicy: unknown,
+  normalizedPolicy: PolicyConfig | undefined,
+  env: Environment
+): Promise<void> {
+  const rawValue = isStructuredValue(rawPolicy) ? asData(rawPolicy) : rawPolicy;
+  const normalizedAuthorizations = normalizedPolicy?.authorizations;
+  const rawConfig = resolvePolicyConfigSource(rawValue);
+  const rawAuthorizationsNode = getAstObjectEntryValue(rawValue, 'authorizations');
+  const rawAuthorizations =
+    rawConfig && isPlainObject(rawConfig.authorizations)
+      ? (rawConfig.authorizations as Record<string, unknown>)
+      : undefined;
+  const rawAllow =
+    rawAuthorizations && isPlainObject(rawAuthorizations.allow)
+      ? (rawAuthorizations.allow as Record<string, unknown>)
+      : undefined;
+
+  if (!normalizedAuthorizations || (!rawAllow && !rawAuthorizationsNode)) {
+    return;
+  }
+
+  for (const [toolName, entry] of Object.entries(normalizedAuthorizations.allow)) {
+    if (entry.kind !== 'constrained') {
+      continue;
+    }
+    const rawEntry = rawAllow?.[toolName];
+    const rawArgsObject =
+      isPlainObject(rawEntry) && isPlainObject(rawEntry.args)
+        ? (rawEntry.args as Record<string, unknown>)
+        : undefined;
+    const rawArgsNode = getAstObjectEntryValue(
+      getAstObjectEntryValue(
+        getAstObjectEntryValue(rawAuthorizationsNode, 'allow'),
+        toolName
+      ),
+      'args'
+    );
+    if (!rawArgsObject && !rawArgsNode) {
+      continue;
+    }
+
+    for (const [argName, clauses] of Object.entries(entry.args)) {
+      const rawConstraint = rawArgsObject?.[argName] ?? getAstObjectEntryValue(rawArgsNode, argName);
+      if (rawConstraint === undefined) {
+        continue;
+      }
+
+      entry.args[argName] = await Promise.all(clauses.map(async clause => {
+        if ('eq' in clause) {
+          const compiledAttestations = await extractConstraintAttestations(
+            isPlainObject(rawConstraint) && Object.prototype.hasOwnProperty.call(rawConstraint, 'eq')
+              ? rawConstraint.eq
+              : getAstObjectEntryValue(rawConstraint, 'eq') ?? rawConstraint,
+            env
+          );
+          if (compiledAttestations.length === 0) {
+            return clause;
+          }
+          return {
+            ...clause,
+            attestations: compiledAttestations
+          };
+        }
+
+        const rawOneOfCandidates =
+          isPlainObject(rawConstraint) && Array.isArray(rawConstraint.oneOf)
+            ? rawConstraint.oneOf
+            : isAstArrayNode(getAstObjectEntryValue(rawConstraint, 'oneOf'))
+              ? (getAstObjectEntryValue(rawConstraint, 'oneOf') as { items: unknown[] }).items
+              : clause.oneOf;
+        const oneOfAttestations = await Promise.all(
+          rawOneOfCandidates.map(candidate => extractConstraintAttestations(candidate, env))
+        );
+        if (!oneOfAttestations.some(entry => entry.length > 0)) {
+          return clause;
+        }
+        return {
+          ...clause,
+          oneOfAttestations
+        };
+      }));
+    }
+  }
 }
 
 function assertPolicyAuthorizationsShapeValid(candidate: PolicyConfig): void {
@@ -52,15 +232,33 @@ export async function resolveInvocationPolicyFragment(
   }
 
   let value = rawPolicy;
+  let attestationSource = rawPolicy;
+  let attestationSourceLocked = false;
   if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
+      const referenced = env.getVariable(candidate.identifier);
+      if (referenced) {
+        attestationSource = referenced.value;
+        attestationSourceLocked = true;
+      }
+    }
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
     value = result.value;
+    if (!attestationSourceLocked && attestationSource === rawPolicy) {
+      attestationSource = value;
+    }
   }
 
   if (isVariable(value)) {
+    attestationSource = value.value;
+    attestationSourceLocked = true;
     value = await extractVariableValue(value, env);
+  } else if (!attestationSourceLocked) {
+    attestationSource = value;
   }
+  const rawResolvedValue = attestationSource;
   if (isStructuredValue(value)) {
     value = asData(value);
   }
@@ -75,7 +273,9 @@ export async function resolveInvocationPolicyFragment(
 
   assertPolicyAuthorizationsShapeValid(candidate);
 
-  return normalizePolicyConfig(candidate);
+  const normalized = normalizePolicyConfig(candidate);
+  await compileAuthorizationAttestations(rawResolvedValue, normalized, env);
+  return normalized;
 }
 
 export function createInvocationPolicyScope(

@@ -149,6 +149,9 @@ function snapshotPolicyArgDescriptors(
     descriptors[name] = Object.freeze({
       labels: Array.isArray(variable.mx?.labels) ? Object.freeze(variable.mx.labels.slice()) : undefined,
       taint: Array.isArray(variable.mx?.taint) ? Object.freeze(variable.mx.taint.slice()) : undefined,
+      attestations: Array.isArray(variable.mx?.attestations)
+        ? Object.freeze(variable.mx.attestations.slice())
+        : undefined,
       sources: Array.isArray(variable.mx?.sources) ? Object.freeze(variable.mx.sources.slice()) : undefined
     });
   }
@@ -168,6 +171,7 @@ export async function evaluateGuardRuntime(
   let contextLabels: readonly DataLabel[];
   let contextSources: readonly string[];
   let contextTaint: readonly string[];
+  let contextAttestations: readonly string[];
   let contextToolsHistory: readonly import('@core/types/security').ToolProvenance[];
   const inputPreview = buildInputPreview(scope, options.perInput, options.operationSnapshot) ?? null;
   let outputValue: unknown;
@@ -177,6 +181,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.perInput.labels;
     contextSources = options.perInput.sources;
     contextTaint = options.perInput.taint;
+    contextAttestations = options.perInput.attestations;
     contextToolsHistory = options.perInput.toolsHistory;
     outputValue = resolveGuardValue(options.perInput.variable, inputVariable);
   } else if (scope === 'perOperation' && options.operationSnapshot) {
@@ -189,6 +194,7 @@ export async function evaluateGuardRuntime(
     contextLabels = options.operationSnapshot.aggregate.labels;
     contextSources = options.operationSnapshot.aggregate.sources;
     contextTaint = options.operationSnapshot.taint;
+    contextAttestations = options.operationSnapshot.attestations;
     contextToolsHistory = options.operationSnapshot.toolsHistory;
     const primaryOutput = options.operationSnapshot.variables[0];
     outputValue = resolveGuardValue(primaryOutput, inputVariable);
@@ -207,13 +213,14 @@ export async function evaluateGuardRuntime(
     outputText as any,
     deps.guardInputSource,
     {
-      metadata: {
-        security: makeSecurityDescriptor({
-          labels: contextLabels,
-          taint: contextTaint,
-          sources: contextSources,
-          tools: contextToolsHistory
-        })
+        metadata: {
+          security: makeSecurityDescriptor({
+            labels: contextLabels,
+            taint: contextTaint,
+            attestations: contextAttestations,
+            sources: contextSources,
+            tools: contextToolsHistory
+          })
       },
       internal: { isReserved: true }
     }
@@ -243,6 +250,7 @@ export async function evaluateGuardRuntime(
     labels: contextLabels,
     sources: contextSources,
     taint: contextTaint,
+    attestations: contextAttestations,
     toolsHistory: contextToolsHistory,
     inputPreview: isSecretContext ? '[REDACTED]' : inputPreview,
     outputPreview: isSecretContext ? '[REDACTED]' : buildVariablePreview(guardOutputVariable),
@@ -269,6 +277,7 @@ export async function evaluateGuardRuntime(
       ? {
           labels: options.perInput.labels,
           taint: options.perInput.taint,
+          attestations: options.perInput.attestations,
           sources: options.perInput.sources
         }
       : undefined;
@@ -278,6 +287,7 @@ export async function evaluateGuardRuntime(
         ? options.operationSnapshot.variables.map(variable => ({
             labels: Array.isArray(variable.mx?.labels) ? variable.mx.labels : [],
             taint: Array.isArray(variable.mx?.taint) ? variable.mx.taint : [],
+            attestations: Array.isArray(variable.mx?.attestations) ? variable.mx.attestations : [],
             sources: Array.isArray(variable.mx?.sources) ? variable.mx.sources : []
           }))
         : undefined;

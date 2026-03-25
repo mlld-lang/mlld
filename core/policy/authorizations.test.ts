@@ -163,7 +163,10 @@ describe('policy authorizations', () => {
       allow: {
         send_email: {
           args: {
-            recipients: ['alice@example.com'],
+            recipients: {
+              eq: ['alice@example.com'],
+              attestations: ['known']
+            },
             cc: []
           }
         }
@@ -184,7 +187,13 @@ describe('policy authorizations', () => {
         },
         controlArgs: ['recipients', 'cc', 'bcc']
       })
-    ).toEqual({ decision: 'allow', matched: true });
+    ).toEqual({
+      decision: 'allow',
+      matched: true,
+      matchedAttestations: {
+        recipients: ['known']
+      }
+    });
 
     expect(
       evaluatePolicyAuthorizationDecision({
@@ -255,6 +264,41 @@ describe('policy authorizations', () => {
     ).toMatchObject({
       decision: 'deny',
       code: 'args_mismatch'
+    });
+  });
+
+  it('tracks matched attestation requirements for oneOf candidates', () => {
+    const authorizations = normalizePolicyAuthorizations({
+      allow: {
+        send_email: {
+          args: {
+            recipients: {
+              oneOf: [['alice@example.com'], ['ops@example.com']],
+              oneOfAttestations: [['known'], ['known:internal']]
+            }
+          }
+        }
+      }
+    });
+    if (!authorizations) {
+      throw new Error('Expected normalized authorizations');
+    }
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'send_email',
+        args: {
+          recipients: ['ops@example.com']
+        },
+        controlArgs: ['recipients']
+      })
+    ).toEqual({
+      decision: 'allow',
+      matched: true,
+      matchedAttestations: {
+        recipients: ['known:internal']
+      }
     });
   });
 });

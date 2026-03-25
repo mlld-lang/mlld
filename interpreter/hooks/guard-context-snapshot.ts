@@ -34,6 +34,7 @@ export function cloneGuardContextSnapshot(context: GuardContextSnapshot): GuardC
     labels: context.labels ? [...context.labels] : undefined,
     sources: context.sources ? [...context.sources] : undefined,
     taint: context.taint ? [...context.taint] : undefined,
+    attestations: context.attestations ? [...context.attestations] : undefined,
     toolsHistory: context.toolsHistory ? [...context.toolsHistory] : undefined,
     hintHistory: context.hintHistory ? [...context.hintHistory] : undefined,
     args: cloneGuardArgsSnapshot(context.args)

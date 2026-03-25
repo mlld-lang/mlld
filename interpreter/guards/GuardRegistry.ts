@@ -22,6 +22,7 @@ export type PolicyConditionResult =
 export type PolicyArgDescriptor = {
   labels?: readonly string[];
   taint?: readonly string[];
+  attestations?: readonly string[];
   sources?: readonly string[];
 };
 
@@ -40,11 +41,13 @@ export type PolicyConditionContext = {
   input?: {
     labels?: readonly string[];
     taint?: readonly string[];
+    attestations?: readonly string[];
     sources?: readonly string[];
   };
   inputs?: ReadonlyArray<{
     labels?: readonly string[];
     taint?: readonly string[];
+    attestations?: readonly string[];
     sources?: readonly string[];
   }>;
 };

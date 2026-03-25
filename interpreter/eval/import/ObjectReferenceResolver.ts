@@ -30,6 +30,10 @@ export class ObjectReferenceResolver {
     if (Array.isArray(value)) {
       return value.map(item => this.resolveObjectReferences(item, variableMap, options));
     }
+
+    if (this.isVariableLike(value)) {
+      return this.resolveExecutableReference(value as Variable);
+    }
     
     // Check if this is a VariableReference AST node
     if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
@@ -255,5 +259,18 @@ export class ObjectReferenceResolver {
       resolved[key] = this.resolveObjectReferences(val, variableMap, options);
     }
     return resolved;
+  }
+
+  private isVariableLike(value: unknown): value is Variable {
+    return Boolean(
+      value &&
+      typeof value === 'object' &&
+      typeof (value as Record<string, unknown>).type === 'string' &&
+      'name' in (value as Record<string, unknown>) &&
+      'value' in (value as Record<string, unknown>) &&
+      'source' in (value as Record<string, unknown>) &&
+      'createdAt' in (value as Record<string, unknown>) &&
+      'modifiedAt' in (value as Record<string, unknown>)
+    );
   }
 }

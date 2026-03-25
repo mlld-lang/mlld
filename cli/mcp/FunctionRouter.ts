@@ -8,7 +8,11 @@ import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { normalizeExecutableDescriptor } from '@interpreter/eval/pipeline/command-execution/normalize-executable';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
-import { normalizeSecurityDescriptor } from '@core/types/security';
+import {
+  isAttestationLabel,
+  makeSecurityDescriptor,
+  normalizeSecurityDescriptor
+} from '@core/types/security';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -26,11 +30,89 @@ interface ExecResult {
   value: unknown;
 }
 
+type CanonicalValueKey = string;
+
 type SyntheticCommandReference = Omit<CommandReference, 'identifier' | 'args'> & {
   identifier: VariableReferenceNode[];
   args?: DataValue[];
   name: string;
 };
+
+function collectDescriptorAttestations(descriptor: SecurityDescriptor | undefined): string[] {
+  const normalized = normalizeSecurityDescriptor(descriptor);
+  if (!normalized) {
+    return [];
+  }
+  return Array.from(
+    new Set([
+      ...(normalized.attestations ?? []),
+      ...normalized.labels.filter(isAttestationLabel)
+    ])
+  );
+}
+
+function unwrapAttestedValue(value: unknown): unknown {
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+  if (isVariable(value)) {
+    const rawValue = value.value;
+    return isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+  }
+  return value;
+}
+
+function canonicalizeAttestedValue(value: unknown): CanonicalValueKey | undefined {
+  const raw = unwrapAttestedValue(value);
+  const encode = (entry: unknown, seen: WeakSet<object>): string | undefined => {
+    if (entry === undefined) {
+      return 'undefined';
+    }
+    if (entry === null) {
+      return 'null';
+    }
+    if (typeof entry === 'string') {
+      return `string:${JSON.stringify(entry)}`;
+    }
+    if (typeof entry === 'number') {
+      return Number.isNaN(entry) ? 'number:NaN' : `number:${entry}`;
+    }
+    if (typeof entry === 'boolean') {
+      return `boolean:${entry ? '1' : '0'}`;
+    }
+    if (Array.isArray(entry)) {
+      const items: string[] = [];
+      for (const item of entry) {
+        const encoded = encode(item, seen);
+        if (encoded === undefined) {
+          return undefined;
+        }
+        items.push(encoded);
+      }
+      return `array:[${items.join(',')}]`;
+    }
+    if (!entry || typeof entry !== 'object') {
+      return undefined;
+    }
+    if (seen.has(entry as object)) {
+      return undefined;
+    }
+    seen.add(entry as object);
+    const record = entry as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    const parts: string[] = [];
+    for (const key of keys) {
+      const encoded = encode(record[key], seen);
+      if (encoded === undefined) {
+        return undefined;
+      }
+      parts.push(`${JSON.stringify(key)}:${encoded}`);
+    }
+    return `object:{${parts.join(',')}}`;
+  };
+
+  return encode(raw, new WeakSet<object>());
+}
 
 export class FunctionRouter {
   private readonly environment: Environment;
@@ -39,14 +121,15 @@ export class FunctionRouter {
   private readonly toolNamesMcp: string[];
   private readonly toolKeyByMcpName?: Map<string, string>;
   private readonly toolNamesAreMcp: boolean;
-  private conversationDescriptor?: SecurityDescriptor;
+  private conversationTaint?: SecurityDescriptor;
+  private readonly attestationIndex = new Map<CanonicalValueKey, readonly string[]>();
 
   constructor(options: FunctionRouterOptions) {
     this.environment = options.environment;
     this.toolCollection = options.toolCollection;
     this.toolNames = options.toolNames;
     this.toolNamesAreMcp = options.toolNamesAreMcp ?? false;
-    this.conversationDescriptor = normalizeSecurityDescriptor(options.conversationDescriptor);
+    this.conversationTaint = this.toConversationTaintDescriptor(options.conversationDescriptor);
     if (this.toolCollection) {
       this.toolKeyByMcpName = this.buildToolKeyMap(this.toolCollection);
       this.toolNamesMcp = Object.keys(this.toolCollection).map(name => mlldNameToMCPName(name));
@@ -75,7 +158,6 @@ export class FunctionRouter {
     };
 
     try {
-      const toolCallSecurity = this.buildToolCallSecurityDescriptor();
       if (this.toolCollection) {
         const definition = this.toolCollection[toolKey];
         if (!definition?.mlld) {
@@ -90,6 +172,7 @@ export class FunctionRouter {
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
       const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
+      const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
@@ -97,12 +180,11 @@ export class FunctionRouter {
         toolKey,
         definition.labels,
         this.shouldUseObjectArgs(execVar),
-        toolCallSecurity
+        invocationSecurity.inputSecurityDescriptor,
+        invocationSecurity.argSecurityDescriptors
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
-      this.mergeConversationDescriptor(
-        extractSecurityDescriptor(result.value, { recursive: true, mergeArrayElements: true })
-      );
+      this.recordToolResultSecurity(result.value);
 
         this.environment.recordToolCall({
           ...callRecord,
@@ -120,6 +202,7 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const invocationSecurity = this.buildInvocationSecurity(execVar, args, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
@@ -127,12 +210,11 @@ export class FunctionRouter {
         toolName,
         undefined,
         this.shouldUseObjectArgs(execVar),
-        toolCallSecurity
+        invocationSecurity.inputSecurityDescriptor,
+        invocationSecurity.argSecurityDescriptors
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
-      this.mergeConversationDescriptor(
-        extractSecurityDescriptor(result.value, { recursive: true, mergeArrayElements: true })
-      );
+      this.recordToolResultSecurity(result.value);
 
       this.environment.recordToolCall({
         ...callRecord,
@@ -256,7 +338,8 @@ export class FunctionRouter {
     operationName: string,
     toolLabels?: string[],
     argsAsObject?: boolean,
-    inputSecurityDescriptor?: SecurityDescriptor
+    inputSecurityDescriptor?: SecurityDescriptor,
+    argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[]
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
@@ -282,32 +365,178 @@ export class FunctionRouter {
         toolCallTracking: 'router',
         toolOperationName: operationName,
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {}),
-        ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {})
+        ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {}),
+        ...(argSecurityDescriptors?.some(Boolean) ? { argSecurityDescriptors } : {})
       }
     } as ExecInvocation;
   }
 
   private buildToolCallSecurityDescriptor(): SecurityDescriptor | undefined {
-    if (!this.conversationDescriptor) {
+    if (!this.conversationTaint) {
       return undefined;
     }
     const policyEnforcer = new PolicyEnforcer(this.environment.getPolicySummary());
     return (
-      policyEnforcer.applyOutputPolicyLabels(this.conversationDescriptor, {
-        inputTaint: descriptorToInputTaint(this.conversationDescriptor),
+      policyEnforcer.applyOutputPolicyLabels(this.conversationTaint, {
+        inputTaint: descriptorToInputTaint(this.conversationTaint),
         exeLabels: ['llm']
-      }) ?? this.conversationDescriptor
+      }) ?? this.conversationTaint
     );
   }
 
-  private mergeConversationDescriptor(descriptor: SecurityDescriptor | undefined): void {
+  private toConversationTaintDescriptor(
+    descriptor: SecurityDescriptor | undefined
+  ): SecurityDescriptor | undefined {
     const normalized = normalizeSecurityDescriptor(descriptor);
     if (!normalized) {
-      return;
+      return undefined;
     }
-    this.conversationDescriptor = this.conversationDescriptor
-      ? this.environment.mergeSecurityDescriptors(this.conversationDescriptor, normalized)
-      : normalized;
+    return makeSecurityDescriptor({
+      labels: normalized.labels.filter(label => !isAttestationLabel(label)),
+      taint: descriptorToInputTaint(normalized),
+      sources: normalized.sources,
+      tools: normalized.tools,
+      policyContext: normalized.policyContext ?? undefined
+    });
+  }
+
+  private recordToolResultSecurity(value: unknown): void {
+    const descriptor = extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const normalizedTaintDescriptor = this.toConversationTaintDescriptor(descriptor);
+    if (normalizedTaintDescriptor) {
+      this.conversationTaint = this.conversationTaint
+        ? this.environment.mergeSecurityDescriptors(this.conversationTaint, normalizedTaintDescriptor)
+        : normalizedTaintDescriptor;
+    }
+    this.registerAttestedValues(value);
+  }
+
+  private buildInvocationSecurity(
+    execVar: ExecutableVariable,
+    args: Record<string, unknown>,
+    argsAsObject: boolean | undefined
+  ): {
+    inputSecurityDescriptor?: SecurityDescriptor;
+    argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+  } {
+    const baseDescriptor = this.buildToolCallSecurityDescriptor();
+    const argSecurityDescriptors = argsAsObject
+      ? [this.buildValueSecurityDescriptor(args, baseDescriptor)]
+      : this.buildArgumentSecurityDescriptorList(execVar, args, baseDescriptor);
+    const presentDescriptors = argSecurityDescriptors.filter(
+      (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
+    );
+    const inputSecurityDescriptor =
+      presentDescriptors.length === 0
+        ? undefined
+        : presentDescriptors.length === 1
+          ? presentDescriptors[0]
+          : this.environment.mergeSecurityDescriptors(...presentDescriptors);
+    return {
+      ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {}),
+      ...(presentDescriptors.length > 0 ? { argSecurityDescriptors } : {})
+    };
+  }
+
+  private buildArgumentSecurityDescriptorList(
+    execVar: ExecutableVariable,
+    args: Record<string, unknown>,
+    baseDescriptor?: SecurityDescriptor
+  ): Array<SecurityDescriptor | undefined> {
+    const params = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    if (params.length === 0) {
+      return [];
+    }
+
+    let lastProvidedIndex = -1;
+    for (let i = params.length - 1; i >= 0; i -= 1) {
+      if (Object.prototype.hasOwnProperty.call(args, params[i])) {
+        lastProvidedIndex = i;
+        break;
+      }
+    }
+    if (lastProvidedIndex === -1) {
+      return [];
+    }
+
+    const descriptors: Array<SecurityDescriptor | undefined> = [];
+    for (let index = 0; index <= lastProvidedIndex; index += 1) {
+      descriptors.push(this.buildValueSecurityDescriptor(args[params[index]], baseDescriptor));
+    }
+    return descriptors;
+  }
+
+  private buildValueSecurityDescriptor(
+    value: unknown,
+    baseDescriptor?: SecurityDescriptor
+  ): SecurityDescriptor | undefined {
+    const parts: SecurityDescriptor[] = [];
+    if (baseDescriptor) {
+      parts.push(baseDescriptor);
+    }
+    const attestationLabels = this.lookupAttestations(value);
+    if (attestationLabels.length > 0) {
+      parts.push(
+        makeSecurityDescriptor({
+          labels: attestationLabels,
+          attestations: attestationLabels
+        })
+      );
+    }
+    if (parts.length === 0) {
+      return undefined;
+    }
+    return parts.length === 1 ? parts[0] : this.environment.mergeSecurityDescriptors(...parts);
+  }
+
+  private lookupAttestations(value: unknown): string[] {
+    const key = canonicalizeAttestedValue(value);
+    if (!key) {
+      return [];
+    }
+    const labels = this.attestationIndex.get(key);
+    return Array.isArray(labels) ? [...labels] : [];
+  }
+
+  private registerAttestedValues(value: unknown): void {
+    const seen = new WeakSet<object>();
+    const visit = (entry: unknown): void => {
+      const descriptor = extractSecurityDescriptor(entry, { recursive: false });
+      const attestationLabels = collectDescriptorAttestations(descriptor);
+      const canonicalKey = canonicalizeAttestedValue(entry);
+      if (attestationLabels.length > 0 && canonicalKey) {
+        const existing = this.attestationIndex.get(canonicalKey) ?? [];
+        this.attestationIndex.set(
+          canonicalKey,
+          Object.freeze(Array.from(new Set([...existing, ...attestationLabels])))
+        );
+      }
+
+      const rawValue = unwrapAttestedValue(entry);
+      if (!rawValue || typeof rawValue !== 'object') {
+        return;
+      }
+      if (seen.has(rawValue as object)) {
+        return;
+      }
+      seen.add(rawValue as object);
+
+      if (Array.isArray(rawValue)) {
+        for (const item of rawValue) {
+          visit(item);
+        }
+        return;
+      }
+
+      for (const child of Object.values(rawValue as Record<string, unknown>)) {
+        visit(child);
+      }
+    };
+
+    visit(value);
   }
 
   private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {

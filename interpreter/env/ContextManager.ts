@@ -57,6 +57,7 @@ export interface GuardContextSnapshot {
   labels?: readonly DataLabel[];
   sources?: readonly string[];
   taint?: readonly string[];
+  attestations?: readonly string[];
   toolsHistory?: readonly ToolProvenance[];
   inputPreview?: string | null;
   outputPreview?: string | null;
@@ -82,6 +83,7 @@ export interface SecuritySnapshotLike {
   labels: readonly string[];
   sources: readonly string[];
   taint: readonly string[];
+  attestations?: readonly string[];
   tools?: readonly ToolProvenance[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
@@ -385,6 +387,11 @@ export class ContextManager {
         ? Array.from(guardContext.labels)
         : security
           ? Array.from(security.labels)
+          : [],
+      attestations: guardContext?.attestations
+        ? Array.from(guardContext.attestations)
+        : security?.attestations
+          ? Array.from(security.attestations)
           : [],
       sources: guardContext?.sources
         ? Array.from(guardContext.sources)

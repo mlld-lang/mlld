@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
+import { fileURLToPath } from 'node:url';
+import { interpret } from '@interpreter/index';
 import { Environment } from '@interpreter/env/Environment';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
@@ -19,8 +22,42 @@ function createEnv(): Environment {
   return new Environment(new NodeFileSystem(), new PathService(), process.cwd());
 }
 
+const fakeServerPath = fileURLToPath(
+  new URL('../../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
+
 function createFunctionTool(name: string, command = 'printf hello'): ExecutableVariable {
   return createExecutableVariable(name, 'command', command, [], 'sh', SOURCE);
+}
+
+async function createInterpretedEnv(
+  source: string,
+  options: { mcpServers?: Record<string, string> } = {}
+): Promise<Environment> {
+  let environment: Environment | undefined;
+  await interpret(source.trim(), {
+    fileSystem: new NodeFileSystem(),
+    pathService: new PathService(),
+    pathContext: {
+      projectRoot: process.cwd(),
+      fileDirectory: process.cwd(),
+      executionDirectory: process.cwd(),
+      invocationDirectory: process.cwd(),
+      filePath: '/call-config-test.mld'
+    },
+    filePath: '/call-config-test.mld',
+    format: 'markdown',
+    mcpServers: options.mcpServers,
+    captureEnvironment: env => {
+      environment = env;
+    }
+  } as any);
+
+  if (!environment) {
+    throw new Error('Failed to capture environment');
+  }
+
+  return environment;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -73,6 +110,18 @@ async function sendJsonRpcMaybeResponse(
       socket.write(`${JSON.stringify(payload)}\n`);
     });
   });
+}
+
+async function sendJsonRpc(
+  socketPath: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 150
+): Promise<Record<string, unknown>> {
+  const response = await sendJsonRpcMaybeResponse(socketPath, payload, timeoutMs);
+  if (!response) {
+    throw new Error('Empty JSON-RPC response');
+  }
+  return response;
 }
 
 describe('createCallMcpConfig', () => {
@@ -193,6 +242,189 @@ describe('createCallMcpConfig', () => {
     } finally {
       await result.cleanup();
       env.popBridge();
+      env.cleanup();
+    }
+  });
+
+  it('applies scoped policies to imported MCP-backed wrapper tools on the generated call config path', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/import tools from mcp "tools" as @mcp',
+        '',
+        '/exe known @get_recipient() = [',
+        '  => @mcp.echo("legit@example.com")',
+        ']',
+        '',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = [',
+        '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+        '] with { controlArgs: ["recipient"] }'
+      ].join('\n'),
+      {
+        mcpServers: {
+          tools: `${process.execPath} ${fakeServerPath}`
+        }
+      }
+    );
+
+    const scopedEnv = env.createChild();
+    scopedEnv.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { destructive: ['tool:w'] }
+      })!
+    );
+
+    const getRecipient = env.getVariable('get_recipient') as ExecutableVariable | undefined;
+    const sendEmail = env.getVariable('send_email') as ExecutableVariable | undefined;
+
+    if (!getRecipient || !sendEmail) {
+      env.cleanup();
+      throw new Error('Failed to load imported MCP-backed wrappers');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: [getRecipient, sendEmail],
+      env: scopedEnv
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{ name?: string }>;
+      const getRecipientTool = tools.find(tool => tool.name === 'get_recipient')?.name;
+      const sendEmailTool = tools.find(tool => tool.name === 'send_email')?.name;
+
+      expect(getRecipientTool).toBeDefined();
+      expect(sendEmailTool).toBeDefined();
+
+      const trustedLookup = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: getRecipientTool,
+          arguments: {}
+        }
+      });
+      expect((trustedLookup.result as any)?.isError).not.toBe(true);
+
+      const deniedSend = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: sendEmailTool,
+          arguments: {
+            recipient: 'evil@example.com',
+            subject: 'hi',
+            body: 'body'
+          }
+        }
+      });
+
+      expect((deniedSend.result as any)?.isError).toBe(true);
+      expect(((deniedSend.result as any)?.content?.[0]?.text ?? '')).toMatch(/no-send-to-unknown|must carry 'known'/i);
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('applies no-untrusted-destructive after MCP-backed wrapper reads on the generated call config path', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/import tools from mcp "tools" as @mcp',
+        '',
+        '/exe untrusted @read_file(path) = [',
+        '  => @mcp.echo("ATTACKER-CONTROLLED")',
+        ']',
+        '',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = [',
+        '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+        '] with { controlArgs: ["recipient"] }'
+      ].join('\n'),
+      {
+        mcpServers: {
+          tools: `${process.execPath} ${fakeServerPath}`
+        }
+      }
+    );
+
+    const scopedEnv = env.createChild();
+    scopedEnv.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-untrusted-destructive'] },
+        operations: { destructive: ['tool:w'] }
+      })!
+    );
+
+    const readFile = env.getVariable('read_file') as ExecutableVariable | undefined;
+    const sendEmail = env.getVariable('send_email') as ExecutableVariable | undefined;
+
+    if (!readFile || !sendEmail) {
+      env.cleanup();
+      throw new Error('Failed to load imported MCP-backed wrappers');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: [readFile, sendEmail],
+      env: scopedEnv
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const taintedRead = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: {
+          name: 'read_file',
+          arguments: { path: '/tmp/prompt.txt' }
+        }
+      });
+      expect((taintedRead.result as any)?.isError).not.toBe(true);
+
+      const deniedSend = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 11,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'victim@example.com',
+            subject: 'hi',
+            body: 'body'
+          }
+        }
+      });
+
+      expect((deniedSend.result as any)?.isError).toBe(true);
+      expect(((deniedSend.result as any)?.content?.[0]?.text ?? '')).toMatch(/no-untrusted-destructive|untrusted/i);
+    } finally {
+      await result.cleanup();
       env.cleanup();
     }
   });

@@ -26,6 +26,7 @@ export interface QuantifierTextHelper {
 export interface QuantifierContextHelper {
   labels: QuantifierLabelsHelper;
   taint: QuantifierLabelsHelper;
+  attestations: QuantifierLabelsHelper;
   tokens: QuantifierTokensHelper;
 }
 
@@ -39,6 +40,7 @@ export interface ArrayAggregateSnapshot {
   readonly texts: readonly string[];
   readonly labels: readonly DataLabel[];
   readonly taint: readonly DataLabel[];
+  readonly attestations: readonly DataLabel[];
   readonly sources: readonly string[];
   readonly tokens: readonly number[];
   totalTokens(): number;
@@ -50,6 +52,7 @@ export interface GuardInputHelper {
   mx: {
     labels: readonly DataLabel[];
     taint: readonly DataLabel[];
+    attestations: readonly DataLabel[];
     tokens: readonly number[];
     sources: readonly string[];
     totalTokens(): number;
@@ -74,6 +77,7 @@ export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputH
     mx: {
       labels: aggregate.labels,
       taint: aggregate.taint,
+      attestations: aggregate.attestations,
       tokens: aggregate.tokens,
       sources: aggregate.sources,
       totalTokens: aggregate.totalTokens,
@@ -130,6 +134,7 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   if (hasAggregateContexts) {
     mx.labels = aggregate.labels;
     mx.taint = aggregate.taint;
+    mx.attestations = aggregate.attestations;
     mx.sources = aggregate.sources;
     mx.tokens = aggregate.tokens;
   } else if (!mx.tokens) {
@@ -170,6 +175,9 @@ export function buildArrayAggregate(
   const taint = freezeArray(
     contexts.flatMap(mx => mx.taint ?? mx.labels ?? [])
   );
+  const attestations = freezeArray(
+    contexts.flatMap(mx => mx.attestations ?? [])
+  );
   const sources = freezeArray(
     contexts.flatMap(mx => mx.sources ?? [])
   );
@@ -184,6 +192,7 @@ export function buildArrayAggregate(
     texts,
     labels,
     taint,
+    attestations,
     sources,
     tokens,
     totalTokens,
@@ -261,10 +270,24 @@ function createQuantifierHelper(
     }
   };
 
+  const attestationHelper: QuantifierLabelsHelper = {
+    includes(label: DataLabel): boolean {
+      return evaluateContext(mx => (mx.attestations ?? []).includes(label));
+    }
+  };
+
   attachQuantifierEvaluator(taintHelper, (method, args) => {
     if (method === 'includes') {
       const label = args[0] as DataLabel;
       return taintHelper.includes(label);
+    }
+    return false;
+  });
+
+  attachQuantifierEvaluator(attestationHelper, (method, args) => {
+    if (method === 'includes') {
+      const label = args[0] as DataLabel;
+      return attestationHelper.includes(label);
     }
     return false;
   });
@@ -302,6 +325,7 @@ function createQuantifierHelper(
     mx: {
       labels: labelsHelper,
       taint: taintHelper,
+      attestations: attestationHelper,
       tokens: tokensHelper
     },
     text: textHelper

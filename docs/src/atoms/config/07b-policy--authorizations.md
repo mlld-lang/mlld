@@ -74,6 +74,8 @@ var tools @agentTools = {
 
 `controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge.
 
+Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
+
 ## Entries
 
 Keys under `authorizations.allow` are exact operation names matching `@mx.op.name`. For MCP-backed tools, use the mlld-side canonical name, not the provider's raw tool name.
@@ -126,6 +128,21 @@ send_email: {
 }
 ```
 
+**Explicit attestation carry-through** — planner or host can preserve trusted approval when emitting plain JSON:
+
+```mlld
+send_email: {
+  args: {
+    recipients: {
+      eq: ["mark@example.com"],
+      attestations: ["known"]
+    }
+  }
+}
+```
+
+This is the bridge format for planner/worker handoff. If the planner already verified the pinned value from a trusted source, `attestations` lets the later worker call satisfy inherited positive checks such as `no-send-to-unknown` without re-looking the value up in the worker session.
+
 Tolerant comparison (`~=`) handles string-vs-array, ordering, null equivalence, and subset matching. The worker can do *less* than authorized (fewer recipients) but not *more* (additional unauthorized recipients).
 
 ## Control-Arg Enforcement
@@ -171,6 +188,8 @@ If the planner had written `"send_email": true`, validation would reject it beca
 - Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires the named destination args to carry `known`, and `no-untrusted-privileged` still blocks untrusted privileged calls.
 - `locked: true` disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials
 - Capability denials (`capabilities.allow/deny/danger`), `env` restrictions, `auth`, and `limits` are separate enforcement paths and are not affected by `authorizations`
+
+Authorization matching is not enough by itself for positive checks. If the planner pins `"acct-1"` as a raw literal, the worker still needs a matching attestation for rules like `no-send-to-unknown`. If the planner pins `@approvedRecipient` and that value carried `known`, the authorization guard carries that attestation requirement forward so the later worker call can satisfy the inherited check.
 
 Authorization denials behave like any other guard denial — they can be caught with `denied =>` handlers and are surfaced through the SDK's existing denial reporting.
 

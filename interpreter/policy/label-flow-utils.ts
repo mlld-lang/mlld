@@ -1,4 +1,4 @@
-import type { SecurityDescriptor } from '@core/types/security';
+import { isAttestationLabel, type SecurityDescriptor } from '@core/types/security';
 import { mergeDescriptors } from '@core/types/security';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 
@@ -27,7 +27,7 @@ export function descriptorToInputTaint(descriptor?: SecurityDescriptor): string[
   const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
   const merged = new Set<string>();
   for (const label of labels) {
-    if (label) {
+    if (label && !isAttestationLabel(String(label))) {
       merged.add(String(label));
     }
   }

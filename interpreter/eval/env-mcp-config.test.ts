@@ -8,6 +8,9 @@ import { fileURLToPath } from 'url';
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
 );
+const callToolFromConfigPath = fileURLToPath(
+  new URL('../../tests/support/mcp/call-tool-from-config.cjs', import.meta.url)
+);
 
 const pathService = new PathService();
 const pathContext = {
@@ -300,6 +303,136 @@ describe('box MCP config integration', () => {
       });
 
       expect(output.trim()).toBe('mcp__mlld_tools__send_email');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves mixed concatenated executable arrays when passed to config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/mcp_active.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe tool:w @send_email(recipient, subject, body) = [',
+      '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+      ']',
+      '/var @toolList = [@send_email]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/exe @research(question) = `researched:@question`',
+      '/var @workerTools = @toolList.concat([@research])',
+      '/exe llm @agent(prompt, config) = `@mx.llm.allowed`',
+      '/show @agent("Email the summary", { tools: @workerTools })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__send_email,mcp__mlld_tools__research');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('does not seed native tool bridge policy state from imported toolList capabilities', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/mcp_active.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe known @get_recipient() = [',
+      '  => @mcp.echo("legit@example.com")',
+      ']',
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = [',
+      '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+      '] with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@get_recipient, @send_email]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/var @basePolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"evil@example.com","subject":"hi","body":"test"}' }`,
+      '/show @agent("Send the email", { tools: @toolList }) with { policy: @basePolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toMatch(/destination must carry 'known'/i);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('allows native tool calls when policy authorizations carry explicit attestations', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/mcp_active.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = [',
+      '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+      '] with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      '/show @agent("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('recipients=["approved@example.com"]');
     } finally {
       environment?.cleanup();
     }

@@ -1,8 +1,8 @@
 import { isTolerantMatch } from '@interpreter/eval/expressions';
 
 export type AuthorizationConstraintClause =
-  | { eq: unknown }
-  | { oneOf: unknown[] };
+  | { eq: unknown; attestations?: readonly string[] }
+  | { oneOf: unknown[]; oneOfAttestations?: readonly (readonly string[])[] };
 
 export type AuthorizationEntry =
   | { kind: 'unconstrained' }
@@ -53,7 +53,11 @@ export interface AuthorizationValidationOptions {
 }
 
 export type PolicyAuthorizationDecision =
-  | { decision: 'allow'; matched: true }
+  | {
+      decision: 'allow';
+      matched: true;
+      matchedAttestations?: Readonly<Record<string, readonly string[]>>;
+    }
   | {
       decision: 'deny';
       matched: true;
@@ -67,9 +71,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function cloneConstraintClause(clause: AuthorizationConstraintClause): AuthorizationConstraintClause {
   if ('eq' in clause) {
-    return { eq: clause.eq };
+    return {
+      eq: clause.eq,
+      ...(Array.isArray(clause.attestations) ? { attestations: clause.attestations.slice() } : {})
+    };
   }
-  return { oneOf: clause.oneOf.slice() };
+  return {
+    oneOf: clause.oneOf.slice(),
+    ...(Array.isArray(clause.oneOfAttestations)
+      ? {
+          oneOfAttestations: clause.oneOfAttestations.map(entry =>
+            Array.isArray(entry) ? entry.slice() : []
+          )
+        }
+      : {})
+  };
 }
 
 function cloneAuthorizationEntry(entry: AuthorizationEntry): AuthorizationEntry {
@@ -116,15 +132,36 @@ function isNormalizedConstraintClause(value: unknown): value is AuthorizationCon
   }
 
   const keys = Object.keys(value);
-  if (keys.length !== 1) {
+  const unsupportedKeys = keys.filter(
+    key => key !== 'eq' && key !== 'oneOf' && key !== 'attestations' && key !== 'oneOfAttestations'
+  );
+  if (unsupportedKeys.length > 0) {
     return false;
   }
-
-  if (keys[0] === 'eq') {
-    return true;
+  if (Object.prototype.hasOwnProperty.call(value, 'eq')) {
+    return (
+      !Object.prototype.hasOwnProperty.call(value, 'oneOf')
+      && (!Object.prototype.hasOwnProperty.call(value, 'oneOfAttestations'))
+      && (
+        value.attestations === undefined
+        || (Array.isArray(value.attestations) && value.attestations.every(entry => typeof entry === 'string'))
+      )
+    );
   }
-
-  return keys[0] === 'oneOf' && Array.isArray(value.oneOf);
+  return (
+    Object.prototype.hasOwnProperty.call(value, 'oneOf')
+    && Array.isArray(value.oneOf)
+    && (
+      value.oneOfAttestations === undefined
+      || (
+        Array.isArray(value.oneOfAttestations)
+        && value.oneOfAttestations.every(
+          entry => Array.isArray(entry) && entry.every(label => typeof label === 'string')
+        )
+      )
+    )
+    && !Object.prototype.hasOwnProperty.call(value, 'attestations')
+  );
 }
 
 function isNormalizedAuthorizationEntry(value: unknown): value is AuthorizationEntry {
@@ -154,15 +191,17 @@ function normalizeConstraint(
 ): AuthorizationConstraintClause | undefined {
   if (isPlainObject(raw) && ('eq' in raw || 'oneOf' in raw)) {
     const keys = Object.keys(raw);
-    const unsupportedKeys = keys.filter(key => key !== 'eq' && key !== 'oneOf');
-    if (unsupportedKeys.length > 0) {
+    const internalKeys = keys.filter(key => key === 'attestations' || key === 'oneOfAttestations');
+    const supportedKeys = new Set(['eq', 'oneOf', ...internalKeys]);
+    const unsupportedAugmentedKeys = keys.filter(key => !supportedKeys.has(key));
+    if (unsupportedAugmentedKeys.length > 0) {
       addIssue(errors, {
         code: 'authorizations-unsupported-constraint',
         severity: 'error',
         tool: toolName,
         arg: argName,
         path: `authorizations.allow.${toolName}.args.${argName}`,
-        message: `Unsupported constraint fields for '${toolName}.${argName}': ${unsupportedKeys.join(', ')}`
+        message: `Unsupported constraint fields for '${toolName}.${argName}': ${unsupportedAugmentedKeys.join(', ')}`
       });
       return undefined;
     }
@@ -182,7 +221,16 @@ function normalizeConstraint(
     }
 
     if (hasEq) {
-      return { eq: raw.eq };
+      return {
+        eq: raw.eq,
+        ...(Array.isArray(raw.attestations)
+          ? {
+              attestations: raw.attestations.filter(
+                (entry): entry is string => typeof entry === 'string' && entry.length > 0
+              )
+            }
+          : {})
+      };
     }
 
     if (!Array.isArray(raw.oneOf)) {
@@ -197,7 +245,18 @@ function normalizeConstraint(
       return undefined;
     }
 
-    return { oneOf: raw.oneOf.slice() };
+    return {
+      oneOf: raw.oneOf.slice(),
+      ...(Array.isArray(raw.oneOfAttestations)
+        ? {
+            oneOfAttestations: raw.oneOfAttestations.map(entry =>
+              Array.isArray(entry)
+                ? entry.filter((label): label is string => typeof label === 'string' && label.length > 0)
+                : []
+            )
+          }
+        : {})
+    };
   }
 
   return { eq: raw };
@@ -522,11 +581,26 @@ export function validateNormalizedPolicyAuthorizations(
   };
 }
 
-function clauseMatches(actual: unknown, clause: AuthorizationConstraintClause): boolean {
+function clauseMatches(
+  actual: unknown,
+  clause: AuthorizationConstraintClause
+): { matched: boolean; attestations?: readonly string[] } {
   if ('eq' in clause) {
-    return isTolerantMatch(actual, clause.eq);
+    return {
+      matched: isTolerantMatch(actual, clause.eq),
+      attestations: clause.attestations
+    };
   }
-  return clause.oneOf.some(candidate => isTolerantMatch(actual, candidate));
+  for (let index = 0; index < clause.oneOf.length; index += 1) {
+    if (!isTolerantMatch(actual, clause.oneOf[index])) {
+      continue;
+    }
+    return {
+      matched: true,
+      attestations: clause.oneOfAttestations?.[index]
+    };
+  }
+  return { matched: false };
 }
 
 export function evaluatePolicyAuthorizationDecision(params: {
@@ -558,15 +632,28 @@ export function evaluatePolicyAuthorizationDecision(params: {
     return { decision: 'allow', matched: true };
   }
 
+  const matchedAttestations: Record<string, readonly string[]> = Object.create(null);
+
   for (const [argName, clauses] of Object.entries(entry.args)) {
     const actualValue = args[argName];
-    if (!clauses.every(clause => clauseMatches(actualValue, clause))) {
+    const clauseMatchesForArg = clauses.map(clause => clauseMatches(actualValue, clause));
+    if (!clauseMatchesForArg.every(result => result.matched)) {
       return {
         decision: 'deny',
         matched: true,
         code: 'args_mismatch',
         reason: 'operation arguments did not match policy.authorizations'
       };
+    }
+    const argAttestations = Array.from(
+      new Set(
+        clauseMatchesForArg.flatMap(result =>
+          Array.isArray(result.attestations) ? [...result.attestations] : []
+        )
+      )
+    );
+    if (argAttestations.length > 0) {
+      matchedAttestations[argName] = Object.freeze(argAttestations);
     }
   }
 
@@ -584,5 +671,11 @@ export function evaluatePolicyAuthorizationDecision(params: {
     }
   }
 
-  return { decision: 'allow', matched: true };
+  return {
+    decision: 'allow',
+    matched: true,
+    ...(Object.keys(matchedAttestations).length > 0
+      ? { matchedAttestations: Object.freeze({ ...matchedAttestations }) }
+      : {})
+  };
 }

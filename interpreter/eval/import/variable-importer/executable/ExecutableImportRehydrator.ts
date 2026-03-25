@@ -1,6 +1,8 @@
 import { createExecutableVariable, VariableMetadataUtils } from '@core/types/variable';
 import type { DataLabel } from '@core/types/security';
 import type { ExecutableVariable, Variable, VariableMetadata, VariableSource } from '@core/types/variable';
+import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { CapturedEnvRehydrator, type CapturedEnvVariableFactory } from './CapturedEnvRehydrator';
 import { getCapturedModuleEnv } from './CapturedModuleEnvKeychain';
 
@@ -15,6 +17,13 @@ export interface ExecutableImportRehydrationRequest {
 
 export class ExecutableImportRehydrator {
   constructor(private readonly capturedEnvRehydrator: CapturedEnvRehydrator) {}
+
+  private getEmbeddedSecurityDescriptor(value: any): SecurityDescriptor | undefined {
+    if (value?.mx) {
+      return varMxToSecurityDescriptor(value.mx);
+    }
+    return value?.metadata?.security as SecurityDescriptor | undefined;
+  }
 
   create(request: ExecutableImportRehydrationRequest): ExecutableVariable {
     const executableDef = request.value.executableDef;
@@ -55,10 +64,15 @@ export class ExecutableImportRehydrator {
       isImported: true,
       importPath: request.metadata.importPath
     };
+    const embeddedDescriptor = this.getEmbeddedSecurityDescriptor(request.value);
+    const existingDescriptor =
+      enhancedMetadata.security && embeddedDescriptor
+        ? mergeDescriptors(enhancedMetadata.security as SecurityDescriptor, embeddedDescriptor)
+        : (enhancedMetadata.security as SecurityDescriptor | undefined) ?? embeddedDescriptor;
 
     const finalMetadata = VariableMetadataUtils.applySecurityMetadata(enhancedMetadata, {
       labels: request.securityLabels,
-      existingDescriptor: enhancedMetadata.security
+      existingDescriptor
     });
 
     const finalInternal = {

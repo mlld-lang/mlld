@@ -212,6 +212,7 @@ export class VariableMetadataUtils {
       ? makeSecurityDescriptor({
           labels: options?.labels ?? baseDescriptor.labels,
           taint: options?.taint ?? baseDescriptor.taint,
+          attestations: baseDescriptor.attestations,
           sources: options?.sources ?? baseDescriptor.sources,
           tools: baseDescriptor.tools,
           capability: options?.capabilityKind ?? baseDescriptor.capability,

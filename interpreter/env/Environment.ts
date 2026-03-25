@@ -1113,6 +1113,7 @@ export class Environment
         labels: this.securityRuntime.descriptor.labels,
         sources: this.securityRuntime.descriptor.sources,
         taint: this.securityRuntime.descriptor.taint,
+        attestations: this.securityRuntime.descriptor.attestations,
         tools: this.securityRuntime.descriptor.tools,
         policy: this.securityRuntime.policy,
         operation: top?.operation
@@ -1129,6 +1130,7 @@ export class Environment
     if (
       descriptor.labels.length === 0
       && descriptor.taint.length === 0
+      && descriptor.attestations.length === 0
       && descriptor.sources.length === 0
       && (descriptor.tools?.length ?? 0) === 0
     ) {
@@ -1144,6 +1146,7 @@ export class Environment
     return makeSecurityDescriptor({
       labels: snapshot.labels,
       taint: snapshot.taint,
+      attestations: snapshot.attestations,
       sources: snapshot.sources,
       tools: snapshot.tools,
       policyContext: snapshot.policy

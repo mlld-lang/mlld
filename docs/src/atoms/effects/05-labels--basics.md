@@ -5,9 +5,9 @@ brief: What labels are and why they matter
 category: effects
 parent: labels
 tags: [labels, taint, security, tracking]
-related: [labels-source-auto, labels-sensitivity, security-label-tracking]
+related: [labels-source-auto, labels-sensitivity, labels-attestations, security-label-tracking]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
-updated: 2026-02-17
+updated: 2026-03-24
 qa_tier: 2
 ---
 
@@ -24,6 +24,7 @@ Labels make this possible. When an operation is attempted, mlld checks whether t
 | Category | Examples | Applied How |
 |----------|----------|-------------|
 | Trust | `trusted`, `untrusted` | Policy defaults, explicit declaration |
+| Attestation | `known`, `known:internal` | Explicit declaration, trusted tool results |
 | Sensitivity | `secret`, `sensitive`, `pii` | Explicit declaration, keychain |
 | Source | `src:mcp`, `src:cmd`, `src:js`, `src:file` | Auto-applied by system |
 | Operation | `op:cmd:git:status`, `op:sh` | Auto-applied during execution |
@@ -86,7 +87,10 @@ show @key.mx.sources
 
 - `labels` - User-declared sensitivity labels
 - `taint` - Union of labels plus source markers (for provenance)
+- `attestations` - Value-scoped approvals such as `known` and `known:*`
 - `sources` - Source references (file paths and guard names), not a full transformation history
+
+Attestations are a separate channel from taint. `untrusted` is taint-like and spreads conservatively. `known` is attestation-like and stays attached to the specific approved value. See `labels-attestations`.
 
 **Why labels work:**
 
