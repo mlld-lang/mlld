@@ -39,6 +39,7 @@ export interface ExeRaw {
   identifier: string;
   params: string[];
   metadata?: string;
+  outputRecord?: string;
   command?: string;
   lang?: string;
   code?: string;
@@ -59,6 +60,7 @@ export interface ExeMeta {
   language?: string;
   isMultiLine?: boolean;
   isNewExpression?: boolean;
+  outputRecord?: string;
   metadata?: {
     type?: string;
     [key: string]: unknown;
@@ -103,6 +105,7 @@ export interface ExeValues {
   identifier: TextNodeArray;
   params: ParameterNode[];
   metadata?: TextNodeArray;
+  outputRecord?: VariableNodeArray;
   command?: ContentNodeArray;
   lang?: TextNodeArray;
   code?: ContentNodeArray;

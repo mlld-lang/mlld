@@ -37,6 +37,8 @@ export interface StructuredValueMetadata {
   stderr?: string;
   retries?: number;
   security?: SecurityDescriptor;
+  schema?: RecordSchemaMetadata;
+  factsources?: readonly FactSourceHandle[];
   loadResult?: StructuredValueLoadResult;
   metrics?: {
     tokens?: number;
@@ -582,6 +584,8 @@ function buildVarMxFromMetadata(
     labels,
     taint,
     attestations,
+    schema: metadata?.schema,
+    factsources: Array.isArray(metadata?.factsources) ? [...metadata.factsources] : undefined,
     sources,
     tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
     policy: normalizedDescriptor.policyContext ?? null,

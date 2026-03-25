@@ -26,6 +26,8 @@ export interface BaseExecutable {
   controlArgs?: string[];
   /** Human-readable summary for tool metadata */
   description?: string;
+  /** Optional record definition applied to executable output */
+  outputRecord?: string;
   /** Original directive type this came from (exec or text) */
   sourceDirective: 'exec' | 'text';
 }

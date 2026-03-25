@@ -1,0 +1,14 @@
+/record @contact = {
+  facts: [email: string],
+  data: [name: string?]
+}
+
+/exe @emitContact() = js {
+  return { email: "ada@example.com", name: "Ada" };
+} => contact
+
+/var @contact = @emitContact()
+/show @contact.email
+/show @contact.email.mx.labels[0]
+/show @contact.email.mx.factsources[0].ref
+/show @contact.mx.schema.valid

@@ -5,7 +5,7 @@
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
-import { mergeDescriptors } from '@core/types/security';
+import { deserializeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
@@ -289,15 +289,35 @@ function getWorkspaceMxContext(value: unknown): WorkspaceMxContext | undefined {
   };
 }
 
-function getFieldMetadataDescriptor(
+function getNamespaceMetadata(
   parentVariable: Variable | undefined,
-  fieldName: string
+  structuredWrapper: StructuredValue | undefined
 ) {
-  const namespaceMetadata = parentVariable?.internal &&
+  const variableMetadata = parentVariable?.internal &&
     typeof parentVariable.internal === 'object' &&
     'namespaceMetadata' in parentVariable.internal
       ? (parentVariable.internal as Record<string, unknown>).namespaceMetadata
       : undefined;
+
+  if (variableMetadata && typeof variableMetadata === 'object') {
+    return variableMetadata;
+  }
+
+  const structuredMetadata = structuredWrapper?.internal &&
+    typeof structuredWrapper.internal === 'object' &&
+    'namespaceMetadata' in structuredWrapper.internal
+      ? (structuredWrapper.internal as Record<string, unknown>).namespaceMetadata
+      : undefined;
+
+  return structuredMetadata;
+}
+
+function getFieldMetadata(
+  parentVariable: Variable | undefined,
+  structuredWrapper: StructuredValue | undefined,
+  fieldName: string
+) {
+  const namespaceMetadata = getNamespaceMetadata(parentVariable, structuredWrapper);
 
   if (!namespaceMetadata || typeof namespaceMetadata !== 'object') {
     return undefined;
@@ -308,9 +328,15 @@ function getFieldMetadataDescriptor(
     return undefined;
   }
 
-  return VariableMetadataUtils.deserializeSecurityMetadata(
-    serialized as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
+  const payload = serialized as Record<string, unknown>;
+  const legacySecurity = VariableMetadataUtils.deserializeSecurityMetadata(
+    payload as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
   ).security;
+
+  return {
+    descriptor: legacySecurity ?? deserializeSecurityDescriptor(payload.security as any),
+    factsources: Array.isArray(payload.factsources) ? payload.factsources : undefined
+  };
 }
 
 function isIgnorableWorkspaceDiffError(error: unknown): boolean {
@@ -1069,7 +1095,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   const provenanceDescriptor = provenanceSource
     ? extractSecurityDescriptor(provenanceSource)
     : undefined;
-  const fieldDescriptor = getFieldMetadataDescriptor(parentVariable, fieldName);
+  const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
+  const fieldDescriptor = fieldMetadata?.descriptor;
   const effectiveDescriptor =
     provenanceDescriptor && fieldDescriptor
       ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
@@ -1087,6 +1114,19 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
   } else if (provenanceSource) {
     inheritExpressionProvenance(accessedValue, provenanceSource);
+  }
+
+  if (fieldMetadata?.factsources && fieldMetadata.factsources.length > 0) {
+    if (accessedValue != null && typeof accessedValue !== 'object') {
+      accessedValue = wrapExecResult(accessedValue);
+    }
+    if (isStructuredValue(accessedValue)) {
+      accessedValue.metadata = {
+        ...(accessedValue.metadata ?? {}),
+        factsources: [...fieldMetadata.factsources]
+      };
+      accessedValue.mx.factsources = [...fieldMetadata.factsources];
+    }
   }
 
   // Check if we need to return context-preserving result

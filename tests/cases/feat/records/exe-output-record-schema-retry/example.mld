@@ -1,0 +1,22 @@
+/record @task = {
+  facts: [id: string],
+  data: [priority: number],
+  validate: "demote"
+}
+
+/guard after @retrySchema for op:@flakyTask = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2 => retry "need valid task"
+  @output.mx.schema.valid == false => deny "schema still invalid"
+  * => allow
+]
+
+/exe @flakyTask() = js {
+  globalThis.__recordSchemaRetryFixture = (globalThis.__recordSchemaRetryFixture || 0) + 1;
+  return globalThis.__recordSchemaRetryFixture === 1
+    ? '{"id":"task-1","priority":"high"}'
+    : '{"id":"task-1","priority":2}';
+} => task
+
+/var @task = @flakyTask()
+/show @task.priority
+/show @task.mx.schema.valid

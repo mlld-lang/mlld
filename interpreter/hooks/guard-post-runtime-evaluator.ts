@@ -161,23 +161,34 @@ export async function evaluatePostGuardRuntime(
       : outputValue === undefined || outputValue === null
         ? ''
         : String(outputValue);
-  const guardOutputVariable = createSimpleTextVariable(
-    'output',
-    outputText as any,
-    dependencies.guardInputSource,
-    {
-      metadata: {
-        security: makeSecurityDescriptor({
-          labels: contextLabels,
-          taint: contextTaint,
-          attestations: contextAttestations,
-          sources: contextSources,
-          tools: contextToolsHistory
-        })
-      },
-      internal: { isReserved: true }
-    }
-  );
+  const guardOutputVariable = outputVariable
+    ? (() => {
+        const clone = dependencies.cloneVariable(outputVariable);
+        clone.name = 'output';
+        clone.internal = {
+          ...(clone.internal ?? {}),
+          isReserved: true,
+          isSystem: true
+        };
+        return clone;
+      })()
+    : createSimpleTextVariable(
+        'output',
+        outputText as any,
+        dependencies.guardInputSource,
+        {
+          metadata: {
+            security: makeSecurityDescriptor({
+              labels: contextLabels,
+              taint: contextTaint,
+              attestations: contextAttestations,
+              sources: contextSources,
+              tools: contextToolsHistory
+            })
+          },
+          internal: { isReserved: true }
+        }
+      );
   guardEnv.setVariable('output', guardOutputVariable);
   if (options.inputHelper) {
     dependencies.attachGuardInputHelper(inputVariable, options.inputHelper);

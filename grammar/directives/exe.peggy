@@ -23,7 +23,7 @@ ExeKeyword
 
 // Primary /exe directive - unified LHS parsing with RHS delegation
 SlashExe
-  = DirectiveContext ExeKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
+  = DirectiveContext ExeKeyword labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent outputRecord:ExeOutputRecordAnnotation? withClause:WithClause? ending:StandardDirectiveEnding {
       helpers.debug('SlashExe matched with ExeRHSContent', { id, params, content });
 
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
@@ -112,6 +112,12 @@ SlashExe
           metaObj.securityLabels = labelInfo.labels;
         }
 
+        if (outputRecord) {
+          values.outputRecord = [outputRecord.node];
+          raw.outputRecord = outputRecord.identifier;
+          metaObj.outputRecord = outputRecord.identifier;
+        }
+
         return helpers.createStructuredDirective(
           DirectiveKind.exe,
           'exeWhen',
@@ -196,6 +202,12 @@ SlashExe
           values.securityLabels = labelInfo.labels;
           raw.securityLabels = labelInfo.raw;
           metaObj.securityLabels = labelInfo.labels;
+        }
+
+        if (outputRecord) {
+          values.outputRecord = [outputRecord.node];
+          raw.outputRecord = outputRecord.identifier;
+          metaObj.outputRecord = outputRecord.identifier;
         }
 
         return helpers.createStructuredDirective(
@@ -283,6 +295,12 @@ SlashExe
           metaObj.securityLabels = labelInfo.labels;
         }
 
+        if (outputRecord) {
+          values.outputRecord = [outputRecord.node];
+          raw.outputRecord = outputRecord.identifier;
+          metaObj.outputRecord = outputRecord.identifier;
+        }
+
         return helpers.createStructuredDirective(
           DirectiveKind.exe,
           'exeLoop',
@@ -363,6 +381,12 @@ SlashExe
           values.securityLabels = labelInfo.labels;
           raw.securityLabels = labelInfo.raw;
           metaObj.securityLabels = labelInfo.labels;
+        }
+
+        if (outputRecord) {
+          values.outputRecord = [outputRecord.node];
+          raw.outputRecord = outputRecord.identifier;
+          metaObj.outputRecord = outputRecord.identifier;
         }
 
         return helpers.createStructuredDirective(
@@ -452,6 +476,12 @@ SlashExe
         metaObj.securityLabels = labelInfo.labels;
       }
 
+      if (outputRecord) {
+        values.outputRecord = [outputRecord.node];
+        raw.outputRecord = outputRecord.identifier;
+        metaObj.outputRecord = outputRecord.identifier;
+      }
+
       if (comment) {
         metaObj.comment = comment;
       }
@@ -465,6 +495,14 @@ SlashExe
         location(),
         source
       );
+    }
+
+ExeOutputRecordAnnotation
+  = __ "=>" _ "@"? identifier:BaseIdentifier {
+      return {
+        identifier,
+        node: helpers.createVariableReferenceNode('varIdentifier', { identifier }, location())
+      };
     }
   // Special case: environment declaration without @ prefix
   / DirectiveContext ExeKeyword _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {

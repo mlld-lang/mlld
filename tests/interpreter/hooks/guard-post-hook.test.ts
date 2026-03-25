@@ -10,7 +10,7 @@ import { evaluateDirective } from '@interpreter/eval/directive';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { guardPostHook } from '@interpreter/hooks/guard-post-hook';
 import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
@@ -274,6 +274,78 @@ describe('guard post-hook integration', () => {
     const guardErr = error as GuardError;
     expect(guardErr.decision).toBe('retry');
     expect(guardErr.retryHint ?? guardErr.reason ?? guardErr.details.reason).toMatch(/try again/i);
+  });
+
+  it('retries after guards when schema metadata marks output invalid', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for op:exe = when [ @output.mx.schema.valid == false => retry "need valid schema" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const output = wrapStructured(
+      { id: 'task-1' },
+      'object',
+      undefined,
+      {
+        schema: {
+          valid: false,
+          errors: [{ path: 'priority', code: 'type', message: 'expected number' }],
+          mode: 'demote'
+        },
+        factsources: []
+      }
+    );
+    output.mx.schema = output.metadata.schema;
+    output.mx.factsources = [];
+    const result = { value: output, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: expect.stringMatching(/need valid schema/i)
+    });
+  });
+
+  it('denies after guards when schema metadata remains invalid', async () => {
+    const env = createEnv();
+    const guardDirective = parseSync(
+      '/guard after for op:exe = when [ @output.mx.schema.valid == false => deny "schema invalid" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    const output = wrapStructured(
+      { id: 'task-1' },
+      'object',
+      undefined,
+      {
+        schema: {
+          valid: false,
+          errors: [{ path: 'priority', code: 'type', message: 'expected number' }],
+          mode: 'demote'
+        },
+        factsources: []
+      }
+    );
+    output.mx.schema = output.metadata.schema;
+    output.mx.factsources = [];
+    const result = { value: output, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [], env, { type: 'exe', name: 'emit' })
+    ).rejects.toMatchObject({
+      decision: 'deny',
+      reason: expect.stringMatching(/schema invalid/i)
+    });
   });
 
   it('denies retry inside pipelines when the source is not retryable', async () => {

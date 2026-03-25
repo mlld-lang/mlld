@@ -104,6 +104,17 @@ export async function evaluateExe(
     executableDef.description = description;
   }
 
+  const outputRecordNode = directive.values?.outputRecord?.[0];
+  const outputRecord =
+    outputRecordNode && outputRecordNode.type === 'VariableReference'
+      ? outputRecordNode.identifier
+      : typeof (directive.raw as any)?.outputRecord === 'string'
+        ? (directive.raw as any).outputRecord
+        : undefined;
+  if (outputRecord) {
+    executableDef.outputRecord = outputRecord;
+  }
+
   return materializeExecutableVariable({
     directive,
     env,

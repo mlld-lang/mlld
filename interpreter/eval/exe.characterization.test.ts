@@ -84,6 +84,16 @@ describe('exe evaluator characterization', () => {
     expect(getExecutableDef(env, 'createFile').controlArgs).toEqual([]);
   });
 
+  it('stores trailing output record annotations on executable definitions', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe @getContact() = { email: "ada@example.com" } => contact'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'getContact').outputRecord).toBe('contact');
+  });
+
   it('rejects exe-level controlArgs that are not declared parameters', async () => {
     const env = createEnvironment();
     const directive = parseSync(

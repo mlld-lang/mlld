@@ -2,12 +2,13 @@ import type { Variable, VariableSource } from '@core/types/variable';
 import {
   createArrayVariable,
   createObjectVariable,
+  createStructuredValueVariable,
   createSimpleTextVariable
 } from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
-import { extractSecurityDescriptor } from './structured-value';
+import { extractSecurityDescriptor, isStructuredValue } from './structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 const FALLBACK_SOURCE: VariableSource = {
@@ -97,6 +98,23 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
 function materializeGuardInput(value: unknown, nameHint: string): Variable | undefined {
   if (isVariable(value)) {
     return value;
+  }
+
+  if (isStructuredValue(value)) {
+    const variable = createStructuredValueVariable(nameHint, value, FALLBACK_SOURCE, {
+      mx: {
+        schema: value.mx.schema,
+        factsources: value.mx.factsources
+      }
+    });
+    applyDescriptorFromValue(value, variable);
+    if (value.mx.schema !== undefined) {
+      variable.mx.schema = value.mx.schema;
+    }
+    if (value.mx.factsources !== undefined) {
+      variable.mx.factsources = [...value.mx.factsources];
+    }
+    return variable;
   }
 
   const normalized = resolveNestedValue(value, { preserveProvenance: true });

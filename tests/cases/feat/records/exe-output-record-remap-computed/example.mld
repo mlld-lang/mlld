@@ -1,0 +1,21 @@
+/record @contact = {
+  facts: [
+    email: string,
+    @input.organization as org: string?,
+    { display: `@input.first @input.last` }: string
+  ]
+}
+
+/exe @emitContact() = js {
+  return {
+    email: "ada@example.com",
+    organization: "analytical",
+    first: "Ada",
+    last: "Lovelace"
+  };
+} => contact
+
+/var @contact = @emitContact()
+/show @contact.org
+/show @contact.display
+/show @contact.display.mx.factsources[0].ref

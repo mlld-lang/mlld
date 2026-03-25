@@ -13,6 +13,7 @@ import { asText, isStructuredValue, wrapStructured } from '../utils/structured-v
 import { createExecutableVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { accessField } from '../utils/field-access';
 
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
@@ -97,6 +98,56 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.data).toEqual({ count: 3 });
     expect(asText(result.value)).toBe('{"count":3}');
     expect(result.stdout).toBe(asText(result.value));
+  });
+
+  it('coerces exec output through declared records before returning structured values', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string, @input.organization as org: string?],
+  data: [{ display: \`@input.first @input.last\` }: string]
+}
+/exe @emitContact() = js {
+  return {
+    email: 'ada@example.com',
+    organization: 'analytical',
+    first: 'Ada',
+    last: 'Lovelace'
+  };
+} => contact
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'emit-contact',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'emit-contact-ref',
+        identifier: 'emitContact',
+        args: []
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.type).toBe('object');
+    expect(result.value.mx.schema?.valid).toBe(true);
+    expect(result.value.mx.factsources?.map(handle => handle.ref)).toEqual([
+      '@contact.email',
+      '@contact.org',
+      '@contact.display'
+    ]);
+
+    const email = await accessField(result.value, { type: 'field', value: 'email' } as any);
+    expect(isStructuredValue(email)).toBe(true);
+    expect(email.text).toBe('ada@example.com');
+    expect(email.mx.labels).toContain('fact:@contact.email');
+    expect(email.mx.factsources?.map(handle => handle.ref)).toEqual(['@contact.email']);
+
+    const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
+    expect(isStructuredValue(display)).toBe(true);
+    expect(display.text).toBe('Ada Lovelace');
   });
 
   it('returns false for isDefined on missing variables', async () => {

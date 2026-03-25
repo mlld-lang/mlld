@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { parseSync } from '@grammar/parser';
 import type { GuardDefinition } from '@interpreter/guards';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import { createSimpleTextVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { GuardRegistry } from '@interpreter/guards/GuardRegistry';
 import {
   buildPerInputCandidates,
   collectOperationGuards
@@ -578,6 +580,24 @@ describe('guard operation key utilities', () => {
     );
 
     expect(guards.map(guard => guard.id)).toEqual(['op-email-send', 'fn-email-send']);
+  });
+
+  it('normalizes registered named-op guards to canonical lowercase refs', () => {
+    const directive = parseSync(
+      '/guard after @retrySchema for op:@FlakyTask = when [ * => allow ]'
+    )[0] as any;
+    const registry = new GuardRegistry();
+    registry.register(directive, null);
+
+    const guards = collectOperationGuards(
+      registry as any,
+      { type: 'exe', name: 'flakyTask' } as OperationContext,
+      { kind: 'none' },
+      { timing: 'after' }
+    );
+
+    expect(guards.map(guard => guard.id)).toEqual(['retrySchema']);
+    expect(registry.getByName('retrySchema')?.filterValue).toBe('op:@flakytask');
   });
 
   it('builds operation snapshots with aggregate metadata and variable references', () => {

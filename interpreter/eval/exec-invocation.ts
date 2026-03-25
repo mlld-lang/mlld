@@ -97,6 +97,7 @@ import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
+import { coerceRecordOutput } from './records/coerce-record';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -2161,6 +2162,23 @@ async function evaluateExecInvocationInternal(
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
   
+  if (definition.outputRecord) {
+    const recordDefinition = runtimeEnv.getRecordDefinition(definition.outputRecord);
+    if (!recordDefinition) {
+      throw new MlldInterpreterError(
+        `Executable '@${variable.name ?? commandName}' references unknown record '@${definition.outputRecord}'`,
+        'exec',
+        nodeSourceLocation,
+        { code: 'RECORD_NOT_FOUND' }
+      );
+    }
+    result = await coerceRecordOutput({
+      definition: recordDefinition,
+      value: result,
+      env: execEnv
+    });
+  }
+
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
   const postFields: any[] = (node as any).fields || [];
   if (postFields && postFields.length > 0) {

@@ -50,6 +50,10 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
     labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
     taint: descriptor.taint ? cloneArray(descriptor.taint) : [],
     attestations: descriptor.attestations ? cloneArray(descriptor.attestations) : EMPTY_LABELS,
+    schema: metadata?.schema,
+    factsources: Array.isArray((metadata as { factsources?: readonly unknown[] } | undefined)?.factsources)
+      ? cloneArray((metadata as { factsources?: readonly unknown[] }).factsources as readonly any[])
+      : undefined,
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
     tools: descriptor.tools ? cloneArray(descriptor.tools) : EMPTY_TOOLS,
     policy: descriptor.policyContext ?? null,

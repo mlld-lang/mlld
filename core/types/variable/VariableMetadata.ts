@@ -403,6 +403,8 @@ export class VariableMetadataUtils {
       definedAt: variable.definedAt,
       labels,
       taint: mxSnapshot.taint ?? 'unknown',
+      schema: mxSnapshot.schema,
+      factsources: mxSnapshot.factsources,
       tokens: tokenValue,
       tokest: tokestValue,
       length: metrics?.length,

@@ -7,6 +7,7 @@ import type {
 } from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
@@ -361,7 +362,8 @@ export class GuardRegistry {
     const index = kind === 'function'
       ? this.functionIndex
       : kind === 'operation' ? this.opIndex : this.dataIndex;
-    const matches = index.get(value) ?? [];
+    const normalizedValue = this.normalizeIndexedFilterValue(kind, value);
+    const matches = index.get(normalizedValue) ?? [];
     return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
   }
 
@@ -374,6 +376,7 @@ export class GuardRegistry {
   }
 
   private registerDefinition(definition: GuardDefinition): void {
+    definition.filterValue = this.normalizeIndexedFilterValue(definition.filterKind, definition.filterValue);
     this.definitions.set(definition.id, definition);
     this.guards.push(definition);
     if (!this.isRoot()) {
@@ -391,6 +394,13 @@ export class GuardRegistry {
     } else {
       index.set(definition.filterValue, [definition]);
     }
+  }
+
+  private normalizeIndexedFilterValue(kind: GuardFilterKind, value: string): string {
+    if (kind !== 'operation') {
+      return value;
+    }
+    return normalizeNamedOperationRef(value) ?? value.toLowerCase();
   }
 
   private allocateRegistrationOrder(): number {
