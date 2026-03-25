@@ -12,6 +12,7 @@ import {
 } from './capability-patterns';
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 import { expandOperationLabels } from './label-flow';
+import { matchesLabelPattern } from './fact-labels';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -950,18 +951,11 @@ function extractShellCommandCandidates(shellCode: string): string[] {
   return candidates;
 }
 
-function matchesPrefix(rule: string, target: string): boolean {
-  if (rule === '*') {
-    return true;
-  }
-  return target === rule || target.startsWith(`${rule}:`);
-}
-
 function hasMatchingLabel(values: readonly string[] | undefined, label: string): boolean {
   if (!values || values.length === 0) {
     return false;
   }
-  return values.some(value => matchesPrefix(label, value));
+  return values.some(value => matchesLabelPattern(label, value));
 }
 
 function makeDataRuleGuard(options: {

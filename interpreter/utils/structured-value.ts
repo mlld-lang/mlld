@@ -4,6 +4,8 @@ import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
+import type { RecordSchemaMetadata } from '@core/types/record';
+import type { FactSourceHandle } from '@core/types/handle';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
@@ -81,6 +83,8 @@ export interface StructuredValueContext {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
   attestations?: readonly DataLabel[];
+  schema?: RecordSchemaMetadata;
+  factsources?: readonly FactSourceHandle[];
   sources: readonly string[];
   tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;

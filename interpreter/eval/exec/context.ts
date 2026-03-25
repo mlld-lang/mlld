@@ -1,6 +1,7 @@
 import type { ExecInvocation, WithClause } from '@core/types';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvironmentCapture';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 
 export function buildExecOperationPreview(node: ExecInvocation): OperationContext | undefined {
   const rawIdentifier = (node.commandRef as any)?.identifier;
@@ -16,9 +17,11 @@ export function buildExecOperationPreview(node: ExecInvocation): OperationContex
       ? (node as any).meta.toolOperationName.trim()
       : undefined;
   if (typeof identifier === 'string' && identifier.length > 0) {
+    const namedOperationRef = normalizeNamedOperationRef(operationName ?? identifier);
     return {
       type: 'exe',
       name: operationName ?? identifier,
+      ...(namedOperationRef ? { opLabels: [namedOperationRef] } : {}),
       location: node.location ?? null,
       metadata: { sourceRetryable: true }
     };

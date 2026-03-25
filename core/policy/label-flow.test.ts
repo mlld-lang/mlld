@@ -87,6 +87,35 @@ describe('checkLabelFlow defaults', () => {
 
     expect(result.allowed).toBe(true);
   });
+
+  it('matches fact-pattern label rules against tiered fact labels', () => {
+    const policy: PolicyConfig = {
+      labels: {
+        'fact:*.email': { deny: ['op:output'] }
+      }
+    };
+
+    const allowed = checkLabelFlow(
+      {
+        inputTaint: ['fact:internal:@contact.email'],
+        opLabels: ['op:show'],
+        exeLabels: []
+      },
+      policy
+    );
+    expect(allowed.allowed).toBe(true);
+
+    const denied = checkLabelFlow(
+      {
+        inputTaint: ['fact:internal:@contact.email'],
+        opLabels: ['op:output'],
+        exeLabels: []
+      },
+      policy
+    );
+    expect(denied.allowed).toBe(false);
+    expect(denied.rule).toBe('policy.labels.fact:*.email.deny');
+  });
 });
 
 describe('checkLabelFlow operations mapping', () => {

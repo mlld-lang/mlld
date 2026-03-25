@@ -15,6 +15,8 @@ import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
 import type { ToolCollection } from '../tools';
+import type { RecordSchemaMetadata } from '../record';
+import type { FactSourceHandle } from '../handle';
 
 // =========================================================================
 // BASE TYPES
@@ -107,6 +109,8 @@ export interface VariableContext {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
   attestations?: readonly DataLabel[];
+  schema?: RecordSchemaMetadata;
+  factsources?: readonly FactSourceHandle[];
   keys?: readonly string[];
   values?: readonly unknown[];
   entries?: readonly (readonly [string, unknown])[];

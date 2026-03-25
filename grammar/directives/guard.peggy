@@ -165,7 +165,18 @@ GuardFunctionIdentifier
     }
 
 GuardOperationFilter
-  = "op:" identifier:GuardOpIdentifier {
+  = "op:" identifier:GuardCanonicalNamedOperationIdentifier {
+      const raw = identifier;
+      const node = helpers.createNode('GuardFilter', {
+        filterKind: 'operation',
+        scope: 'perOperation',
+        value: identifier,
+        raw,
+        location: location()
+      });
+      return { node, raw };
+    }
+  / "op:" identifier:GuardOpIdentifier {
       const raw = `op:${identifier}`;
       const node = helpers.createNode('GuardFilter', {
         filterKind: 'operation',
@@ -175,6 +186,11 @@ GuardOperationFilter
         location: location()
       });
       return { node, raw };
+    }
+
+GuardCanonicalNamedOperationIdentifier
+  = "@" identifier:GuardFunctionIdentifier {
+      return `op:@${identifier}`;
     }
 
 GuardDataFilter

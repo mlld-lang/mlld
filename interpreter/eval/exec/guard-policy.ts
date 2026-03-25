@@ -9,7 +9,11 @@ import { MlldSecurityError } from '@core/errors';
 import { GuardError } from '@core/errors/GuardError';
 import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
 import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
-import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
+import {
+  getOperationLabels,
+  normalizeNamedOperationRef,
+  parseCommand
+} from '@core/policy/operation-labels';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
@@ -183,6 +187,17 @@ function mergeLabelArrays(base: readonly string[], extra: readonly string[]): st
     merged.push(label);
   }
   return merged;
+}
+
+function mergeOperationLabelsWithCanonicalName(
+  operationName: string | undefined,
+  labels: readonly string[]
+): string[] {
+  const canonical = normalizeNamedOperationRef(operationName);
+  if (!canonical) {
+    return labels.length > 0 ? labels.slice() : [];
+  }
+  return mergeLabelArrays([canonical], labels);
 }
 
 export function cloneExecVariableWithNewValue(
@@ -423,7 +438,10 @@ export async function createExecOperationContextAndEnforcePolicy(
       toolLabels
     );
     if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
+      operationContext.opLabels = mergeOperationLabelsWithCanonicalName(
+        operationContext.name,
+        opLabels
+      );
       operationContext.command = commandPreview;
     }
     const metadata = { ...(operationContext.metadata ?? {}) } as Record<string, unknown>;
@@ -492,7 +510,10 @@ export async function createExecOperationContextAndEnforcePolicy(
       toolLabels
     );
     if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
+      operationContext.opLabels = mergeOperationLabelsWithCanonicalName(
+        operationContext.name,
+        opLabels
+      );
     }
     if (opType) {
       if (policySummary) {
@@ -526,7 +547,10 @@ export async function createExecOperationContextAndEnforcePolicy(
   } else if (isNodeFunctionExecutable(definition)) {
     const opLabels = mergeLabelArrays(getOperationLabels({ type: 'node' }), toolLabels);
     if (opLabels.length > 0) {
-      operationContext.opLabels = opLabels;
+      operationContext.opLabels = mergeOperationLabelsWithCanonicalName(
+        operationContext.name,
+        opLabels
+      );
     }
     if (policySummary) {
       const decision = evaluateCapabilityAccess(policySummary, 'node');

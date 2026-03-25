@@ -3,6 +3,7 @@ import type { Variable } from '@core/types/variable';
 import { buildArrayAggregate } from '@core/types/variable/ArrayHelpers';
 import type { ArrayAggregateSnapshot } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel, ToolProvenance } from '@core/types/security';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 
 export interface OperationSnapshot {
   labels: readonly DataLabel[];
@@ -71,6 +72,11 @@ export function buildOperationKeys(operation: OperationContext): string[] {
     if (operationType === 'run') {
       keys.add('exe');
     }
+  }
+
+  const namedOperationRef = normalizeNamedOperationRef(operation.name);
+  if (namedOperationRef) {
+    keys.add(namedOperationRef);
   }
 
   if (operation.subtype) {

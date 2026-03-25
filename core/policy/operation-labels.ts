@@ -17,6 +17,32 @@ export interface ExecutionContext {
   subcommand?: string;
 }
 
+const NAMED_OPERATION_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+export function normalizeNamedOperationRef(value: string | undefined | null): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.includes(':') && !trimmed.startsWith('op:@')) {
+    return undefined;
+  }
+
+  const withoutPrefix = trimmed.startsWith('op:@') ? trimmed.slice(3) : trimmed;
+  const withAt = withoutPrefix.startsWith('@') ? withoutPrefix : `@${withoutPrefix}`;
+  const identifier = withAt.slice(1);
+  if (!NAMED_OPERATION_PATTERN.test(identifier)) {
+    return undefined;
+  }
+
+  return `op:@${identifier.toLowerCase()}`;
+}
+
 export function getOperationLabels(ctx: ExecutionContext): string[] {
   const labels: string[] = [];
 

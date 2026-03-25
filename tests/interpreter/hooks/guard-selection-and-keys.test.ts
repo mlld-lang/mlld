@@ -517,6 +517,15 @@ describe('guard operation key utilities', () => {
     expect(keys).toEqual(['exe', 'op:publish', 'exfil', 'sensitive']);
   });
 
+  it('adds canonical named operation refs to operation keys', () => {
+    const keys = buildOperationKeys({
+      type: 'exe',
+      name: 'Email.Send'
+    } as OperationContext);
+
+    expect(keys).toEqual(['exe', 'op:@email.send']);
+  });
+
   it('does not alias non-command exe operation labels to run', () => {
     const keys = buildOperationKeys({
       type: 'exe',
@@ -534,6 +543,41 @@ describe('guard operation key utilities', () => {
     } as OperationContext);
 
     expect(Array.from(keySet)).toEqual(['show', 'display', 'release']);
+  });
+
+  it('collects canonical named-op guards alongside legacy function guards', () => {
+    const opGuard = createGuard({
+      id: 'op-email-send',
+      name: 'opEmailSend',
+      filterKind: 'operation',
+      filterValue: 'op:@email.send'
+    });
+    const fnGuard = {
+      ...createGuard({ id: 'fn-email-send', name: 'fnEmailSend' }),
+      filterKind: 'function' as const,
+      filterValue: 'email.send',
+      scope: 'perOperation' as const
+    };
+
+    const registry = {
+      getOperationGuardsForTiming(key: string): GuardDefinition[] {
+        return key === 'op:@email.send' ? [opGuard] : [];
+      },
+      getDataGuardsForTiming(): GuardDefinition[] {
+        return [];
+      },
+      getFunctionGuardsForTiming(name: string): GuardDefinition[] {
+        return name === 'email.send' ? [fnGuard] : [];
+      }
+    } as any;
+
+    const guards = collectOperationGuards(
+      registry,
+      { type: 'exe', name: 'email.send' } as OperationContext,
+      { kind: 'none' }
+    );
+
+    expect(guards.map(guard => guard.id)).toEqual(['op-email-send', 'fn-email-send']);
   });
 
   it('builds operation snapshots with aggregate metadata and variable references', () => {

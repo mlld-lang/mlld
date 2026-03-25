@@ -2,6 +2,11 @@ import type { PolicyConfig, PolicyLabels, PolicyOperations } from './union';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { resolveInputTaint } from './input-taint';
 import { isAttestationLabel } from '@core/types/security';
+import {
+  getLabelPatternSpecificity,
+  matchesFactPattern,
+  matchesLabelPattern
+} from './fact-labels';
 
 export type FlowChannel = 'arg' | 'stdin' | 'using';
 
@@ -59,18 +64,8 @@ function normalizeList(values?: readonly string[]): string[] {
   return result;
 }
 
-function matchesPrefix(rule: string, target: string): boolean {
-  if (rule === '*') {
-    return true;
-  }
-  return target === rule || target.startsWith(`${rule}:`);
-}
-
 function ruleSpecificity(rule: string): number {
-  if (rule === '*') {
-    return 0;
-  }
-  return rule.split(':').length;
+  return getLabelPatternSpecificity(rule);
 }
 
 function findBestMatch(
@@ -80,7 +75,7 @@ function findBestMatch(
   let best: MatchResult | null = null;
   for (const target of targets) {
     for (const rule of rules) {
-      if (!matchesPrefix(rule, target)) {
+      if (!matchesLabelPattern(rule, target)) {
         continue;
       }
       const specificity = ruleSpecificity(rule);
@@ -103,13 +98,48 @@ export function expandOperationLabels(
   for (const target of targets) {
     for (const [riskCategory, semanticLabels] of Object.entries(mappings)) {
       const labels = normalizeList(semanticLabels);
-      const matches = labels.some(label => matchesPrefix(label, target));
+      const matches = labels.some(label => matchesLabelPattern(label, target));
       if (matches) {
         expanded.add(riskCategory);
       }
     }
   }
   return Array.from(expanded);
+}
+
+function findBestPolicyLabelRule(
+  label: string,
+  rules: PolicyLabels
+): { key: string; rule: NonNullable<PolicyLabels[string]> } | null {
+  let bestKey: string | null = null;
+  let bestRule: NonNullable<PolicyLabels[string]> | null = null;
+  let bestSpecificity = -1;
+
+  for (const [ruleKey, rule] of Object.entries(rules)) {
+    if (!rule) {
+      continue;
+    }
+
+    const matches = ruleKey.startsWith('fact:')
+      ? matchesFactPattern(ruleKey, label)
+      : ruleKey === label;
+    if (!matches) {
+      continue;
+    }
+
+    const specificity = ruleSpecificity(ruleKey);
+    if (!bestRule || specificity > bestSpecificity) {
+      bestKey = ruleKey;
+      bestRule = rule;
+      bestSpecificity = specificity;
+    }
+  }
+
+  if (!bestKey || !bestRule) {
+    return null;
+  }
+
+  return { key: bestKey, rule: bestRule };
 }
 
 export function hasManagedPolicyLabelFlow(policy?: PolicyConfig): boolean {
@@ -148,10 +178,11 @@ export function checkExplicitLabelFlowRules(
   const labelRules: PolicyLabels = policy.labels ?? {};
 
   for (const label of inputTaint) {
-    const rule = labelRules[label];
-    if (!rule) {
+    const matchedRule = findBestPolicyLabelRule(label, labelRules);
+    if (!matchedRule) {
       continue;
     }
+    const rule = matchedRule.rule;
     const denyRules = normalizeList(rule.deny);
     const allowRules = normalizeList(rule.allow);
     const denyMatch = denyRules.length > 0 ? findBestMatch(opTargets, denyRules) : null;
@@ -164,7 +195,7 @@ export function checkExplicitLabelFlowRules(
       return {
         allowed: false,
         reason: `Label '${label}' cannot flow to '${denyMatch.match}'`,
-        rule: `policy.labels.${label}.deny`,
+        rule: `policy.labels.${matchedRule.key}.deny`,
         label,
         matched: denyMatch.match
       };
@@ -173,8 +204,8 @@ export function checkExplicitLabelFlowRules(
 
   if (resolvedInput.applyUntrustedDefault) {
     for (const label of resolvedInput.raw) {
-      const rule = labelRules[label];
-      const allowRules = normalizeList(rule?.allow);
+      const matchedRule = findBestPolicyLabelRule(label, labelRules);
+      const allowRules = normalizeList(matchedRule?.rule.allow);
       if (allowRules.length === 0) {
         continue;
       }
@@ -183,7 +214,7 @@ export function checkExplicitLabelFlowRules(
         return {
           allowed: false,
           reason: `Label '${label}' is not explicitly allowed for this operation`,
-          rule: `policy.labels.${label}.allow`,
+          rule: `policy.labels.${matchedRule?.key ?? label}.allow`,
           label
         };
       }
