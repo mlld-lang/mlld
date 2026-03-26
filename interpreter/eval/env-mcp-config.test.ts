@@ -428,6 +428,46 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('keeps display-bearing record values literal during direct mlld evaluation outside the MCP boundary', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, name: string],',
+      '  data: [notes: string?],',
+      '  display: [name, { mask: "email" }]',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies", notes: "Met at conference" }; } => contact',
+      '/export { @search_contacts }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @search_contacts } from "/contacts_tools.mld"',
+      '/var @contact = @search_contacts("Mark")',
+      '/show @contact'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: 'mark@example.com',
+        name: 'Mark Davies',
+        notes: 'Met at conference'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('uses projected result handles as the primary planner path without a separate facts call', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/contacts_tools.mld', [

@@ -52,6 +52,7 @@ export interface AvailableToolDescriptor {
 }
 
 export interface CallMcpConfig {
+  readonly sessionId: string;
   readonly mcpConfigPath: string;
   readonly toolsCsv: string;
   readonly mcpAllowedTools: string;
@@ -620,6 +621,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   if (Object.keys(mcpServers).length === 0) {
     return {
+      sessionId: randomUUID(),
       mcpConfigPath: '',
       toolsCsv,
       mcpAllowedTools: '',
@@ -633,6 +635,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     };
   }
 
+  const sessionId = randomUUID();
   const configPath = path.join(
     os.tmpdir(),
     `mlld-toolbridge-call-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
@@ -659,6 +662,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const unifiedAllowedTools = [mcpAllowedTools, nativeAllowedTools].filter(Boolean).join(',');
 
   return {
+    sessionId,
     mcpConfigPath: configPath,
     toolsCsv,
     mcpAllowedTools,

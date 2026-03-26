@@ -222,6 +222,70 @@ describe('renderDisplayProjection', () => {
     expect(asText(resolved)).toBe('ada@example.com');
   });
 
+  it('records emitted projection aliases for the active llm tool session', async () => {
+    const env = createEnvironment();
+    env.setLlmToolConfig({
+      sessionId: 'session-projection-test',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string, phone: string?],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace',
+        phone: '+1-555-0142',
+        notes: 'Met at conference'
+      },
+      env
+    });
+
+    await renderDisplayProjection(output, env);
+
+    const exposures = env.getProjectionExposures('session-projection-test');
+    expect(exposures).toHaveLength(3);
+    expect(exposures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: 'session-projection-test',
+          kind: 'bare',
+          field: 'name',
+          record: 'contact',
+          emittedLiteral: 'Ada Lovelace'
+        }),
+        expect.objectContaining({
+          sessionId: 'session-projection-test',
+          kind: 'mask',
+          field: 'email',
+          record: 'contact',
+          emittedPreview: 'a***@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }),
+        expect.objectContaining({
+          sessionId: 'session-projection-test',
+          kind: 'handle',
+          field: 'phone',
+          record: 'contact',
+          handle: expect.stringMatching(HANDLE_RE)
+        })
+      ])
+    );
+  });
+
   it('suppresses non-qualifying handles when active tool policy requires stronger fact proof', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

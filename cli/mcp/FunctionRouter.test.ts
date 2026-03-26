@@ -179,6 +179,58 @@ describe('FunctionRouter', () => {
     ]);
   });
 
+  it('records projection exposures for the active llm tool session while serializing tool results', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string, name: string],
+        display: [name, { mask: "email" }]
+      }
+
+      /exe @getContact() = js {
+        return { email: 'ada@example.com', name: 'Ada Lovelace' };
+      } => contact
+
+      /export { @getContact }
+    `);
+
+    environment.setLlmToolConfig({
+      sessionId: 'router-projection-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const router = new FunctionRouter({ environment });
+    await router.executeFunction('get_contact', {});
+
+    const exposures = environment.getProjectionExposures('router-projection-session');
+    expect(exposures).toHaveLength(2);
+    expect(exposures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: 'router-projection-session',
+          kind: 'bare',
+          field: 'name',
+          record: 'contact',
+          emittedLiteral: 'Ada Lovelace'
+        }),
+        expect.objectContaining({
+          sessionId: 'router-projection-session',
+          kind: 'mask',
+          field: 'email',
+          record: 'contact',
+          emittedPreview: 'a***@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        })
+      ])
+    );
+  });
+
   it('narrows projected handles against the active tool list and policy', async () => {
     const environment = await createEnvironment(`
       /record @contact = {
