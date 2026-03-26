@@ -410,7 +410,10 @@ export async function evaluateExecInvocationArgs(options: {
       argValueAny = arg;
     }
 
-    argValueAny = materializeSessionProofMatches(argValueAny, env);
+    const llmToolSessionId = env.getLlmToolConfig()?.sessionId;
+    if (typeof llmToolSessionId !== 'string' || llmToolSessionId.trim().length === 0) {
+      argValueAny = materializeSessionProofMatches(argValueAny, env);
+    }
     if (isStructuredValue(argValueAny)) {
       argValue = asText(argValueAny);
     }

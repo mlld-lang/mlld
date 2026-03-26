@@ -568,6 +568,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ]).join(',');
 
   const cleanupFns: Array<() => Promise<void>> = [];
+  const sessionId = randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
   const availableTools = buildAvailableTools([
@@ -608,6 +609,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     const functionBridge = await createFunctionMcpBridge({
       env: options.env,
       functions: functionMap,
+      sessionId,
+      availableTools,
       conversationDescriptor: options.conversationDescriptor
     });
     cleanupFns.push(functionBridge.cleanup);
@@ -621,7 +624,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   if (Object.keys(mcpServers).length === 0) {
     return {
-      sessionId: randomUUID(),
+      sessionId,
       mcpConfigPath: '',
       toolsCsv,
       mcpAllowedTools: '',
@@ -635,7 +638,6 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     };
   }
 
-  const sessionId = randomUUID();
   const configPath = path.join(
     os.tmpdir(),
     `mlld-toolbridge-call-config-${process.pid}-${Date.now()}-${randomUUID()}.json`

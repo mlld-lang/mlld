@@ -128,6 +128,22 @@ async function sendJsonRpc(
   return response;
 }
 
+async function getFunctionBridgeSocketPath(mcpConfigPath: string): Promise<string> {
+  const configRaw = await fs.readFile(mcpConfigPath, 'utf8');
+  const config = JSON.parse(configRaw) as {
+    mcpServers: {
+      mlld_tools: {
+        env: { MLLD_FUNCTION_MCP_SOCKET: string };
+      };
+    };
+  };
+  return config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+}
+
+function getToolResultText(response: Record<string, unknown>): string {
+  return String((response.result as any)?.content?.[0]?.text ?? '');
+}
+
 describe('createCallMcpConfig', () => {
   it('returns no config for string tools outside a box', async () => {
     const env = createEnv();
@@ -490,15 +506,7 @@ describe('createCallMcpConfig', () => {
     });
 
     try {
-      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
-      const config = JSON.parse(configRaw) as {
-        mcpServers: {
-          mlld_tools: {
-            env: { MLLD_FUNCTION_MCP_SOCKET: string };
-          };
-        };
-      };
-      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
 
       const search = await sendJsonRpc(socketPath, {
         jsonrpc: '2.0',
@@ -544,7 +552,295 @@ describe('createCallMcpConfig', () => {
       });
 
       expect((send.result as any)?.isError).not.toBe(true);
-      expect(String((send.result as any)?.content?.[0]?.text ?? '')).toBe('sent:mark@example.com:hi');
+      expect(getToolResultText(send)).toBe('sent:mark@example.com:hi');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('canonicalizes masked preview strings for security-relevant tool args in the same session', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string, name: string],',
+        '  display: [name, { mask: "email" }]',
+        '}',
+        '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
+      ].join('\n')
+    );
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 32,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: { query: 'Mark' }
+        }
+      });
+      expect((search.result as any)?.isError).not.toBe(true);
+
+      const send = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 33,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'm***@example.com',
+            subject: 'hi',
+            body: 'hello'
+          }
+        }
+      });
+
+      expect((send.result as any)?.isError).not.toBe(true);
+      expect(getToolResultText(send)).toBe('sent:mark@example.com:hi');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('canonicalizes emitted bare literals for security-relevant tool args in the same session', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string, name: string],',
+        '  display: [name, email]',
+        '}',
+        '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
+      ].join('\n')
+    );
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 34,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: { query: 'Mark' }
+        }
+      });
+      expect((search.result as any)?.isError).not.toBe(true);
+
+      const send = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 35,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'mark@example.com',
+            subject: 'hi',
+            body: 'hello'
+          }
+        }
+      });
+
+      expect((send.result as any)?.isError).not.toBe(true);
+      expect(getToolResultText(send)).toBe('sent:mark@example.com:hi');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('fails closed on ambiguous masked previews with handle guidance', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string],',
+        '  display: [{ mask: "email" }]',
+        '}',
+        '/exe @search_contacts(query) = js { return [',
+        '  { email: "sarah@company.com" },',
+        '  { email: "steve@company.com" }',
+        ']; } => contact',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
+      ].join('\n')
+    );
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 36,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: { query: 's' }
+        }
+      });
+      expect((search.result as any)?.isError).not.toBe(true);
+
+      const send = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 37,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 's***@company.com',
+            subject: 'hi',
+            body: 'hello'
+          }
+        }
+      });
+
+      expect((send.result as any)?.isError).toBe(true);
+      expect(getToolResultText(send)).toMatch(/ambiguous projected value/i);
+      expect(getToolResultText(send)).toMatch(/handle wrapper from the tool result/i);
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('does not canonicalize literals for handle-only projected fields', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string],',
+        '  display: []',
+        '}',
+        '/exe @search_contacts(query) = js { return { email: "mark@example.com" }; } => contact',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
+      ].join('\n')
+    );
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 38,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: { query: 'Mark' }
+        }
+      });
+      expect((search.result as any)?.isError).not.toBe(true);
+
+      const send = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 39,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'mark@example.com',
+            subject: 'hi',
+            body: 'hello'
+          }
+        }
+      });
+
+      expect((send.result as any)?.isError).toBe(true);
+      expect(getToolResultText(send)).toMatch(/destination must carry 'known'/i);
     } finally {
       await result.cleanup();
       env.cleanup();

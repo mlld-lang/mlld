@@ -484,23 +484,26 @@ export class FunctionRouter {
     if (baseDescriptor) {
       parts.push(baseDescriptor);
     }
-    const attestationLabels = this.lookupAttestations(value);
-    if (attestationLabels.length > 0) {
-      parts.push(
-        makeSecurityDescriptor({
-          labels: attestationLabels,
-          attestations: attestationLabels
-        })
-      );
-    }
+    const llmToolSessionId = this.environment.getLlmToolConfig()?.sessionId;
+    if (typeof llmToolSessionId !== 'string' || llmToolSessionId.trim().length === 0) {
+      const attestationLabels = this.lookupAttestations(value);
+      if (attestationLabels.length > 0) {
+        parts.push(
+          makeSecurityDescriptor({
+            labels: attestationLabels,
+            attestations: attestationLabels
+          })
+        );
+      }
 
-    const matchedValue = materializeSessionProofMatches(value, this.environment);
-    const matchedDescriptor = extractSecurityDescriptor(matchedValue, {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (matchedDescriptor) {
-      parts.push(matchedDescriptor);
+      const matchedValue = materializeSessionProofMatches(value, this.environment);
+      const matchedDescriptor = extractSecurityDescriptor(matchedValue, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      if (matchedDescriptor) {
+        parts.push(matchedDescriptor);
+      }
     }
 
     if (parts.length === 0) {

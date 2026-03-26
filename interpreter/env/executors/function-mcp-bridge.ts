@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
+import type { AvailableToolDescriptor } from '@interpreter/env/executors/call-mcp-config';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
@@ -34,6 +35,8 @@ interface JsonRpcResponse {
 export interface FunctionMcpBridgeOptions {
   env: Environment;
   functions: Map<string, ExecutableVariable>; // key is exposed MCP tool name
+  sessionId: string;
+  availableTools?: readonly AvailableToolDescriptor[];
   conversationDescriptor?: SecurityDescriptor;
 }
 
@@ -55,9 +58,22 @@ class FunctionMcpBridgeServer {
     private readonly env: Environment,
     private readonly functions: Map<string, ExecutableVariable>,
     private readonly socketPath: string,
+    sessionId: string,
+    availableTools: readonly AvailableToolDescriptor[] | undefined,
     conversationDescriptor?: SecurityDescriptor
   ) {
     this.toolEnv = env.createChild();
+    this.toolEnv.setLlmToolConfig({
+      sessionId,
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: availableTools ?? [],
+      inBox: false,
+      cleanup: async () => {}
+    });
     this.toolCollection = {};
     this.toolSchemas = [];
     this.toolParamInfo = new Map();
@@ -373,6 +389,8 @@ export async function createFunctionMcpBridge(
     options.env,
     options.functions,
     socketPath,
+    options.sessionId,
+    options.availableTools,
     options.conversationDescriptor
   );
   await server.start();

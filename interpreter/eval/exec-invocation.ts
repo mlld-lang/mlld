@@ -46,8 +46,10 @@ import type { WhenExpressionNode } from '@core/types/when';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
+import { resolveFactRequirementsForOperation } from '@core/policy/fact-requirements';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
+import { expandOperationLabels } from '@core/policy/label-flow';
 import {
   buildExecOperationPreview,
   deserializeShadowEnvs
@@ -103,6 +105,7 @@ import { coerceRecordOutput } from './records/coerce-record';
 import type { RecordDefinition } from '@core/types/record';
 import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
+import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -357,6 +360,119 @@ function buildToolProvenance(
     ...(argNames.length > 0 ? { args: argNames } : {}),
     ...(auditRef ? { auditRef } : {})
   };
+}
+
+function synchronizeGuardVariableCandidates(options: {
+  guardVariableCandidates: (Variable | undefined)[];
+  evaluatedArgs: readonly unknown[];
+  evaluatedArgStrings: readonly string[];
+}): void {
+  const { guardVariableCandidates, evaluatedArgs, evaluatedArgStrings } = options;
+
+  for (let i = 0; i < guardVariableCandidates.length; i += 1) {
+    const candidate = guardVariableCandidates[i];
+    if (!candidate) {
+      continue;
+    }
+    const updated = cloneExecVariableWithNewValue(
+      candidate,
+      evaluatedArgs[i],
+      evaluatedArgStrings[i] ?? ''
+    );
+    const resolvedDescriptor = extractSecurityDescriptor(evaluatedArgs[i], {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (resolvedDescriptor) {
+      if (!updated.mx) {
+        updated.mx = {};
+      }
+      updateVarMxFromDescriptor(updated.mx as VariableContext, resolvedDescriptor);
+      if ((updated.mx as any).mxCache) {
+        delete (updated.mx as any).mxCache;
+      }
+    }
+    guardVariableCandidates[i] = updated;
+  }
+}
+
+function mergeResolvedArgValueDescriptors(options: {
+  env: Environment;
+  evaluatedArgs: readonly unknown[];
+  argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+}): readonly (SecurityDescriptor | undefined)[] | undefined {
+  const { env, evaluatedArgs, argSecurityDescriptors } = options;
+  const descriptorCount = Math.max(evaluatedArgs.length, argSecurityDescriptors?.length ?? 0);
+  if (descriptorCount === 0) {
+    return argSecurityDescriptors;
+  }
+
+  const descriptors = Array.from(
+    { length: descriptorCount },
+    (_unused, index) => argSecurityDescriptors?.[index]
+  );
+  let changed = false;
+
+  for (let index = 0; index < evaluatedArgs.length; index += 1) {
+    const resolvedDescriptor = extractSecurityDescriptor(evaluatedArgs[index], {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (!resolvedDescriptor) {
+      continue;
+    }
+    descriptors[index] = descriptors[index]
+      ? env.mergeSecurityDescriptors(descriptors[index]!, resolvedDescriptor)
+      : resolvedDescriptor;
+    changed = true;
+  }
+
+  return changed ? descriptors : argSecurityDescriptors;
+}
+
+function collectCanonicalizationArgNames(options: {
+  operationName: string;
+  effectiveToolMetadata: {
+    labels: readonly string[];
+    controlArgs?: readonly string[];
+    hasControlArgsMetadata: boolean;
+  };
+  policySummary: ReturnType<Environment['getPolicySummary']>;
+}): string[] {
+  const resolution = resolveFactRequirementsForOperation({
+    opRef: options.operationName,
+    operationLabels: expandOperationLabels(
+      options.effectiveToolMetadata.labels,
+      options.policySummary?.operations
+    ),
+    controlArgs: options.effectiveToolMetadata.controlArgs,
+    hasControlArgsMetadata: options.effectiveToolMetadata.hasControlArgsMetadata,
+    policy: options.policySummary
+  });
+
+  return Object.keys(resolution.requirementsByArg);
+}
+
+async function canonicalizeSecurityRelevantExecArgs(options: {
+  env: Environment;
+  paramNames: readonly string[];
+  evaluatedArgs: readonly unknown[];
+  targetArgNames: readonly string[];
+}): Promise<unknown[]> {
+  if (options.targetArgNames.length === 0) {
+    return [...options.evaluatedArgs];
+  }
+
+  const nextArgs = [...options.evaluatedArgs];
+  for (const argName of new Set(options.targetArgNames)) {
+    const argIndex = options.paramNames.indexOf(argName);
+    if (argIndex === -1 || argIndex >= nextArgs.length) {
+      continue;
+    }
+    nextArgs[argIndex] = await canonicalizeProjectedValue(nextArgs[argIndex], options.env);
+  }
+
+  return nextArgs;
 }
 
 function getToolResultLength(value: unknown): number | undefined {
@@ -1719,31 +1835,11 @@ async function evaluateExecInvocationInternal(
     evaluatedArgs.map(arg => resolveValueHandles(arg, runtimeEnv))
   );
   evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
-  for (let i = 0; i < guardVariableCandidates.length; i += 1) {
-    const candidate = guardVariableCandidates[i];
-    if (!candidate) {
-      continue;
-    }
-    const updated = cloneExecVariableWithNewValue(
-      candidate,
-      evaluatedArgs[i],
-      evaluatedArgStrings[i] ?? ''
-    );
-    const resolvedDescriptor = extractSecurityDescriptor(evaluatedArgs[i], {
-      recursive: true,
-      mergeArrayElements: true
-    });
-    if (resolvedDescriptor) {
-      if (!updated.mx) {
-        updated.mx = {};
-      }
-      updateVarMxFromDescriptor(updated.mx as VariableContext, resolvedDescriptor);
-      if ((updated.mx as any).mxCache) {
-        delete (updated.mx as any).mxCache;
-      }
-    }
-    guardVariableCandidates[i] = updated;
-  }
+  synchronizeGuardVariableCandidates({
+    guardVariableCandidates,
+    evaluatedArgs,
+    evaluatedArgStrings
+  });
 
   // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
   // and expose the result on @mx.llm for the exe body to consume.
@@ -1824,6 +1920,25 @@ async function evaluateExecInvocationInternal(
       : undefined
   });
   const toolLabels = effectiveToolMetadata.labels;
+  const canonicalizationArgNames = collectCanonicalizationArgNames({
+    operationName: toolOperationName ?? variable.name ?? commandName,
+    effectiveToolMetadata,
+    policySummary: runtimeEnv.getPolicySummary()
+  });
+  if (canonicalizationArgNames.length > 0) {
+    evaluatedArgs = await canonicalizeSecurityRelevantExecArgs({
+      env: runtimeEnv,
+      paramNames: params,
+      evaluatedArgs,
+      targetArgNames: canonicalizationArgNames
+    });
+    evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+    synchronizeGuardVariableCandidates({
+      guardVariableCandidates,
+      evaluatedArgs,
+      evaluatedArgStrings
+    });
+  }
   const policyGuardControlArgs =
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
@@ -1835,7 +1950,11 @@ async function evaluateExecInvocationInternal(
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels);
-  let effectiveArgSecurityDescriptors = argSecurityDescriptors;
+  let effectiveArgSecurityDescriptors = mergeResolvedArgValueDescriptors({
+    env: runtimeEnv,
+    evaluatedArgs,
+    argSecurityDescriptors
+  });
   if (shouldValidatePolicyAuthorizations) {
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
