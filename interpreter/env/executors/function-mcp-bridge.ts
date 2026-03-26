@@ -240,6 +240,7 @@ class FunctionMcpBridgeServer {
             }
           };
         } catch (error) {
+          this.env.recordGuardDenialFromError(error);
           return {
             jsonrpc: '2.0',
             id,

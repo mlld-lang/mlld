@@ -1,6 +1,9 @@
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import { hasMatchingFactLabel, parseFactLabel } from '@core/policy/fact-labels';
+import { expandOperationLabels } from '@core/policy/label-flow';
+import { deriveBuiltInFactPatternsForOperationArg } from '@core/policy/fact-requirements';
 import type { Environment } from '@interpreter/env/Environment';
+import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { accessField } from '@interpreter/utils/field-access';
 import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
@@ -17,6 +20,12 @@ type FactCandidate = {
   label: string;
   field: string;
   fact: string;
+};
+
+type QueryOperationContext = {
+  labels?: readonly string[];
+  controlArgs?: readonly string[];
+  hasControlArgsMetadata?: boolean;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -48,20 +57,28 @@ function normalizeFyiFactsQuery(raw: unknown): FyiFactsQuery {
   };
 }
 
-function buildFactPatterns(query: FyiFactsQuery): string[] | null {
-  if (!query.arg) {
-    return null;
+function resolveQueryOperationContext(
+  query: FyiFactsQuery,
+  env: Environment
+): QueryOperationContext | undefined {
+  if (!query.op) {
+    return undefined;
   }
 
-  if (['recipient', 'recipients', 'cc', 'bcc'].includes(query.arg)) {
-    return ['fact:*.email'];
+  const operationName = query.op.startsWith('op:@') ? query.op.slice(4) : query.op;
+  const metadata = resolveNamedOperationMetadata(env, operationName);
+  if (!metadata) {
+    return undefined;
   }
 
-  if (query.arg === 'id') {
-    return ['fact:*.id'];
-  }
-
-  return [];
+  return {
+    labels: expandOperationLabels(
+      metadata.labels,
+      env.getPolicySummary()?.operations
+    ),
+    controlArgs: metadata.controlArgs,
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+  };
 }
 
 function extractCandidateFromLeaf(value: StructuredValue): {
@@ -139,7 +156,13 @@ async function collectFactCandidates(
 
 export async function evaluateFyiFacts(query: unknown, env: Environment): Promise<StructuredValue<FactCandidate[]>> {
   const normalizedQuery = normalizeFyiFactsQuery(query);
-  const requiredPatterns = buildFactPatterns(normalizedQuery);
+  const operationContext = resolveQueryOperationContext(normalizedQuery, env);
+  const requiredPatterns = deriveBuiltInFactPatternsForOperationArg({
+    arg: normalizedQuery.arg,
+    operationLabels: operationContext?.labels,
+    controlArgs: operationContext?.controlArgs,
+    hasControlArgsMetadata: operationContext?.hasControlArgsMetadata
+  });
   const scopedConfig = env.getScopedEnvironmentConfig() as { fyi?: { facts?: unknown[] } } | undefined;
   const configuredRoots = Array.isArray(scopedConfig?.fyi?.facts) ? scopedConfig!.fyi!.facts : [];
 

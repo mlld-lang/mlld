@@ -7,6 +7,11 @@ import {
   matchesFactPattern,
   matchesLabelPattern
 } from './fact-labels';
+import {
+  SEND_KNOWN_PATTERNS,
+  SEND_INTERNAL_PATTERNS,
+  TARGET_KNOWN_PATTERNS
+} from './fact-requirements';
 
 export type FlowChannel = 'arg' | 'stdin' | 'using';
 
@@ -46,10 +51,6 @@ const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-untrusted-privileged',
   'no-influenced-advice'
 ]);
-
-const SEND_KNOWN_PATTERNS = ['known', 'fact:*.email'] as const;
-const SEND_INTERNAL_PATTERNS = ['known:internal', 'fact:internal:*.email'] as const;
-const TARGET_KNOWN_PATTERNS = ['known', 'fact:*.id'] as const;
 
 function normalizeList(values?: readonly string[]): string[] {
   if (!values) {

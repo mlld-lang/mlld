@@ -1797,7 +1797,11 @@ async function evaluateExecInvocationInternal(
       : undefined
   });
   const toolLabels = effectiveToolMetadata.labels;
-  const authorizationControlArgs =
+  const policyGuardControlArgs =
+    effectiveToolMetadata.hasControlArgsMetadata
+      ? effectiveToolMetadata.controlArgs ?? []
+      : undefined;
+  const authorizationDecisionControlArgs =
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
       : effectiveToolMetadata.params;
@@ -1816,7 +1820,7 @@ async function evaluateExecInvocationInternal(
       authorizations: runtimeEnv.getPolicySummary()!.authorizations!,
       operationName: toolOperationName ?? variable.name ?? commandName,
       args: authorizationArgs,
-      controlArgs: authorizationControlArgs
+      controlArgs: authorizationDecisionControlArgs
     });
     if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
@@ -1943,7 +1947,7 @@ async function evaluateExecInvocationInternal(
       commandName,
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
-      authorizationControlArgs,
+      authorizationControlArgs: policyGuardControlArgs,
       env: runtimeEnv,
       execEnv,
       policyEnforcer: activePolicyEnforcer,

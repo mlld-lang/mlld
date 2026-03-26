@@ -13,6 +13,13 @@ import {
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 import { expandOperationLabels } from './label-flow';
 import { matchesLabelPattern } from './fact-labels';
+import {
+  SEND_KNOWN_PATTERNS,
+  SEND_INTERNAL_PATTERNS,
+  TARGET_KNOWN_PATTERNS,
+  selectDestinationArgs,
+  selectTargetArgs
+} from './fact-requirements';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -31,12 +38,6 @@ export interface AuthorizationInheritedPolicyCheckFailure {
   suggestions?: string[];
 }
 
-const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
-const TARGET_ARG_SELECTORS = ['id'] as const;
-const SEND_KNOWN_PATTERNS = ['known', 'fact:*.email'] as const;
-const SEND_INTERNAL_PATTERNS = ['known:internal', 'fact:internal:*.email'] as const;
-const TARGET_KNOWN_PATTERNS = ['known', 'fact:*.id'] as const;
-
 export type CommandAccessDecision = {
   allowed: boolean;
   commandName: string;
@@ -53,15 +54,6 @@ export type CapabilityAccessDecision = {
   allowed: boolean;
   reason?: string;
 };
-
-function isEmptyAuthorizationValue(value: unknown): boolean {
-  return (
-    value === undefined ||
-    value === null ||
-    value === '' ||
-    (Array.isArray(value) && value.length === 0)
-  );
-}
 
 function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
   return normalizeList([
@@ -96,48 +88,6 @@ function getExpandedPolicyOperationLabels(
     ...(operation.opLabels ?? []),
     ...(operation.labels ?? [])
   ], operations);
-}
-
-function selectNamedArgs(
-  args: Readonly<Record<string, unknown>> | undefined,
-  selectors: readonly string[],
-  options?: { ignoreEmpty?: boolean }
-): string[] {
-  if (!args) {
-    return [];
-  }
-
-  const selected: string[] = [];
-  for (const selector of selectors) {
-    if (!Object.prototype.hasOwnProperty.call(args, selector)) {
-      continue;
-    }
-    if (options?.ignoreEmpty === true && isEmptyAuthorizationValue(args[selector])) {
-      continue;
-    }
-    selected.push(selector);
-  }
-  return selected;
-}
-
-function selectNamedArgsWithFallback(
-  args: Readonly<Record<string, unknown>> | undefined,
-  selectors: readonly string[],
-  options?: { ignoreEmpty?: boolean; fallbackToFirstProvided?: boolean }
-): string[] {
-  const selected = selectNamedArgs(args, selectors, options);
-  if (selected.length > 0 || !args || options?.fallbackToFirstProvided !== true) {
-    return selected;
-  }
-
-  for (const [argName, value] of Object.entries(args)) {
-    if (options?.ignoreEmpty === true && isEmptyAuthorizationValue(value)) {
-      continue;
-    }
-    return [argName];
-  }
-
-  return [];
 }
 
 function buildInheritedPositiveCheckFailure(options: {
@@ -179,9 +129,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     enabledRules.includes('no-send-to-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'exfil:send')
   ) {
-    const destinationArgs = selectNamedArgs(options.args, SEND_DESTINATION_ARG_SELECTORS, {
-      ignoreEmpty: true
-    });
+    const destinationArgs = selectDestinationArgs(options.operation, options.args);
     if (destinationArgs.length === 0) {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
@@ -209,9 +157,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     enabledRules.includes('no-send-to-external') &&
     hasMatchingLabel(expandedOperationLabels, 'exfil:send')
   ) {
-    const destinationArgs = selectNamedArgs(options.args, SEND_DESTINATION_ARG_SELECTORS, {
-      ignoreEmpty: true
-    });
+    const destinationArgs = selectDestinationArgs(options.operation, options.args);
     if (destinationArgs.length === 0) {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
@@ -241,9 +187,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     enabledRules.includes('no-destroy-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'destructive:targeted')
   ) {
-    const targetArgs = selectNamedArgsWithFallback(options.args, TARGET_ARG_SELECTORS, {
-      fallbackToFirstProvided: true
-    });
+    const targetArgs = selectTargetArgs(options.args);
     if (targetArgs.length === 0) {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
@@ -342,7 +286,6 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_unknown',
         operationLabel: 'exfil:send',
-        selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known',
         acceptedPatterns: SEND_KNOWN_PATTERNS,
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
@@ -356,7 +299,6 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_external',
         operationLabel: 'exfil:send',
-        selectors: SEND_DESTINATION_ARG_SELECTORS,
         requiredLabel: 'known:internal',
         acceptedPatterns: SEND_INTERNAL_PATTERNS,
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
@@ -371,7 +313,6 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_destroy_unknown',
         operationLabel: 'destructive:targeted',
-        selectors: TARGET_ARG_SELECTORS,
         requiredLabel: 'known',
         acceptedPatterns: TARGET_KNOWN_PATTERNS,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
@@ -1010,7 +951,6 @@ function makeDataRuleGuard(options: {
 function makeNamedArgAttestationGuard(options: {
   name: string;
   operationLabel: string;
-  selectors: readonly string[];
   requiredLabel: string;
   acceptedPatterns?: readonly string[];
   reason: string;
@@ -1042,10 +982,10 @@ function makeNamedArgAttestationGuard(options: {
         return { decision: 'allow' };
       }
 
-      const selectedArgs = selectNamedArgsWithFallback(args, options.selectors, {
-        ignoreEmpty: true,
-        fallbackToFirstProvided: options.fallbackToFirstProvided === true
-      });
+      const selectedArgs =
+        options.operationLabel === 'exfil:send'
+          ? selectDestinationArgs(operation, args)
+          : selectTargetArgs(args);
       if (selectedArgs.length === 0) {
         return {
           decision: 'deny',

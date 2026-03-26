@@ -49,6 +49,29 @@ function resolveExecutableVariable(
   return variable && isExecutableVariable(variable) ? variable : undefined;
 }
 
+function resolveExecutableVariableCaseInsensitive(
+  env: Environment,
+  name: string
+): ExecutableVariable | undefined {
+  const direct = resolveExecutableVariable(env, name);
+  if (direct) {
+    return direct;
+  }
+
+  const lowered = name.trim().toLowerCase();
+  if (!lowered) {
+    return undefined;
+  }
+
+  for (const [candidateName, variable] of env.getAllVariables()) {
+    if (candidateName.trim().toLowerCase() === lowered && isExecutableVariable(variable)) {
+      return variable;
+    }
+  }
+
+  return undefined;
+}
+
 function getExecutableParamNames(executable: ExecutableVariable): string[] {
   return Array.isArray(executable.paramNames)
     ? executable.paramNames.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
@@ -210,4 +233,40 @@ export function resolveEffectiveToolMetadata(options: {
     ...merged,
     labels: mergeStringLists(merged.labels, additionalLabels)
   };
+}
+
+export function resolveNamedOperationMetadata(
+  env: Environment,
+  operationName: string
+): EffectiveToolMetadata | undefined {
+  const trimmed = operationName.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const scopedTools = getScopedToolCollection(env);
+  const directDefinition =
+    scopedTools?.[trimmed] ??
+    Object.entries(scopedTools ?? {}).find(([name]) => name.trim().toLowerCase() === trimmed.toLowerCase())?.[1];
+  if (directDefinition?.mlld) {
+    const executable = resolveExecutableVariableCaseInsensitive(env, directDefinition.mlld);
+    if (executable) {
+      return resolveEffectiveToolMetadata({
+        env,
+        executable,
+        operationName: trimmed
+      });
+    }
+  }
+
+  const executable = resolveExecutableVariableCaseInsensitive(env, trimmed);
+  if (!executable) {
+    return undefined;
+  }
+
+  return resolveEffectiveToolMetadata({
+    env,
+    executable,
+    operationName: trimmed
+  });
 }

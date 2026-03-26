@@ -415,7 +415,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       executableType: definition.type,
       command: commandName,
       sourceRetryable: true,
-      ...(options.authorizationControlArgs
+      ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {})
     }

@@ -53,7 +53,11 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendUnknown?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['fact:@contact.email'] }
@@ -63,7 +67,11 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendUnknown?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['known'] }
@@ -73,7 +81,11 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendUnknown?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1', subject: 'ok' },
         argDescriptors: {
           subject: { attestations: ['known'] }
@@ -86,7 +98,11 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendExternal?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['known'] }
@@ -99,7 +115,11 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendExternal?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['fact:internal:@contact.email'] }
@@ -109,13 +129,80 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       sendExternal?.policyCondition?.({
-        operation: { name: 'send', labels: ['mail:send'] },
+        operation: {
+          name: 'send',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['known:internal'] }
         }
       })
     ).toEqual({ decision: 'allow' });
+
+    expect(
+      sendUnknown?.policyCondition?.({
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['participants'] }
+        },
+        args: { participants: ['acct-1'] },
+        argDescriptors: {
+          participants: { attestations: ['known'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('falls back to the first provided arg for non-tool exfil:send operations', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['mail:send'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const sendUnknown = guards.find(guard => guard.name === '__policy_rule_no_send_to_unknown');
+
+    expect(
+      sendUnknown?.policyCondition?.({
+        operation: {
+          name: 'send',
+          labels: ['mail:send']
+        },
+        args: { destination: 'acct-1', body: 'hello' },
+        argDescriptors: {
+          destination: { attestations: ['known'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('fails closed for tool:w exfil:send operations without control-arg metadata', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w:send_money'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const sendUnknown = guards.find(guard => guard.name === '__policy_rule_no_send_to_unknown');
+
+    expect(
+      sendUnknown?.policyCondition?.({
+        operation: {
+          name: 'sendMoney',
+          labels: ['tool:w:send_money']
+        },
+        args: { recipient: 'acct-1' },
+        argDescriptors: {
+          recipient: { attestations: ['known'] }
+        }
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'"
+    });
   });
 
   it('checks named target arg attestations for destructive:targeted rules', () => {
@@ -187,7 +274,10 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       evaluateAuthorizationInheritedPolicyChecks({
         policy,
-        operation: { labels: ['tool:w:send_money'] },
+        operation: {
+          labels: ['tool:w:send_money'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1', cc: [], bcc: [] },
         argDescriptors: {
           recipient: { attestations: ['known:internal'] }
@@ -198,7 +288,10 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       evaluateAuthorizationInheritedPolicyChecks({
         policy,
-        operation: { labels: ['tool:w:send_money'] },
+        operation: {
+          labels: ['tool:w:send_money'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { labels: [] }
@@ -249,7 +342,10 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       evaluateAuthorizationInheritedPolicyChecks({
         policy,
-        operation: { labels: ['tool:w:send_money'] },
+        operation: {
+          labels: ['tool:w:send_money'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { labels: [] }
@@ -273,7 +369,10 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(
       evaluateAuthorizationInheritedPolicyChecks({
         policy,
-        operation: { labels: ['tool:w:send_mail'] },
+        operation: {
+          labels: ['tool:w:send_mail'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
         args: { recipient: 'acct-1' },
         argDescriptors: {
           recipient: { attestations: ['fact:internal:@contact.email'] }

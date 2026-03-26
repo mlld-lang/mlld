@@ -81,6 +81,47 @@ describe('evaluateFyiFacts', () => {
     ]);
   });
 
+  it('prefers live operation metadata for nonstandard control args', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @contact = {
+  facts: [email: string]
+}
+/exe @emitContact() = js {
+  return { email: "ada@example.com" };
+} => contact
+/exe exfil:send @createCalendarEvent(participants, title) = @participants with {
+  controlArgs: ["participants"]
+}
+/var @contact = @emitContact()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+    const contact = env.getVariable('contact');
+    if (!contact) {
+      throw new Error('Expected @contact to be defined');
+    }
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [contact]
+      }
+    });
+
+    const result = await evaluateFyiFacts(
+      { op: 'op:@createCalendarEvent', arg: 'participants' },
+      env
+    );
+
+    expect(result.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'ada@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
+  });
+
   it('filters destructive targets to id facts', async () => {
     const env = await createContactsEnv();
 
