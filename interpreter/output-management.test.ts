@@ -77,11 +77,11 @@ describe('Output Management Integration', () => {
   });
 
   it('should collect errors when collectErrors is enabled', async () => {
-    const content = `
-    /run {exit 1}
-    /run {echo "This should still run"}
-    /run {exit 2}
-    `.trim();
+    const content = [
+      '/run {exit 1}',
+      '/run {echo "This should still run"}',
+      '/run {exit 2}'
+    ].join('\n');
     
     await interpret(content, {
       fileSystem,
@@ -101,10 +101,10 @@ describe('Output Management Integration', () => {
   });
 
   it('should halt on error when errorBehavior is halt', async () => {
-    const content = `
-    /run {exit 1}
-    /run {echo "This should not run"}
-    `.trim();
+    const content = [
+      '/run {exit 1}',
+      '/run {echo "This should not run"}'
+    ].join('\n');
     
     await expect(
       interpret(content, {
@@ -119,10 +119,10 @@ describe('Output Management Integration', () => {
   });
 
   it('should continue on error when errorBehavior is continue', async () => {
-    const content = `
-    /run {exit 1}
-    /run {echo "This should run"}
-    `.trim();
+    const content = [
+      '/run {exit 1}',
+      '/run {echo "This should run"}'
+    ].join('\n');
     
     const result = await interpret(content, {
       fileSystem,

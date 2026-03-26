@@ -2,7 +2,7 @@
   "name": "GuardError",
   "guardName": "@retryOutput",
   "filter": "operation:exe",
-  "reason": "Cannot retry: Retry output check",
+  "reason": "Guard retry limit exceeded (3)",
   "operation": "exe",
   "decision": "deny"
 }

@@ -14,6 +14,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function cloneWithOwnDescriptors<T extends object>(value: T): T {
+  const clone = Object.create(Object.getPrototypeOf(value));
+  Object.defineProperties(clone, Object.getOwnPropertyDescriptors(value));
+  return clone;
+}
+
 export async function resolveValueHandles(value: unknown, env: Environment): Promise<unknown> {
   if (isHandleWrapper(value)) {
     return env.resolveHandle(value.handle);
@@ -24,10 +30,9 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     if (resolvedValue === value.value) {
       return value;
     }
-    return {
-      ...value,
-      value: resolvedValue
-    };
+    const clone = cloneWithOwnDescriptors(value);
+    (clone as typeof value).value = resolvedValue;
+    return clone;
   }
 
   if (isStructuredValue(value)) {
@@ -35,12 +40,19 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
       return value;
     }
     const resolvedData = await resolveValueHandles(value.data, env);
-    return wrapStructured(
+    if (resolvedData === value.data) {
+      return value;
+    }
+    const resolved = wrapStructured(
       resolvedData as any,
       value.type,
-      undefined,
+      value.text,
       value.metadata
     );
+    if (value.internal) {
+      resolved.internal = { ...value.internal };
+    }
+    return resolved;
   }
 
   if (Array.isArray(value)) {

@@ -30,6 +30,7 @@ import {
 } from './guard-materialization';
 import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import { attachGuardHelper } from './guard-helper-injection';
+import { formatGuardFilterForMetadata } from './guard-filter-display';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
@@ -301,7 +302,7 @@ export async function evaluateGuardRuntime(
     if (policyResult.decision === 'deny') {
       const metadataBase: Record<string, unknown> = {
         guardName: guard.name ?? null,
-        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+        guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
         scope,
         inputPreview,
         guardContext: contextSnapshotForMetadata,
@@ -348,7 +349,7 @@ export async function evaluateGuardRuntime(
       timing: 'before',
       metadata: {
         guardName: guard.name ?? null,
-        guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+        guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
         scope,
         inputPreview,
         guardContext: contextSnapshotForMetadata,
@@ -368,7 +369,7 @@ export async function evaluateGuardRuntime(
 
   const metadataBase: Record<string, unknown> = {
     guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+    guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
     scope,
     inputPreview,
     guardContext: contextSnapshotForMetadata,

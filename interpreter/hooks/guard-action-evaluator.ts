@@ -18,6 +18,7 @@ import {
   hasSecretLabel,
   redactVariableForErrorOutput
 } from './guard-materialization';
+import { formatGuardFilterForMetadata } from './guard-filter-display';
 import type { GuardAttemptEntry } from './guard-retry-state';
 import {
   applyGuardLabelModifications,
@@ -182,7 +183,7 @@ export function buildDecisionMetadata(
   const metadata: Record<string, unknown> = {
     reason,
     guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+    guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
     scope: guard.scope,
     decision: action.decision,
     guardPrivileged: guard.privileged === true,

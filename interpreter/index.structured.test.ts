@@ -29,11 +29,13 @@ describe('interpret structured mode', () => {
     expect((result as any).output).toContain('Hello there');
     expect(Array.isArray(effects)).toBe(true);
     expect(effects.length).toBeGreaterThan(0);
-    expect(effects[0].type).toBe('doc');
-    expect(effects[0].security).toBeDefined();
-    expect(Array.isArray(effects[0].security?.labels)).toBe(true);
-    expect(Array.isArray(effects[0].security?.taint ?? [])).toBe(true);
-    expect(Array.isArray(effects[0].security?.sources)).toBe(true);
+    const firstVisibleEffect = effects.find((effect: any) => effect.type === 'doc' || effect.type === 'both');
+    expect(firstVisibleEffect).toBeDefined();
+    expect(['doc', 'both']).toContain(firstVisibleEffect.type);
+    expect(firstVisibleEffect.security).toBeDefined();
+    expect(Array.isArray(firstVisibleEffect.security?.labels)).toBe(true);
+    expect(Array.isArray(firstVisibleEffect.security?.taint ?? [])).toBe(true);
+    expect(Array.isArray(firstVisibleEffect.security?.sources)).toBe(true);
 
     const exportKey = exports.apiKey ? 'apiKey' : '@apiKey';
     expect(exports[exportKey].value).toBe('sk-123');

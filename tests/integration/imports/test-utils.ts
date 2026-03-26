@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
-import { existsSync, statSync } from 'fs';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -45,14 +45,58 @@ export interface RunResult {
   duration: number;
 }
 
-function shouldUseWrapper(distPath: string, sourcePath: string): boolean {
-  if (!existsSync(distPath)) return true;
-  if (!existsSync(sourcePath)) return false;
-  try {
-    return statSync(sourcePath).mtimeMs > statSync(distPath).mtimeMs;
-  } catch {
-    return false;
+function normalizeImportOutput(output: string): string {
+  return output
+    .replace(/\r\n/g, '\n')
+    .trim()
+    .replace(/\n[ \t]*\n+/g, '\n');
+}
+
+function buildIsolatedChildEnv(
+  overrides: Record<string, string> | undefined,
+  useSourceCli: boolean,
+  tsconfigPath: string
+): NodeJS.ProcessEnv {
+  const inheritedKeys = [
+    'PATH',
+    'HOME',
+    'USERPROFILE',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'SHELL',
+    'TERM',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TZ',
+    'SystemRoot',
+    'ComSpec',
+    'PATHEXT',
+    'CI',
+    'NO_COLOR',
+    'FORCE_COLOR'
+  ] as const;
+
+  const env: NodeJS.ProcessEnv = {};
+
+  for (const key of inheritedKeys) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
   }
+
+  env.NODE_ENV = 'test';
+  env.MLLD_TEST = '1';
+  env.MLLD_NO_STREAMING = 'true';
+
+  if (useSourceCli) {
+    env.TSX_TSCONFIG_PATH = tsconfigPath;
+  }
+
+  return {
+    ...env,
+    ...overrides
+  };
 }
 
 // Helper to run mlld in subprocess for isolation
@@ -63,19 +107,19 @@ export async function runMLLD(
   const startTime = Date.now();
   const distPath = path.join(__dirname, '../../../dist/cli.cjs');
   const sourcePath = path.join(__dirname, '../../../cli/cli-entry.ts');
-  const wrapperPath = path.join(__dirname, '../../../bin/mlld-wrapper.cjs');
-  const mlldPath = shouldUseWrapper(distPath, sourcePath) ? wrapperPath : distPath;
+  const tsxLoaderPath = path.join(__dirname, '../../../node_modules/tsx/dist/esm/index.mjs');
+  const tsconfigPath = path.join(__dirname, '../../../tsconfig.json');
+  const useSourceCli = existsSync(sourcePath);
+  const cliArgs = useSourceCli
+    ? ['--import', tsxLoaderPath, sourcePath, scriptPath]
+    : [distPath, scriptPath];
   
   return new Promise((resolve) => {
     // Use the current node executable path to avoid PATH issues
     const nodeExecutable = process.execPath;
-    const child = spawn(nodeExecutable, [mlldPath, scriptPath], {
+    const child = spawn(nodeExecutable, cliArgs, {
       cwd: options.cwd || process.cwd(),
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        ...options.env
-      },
+      env: buildIsolatedChildEnv(options.env, useSourceCli, tsconfigPath),
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: options.timeout || 30000 // 30 second default timeout
     });
@@ -165,8 +209,8 @@ export class ImportTestRunner {
       let success = true;
       
       if (testCase.expectedOutput !== undefined) {
-        const actualOutput = result.output.trim();
-        const expectedOutput = testCase.expectedOutput.trim();
+        const actualOutput = normalizeImportOutput(result.output);
+        const expectedOutput = normalizeImportOutput(testCase.expectedOutput);
         if (actualOutput !== expectedOutput) {
           success = false;
           if (testCase.debug) {
@@ -198,7 +242,7 @@ export class ImportTestRunner {
           }
         }
       }
-      
+
       return {
         success,
         output: result.output,

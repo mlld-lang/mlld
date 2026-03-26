@@ -8,7 +8,7 @@ import {
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import { isVariable } from './variable-resolution';
 import { resolveNestedValue } from './display-materialization';
-import { extractSecurityDescriptor, isStructuredValue } from './structured-value';
+import { asData, extractSecurityDescriptor, isStructuredValue } from './structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 
 const FALLBACK_SOURCE: VariableSource = {
@@ -97,10 +97,52 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
 
 function materializeGuardInput(value: unknown, nameHint: string): Variable | undefined {
   if (isVariable(value)) {
+    if (isStructuredValue(value.value)) {
+      const data = asData(value.value);
+      if (data === null || (typeof data !== 'object' && typeof data !== 'function')) {
+        const materialized = materializeExpressionValue(data, { name: value.name || nameHint })
+          ?? createSimpleTextVariable(value.name || nameHint, formatGuardInputValue(data), FALLBACK_SOURCE, { mx: {} });
+        materialized.name = value.name || nameHint;
+        materialized.source = value.source;
+        materialized.internal = {
+          ...(value.internal ?? {}),
+          ...(materialized.internal ?? {})
+        };
+        materialized.metadata = {
+          ...(value.metadata ?? {}),
+          ...(materialized.metadata ?? {})
+        };
+        applyDescriptorFromValue(value.value, materialized);
+        if (value.mx) {
+          materialized.mx = {
+            ...(materialized.mx ?? {}),
+            ...value.mx
+          };
+          if ((materialized.mx as any).mxCache) {
+            delete (materialized.mx as any).mxCache;
+          }
+        }
+        return materialized;
+      }
+    }
     return value;
   }
 
   if (isStructuredValue(value)) {
+    const data = asData(value);
+    if (data === null || (typeof data !== 'object' && typeof data !== 'function')) {
+      const materialized = materializeExpressionValue(data, { name: nameHint })
+        ?? createSimpleTextVariable(nameHint, formatGuardInputValue(data), FALLBACK_SOURCE, { mx: {} });
+      applyDescriptorFromValue(value, materialized);
+      if (value.mx.schema !== undefined) {
+        materialized.mx.schema = value.mx.schema;
+      }
+      if (value.mx.factsources !== undefined) {
+        materialized.mx.factsources = [...value.mx.factsources];
+      }
+      return materialized;
+    }
+
     const variable = createStructuredValueVariable(nameHint, value, FALLBACK_SOURCE, {
       mx: {
         schema: value.mx.schema,

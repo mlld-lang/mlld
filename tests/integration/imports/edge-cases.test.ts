@@ -30,7 +30,6 @@ describe('Import Edge Cases and Error Scenarios', () => {
           'module2.mld': '/var @helper = "From module 2"'
         },
         expectedOutput: `From module 1
-
 From module 2`
       });
       
@@ -116,7 +115,6 @@ From module 2`
 /var @test_2_name = "Second"`
         },
         expectedOutput: `First
-
 Second`
       });
       

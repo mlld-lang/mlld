@@ -71,6 +71,14 @@ export function collectOperationGuards(
   override: NormalizedGuardOverride,
   options: OperationGuardCollectionOptions = {}
 ): GuardDefinition[] {
+  const guardDomain =
+    operation.metadata && typeof operation.metadata === 'object'
+      ? (operation.metadata as Record<string, unknown>).guardDomain
+      : undefined;
+  if (guardDomain === 'definition') {
+    return [];
+  }
+
   const timing = options.timing ?? 'before';
   const keys = buildOperationKeys(operation);
   const excluded = options.excludeGuardIds;

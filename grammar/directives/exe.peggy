@@ -496,14 +496,6 @@ SlashExe
         source
       );
     }
-
-ExeOutputRecordAnnotation
-  = __ "=>" _ "@"? identifier:BaseIdentifier {
-      return {
-        identifier,
-        node: helpers.createVariableReferenceNode('varIdentifier', { identifier }, location())
-      };
-    }
   // Special case: environment declaration without @ prefix
   / DirectiveContext ExeKeyword _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? ending:StandardDirectiveEnding {
       // Only allow environment declarations without @
@@ -621,6 +613,14 @@ ExeOutputRecordAnnotation
             "  exe @calc(x) = js {return @x * 2}\n" +
             "  exe @alias() = @otherCommand\n" +
             "  exe @msg() = \"a string value\"", "@", location());
+    }
+
+ExeOutputRecordAnnotation
+  = __ "=>" _ "@"? identifier:BaseIdentifier {
+      return {
+        identifier,
+        node: helpers.createVariableReferenceNode('varIdentifier', { identifier }, location())
+      };
     }
 
 // -------------------------------------------------------------

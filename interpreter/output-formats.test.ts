@@ -50,12 +50,12 @@ describe('Output Format Tests', () => {
   
   describe('Markdown Format', () => {
     it('should output clean markdown by default', async () => {
-      const source = `
-    /var @message = "Hello Markdown"
-    /var @config = {"name": "MyApp", "version": "1.0.0"}
-    /show @message
-    /show @config
-`;
+      const source = [
+        '/var @message = "Hello Markdown"',
+        '/var @config = {"name": "MyApp", "version": "1.0.0"}',
+        '/show @message',
+        '/show @config'
+      ].join('\n');
       
       const result = await interpret(source, {
         fileSystem,
@@ -135,18 +135,21 @@ describe('Integration Scenarios', () => {
   describe('Import Scope Precedence', () => {
     it('should use imported variables (first import wins immutable design)', async () => {
       // Set up imported file with variables
-      await fileSystem.writeFile('/imported.mld', `
-    /var @greeting = "Hello from import"
-    /var @author = "Import Author"
-    /var @settings = {"theme": "dark", "lang": "en"}
-`);
+      await fileSystem.writeFile(
+        '/imported.mld',
+        [
+          '/var @greeting = "Hello from import"',
+          '/var @author = "Import Author"',
+          '/var @settings = {"theme": "dark", "lang": "en"}'
+        ].join('\n')
+      );
       
-      const source = `
-    /import "/imported.mld" as @imported
-    /show @imported.greeting
-    /show " by "
-    /show @imported.author
-`;
+      const source = [
+        '/import "/imported.mld" as @imported',
+        '/show @imported.greeting',
+        '/show " by "',
+        '/show @imported.author'
+      ].join('\n');
       
       const result = await interpret(source, {
         fileSystem,
@@ -161,16 +164,19 @@ describe('Integration Scenarios', () => {
     });
     
     it('should import only selected variables', async () => {
-      await fileSystem.writeFile('/utils.mld', `
-    /var @helper = "Utility Function"
-    /var @private = "Should not be imported"
-    /var @config = {"debug": true}
-`);
+      await fileSystem.writeFile(
+        '/utils.mld',
+        [
+          '/var @helper = "Utility Function"',
+          '/var @private = "Should not be imported"',
+          '/var @config = {"debug": true}'
+        ].join('\n')
+      );
       
-      const source = `
-    /import {helper, config} from "/utils.mld"
-    /show @helper
-`;
+      const source = [
+        '/import {helper, config} from "/utils.mld"',
+        '/show @helper'
+      ].join('\n');
       
       const result = await interpret(source, {
         fileSystem,
@@ -182,10 +188,10 @@ describe('Integration Scenarios', () => {
       expect(result.trim()).toBe('Utility Function');
       
       // Verify 'private' was not imported by checking it throws
-      const sourceWithPrivate = `
-    /import {helper, config} from "/utils.mld"
-    /show @private
-`;
+      const sourceWithPrivate = [
+        '/import {helper, config} from "/utils.mld"',
+        '/show @private'
+      ].join('\n');
       
       await expect(interpret(sourceWithPrivate, {
         fileSystem,
@@ -199,10 +205,10 @@ describe('Integration Scenarios', () => {
   describe('Variable Immutability', () => {
     
     it('should throw error when attempting to redefine a variable', async () => {
-      const source = `
-    /var @message = "First definition"
-    /var @message = "Second definition"
-`;
+      const source = [
+        '/var @message = "First definition"',
+        '/var @message = "Second definition"'
+      ].join('\n');
       
       await expect(interpret(source, {
         fileSystem,
@@ -212,10 +218,10 @@ describe('Integration Scenarios', () => {
     });
     
     it('should throw error when redefining across different variable types', async () => {
-      const source = `
-    /var @myVar = "Text value"
-    /var @myVar = {"type": "data"}
-`;
+      const source = [
+        '/var @myVar = "Text value"',
+        '/var @myVar = {"type": "data"}'
+      ].join('\n');
       
       await expect(interpret(source, {
         fileSystem,
@@ -229,12 +235,12 @@ describe('Integration Scenarios', () => {
       // with the user's @conflict when imported via namespace
       await fileSystem.writeFile('/defs.mld', '/var @conflict = "From import"\n/export { @conflict }');
 
-      const source = `
-    /var @conflict = "Original"
-    /import "/defs.mld" as @defs
-    /show @conflict
-    /show @defs.conflict
-`;
+      const source = [
+        '/var @conflict = "Original"',
+        '/import "/defs.mld" as @defs',
+        '/show @conflict',
+        '/show @defs.conflict'
+      ].join('\n');
 
       const result = await interpret(source, {
         fileSystem,

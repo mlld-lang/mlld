@@ -16,7 +16,7 @@ describe('NodeShadowEnvironment process exit', () => {
   
   it('should exit cleanly when Node shadow environment has timers', { timeout: 10000 }, async () => {
     // Create a test file that uses Node shadow environment with timers
-    const testFile = path.join(testDir, 'timer-test.mld');
+    const testFile = path.join(testDir, 'timer-test.mld.md');
     const content = `
 # Test Node Shadow Environment Cleanup
 
@@ -62,7 +62,7 @@ describe('NodeShadowEnvironment process exit', () => {
   });
   
   it('should exit cleanly with multiple shadow environments', { timeout: 10000 }, async () => {
-    const testFile = path.join(testDir, 'multiple-env-test.mld');
+    const testFile = path.join(testDir, 'multiple-env-test.mld.md');
     const content = `
 # Test Multiple Shadow Environments
 

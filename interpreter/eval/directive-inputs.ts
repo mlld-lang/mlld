@@ -77,13 +77,16 @@ async function extractShowInputs(
   const varName = resolveShowVariableName(directive);
   if (!varName) {
     const inlineVars = collectVariablesFromNodes([directive.values as any], env);
-    return inlineVars.length > 0 ? materializeGuardInputs(inlineVars) : inputs;
+    return inlineVars;
   }
   const variable = env.getVariable(varName);
   if (variable) {
     inputs.push(variable);
   }
-  return materializeGuardInputs(inputs);
+  // Preserve the original variable so /show field access and structured wrappers
+  // keep their runtime shape. Materializing here strips file/structured metadata
+  // and breaks cases like @file.mx.data or structured null display.
+  return inputs;
 }
 
 function resolveShowVariableName(directive: DirectiveNode): string | undefined {

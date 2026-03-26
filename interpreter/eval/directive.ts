@@ -761,6 +761,9 @@ function buildOperationContext(
   const baseMetadata: Record<string, unknown> = {
     trace: traceInfo.directive
   };
+  if (directive.kind === 'exe') {
+    baseMetadata.guardDomain = 'definition';
+  }
   const streamingEnabled = readStreamFlag(directive);
   const effectiveKind = directive.kind === 'output' && directive.meta?.isLogSugar
     ? 'log'

@@ -289,6 +289,18 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
   // Handle file-loaded values (both StructuredValue and legacy LoadContentResult)
   if (isFileLoadedValue(value)) {
     if (isStructuredValue(value)) {
+      if ((value.internal as any)?.keepStructured) {
+        if (target && key) {
+          recordPrimitiveMetadata(target, key, {
+            isVariable: false,
+            type: 'load-content',
+            mx: value.mx,
+            internal: value.internal,
+            text: value.text
+          });
+        }
+        return value;
+      }
       // StructuredValue with file metadata
       if (target && key) {
         recordPrimitiveMetadata(target, key, {
@@ -316,6 +328,18 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
 
   // Handle other StructuredValue types
   if (isStructuredValue(value)) {
+    if ((value.internal as any)?.keepStructured) {
+      if (target && key) {
+        recordPrimitiveMetadata(target, key, {
+          isVariable: false,
+          type: value.type,
+          mx: value.mx,
+          internal: value.internal,
+          text: value.text
+        });
+      }
+      return value;
+    }
     // For load-content arrays, use .text (concatenated content)
     if (value.type === 'array') {
       const isLoadContentArray = value.mx?.source === 'load-content' ||

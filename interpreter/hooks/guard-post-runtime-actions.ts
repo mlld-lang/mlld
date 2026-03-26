@@ -19,6 +19,7 @@ import {
   applyGuardLabelModifications,
   extractGuardLabelModifications
 } from './guard-utils';
+import { formatGuardFilterForMetadata } from './guard-filter-display';
 
 export interface BuildPostDecisionMetadataExtras {
   hint?: string | null;
@@ -196,7 +197,7 @@ export function buildPostDecisionMetadata(
   const metadata: Record<string, unknown> = {
     reason,
     guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+    guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
     scope: guard.scope,
     decision: action.decision,
     timing: 'after'

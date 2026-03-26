@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { createStructuredValueVariable } from '@core/types/variable';
 import {
   applySecurityDescriptorToStructuredValue,
   wrapStructured
@@ -35,6 +36,30 @@ describe('materializeGuardInputs', () => {
     expect(entry?.index).toBe(0);
     expect(entry?.variable.value).toBe('secret-log');
     expect(entry?.variable.mx?.labels).toContain('secret');
+  });
+
+  it('materializes variables that wrap structured primitive payloads', () => {
+    const payload = wrapStructured('secret-log', 'text', 'secret-log');
+    applySecurityDescriptorToStructuredValue(
+      payload,
+      makeSecurityDescriptor({ labels: ['secret'], taint: ['src:js'] })
+    );
+    const variable = createStructuredValueVariable(
+      'wrapped',
+      payload,
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
+    );
+
+    const [result] = materializeGuardInputs([variable], { nameHint: '__effect_input__' });
+
+    expect(result?.value).toBe('secret-log');
+    expect(result?.mx?.labels).toContain('secret');
+    expect(result?.mx?.taint).toContain('src:js');
   });
 
   it('keeps inline array args structured in mapping mode', () => {
