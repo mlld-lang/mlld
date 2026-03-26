@@ -135,6 +135,8 @@ export interface NodeFunctionExecutable extends BaseExecutable {
   type: 'nodeFunction';
   name: string;
   fn: (...args: unknown[]) => unknown;
+  /** When true, the current execution env is appended to fn args at call time. */
+  bindExecutionEnv?: boolean;
   thisArg?: unknown;
   moduleName?: string;
   sourceDirective: 'exec';

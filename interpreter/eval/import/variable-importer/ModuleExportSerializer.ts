@@ -19,6 +19,7 @@ type SerializedMetadata = ReturnType<typeof VariableMetadataUtils.serializeSecur
 
 interface ModuleExportSerializationContext {
   childVars: Map<string, Variable>;
+  childEnv?: Environment;
   options?: { resolveStrings?: boolean };
   shouldSerializeModuleEnv: boolean;
   currentSerializationTarget?: Map<string, Variable>;
@@ -61,8 +62,10 @@ export class ModuleExportSerializer {
     };
 
     const envDescriptor = this.getEnvironmentDescriptor(request.childEnv);
+    const resolutionVars = this.buildResolutionVariables(request.childVars, request.childEnv);
     const context: ModuleExportSerializationContext = {
-      childVars: request.childVars,
+      childVars: resolutionVars,
+      childEnv: request.childEnv,
       options: request.options,
       shouldSerializeModuleEnv,
       currentSerializationTarget: request.currentSerializationTarget,
@@ -95,6 +98,23 @@ export class ModuleExportSerializer {
     return { moduleObject };
   }
 
+  private buildResolutionVariables(
+    childVars: Map<string, Variable>,
+    childEnv?: Environment
+  ): Map<string, Variable> {
+    if (!childEnv || typeof childEnv.getAllVariables !== 'function') {
+      return childVars;
+    }
+
+    const merged = new Map(childVars);
+    for (const [name, variable] of childEnv.getAllVariables()) {
+      if (!merged.has(name)) {
+        merged.set(name, variable);
+      }
+    }
+    return merged;
+  }
+
   private serializeVariable(
     _name: string,
     variable: Variable,
@@ -123,7 +143,10 @@ export class ModuleExportSerializer {
       const resolved = this.objectResolver.resolveObjectReferences(
         variable.value,
         context.childVars,
-        { resolveStrings: context.options?.resolveStrings }
+        {
+          resolveStrings: context.options?.resolveStrings,
+          resolveVariable: name => context.childEnv?.getVariable(name)
+        }
       );
       if (variable.internal?.isNamespace && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
         (resolved as Record<string, unknown>).__namespace = true;
@@ -142,7 +165,10 @@ export class ModuleExportSerializer {
       return this.objectResolver.resolveObjectReferences(
         variable.value,
         context.childVars,
-        { resolveStrings: context.options?.resolveStrings }
+        {
+          resolveStrings: context.options?.resolveStrings,
+          resolveVariable: name => context.childEnv?.getVariable(name)
+        }
       );
     }
 
@@ -157,7 +183,10 @@ export class ModuleExportSerializer {
       return this.objectResolver.resolveObjectReferences(
         items,
         context.childVars,
-        { resolveStrings: context.options?.resolveStrings }
+        {
+          resolveStrings: context.options?.resolveStrings,
+          resolveVariable: name => context.childEnv?.getVariable(name)
+        }
       );
     }
 

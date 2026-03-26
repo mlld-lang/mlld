@@ -194,6 +194,9 @@ async function handleNodeFunctionOrClassExecutable(
   } else {
     jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
   }
+  if (definition.bindExecutionEnv) {
+    jsArgs.push(options.execEnv);
+  }
   let output = definition.fn.apply(definition.thisArg ?? undefined, jsArgs);
   if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
     output = await output;

@@ -9,7 +9,9 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { ExecutableVariable, VariableSource } from '@core/types/variable';
-import { createCallMcpConfig } from './call-mcp-config';
+import { createCallMcpConfig, normalizeToolsArg } from './call-mcp-config';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
 const SOURCE: VariableSource = {
   directive: 'var',
@@ -167,6 +169,96 @@ describe('createCallMcpConfig', () => {
       if (configPath) {
         expect(await fileExists(configPath)).toBe(false);
       }
+      env.cleanup();
+    }
+  });
+
+  it('serves @fyi.facts through the generated function MCP bridge', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = { facts: [email: string] }',
+        '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
+        '/var @contact = @emitContact()',
+        '/var @toolList = [@fyi.facts]'
+      ].join('\n')
+    );
+
+    const scopedConfig = env.getScopedEnvironmentConfig() ?? {};
+    const contact = env.getVariable('contact');
+    env.setScopedEnvironmentConfig({
+      ...scopedConfig,
+      fyi: { facts: [contact] }
+    });
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      expect(result.inBox).toBe(false);
+      expect(result.mcpConfigPath).not.toBe('');
+      expect(result.toolsCsv).toBe('facts');
+
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{
+        name?: string;
+        inputSchema?: { properties?: Record<string, unknown> };
+      }>;
+      expect(tools.map(tool => tool.name)).toContain('facts');
+      const factsSchema = tools.find(tool => tool.name === 'facts')?.inputSchema;
+      expect(Object.keys(factsSchema?.properties ?? {})).toEqual(['query']);
+
+      const called = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'facts',
+          arguments: {
+            query: { op: 'op:@email.send', arg: 'recipient' }
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      const text = String((called.result as any)?.content?.[0]?.text ?? '');
+      const parsed = JSON.parse(text) as Array<Record<string, unknown>>;
+      expect(parsed).toEqual([
+        {
+          handle: 'h_1',
+          label: 'a***@example.com',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ]);
+    } finally {
+      await result.cleanup();
       env.cleanup();
     }
   });

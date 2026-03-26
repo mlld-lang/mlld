@@ -18,7 +18,8 @@ export function createFyiVariable(env: Environment) {
   const factsDefinition: NodeFunctionExecutable = {
     type: 'nodeFunction',
     name: 'facts',
-    fn: async (query?: unknown) => evaluateFyiFacts(query, env),
+    fn: async (query?: unknown, boundEnv?: Environment) => evaluateFyiFacts(query, boundEnv ?? env),
+    bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['query'],
     description: 'List fact-bearing candidates from configured FYI roots'

@@ -18,7 +18,7 @@ export class ObjectReferenceResolver {
   resolveObjectReferences(
     value: any,
     variableMap: Map<string, Variable>,
-    options?: { resolveStrings?: boolean }
+    options?: { resolveStrings?: boolean; resolveVariable?: (name: string) => Variable | undefined }
   ): any {
     const resolveStrings = options?.resolveStrings !== false;
     const stringRefPattern = /^@[A-Za-z0-9_.-]+$/;
@@ -37,7 +37,7 @@ export class ObjectReferenceResolver {
     
     // Check if this is a VariableReference AST node
     if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
-      return this.resolveVariableReference(value.identifier, variableMap, (value as any).fields);
+      return this.resolveVariableReference(value.identifier, variableMap, (value as any).fields, options);
     }
     
     if (typeof value === 'object') {
@@ -56,7 +56,7 @@ export class ObjectReferenceResolver {
     // Check if this is a variable reference string (starts with @)
     if (typeof value === 'string' && resolveStrings && stringRefPattern.test(value)) {
       const varName = value.substring(1); // Remove @ prefix
-      const referencedVar = variableMap.get(varName);
+      const referencedVar = variableMap.get(varName) ?? options?.resolveVariable?.(varName);
 
       if (process.env.DEBUG_EXEC) {
         logger.debug('resolveObjectReferences looking for variable:', {
@@ -82,8 +82,13 @@ export class ObjectReferenceResolver {
   /**
    * Resolve a single variable reference by name, optionally applying field access
    */
-  private resolveVariableReference(varName: string, variableMap: Map<string, Variable>, fields?: any[]): any {
-    const referencedVar = variableMap.get(varName);
+  private resolveVariableReference(
+    varName: string,
+    variableMap: Map<string, Variable>,
+    fields?: any[],
+    options?: { resolveStrings?: boolean; resolveVariable?: (name: string) => Variable | undefined }
+  ): any {
+    const referencedVar = variableMap.get(varName) ?? options?.resolveVariable?.(varName);
 
     if (referencedVar) {
       let result = this.resolveExecutableReference(referencedVar);
@@ -113,7 +118,7 @@ export class ObjectReferenceResolver {
 
       // If the result is an object that might contain more AST nodes, recursively resolve it
       if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result) && !(result as any).__arraySnapshot) {
-        return this.resolveObjectReferences(result, variableMap);
+        return this.resolveObjectReferences(result, variableMap, options);
       }
 
       return result;

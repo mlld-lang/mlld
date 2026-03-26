@@ -346,6 +346,50 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported @fyi.facts arrays when passed to config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/mcp_active.mld', [
+      '/var @toolList = [@fyi.facts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/record @contact = { facts: [email: string] }',
+      '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
+      '/var @contact = @emitContact()',
+      '/var @cfg = { fyi: { facts: [@contact] } }',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:@email.send","arg":"recipient"}}' }`,
+      '/box @cfg [',
+      '  show @agent("Discover the allowed recipient", { tools: @toolList })',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual([
+        {
+          handle: 'h_1',
+          label: 'a***@example.com',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('does not seed native tool bridge policy state from imported toolList capabilities', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
