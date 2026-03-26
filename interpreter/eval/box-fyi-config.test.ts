@@ -49,7 +49,7 @@ describe('box fyi config integration', () => {
         fact: 'fact:@contact.email'
       },
       {
-        label: 'name value',
+        label: 'M***',
         field: 'name',
         fact: 'fact:@contact.name'
       }
@@ -61,7 +61,7 @@ describe('box fyi config integration', () => {
         fact: 'fact:@contact.email'
       },
       {
-        label: 'name value',
+        label: 'M***',
         field: 'name',
         fact: 'fact:@contact.name'
       }

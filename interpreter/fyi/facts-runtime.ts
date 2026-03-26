@@ -8,6 +8,7 @@ import {
 } from '@core/policy/fact-requirements';
 import type { Environment } from '@interpreter/env/Environment';
 import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
+import { maskFactFieldValue } from '@interpreter/eval/records/display-masking';
 import { accessField } from '@interpreter/utils/field-access';
 import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
@@ -187,28 +188,6 @@ function readDisplayText(value: unknown): string | null {
   return null;
 }
 
-function maskEmail(value: string): string {
-  const trimmed = value.trim();
-  const atIndex = trimmed.indexOf('@');
-  if (atIndex <= 0) {
-    return 'email value';
-  }
-  const local = trimmed.slice(0, atIndex);
-  const domain = trimmed.slice(atIndex + 1);
-  const localPreview = `${local[0] ?? ''}${local.length > 1 ? '***' : '*'}`;
-  return `${localPreview}@${domain}`;
-}
-
-function maskIdentifier(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= 4) {
-    return `${trimmed[0] ?? ''}***`;
-  }
-  const prefix = trimmed.slice(0, Math.min(4, trimmed.length - 2));
-  const suffix = trimmed.slice(-2);
-  return `${prefix}…${suffix}`;
-}
-
 function deriveSafeCandidateLabel(options: {
   value: StructuredValue;
   field: string;
@@ -232,13 +211,7 @@ function deriveSafeCandidateLabel(options: {
   }
 
   const rawText = asText(options.value).trim();
-  if (options.field === 'email') {
-    return maskEmail(rawText);
-  }
-  if (options.field === 'id') {
-    return maskIdentifier(rawText);
-  }
-  return `${options.field} value`;
+  return maskFactFieldValue(options.field, rawText);
 }
 
 function extractCandidateFromLeaf(options: {

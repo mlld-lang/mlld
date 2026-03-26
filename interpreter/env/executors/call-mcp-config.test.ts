@@ -372,7 +372,7 @@ describe('createCallMcpConfig', () => {
         },
         {
           handle: expect.stringMatching(HANDLE_RE),
-          label: 'name value',
+          label: 'M*** D*****',
           field: 'name',
           fact: 'fact:@contact.name'
         }
