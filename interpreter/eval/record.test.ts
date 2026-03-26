@@ -30,6 +30,7 @@ describe('evaluateRecord', () => {
 /record @contact = {
   facts: [email: string, @input.organization as org: string?],
   data: [{ display: \`@input.first @input.last\` }: string],
+  display: [email],
   when [
     internal => :internal
     * => data
@@ -68,6 +69,7 @@ describe('evaluateRecord', () => {
           optional: false
         }
       ],
+      display: [{ kind: 'bare', field: 'email' }],
       when: [
         {
           condition: {
@@ -126,6 +128,65 @@ describe('evaluateRecord', () => {
 
     await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
       code: 'INVALID_RECORD_FIELD'
+    });
+  });
+
+  it('preserves an explicit empty display list on the definition', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  display: []
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('contact')).toMatchObject({
+      display: []
+    });
+  });
+
+  it('rejects display entries that reference unknown fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  display: [name]
+}
+`);
+
+    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
+      code: 'INVALID_RECORD_DISPLAY'
+    });
+  });
+
+  it('rejects duplicate display entries for the same field', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  display: [email, { mask: "email" }]
+}
+`);
+
+    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
+      code: 'INVALID_RECORD_DISPLAY'
+    });
+  });
+
+  it('rejects display entries that target data fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  data: [notes: string?],
+  display: [notes]
+}
+`);
+
+    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
+      code: 'INVALID_RECORD_DISPLAY'
     });
   });
 });

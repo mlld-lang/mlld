@@ -5,6 +5,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { evaluateExe, evaluateExeBlock } from './exe';
+import { evaluateRecord } from './record';
 import { isExeReturnControl } from './exe-return';
 
 function createEnvironment(): Environment {
@@ -92,6 +93,24 @@ describe('exe evaluator characterization', () => {
 
     await evaluateExe(directive, env);
     expect(getExecutableDef(env, 'getContact').outputRecord).toBe('contact');
+  });
+
+  it('embeds display metadata from referenced records into executable variable metadata', async () => {
+    const env = createEnvironment();
+    env.setCurrentFilePath('/project/records.mld');
+    const recordDirective = parseSync(
+      '/record @contact = { facts: [email: string, name: string], display: [name, { mask: "email" }] }'
+    )[0] as DirectiveNode;
+    await evaluateRecord(recordDirective as any, env);
+
+    const exeDirective = parseSync('/exe @getContact() = { email: "ada@example.com", name: "Ada" } => contact')[0] as DirectiveNode;
+    await evaluateExe(exeDirective, env);
+
+    const variable = env.getVariable('getContact') as any;
+    expect(variable.internal?.recordDefinitions?.contact?.display).toEqual([
+      { kind: 'bare', field: 'name' },
+      { kind: 'mask', field: 'email' }
+    ]);
   });
 
   it('rejects exe-level controlArgs that are not declared parameters', async () => {

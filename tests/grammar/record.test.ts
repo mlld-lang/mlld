@@ -65,6 +65,7 @@ describe('record grammar', () => {
       valueType: 'string',
       optional: true
     });
+    expect(directive.values.display).toBeUndefined();
 
     expect(directive.values.when).toEqual([
       {
@@ -86,6 +87,42 @@ describe('record grammar', () => {
         }
       }
     ]);
+  });
+
+  it('parses top-level display entries without conflicting with computed data fields', () => {
+    const directive = getFirstDirective(`
+/record @contact = {
+  facts: [
+    email: string,
+    name: string,
+    { display: \`@input.first @input.last\` }: string
+  ],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.display).toEqual([
+      { kind: 'bare', field: 'name' },
+      { kind: 'mask', field: 'email' }
+    ]);
+    expect(directive.values.facts?.[2]).toMatchObject({
+      kind: 'computed',
+      name: 'display',
+      valueType: 'string',
+      optional: false
+    });
+  });
+
+  it('preserves an explicit empty display list', () => {
+    const directive = getFirstDirective(`
+/record @contact = {
+  facts: [email: string],
+  display: []
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.display).toEqual([]);
   });
 
   it('captures deferred key declarations as unsupported record entries', () => {

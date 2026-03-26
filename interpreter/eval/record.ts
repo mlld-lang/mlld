@@ -4,6 +4,7 @@ import type {
   RecordDirectiveNode,
   RecordDefinition,
   RecordFieldDefinition,
+  RecordDisplayEntry,
   RecordWhenCondition
 } from '@core/types/record';
 import { MlldInterpreterError } from '@core/errors';
@@ -73,6 +74,11 @@ export async function evaluateRecord(
     assertRecordFieldIsPure(field, name);
   }
 
+  const hasDisplayClause = Object.prototype.hasOwnProperty.call(directive.values ?? {}, 'display');
+  const display = hasDisplayClause
+    ? normalizeDisplayEntries(directive.values?.display ?? [], fields, name)
+    : undefined;
+
   const when = directive.values?.when;
   if (Array.isArray(when)) {
     for (const rule of when) {
@@ -83,6 +89,7 @@ export async function evaluateRecord(
   const definition: RecordDefinition = {
     name,
     fields,
+    ...(hasDisplayClause ? { display: display ?? [] } : {}),
     validate: directive.values?.validate ?? DEFAULT_VALIDATE_MODE,
     ...(Array.isArray(when) && when.length > 0 ? { when: [...when] } : {}),
     location: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
@@ -103,6 +110,45 @@ function normalizeFields(
     ...field,
     classification
   }));
+}
+
+function normalizeDisplayEntries(
+  entries: RecordDisplayEntry[],
+  fields: RecordFieldDefinition[],
+  recordName: string
+): RecordDisplayEntry[] {
+  const fieldByName = new Map(fields.map(field => [field.name, field]));
+  const seen = new Set<string>();
+
+  return entries.map(entry => {
+    const field = fieldByName.get(entry.field);
+    if (!field) {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}' display entry references unknown field '${entry.field}'`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_DISPLAY' }
+      );
+    }
+    if (field.classification !== 'fact') {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}' display entry '${entry.field}' must reference a fact field`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_DISPLAY' }
+      );
+    }
+    if (seen.has(entry.field)) {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}' display entry '${entry.field}' is duplicated`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_DISPLAY' }
+      );
+    }
+    seen.add(entry.field);
+    return { ...entry };
+  });
 }
 
 function assertRecordFieldIsPure(field: RecordFieldDefinition, recordName: string): void {

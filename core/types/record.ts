@@ -5,6 +5,9 @@ import type { DataValue } from './var';
 export type RecordFieldClassification = 'fact' | 'data';
 export type RecordScalarType = 'string' | 'number' | 'boolean';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
+export type RecordDisplayEntry =
+  | { kind: 'bare'; field: string }
+  | { kind: 'mask'; field: string };
 
 export interface RecordInputFieldDefinition {
   kind: 'input';
@@ -50,6 +53,7 @@ export interface RecordWhenRule {
 export interface RecordDefinition {
   name: string;
   fields: RecordFieldDefinition[];
+  display?: RecordDisplayEntry[];
   validate: RecordValidationMode;
   when?: RecordWhenRule[];
   location?: SourceLocation;
@@ -74,6 +78,7 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     identifier: VariableReferenceNode[];
     facts?: RecordFieldDefinition[];
     data?: RecordFieldDefinition[];
+    display?: RecordDisplayEntry[];
     when?: RecordWhenRule[];
     validate?: RecordValidationMode;
     unsupported?: Array<{ key: string; value?: BaseMlldNode | DataValue }>;

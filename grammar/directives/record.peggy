@@ -11,6 +11,9 @@ SlashRecord
       const data = body.entries.filter(entry => entry.kind === 'data').flatMap(entry => entry.fields);
       const whenEntry = body.entries.find(entry => entry.kind === 'when');
       const validateEntry = body.entries.find(entry => entry.kind === 'validate');
+      const displayEntries = body.entries
+        .filter(entry => entry.kind === 'display')
+        .flatMap(entry => entry.entries);
       const unsupported = body.entries
         .filter(entry => entry.kind === 'unsupported')
         .map(entry => ({ key: entry.key, value: entry.value }));
@@ -19,6 +22,9 @@ SlashRecord
         identifier: [identifierNode],
         ...(facts.length > 0 ? { facts } : {}),
         ...(data.length > 0 ? { data } : {}),
+        ...(displayEntries.length > 0 || body.entries.some(entry => entry.kind === 'display')
+          ? { display: displayEntries }
+          : {}),
         ...(whenEntry ? { when: whenEntry.rules } : {}),
         ...(validateEntry ? { validate: validateEntry.mode } : {}),
         ...(unsupported.length > 0 ? { unsupported } : {})
@@ -62,6 +68,7 @@ RecordEntries
 RecordEntry
   = RecordFactsEntry
   / RecordDataEntry
+  / RecordDisplayEntry
   / RecordWhenEntry
   / RecordValidateEntry
   / RecordUnsupportedEntry
@@ -74,6 +81,11 @@ RecordFactsEntry
 RecordDataEntry
   = "data" _ ":" _ fields:RecordFieldList {
       return { kind: 'data', fields };
+    }
+
+RecordDisplayEntry
+  = "display" _ ":" _ entries:RecordDisplayList {
+      return { kind: 'display', entries };
     }
 
 RecordValidateEntry
@@ -112,6 +124,40 @@ RecordFieldList
   = "[" _ fields:RecordFields? _ "]" {
       return fields || [];
     }
+
+RecordDisplayList
+  = "[" _ entries:RecordDisplayEntries? _ "]" {
+      return entries || [];
+    }
+
+RecordDisplayEntries
+  = first:RecordDisplayItem rest:(_ "," _ item:RecordDisplayItem { return item; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordDisplayItem
+  = RecordDisplayMaskItem
+  / RecordDisplayBareItem
+
+RecordDisplayBareItem
+  = field:BaseIdentifier {
+      return {
+        kind: 'bare',
+        field
+      };
+    }
+
+RecordDisplayMaskItem
+  = "{" _ "mask" _ ":" _ field:RecordDisplayFieldName _ "}" {
+      return {
+        kind: 'mask',
+        field
+      };
+    }
+
+RecordDisplayFieldName
+  = "\"" field:BaseIdentifier "\"" { return field; }
+  / "'" field:BaseIdentifier "'" { return field; }
 
 RecordFields
   = first:RecordField rest:(_ "," _ field:RecordField { return field; })* _ ","? {
