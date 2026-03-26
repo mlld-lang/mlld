@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  collectDeclarativeFactRequirementEntries,
   resolveFactRequirementsForOperationArg,
   selectDestinationArgs,
   selectTargetArgs
 } from './fact-requirements';
+import { mergePolicyConfigs, normalizePolicyConfig } from './union';
 
 describe('fact requirements', () => {
   it('resolves symbolic built-in operations without guessing from arg names alone', () => {
@@ -145,6 +147,69 @@ describe('fact requirements', () => {
           patterns: ['fact:internal:*.email'],
           source: 'policy',
           rule: 'policy.defaults.rules.no-send-to-external'
+        }
+      ]
+    });
+  });
+
+  it('collects declarative fact requirements from policy config and preserves merged clauses', () => {
+    const merged = mergePolicyConfigs(
+      normalizePolicyConfig({
+        facts: {
+          requirements: {
+            '@createCalendarEvent': {
+              participants: ['fact:*.email']
+            }
+          }
+        }
+      }),
+      normalizePolicyConfig({
+        facts: {
+          requirements: {
+            '@createCalendarEvent': {
+              participants: ['fact:internal:*.email']
+            }
+          }
+        }
+      })
+    );
+
+    expect(collectDeclarativeFactRequirementEntries(merged)).toEqual([
+      {
+        opRef: 'op:@createcalendarevent',
+        arg: 'participants',
+        clauses: [
+          ['fact:*.email'],
+          ['fact:internal:*.email']
+        ]
+      }
+    ]);
+  });
+
+  it('resolves declarative fact requirements for unknown symbolic operations', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@createCalendarEvent',
+        argName: 'participants',
+        policy: normalizePolicyConfig({
+          facts: {
+            requirements: {
+              '@createCalendarEvent': {
+                participants: ['fact:internal:*.email']
+              }
+            }
+          }
+        })
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:@createcalendarevent',
+      requirements: [
+        {
+          arg: 'participants',
+          patterns: ['fact:internal:*.email'],
+          source: 'declarative',
+          rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
         }
       ]
     });

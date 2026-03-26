@@ -48,19 +48,21 @@ describe('evaluateFyiFacts', () => {
     expect(result.data).toEqual([
       {
         handle: 'h_1',
-        label: 'ada@example.com',
+        label: 'Ada Lovelace',
         field: 'email',
         fact: 'fact:@contact.email'
       },
       {
         handle: 'h_2',
-        label: 'contact-1',
+        label: 'Ada Lovelace',
         field: 'id',
         fact: 'fact:@contact.id'
       }
     ]);
     for (const candidate of result.data) {
       expect(candidate).not.toHaveProperty('value');
+      expect(candidate.label).not.toContain('ada@example.com');
+      expect(candidate.label).not.toContain('contact-1');
     }
   });
 
@@ -75,7 +77,7 @@ describe('evaluateFyiFacts', () => {
     expect(result.data).toEqual([
       {
         handle: 'h_1',
-        label: 'ada@example.com',
+        label: 'Ada Lovelace',
         field: 'email',
         fact: 'fact:@contact.email'
       }
@@ -116,7 +118,7 @@ describe('evaluateFyiFacts', () => {
     expect(result.data).toEqual([
       {
         handle: 'h_1',
-        label: 'ada@example.com',
+        label: 'a***@example.com',
         field: 'email',
         fact: 'fact:@contact.email'
       }
@@ -134,7 +136,7 @@ describe('evaluateFyiFacts', () => {
     expect(result.data).toEqual([
       {
         handle: 'h_1',
-        label: 'contact-1',
+        label: 'Ada Lovelace',
         field: 'id',
         fact: 'fact:@contact.id'
       }
@@ -166,5 +168,32 @@ describe('evaluateFyiFacts', () => {
     );
 
     expect(result.data).toEqual([]);
+  });
+
+  it('resolves declarative fact requirements for non-built-in operations', async () => {
+    const env = await createContactsEnv();
+    env.setPolicySummary(normalizePolicyConfig({
+      facts: {
+        requirements: {
+          '@createCalendarEvent': {
+            participants: ['fact:*.email']
+          }
+        }
+      }
+    }));
+
+    const result = await evaluateFyiFacts(
+      { op: 'op:@createCalendarEvent', arg: 'participants' },
+      env
+    );
+
+    expect(result.data).toEqual([
+      {
+        handle: 'h_1',
+        label: 'Ada Lovelace',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
   });
 });

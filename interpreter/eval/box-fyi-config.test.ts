@@ -38,7 +38,7 @@ describe('box fyi config integration', () => {
         '[',
         '  {',
         '    "handle": "h_1",',
-        '    "label": "ada@example.com",',
+        '    "label": "a***@example.com",',
         '    "field": "email",',
         '    "fact": "fact:@contact.email"',
         '  }',

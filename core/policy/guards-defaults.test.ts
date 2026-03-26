@@ -391,4 +391,80 @@ describe('generatePolicyGuards defaults rules', () => {
       })
     ).toBeUndefined();
   });
+
+  it('enforces declarative fact requirements for runtime guards and inherited checks', () => {
+    const policy: PolicyConfig = {
+      facts: {
+        requirements: {
+          '@createCalendarEvent': {
+            participants: ['fact:internal:*.email']
+          }
+        }
+      }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const factGuard = guards.find(guard =>
+      guard.name.includes('__policy_fact_requirement_op:@createcalendarevent_participants')
+    );
+
+    expect(
+      factGuard?.policyCondition?.({
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['tool:w:create_calendar_event']
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:internal:@contact.email'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      factGuard?.policyCondition?.({
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['tool:w:create_calendar_event']
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:@contact.email'] }
+        }
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
+    });
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['tool:w:create_calendar_event']
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:@contact.email'] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
+    });
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['tool:w:create_calendar_event']
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:internal:@contact.email'] }
+        }
+      })
+    ).toBeUndefined();
+  });
 });

@@ -9,6 +9,7 @@ import { asText, isStructuredValue, wrapStructured, type StructuredValue } from 
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
 const MAX_FYI_FACT_CANDIDATES = 25;
+const FACT_DISPLAY_FIELD_PREFERENCES = ['name', 'title', 'display', 'display_name', 'label'] as const;
 
 type FyiFactsQuery = {
   op?: string;
@@ -81,12 +82,87 @@ function resolveQueryOperationContext(
   };
 }
 
-function extractCandidateFromLeaf(value: StructuredValue): {
+function readDisplayText(value: unknown): string | null {
+  const resolved = isVariable(value) ? value.value : value;
+  if (isStructuredValue(resolved)) {
+    const text = asText(resolved).trim();
+    return text.length > 0 ? text : null;
+  }
+  if (
+    typeof resolved === 'string' ||
+    typeof resolved === 'number' ||
+    typeof resolved === 'boolean'
+  ) {
+    const text = String(resolved).trim();
+    return text.length > 0 ? text : null;
+  }
+  return null;
+}
+
+function maskEmail(value: string): string {
+  const trimmed = value.trim();
+  const atIndex = trimmed.indexOf('@');
+  if (atIndex <= 0) {
+    return 'email value';
+  }
+  const local = trimmed.slice(0, atIndex);
+  const domain = trimmed.slice(atIndex + 1);
+  const localPreview = `${local[0] ?? ''}${local.length > 1 ? '***' : '*'}`;
+  return `${localPreview}@${domain}`;
+}
+
+function maskIdentifier(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 4) {
+    return `${trimmed[0] ?? ''}***`;
+  }
+  const prefix = trimmed.slice(0, Math.min(4, trimmed.length - 2));
+  const suffix = trimmed.slice(-2);
+  return `${prefix}…${suffix}`;
+}
+
+function deriveSafeCandidateLabel(options: {
+  value: StructuredValue;
+  field: string;
+  parent?: StructuredValue;
+}): string {
+  const parent = options.parent;
+  if (parent?.type === 'object' && parent.data && typeof parent.data === 'object' && !Array.isArray(parent.data)) {
+    const objectData = parent.data as Record<string, unknown>;
+    for (const preferredField of FACT_DISPLAY_FIELD_PREFERENCES) {
+      if (preferredField === options.field) {
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(objectData, preferredField)) {
+        continue;
+      }
+      const displayText = readDisplayText(objectData[preferredField]);
+      if (displayText) {
+        return displayText;
+      }
+    }
+  }
+
+  const rawText = asText(options.value).trim();
+  if (options.field === 'email') {
+    return maskEmail(rawText);
+  }
+  if (options.field === 'id') {
+    return maskIdentifier(rawText);
+  }
+  return `${options.field} value`;
+}
+
+function extractCandidateFromLeaf(options: {
+  value: StructuredValue;
+  parent?: StructuredValue;
+}): {
   label: string;
   field: string;
   fact: string;
   ref: string;
 } | null {
+  const value = options.value;
   const labels = Array.isArray(value.mx?.labels) ? value.mx.labels : [];
   const facts = labels.filter((label): label is string => typeof label === 'string' && label.startsWith('fact:'));
   if (facts.length === 0) {
@@ -103,7 +179,11 @@ function extractCandidateFromLeaf(value: StructuredValue): {
   }
 
   return {
-    label: asText(value),
+    label: deriveSafeCandidateLabel({
+      value,
+      field,
+      parent: options.parent
+    }),
     field,
     fact,
     ref
@@ -113,12 +193,16 @@ function extractCandidateFromLeaf(value: StructuredValue): {
 async function collectFactCandidates(
   value: unknown,
   env: Environment,
-  output: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }>
+  output: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }>,
+  context: { parent?: StructuredValue } = {}
 ): Promise<void> {
   const resolved = isVariable(value) ? value.value : value;
 
   if (isStructuredValue(resolved)) {
-    const candidate = extractCandidateFromLeaf(resolved);
+    const candidate = extractCandidateFromLeaf({
+      value: resolved,
+      parent: context.parent
+    });
     if (candidate) {
       output.push({ value: resolved, ...candidate });
     }
@@ -126,7 +210,7 @@ async function collectFactCandidates(
     if (resolved.type === 'object' && resolved.data && typeof resolved.data === 'object' && !Array.isArray(resolved.data)) {
       for (const key of Object.keys(resolved.data as Record<string, unknown>)) {
         const child = await accessField(resolved, { type: 'field', value: key } as any, { env });
-        await collectFactCandidates(child, env, output);
+        await collectFactCandidates(child, env, output, { parent: resolved });
       }
       return;
     }
@@ -134,7 +218,7 @@ async function collectFactCandidates(
     if (resolved.type === 'array' && Array.isArray(resolved.data)) {
       for (let index = 0; index < resolved.data.length; index += 1) {
         const child = await accessField(resolved, { type: 'index', value: index } as any, { env });
-        await collectFactCandidates(child, env, output);
+        await collectFactCandidates(child, env, output, { parent: resolved });
       }
     }
     return;
@@ -142,14 +226,14 @@ async function collectFactCandidates(
 
   if (Array.isArray(resolved)) {
     for (const item of resolved) {
-      await collectFactCandidates(item, env, output);
+      await collectFactCandidates(item, env, output, context);
     }
     return;
   }
 
   if (isPlainObject(resolved)) {
     for (const item of Object.values(resolved)) {
-      await collectFactCandidates(item, env, output);
+      await collectFactCandidates(item, env, output, context);
     }
   }
 }
@@ -193,7 +277,7 @@ export async function evaluateFyiFacts(query: unknown, env: Environment): Promis
     )) {
       continue;
     }
-    const key = `${entry.ref}\u0000${entry.fact}\u0000${entry.label}`;
+    const key = `${entry.ref}\u0000${entry.fact}`;
     if (!deduped.has(key)) {
       deduped.set(key, entry);
     }

@@ -191,7 +191,7 @@ Discovery uses box or call-site `fyi: { facts: [...] }` roots and returns bounde
 - `field`
 - `fact`
 
-It does not return raw live values.
+It does not return raw live values or raw authorization-critical literals. `label` is a safe display string derived from sibling record context when possible and otherwise falls back to a masked preview.
 
 There are two discovery modes:
 
@@ -222,13 +222,14 @@ The resolver:
 - distinguishes `resolved`, `no_requirement`, and `unknown_operation`
 - derives requirements from live operation metadata when available
 - supports explicit built-in symbolic op specs
-- leaves a narrow integration point for declarative fact-aware policy requirements
+- resolves declarative fact-aware policy requirements from `policy.facts.requirements`
 
 Important behavior:
 
 - discovery does not guess from arg names alone
 - unknown operations fail closed
 - live metadata and declared `controlArgs` are authoritative for nonstandard send/target args
+- declarative `(op, arg)` fact requirements compose conjunctively with built-in requirements
 
 This removes the old drift between discovery heuristics and enforcement semantics.
 
@@ -308,7 +309,7 @@ That layer determines how file content becomes trusted, untrusted, or unlabeled 
 - Handles are execution-scoped and are not durable ids.
 - A copied literal carries no proof by itself.
 - `@fyi.facts({ arg: "recipient" })` is intentionally empty.
-- Discovery requires either resolvable live metadata or an explicit symbolic op spec.
+- Discovery requires either resolvable live metadata, an explicit symbolic op spec, or declarative `policy.facts.requirements`.
 - `tool:w` send operations without declared `controlArgs` fail closed for fact discovery.
 - Plain non-tool runtime compatibility fallbacks for dispatch are not discovery semantics.
 - Record-addressed facts are the shipped proof form. Store-addressed facts are outside this model.

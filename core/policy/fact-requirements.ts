@@ -1,6 +1,6 @@
 import { matchesLabelPattern } from './fact-labels';
 import { normalizeNamedOperationRef } from './operation-labels';
-import type { PolicyConfig } from './union';
+import { normalizePolicyConfig, type PolicyConfig } from './union';
 
 const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
 const TARGET_ARG_SELECTORS = ['id'] as const;
@@ -22,7 +22,7 @@ export interface OperationMetadataLike {
 export interface FactRequirement {
   arg: string;
   patterns: string[];
-  source: 'builtin' | 'policy';
+  source: 'builtin' | 'policy' | 'declarative';
   rule?: string;
 }
 
@@ -205,12 +205,53 @@ function getEnabledPositiveFactRules(
   return enabled;
 }
 
-function collectDeclarativeFactRequirements(_options: {
+export interface DeclarativeFactRequirementEntry {
+  opRef: string;
+  arg: string;
+  clauses: readonly string[][];
+}
+
+export function collectDeclarativeFactRequirementEntries(
+  policy?: Pick<PolicyConfig, 'facts'>
+): DeclarativeFactRequirementEntry[] {
+  const normalizedPolicy = normalizePolicyConfig(policy as PolicyConfig | undefined);
+  const output: DeclarativeFactRequirementEntry[] = [];
+  for (const [opRef, args] of Object.entries(normalizedPolicy.facts?.requirements ?? {})) {
+    for (const [arg, clauses] of Object.entries(args)) {
+      if (!Array.isArray(clauses) || clauses.length === 0) {
+        continue;
+      }
+      output.push({
+        opRef,
+        arg,
+        clauses
+      });
+    }
+  }
+  return output;
+}
+
+function collectDeclarativeFactRequirements(options: {
   opRef?: string;
   argName: string;
-  policy?: Pick<PolicyConfig, 'defaults'>;
+  policy?: Pick<PolicyConfig, 'facts'>;
 }): FactRequirement[] {
-  return [];
+  if (!options.opRef) {
+    return [];
+  }
+
+  const normalizedPolicy = normalizePolicyConfig(options.policy as PolicyConfig | undefined);
+  const clauses = normalizedPolicy.facts?.requirements?.[options.opRef]?.[options.argName];
+  if (!Array.isArray(clauses) || clauses.length === 0) {
+    return [];
+  }
+
+  return clauses.map(patterns => ({
+    arg: options.argName,
+    patterns: [...patterns],
+    source: 'declarative',
+    rule: `policy.facts.requirements.${options.opRef}.${options.argName}`
+  }));
 }
 
 function appendRequirements(
@@ -347,7 +388,7 @@ export function resolveFactRequirementsForOperationArg(options: {
   operationLabels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
-  policy?: Pick<PolicyConfig, 'defaults'>;
+  policy?: Pick<PolicyConfig, 'defaults' | 'facts'>;
 }): FactRequirementResolution {
   const argName = normalizeArgName(options.argName);
   const normalizedOpRef = typeof options.opRef === 'string'
@@ -362,21 +403,22 @@ export function resolveFactRequirementsForOperationArg(options: {
     };
   }
 
-  const enabledRules = getEnabledPositiveFactRules(options.policy);
+  const normalizedPolicy = normalizePolicyConfig(options.policy as PolicyConfig | undefined);
+  const enabledRules = getEnabledPositiveFactRules(normalizedPolicy);
 
   const liveMetadataResolution = resolveBuiltInFactRequirementsFromOperationLabels({
-    argName,
-    opRef: normalizedOpRef,
-    operationLabels: options.operationLabels,
-    controlArgs: options.controlArgs,
-    hasControlArgsMetadata: options.hasControlArgsMetadata,
+        argName,
+        opRef: normalizedOpRef,
+        operationLabels: options.operationLabels,
+        controlArgs: options.controlArgs,
+        hasControlArgsMetadata: options.hasControlArgsMetadata,
     enabledRules
   });
   if (liveMetadataResolution) {
     const declarativeRequirements = collectDeclarativeFactRequirements({
       opRef: normalizedOpRef,
       argName,
-      policy: options.policy
+      policy: normalizedPolicy
     });
     if (declarativeRequirements.length === 0) {
       return liveMetadataResolution;
@@ -412,7 +454,7 @@ export function resolveFactRequirementsForOperationArg(options: {
   const declarativeRequirements = collectDeclarativeFactRequirements({
     opRef: normalizedOpRef,
     argName,
-    policy: options.policy
+    policy: normalizedPolicy
   });
   if (declarativeRequirements.length === 0) {
     return builtInResolution;

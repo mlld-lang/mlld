@@ -299,7 +299,7 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.data).toEqual([
       {
         handle: 'h_1',
-        label: 'grace@example.com',
+        label: 'g***@example.com',
         field: 'email',
         fact: 'fact:@contact.email'
       }

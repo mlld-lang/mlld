@@ -17,9 +17,11 @@ import {
   SEND_KNOWN_PATTERNS,
   SEND_INTERNAL_PATTERNS,
   TARGET_KNOWN_PATTERNS,
+  collectDeclarativeFactRequirementEntries,
   selectDestinationArgs,
   selectTargetArgs
 } from './fact-requirements';
+import { normalizeNamedOperationRef } from './operation-labels';
 
 export interface PolicyGuardSpec {
   name: string;
@@ -90,6 +92,17 @@ function getExpandedPolicyOperationLabels(
   ], operations);
 }
 
+function collectEffectiveArgAttestations(options: {
+  argName: string;
+  argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
+  authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
+}): string[] {
+  return normalizeList([
+    ...collectDescriptorAttestations(options.argDescriptors?.[options.argName]),
+    ...collectAuthorizedAttestations(options.authorizedArgAttestations, options.argName)
+  ]);
+}
+
 function buildInheritedPositiveCheckFailure(options: {
   reason: string;
   rule: string;
@@ -116,7 +129,14 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
   const enabledRules = normalizeRuleList(options.policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
-  if (enabledRules.length === 0) {
+  const normalizedOperationRef =
+    typeof (options.operation as { name?: unknown }).name === 'string'
+      ? normalizeNamedOperationRef((options.operation as { name?: string }).name)
+      : undefined;
+  const declarativeEntries = collectDeclarativeFactRequirementEntries(options.policy).filter(
+    entry => entry.opRef === normalizedOperationRef
+  );
+  if (enabledRules.length === 0 && declarativeEntries.length === 0) {
     return undefined;
   }
 
@@ -224,6 +244,31 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
             'Review active policies with @mx.policy.activePolicies'
           ]
         };
+      }
+    }
+  }
+
+  for (const entry of declarativeEntries) {
+    if (!options.args || !Object.prototype.hasOwnProperty.call(options.args, entry.arg)) {
+      return buildInheritedPositiveCheckFailure({
+        reason: `Rule '${`policy.facts.requirements.${entry.opRef}.${entry.arg}`}': arg '${entry.arg}' must carry required fact provenance`,
+        rule: `policy.facts.requirements.${entry.opRef}.${entry.arg}`,
+        missingLabelSuggestion: `Use an approved ${entry.arg} source or select a handle from @fyi.facts({ op: "${entry.opRef}", arg: "${entry.arg}" })`
+      });
+    }
+
+    const effectiveAttestations = collectEffectiveArgAttestations({
+      argName: entry.arg,
+      argDescriptors: options.argDescriptors,
+      authorizedArgAttestations: options.authorizedArgAttestations
+    });
+    for (const clause of entry.clauses) {
+      if (!hasAnyMatchingLabel(effectiveAttestations, clause)) {
+        return buildInheritedPositiveCheckFailure({
+          reason: `Rule '${`policy.facts.requirements.${entry.opRef}.${entry.arg}`}': arg '${entry.arg}' must carry required fact provenance`,
+          rule: `policy.facts.requirements.${entry.opRef}.${entry.arg}`,
+          missingLabelSuggestion: `Use an approved ${entry.arg} source or select a handle from @fyi.facts({ op: "${entry.opRef}", arg: "${entry.arg}" })`
+        });
       }
     }
   }
@@ -358,6 +403,16 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     }
   }
 
+  for (const entry of collectDeclarativeFactRequirementEntries(policy)) {
+    guards.push(makeDeclarativeFactRequirementGuard({
+      opRef: entry.opRef,
+      argName: entry.arg,
+      clauses: entry.clauses,
+      policyDisplayName,
+      locked: policyLocked
+    }));
+  }
+
   const allow = policy.allow;
   const deny = policy.deny;
   const allowListActive = allow !== undefined && allow !== true;
@@ -470,6 +525,70 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
   }
 
   return guards;
+}
+
+function makeDeclarativeFactRequirementGuard(options: {
+  opRef: string;
+  argName: string;
+  clauses: readonly string[][];
+  policyDisplayName?: string;
+  locked?: boolean;
+}): PolicyGuardSpec {
+  const rulePath = `policy.facts.requirements.${options.opRef}.${options.argName}`;
+  const reason = `Rule '${rulePath}': arg '${options.argName}' must carry required fact provenance`;
+
+  return {
+    name: `__policy_fact_requirement_${options.opRef.replace(/[^a-z0-9_:@.]+/gi, '_')}_${options.argName}`,
+    filterKind: 'operation',
+    filterValue: 'exe',
+    scope: 'perOperation',
+    block: makeGuardBlock(),
+    timing: 'before',
+    privileged: true,
+    policyCondition: ({ operation, args, argDescriptors }) => {
+      if (typeof operation.name !== 'string' || operation.name.length === 0) {
+        return { decision: 'allow' };
+      }
+
+      const operationRef = normalizeNamedOperationRef(operation.name);
+      if (operationRef !== options.opRef) {
+        return { decision: 'allow' };
+      }
+
+      if (!args || !Object.prototype.hasOwnProperty.call(args, options.argName)) {
+        return {
+          decision: 'deny',
+          reason,
+          policyName: options.policyDisplayName,
+          locked: options.locked === true,
+          rule: rulePath,
+          suggestions: [
+            `Use @fyi.facts({ op: "${options.opRef}", arg: "${options.argName}" }) to select an approved value`,
+            'Review active policies with @mx.policy.activePolicies'
+          ]
+        };
+      }
+
+      const attestations = collectDescriptorAttestations(argDescriptors?.[options.argName]);
+      for (const clause of options.clauses) {
+        if (!hasAnyMatchingLabel(attestations, clause)) {
+          return {
+            decision: 'deny',
+            reason,
+            policyName: options.policyDisplayName,
+            locked: options.locked === true,
+            rule: rulePath,
+            suggestions: [
+              `Use @fyi.facts({ op: "${options.opRef}", arg: "${options.argName}" }) to select an approved value`,
+              'Review active policies with @mx.policy.activePolicies'
+            ]
+          };
+        }
+      }
+
+      return { decision: 'allow' };
+    }
+  };
 }
 
 function inferCapabilityRule(policy: PolicyConfig, commandText: string): string {

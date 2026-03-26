@@ -4,6 +4,7 @@ import {
   normalizePolicyAuthorizations,
   type PolicyAuthorizations
 } from './authorizations';
+import { normalizeNamedOperationRef } from './operation-labels';
 import type { DataLabel } from '@core/types/security';
 
 export type PolicyLimits = {
@@ -100,6 +101,17 @@ export type PolicyCapabilitiesConfig = {
 
 export type PolicyOperations = Record<string, string[]>;
 
+export type PolicyFactRequirementClause = string[];
+export type PolicyFactRequirementSpec =
+  | string
+  | string[]
+  | string[][];
+export type PolicyFactRequirements = Record<string, Record<string, PolicyFactRequirementSpec>>;
+export type NormalizedPolicyFactRequirements = Record<string, Record<string, PolicyFactRequirementClause[]>>;
+export type PolicyFactsConfig = {
+  requirements?: PolicyFactRequirements | NormalizedPolicyFactRequirements;
+};
+
 export type PolicyConfig = {
   verify_all_instructions?: boolean;
   locked?: boolean;
@@ -115,6 +127,7 @@ export type PolicyConfig = {
   capabilities?: PolicyCapabilitiesConfig;
   labels?: PolicyLabels;
   operations?: PolicyOperations;
+  facts?: PolicyFactsConfig;
   signers?: Record<string, PolicySignerRule>;
   filesystem_integrity?: Record<string, PolicyFileIntegrityRule>;
   env?: PolicyEnvironmentConfig;
@@ -164,6 +177,7 @@ export function mergePolicyConfigs(
 
   const labels = mergePolicyLabels(normalizedBase.labels, normalizedIncoming.labels);
   const operations = mergePolicyOperations(normalizedBase.operations, normalizedIncoming.operations);
+  const facts = mergePolicyFacts(normalizedBase.facts, normalizedIncoming.facts);
   const signers = mergePolicySigners(normalizedBase.signers, normalizedIncoming.signers);
   const filesystemIntegrity = mergePolicyFilesystemIntegrity(
     normalizedBase.filesystem_integrity,
@@ -194,6 +208,7 @@ export function mergePolicyConfigs(
     ...(danger && danger.length > 0 ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(operations ? { operations } : {}),
+    ...(facts ? { facts } : {}),
     ...(signers ? { signers } : {}),
     ...(filesystemIntegrity ? { filesystem_integrity: filesystemIntegrity } : {}),
     ...(envConfig ? { env: envConfig } : {}),
@@ -242,6 +257,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     : undefined;
   const labels = normalizePolicyLabels(config.labels);
   const operations = normalizePolicyOperations(config.operations);
+  const facts = normalizePolicyFacts(config.facts);
   const signers = normalizePolicySigners(config.signers);
   const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
   const authorizations = normalizePolicyAuthorizations(config.authorizations);
@@ -264,6 +280,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(danger ? { danger } : {}),
     ...(labels ? { labels } : {}),
     ...(operations ? { operations } : {}),
+    ...(facts ? { facts } : {}),
     ...(signers ? { signers } : {}),
     ...(filesystemIntegrity ? { filesystem_integrity: filesystemIntegrity } : {}),
     ...(envConfig ? { env: envConfig } : {}),
@@ -1484,6 +1501,99 @@ function normalizePolicyOperations(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function normalizePolicyFacts(
+  facts?: PolicyConfig['facts']
+): PolicyConfig['facts'] | undefined {
+  if (!facts || typeof facts !== 'object' || Array.isArray(facts)) {
+    return undefined;
+  }
+
+  const requirements = normalizePolicyFactRequirements(facts.requirements);
+  if (!requirements) {
+    return undefined;
+  }
+
+  return { requirements };
+}
+
+function normalizePolicyFactRequirements(
+  requirements?: PolicyFactsConfig['requirements']
+): NormalizedPolicyFactRequirements | undefined {
+  if (!requirements || typeof requirements !== 'object' || Array.isArray(requirements)) {
+    return undefined;
+  }
+
+  const normalizedRequirements: NormalizedPolicyFactRequirements = {};
+  for (const [rawOpRef, rawArgs] of Object.entries(requirements)) {
+    const normalizedOpRef = normalizeNamedOperationRef(rawOpRef);
+    if (!normalizedOpRef || !rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs)) {
+      continue;
+    }
+
+    const normalizedArgs: Record<string, PolicyFactRequirementClause[]> = {};
+    for (const [rawArgName, rawRequirement] of Object.entries(rawArgs)) {
+      const argName = normalizePolicyFactArgName(rawArgName);
+      if (!argName) {
+        continue;
+      }
+      const clauses = normalizePolicyFactRequirementSpec(rawRequirement);
+      if (clauses) {
+        normalizedArgs[argName] = clauses;
+      }
+    }
+
+    if (Object.keys(normalizedArgs).length > 0) {
+      normalizedRequirements[normalizedOpRef] = normalizedArgs;
+    }
+  }
+
+  return Object.keys(normalizedRequirements).length > 0
+    ? normalizedRequirements
+    : undefined;
+}
+
+function normalizePolicyFactRequirementSpec(
+  raw: unknown
+): PolicyFactRequirementClause[] | undefined {
+  if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+    const normalized = String(raw).trim();
+    return normalized ? [[normalized]] : undefined;
+  }
+
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+
+  if (raw.every(entry =>
+    typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean'
+  )) {
+    const clause = raw
+      .map(entry => String(entry).trim())
+      .filter(entry => entry.length > 0);
+    return clause.length > 0 ? [Array.from(new Set(clause))] : undefined;
+  }
+
+  const clauses: PolicyFactRequirementClause[] = [];
+  for (const entry of raw) {
+    if (!Array.isArray(entry)) {
+      continue;
+    }
+    const clause = entry
+      .map(item => String(item).trim())
+      .filter(item => item.length > 0);
+    if (clause.length > 0) {
+      clauses.push(Array.from(new Set(clause)));
+    }
+  }
+
+  return clauses.length > 0 ? dedupeFactRequirementClauses(clauses) : undefined;
+}
+
+function normalizePolicyFactArgName(value: string): string | undefined {
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function normalizePolicySigners(
   signers?: PolicyConfig['signers']
 ): PolicyConfig['signers'] | undefined {
@@ -1572,6 +1682,38 @@ function mergePolicyOperations(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function mergePolicyFacts(
+  base?: PolicyConfig['facts'],
+  incoming?: PolicyConfig['facts']
+): PolicyConfig['facts'] | undefined {
+  const normalizedBase = normalizePolicyFacts(base);
+  const normalizedIncoming = normalizePolicyFacts(incoming);
+
+  if (!normalizedBase && !normalizedIncoming) {
+    return undefined;
+  }
+
+  const mergedRequirements: NormalizedPolicyFactRequirements = {
+    ...(normalizedBase?.requirements ?? {})
+  };
+
+  for (const [opRef, argMap] of Object.entries(normalizedIncoming?.requirements ?? {})) {
+    const currentArgs = mergedRequirements[opRef] ?? {};
+    const nextArgs: Record<string, PolicyFactRequirementClause[]> = { ...currentArgs };
+    for (const [argName, clauses] of Object.entries(argMap)) {
+      nextArgs[argName] = dedupeFactRequirementClauses([
+        ...(currentArgs[argName] ?? []),
+        ...clauses
+      ]);
+    }
+    mergedRequirements[opRef] = nextArgs;
+  }
+
+  return Object.keys(mergedRequirements).length > 0
+    ? { requirements: mergedRequirements }
+    : undefined;
+}
+
 function mergePolicySigners(
   base?: PolicyConfig['signers'],
   incoming?: PolicyConfig['signers']
@@ -1649,6 +1791,22 @@ function mergeLabelListUnion(a?: string[], b?: string[]): string[] | undefined {
     return undefined;
   }
   return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
+}
+
+function dedupeFactRequirementClauses(
+  clauses: PolicyFactRequirementClause[]
+): PolicyFactRequirementClause[] {
+  const seen = new Set<string>();
+  const normalized: PolicyFactRequirementClause[] = [];
+  for (const clause of clauses) {
+    const key = clause.join('\u0000');
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push([...clause]);
+  }
+  return normalized;
 }
 
 function mergeLabelListIntersection(a?: string[], b?: string[]): string[] | undefined {
