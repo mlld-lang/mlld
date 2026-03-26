@@ -7,6 +7,8 @@ import { PathService } from '@services/fs/PathService';
 import type { ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 async function readAuditEvents(environment: Environment): Promise<Array<Record<string, unknown>>> {
   const contents = await environment.getFileSystemService().readFile('/.mlld/sec/audit.jsonl');
   return contents
@@ -93,6 +95,88 @@ describe('FunctionRouter', () => {
     const result = await router.executeFunction('get_data', {});
 
     expect(JSON.parse(result)).toEqual({ name: 'Alice', age: 30 });
+  });
+
+  it('serializes record-coerced results through display projections', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string, name: string, phone: string?],
+        data: [notes: string?],
+        display: [name, { mask: "email" }]
+      }
+
+      /exe @getContact() = js {
+        return {
+          email: 'ada@example.com',
+          name: 'Ada Lovelace',
+          phone: '+1-555-0142',
+          notes: 'Met at conference'
+        };
+      } => contact
+
+      /export { @getContact }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('get_contact', {});
+
+    expect(JSON.parse(result)).toEqual({
+      name: 'Ada Lovelace',
+      email: {
+        preview: 'a***@example.com',
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      phone: {
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      notes: 'Met at conference'
+    });
+  });
+
+  it('serializes arrays of record-coerced results element-by-element', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string, name: string],
+        display: [name, { mask: "email" }]
+      }
+
+      /exe @listContacts() = js {
+        return [
+          { email: 'ada@example.com', name: 'Ada' },
+          { email: 'grace@example.com', name: 'Grace' }
+        ];
+      } => contact
+
+      /export { @listContacts }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const result = await router.executeFunction('list_contacts', {});
+
+    expect(JSON.parse(result)).toEqual([
+      {
+        name: 'Ada',
+        email: {
+          preview: 'a***@example.com',
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        }
+      },
+      {
+        name: 'Grace',
+        email: {
+          preview: 'g***@example.com',
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        }
+      }
+    ]);
   });
 
   it('treats missing trailing parameters as undefined', async () => {

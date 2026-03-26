@@ -6,6 +6,10 @@ import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
+import {
+  hasDisplayProjectionTarget,
+  renderDisplayProjection
+} from '@interpreter/eval/records/display-projection';
 import { normalizeExecutableDescriptor } from '@interpreter/eval/pipeline/command-execution/normalize-executable';
 import { mcpNameToMlldName, mlldNameToMCPName } from '@core/mcp/names';
 import {
@@ -192,7 +196,7 @@ export class FunctionRouter {
           result: this.toTrackedToolResult(result.value),
           fyiFactRoot: result.value
         });
-        return this.serializeResult(result.value);
+        return await this.serializeResult(result.value);
       }
 
       const execName = toolKey;
@@ -223,7 +227,7 @@ export class FunctionRouter {
         result: this.toTrackedToolResult(result.value),
         fyiFactRoot: result.value
       });
-      return this.serializeResult(result.value);
+      return await this.serializeResult(result.value);
     } catch (error) {
       this.environment.recordToolCall({
         ...callRecord,
@@ -728,7 +732,17 @@ export class FunctionRouter {
     };
   }
 
-  private serializeResult(value: unknown): string {
+  private async serializeResult(value: unknown): Promise<string> {
+    if (hasDisplayProjectionTarget(value)) {
+      try {
+        const projected = await renderDisplayProjection(value, this.environment);
+        return JSON.stringify(projected, null, 2);
+      } catch {
+        // Fall through to the existing serialization path so projection failures do not
+        // silently drop a tool result on the floor.
+      }
+    }
+
     if (isStructuredValue(value)) {
       return asText(value);
     }

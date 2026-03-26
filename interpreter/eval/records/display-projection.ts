@@ -111,3 +111,23 @@ export async function renderDisplayProjection(
 
   return resolved;
 }
+
+export function hasDisplayProjectionTarget(value: unknown): boolean {
+  const resolved = isVariable(value) ? value.value : value;
+
+  if (isStructuredValue(resolved)) {
+    if (Boolean(getRecordProjectionMetadata(resolved))) {
+      return true;
+    }
+    if (resolved.type === 'array' && Array.isArray(resolved.data)) {
+      return resolved.data.some(item => hasDisplayProjectionTarget(item));
+    }
+    return false;
+  }
+
+  if (Array.isArray(resolved)) {
+    return resolved.some(item => hasDisplayProjectionTarget(item));
+  }
+
+  return false;
+}

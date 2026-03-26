@@ -295,6 +295,77 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('serializes display-projected record results through the generated function MCP bridge', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string, name: string],',
+        '  data: [notes: string?],',
+        '  display: [name, { mask: "email" }]',
+        '}',
+        '/exe @search_contacts(query) = js {',
+        '  return { email: "mark@example.com", name: "Mark Davies", notes: "Met at conference" };',
+        '} => contact',
+        '/var @toolList = [@search_contacts]'
+      ].join('\n')
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const response = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 22,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: {
+            query: 'Mark'
+          }
+        }
+      });
+
+      expect((response.result as any)?.isError).not.toBe(true);
+      const text = String((response.result as any)?.content?.[0]?.text ?? '');
+      expect(JSON.parse(text)).toEqual({
+        name: 'Mark Davies',
+        email: {
+          preview: 'm***@example.com',
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        },
+        notes: 'Met at conference'
+      });
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('discovers auto fact roots from prior native tool results in the same MCP session', async () => {
     const env = await createInterpretedEnv(
       [

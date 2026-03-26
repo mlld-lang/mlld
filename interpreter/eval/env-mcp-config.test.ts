@@ -379,6 +379,52 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves display-projected outputs for MCP-imported executables from the same module', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, name: string],',
+      '  data: [notes: string?],',
+      '  display: [name, { mask: "email" }]',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies", notes: "Met at conference" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' }`,
+      '/show @agent("Find Mark", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        name: 'Mark Davies',
+        email: {
+          preview: 'm***@example.com',
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        },
+        notes: 'Met at conference'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves mixed concatenated executable arrays when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
