@@ -12,6 +12,7 @@ import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import {
   getOperationLabels,
   normalizeNamedOperationRef,
+  resolveCanonicalOperationRef,
   parseCommand
 } from '@core/policy/operation-labels';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -408,6 +409,10 @@ export async function createExecOperationContextAndEnforcePolicy(
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
   const operationContext: OperationContext = {
     type: 'exe',
+    ref: resolveCanonicalOperationRef({
+      type: 'exe',
+      name: operationName ?? commandName
+    }),
     name: operationName ?? commandName,
     labels: operationLabels.length > 0 ? operationLabels : undefined,
     location: node.location ?? null,

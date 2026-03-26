@@ -1,6 +1,7 @@
 import type { SourceLocation } from '@core/types';
 import type { DataLabel, ToolProvenance } from '@core/types/security';
 import type { GuardHint, GuardResult } from '@core/types/guard';
+import { resolveCanonicalOperationRef } from '@core/policy/operation-labels';
 import {
   createGuardArgsView,
   type GuardArgsSnapshot
@@ -11,6 +12,8 @@ const DEFAULT_GUARD_MAX = 3;
 export interface OperationContext {
   /** Directive or operation type (e.g., "var", "run", "output") */
   type: string;
+  /** Canonical operation ref for named operations (e.g., "op:@email.send") */
+  ref?: string;
   /** Optional subtype (e.g., "runExec") */
   subtype?: string;
   /** Data labels declared on the directive */
@@ -517,8 +520,16 @@ export class ContextManager {
     const labels = this.normalizeToolList(operation.labels as readonly string[] | undefined);
     const opLabels = this.normalizeToolList(operation.opLabels as readonly string[] | undefined);
     const mergedLabels = this.normalizeToolList([...labels, ...opLabels]);
+    const ref =
+      resolveCanonicalOperationRef({
+        type: typeof operation.type === 'string' ? operation.type : undefined,
+        ref: typeof operation.ref === 'string' ? operation.ref : undefined,
+        name: typeof operation.name === 'string' ? operation.name : undefined,
+        opLabels
+      }) ?? null;
     return {
       ...operation,
+      ref,
       labels: mergedLabels,
       opLabels
     };

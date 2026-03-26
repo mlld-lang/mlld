@@ -1655,6 +1655,20 @@ it('applies op:exe guards to bare run-exec statements and var-assigned exec call
   await expect(evaluateDirective(assignedInvocation, env)).rejects.toThrow(/blocked exec/);
 });
 
+it('exposes canonical named operation refs to guard conditions', async () => {
+  const env = createEnv();
+  const guardDirective = parseSync(
+    '/guard before @gate for op:@sendEmail = when [ @mx.op.ref == "op:@sendemail" => deny "blocked named op" \n * => allow ]'
+  )[0] as DirectiveNode;
+  await evaluateDirective(guardDirective, env);
+
+  const exeDirective = parseSync('/exe @sendEmail(value) = ::@value::')[0] as DirectiveNode;
+  await evaluateDirective(exeDirective, env);
+
+  const directive = parseSync('/show @sendEmail("hi")')[0] as DirectiveNode;
+  await expect(evaluateDirective(directive, env)).rejects.toThrow(/blocked named op/);
+});
+
 it('fires before guards for exec arguments reached through field access', async () => {
   const env = createEnv();
   const labelGuard = parseSync(

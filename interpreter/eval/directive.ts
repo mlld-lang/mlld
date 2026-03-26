@@ -46,7 +46,12 @@ import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/type
 import { evaluatePolicy } from './policy';
 import { evaluateAuth } from './auth';
 import { evaluateRecord } from './record';
-import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
+import {
+  getOperationLabels,
+  getOperationSources,
+  parseCommand,
+  resolveCanonicalOperationRef
+} from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { collectInputDescriptor, descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
 import { makeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
@@ -800,6 +805,7 @@ function buildOperationContext(
   }
 
   applyOperationLabels(context, directive);
+  context.ref = resolveCanonicalOperationRef(context);
 
   return context;
 }

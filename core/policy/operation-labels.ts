@@ -43,6 +43,33 @@ export function normalizeNamedOperationRef(value: string | undefined | null): st
   return `op:@${identifier.toLowerCase()}`;
 }
 
+export function resolveCanonicalOperationRef(options: {
+  type?: string | undefined | null;
+  ref?: string | undefined | null;
+  name?: string | undefined | null;
+  opLabels?: readonly string[] | undefined | null;
+}): string | undefined {
+  const explicitRef = normalizeNamedOperationRef(options.ref);
+  if (explicitRef) {
+    return explicitRef;
+  }
+
+  if (Array.isArray(options.opLabels)) {
+    for (const label of options.opLabels) {
+      const normalizedLabel = normalizeNamedOperationRef(label);
+      if (normalizedLabel) {
+        return normalizedLabel;
+      }
+    }
+  }
+
+  if (options.type === 'exe') {
+    return normalizeNamedOperationRef(options.name);
+  }
+
+  return undefined;
+}
+
 export function getOperationLabels(ctx: ExecutionContext): string[] {
   const labels: string[] = [];
 
