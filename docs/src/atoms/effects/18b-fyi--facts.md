@@ -10,7 +10,7 @@ updated: 2026-03-25
 qa_tier: 2
 ---
 
-`@fyi.facts()` discovers fact-bearing values from configured roots and returns opaque handles. It's how LLM agents find authorized values without copying raw literals.
+The primary planner workflow uses projected record results with embedded handles. `@fyi.facts()` remains the explicit discovery surface for agents that need to search configured roots directly.
 
 `@fyi` is a tool given to agents -- including via MCP. When `fyi: { facts: ... }` is configured on a box or call site, the `@fyi` tool is implicitly available to the LLM inside that scope.
 
@@ -36,7 +36,7 @@ qa_tier: 2
 { "name": "fyi.facts", "arguments": { "query": { "op": "sendEmail", "arg": "recipient" } } }
 ```
 
-The query accepts a bare operation name (`"sendEmail"`), a canonical ref (`"op:named:send_email"`), or an object with `op` and optional `arg`.
+The query accepts a bare operation name (`"sendEmail"`), a canonical ref (`"op:named:email.send"`), or an object with `op` and optional `arg`.
 
 In mlld syntax: `@fyi.facts()`, `@fyi.facts("sendEmail")`, or `@fyi.facts({ op: "sendEmail", arg: "recipient" })`.
 
@@ -90,7 +90,9 @@ var @cfg = { fyi: { facts: "auto" } }
 
 When an agent calls a tool that returns a record-coerced value, that result is auto-registered as a discovery root. A later `@fyi.facts()` call in the same session can surface handles from it without the orchestrator listing roots explicitly.
 
-This is the typical agent configuration -- the agent discovers facts from whatever data it retrieves during its session.
+This is a compatibility path, not the primary planner workflow. If the projected tool result already contains the needed handle, the agent can copy that handle directly and skip `@fyi.facts()`.
+
+This is the typical explicit-discovery configuration -- the agent discovers facts from whatever data it retrieves during its session when projected tool results alone are not enough.
 
 ### Explicit roots
 
@@ -130,7 +132,7 @@ See `facts-and-handles` for the full security model. See `pattern-planner` for u
 
 Filtered discovery derives requirements from three sources:
 
-1. **Built-in symbolic specs** -- `op:named:email_send` requires `fact:*.email` on destination args
+1. **Built-in symbolic specs** -- `op:named:email.send` requires `fact:*.email` on destination args
 2. **Live operation metadata** -- `labels` and `controlArgs` from the exe definition
 3. **Declarative policy** -- `policy.facts.requirements` entries
 

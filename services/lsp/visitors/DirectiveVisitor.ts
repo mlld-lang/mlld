@@ -4172,7 +4172,7 @@ export class DirectiveVisitor extends BaseVisitor {
    */
   private getDirectiveTokenType(kind: string): string {
     switch (kind) {
-      // Definition directives: var, exe, guard, hook, policy, checkpoint
+      // Definition directives: var, exe, guard, hook, policy, checkpoint, record
       // Use 'modifier' semantic type → renders as pink italic
       case 'var':
       case 'exe':
@@ -4180,6 +4180,7 @@ export class DirectiveVisitor extends BaseVisitor {
       case 'hook':
       case 'policy':
       case 'checkpoint':
+      case 'record':
         return 'directiveDefinition';
 
       // Action directives: run, show, output, append, log, stream

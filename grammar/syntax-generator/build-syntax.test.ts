@@ -10,6 +10,7 @@ describe('MlldSyntaxGenerator', () => {
       'box',
       'file',
       'files',
+      'record',
       'needs',
       'profiles',
       'while'
@@ -33,6 +34,10 @@ describe('MlldSyntaxGenerator', () => {
 
     const objectKeyRegex = new RegExp(generator.patterns.objectKey);
     expect('max-retries: 3'.match(objectKeyRegex)?.[0]).toBe('max-retries');
+    expect('facts: [email: string]'.match(objectKeyRegex)?.[0]).toBe('facts');
+    expect('data: [notes: string?]'.match(objectKeyRegex)?.[0]).toBe('data');
+    expect('display: [name, { mask: "email" }]'.match(objectKeyRegex)?.[0]).toBe('display');
+    expect('{ mask: "email" }'.match(objectKeyRegex)?.[0]).toBe('mask');
   });
 
   it('emits inline and block keyword patterns for TextMate grammars', () => {

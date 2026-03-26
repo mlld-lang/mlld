@@ -149,7 +149,7 @@ var @plannerOutput = @planner(@task) | @parse
 var @result = @agent(@prompt) with { policy: @plannerOutput }
 ```
 
-The planner's output is a JSON fragment. Values can be pinned by handle (from `@fyi.facts` discovery) or by literal:
+The planner's output is a JSON fragment. In the primary workflow, handles are copied directly from projected tool results. Literal pinning remains available as a same-session fallback, but it is secondary:
 
 ```json
 {
@@ -158,6 +158,18 @@ The planner's output is a JSON fragment. Values can be pinned by handle (from `@
       "send_email": { "args": { "recipients": [{ "handle": "h_a7x9k2" }] } },
       "create_file": true
     }
+  }
+}
+```
+
+That handle usually comes from a record display projection such as:
+
+```json
+{
+  "name": "Mark Davies",
+  "email": {
+    "preview": "m***@example.com",
+    "handle": { "handle": "h_a7x9k2" }
   }
 }
 ```

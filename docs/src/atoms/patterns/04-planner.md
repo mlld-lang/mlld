@@ -17,7 +17,7 @@ An LLM agent that both decides and executes has one shot to get everything right
 
 Splitting creates a security boundary:
 
-- The **planner** runs with discovery tools (`@fyi.facts()`), looks up trusted data, and produces an authorization bundle specifying exactly which tools and argument values are allowed
+- The **planner** runs with read tools that return projected handles, looks up trusted data, and produces an authorization bundle specifying exactly which tools and argument values are allowed
 - The **worker** runs under that authorization, can read untrusted content, but can only call tools the planner pre-approved with pre-approved values
 
 The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can't actually do it because the planner never authorized that recipient.
@@ -27,7 +27,8 @@ The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can'
 ```mlld
 record @contact = {
   facts: [email: string, name: string],
-  data: [notes: string?]
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
 }
 
 exe @searchContacts(query) = run cmd {
@@ -43,13 +44,19 @@ The `controlArgs` declaration marks `recipient` as a security-relevant parameter
 
 ### Planner phase
 
-The planner looks up contacts, discovers fact candidates, and produces an authorization. The planner LLM has `@fyi.facts` as a tool and calls it with the operation name:
+The planner looks up contacts and receives a projected result with embedded handles:
 
 ```json
-{ "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
+{
+  "name": "Mark Davies",
+  "email": {
+    "preview": "m***@example.com",
+    "handle": { "handle": "h_a7x9k2" }
+  }
+}
 ```
 
-The runtime returns candidates grouped by arg. The planner then produces a JSON authorization bundle:
+The planner copies the inner handle wrapper into a JSON authorization bundle:
 
 ```json
 {
@@ -65,7 +72,9 @@ The runtime returns candidates grouped by arg. The planner then produces a JSON 
 }
 ```
 
-The handle `h_a7x9k2` refers to the live contact value with `fact:@contact.email` still attached. The planner pins the exact recipient.
+The outer `{ preview, handle }` object is display-only. The planner copies the inner single-key wrapper. The handle `h_a7x9k2` refers to the live contact value with `fact:@contact.email` still attached. The planner pins the exact recipient without copying the raw email address.
+
+`@fyi.facts(...)` remains available for explicit cross-root discovery, but it is no longer the primary planner workflow.
 
 ### Worker phase
 
@@ -132,6 +141,7 @@ The worker can pass *less* than authorized (fewer recipients) but not *more*. Ar
 record @contact = {
   facts: [email: string, name: string],
   data: [notes: string?],
+  display: [name, { mask: "email" }],
   when [
     internal => :internal
     * => :external
@@ -153,28 +163,25 @@ var @base = {
   operations: { "exfil:send": ["exfil:send"] }
 }
 
->> Step 1: Planner runs with auto-discovery -- tool results become roots
-var @cfg = { fyi: { facts: "auto" } }
+>> Step 1: Planner calls @searchContacts
+>> The result already carries a projected email handle on @result.email.handle
+>> The planner copies that handle into the authorization bundle
 
->> Step 2: Planner LLM calls @searchContacts, result auto-registers as root
->> Then calls fyi.facts("sendEmail") and gets candidates grouped by arg
->> then produces an authorization bundle with the discovered handle
-
->> Step 3: Orchestrator wires planner output into worker policy
+>> Step 2: Orchestrator wires planner output into worker policy
 var @plannerAuth = {
   authorizations: {
     allow: {
       sendEmail: {
         args: {
-          recipient: @contacts.email
+          recipient: { handle: "h_a7x9k2" }
         }
       }
     }
   }
 }
 
->> Step 4: Worker runs under combined policy
+>> Step 3: Worker runs under combined policy
 show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @plannerAuth }
 ```
 
-See `facts-and-handles` for how records, facts, and handles work. See `policy-authorizations` for the full authorization syntax.
+For explicit cross-root discovery, a planner can still use `@fyi.facts(...)` as a compatibility tool. See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.

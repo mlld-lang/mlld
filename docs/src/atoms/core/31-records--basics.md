@@ -51,6 +51,49 @@ true
 
 The `email` field carries `fact:@contact.email`. Schema validation metadata is available on `@output.mx.schema.valid` and `@output.mx.schema.errors`.
 
+## Display projections
+
+Records can also define how fact fields cross an LLM or MCP boundary:
+
+```mlld
+record @contact = {
+  facts: [email: string, name: string, phone: string?],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}
+```
+
+This does **not** change ordinary runtime behavior:
+
+- `show @contact.email` still prints the actual email
+- interpolation still sees the live value
+- field-level proof stays attached to the live structured value
+
+It only changes the projected form used at the LLM boundary. With the definition above, a projected tool result looks like:
+
+```json
+{
+  "name": "Ada Lovelace",
+  "email": {
+    "preview": "a***@example.com",
+    "handle": { "handle": "h_ab12cd" }
+  },
+  "phone": {
+    "handle": { "handle": "h_ef34gh" }
+  },
+  "notes": "Met at conference"
+}
+```
+
+Rules:
+
+- listed fact fields are bare-visible unless wrapped with `{ mask: "field" }`
+- masked fact fields emit a safe preview plus a nested handle wrapper
+- omitted fact fields become handle-only when any `display:` clause is present
+- data fields remain bare
+
+This is the primary planner-facing handle path. See `facts-and-handles` for the boundary model.
+
 ## Field remapping
 
 Remap source fields with `@input.field as alias`:

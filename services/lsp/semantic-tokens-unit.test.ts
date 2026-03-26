@@ -227,6 +227,41 @@ describe('Semantic Tokens - Unit Tests', () => {
         modifiers: ['declaration']
       });
     });
+
+    it('highlights record directives and record display keys', async () => {
+      const code = `/record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/record',
+        tokenType: 'directiveDefinition'
+      });
+      expectToken(tokens, {
+        text: '@contact',
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
+      expectToken(tokens, {
+        text: 'facts',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'data',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'display',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'mask',
+        tokenType: 'property'
+      });
+    });
     
     it('highlights multiple directives', async () => {
       const code = `/var @x = 1

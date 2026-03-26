@@ -28,7 +28,7 @@ The important architectural split is between contamination and proof. Negative r
 - Run policy before execution.
 - Keep policy non-bypassable.
 - Use records as the structured shaping and classification boundary.
-- Cross LLM boundaries with opaque handles.
+- Cross LLM boundaries with opaque handles and boundary-only display projections.
 - Canonicalize named operations before discovery or fact-aware policy checks.
 - Fail closed when discovery lacks operation identity or required control-arg metadata.
 
@@ -156,6 +156,22 @@ This gives the runtime a field-granular proof model:
 - a record field can be authoritative while sibling fields are not
 - trust is attached to the accessed live value, not to a serialized parent blob
 
+### Display Projections
+
+Record display projections are the primary LLM-facing handle path.
+
+Projection rendering lives in [`display-projection.ts`](/Users/adam/mlld/mlld/interpreter/eval/records/display-projection.ts).
+
+Important properties:
+
+- projection is an LLM/MCP-boundary renderer, not a mutation of `StructuredValue.text`
+- fact fields can render as bare values, masked previews plus handles, or handle-only wrappers
+- when a record declares `display: [...]`, omitted fact fields default to handle-only projection
+- data fields remain bare
+- scoped `display: "strict"` forces all fact fields to handle-only projection
+
+Projected handle payloads use nested compatibility wrappers such as `{ preview, handle: { handle: "..." } }`. The inner single-key wrapper is the actual handle wrapper consumed by recursive handle resolution.
+
 ### Handles
 
 Handles are the boundary primitive for LLM-mediated selection.
@@ -167,7 +183,7 @@ Properties of handles:
 - runtime-issued
 - resolved back to the original live value
 
-The public wrapper shape is exactly `{ handle: "..." }`. Extra-key objects are plain objects, not handle wrappers. Handle types live in [`handle.ts`](/Users/adam/mlld/mlld/core/types/handle.ts). Resolution lives in [`handle-resolution.ts`](/Users/adam/mlld/mlld/interpreter/utils/handle-resolution.ts).
+The public wrapper shape is exactly `{ handle: "..." }`. Extra-key objects are plain objects, not handle wrappers. Projection payloads therefore nest the wrapper under a descriptive field such as `handle: { handle: "..." }`. Handle types live in [`handle.ts`](/Users/adam/mlld/mlld/core/types/handle.ts). Resolution lives in [`handle-resolution.ts`](/Users/adam/mlld/mlld/interpreter/utils/handle-resolution.ts).
 
 Handle resolution is recursive across:
 
@@ -180,7 +196,7 @@ This is the mechanism that preserves proof across LLM boundaries without trustin
 
 ### Fact Discovery
 
-`@fyi.facts(...)` is the fact-discovery surface.
+The primary planner path is projected record results. `@fyi.facts(...)` remains the explicit fact-discovery surface when agents need to search configured roots directly instead of copying handles from projected tool output.
 
 The implementation lives in [`facts-runtime.ts`](/Users/adam/mlld/mlld/interpreter/fyi/facts-runtime.ts).
 
@@ -192,6 +208,8 @@ Discovery uses box or call-site `fyi: { facts: [...] }` roots and returns bounde
 - `fact`
 
 It does not return raw live values or raw authorization-critical literals. `label` is a safe display string derived from sibling record context when possible and otherwise falls back to a masked preview.
+
+`facts: "auto"` remains available as a same-session compatibility path that reuses successful native tool results as discovery roots. It is not required for the primary projection-based planner workflow.
 
 There are two discovery modes:
 
@@ -265,6 +283,8 @@ It resolves:
 - handle wrappers
 
 Compiled authorization proof comes from the resolved live value’s security descriptor, not from a copied literal representation.
+
+For bare-visible fact fields, authorization compilation also performs same-session literal matching against prior auto fact roots before normalization. That allows planner-produced literals to recover live proof when they exactly match a same-session fact value, while keeping copied literals outside that scope unauthenticated.
 
 ### Dispatch-Time Authorization And Policy Checks
 

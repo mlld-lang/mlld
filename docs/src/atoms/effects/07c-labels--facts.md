@@ -89,7 +89,9 @@ These compose conjunctively with built-in requirements. If both a built-in rule 
 
 ## Discovery
 
-`@fyi.facts()` uses fact requirements to filter candidates. The agent calls it with an operation name:
+Projected tool results are the primary planner path. `@fyi.facts()` remains the explicit discovery surface when an agent needs to search configured roots instead of copying handles from a projected record result.
+
+When used directly, `@fyi.facts()` uses fact requirements to filter candidates. The agent calls it with an operation name:
 
 ```
 @fyi.facts("sendEmail")
@@ -99,7 +101,7 @@ This returns candidates grouped by arg, filtered to values whose fact labels sat
 
 Requirements come from three sources:
 
-1. Built-in symbolic specs (like `op:named:email_send`)
+1. Built-in symbolic specs (like `op:named:email.send`)
 2. Live operation metadata (`labels`, `controlArgs`)
 3. Declarative `policy.facts.requirements`
 
@@ -120,7 +122,7 @@ Each entry is a `{ kind, ref, sourceRef, field, tiers }` object. This is the str
 Guards can check for specific fact labels:
 
 ```mlld
-guard @internalOnly before op:named:sendEmail = when [
+guard @internalOnly before op:named:sendemail = when [
   @mx.args.recipient.mx.has_label("fact:internal:@contact.email") => allow
   * => deny "Only internal contacts"
 ]

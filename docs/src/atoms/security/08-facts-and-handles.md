@@ -89,22 +89,31 @@ The agent gets a contact where `email: "mark@example.com"` carries `fact:@contac
 
 mlld gives the LLM opaque references to live values instead of copyable literals.
 
-The agent calls `@fyi.facts()` -- a discovery tool that returns fact candidates from configured roots:
+The primary path is record display projection. A tool returning a contact record with:
 
-```json
-[
-  { "handle": "h_a7x9k2", "label": "Mark Davies", "field": "email", "fact": "fact:external:@contact.email" },
-  { "handle": "h_m3q8t1", "label": "Sarah Chen", "field": "email", "fact": "fact:internal:@contact.email" }
-]
+```mlld
+display: [name, { mask: "email" }]
 ```
 
-The response includes opaque handles and safe display labels -- not raw email addresses. The `label` comes from sibling record fields (like `name`) when available, or a masked fallback (like `a***@example.com`) otherwise.
+crosses the LLM boundary as:
 
-The LLM returns a handle:
+```json
+{
+  "name": "Mark Davies",
+  "email": {
+    "preview": "m***@example.com",
+    "handle": { "handle": "h_a7x9k2" }
+  }
+}
+```
+
+The LLM copies the inner handle wrapper into its tool call or authorization:
 
 ```json
 { "recipient": { "handle": "h_a7x9k2" } }
 ```
+
+The outer `{ preview, handle }` object is display-only. The actual reusable handle wrapper is the inner single-key `{ "handle": "..." }` object.
 
 The runtime resolves `h_a7x9k2` back to the original live value with `fact:external:@contact.email` still attached. The positive check passes because the value has real provenance.
 
@@ -112,7 +121,7 @@ If the LLM returns a raw literal instead (tricked by injection), the literal has
 
 ### Discovery is operation-aware
 
-`@fyi.facts()` is a tool given to agents -- including via MCP. The agent calls it with just the operation name:
+`@fyi.facts()` remains available when an agent needs explicit discovery across configured roots instead of using projected tool output directly. It is a tool given to agents -- including via MCP. The agent calls it with just the operation name:
 
 ```json
 { "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
@@ -124,13 +133,13 @@ Requirements come from three sources: built-in symbolic specs, live operation me
 
 ### Configuring fact roots
 
-Discovery searches configured roots, not all of runtime scope. The typical agent config uses `facts: "auto"`, which auto-registers successful native tool results from the session:
+Discovery searches configured roots, not all of runtime scope. `facts: "auto"` auto-registers successful native tool results from the session:
 
 ```mlld
 var @cfg = { fyi: { facts: "auto" } }
 ```
 
-The agent's own tool calls become discovery roots automatically. For explicit control, list roots directly with `fyi: { facts: [@contacts] }`. See `fyi-facts` for all configuration modes.
+The agent's own tool calls become discovery roots automatically. This is useful for explicit discovery flows, but planners that already hold projected tool results usually do not need a second `facts` call. For explicit control, list roots directly with `fyi: { facts: [@contacts] }`. See `fyi-facts` for all configuration modes.
 
 ## Policy rules
 
@@ -163,7 +172,7 @@ The first two are *positive checks* -- they require proof on specific values. Th
 Guards add contextual rules using fact labels:
 
 ```mlld
-guard @internalOnly before op:named:sendEmail = when [
+guard @internalOnly before op:named:sendemail = when [
   @mx.args.recipient.mx.has_label("fact:internal:@contact.email") => allow
   * => deny "Only internal contacts can receive email"
 ]
@@ -200,14 +209,12 @@ If the LLM returns malformed JSON or missing fields, the guard retries with vali
 ```
 1. User: "Reply to Mark's email about the project update"
 
-2. Planner (runs with fact discovery tools):
+2. Planner (runs with read tools that return projected handles):
    a. Calls @searchEmail("project update")
       -> Returns email record: from is a fact, body is data
    b. Calls @searchContacts("Mark")
-      -> Returns contact record: email carries fact:external:@contact.email
-   c. Calls fyi.facts("sendEmail")
-      -> Returns { recipient: [{ handle: "h_a7x9k2", label: "Mark Davies", field: "email", ... }] }
-   d. Produces authorization:
+      -> Returns contact projection with `email.handle = { handle: "h_a7x9k2" }`
+   c. Produces authorization by copying that handle:
       { sendEmail: { args: { recipient: { handle: "h_a7x9k2" } } } }
 
 3. Worker (executes under policy + authorization):

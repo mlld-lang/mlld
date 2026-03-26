@@ -58,7 +58,7 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 ## Principles
 
 - Reuse interpreter primitives: build real `ExecInvocation` nodes and call `evaluateExecInvocation`.
-- Preserve structured outputs: always emit the `.text` view while keeping StructuredValue metadata intact.
+- Preserve live structured values internally, but emit the LLM-boundary display projection for record-coerced tool results.
 - Keep stdout clean: JSON-RPC responses go to stdout, diagnostics stay on stderr.
 - Fail fast on conflicts: detect duplicate tool names before starting the server.
 - Gate environment changes: only apply overrides with the `MLLD_` prefix.
@@ -88,7 +88,10 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 ### Tool execution
 
 - `MCPServer` manages the JSON-RPC lifecycle (`initialize`, `tools/list`, `tools/call`) and enforces initialization before serving tools.
-- `FunctionRouter` converts tool calls into synthetic AST nodes, feeds them to `evaluateExecInvocation`, and serializes results with `asText` so StructuredValue wrapping remains intact.
+- `FunctionRouter` converts tool calls into synthetic AST nodes, feeds them to `evaluateExecInvocation`, and serializes results through the record display-projection renderer before emitting MCP text.
+- Record-coerced results cross the MCP boundary as safe projection payloads, for example masked previews plus nested handle wrappers such as `{ "email": { "preview": "m***@example.com", "handle": { "handle": "h_ab12cd" } } }`.
+- The live `StructuredValue` remains intact inside the interpreter. Projection is an MCP/LLM-boundary renderer, not a mutation of `.text`.
+- Scoped `display: "strict"` forces all fact fields to handle-only projection at the MCP boundary.
 - Errors thrown during execution become `isError` responses with text content only; protocol errors surface via MCP error codes.
 
 ### Configuration modules
@@ -100,7 +103,8 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 ## Gotchas
 
 - Forgetting the `MLLD_` prefix means overrides are silently skipped.
-- StructuredValue results must flow back as strings; bypassing `asText` leads to JSON blobs in client responses.
+- StructuredValue results must flow back through the MCP serializer; bypassing the display-projection path leaks raw record data or drops embedded handles.
+- Record arrays project element-by-element. The MCP boundary does not special-case only singleton records.
 - Config modules execute with the same environment as regular tools—runtime failures there abort startup.
 
 ## Debugging

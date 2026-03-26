@@ -52,8 +52,10 @@ Current `TOKEN_TYPE_MAP` highlights to keep accurate:
 
 Current directive keyword grouping in `DirectiveVisitor`:
 
-- `directiveDefinition`: `var`, `exe`, `guard`, `hook`, `policy`, `checkpoint`
+- `directiveDefinition`: `var`, `exe`, `guard`, `hook`, `policy`, `checkpoint`, `record`
 - `directiveAction`: `run`, `show`, `output`, `append`, `log`, `stream`, `sign`, `verify`
+
+Record field keys such as `facts`, `data`, `display`, and nested `mask` entries are highlighted through the ordinary object-key/property token path. Keep semantic-token tests for record syntax aligned with the record grammar whenever those keys or projection forms change.
 
 Pass-through entries currently include:
 
