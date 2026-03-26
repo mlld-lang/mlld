@@ -153,12 +153,11 @@ var @base = {
   operations: { "exfil:send": ["exfil:send"] }
 }
 
->> Step 1: Orchestrator looks up contacts and configures discovery roots
-var @contacts = @searchContacts("Mark")
-var @cfg = { fyi: { facts: [@contacts] } }
+>> Step 1: Planner runs with auto-discovery -- tool results become roots
+var @cfg = { fyi: { facts: "auto" } }
 
->> Step 2: Planner LLM runs with @fyi.facts as a tool
->> It calls fyi.facts("sendEmail") and gets candidates grouped by arg
+>> Step 2: Planner LLM calls @searchContacts, result auto-registers as root
+>> Then calls fyi.facts("sendEmail") and gets candidates grouped by arg
 >> then produces an authorization bundle with the discovered handle
 
 >> Step 3: Orchestrator wires planner output into worker policy

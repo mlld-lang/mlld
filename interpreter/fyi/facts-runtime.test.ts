@@ -256,4 +256,46 @@ describe('evaluateFyiFacts', () => {
       }
     ]);
   });
+
+  it('discovers fact candidates from auto-registered tool results', async () => {
+    const env = await createContactsEnv();
+    const contact = env.getVariable('contact');
+    if (!contact) {
+      throw new Error('Expected @contact to be defined');
+    }
+
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        autoFacts: true
+      }
+    });
+    env.recordToolCall({
+      name: 'search_contacts',
+      timestamp: Date.now(),
+      ok: true,
+      result: {
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        id: 'contact-1'
+      },
+      fyiFactRoot: contact
+    });
+
+    const result = await evaluateFyiFacts(undefined, env);
+
+    expect(result.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'Ada Lovelace',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      },
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'Ada Lovelace',
+        field: 'id',
+        fact: 'fact:@contact.id'
+      }
+    ]);
+  });
 });

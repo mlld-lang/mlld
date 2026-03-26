@@ -1924,6 +1924,10 @@ export class Environment
     this.contextManager.resetToolCalls();
   }
 
+  getFyiAutoFactRoots(): readonly unknown[] {
+    return this.contextManager.getFyiAutoFactRoots();
+  }
+
   async withPipeContext<T>(
     context: PipelineContextSnapshot,
     fn: () => Promise<T> | T

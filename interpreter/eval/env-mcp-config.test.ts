@@ -13,6 +13,9 @@ const fakeServerPath = fileURLToPath(
 const callToolFromConfigPath = fileURLToPath(
   new URL('../../tests/support/mcp/call-tool-from-config.cjs', import.meta.url)
 );
+const callToolSequenceFromConfigPath = fileURLToPath(
+  new URL('../../tests/support/mcp/call-tool-sequence-from-config.cjs', import.meta.url)
+);
 
 const pathService = new PathService();
 const pathContext = {
@@ -310,6 +313,42 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves record coercion for MCP-imported executables from the same module', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = { facts: [email: string, name: string] }',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' }`,
+      '/show @agent("Find Mark", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: 'mark@example.com',
+        name: 'Mark Davies'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves mixed concatenated executable arrays when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
@@ -477,6 +516,50 @@ describe('box MCP config integration', () => {
           label: 'm***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'
+        }
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('auto-registers prior native tool results as fyi fact roots within one agent call', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = { facts: [email: string, name: string] }',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+      '/var @toolList = [@search_contacts, @fyi.facts]',
+      '/var @cfg = { fyi: { facts: "auto" } }',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}},{"name":"facts","arguments":{}}]' }`,
+      '/box @cfg [',
+      '  show @agent("Find Mark", { tools: @toolList })',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual([
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Mark Davies',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        },
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'name value',
+          field: 'name',
+          fact: 'fact:@contact.name'
         }
       ]);
     } finally {

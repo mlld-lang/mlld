@@ -13,6 +13,7 @@ import {
 
 export interface ResolvedFyiConfig {
   facts?: unknown[];
+  autoFacts?: boolean;
 }
 
 function isAstObjectNode(value: unknown): value is {
@@ -108,6 +109,66 @@ async function resolveFactsList(value: unknown, env: Environment): Promise<unkno
   return single === undefined ? [] : [single];
 }
 
+function isAutoFactsSentinel(value: unknown): boolean {
+  if (isVariable(value)) {
+    return isAutoFactsSentinel(value.value);
+  }
+  if (isStructuredValue(value)) {
+    return isAutoFactsSentinel(value.data);
+  }
+  return typeof value === 'string' && value.trim().toLowerCase() === 'auto';
+}
+
+async function resolveFactsConfig(
+  value: unknown,
+  env: Environment
+): Promise<Pick<ResolvedFyiConfig, 'facts' | 'autoFacts'>> {
+  const source = isStructuredValue(value) ? asData(value) : value;
+  if (isAstArrayNode(source)) {
+    const facts: unknown[] = [];
+    let autoFacts = false;
+    for (const item of source.items ?? []) {
+      const resolved = await resolveFyiFactRoot(item, env);
+      if (isAutoFactsSentinel(resolved)) {
+        autoFacts = true;
+        continue;
+      }
+      if (resolved !== undefined) {
+        facts.push(resolved);
+      }
+    }
+    return {
+      ...(facts.length > 0 ? { facts } : {}),
+      ...(autoFacts ? { autoFacts: true } : {})
+    };
+  }
+
+  if (Array.isArray(source)) {
+    const facts: unknown[] = [];
+    let autoFacts = false;
+    for (const item of source) {
+      const resolved = await resolveFyiFactRoot(item, env);
+      if (isAutoFactsSentinel(resolved)) {
+        autoFacts = true;
+        continue;
+      }
+      if (resolved !== undefined) {
+        facts.push(resolved);
+      }
+    }
+    return {
+      ...(facts.length > 0 ? { facts } : {}),
+      ...(autoFacts ? { autoFacts: true } : {})
+    };
+  }
+
+  const single = await resolveFyiFactRoot(source, env);
+  if (isAutoFactsSentinel(single)) {
+    return { autoFacts: true };
+  }
+  return single === undefined ? {} : { facts: [single] };
+}
+
 export async function resolveFyiConfig(
   rawValue: unknown,
   env: Environment
@@ -121,7 +182,7 @@ export async function resolveFyiConfig(
     if (!factsEntry) {
       return {};
     }
-    return { facts: await resolveFactsList(factsEntry.value, env) };
+    return await resolveFactsConfig(factsEntry.value, env);
   }
 
   if (isPlainObject(rawValue)) {
@@ -129,7 +190,7 @@ export async function resolveFyiConfig(
     if (factsValue === undefined) {
       return {};
     }
-    return { facts: await resolveFactsList(factsValue, env) };
+    return await resolveFactsConfig(factsValue, env);
   }
 
   return undefined;

@@ -17,7 +17,13 @@ export function generateToolSchema(
   const exposedParams = hasExpose
     ? toolDef!.expose!
     : paramNames.filter(param => !boundSet.has(param));
-  const optionalSet = new Set(Array.isArray(toolDef?.optional) ? toolDef!.optional! : []);
+  const optionalSet = new Set(
+    Array.isArray(toolDef?.optional)
+      ? toolDef!.optional!
+      : Array.isArray(execVar.internal?.executableDef?.optionalParams)
+        ? execVar.internal.executableDef.optionalParams
+        : []
+  );
   const exposedSet = new Set(exposedParams);
   const visibleParams = paramNames.filter(param => exposedSet.has(param));
   const properties: Record<string, JSONSchemaProperty> = {};

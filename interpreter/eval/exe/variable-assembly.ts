@@ -3,6 +3,7 @@ import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
+import type { RecordDefinition } from '@core/types/record';
 import {
   createExecutableVariable,
   VariableMetadataUtils,
@@ -91,6 +92,10 @@ export async function materializeExecutableVariable(
   if (env.getIsImporting()) {
     metadata.capturedModuleEnv = env.captureModuleEnvironment();
   }
+  const embeddedRecordDefinitions = collectEmbeddedRecordDefinitions(executableDef, env);
+  if (Object.keys(embeddedRecordDefinitions).length > 0) {
+    metadata.recordDefinitions = embeddedRecordDefinitions;
+  }
 
   const descriptorWithCommandTaint = addCommandDescriptorTaint(executableDef, descriptor, env);
   const metadataWithSecurity = VariableMetadataUtils.applySecurityMetadata(metadata, {
@@ -131,6 +136,23 @@ export async function materializeExecutableVariable(
   await maybeAutosignVariable(identifier, variable, env);
 
   return { value: executableDef, env };
+}
+
+function collectEmbeddedRecordDefinitions(
+  executableDef: ExecutableDefinition,
+  env: Environment
+): Record<string, RecordDefinition> {
+  const outputRecord = executableDef.outputRecord;
+  if (!outputRecord) {
+    return {};
+  }
+  const definition = env.getRecordDefinition(outputRecord);
+  if (!definition) {
+    return {};
+  }
+  return {
+    [outputRecord]: definition
+  };
 }
 
 function buildVariableSource(executableDef: ExecutableDefinition): VariableSource {

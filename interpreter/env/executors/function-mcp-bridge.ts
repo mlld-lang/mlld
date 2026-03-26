@@ -88,6 +88,7 @@ class FunctionMcpBridgeServer {
         mlld: tempName,
         ...(Array.isArray(executable.mx?.labels) ? { labels: executable.mx.labels } : {}),
         ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
+        ...(Array.isArray(clonedExecutableDef?.optionalParams) ? { optional: clonedExecutableDef.optionalParams } : {}),
         ...(typeof executable.description === 'string' ? { description: executable.description } : {})
       };
       const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);

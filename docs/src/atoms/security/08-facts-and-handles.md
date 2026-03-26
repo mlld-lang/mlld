@@ -124,14 +124,13 @@ Requirements come from three sources: built-in symbolic specs, live operation me
 
 ### Configuring fact roots
 
-Discovery searches explicit roots, not all of runtime scope:
+Discovery searches configured roots, not all of runtime scope. The typical agent config uses `facts: "auto"`, which auto-registers successful native tool results from the session:
 
 ```mlld
-var @contacts = @searchContacts("Mark")
-var @cfg = { fyi: { facts: [@contacts] } }
+var @cfg = { fyi: { facts: "auto" } }
 ```
 
-Only values listed in `fyi.facts` are eligible. The agent can't discover facts from values it wasn't given.
+The agent's own tool calls become discovery roots automatically. For explicit control, list roots directly with `fyi: { facts: [@contacts] }`. See `fyi-facts` for all configuration modes.
 
 ## Policy rules
 

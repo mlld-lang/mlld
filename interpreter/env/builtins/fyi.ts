@@ -40,6 +40,7 @@ export function createFyiVariable(env: Environment) {
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['query'],
+    optionalParams: ['query'],
     description: 'List fact-bearing candidates from configured FYI roots'
   };
 

@@ -352,10 +352,14 @@ export async function evaluateFyiFacts(
           policy: env.getPolicySummary()
         })
       : null;
-  const scopedConfig = env.getScopedEnvironmentConfig() as { fyi?: { facts?: unknown[] } } | undefined;
+  const scopedConfig = env.getScopedEnvironmentConfig() as
+    | { fyi?: { facts?: unknown[]; autoFacts?: boolean } }
+    | undefined;
   const configuredRoots = Array.isArray(scopedConfig?.fyi?.facts) ? scopedConfig!.fyi!.facts : [];
+  const autoRoots = scopedConfig?.fyi?.autoFacts ? env.getFyiAutoFactRoots() : [];
+  const discoveryRoots = [...configuredRoots, ...autoRoots];
 
-  if (configuredRoots.length === 0) {
+  if (discoveryRoots.length === 0) {
     return normalizedQuery.op && !normalizedQuery.arg
       ? wrapStructured({}, 'object')
       : wrapStructured([], 'array');
@@ -377,7 +381,7 @@ export async function evaluateFyiFacts(
   }
 
   const collected: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }> = [];
-  for (const root of configuredRoots) {
+  for (const root of discoveryRoots) {
     await collectFactCandidates(root, env, collected);
   }
 

@@ -189,7 +189,8 @@ export class FunctionRouter {
         this.environment.recordToolCall({
           ...callRecord,
           ok: true,
-          result: this.toTrackedToolResult(result.value)
+          result: this.toTrackedToolResult(result.value),
+          fyiFactRoot: result.value
         });
         return this.serializeResult(result.value);
       }
@@ -219,7 +220,8 @@ export class FunctionRouter {
       this.environment.recordToolCall({
         ...callRecord,
         ok: true,
-        result: this.toTrackedToolResult(result.value)
+        result: this.toTrackedToolResult(result.value),
+        fyiFactRoot: result.value
       });
       return this.serializeResult(result.value);
     } catch (error) {

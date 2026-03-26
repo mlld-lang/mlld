@@ -12,7 +12,7 @@ qa_tier: 2
 
 `@fyi.facts()` discovers fact-bearing values from configured roots and returns opaque handles. It's how LLM agents find authorized values without copying raw literals.
 
-`@fyi` is a tool given to agents -- including via MCP. When `fyi: { facts: [...] }` is configured on a box or call site, the `@fyi` tool is implicitly available to the LLM inside that scope.
+`@fyi` is a tool given to agents -- including via MCP. When `fyi: { facts: ... }` is configured on a box or call site, the `@fyi` tool is implicitly available to the LLM inside that scope.
 
 ## How the agent calls it
 
@@ -80,7 +80,21 @@ The raw authorization-critical value (the actual email address) is not exposed. 
 
 ## Configuring roots
 
-Discovery searches only explicitly configured roots. Configure them at the box or call site:
+### Auto mode
+
+`facts: "auto"` uses successful native tool results from the current scoped session as discovery roots automatically:
+
+```mlld
+var @cfg = { fyi: { facts: "auto" } }
+```
+
+When an agent calls a tool that returns a record-coerced value, that result is auto-registered as a discovery root. A later `@fyi.facts()` call in the same session can surface handles from it without the orchestrator listing roots explicitly.
+
+This is the typical agent configuration -- the agent discovers facts from whatever data it retrieves during its session.
+
+### Explicit roots
+
+List specific values to make them discoverable:
 
 ```mlld
 var @contacts = @getContacts("Mark")
@@ -88,7 +102,15 @@ var @task = @getTask("123")
 var @cfg = { fyi: { facts: [@contacts, @task] } }
 ```
 
-Call-site `fyi.facts` overrides box-level defaults for that call. Only values listed in `fyi.facts` are eligible.
+Only values listed in `fyi.facts` are eligible. Call-site config overrides box-level defaults.
+
+### Combining both
+
+```mlld
+var @cfg = { fyi: { facts: ["auto", @contacts] } }
+```
+
+Auto-collected tool results plus any explicit roots you provide.
 
 ## Using handles
 

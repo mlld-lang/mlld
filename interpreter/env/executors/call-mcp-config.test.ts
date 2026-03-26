@@ -292,6 +292,94 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('discovers auto fact roots from prior native tool results in the same MCP session', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = { facts: [email: string, name: string] }',
+        '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+        '/var @toolList = [@search_contacts, @fyi.facts]'
+      ].join('\n')
+    );
+
+    const scopedConfig = env.getScopedEnvironmentConfig() ?? {};
+    env.setScopedEnvironmentConfig({
+      ...scopedConfig,
+      fyi: { autoFacts: true }
+    });
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: {
+            query: 'Mark'
+          }
+        }
+      });
+
+      expect((search.result as any)?.isError).not.toBe(true);
+
+      const facts = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 11,
+        method: 'tools/call',
+        params: {
+          name: 'facts',
+          arguments: {}
+        }
+      });
+
+      expect((facts.result as any)?.isError).not.toBe(true);
+      const text = String((facts.result as any)?.content?.[0]?.text ?? '');
+      const parsed = JSON.parse(text) as Array<Record<string, unknown>>;
+      expect(parsed).toEqual([
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Mark Davies',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        },
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'name value',
+          field: 'name',
+          fact: 'fact:@contact.name'
+        }
+      ]);
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('throws for unknown VFS tools inside a box', async () => {
     const env = createEnv();
     env.pushBridge({

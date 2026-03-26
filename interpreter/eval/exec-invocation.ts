@@ -100,6 +100,7 @@ import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mc
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
+import type { RecordDefinition } from '@core/types/record';
 import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
@@ -2214,7 +2215,9 @@ async function evaluateExecInvocationInternal(
   }
   
   if (definition.outputRecord) {
-    const recordDefinition = runtimeEnv.getRecordDefinition(definition.outputRecord);
+    const recordDefinition =
+      runtimeEnv.getRecordDefinition(definition.outputRecord) ??
+      readEmbeddedRecordDefinition(variable, definition.outputRecord);
     if (!recordDefinition) {
       throw new MlldInterpreterError(
         `Executable '@${variable.name ?? commandName}' references unknown record '@${definition.outputRecord}'`,
@@ -2403,4 +2406,19 @@ async function evaluateExecInvocationInternal(
 
     finalizeExecInvocationStreaming(env, streamingManager);
   }
+}
+
+function readEmbeddedRecordDefinition(
+  variable: { internal?: Record<string, unknown> } | undefined,
+  recordName: string
+): RecordDefinition | undefined {
+  const container = variable?.internal?.recordDefinitions;
+  if (!container || typeof container !== 'object' || Array.isArray(container)) {
+    return undefined;
+  }
+  const embedded = (container as Record<string, unknown>)[recordName];
+  if (!embedded || typeof embedded !== 'object' || Array.isArray(embedded)) {
+    return undefined;
+  }
+  return embedded as RecordDefinition;
 }

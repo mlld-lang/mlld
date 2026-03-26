@@ -108,6 +108,7 @@ export interface ToolCallRecord {
   ok: boolean;
   error?: string | null;
   result?: unknown;
+  fyiFactRoot?: unknown;
 }
 
 export interface ToolsContextSnapshot {
@@ -144,6 +145,7 @@ export class ContextManager {
   private toolAllowed: string[] = [];
   private toolDenied: string[] = [];
   private toolResults: Record<string, unknown> = {};
+  private toolFactRoots: unknown[] = [];
   private sigStatuses: Record<string, unknown> = {};
   private sigFilesResolver?: SigFilesResolver;
 
@@ -288,6 +290,9 @@ export class ContextManager {
   recordToolCall(call: ToolCallRecord): void {
     this.toolCalls.push(Object.freeze({ ...call }));
     if (call.ok) {
+      if (call.fyiFactRoot !== undefined) {
+        this.toolFactRoots.push(call.fyiFactRoot);
+      }
       if (call.result !== undefined) {
         this.toolResults[call.name] = this.cloneToolResult(call.result);
       }
@@ -302,6 +307,7 @@ export class ContextManager {
   resetToolCalls(): void {
     this.toolCalls = [];
     this.toolResults = {};
+    this.toolFactRoots = [];
   }
 
   getToolsSnapshot(): ToolsContextSnapshot {
@@ -312,6 +318,10 @@ export class ContextManager {
       results: { ...this.toolResults },
       history: []
     };
+  }
+
+  getFyiAutoFactRoots(): readonly unknown[] {
+    return [...this.toolFactRoots];
   }
 
   recordSigStatus(keys: readonly string[], status: unknown): void {
