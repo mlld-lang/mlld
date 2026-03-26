@@ -89,15 +89,21 @@ These compose conjunctively with built-in requirements. If both a built-in rule 
 
 ## Discovery
 
-`@fyi.facts()` uses fact requirements to filter candidates. When called with `{ op: "op:named:email.send", arg: "recipient" }`, it returns only values whose fact labels satisfy the requirements for that `(op, arg)` pair.
+`@fyi.facts()` uses fact requirements to filter candidates. The agent calls it with an operation name:
+
+```
+@fyi.facts("sendEmail")
+```
+
+This returns candidates grouped by arg, filtered to values whose fact labels satisfy each arg's requirements. For a send operation, that means email facts for the `recipient` arg.
 
 Requirements come from three sources:
 
-1. Built-in symbolic specs (like `op:named:email.send`)
+1. Built-in symbolic specs (like `op:named:email_send`)
 2. Live operation metadata (`labels`, `controlArgs`)
 3. Declarative `policy.facts.requirements`
 
-If none resolve, discovery returns nothing. It never guesses from arg names.
+If none resolve, discovery returns nothing. It never guesses from arg names. See `fyi-facts` for the full discovery API.
 
 ## Fact sources
 

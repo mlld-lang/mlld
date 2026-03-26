@@ -43,13 +43,13 @@ The `controlArgs` declaration marks `recipient` as a security-relevant parameter
 
 ### Planner phase
 
-The planner looks up contacts, discovers fact candidates, and produces an authorization. The planner LLM has `@fyi.facts` as a tool and calls it via MCP:
+The planner looks up contacts, discovers fact candidates, and produces an authorization. The planner LLM has `@fyi.facts` as a tool and calls it with the operation name:
 
 ```json
-{ "name": "fyi.facts", "arguments": { "query": { "op": "op:named:sendEmail", "arg": "recipient" } } }
+{ "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
 ```
 
-The runtime returns candidates with handles. The planner then produces a JSON authorization bundle:
+The runtime returns candidates grouped by arg. The planner then produces a JSON authorization bundle:
 
 ```json
 {
@@ -158,8 +158,8 @@ var @contacts = @searchContacts("Mark")
 var @cfg = { fyi: { facts: [@contacts] } }
 
 >> Step 2: Planner LLM runs with @fyi.facts as a tool
->> It calls fyi.facts({ query: { op: "op:named:sendEmail", arg: "recipient" } })
->> and produces an authorization bundle with the discovered handle
+>> It calls fyi.facts("sendEmail") and gets candidates grouped by arg
+>> then produces an authorization bundle with the discovered handle
 
 >> Step 3: Orchestrator wires planner output into worker policy
 var @plannerAuth = {

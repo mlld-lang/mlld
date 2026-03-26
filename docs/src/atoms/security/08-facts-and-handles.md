@@ -112,15 +112,15 @@ If the LLM returns a raw literal instead (tricked by injection), the literal has
 
 ### Discovery is operation-aware
 
-`@fyi.facts()` is a tool given to agents -- including via MCP. It filters by what the operation needs. The agent calls it with a query parameter:
+`@fyi.facts()` is a tool given to agents -- including via MCP. The agent calls it with just the operation name:
 
 ```json
-{ "name": "fyi.facts", "arguments": { "query": { "op": "op:named:sendEmail", "arg": "recipient" } } }
+{ "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
 ```
 
-This returns email facts because `no-send-to-unknown` requires `fact:*.email` on send-operation recipients. Discovery and enforcement use the same shared requirement model.
+This returns all fact-relevant candidates for `sendEmail`, grouped by arg. For a send operation, that means email facts for the `recipient` arg. Discovery and enforcement use the same shared requirement model.
 
-Requirements come from three sources: built-in symbolic specs (like `op:named:email.send`), live operation metadata, and declarative `policy.facts.requirements`. If none resolve for a given `(op, arg)`, discovery returns nothing. It never guesses from arg names.
+Requirements come from three sources: built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. If none resolve, discovery returns nothing. It never guesses from arg names. See `fyi-facts` for the full discovery API.
 
 ### Configuring fact roots
 
@@ -206,15 +206,15 @@ If the LLM returns malformed JSON or missing fields, the guard retries with vali
       -> Returns email record: from is a fact, body is data
    b. Calls @searchContacts("Mark")
       -> Returns contact record: email carries fact:external:@contact.email
-   c. Calls @fyi.facts({ op: "op:named:sendemail", arg: "recipient" })
-      -> Returns [{ handle: "h_1", label: "Mark Davies", field: "email", ... }]
+   c. Calls fyi.facts("sendEmail")
+      -> Returns { recipient: [{ handle: "h_a7x9k2", label: "Mark Davies", field: "email", ... }] }
    d. Produces authorization:
-      { sendEmail: { args: { recipient: { handle: "h_1" } } } }
+      { sendEmail: { args: { recipient: { handle: "h_a7x9k2" } } } }
 
 3. Worker (executes under policy + authorization):
    a. Reads the email (body is data -- no fact label)
    b. LLM drafts a reply and calls sendEmail
-   c. Runtime resolves handle h_1 -> "mark@example.com" with fact:@contact.email
+   c. Runtime resolves handle h_a7x9k2 -> "mark@example.com" with fact:@contact.email
    d. no-send-to-unknown: recipient has fact:*.email? YES -> allowed
    e. Email sent
 

@@ -149,13 +149,13 @@ var @plannerOutput = @planner(@task) | @parse
 var @result = @agent(@prompt) with { policy: @plannerOutput }
 ```
 
-The planner's output is a JSON fragment like:
+The planner's output is a JSON fragment. Values can be pinned by handle (from `@fyi.facts` discovery) or by literal:
 
 ```json
 {
   "authorizations": {
     "allow": {
-      "send_email": { "args": { "recipients": ["mark@example.com"] } },
+      "send_email": { "args": { "recipients": [{ "handle": "h_a7x9k2" }] } },
       "create_file": true
     }
   }

@@ -18,21 +18,27 @@ qa_tier: 2
 
 `@fyi.facts` takes a single `query` parameter. From the agent's perspective (MCP tool call):
 
-**No-arg exploration** -- discover all fact candidates from configured roots:
+**No-arg exploration** -- all fact candidates from configured roots:
 
 ```json
 { "name": "fyi.facts", "arguments": {} }
 ```
 
-**Filtered discovery** -- find candidates matching a specific `(op, arg)` requirement:
+**By operation** -- all fact-relevant args for an operation, grouped by arg name:
 
 ```json
-{ "name": "fyi.facts", "arguments": { "query": { "op": "op:named:sendEmail", "arg": "recipient" } } }
+{ "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
 ```
 
-This returns only candidates whose fact labels satisfy the requirements for `recipient` on `op:named:sendEmail` -- typically `fact:*.email`.
+**By operation and arg** -- narrow to one specific arg:
 
-In mlld syntax, the same calls look like `@fyi.facts()` and `@fyi.facts({ op: "op:named:sendEmail", arg: "recipient" })` -- the `{ op, arg }` object is the `query` parameter positionally.
+```json
+{ "name": "fyi.facts", "arguments": { "query": { "op": "sendEmail", "arg": "recipient" } } }
+```
+
+The query accepts a bare operation name (`"sendEmail"`), a canonical ref (`"op:named:send_email"`), or an object with `op` and optional `arg`.
+
+In mlld syntax: `@fyi.facts()`, `@fyi.facts("sendEmail")`, or `@fyi.facts({ op: "sendEmail", arg: "recipient" })`.
 
 ## Setting up roots
 
@@ -102,7 +108,7 @@ See `facts-and-handles` for the full security model. See `pattern-planner` for u
 
 Filtered discovery derives requirements from three sources:
 
-1. **Built-in symbolic specs** -- `op:named:email.send` requires `fact:*.email` on destination args
+1. **Built-in symbolic specs** -- `op:named:email_send` requires `fact:*.email` on destination args
 2. **Live operation metadata** -- `labels` and `controlArgs` from the exe definition
 3. **Declarative policy** -- `policy.facts.requirements` entries
 
