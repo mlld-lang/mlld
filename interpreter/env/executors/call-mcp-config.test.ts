@@ -454,6 +454,103 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('lets a planner reuse projected result handles without a separate facts lookup', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string, name: string],',
+        '  display: [name, { mask: "email" }]',
+        '}',
+        '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
+      ].join('\n')
+    );
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+    const normalizedToolList = normalizeToolsArg(toolList);
+    if (!Array.isArray(normalizedToolList)) {
+      env.cleanup();
+      throw new Error('Failed to load @toolList');
+    }
+
+    const result = await createCallMcpConfig({
+      tools: normalizedToolList,
+      env
+    });
+
+    try {
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const socketPath = config.mcpServers.mlld_tools.env.MLLD_FUNCTION_MCP_SOCKET;
+
+      const search = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 30,
+        method: 'tools/call',
+        params: {
+          name: 'search_contacts',
+          arguments: { query: 'Mark' }
+        }
+      });
+
+      expect((search.result as any)?.isError).not.toBe(true);
+      const searchText = String((search.result as any)?.content?.[0]?.text ?? '');
+      const projected = JSON.parse(searchText) as {
+        name?: string;
+        email?: {
+          preview?: string;
+          handle?: { handle?: string };
+        };
+      };
+      expect(projected).toEqual({
+        name: 'Mark Davies',
+        email: {
+          preview: 'm***@example.com',
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        }
+      });
+
+      const send = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 31,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: projected.email?.handle,
+            subject: 'hi',
+            body: 'hello'
+          }
+        }
+      });
+
+      expect((send.result as any)?.isError).not.toBe(true);
+      expect(String((send.result as any)?.content?.[0]?.text ?? '')).toBe('sent:mark@example.com:hi');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('throws for unknown VFS tools inside a box', async () => {
     const env = createEnv();
     env.pushBridge({

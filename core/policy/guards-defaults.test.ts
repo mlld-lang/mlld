@@ -392,6 +392,27 @@ describe('generatePolicyGuards defaults rules', () => {
     ).toBeUndefined();
   });
 
+  it('uses projection-first suggestions for inherited positive checks', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w:send_email'] }
+    };
+
+    const failure = evaluateAuthorizationInheritedPolicyChecks({
+      policy,
+      operation: {
+        labels: ['tool:w:send_email'],
+        metadata: { authorizationControlArgs: ['recipient'] }
+      },
+      args: { recipient: 'evil@example.com' }
+    });
+
+    expect(failure?.suggestions).toContain(
+      'Use a projected handle for the destination from an approved tool result or another approved source'
+    );
+    expect(failure?.suggestions?.join('\n')).not.toContain('@fyi.facts');
+  });
+
   it('enforces declarative fact requirements for runtime guards and inherited checks', () => {
     const policy: PolicyConfig = {
       facts: {
@@ -436,25 +457,33 @@ describe('generatePolicyGuards defaults rules', () => {
       })
     ).toMatchObject({
       decision: 'deny',
-      rule: 'policy.facts.requirements.op:named:createcalendarevent.participants'
+      rule: 'policy.facts.requirements.op:named:createcalendarevent.participants',
+      suggestions: [
+        "Use a projected handle for 'participants' from an approved tool result or another approved source",
+        'Review active policies with @mx.policy.activePolicies'
+      ]
     });
 
-    expect(
-      evaluateAuthorizationInheritedPolicyChecks({
-        policy,
-        operation: {
-          name: 'createCalendarEvent',
-          named: 'op:named:createcalendarevent',
-          labels: ['tool:w:create_calendar_event']
-        },
-        args: { participants: ['ada@example.com'] },
-        argDescriptors: {
-          participants: { attestations: ['fact:@contact.email'] }
-        }
-      })
-    ).toMatchObject({
+    const inheritedFailure = evaluateAuthorizationInheritedPolicyChecks({
+      policy,
+      operation: {
+        name: 'createCalendarEvent',
+        named: 'op:named:createcalendarevent',
+        labels: ['tool:w:create_calendar_event']
+      },
+      args: { participants: ['ada@example.com'] },
+      argDescriptors: {
+        participants: { attestations: ['fact:@contact.email'] }
+      }
+    });
+
+    expect(inheritedFailure).toMatchObject({
       rule: 'policy.facts.requirements.op:named:createcalendarevent.participants'
     });
+    expect(inheritedFailure?.suggestions).toContain(
+      "Use a projected handle for 'participants' from an approved tool result or another approved source"
+    );
+    expect(inheritedFailure?.suggestions?.join('\n')).not.toContain('@fyi.facts');
 
     expect(
       evaluateAuthorizationInheritedPolicyChecks({

@@ -117,6 +117,10 @@ function buildInheritedPositiveCheckFailure(options: {
   };
 }
 
+function projectedHandleSuggestion(message: string): string {
+  return `${message} from an approved tool result or another approved source`;
+}
+
 export function evaluateAuthorizationInheritedPolicyChecks(options: {
   policy: PolicyConfig;
   operation: {
@@ -153,7 +157,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
         rule: 'policy.defaults.rules.no-send-to-unknown',
-        missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source"
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the destination"
+        )
       });
     }
 
@@ -166,7 +172,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
           rule: 'policy.defaults.rules.no-send-to-unknown',
-          missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source"
+          missingLabelSuggestion: projectedHandleSuggestion(
+            "Use a projected handle for the destination"
+          )
         });
       }
     }
@@ -181,8 +189,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
         rule: 'policy.defaults.rules.no-send-to-external',
-        missingLabelSuggestion:
-          "Mark the destination with 'known:internal' or use an approved internal destination source"
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for an approved internal destination"
+        )
       });
     }
 
@@ -195,8 +204,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
           rule: 'policy.defaults.rules.no-send-to-external',
-          missingLabelSuggestion:
-            "Mark the destination with 'known:internal' or use an approved internal destination source"
+          missingLabelSuggestion: projectedHandleSuggestion(
+            "Use a projected handle for an approved internal destination"
+          )
         });
       }
     }
@@ -211,7 +221,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
         rule: 'policy.defaults.rules.no-destroy-unknown',
-        missingLabelSuggestion: "Mark the target with 'known' or use an approved target source"
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the target"
+        )
       });
     }
 
@@ -224,7 +236,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
           rule: 'policy.defaults.rules.no-destroy-unknown',
-          missingLabelSuggestion: "Mark the target with 'known' or use an approved target source"
+          missingLabelSuggestion: projectedHandleSuggestion(
+            "Use a projected handle for the target"
+          )
         });
       }
     }
@@ -252,7 +266,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
       return buildInheritedPositiveCheckFailure({
         reason: `Rule '${`policy.facts.requirements.${entry.opRef}.${entry.arg}`}': arg '${entry.arg}' must carry required fact provenance`,
         rule: `policy.facts.requirements.${entry.opRef}.${entry.arg}`,
-        missingLabelSuggestion: `Use an approved ${entry.arg} source or select a handle from @fyi.facts({ op: "${entry.opRef}", arg: "${entry.arg}" })`
+        missingLabelSuggestion: projectedHandleSuggestion(
+          `Use a projected handle for '${entry.arg}'`
+        )
       });
     }
 
@@ -266,7 +282,9 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         return buildInheritedPositiveCheckFailure({
           reason: `Rule '${`policy.facts.requirements.${entry.opRef}.${entry.arg}`}': arg '${entry.arg}' must carry required fact provenance`,
           rule: `policy.facts.requirements.${entry.opRef}.${entry.arg}`,
-          missingLabelSuggestion: `Use an approved ${entry.arg} source or select a handle from @fyi.facts({ op: "${entry.opRef}", arg: "${entry.arg}" })`
+          missingLabelSuggestion: projectedHandleSuggestion(
+            `Use a projected handle for '${entry.arg}'`
+          )
         });
       }
     }
@@ -333,7 +351,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         requiredLabel: 'known',
         acceptedPatterns: SEND_KNOWN_PATTERNS,
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
-        missingLabelSuggestion: "Mark the destination with 'known' or use an approved destination source",
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the destination"
+        ),
         operations: policy.operations,
         policyDisplayName,
         locked: policyLocked
@@ -346,8 +366,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         requiredLabel: 'known:internal',
         acceptedPatterns: SEND_INTERNAL_PATTERNS,
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
-        missingLabelSuggestion:
-          "Mark the destination with 'known:internal' or use an approved internal destination source",
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for an approved internal destination"
+        ),
         operations: policy.operations,
         policyDisplayName,
         locked: policyLocked
@@ -360,7 +381,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         requiredLabel: 'known',
         acceptedPatterns: TARGET_KNOWN_PATTERNS,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
-        missingLabelSuggestion: "Mark the target with 'known' or use an approved target source",
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the target"
+        ),
         fallbackToFirstProvided: true,
         operations: policy.operations,
         policyDisplayName,
@@ -562,7 +585,9 @@ function makeDeclarativeFactRequirementGuard(options: {
           locked: options.locked === true,
           rule: rulePath,
           suggestions: [
-            `Use @fyi.facts({ op: "${options.opRef}", arg: "${options.argName}" }) to select an approved value`,
+            projectedHandleSuggestion(
+              `Use a projected handle for '${options.argName}'`
+            ),
             'Review active policies with @mx.policy.activePolicies'
           ]
         };
@@ -578,7 +603,9 @@ function makeDeclarativeFactRequirementGuard(options: {
             locked: options.locked === true,
             rule: rulePath,
             suggestions: [
-              `Use @fyi.facts({ op: "${options.opRef}", arg: "${options.argName}" }) to select an approved value`,
+              projectedHandleSuggestion(
+                `Use a projected handle for '${options.argName}'`
+              ),
               'Review active policies with @mx.policy.activePolicies'
             ]
           };
