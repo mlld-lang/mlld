@@ -32,6 +32,12 @@ export interface FactRequirementResolution {
   requirements: FactRequirement[];
 }
 
+export interface OperationFactRequirementResolution {
+  status: 'resolved' | 'no_requirement' | 'unknown_operation';
+  opRef?: string;
+  requirementsByArg: Record<string, FactRequirement[]>;
+}
+
 type PositiveFactPolicyRule =
   | 'no-send-to-unknown'
   | 'no-send-to-external'
@@ -47,7 +53,7 @@ type BuiltInOperationFactSpec = {
 
 const BUILTIN_OPERATION_FACT_SPECS: readonly BuiltInOperationFactSpec[] = [
   {
-    opRef: 'op:@email.send',
+    opRef: 'op:named:email.send',
     argKind: 'controlArgs',
     args: SEND_DESTINATION_ARG_SELECTORS,
     basePatterns: SEND_KNOWN_FACT_PATTERNS,
@@ -56,7 +62,7 @@ const BUILTIN_OPERATION_FACT_SPECS: readonly BuiltInOperationFactSpec[] = [
     }
   },
   {
-    opRef: 'op:@crm.delete',
+    opRef: 'op:named:crm.delete',
     argKind: 'target',
     args: TARGET_ARG_SELECTORS,
     basePatterns: TARGET_KNOWN_FACT_PATTERNS
@@ -464,5 +470,81 @@ export function resolveFactRequirementsForOperationArg(options: {
     status: 'resolved',
     opRef: normalizedOpRef,
     requirements: [...builtInResolution.requirements, ...declarativeRequirements]
+  };
+}
+
+export function resolveFactRequirementsForOperation(options: {
+  opRef?: string;
+  operationLabels?: readonly string[];
+  controlArgs?: readonly string[];
+  hasControlArgsMetadata?: boolean;
+  policy?: Pick<PolicyConfig, 'defaults' | 'facts'>;
+}): OperationFactRequirementResolution {
+  const normalizedOpRef = typeof options.opRef === 'string'
+    ? normalizeNamedOperationRef(options.opRef)
+    : undefined;
+  const normalizedPolicy = normalizePolicyConfig(options.policy as PolicyConfig | undefined);
+  const candidateArgs = new Set<string>();
+
+  for (const controlArg of normalizeControlArgs(options.controlArgs)) {
+    candidateArgs.add(controlArg);
+  }
+
+  if (normalizedOpRef) {
+    const builtInSpec = BUILTIN_OPERATION_FACT_SPECS.find(spec => spec.opRef === normalizedOpRef);
+    for (const arg of builtInSpec?.args ?? []) {
+      candidateArgs.add(arg);
+    }
+
+    for (const entry of collectDeclarativeFactRequirementEntries(normalizedPolicy)) {
+      if (entry.opRef === normalizedOpRef) {
+        candidateArgs.add(entry.arg);
+      }
+    }
+  }
+
+  const requirementsByArg: Record<string, FactRequirement[]> = {};
+  let sawUnknownOperation = false;
+
+  for (const argName of candidateArgs) {
+    const resolution = resolveFactRequirementsForOperationArg({
+      opRef: normalizedOpRef,
+      argName,
+      operationLabels: options.operationLabels,
+      controlArgs: options.controlArgs,
+      hasControlArgsMetadata: options.hasControlArgsMetadata,
+      policy: normalizedPolicy
+    });
+
+    if (resolution.status === 'resolved' && resolution.requirements.length > 0) {
+      requirementsByArg[argName] = resolution.requirements;
+      continue;
+    }
+
+    if (resolution.status === 'unknown_operation') {
+      sawUnknownOperation = true;
+    }
+  }
+
+  if (Object.keys(requirementsByArg).length > 0) {
+    return {
+      status: 'resolved',
+      opRef: normalizedOpRef,
+      requirementsByArg
+    };
+  }
+
+  if (sawUnknownOperation) {
+    return {
+      status: 'unknown_operation',
+      opRef: normalizedOpRef,
+      requirementsByArg: {}
+    };
+  }
+
+  return {
+    status: 'no_requirement',
+    opRef: normalizedOpRef,
+    requirementsByArg: {}
   };
 }

@@ -16,6 +16,8 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import { accessField } from '../utils/field-access';
 import { evaluateFyiFacts } from '@interpreter/fyi/facts-runtime';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
   let tempDir: string;
@@ -172,9 +174,9 @@ describe('evaluateExecInvocation (structured)', () => {
       }
     });
 
-    const facts = await evaluateFyiFacts({ op: 'op:@email.send', arg: 'recipient' }, env);
+    const facts = await evaluateFyiFacts({ op: 'op:named:email.send', arg: 'recipient' }, env);
     const handle = facts.data[0]?.handle;
-    expect(handle).toBe('h_1');
+    expect(handle).toMatch(HANDLE_RE);
 
     const result = await evaluateExecInvocation(
       {
@@ -230,14 +232,14 @@ describe('evaluateExecInvocation (structured)', () => {
           type: 'CommandReference',
           nodeId: 'echo-extra-keys-ref',
           identifier: 'echo',
-          args: [{ handle: 'h_1', label: 'not-a-wrapper' } as any]
+          args: [{ handle: 'h_fake12', label: 'not-a-wrapper' } as any]
         }
       },
       env
     );
 
     expect(isStructuredValue(result.value)).toBe(true);
-    expect(result.value.data).toEqual({ handle: 'h_1', label: 'not-a-wrapper' });
+    expect(result.value.data).toEqual({ handle: 'h_fake12', label: 'not-a-wrapper' });
   });
 
   it('lets call-site fyi roots override inherited scoped roots for a specific invocation', async () => {
@@ -247,7 +249,7 @@ describe('evaluateExecInvocation (structured)', () => {
 /exe @emitB() = js { return { email: 'grace@example.com' }; } => contact
 /var @contactA = @emitA()
 /var @contactB = @emitB()
-/exe @discover() = @fyi.facts({ op: "op:@email.send", arg: "recipient" })
+/exe @discover() = @fyi.facts({ op: "op:named:email.send", arg: "recipient" })
 `;
     const { ast } = await parse(src);
     await evaluate(ast, env);
@@ -298,7 +300,7 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(isStructuredValue(result.value)).toBe(true);
     expect(result.value.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'g***@example.com',
         field: 'email',
         fact: 'fact:@contact.email'

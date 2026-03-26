@@ -117,11 +117,5 @@ export function collectOperationGuards(
     }
   }
 
-  // Collect function guards matching the operation name (e.g., guard before @send_email)
-  const operationName = operation.name;
-  if (typeof operationName === 'string' && operationName.length > 0) {
-    addDefinitions(registry.getFunctionGuardsForTiming(operationName, timing));
-  }
-
   return applyGuardOverrideFilter(results, override);
 }

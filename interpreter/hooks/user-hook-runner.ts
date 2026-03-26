@@ -10,6 +10,8 @@ import { VariableImporter } from '../eval/import/VariableImporter';
 import { asText, isStructuredValue } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { HookDefinition } from './HookRegistry';
+import { buildOperationKeys } from './guard-operation-keys';
+import { normalizeNamedOperationRef, normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 interface UserHookRunOptions {
   timing: HookTiming;
@@ -72,34 +74,6 @@ function addUniqueHooks(
   }
 }
 
-function resolveFunctionName(node: HookableNode, operation?: OperationContext): string | undefined {
-  const operationName = operation?.name;
-  if (typeof operationName === 'string' && operationName.length > 0) {
-    return operationName;
-  }
-
-  if (!isExecHookTarget(node)) {
-    return undefined;
-  }
-
-  const commandRef = (node as any)?.commandRef;
-  const identifierNodes = Array.isArray(commandRef?.identifier) ? commandRef.identifier : [];
-  const firstIdentifier = identifierNodes[0];
-  const identifier =
-    firstIdentifier && typeof firstIdentifier === 'object' && typeof firstIdentifier.identifier === 'string'
-      ? firstIdentifier.identifier
-      : undefined;
-  if (identifier && identifier.length > 0) {
-    return identifier;
-  }
-
-  const commandName =
-    commandRef && typeof commandRef === 'object' && typeof commandRef.name === 'string'
-      ? commandRef.name
-      : undefined;
-  return commandName && commandName.length > 0 ? commandName : undefined;
-}
-
 function stringifyHookArgument(value: unknown): string {
   const normalized = isVariable(value) ? value.value : value;
 
@@ -126,11 +100,7 @@ function stringifyHookArgument(value: unknown): string {
   }
 }
 
-function matchesFunctionArgPattern(hook: HookDefinition, inputs: readonly unknown[]): boolean {
-  if (hook.filterKind !== 'function') {
-    return true;
-  }
-
+function matchesOperationArgPattern(hook: HookDefinition, inputs: readonly unknown[]): boolean {
   const pattern = typeof hook.argPattern === 'string' ? hook.argPattern : null;
   if (!pattern || pattern.length === 0) {
     return true;
@@ -151,11 +121,6 @@ function collectMatchingUserHooks(
   const matches: HookDefinition[] = [];
   const seen = new Set<string>();
 
-  const operationType = operation?.type;
-  if (typeof operationType === 'string' && operationType.length > 0) {
-    addUniqueHooks(matches, registry.getOperationHooks(operationType, timing), seen);
-  }
-
   const operationLabels = Array.isArray(operation?.labels) ? operation.labels : [];
   for (const label of operationLabels) {
     if (typeof label !== 'string' || label.length === 0) {
@@ -165,12 +130,36 @@ function collectMatchingUserHooks(
     addUniqueHooks(matches, registry.getOperationHooks(label, timing), seen);
   }
 
-  const functionName = resolveFunctionName(node, operation);
-  if (functionName) {
-    const functionHooks = registry
-      .getFunctionHooks(functionName, timing)
-      .filter(hook => matchesFunctionArgPattern(hook, inputs));
-    addUniqueHooks(matches, functionHooks, seen);
+  const operationKeys = new Set<string>();
+  if (operation) {
+    for (const key of buildOperationKeys(operation)) {
+      operationKeys.add(key);
+    }
+  } else if (isExecHookTarget(node)) {
+    const commandRef = (node as any)?.commandRef;
+    const identifierNodes = Array.isArray(commandRef?.identifier) ? commandRef.identifier : [];
+    const firstIdentifier = identifierNodes[0];
+    const identifier =
+      firstIdentifier && typeof firstIdentifier === 'object' && typeof firstIdentifier.identifier === 'string'
+        ? firstIdentifier.identifier
+        : undefined;
+    const commandName =
+      typeof identifier === 'string' && identifier.length > 0
+        ? identifier
+        : commandRef && typeof commandRef === 'object' && typeof commandRef.name === 'string'
+          ? commandRef.name
+          : undefined;
+    const namedOperation = normalizeNamedOperationRef(commandName);
+    if (namedOperation) {
+      operationKeys.add(namedOperation);
+    }
+  }
+
+  for (const key of operationKeys) {
+    const operationHooks = registry
+      .getOperationHooks(key, timing)
+      .filter(hook => matchesOperationArgPattern(hook, inputs));
+    addUniqueHooks(matches, operationHooks, seen);
   }
 
   return matches.sort((a, b) => a.registrationOrder - b.registrationOrder);
@@ -254,7 +243,8 @@ function createHookEnvironment(
 ): Environment {
   const hookEnv = env.createChild();
   const importer = new VariableImporter();
-  const shouldExposeInputArray = hook.filterKind === 'function' && timing === 'before';
+  const shouldExposeInputArray =
+    timing === 'before' && normalizeNamedOperationSelector(hook.filterValue) !== undefined;
   const inputValue = shouldExposeInputArray ? Array.from(inputs) : inputs.length === 1 ? inputs[0] : Array.from(inputs);
   bindHookVariable(hookEnv, importer, 'input', inputValue);
   if (result !== undefined) {

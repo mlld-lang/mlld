@@ -1,7 +1,7 @@
 import type { TypedDirectiveNode } from './base';
 import type { BaseMlldNode, DirectiveNode, SourceLocation } from './primitives';
 
-export type HookFilterKind = 'data' | 'operation' | 'function';
+export type HookFilterKind = 'data' | 'operation';
 export type HookTiming = 'before' | 'after';
 
 export interface HookFilterNode extends BaseMlldNode {

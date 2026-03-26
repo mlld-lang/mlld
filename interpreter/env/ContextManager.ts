@@ -12,8 +12,8 @@ const DEFAULT_GUARD_MAX = 3;
 export interface OperationContext {
   /** Directive or operation type (e.g., "var", "run", "output") */
   type: string;
-  /** Canonical operation ref for named operations (e.g., "op:@email.send") */
-  ref?: string;
+  /** Canonical named operation identity for named operations (e.g., "op:named:email.send") */
+  named?: string;
   /** Optional subtype (e.g., "runExec") */
   subtype?: string;
   /** Data labels declared on the directive */
@@ -520,16 +520,16 @@ export class ContextManager {
     const labels = this.normalizeToolList(operation.labels as readonly string[] | undefined);
     const opLabels = this.normalizeToolList(operation.opLabels as readonly string[] | undefined);
     const mergedLabels = this.normalizeToolList([...labels, ...opLabels]);
-    const ref =
+    const named =
       resolveCanonicalOperationRef({
         type: typeof operation.type === 'string' ? operation.type : undefined,
-        ref: typeof operation.ref === 'string' ? operation.ref : undefined,
+        named: typeof operation.named === 'string' ? operation.named : undefined,
         name: typeof operation.name === 'string' ? operation.name : undefined,
         opLabels
       }) ?? null;
     return {
       ...operation,
-      ref,
+      named,
       labels: mergedLabels,
       opLabels
     };

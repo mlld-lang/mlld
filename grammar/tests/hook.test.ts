@@ -27,9 +27,9 @@ describe('Hook directive', () => {
     expect(hook.values.body[0]).toMatchObject({ type: 'HookBlock' });
   });
 
-  test('parses function hook with argument prefix filter and when body', async () => {
-    const content = `/hook before @claudePoll("review") = when [
-      @mx.op.name == "claudePoll" => show "hit"
+  test('parses named-operation hook with argument prefix filter and when body', async () => {
+    const content = `/hook before op:named:claudePoll("review") = when [
+      @mx.op.named == "op:named:claudepoll" => show "hit"
       * => skip
     ]`;
 
@@ -41,8 +41,8 @@ describe('Hook directive', () => {
     expect(hook.meta.bodyKind).toBe('when');
     expect(hook.meta.hasArgPattern).toBe(true);
     expect(hook.values.filter[0]).toMatchObject({
-      filterKind: 'function',
-      value: 'claudePoll',
+      filterKind: 'operation',
+      value: 'op:named:claudePoll',
       argPattern: 'review'
     });
     expect(hook.values.body[0]).toMatchObject({ type: 'WhenExpression' });
@@ -81,7 +81,7 @@ describe('Hook directive', () => {
     expect(() => parseSync('/hook @audit op:exe = [ show "x" ]')).toThrow();
   });
 
-  test('rejects unquoted function argument filters', () => {
-    expect(() => parseSync('/hook before @audit(test) = [ show "x" ]')).toThrow();
+  test('rejects unquoted named-operation argument filters', () => {
+    expect(() => parseSync('/hook before op:named:audit(test) = [ show "x" ]')).toThrow();
   });
 });

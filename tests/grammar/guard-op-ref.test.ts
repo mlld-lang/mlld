@@ -12,21 +12,16 @@ function getFirstDirective(source: string): DirectiveNode {
 }
 
 describe('guard grammar named operation refs', () => {
-  it('parses canonical op:@ filters as operation guards', () => {
-    const directive = getFirstDirective('/guard before @gate for op:@email.send = when [ * => allow ]');
+  it('parses canonical op:named: filters as operation guards', () => {
+    const directive = getFirstDirective('/guard before @gate for op:named:email.send = when [ * => allow ]');
 
     expect(directive.kind).toBe('guard');
     expect(directive.meta.filterKind).toBe('operation');
-    expect(directive.meta.filterValue).toBe('op:@email.send');
-    expect(directive.raw.filter).toBe('op:@email.send');
+    expect(directive.meta.filterValue).toBe('op:named:email.send');
+    expect(directive.raw.filter).toBe('op:named:email.send');
   });
 
-  it('keeps legacy @name filters as function guards', () => {
-    const directive = getFirstDirective('/guard before @gate for @email.send = when [ * => allow ]');
-
-    expect(directive.kind).toBe('guard');
-    expect(directive.meta.filterKind).toBe('function');
-    expect(directive.meta.filterValue).toBe('email.send');
-    expect(directive.raw.filter).toBe('@email.send');
+  it('rejects legacy bare @name guard filters', () => {
+    expect(() => getFirstDirective('/guard before @gate for @email.send = when [ * => allow ]')).toThrow();
   });
 });

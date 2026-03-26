@@ -43,18 +43,18 @@ describe('directive hook infrastructure', () => {
     expect((mxVar?.value as any)?.op?.type).toBe('diagnostic');
   });
 
-  it('exposes canonical named operation refs on @mx.op', () => {
+  it('exposes canonical named operation identities on @mx.op', () => {
     const env = createEnv();
     env.getContextManager().pushOperation({
       type: 'exe',
       name: 'Email.Send',
-      opLabels: ['op:@email.send']
+      opLabels: ['op:named:email.send']
     });
     const mxVar = env.getVariable('mx');
     env.getContextManager().popOperation();
 
     expect(mxVar).toBeDefined();
-    expect((mxVar?.value as any)?.op?.ref).toBe('op:@email.send');
+    expect((mxVar?.value as any)?.op?.named).toBe('op:named:email.send');
   });
 
   it('mirrors pipeline context into @mx.pipe namespace', () => {

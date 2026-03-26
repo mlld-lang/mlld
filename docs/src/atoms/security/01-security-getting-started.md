@@ -4,7 +4,7 @@ title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
-related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations]
+related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations, facts-and-handles, pattern-planner]
 updated: 2026-03-24
 qa_tier: 2
 ---
@@ -89,7 +89,9 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 
 `defaults.unlabeled` treats all data without explicit labels as `untrusted`. `operations` groups semantic exe labels (`net:w`) under risk categories (`exfil`). The built-in rules then block flows like `secret` data reaching an `exfil` operation.
 
-For destination-aware sends, use the narrower `exfil:send` label. `no-send-to-unknown` requires named destination args to carry `known`, which works well for contact lists, directory lookups, or other values returned by trusted lookup tools. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the named target arg to be a `known` pinned target.
+For destination-aware sends, use the narrower `exfil:send` label. `no-send-to-unknown` requires named destination args to carry `known` or a matching `fact:` label. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the named target arg to carry `known` or `fact:*.id`.
+
+For field-level trust classification, use records to declare which tool output fields are authoritative facts and which are untrusted data. `exe @tool(...) => record` applies the record's classification automatically. See `facts-and-handles` for the full record/fact/handle model.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 

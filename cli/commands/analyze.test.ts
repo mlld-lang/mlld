@@ -441,11 +441,11 @@ guard privileged @auth before op:tool:w = when [
   it('validates guard filters, operation names, and arg references against context executables', async () => {
     const contextPath = await writeModule('analyze-tools-context.mld', `exe tool:w @send_email(recipients, subject) = cmd { echo "ok" }
 `);
-    const guardPath = await writeModule('analyze-guard-context.mld', `guard @sendEmail before @send_email = when [
+    const guardPath = await writeModule('analyze-guard-context.mld', `guard @sendEmail before op:named:send_email = when [
   @mx.args.recipients ~= ["alice@example.com"] => allow
   @mx.args.cc ~= [] => deny "cc not allowed"
 ]
-guard @missingFilter before @archive = when [
+guard @missingFilter before op:named:archive = when [
   * => deny "missing filter target"
 ]
 guard @missingOpLabel before op:tool:x = when [
@@ -476,7 +476,7 @@ guard @missingOpName before op:tool:w = when [
     );
 
     expect(missingExeWarnings).toHaveLength(2);
-    expect(missingExeWarnings.map(entry => entry.message).join('\n')).toContain('@archive');
+    expect(missingExeWarnings.map(entry => entry.message).join('\n')).toContain('op:named:archive');
     expect(missingExeWarnings.map(entry => entry.message).join('\n')).toContain('missing_tool');
     expect(missingOpLabelWarnings).toHaveLength(1);
     expect(missingOpLabelWarnings[0]?.message).toContain('tool:x');

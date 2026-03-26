@@ -462,7 +462,7 @@ async function main() {
     needsRebuild.typescript = checkTypeScript(lastBuildTime, dirtyFiles);
     needsRebuild.fixtures = checkFixtures(lastBuildTime, dirtyFiles);
 
-    needsRebuild.docs = checkDocs(lastBuildTime, dirtyFiles);
+    needsRebuild.docs = process.env.CI ? checkDocs(lastBuildTime, dirtyFiles) : false;
 
     needsRebuild.wasm = false; // Usually skip WASM (optional step)
 

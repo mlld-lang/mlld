@@ -74,7 +74,7 @@ export function buildOperationKeys(operation: OperationContext): string[] {
     }
   }
 
-  const namedOperationRef = normalizeNamedOperationRef(operation.name);
+  const namedOperationRef = normalizeNamedOperationRef(operation.named);
   if (namedOperationRef) {
     keys.add(namedOperationRef);
   }

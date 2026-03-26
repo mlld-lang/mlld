@@ -5,7 +5,7 @@ import type { DataLabel } from './security';
 import type { PolicyConfig } from '../policy/union';
 
 export type GuardScope = 'perInput' | 'perOperation';
-export type GuardFilterKind = 'data' | 'operation' | 'function';
+export type GuardFilterKind = 'data' | 'operation';
 export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'prompt' | 'env';
 export type GuardTiming = 'before' | 'after' | 'always';
 

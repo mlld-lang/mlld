@@ -5,6 +5,8 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { fileURLToPath } from 'url';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
 );
@@ -359,7 +361,7 @@ describe('box MCP config integration', () => {
       '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
       '/var @contact = @emitContact()',
       '/var @cfg = { fyi: { facts: [@contact] } }',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:@email.send","arg":"recipient"}}' }`,
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:named:email.send","arg":"recipient"}}' }`,
       '/box @cfg [',
       '  show @agent("Discover the allowed recipient", { tools: @toolList })',
       ']'
@@ -379,12 +381,61 @@ describe('box MCP config integration', () => {
 
       expect(JSON.parse(output.trim())).toEqual([
         {
-          handle: 'h_1',
+          handle: expect.stringMatching(HANDLE_RE),
           label: 'a***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'
         }
       ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('supports imported @fyi.facts op-only grouped discovery for agent tool usage', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/mcp_active.mld', [
+      '/var @toolList = [@fyi.facts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/record @contact = { facts: [email: string], data: [name: string] }',
+      '/exe @emitContact() = js { return { email: "ada@example.com", name: "Ada" }; } => contact',
+      '/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = "sent" with {',
+      '  controlArgs: ["recipient"]',
+      '}',
+      '/var @contact = @emitContact()',
+      '/var @cfg = { fyi: { facts: [@contact] } }',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":"sendEmail"}' }`,
+      '/box @cfg [',
+      '  show @agent("Discover the allowed sendEmail facts", { tools: @toolList })',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        recipient: [
+          {
+            handle: expect.stringMatching(HANDLE_RE),
+            label: 'Ada',
+            field: 'email',
+            fact: 'fact:@contact.email'
+          }
+        ]
+      });
     } finally {
       environment?.cleanup();
     }
@@ -402,7 +453,7 @@ describe('box MCP config integration', () => {
       '/record @contact = { facts: [email: string] }',
       '/exe @emitContact() = js { return { email: "mark@example.com" }; } => contact',
       '/var @contact = @emitContact()',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:@email.send","arg":"recipient"}}' }`,
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:named:email.send","arg":"recipient"}}' }`,
       '/show @agent("Discover the allowed recipient", { tools: @toolList }) with {',
       '  fyi: { facts: [@contact] }',
       '}'
@@ -422,7 +473,7 @@ describe('box MCP config integration', () => {
 
       expect(JSON.parse(output.trim())).toEqual([
         {
-          handle: 'h_1',
+          handle: expect.stringMatching(HANDLE_RE),
           label: 'm***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'

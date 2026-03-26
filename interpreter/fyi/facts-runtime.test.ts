@@ -7,6 +7,8 @@ import { PathService } from '@services/fs/PathService';
 import { normalizePolicyConfig } from '@core/policy/union';
 import { evaluateFyiFacts } from './facts-runtime';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 async function createContactsEnv(): Promise<Environment> {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
   const source = `
@@ -47,13 +49,13 @@ describe('evaluateFyiFacts', () => {
     expect(result.data).toHaveLength(2);
     expect(result.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Ada Lovelace',
         field: 'email',
         fact: 'fact:@contact.email'
       },
       {
-        handle: 'h_2',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Ada Lovelace',
         field: 'id',
         fact: 'fact:@contact.id'
@@ -61,6 +63,7 @@ describe('evaluateFyiFacts', () => {
     ]);
     for (const candidate of result.data) {
       expect(candidate).not.toHaveProperty('value');
+      expect(candidate.handle).toMatch(HANDLE_RE);
       expect(candidate.label).not.toContain('ada@example.com');
       expect(candidate.label).not.toContain('contact-1');
     }
@@ -70,13 +73,70 @@ describe('evaluateFyiFacts', () => {
     const env = await createContactsEnv();
 
     const result = await evaluateFyiFacts(
-      { op: 'op:@email.send', arg: 'recipient' },
+      { op: 'op:named:email.send', arg: 'recipient' },
       env
     );
 
     expect(result.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'Ada Lovelace',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
+  });
+
+  it('supports bare-string op queries and groups candidates by arg', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @contact = {
+  facts: [email: string]
+  data: [name: string]
+}
+/exe @emitContact() = js {
+  return { email: "mark@example.com", name: "Mark Davies" };
+} => contact
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = "sent" with {
+  controlArgs: ["recipient"]
+}
+/var @contact = @emitContact()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+    const contact = env.getVariable('contact');
+    if (!contact) {
+      throw new Error('Expected @contact to be defined');
+    }
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [contact]
+      }
+    });
+
+    const result = await evaluateFyiFacts('sendEmail', env);
+
+    expect(result.type).toBe('object');
+    expect(result.data).toEqual({
+      recipient: [
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Mark Davies',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ]
+    });
+  });
+
+  it('supports bare-string op queries with a separate arg override', async () => {
+    const env = await createContactsEnv();
+
+    const result = await evaluateFyiFacts('email.send', env, 'recipient');
+
+    expect(result.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Ada Lovelace',
         field: 'email',
         fact: 'fact:@contact.email'
@@ -111,13 +171,13 @@ describe('evaluateFyiFacts', () => {
     });
 
     const result = await evaluateFyiFacts(
-      { op: 'op:@createCalendarEvent', arg: 'participants' },
+      { op: 'op:named:createCalendarEvent', arg: 'participants' },
       env
     );
 
     expect(result.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'a***@example.com',
         field: 'email',
         fact: 'fact:@contact.email'
@@ -129,13 +189,13 @@ describe('evaluateFyiFacts', () => {
     const env = await createContactsEnv();
 
     const result = await evaluateFyiFacts(
-      { op: 'op:@crm.delete', arg: 'id' },
+      { op: 'op:named:crm.delete', arg: 'id' },
       env
     );
 
     expect(result.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Ada Lovelace',
         field: 'id',
         fact: 'fact:@contact.id'
@@ -163,7 +223,7 @@ describe('evaluateFyiFacts', () => {
     }));
 
     const result = await evaluateFyiFacts(
-      { op: 'op:@email.send', arg: 'recipient' },
+      { op: 'op:named:email.send', arg: 'recipient' },
       env
     );
 
@@ -183,13 +243,13 @@ describe('evaluateFyiFacts', () => {
     }));
 
     const result = await evaluateFyiFacts(
-      { op: 'op:@createCalendarEvent', arg: 'participants' },
+      { op: 'op:named:createCalendarEvent', arg: 'participants' },
       env
     );
 
     expect(result.data).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Ada Lovelace',
         field: 'email',
         fact: 'fact:@contact.email'

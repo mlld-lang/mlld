@@ -29,27 +29,43 @@ export function normalizeNamedOperationRef(value: string | undefined | null): st
     return undefined;
   }
 
-  if (trimmed.includes(':') && !trimmed.startsWith('op:@')) {
+  if (trimmed.includes(':') && !trimmed.startsWith('op:named:')) {
     return undefined;
   }
 
-  const withoutPrefix = trimmed.startsWith('op:@') ? trimmed.slice(3) : trimmed;
-  const withAt = withoutPrefix.startsWith('@') ? withoutPrefix : `@${withoutPrefix}`;
-  const identifier = withAt.slice(1);
+  const withoutPrefix = trimmed.startsWith('op:named:') ? trimmed.slice('op:named:'.length) : trimmed;
+  const identifier = withoutPrefix.startsWith('@') ? withoutPrefix.slice(1) : withoutPrefix;
   if (!NAMED_OPERATION_PATTERN.test(identifier)) {
     return undefined;
   }
 
-  return `op:@${identifier.toLowerCase()}`;
+  return `op:named:${identifier.toLowerCase()}`;
+}
+
+export function normalizeNamedOperationSelector(value: string | undefined | null): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (!trimmed.startsWith('op:named:') && !trimmed.startsWith('@')) {
+    return undefined;
+  }
+
+  return normalizeNamedOperationRef(trimmed);
 }
 
 export function resolveCanonicalOperationRef(options: {
   type?: string | undefined | null;
-  ref?: string | undefined | null;
+  named?: string | undefined | null;
   name?: string | undefined | null;
   opLabels?: readonly string[] | undefined | null;
 }): string | undefined {
-  const explicitRef = normalizeNamedOperationRef(options.ref);
+  const explicitRef = normalizeNamedOperationRef(options.named);
   if (explicitRef) {
     return explicitRef;
   }

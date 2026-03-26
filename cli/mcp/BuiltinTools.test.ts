@@ -171,7 +171,7 @@ describe('BuiltinTools', () => {
         );
 
         const result = await executeBuiltinTool('mlld_validate', {
-          code: `guard @auth before @send_email = when [
+          code: `guard @auth before op:named:send_email = when [
   @mx.args.recipients ~= ["alice@example.com"] => allow
 ]`,
           context: [contextFile]

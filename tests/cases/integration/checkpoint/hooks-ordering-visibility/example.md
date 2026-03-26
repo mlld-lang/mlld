@@ -5,7 +5,7 @@
   return "review:" + rawPrompt + ":" + rawModel;
 }
 
-/hook @trace after @review = [
+/hook @trace after op:named:review = [
   append `hook|hit=@mx.checkpoint.hit|fn=@mx.op.name` to "hooks-checkpoint.log"
 ]
 

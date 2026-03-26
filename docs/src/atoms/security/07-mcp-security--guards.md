@@ -5,7 +5,7 @@ brief: Inspect, block, and transform MCP tool calls with guards
 category: security
 parent: mcp-security
 tags: [mcp, guards, for secret, src:mcp, security]
-related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics]
+related: [mcp, mcp-security, mcp-policy, mcp-import, security-guards-basics, facts-and-handles]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/eval/guard.ts]
 updated: 2026-03-23
 qa_tier: 2
@@ -79,5 +79,7 @@ Inside a guard triggered by an MCP tool call:
 `@mx.tools.calls` is still available alongside `history` when you need execution-level history instead of value lineage.
 
 MCP tool parameters often have non-dot-safe names from JSON Schema property keys. Use bracket access for these: `@mx.args["repo-name"]`.
+
+MCP tools imported with `=> record` (e.g., `import tools { @searchContacts => contact } from mcp "server"`) carry field-level fact labels from the record classification. Guards and policy can check those facts on MCP tool output the same way they work for local exes. See `facts-and-handles` for the record/fact/handle model.
 
 See `security-guards-basics` for general guard syntax and `mcp-security` for taint details.

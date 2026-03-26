@@ -4,7 +4,7 @@
   validate: "demote"
 }
 
-/guard after @retrySchema for op:@flakyTask = when [
+/guard after @retrySchema for op:named:flakyTask = when [
   @output.mx.schema.valid == false && @mx.guard.try < 2 => retry "need valid task"
   @output.mx.schema.valid == false => deny "schema still invalid"
   * => allow

@@ -409,7 +409,7 @@ export async function createExecOperationContextAndEnforcePolicy(
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
   const operationContext: OperationContext = {
     type: 'exe',
-    ref: resolveCanonicalOperationRef({
+    named: resolveCanonicalOperationRef({
       type: 'exe',
       name: operationName ?? commandName
     }),

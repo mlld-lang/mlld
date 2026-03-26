@@ -64,22 +64,8 @@ HookTiming
   / "after" ![a-zA-Z0-9_] { return 'after'; }
 
 HookFilterClause
-  = filter:HookFunctionFilter { return filter; }
-  / filter:HookOperationFilter { return filter; }
+  = filter:HookOperationFilter { return filter; }
   / filter:HookDataFilter { return filter; }
-
-HookFunctionFilter
-  = "@" identifier:HookFunctionIdentifier argPattern:HookFunctionArgPattern? {
-      const raw = text();
-      const node = helpers.createNode('HookFilter', {
-        filterKind: 'function',
-        value: identifier,
-        argPattern: argPattern ?? null,
-        raw,
-        location: location()
-      });
-      return { node, raw, argPattern: argPattern ?? null };
-    }
 
 HookFunctionIdentifier
   = first:BaseIdentifier rest:("." part:BaseIdentifier { return part; })* {
@@ -92,7 +78,18 @@ HookFunctionArgPattern
     }
 
 HookOperationFilter
-  = "op:" identifier:HookOperationIdentifier {
+  = "op:named:" identifier:HookFunctionIdentifier argPattern:HookFunctionArgPattern? {
+      const raw = `op:named:${identifier}${argPattern ? `(${JSON.stringify(argPattern)})` : ''}`;
+      const node = helpers.createNode('HookFilter', {
+        filterKind: 'operation',
+        value: `op:named:${identifier}`,
+        argPattern: argPattern ?? null,
+        raw,
+        location: location()
+      });
+      return { node, raw, argPattern: argPattern ?? null };
+    }
+  / "op:" identifier:HookOperationIdentifier {
       const raw = `op:${identifier}`;
       const node = helpers.createNode('HookFilter', {
         filterKind: 'operation',
@@ -104,8 +101,13 @@ HookOperationFilter
     }
 
 HookOperationIdentifier
-  = first:BaseIdentifier rest:(":" part:BaseIdentifier { return part; })* {
-      return [first, ...rest].join(':');
+  = first:HookOperationSegment rest:("." part:HookOperationSegment { return part; })* {
+      return [first, ...rest].join('.');
+    }
+
+HookOperationSegment
+  = base:BaseIdentifier suffix:(':' BaseIdentifier)? {
+      return suffix ? base + ':' + suffix[1] : base;
     }
 
 HookDataFilter

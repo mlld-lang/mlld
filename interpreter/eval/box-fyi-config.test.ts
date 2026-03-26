@@ -3,6 +3,8 @@ import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 const pathService = new PathService();
 const pathContext = {
   projectRoot: '/',
@@ -71,7 +73,7 @@ describe('box fyi config integration', () => {
     const source = [
       '/record @contact = { facts: [email: string] }',
       '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
-      '/exe @discover() = @fyi.facts({ op: "op:@email.send", arg: "recipient" })',
+      '/exe @discover() = @fyi.facts({ op: "op:named:email.send", arg: "recipient" })',
       '/var @contact = @emitContact()',
       '/var @cfg = { fyi: { facts: [@contact] } }',
       '/box @cfg [',
@@ -86,21 +88,17 @@ describe('box fyi config integration', () => {
       format: 'markdown'
     });
 
-    expect(output.trim()).toBe(
-      [
-        '[',
-        '  {',
-        '    "handle": "h_1",',
-        '    "label": "a***@example.com",',
-        '    "field": "email",',
-        '    "fact": "fact:@contact.email"',
-        '  }',
-        ']'
-      ].join('\n')
-    );
+    expect(JSON.parse(output.trim())).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'a***@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      }
+    ]);
   });
 
-  it('filters discovery for in-scope tool ops when the op ref is escaped in mlld string syntax', async () => {
+  it('filters discovery for in-scope tool ops using canonical op:named refs', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/record @contact = { facts: [email: string, name: string] }',
@@ -109,7 +107,7 @@ describe('box fyi config integration', () => {
       '  => "sent"',
       '] with { controlArgs: ["recipients"] }',
       '/var @contact = @emitContact()',
-      '/show @fyi.facts({ op: "op:\\@send_email", arg: "recipients" }) with {',
+      '/show @fyi.facts({ op: "op:named:send_email", arg: "recipients" }) with {',
       '  fyi: { facts: [@contact] }',
       '} | @json'
     ].join('\n');
@@ -123,11 +121,44 @@ describe('box fyi config integration', () => {
 
     expect(JSON.parse(output.trim())).toEqual([
       {
-        handle: 'h_1',
+        handle: expect.stringMatching(HANDLE_RE),
         label: 'Mark',
         field: 'email',
         fact: 'fact:@contact.email'
       }
     ]);
+  });
+
+  it('supports bare-string op queries and groups candidates by arg for agent usage', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = { facts: [email: string], data: [name: string] }',
+      '/exe @emitContact() = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+      '/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = [',
+      '  => "sent"',
+      '] with { controlArgs: ["recipient"] }',
+      '/var @contact = @emitContact()',
+      '/show @fyi.facts("sendEmail") with {',
+      '  fyi: { facts: [@contact] }',
+      '} | @json'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      format: 'markdown'
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      recipient: [
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Mark Davies',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ]
+    });
   });
 });

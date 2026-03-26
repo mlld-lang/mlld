@@ -1,7 +1,11 @@
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import { hasMatchingFactLabel, parseFactLabel } from '@core/policy/fact-labels';
 import { expandOperationLabels } from '@core/policy/label-flow';
-import { resolveFactRequirementsForOperationArg } from '@core/policy/fact-requirements';
+import {
+  resolveFactRequirementsForOperation,
+  resolveFactRequirementsForOperationArg,
+  type FactRequirement
+} from '@core/policy/fact-requirements';
 import type { Environment } from '@interpreter/env/Environment';
 import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { accessField } from '@interpreter/utils/field-access';
@@ -23,6 +27,8 @@ type FactCandidate = {
   fact: string;
 };
 
+type GroupedFactCandidates = Record<string, FactCandidate[]>;
+
 type QueryOperationContext = {
   labels?: readonly string[];
   controlArgs?: readonly string[];
@@ -41,21 +47,41 @@ function isObjectLike(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function normalizeFyiFactsQuery(raw: unknown): FyiFactsQuery {
-  if (!raw) {
+function unwrapQueryEnvelope(raw: unknown): unknown {
+  if (isStructuredValue(raw)) {
+    return unwrapQueryEnvelope(raw.data);
+  }
+  if (!isObjectLike(raw)) {
+    return raw;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(raw, 'query') &&
+    !Object.prototype.hasOwnProperty.call(raw, 'op') &&
+    !Object.prototype.hasOwnProperty.call(raw, 'arg')
+  ) {
+    return (raw as Record<string, unknown>).query;
+  }
+  return raw;
+}
+
+function normalizeFyiFactsQuery(raw: unknown, argOverride?: unknown): FyiFactsQuery {
+  const unwrapped = unwrapQueryEnvelope(raw);
+  if (!unwrapped && argOverride === undefined) {
     return {};
   }
 
-  const source = isStructuredValue(raw)
-    ? raw.data
-    : raw;
-
-  if (!isObjectLike(source)) {
-    return {};
+  if (!isObjectLike(unwrapped)) {
+    const op = normalizeNamedOperationRef(readQueryString(unwrapped));
+    const arg = normalizeQueryArgName(argOverride);
+    return {
+      ...(op ? { op } : {}),
+      ...(arg ? { arg } : {})
+    };
   }
 
+  const source = unwrapped;
   const op = normalizeNamedOperationRef(readQueryString(source.op));
-  const arg = normalizeQueryArgName(source.arg);
+  const arg = normalizeQueryArgName(argOverride ?? source.arg);
   return {
     ...(op ? { op } : {}),
     ...(arg ? { arg } : {})
@@ -97,7 +123,7 @@ function resolveQueryOperationContext(
     return undefined;
   }
 
-  const operationName = query.op.startsWith('op:@') ? query.op.slice(4) : query.op;
+  const operationName = query.op.startsWith('op:named:') ? query.op.slice('op:named:'.length) : query.op;
   const metadata = resolveNamedOperationMetadata(env, operationName);
   if (!metadata) {
     return undefined;
@@ -110,6 +136,37 @@ function resolveQueryOperationContext(
     ),
     controlArgs: metadata.controlArgs,
     hasControlArgsMetadata: metadata.hasControlArgsMetadata
+  };
+}
+
+function requirementMatchesFact(requirements: readonly FactRequirement[], fact: string): boolean {
+  return requirements.every(requirement =>
+    requirement.patterns.some(pattern => hasMatchingFactLabel([fact], pattern))
+  );
+}
+
+function issueFactCandidate(options: {
+  env: Environment;
+  entry: { value: StructuredValue; label: string; field: string; fact: string; ref: string };
+  op?: string;
+  arg?: string;
+}): FactCandidate {
+  const issued = options.env.issueHandle(options.entry.value, {
+    preview: options.entry.label,
+    metadata: {
+      field: options.entry.field,
+      ref: options.entry.ref,
+      fact: options.entry.fact,
+      ...(options.op ? { op: options.op } : {}),
+      ...(options.arg ? { arg: options.arg } : {})
+    }
+  });
+
+  return {
+    handle: issued.handle,
+    label: options.entry.label,
+    field: options.entry.field,
+    fact: options.entry.fact
   };
 }
 
@@ -269,8 +326,13 @@ async function collectFactCandidates(
   }
 }
 
-export async function evaluateFyiFacts(query: unknown, env: Environment): Promise<StructuredValue<FactCandidate[]>> {
-  const normalizedQuery = normalizeFyiFactsQuery(query);
+export async function evaluateFyiFacts(
+  query: unknown,
+  env: Environment,
+  argOverride?: unknown
+): Promise<StructuredValue<FactCandidate[] | GroupedFactCandidates>> {
+  const normalizedQuery = normalizeFyiFactsQuery(query, argOverride);
+  const isBroadDiscovery = !normalizedQuery.op && !normalizedQuery.arg;
   const operationContext = resolveQueryOperationContext(normalizedQuery, env);
   const requirementResolution = normalizedQuery.arg
     ? resolveFactRequirementsForOperationArg({
@@ -281,19 +343,37 @@ export async function evaluateFyiFacts(query: unknown, env: Environment): Promis
         hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
         policy: env.getPolicySummary()
       })
-    : null;
+    : normalizedQuery.op
+      ? resolveFactRequirementsForOperation({
+          opRef: normalizedQuery.op,
+          operationLabels: operationContext?.labels,
+          controlArgs: operationContext?.controlArgs,
+          hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
+          policy: env.getPolicySummary()
+        })
+      : null;
   const scopedConfig = env.getScopedEnvironmentConfig() as { fyi?: { facts?: unknown[] } } | undefined;
   const configuredRoots = Array.isArray(scopedConfig?.fyi?.facts) ? scopedConfig!.fyi!.facts : [];
 
   if (configuredRoots.length === 0) {
-    return wrapStructured([], 'array');
+    return normalizedQuery.op && !normalizedQuery.arg
+      ? wrapStructured({}, 'object')
+      : wrapStructured([], 'array');
   }
 
   if (
     requirementResolution &&
-    (requirementResolution.status !== 'resolved' || requirementResolution.requirements.length === 0)
+    (
+      (normalizedQuery.arg &&
+        (requirementResolution.status !== 'resolved' || requirementResolution.requirements.length === 0)) ||
+      (!normalizedQuery.arg &&
+        (requirementResolution.status !== 'resolved' ||
+          Object.keys(requirementResolution.requirementsByArg).length === 0))
+    )
   ) {
-    return wrapStructured([], 'array');
+    return normalizedQuery.op && !normalizedQuery.arg
+      ? wrapStructured({}, 'object')
+      : wrapStructured([], 'array');
   }
 
   const collected: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }> = [];
@@ -301,41 +381,67 @@ export async function evaluateFyiFacts(query: unknown, env: Environment): Promis
     await collectFactCandidates(root, env, collected);
   }
 
-  const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
-  for (const entry of collected) {
-    if (requirementResolution && !requirementResolution.requirements.every(requirement =>
-      requirement.patterns.some(pattern => hasMatchingFactLabel([entry.fact], pattern))
-    )) {
-      continue;
-    }
-    const key = `${entry.ref}\u0000${entry.fact}`;
-    if (!deduped.has(key)) {
-      deduped.set(key, entry);
-    }
-  }
-
-  const candidates: FactCandidate[] = [];
-  for (const entry of deduped.values()) {
-    if (candidates.length >= MAX_FYI_FACT_CANDIDATES) {
-      break;
-    }
-    const issued = env.issueHandle(entry.value, {
-      preview: entry.label,
-      metadata: {
-        field: entry.field,
-        ref: entry.ref,
-        fact: entry.fact,
-        ...(normalizedQuery.op ? { op: normalizedQuery.op } : {}),
-        ...(normalizedQuery.arg ? { arg: normalizedQuery.arg } : {})
+  if (isBroadDiscovery || normalizedQuery.arg) {
+    const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
+    for (const entry of collected) {
+      if (
+        normalizedQuery.arg &&
+        requirementResolution &&
+        !requirementMatchesFact(requirementResolution.requirements, entry.fact)
+      ) {
+        continue;
       }
-    });
-    candidates.push({
-      handle: issued.handle,
-      label: entry.label,
-      field: entry.field,
-      fact: entry.fact
-    });
+      const key = `${entry.ref}\u0000${entry.fact}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, entry);
+      }
+    }
+
+    const candidates: FactCandidate[] = [];
+    for (const entry of deduped.values()) {
+      if (candidates.length >= MAX_FYI_FACT_CANDIDATES) {
+        break;
+      }
+      candidates.push(
+        issueFactCandidate({
+          env,
+          entry,
+          op: normalizedQuery.op,
+          arg: normalizedQuery.arg
+        })
+      );
+    }
+
+    return wrapStructured(candidates, 'array');
   }
 
-  return wrapStructured(candidates, 'array');
+  const groupedCandidates: GroupedFactCandidates = {};
+  for (const [argName, requirements] of Object.entries(requirementResolution?.requirementsByArg ?? {})) {
+    const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
+    for (const entry of collected) {
+      if (!requirementMatchesFact(requirements, entry.fact)) {
+        continue;
+      }
+      const key = `${entry.ref}\u0000${entry.fact}`;
+      if (!deduped.has(key)) {
+        deduped.set(key, entry);
+      }
+    }
+
+    groupedCandidates[argName] = [];
+    for (const entry of deduped.values()) {
+      if (groupedCandidates[argName]!.length >= MAX_FYI_FACT_CANDIDATES) {
+        break;
+      }
+      groupedCandidates[argName]!.push(
+        issueFactCandidate({
+          env,
+          entry,
+          op: normalizedQuery.op
+        })
+      );
+    }
+  }
+
+  return wrapStructured(groupedCandidates, 'object');
 }

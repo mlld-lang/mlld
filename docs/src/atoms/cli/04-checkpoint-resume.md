@@ -112,7 +112,7 @@ Named checkpoints are discovered from source before execution starts, so `--resu
 Use in hooks for observability:
 
 ```mlld
-hook @cacheLog after @review = [
+hook @cacheLog after op:named:review = [
   append `@mx.op.name hit=@mx.checkpoint.hit` to "cache.log"
 ]
 ```

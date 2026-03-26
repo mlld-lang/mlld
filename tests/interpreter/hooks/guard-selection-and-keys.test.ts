@@ -522,10 +522,11 @@ describe('guard operation key utilities', () => {
   it('adds canonical named operation refs to operation keys', () => {
     const keys = buildOperationKeys({
       type: 'exe',
-      name: 'Email.Send'
+      name: 'Email.Send',
+      named: 'op:named:email.send'
     } as OperationContext);
 
-    expect(keys).toEqual(['exe', 'op:@email.send']);
+    expect(keys).toEqual(['exe', 'op:named:email.send']);
   });
 
   it('does not alias non-command exe operation labels to run', () => {
@@ -547,57 +548,48 @@ describe('guard operation key utilities', () => {
     expect(Array.from(keySet)).toEqual(['show', 'display', 'release']);
   });
 
-  it('collects canonical named-op guards alongside legacy function guards', () => {
+  it('collects canonical named-op guards through operation-key matching', () => {
     const opGuard = createGuard({
       id: 'op-email-send',
       name: 'opEmailSend',
       filterKind: 'operation',
-      filterValue: 'op:@email.send'
+      filterValue: 'op:named:email.send'
     });
-    const fnGuard = {
-      ...createGuard({ id: 'fn-email-send', name: 'fnEmailSend' }),
-      filterKind: 'function' as const,
-      filterValue: 'email.send',
-      scope: 'perOperation' as const
-    };
 
     const registry = {
       getOperationGuardsForTiming(key: string): GuardDefinition[] {
-        return key === 'op:@email.send' ? [opGuard] : [];
+        return key === 'op:named:email.send' ? [opGuard] : [];
       },
       getDataGuardsForTiming(): GuardDefinition[] {
         return [];
-      },
-      getFunctionGuardsForTiming(name: string): GuardDefinition[] {
-        return name === 'email.send' ? [fnGuard] : [];
       }
     } as any;
 
     const guards = collectOperationGuards(
       registry,
-      { type: 'exe', name: 'email.send' } as OperationContext,
+      { type: 'exe', name: 'email.send', named: 'op:named:email.send' } as OperationContext,
       { kind: 'none' }
     );
 
-    expect(guards.map(guard => guard.id)).toEqual(['op-email-send', 'fn-email-send']);
+    expect(guards.map(guard => guard.id)).toEqual(['op-email-send']);
   });
 
   it('normalizes registered named-op guards to canonical lowercase refs', () => {
     const directive = parseSync(
-      '/guard after @retrySchema for op:@FlakyTask = when [ * => allow ]'
+      '/guard after @retrySchema for op:named:FlakyTask = when [ * => allow ]'
     )[0] as any;
     const registry = new GuardRegistry();
     registry.register(directive, null);
 
     const guards = collectOperationGuards(
       registry as any,
-      { type: 'exe', name: 'flakyTask' } as OperationContext,
+      { type: 'exe', name: 'flakyTask', named: 'op:named:flakytask' } as OperationContext,
       { kind: 'none' },
       { timing: 'after' }
     );
 
     expect(guards.map(guard => guard.id)).toEqual(['retrySchema']);
-    expect(registry.getByName('retrySchema')?.filterValue).toBe('op:@flakytask');
+    expect(registry.getByName('retrySchema')?.filterValue).toBe('op:named:flakytask');
   });
 
   it('builds operation snapshots with aggregate metadata and variable references', () => {

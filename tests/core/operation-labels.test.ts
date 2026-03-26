@@ -22,10 +22,10 @@ describe('operation labels', () => {
     expect(parsed.subcommand).toBe('status');
   });
 
-  it('normalizes named operation refs to canonical op:@ labels', () => {
-    expect(normalizeNamedOperationRef('email.send')).toBe('op:@email.send');
-    expect(normalizeNamedOperationRef('@Email.Send')).toBe('op:@email.send');
-    expect(normalizeNamedOperationRef('op:@Email.Send')).toBe('op:@email.send');
+  it('normalizes named operation refs to canonical op:named: labels', () => {
+    expect(normalizeNamedOperationRef('email.send')).toBe('op:named:email.send');
+    expect(normalizeNamedOperationRef('@Email.Send')).toBe('op:named:email.send');
+    expect(normalizeNamedOperationRef('op:named:Email.Send')).toBe('op:named:email.send');
     expect(normalizeNamedOperationRef('op:cmd')).toBeUndefined();
   });
 });

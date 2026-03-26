@@ -4,23 +4,23 @@
   return "emit:" + rawPrompt;
 }
 
-/hook @stateTelemetry after @emit = [
+/hook @stateTelemetry after op:named:emit = [
   output `telemetry:@mx.op.name:@mx.checkpoint.hit` to "state://telemetry"
 ]
 
-/hook @appendLog after @emit = [
+/hook @appendLog after op:named:emit = [
   append `append:@mx.op.name` to "hooks-observability.log"
 ]
 
-/hook @externalAttempt after @emit = [
+/hook @externalAttempt after op:named:emit = [
   run node { process.exit(0) }
 ]
 
-/hook @appendFailure after @emit = [
+/hook @appendFailure after op:named:emit = [
   append "not-json" to "hooks-observability.jsonl"
 ]
 
-/hook @captureErrors after @emit = [
+/hook @captureErrors after op:named:emit = [
   append `errors:@mx.hooks.errors.length` to "hooks-observability.log"
 ]
 

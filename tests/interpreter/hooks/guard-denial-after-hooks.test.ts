@@ -65,7 +65,7 @@ describe('guard-denial after-hook lifecycle', () => {
   @mx.op.name == "emit" => deny "blocked-exec"
   * => allow
 ]
-/hook @auditExec after @emit = [
+/hook @auditExec after op:named:emit = [
   output \`exec:@mx.denied:@output.reason\` to "state://denials"
 ]
       `,

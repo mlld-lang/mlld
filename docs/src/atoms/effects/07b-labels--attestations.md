@@ -6,7 +6,7 @@ brief: known and known:* are value-scoped approvals used by destination and targ
 category: effects
 parent: labels
 tags: [labels, attestations, known, trust, security]
-related: [labels-overview, labels-trust, policy-operations, policy-authorizations, security-guards-basics]
+related: [labels-overview, labels-trust, policy-operations, policy-authorizations, security-guards-basics, facts-and-handles]
 updated: 2026-03-24
 ---
 
@@ -55,3 +55,9 @@ This is why attestation is safe for approvals like recipients, IDs, file handles
 `with { policy }` authorizations also preserve planner-time attestations on pinned values.
 
 If a planner pins `recipient: @approvedRecipient` and `@approvedRecipient` carried `known`, the authorization guard carries that attestation requirement forward. A later worker call can satisfy inherited positive checks only when the pinned planner value was actually attested at plan time.
+
+## Facts
+
+Record-derived `fact:` labels also satisfy positive checks. `fact:*.email` satisfies `no-send-to-unknown` and `fact:*.id` satisfies `no-destroy-unknown`, alongside `known` attestations.
+
+Facts provide field-level proof from authoritative sources (contacts databases, CRM systems), while `known` attestations are value-scoped approvals. Both are valid proof for positive checks. See `facts-and-handles` for the full record/fact/handle model.

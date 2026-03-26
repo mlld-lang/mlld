@@ -26,6 +26,7 @@ import {
   type AuthorizationToolContext,
   type PolicyAuthorizationIssue
 } from '@core/policy/authorizations';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import * as yaml from 'js-yaml';
 import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
 
@@ -2320,6 +2321,21 @@ function detectGuardContextWarnings(
     warnings.push(warning);
   };
 
+  const findContextExecutableByNamedRef = (
+    opRef: string | undefined
+  ): ValidationContextExecutable | undefined => {
+    const normalizedRef = normalizeNamedOperationRef(opRef);
+    if (!normalizedRef) {
+      return undefined;
+    }
+    for (const executable of contextExecutables.values()) {
+      if (normalizeNamedOperationRef(executable.name) === normalizedRef) {
+        return executable;
+      }
+    }
+    return undefined;
+  };
+
   const visitGuardRuleReferences = (
     value: unknown,
     opNames: Set<string>,
@@ -2379,6 +2395,11 @@ function detectGuardContextWarnings(
     const guardNode = node as GuardDirectiveNode;
     const guardName = extractText(guardNode.values?.name) || guardNode.raw?.name || 'anonymous guard';
 
+    const namedFilterRef =
+      guardNode.meta?.filterKind === 'operation'
+        ? normalizeNamedOperationRef(guardNode.meta?.filterValue)
+        : undefined;
+
     if (guardNode.meta?.filterKind === 'function') {
       const functionName = guardNode.meta?.filterValue;
       if (functionName && !contextExecutables.has(functionName)) {
@@ -2390,12 +2411,21 @@ function detectGuardContextWarnings(
           suggestion: `Add @${functionName} to the context files or update the guard filter.`
         });
       }
+    } else if (namedFilterRef && !findContextExecutableByNamedRef(namedFilterRef)) {
+      pushWarning({
+        code: 'guard-context-missing-exe',
+        message: `Guard ${guardName} filters on ${namedFilterRef}, but no executable with that name exists in the validation context.`,
+        line: guardNode.location?.start?.line,
+        column: guardNode.location?.start?.column,
+        suggestion: `Add a context module that defines ${namedFilterRef}, or update the guard filter.`
+      });
     }
 
     if (guardNode.meta?.filterKind === 'operation') {
       const filterValue = guardNode.meta?.filterValue;
       if (
         filterValue &&
+        !namedFilterRef &&
         contextExecutables.size > 0 &&
         !Array.from(contextExecutables.values()).some(executable => executable.labels.has(filterValue))
       ) {
@@ -2440,6 +2470,10 @@ function detectGuardContextWarnings(
           ? Array.from(opNames)
               .map(name => contextExecutables.get(name))
               .filter((executable): executable is ValidationContextExecutable => Boolean(executable))
+          : namedFilterRef
+            ? [findContextExecutableByNamedRef(namedFilterRef)].filter(
+                (executable): executable is ValidationContextExecutable => Boolean(executable)
+              )
           : guardNode.meta?.filterKind === 'function' && guardNode.meta.filterValue
             ? [contextExecutables.get(guardNode.meta.filterValue)].filter(
                 (executable): executable is ValidationContextExecutable => Boolean(executable)

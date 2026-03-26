@@ -805,7 +805,7 @@ function buildOperationContext(
   }
 
   applyOperationLabels(context, directive);
-  context.ref = resolveCanonicalOperationRef(context);
+  context.named = resolveCanonicalOperationRef(context);
 
   return context;
 }

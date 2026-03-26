@@ -13,6 +13,8 @@ import { createCallMcpConfig, normalizeToolsArg } from './call-mcp-config';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 
+const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
 const SOURCE: VariableSource = {
   directive: 'var',
   syntax: 'code',
@@ -241,7 +243,7 @@ describe('createCallMcpConfig', () => {
         params: {
           name: 'facts',
           arguments: {
-            query: { op: 'op:@email.send', arg: 'recipient' }
+            query: { op: 'op:named:email.send', arg: 'recipient' }
           }
         }
       });
@@ -251,12 +253,39 @@ describe('createCallMcpConfig', () => {
       const parsed = JSON.parse(text) as Array<Record<string, unknown>>;
       expect(parsed).toEqual([
         {
-          handle: 'h_1',
+          handle: expect.stringMatching(HANDLE_RE),
           label: 'a***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'
         }
       ]);
+
+      const grouped = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'facts',
+          arguments: {
+            query: 'email.send'
+          }
+        }
+      });
+
+      expect((grouped.result as any)?.isError).not.toBe(true);
+      const groupedText = String((grouped.result as any)?.content?.[0]?.text ?? '');
+      const groupedParsed = JSON.parse(groupedText) as Record<string, Array<Record<string, unknown>>>;
+      expect(Object.keys(groupedParsed).sort()).toEqual(['bcc', 'cc', 'recipient', 'recipients']);
+      for (const argName of ['recipient', 'recipients', 'cc', 'bcc']) {
+        expect(groupedParsed[argName]).toEqual([
+          {
+            handle: expect.stringMatching(HANDLE_RE),
+            label: 'a***@example.com',
+            field: 'email',
+            fact: 'fact:@contact.email'
+          }
+        ]);
+      }
     } finally {
       await result.cleanup();
       env.cleanup();

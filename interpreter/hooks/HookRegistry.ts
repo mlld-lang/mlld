@@ -5,6 +5,7 @@ import type {
   HookTiming
 } from '@core/types/hook';
 import type { SourceLocation } from '@core/types';
+import { normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 const KNOWN_OPERATION_TYPES = [
   'exe',
@@ -45,7 +46,6 @@ export class HookRegistry {
   private readonly root: HookRegistry;
   private nextRegistrationOrder: number;
   private readonly hooks: HookDefinition[] = [];
-  private readonly functionIndex: Map<string, HookDefinition[]>;
   private readonly operationIndex: Map<string, HookDefinition[]>;
   private readonly dataIndex: Map<string, HookDefinition[]>;
   private readonly definitions = new Map<string, HookDefinition>();
@@ -57,13 +57,11 @@ export class HookRegistry {
     this.root = parent?.root ?? this;
     if (this.isRoot()) {
       this.nextRegistrationOrder = 1;
-      this.functionIndex = new Map();
       this.operationIndex = new Map();
       this.dataIndex = new Map();
       this.hookNames = new Set();
     } else {
       this.nextRegistrationOrder = 0;
-      this.functionIndex = this.root.functionIndex;
       this.operationIndex = this.root.operationIndex;
       this.dataIndex = this.root.dataIndex;
       this.hookNames = this.root.hookNames;
@@ -119,10 +117,6 @@ export class HookRegistry {
     return definition;
   }
 
-  getFunctionHooks(fnName: string, timing: HookTiming): HookDefinition[] {
-    return this.collectHooks(fnName, 'function').filter(def => this.matchesTiming(def, timing));
-  }
-
   getOperationHooks(opType: string, timing: HookTiming): HookDefinition[] {
     return this.collectHooks(opType, 'operation').filter(def => this.matchesTiming(def, timing));
   }
@@ -147,14 +141,10 @@ export class HookRegistry {
   }
 
   private collectHooks(value: string, kind: HookFilterKind): HookDefinition[] {
-    const index =
-      kind === 'function'
-        ? this.functionIndex
-        : kind === 'operation'
-          ? this.operationIndex
-          : this.dataIndex;
+    const index = kind === 'operation' ? this.operationIndex : this.dataIndex;
+    const normalizedValue = this.normalizeIndexedFilterValue(kind, value);
 
-    const matches = index.get(value) ?? [];
+    const matches = index.get(normalizedValue) ?? [];
     return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
   }
 
@@ -176,6 +166,7 @@ export class HookRegistry {
   }
 
   private registerDefinition(definition: HookDefinition): void {
+    definition.filterValue = this.normalizeIndexedFilterValue(definition.filterKind, definition.filterValue);
     this.definitions.set(definition.id, definition);
     this.hooks.push(definition);
     if (!this.isRoot()) {
@@ -185,18 +176,20 @@ export class HookRegistry {
       this.namedDefinitions.set(definition.name, definition);
     }
 
-    const index =
-      definition.filterKind === 'function'
-        ? this.functionIndex
-        : definition.filterKind === 'operation'
-          ? this.operationIndex
-          : this.dataIndex;
+    const index = definition.filterKind === 'operation' ? this.operationIndex : this.dataIndex;
     const list = index.get(definition.filterValue);
     if (list) {
       list.push(definition);
     } else {
       index.set(definition.filterValue, [definition]);
     }
+  }
+
+  private normalizeIndexedFilterValue(kind: HookFilterKind, value: string): string {
+    if (kind !== 'operation') {
+      return value;
+    }
+    return normalizeNamedOperationSelector(value) ?? value.toLowerCase();
   }
 
   private allocateRegistrationOrder(): number {

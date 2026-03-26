@@ -41,6 +41,8 @@ function showProgress(step, status = 'running', stepIndex = null) {
     process.stdout.write(`${yellow}Building${dots}${reset} [${displayStep + 1}/${steps.length}] ${step}`);
   } else if (status === 'done') {
     process.stdout.write(`${green}✓${reset} [${displayStep}/${steps.length}] ${step}\n`);
+  } else if (status === 'skipped') {
+    process.stdout.write(`${yellow}–${reset} [${displayStep}/${steps.length}] ${step} (skipped)\n`);
   } else if (status === 'error') {
     process.stdout.write(`${red}✗${reset} [${displayStep}/${steps.length}] ${step}\n`);
   }
@@ -172,9 +174,13 @@ async function build() {
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
     
-    showProgress(steps[currentStep].display, 'running');
-    await runCommand('npm run build:docs', 'docs');
-    showProgress(steps[currentStep].display, 'done');
+    if (process.env.CI) {
+      showProgress(steps[currentStep].display, 'running');
+      await runCommand('npm run build:docs', 'docs');
+      showProgress(steps[currentStep].display, 'done');
+    } else {
+      showProgress(steps[currentStep].display, 'skipped');
+    }
     currentStep++;
 
     showProgress(steps[currentStep].display, 'running');

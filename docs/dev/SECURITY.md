@@ -200,7 +200,7 @@ There are two discovery modes:
 
 ### Canonical Operation Identity
 
-Named operations are canonicalized to `op:@...` in [`operation-labels.ts`](/Users/adam/mlld/mlld/core/policy/operation-labels.ts).
+Named operations are canonicalized to `op:named:...` in [`operation-labels.ts`](/Users/adam/mlld/mlld/core/policy/operation-labels.ts).
 
 That identity is shared across:
 
@@ -218,7 +218,7 @@ Discovery and fact-aware positive checks share the fact-requirement model in [`f
 
 The resolver:
 
-- normalizes operation identity to `op:@...`
+- normalizes operation identity to `op:named:...`
 - distinguishes `resolved`, `no_requirement`, and `unknown_operation`
 - derives requirements from live operation metadata when available
 - supports explicit built-in symbolic op specs

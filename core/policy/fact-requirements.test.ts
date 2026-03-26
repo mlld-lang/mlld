@@ -11,12 +11,12 @@ describe('fact requirements', () => {
   it('resolves symbolic built-in operations without guessing from arg names alone', () => {
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@email.send',
+        opRef: 'op:named:email.send',
         argName: 'recipient'
       })
     ).toEqual({
       status: 'resolved',
-      opRef: 'op:@email.send',
+      opRef: 'op:named:email.send',
       requirements: [
         {
           arg: 'recipient',
@@ -28,12 +28,12 @@ describe('fact requirements', () => {
 
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@crm.delete',
+        opRef: 'op:named:crm.delete',
         argName: 'id'
       })
     ).toEqual({
       status: 'resolved',
-      opRef: 'op:@crm.delete',
+      opRef: 'op:named:crm.delete',
       requirements: [
         {
           arg: 'id',
@@ -56,12 +56,12 @@ describe('fact requirements', () => {
 
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@unknown.tool',
+        opRef: 'op:named:unknown.tool',
         argName: 'recipient'
       })
     ).toEqual({
       status: 'unknown_operation',
-      opRef: 'op:@unknown.tool',
+      opRef: 'op:named:unknown.tool',
       requirements: []
     });
   });
@@ -90,7 +90,7 @@ describe('fact requirements', () => {
   it('derives fact requirements from live operation metadata when available', () => {
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@createCalendarEvent',
+        opRef: 'op:named:createCalendarEvent',
         argName: 'participants',
         operationLabels: ['exfil:send'],
         controlArgs: ['participants'],
@@ -98,7 +98,7 @@ describe('fact requirements', () => {
       })
     ).toEqual({
       status: 'resolved',
-      opRef: 'op:@createcalendarevent',
+      opRef: 'op:named:createcalendarevent',
       requirements: [
         {
           arg: 'participants',
@@ -110,14 +110,14 @@ describe('fact requirements', () => {
 
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@sendMoney',
+        opRef: 'op:named:sendMoney',
         argName: 'recipient',
         operationLabels: ['exfil:send'],
         hasControlArgsMetadata: false
       })
     ).toEqual({
       status: 'no_requirement',
-      opRef: 'op:@sendmoney',
+      opRef: 'op:named:sendmoney',
       requirements: []
     });
   });
@@ -125,7 +125,7 @@ describe('fact requirements', () => {
   it('adds stricter policy-derived requirements on top of built-in op requirements', () => {
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@email.send',
+        opRef: 'op:named:email.send',
         argName: 'recipient',
         policy: {
           defaults: {
@@ -135,7 +135,7 @@ describe('fact requirements', () => {
       })
     ).toEqual({
       status: 'resolved',
-      opRef: 'op:@email.send',
+      opRef: 'op:named:email.send',
       requirements: [
         {
           arg: 'recipient',
@@ -176,7 +176,7 @@ describe('fact requirements', () => {
 
     expect(collectDeclarativeFactRequirementEntries(merged)).toEqual([
       {
-        opRef: 'op:@createcalendarevent',
+        opRef: 'op:named:createcalendarevent',
         arg: 'participants',
         clauses: [
           ['fact:*.email'],
@@ -189,7 +189,7 @@ describe('fact requirements', () => {
   it('resolves declarative fact requirements for unknown symbolic operations', () => {
     expect(
       resolveFactRequirementsForOperationArg({
-        opRef: 'op:@createCalendarEvent',
+        opRef: 'op:named:createCalendarEvent',
         argName: 'participants',
         policy: normalizePolicyConfig({
           facts: {
@@ -203,13 +203,13 @@ describe('fact requirements', () => {
       })
     ).toEqual({
       status: 'resolved',
-      opRef: 'op:@createcalendarevent',
+      opRef: 'op:named:createcalendarevent',
       requirements: [
         {
           arg: 'participants',
           patterns: ['fact:internal:*.email'],
           source: 'declarative',
-          rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
+          rule: 'policy.facts.requirements.op:named:createcalendarevent.participants'
         }
       ]
     });

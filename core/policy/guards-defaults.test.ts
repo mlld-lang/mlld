@@ -405,13 +405,14 @@ describe('generatePolicyGuards defaults rules', () => {
 
     const guards = generatePolicyGuards(policy);
     const factGuard = guards.find(guard =>
-      guard.name.includes('__policy_fact_requirement_op:@createcalendarevent_participants')
+      guard.name.includes('__policy_fact_requirement_op:named:createcalendarevent_participants')
     );
 
     expect(
       factGuard?.policyCondition?.({
         operation: {
           name: 'createCalendarEvent',
+          named: 'op:named:createcalendarevent',
           labels: ['tool:w:create_calendar_event']
         },
         args: { participants: ['ada@example.com'] },
@@ -425,6 +426,7 @@ describe('generatePolicyGuards defaults rules', () => {
       factGuard?.policyCondition?.({
         operation: {
           name: 'createCalendarEvent',
+          named: 'op:named:createcalendarevent',
           labels: ['tool:w:create_calendar_event']
         },
         args: { participants: ['ada@example.com'] },
@@ -434,7 +436,7 @@ describe('generatePolicyGuards defaults rules', () => {
       })
     ).toMatchObject({
       decision: 'deny',
-      rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
+      rule: 'policy.facts.requirements.op:named:createcalendarevent.participants'
     });
 
     expect(
@@ -442,6 +444,7 @@ describe('generatePolicyGuards defaults rules', () => {
         policy,
         operation: {
           name: 'createCalendarEvent',
+          named: 'op:named:createcalendarevent',
           labels: ['tool:w:create_calendar_event']
         },
         args: { participants: ['ada@example.com'] },
@@ -450,7 +453,7 @@ describe('generatePolicyGuards defaults rules', () => {
         }
       })
     ).toMatchObject({
-      rule: 'policy.facts.requirements.op:@createcalendarevent.participants'
+      rule: 'policy.facts.requirements.op:named:createcalendarevent.participants'
     });
 
     expect(

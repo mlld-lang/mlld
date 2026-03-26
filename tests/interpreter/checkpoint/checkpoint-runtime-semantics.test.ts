@@ -114,7 +114,7 @@ function buildTelemetryScript(counterKey: string, includeGuards: boolean): strin
   return "telemetry:" + globalThis.${counterKey} + ":" + rawPrompt + ":" + rawModel;
 }
 ${guardSection}
-/hook @telemetry after @llm = [
+/hook @telemetry after op:named:llm = [
   output \`hit:@mx.checkpoint.hit,key:@mx.checkpoint.key\` to "state://telemetry"
 ]
 /var @result = @llm("review src/a.ts", "sonnet")
@@ -144,7 +144,7 @@ resume: auto
   printf "wrote"
 }
 
-/hook @telemetry after @writeOutput = [
+/hook @telemetry after op:named:writeOutput = [
   output \`hit:@mx.checkpoint.hit\` to "state://telemetry"
 ]
 

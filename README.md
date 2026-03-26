@@ -347,7 +347,7 @@ show @process(@key)   # Logs to audit.log, shows message, continues
 User-defined before/after hooks on functions, operations, and data labels for observation and extensibility:
 
 ```mlld
-hook before @myFunc = [
+hook before op:named:myfunc = [
   log `Calling @mx.hook.target`
 ]
 

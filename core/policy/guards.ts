@@ -129,8 +129,8 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
   const enabledRules = normalizeRuleList(options.policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
   const normalizedOperationRef =
-    typeof (options.operation as { name?: unknown }).name === 'string'
-      ? normalizeNamedOperationRef((options.operation as { name?: string }).name)
+    typeof (options.operation as { named?: unknown }).named === 'string'
+      ? normalizeNamedOperationRef((options.operation as { named?: string }).named)
       : undefined;
   const declarativeEntries = collectDeclarativeFactRequirementEntries(options.policy).filter(
     entry => entry.opRef === normalizedOperationRef
@@ -545,11 +545,11 @@ function makeDeclarativeFactRequirementGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, args, argDescriptors }) => {
-      if (typeof operation.name !== 'string' || operation.name.length === 0) {
+      if (typeof operation.named !== 'string' || operation.named.length === 0) {
         return { decision: 'allow' };
       }
 
-      const operationRef = normalizeNamedOperationRef(operation.name);
+      const operationRef = normalizeNamedOperationRef(operation.named);
       if (operationRef !== options.opRef) {
         return { decision: 'allow' };
       }

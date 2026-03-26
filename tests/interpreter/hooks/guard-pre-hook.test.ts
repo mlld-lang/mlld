@@ -1736,7 +1736,7 @@ it('applies op:exe guards to bare run-exec statements and var-assigned exec call
 it('exposes canonical named operation refs to guard conditions', async () => {
   const env = createEnv();
   const guardDirective = parseSync(
-    '/guard before @gate for op:@sendEmail = when [ @mx.op.ref == "op:@sendemail" => deny "blocked named op" \n * => allow ]'
+    '/guard before @gate for op:named:sendEmail = when [ @mx.op.named == "op:named:sendemail" => deny "blocked named op" \n * => allow ]'
   )[0] as DirectiveNode;
   await evaluateDirective(guardDirective, env);
 

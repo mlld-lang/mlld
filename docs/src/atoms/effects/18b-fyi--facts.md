@@ -1,0 +1,119 @@
+---
+id: fyi-facts
+title: Fact Discovery
+brief: Discover fact candidates with opaque handles via @fyi.facts()
+category: effects
+tags: [fyi, facts, handles, discovery, agents, security]
+related: [labels-facts, records-basics, facts-and-handles, pattern-planner, policy-authorizations]
+related-code: [interpreter/fyi/facts-runtime.ts, interpreter/fyi/config.ts, interpreter/env/ValueHandleRegistry.ts, core/policy/fact-requirements.ts]
+updated: 2026-03-25
+qa_tier: 2
+---
+
+`@fyi.facts()` discovers fact-bearing values from configured roots and returns opaque handles. It's how LLM agents find authorized values without copying raw literals.
+
+`@fyi` is a tool given to agents -- including via MCP. When `fyi: { facts: [...] }` is configured on a box or call site, the `@fyi` tool is implicitly available to the LLM inside that scope.
+
+## How the agent calls it
+
+`@fyi.facts` takes a single `query` parameter. From the agent's perspective (MCP tool call):
+
+**No-arg exploration** -- discover all fact candidates from configured roots:
+
+```json
+{ "name": "fyi.facts", "arguments": {} }
+```
+
+**Filtered discovery** -- find candidates matching a specific `(op, arg)` requirement:
+
+```json
+{ "name": "fyi.facts", "arguments": { "query": { "op": "op:named:sendEmail", "arg": "recipient" } } }
+```
+
+This returns only candidates whose fact labels satisfy the requirements for `recipient` on `op:named:sendEmail` -- typically `fact:*.email`.
+
+In mlld syntax, the same calls look like `@fyi.facts()` and `@fyi.facts({ op: "op:named:sendEmail", arg: "recipient" })` -- the `{ op, arg }` object is the `query` parameter positionally.
+
+## Setting up roots
+
+```mlld
+record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?]
+}
+
+exe @getContacts(query) = run cmd {
+  contacts-cli search @query --format json
+} => contact
+
+var @contacts = @getContacts("Mark")
+var @cfg = { fyi: { facts: [@contacts] } }
+```
+
+Inside a box or call-site scoped with that config, `@fyi.facts()` searches the configured roots.
+
+## Response shape
+
+Each candidate has four fields:
+
+```json
+[
+  { "handle": "h_a7x9k2", "label": "Mark Davies", "field": "email", "fact": "fact:external:@contact.email" },
+  { "handle": "h_m3q8t1", "label": "a***@example.com", "field": "email", "fact": "fact:@contact.email" }
+]
+```
+
+| Field | What it is |
+|---|---|
+| `handle` | Opaque reference to the live value (e.g., `h_a7x9k2`) |
+| `label` | Safe display text -- sibling field (like `name`) or masked fallback |
+| `field` | Record field name |
+| `fact` | The fact label on the value |
+
+The raw authorization-critical value (the actual email address) is not exposed. The LLM chooses from candidates by label, then returns the handle.
+
+## Configuring roots
+
+Discovery searches only explicitly configured roots. Configure them at the box or call site:
+
+```mlld
+var @contacts = @getContacts("Mark")
+var @task = @getTask("123")
+var @cfg = { fyi: { facts: [@contacts, @task] } }
+```
+
+Call-site `fyi.facts` overrides box-level defaults for that call. Only values listed in `fyi.facts` are eligible.
+
+## Using handles
+
+The LLM returns a handle instead of a literal:
+
+```json
+{ "recipient": { "handle": "h_a7x9k2" } }
+```
+
+The runtime resolves `h_a7x9k2` back to the original live value with its fact labels intact. This is how proof survives the LLM boundary.
+
+If the LLM returns a raw literal instead of a handle, the literal has no proof. Positive checks fail closed.
+
+See `facts-and-handles` for the full security model. See `pattern-planner` for using handles in planner-worker authorization.
+
+## Requirement sources
+
+Filtered discovery derives requirements from three sources:
+
+1. **Built-in symbolic specs** -- `op:named:email.send` requires `fact:*.email` on destination args
+2. **Live operation metadata** -- `labels` and `controlArgs` from the exe definition
+3. **Declarative policy** -- `policy.facts.requirements` entries
+
+If none resolve for a given `(op, arg)`, discovery returns nothing. It never infers requirements from arg names alone.
+
+## Handles are execution-scoped
+
+Handles are:
+
+- Opaque -- format is not meaningful to consumers
+- Execution-scoped -- valid only within the current execution
+- Runtime-issued -- minted by the runtime, not by user code
+
+They are not stable IDs and should not be persisted or shared across executions.

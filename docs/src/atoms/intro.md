@@ -119,7 +119,7 @@ var @alt = ::Hello @name!::
 
 **Security** - Labels + policies + guards = prompt injection defense
 
-**Hooks** - Lifecycle observers: `hook after @fn = [...]` for logging, telemetry, transforms
+**Hooks** - Lifecycle observers: `hook after op:named:fn = [...]` for logging, telemetry, transforms
 
 **Checkpoint** - Auto-caches `llm`-labeled exe results; `--resume` re-runs selectively
 

@@ -15,8 +15,8 @@ updated: 2026-02-20
 **Syntax:** `hook [<@name>] <before|after> <filter> = <body>`
 
 ```mlld
->> Named hook on a function (after)
-hook @logger after @review = [
+>> Named hook on a named operation (after)
+hook @logger after op:named:review = [
   append `reviewed: @mx.op.name` to "audit.log"
 ]
 
@@ -36,8 +36,8 @@ hook @router after op:exe = when [
 
 | Filter | Example | Matches |
 |--------|---------|---------|
-| Function | `@review` | Calls to that executable |
-| Function + prefix | `@review("src/")` | Calls where first arg starts with `"src/"` |
+| Named operation | `op:named:review` | Calls to that executable |
+| Named operation + prefix | `op:named:review("src/")` | Calls where first arg starts with `"src/"` |
 | Operation | `op:run`, `op:exe`, `op:var` | All operations of that type |
 | Data label | `untrusted` | Operations with labeled inputs |
 
@@ -49,10 +49,11 @@ Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output
 
 | Variable | Timing | Description |
 |----------|--------|-------------|
-| `@input` | both | Operation inputs (function args for `before` function hooks) |
+| `@input` | both | Operation inputs (named-operation `before` hooks receive the argument array) |
 | `@output` | `after` | Operation result |
 | `@mx.op.name` | both | Operation or executable name |
 | `@mx.op.type` | both | Operation type (`exe`, `run`, `show`, etc.) |
+| `@mx.op.named` | named ops | Canonical named-op identity (`op:named:...`) |
 | `@mx.op.labels` | both | Labels on the operation |
 | `@mx.hooks.errors` | both | Errors from earlier hooks in the chain |
 
@@ -64,11 +65,11 @@ Supported operation filters: `op:var`, `op:run`, `op:exe`, `op:show`, `op:output
 
 ```mlld
 >> Observability: telemetry + error tracking
-hook @telemetry after @emit = [
+hook @telemetry after op:named:emit = [
   output `telemetry:@mx.op.name` to "state://telemetry"
 ]
 
-hook @errors after @emit = [
+hook @errors after op:named:emit = [
   append `errors:@mx.hooks.errors.length` to "hook-errors.log"
 ]
 ```

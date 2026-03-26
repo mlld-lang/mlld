@@ -37,19 +37,19 @@ describe('HookRegistry', () => {
     expect(afterHooks.map(hook => hook.name)).toEqual(['afterHook']);
   });
 
-  test('indexes function, operation, and data filters', () => {
+  test('indexes named operation, operation, and data filters', () => {
     const registry = new HookRegistry();
-    registry.register(parseHookDirective('/hook @fn before @summarize("review") = [ => @input ]'));
+    registry.register(parseHookDirective('/hook @fn before op:named:summarize("review") = [ => @input ]'));
     registry.register(parseHookDirective('/hook @op before op:for:iteration = [ => @input ]'));
     registry.register(parseHookDirective('/hook @data after untrusted = [ => @output ]'));
 
-    const functionHooks = registry.getFunctionHooks('summarize', 'before');
+    const namedOperationHooks = registry.getOperationHooks('op:named:summarize', 'before');
     const operationHooks = registry.getOperationHooks('for:iteration', 'before');
     const dataHooks = registry.getDataHooks('untrusted', 'after');
 
-    expect(functionHooks).toHaveLength(1);
-    expect(functionHooks[0].name).toBe('fn');
-    expect(functionHooks[0].argPattern).toBe('review');
+    expect(namedOperationHooks).toHaveLength(1);
+    expect(namedOperationHooks[0].name).toBe('fn');
+    expect(namedOperationHooks[0].argPattern).toBe('review');
 
     expect(operationHooks).toHaveLength(1);
     expect(operationHooks[0].name).toBe('op');

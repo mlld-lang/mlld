@@ -5,7 +5,7 @@ resume: auto
   printf "wrote"
 }
 
-/hook @telemetry after @writeOutput = [
+/hook @telemetry after op:named:writeOutput = [
   output `hit:@mx.checkpoint.hit` to "state://telemetry"
 ]
 

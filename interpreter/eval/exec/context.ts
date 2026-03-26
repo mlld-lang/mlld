@@ -20,7 +20,7 @@ export function buildExecOperationPreview(node: ExecInvocation): OperationContex
     const namedOperationRef = normalizeNamedOperationRef(operationName ?? identifier);
     return {
       type: 'exe',
-      ref: resolveCanonicalOperationRef({
+      named: resolveCanonicalOperationRef({
         type: 'exe',
         name: operationName ?? identifier,
         opLabels: namedOperationRef ? [namedOperationRef] : undefined

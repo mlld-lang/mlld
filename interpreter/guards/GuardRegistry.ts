@@ -7,7 +7,7 @@ import type {
 } from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
-import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
+import { normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 export type PolicyConditionResult =
   | { decision: 'allow' }
@@ -98,7 +98,6 @@ export class GuardRegistry {
   private readonly guards: GuardDefinition[] = [];
   private readonly dataIndex: Map<string, GuardDefinition[]>;
   private readonly opIndex: Map<string, GuardDefinition[]>;
-  private readonly functionIndex: Map<string, GuardDefinition[]>;
   private readonly definitions = new Map<string, GuardDefinition>();
   private readonly namedDefinitions = new Map<string, GuardDefinition>();
   private readonly guardNames: Set<string>;
@@ -110,13 +109,11 @@ export class GuardRegistry {
       this.nextRegistrationOrder = 1;
       this.dataIndex = new Map();
       this.opIndex = new Map();
-      this.functionIndex = new Map();
       this.guardNames = new Set();
     } else {
       this.nextRegistrationOrder = 0;
       this.dataIndex = this.root.dataIndex;
       this.opIndex = this.root.opIndex;
-      this.functionIndex = this.root.functionIndex;
       this.guardNames = this.root.guardNames;
     }
   }
@@ -184,10 +181,6 @@ export class GuardRegistry {
 
   getOperationGuardsForTiming(op: string, timing: GuardTiming): GuardDefinition[] {
     return this.collectGuards(op, 'operation').filter(def => this.matchesTiming(def, timing));
-  }
-
-  getFunctionGuardsForTiming(fnName: string, timing: GuardTiming): GuardDefinition[] {
-    return this.collectGuards(fnName, 'function').filter(def => this.matchesTiming(def, timing));
   }
 
   serializeOwn(): SerializedGuardDefinition[] {
@@ -359,9 +352,7 @@ export class GuardRegistry {
   }
 
   private collectGuards(value: string, kind: GuardFilterKind): GuardDefinition[] {
-    const index = kind === 'function'
-      ? this.functionIndex
-      : kind === 'operation' ? this.opIndex : this.dataIndex;
+    const index = kind === 'operation' ? this.opIndex : this.dataIndex;
     const normalizedValue = this.normalizeIndexedFilterValue(kind, value);
     const matches = index.get(normalizedValue) ?? [];
     return matches.slice().sort((a, b) => a.registrationOrder - b.registrationOrder);
@@ -385,9 +376,7 @@ export class GuardRegistry {
     if (definition.name) {
       this.namedDefinitions.set(definition.name, definition);
     }
-    const index = definition.filterKind === 'function'
-      ? this.functionIndex
-      : definition.filterKind === 'operation' ? this.opIndex : this.dataIndex;
+    const index = definition.filterKind === 'operation' ? this.opIndex : this.dataIndex;
     const list = index.get(definition.filterValue);
     if (list) {
       list.push(definition);
@@ -400,7 +389,7 @@ export class GuardRegistry {
     if (kind !== 'operation') {
       return value;
     }
-    return normalizeNamedOperationRef(value) ?? value.toLowerCase();
+    return normalizeNamedOperationSelector(value) ?? value.toLowerCase();
   }
 
   private allocateRegistrationOrder(): number {

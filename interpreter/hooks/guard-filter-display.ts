@@ -1,5 +1,5 @@
 import type { GuardFilterKind } from '@core/types/guard';
-import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
+import { normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 export function formatGuardFilterForMetadata(
   filterKind: GuardFilterKind,
@@ -10,12 +10,9 @@ export function formatGuardFilterForMetadata(
   }
 
   const normalized =
-    normalizeNamedOperationRef(filterValue) ??
+    normalizeNamedOperationSelector(filterValue) ??
     (typeof filterValue === 'string' ? filterValue.trim().toLowerCase() : '');
 
-  if (normalized.startsWith('op:@')) {
-    return `operation:${normalized.slice(4)}`;
-  }
   if (normalized.startsWith('op:')) {
     return `operation:${normalized.slice(3)}`;
   }

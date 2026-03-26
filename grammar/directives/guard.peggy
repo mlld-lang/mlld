@@ -142,22 +142,8 @@ GuardDirectivePrivilegedValue
     }
 
 GuardFilterClause
-  = filter:GuardFunctionFilter { return filter; }
-  / filter:GuardOperationFilter { return filter; }
+  = filter:GuardOperationFilter { return filter; }
   / filter:GuardDataFilter { return filter; }
-
-GuardFunctionFilter
-  = "@" identifier:GuardFunctionIdentifier {
-      const raw = `@${identifier}`;
-      const node = helpers.createNode('GuardFilter', {
-        filterKind: 'function',
-        scope: 'perOperation',
-        value: identifier,
-        raw,
-        location: location()
-      });
-      return { node, raw };
-    }
 
 GuardFunctionIdentifier
   = first:BaseIdentifier rest:("." part:BaseIdentifier { return part; })* {
@@ -165,12 +151,12 @@ GuardFunctionIdentifier
     }
 
 GuardOperationFilter
-  = "op:" identifier:GuardCanonicalNamedOperationIdentifier {
-      const raw = identifier;
+  = "op:named:" identifier:GuardFunctionIdentifier {
+      const raw = `op:named:${identifier}`;
       const node = helpers.createNode('GuardFilter', {
         filterKind: 'operation',
         scope: 'perOperation',
-        value: identifier,
+        value: raw,
         raw,
         location: location()
       });
@@ -186,11 +172,6 @@ GuardOperationFilter
         location: location()
       });
       return { node, raw };
-    }
-
-GuardCanonicalNamedOperationIdentifier
-  = "@" identifier:GuardFunctionIdentifier {
-      return `op:@${identifier}`;
     }
 
 GuardDataFilter

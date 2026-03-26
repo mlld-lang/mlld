@@ -52,8 +52,8 @@ describe('user hook runtime', () => {
   const raw = value && typeof value === "object" && "value" in value ? value.value : value;
   return String(raw);
 }
-/hook @trim before @emit = [ => @trimArgs(@input) ]
-/hook @suffix before @emit = [ => @suffixArgs(@input) ]
+/hook @trim before op:named:emit = [ => @trimArgs(@input) ]
+/hook @suffix before op:named:emit = [ => @suffixArgs(@input) ]
 /var @result = @emit("  phase3b  ")
       `,
       env
@@ -76,8 +76,8 @@ describe('user hook runtime', () => {
   return String(raw).replace("SECRET", "[REDACTED]");
 }
 /exe @emit() = js { return "  SECRET-token  "; }
-/hook @trimAfter after @emit = [ => @trimOutput(@output) ]
-/hook @redactAfter after @emit = [ => @redactOutput(@output) ]
+/hook @trimAfter after op:named:emit = [ => @trimOutput(@output) ]
+/hook @redactAfter after op:named:emit = [ => @redactOutput(@output) ]
 /var @result = @emit()
       `,
       env
@@ -92,7 +92,7 @@ describe('user hook runtime', () => {
     await evaluateDirectives(
       `
 /exe @emit() = js { return "stable"; }
-/hook @observeOnly after @emit = when [
+/hook @observeOnly after op:named:emit = when [
   * => output \`observed:@output\` to "state://hook-observe"
 ]
 /var @result = @emit()
@@ -123,9 +123,9 @@ describe('user hook runtime', () => {
   return String(raw) + "-after";
 }
 /exe @emit() = js { return "base"; }
-/hook @broken after @emit = [ append "not-json" to "hook-errors.jsonl" ]
-/hook @suffixAfter after @emit = [ => @suffix(@output) ]
-/hook @captureAfter after @emit = [
+/hook @broken after op:named:emit = [ append "not-json" to "hook-errors.jsonl" ]
+/hook @suffixAfter after op:named:emit = [ => @suffix(@output) ]
+/hook @captureAfter after op:named:emit = [
   @capture(@mx.hooks.errors)
   => @output
 ]
@@ -162,7 +162,7 @@ describe('user hook runtime', () => {
   const raw = value && typeof value === "object" && "value" in value ? value.value : value;
   return String(raw);
 }
-/hook @reviewOnly before @emit("review") = [ @record("matched") ]
+/hook @reviewOnly before op:named:emit("review") = [ @record("matched") ]
 /var @first = @emit("review-item")
 /var @second = @emit("other-item")
         `,
@@ -183,8 +183,8 @@ describe('user hook runtime', () => {
     await evaluateDirectives(
       `
 /exe @emit() = js { return "ok"; }
-/hook @telemetry after @emit = [
-  output \`event:hook,op:@mx.op.name\` to "state://telemetry"
+/hook @telemetry after op:named:emit = [
+  output \`event:hook,op_named:@mx.op.named\` to "state://telemetry"
 ]
 /var @result = @emit()
       `,

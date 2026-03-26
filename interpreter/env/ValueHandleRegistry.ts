@@ -12,12 +12,10 @@ export interface IssueValueHandleOptions {
 }
 
 export class ValueHandleRegistry {
-  private nextId = 1;
   private readonly entries = new Map<string, ValueHandleEntry>();
 
   issue(value: unknown, options: IssueValueHandleOptions = {}): ValueHandleEntry {
-    const handle = `h_${this.nextId.toString(36)}`;
-    this.nextId += 1;
+    const handle = this.createHandle();
 
     const entry: ValueHandleEntry = {
       handle,
@@ -37,5 +35,20 @@ export class ValueHandleRegistry {
 
   size(): number {
     return this.entries.size;
+  }
+
+  private createHandle(): string {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+    while (true) {
+      let suffix = '';
+      for (let index = 0; index < 6; index += 1) {
+        suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+      }
+      const handle = `h_${suffix}`;
+      if (!this.entries.has(handle)) {
+        return handle;
+      }
+    }
   }
 }

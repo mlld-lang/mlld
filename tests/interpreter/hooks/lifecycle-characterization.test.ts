@@ -190,8 +190,8 @@ describe('hook lifecycle characterization baseline', () => {
   globalThis.${key}.push("operation:decision:outer-body");
   return "outer";
 }
-/hook @outerAfter after @outer = [ => @inner() ]
-/hook @innerAfter after @inner = [ => @record("user:after:inner") ]
+/hook @outerAfter after op:named:outer = [ => @inner() ]
+/hook @innerAfter after op:named:inner = [ => @record("user:after:inner") ]
         `,
         env
       );
@@ -233,8 +233,8 @@ describe('hook lifecycle characterization baseline', () => {
   @mx.op.name == "inner" => allow @record("guard:before:inner")
   * => allow
 ]
-/hook @outerAfter after @outer = [ => @inner() ]
-/hook @innerAfter after @inner = [ => @record("user:after:inner") ]
+/hook @outerAfter after op:named:outer = [ => @inner() ]
+/hook @innerAfter after op:named:inner = [ => @record("user:after:inner") ]
         `,
         env
       );
@@ -312,8 +312,8 @@ describe('hook lifecycle characterization baseline', () => {
   @mx.op.name == "emit" => allow @record("guard:after:exe")
   * => allow
 ]
-/hook @userBefore before @emit = [ => @record("user:before:exe") ]
-/hook @userAfter after @emit = [ => @record("user:after:exe") ]
+/hook @userBefore before op:named:emit = [ => @record("user:before:exe") ]
+/hook @userAfter after op:named:emit = [ => @record("user:after:exe") ]
         `,
         env
       );

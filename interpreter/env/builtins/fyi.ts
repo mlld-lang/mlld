@@ -28,14 +28,14 @@ export function createFyiVariable(env: Environment) {
   const factsDefinition: NodeFunctionExecutable = {
     type: 'nodeFunction',
     name: 'facts',
-    fn: async (queryOrEnv?: unknown, boundEnv?: Environment) => {
+    fn: async (queryOrEnv?: unknown, argOrEnv?: unknown, boundEnv?: Environment) => {
       const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(argOrEnv) ? argOrEnv : undefined)
         ?? (looksLikeEnvironment(queryOrEnv) ? queryOrEnv : undefined)
         ?? env;
-      const query = boundEnv || !looksLikeEnvironment(queryOrEnv)
-        ? queryOrEnv
-        : undefined;
-      return evaluateFyiFacts(query, executionEnv);
+      const query = boundEnv || !looksLikeEnvironment(queryOrEnv) ? queryOrEnv : undefined;
+      const arg = boundEnv || !looksLikeEnvironment(argOrEnv) ? argOrEnv : undefined;
+      return evaluateFyiFacts(query, executionEnv, arg);
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
