@@ -22,7 +22,7 @@
       "contentName": "source.mlld.embedded",
       "patterns": [
         {
-          "begin": "^((var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
+          "begin": "^((var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
           "end": "$",
           "name": "meta.embedded.line.mlld",
           "beginCaptures": {
@@ -462,7 +462,7 @@
             },
             {
               "name": "support.type.guard-filter.mlld",
-              "match": "\\bop:(var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
+              "match": "\\bop:(?:named:[A-Za-z_][A-Za-z0-9_.-]*|var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
             },
             {
               "name": "keyword.operator.pipe.mlld",
@@ -497,7 +497,7 @@
       ]
     },
     {
-      "begin": "^((var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
+      "begin": "^((var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
@@ -937,7 +937,7 @@
         },
         {
           "name": "support.type.guard-filter.mlld",
-          "match": "\\bop:(var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
+          "match": "\\bop:(?:named:[A-Za-z_][A-Za-z0-9_.-]*|var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",

@@ -95,12 +95,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=/(var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
+      "begin": "^(?=/(var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G/(var|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b"
+          "match": "\\G/(var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -533,7 +533,7 @@
         },
         {
           "name": "support.type.guard-filter.mlld",
-          "match": "\\bop:(var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
+          "match": "\\bop:(?:named:[A-Za-z_][A-Za-z0-9_.-]*|var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",

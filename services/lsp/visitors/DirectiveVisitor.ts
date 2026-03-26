@@ -3369,33 +3369,7 @@ export class DirectiveVisitor extends BaseVisitor {
       const filterNode = values.filter[0];
 
       if (filterNode.filterKind === 'operation') {
-        const opMatch = directiveText.match(/\bop:([A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)*)/);
-        if (opMatch && opMatch.index !== undefined) {
-          const opOffset = directive.location.start.offset + opMatch.index;
-          const opPosition = this.document.positionAt(opOffset);
-
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character,
-            length: 2,
-            tokenType: 'keyword',
-            modifiers: []
-          });
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character + 2,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character + 3,
-            length: opMatch[1].length,
-            tokenType: 'variable',
-            modifiers: []
-          });
-        }
+        this.tokenizeOperationFilterSegment(directive, directiveText, true);
       } else if (filterNode.filterKind === 'function') {
         const fnMatch = directiveText.match(/@([A-Za-z_][A-Za-z0-9_.-]*)/);
         if (fnMatch && fnMatch.index !== undefined) {
@@ -3493,39 +3467,7 @@ export class DirectiveVisitor extends BaseVisitor {
       const filterNode = values.filter[0];
 
       if (filterNode.filterKind === 'operation') {
-        // op:run, op:exe, etc.
-        const opMatch = directiveText.match(/\bop:([A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)*)/);
-        if (opMatch && opMatch.index !== undefined) {
-          const opOffset = directive.location.start.offset + opMatch.index;
-          const opPosition = this.document.positionAt(opOffset);
-
-          // Tokenize 'op' as keyword
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character,
-            length: 2, // 'op'
-            tokenType: 'keyword',
-            modifiers: []
-          });
-
-          // Tokenize ':' as operator
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character + 2,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
-
-          // Tokenize the operation identifier
-          this.tokenBuilder.addToken({
-            line: opPosition.line,
-            char: opPosition.character + 3,
-            length: opMatch[1].length,
-            tokenType: 'variable',
-            modifiers: []
-          });
-        }
+        this.tokenizeOperationFilterSegment(directive, directiveText, false);
       } else if (filterNode.filterKind === 'data') {
         // Data label filter - find and tokenize
         const labelValue = filterNode.value;
@@ -3728,6 +3670,80 @@ export class DirectiveVisitor extends BaseVisitor {
         });
       }
     }
+  }
+
+  private tokenizeOperationFilterSegment(
+    directive: LspAstNode,
+    directiveText: string,
+    allowArgPattern: boolean
+  ): void {
+    if (!directive.location) return;
+
+    const opMatch = directiveText.match(/\bop:(named:[A-Za-z_][A-Za-z0-9_.-]*|[A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)*)/);
+    if (!opMatch || opMatch.index === undefined) return;
+
+    const opOffset = directive.location.start.offset + opMatch.index;
+    const opPosition = this.document.positionAt(opOffset);
+
+    this.tokenBuilder.addToken({
+      line: opPosition.line,
+      char: opPosition.character,
+      length: 2,
+      tokenType: 'keyword',
+      modifiers: []
+    });
+
+    this.tokenBuilder.addToken({
+      line: opPosition.line,
+      char: opPosition.character + 2,
+      length: 1,
+      tokenType: 'operator',
+      modifiers: []
+    });
+
+    this.tokenBuilder.addToken({
+      line: opPosition.line,
+      char: opPosition.character + 3,
+      length: opMatch[1].length,
+      tokenType: 'variable',
+      modifiers: []
+    });
+
+    if (!allowArgPattern) return;
+
+    const remainder = directiveText.slice(opMatch.index + opMatch[0].length);
+    const argPatternMatch = remainder.match(/^\(\s*((?:"[^"]*"|'[^']*'))\s*\)/);
+    if (!argPatternMatch || argPatternMatch.index === undefined) return;
+
+    const parenOffset = opOffset + opMatch[0].length + argPatternMatch.index;
+    const openParenPosition = this.document.positionAt(parenOffset);
+    this.tokenBuilder.addToken({
+      line: openParenPosition.line,
+      char: openParenPosition.character,
+      length: 1,
+      tokenType: 'operator',
+      modifiers: []
+    });
+
+    const stringOffset = parenOffset + argPatternMatch[0].indexOf(argPatternMatch[1]);
+    const stringPosition = this.document.positionAt(stringOffset);
+    this.tokenBuilder.addToken({
+      line: stringPosition.line,
+      char: stringPosition.character,
+      length: argPatternMatch[1].length,
+      tokenType: 'string',
+      modifiers: []
+    });
+
+    const closeParenOffset = parenOffset + argPatternMatch[0].lastIndexOf(')');
+    const closeParenPosition = this.document.positionAt(closeParenOffset);
+    this.tokenBuilder.addToken({
+      line: closeParenPosition.line,
+      char: closeParenPosition.character,
+      length: 1,
+      tokenType: 'operator',
+      modifiers: []
+    });
   }
 
   private visitLetAssignment(letNode: LspAstNode, directive: LspAstNode, context: VisitorContext): void {

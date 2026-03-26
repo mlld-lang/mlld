@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2026-03-12T07:13:50.954Z
+" Latest Revision: 2026-03-26T11:26:44.686Z
 
 if exists("b:current_syntax")
   finish
@@ -18,7 +18,7 @@ syn sync minlines=10
 syn match mlldComment "\(>>\|<<\).*$"
 
 " Directives - must be at start of line
-syn match mlldDirective "^/\(var\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|file\|files\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|box\|while\|needs\|profiles\)\>"
+syn match mlldDirective "^/\(var\|record\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|file\|files\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|box\|while\|needs\|profiles\)\>"
 
 " Directive-like keywords in strict expression/block forms
 syn match mlldInlineDirective "\<\(loop\|while\)\>\ze\s*("

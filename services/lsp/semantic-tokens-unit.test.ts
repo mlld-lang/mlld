@@ -241,6 +241,65 @@ describe('Semantic Tokens - Unit Tests', () => {
       expect(directives.map(d => d.text)).toEqual(['/var', '/show', '/exe']);
     });
 
+    it('highlights canonical named-op filters in guard directives', async () => {
+      const code = '/guard before @gate for op:named:email.send = when [ * => allow ]';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'before',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: '@gate',
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
+      expectToken(tokens, {
+        text: 'op',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: 'named:email.send',
+        tokenType: 'variable'
+      });
+    });
+
+    it('highlights named-op hooks and @mx.op.named field access', async () => {
+      const code = `/hook before op:named:claudePoll("review") = when [
+  @mx.op.named == "op:named:claudepoll" => show "hit"
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'before',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: 'op',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: 'named:claudePoll',
+        tokenType: 'variable'
+      });
+      expectToken(tokens, {
+        text: '"review"',
+        tokenType: 'string'
+      });
+      expectToken(tokens, {
+        text: '@mx',
+        tokenType: 'variable'
+      });
+      expectToken(tokens, {
+        text: 'op',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'named',
+        tokenType: 'property'
+      });
+    });
+
     it('highlights /export directive and members', async () => {
       const code = '/export { name, other as alias }';
       const tokens = await getSemanticTokens(code);
