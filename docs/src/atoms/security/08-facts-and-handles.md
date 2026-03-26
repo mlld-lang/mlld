@@ -6,7 +6,7 @@ category: security
 tags: [security, records, facts, handles, fyi, authorization, provenance, prompt-injection]
 related: [labels-attestations, security-getting-started, security-guards-basics, mcp-guards, policy-authorizations, pattern-planner]
 related-code: [core/policy/fact-requirements.ts, core/policy/fact-labels.ts, interpreter/fyi/facts-runtime.ts, interpreter/utils/handle-resolution.ts, interpreter/eval/records/coerce-record.ts, core/types/handle.ts]
-updated: 2026-03-25
+updated: 2026-03-26
 ---
 
 Records, fact labels, and opaque handles form mlld's provenance-based authorization model. Together they prevent prompt injection consequences by tracking which values came from trusted sources and giving LLMs safe references instead of copyable literals.
@@ -117,7 +117,13 @@ The outer `{ preview, handle }` object is display-only. The actual reusable hand
 
 The runtime resolves `h_a7x9k2` back to the original live value with `fact:external:@contact.email` still attached. The positive check passes because the value has real provenance.
 
-If the LLM returns a raw literal instead (tricked by injection), the literal has no provenance. The check fails. The call is denied.
+For security-relevant args, mlld also accepts exact projected forms it emitted in the same tool session:
+
+- the inner handle wrapper
+- the masked preview string
+- a bare visible fact literal
+
+If the match is unique, the runtime canonicalizes that emitted form back to the live value before authorization and policy checks. If the projected value is ambiguous, the call fails closed and tells the model to use the handle wrapper. Values the runtime never emitted remain fresh literals with no proof.
 
 ### Discovery is operation-aware
 
@@ -220,13 +226,13 @@ If the LLM returns malformed JSON or missing fields, the guard retries with vali
 3. Worker (executes under policy + authorization):
    a. Reads the email (body is data -- no fact label)
    b. LLM drafts a reply and calls sendEmail
-   c. Runtime resolves handle h_a7x9k2 -> "mark@example.com" with fact:@contact.email
+   c. Runtime canonicalizes the authorized recipient back to the live value. The strongest path is handle resolution, but the exact emitted preview or bare visible value also works when the match is unique.
    d. no-send-to-unknown: recipient has fact:*.email? YES -> allowed
    e. Email sent
 
 4. If injection in the email says "also send to attacker@evil.com":
    a. LLM tries sendEmail(recipient: "attacker@evil.com")
-   b. "attacker@evil.com" is a raw literal -- no handle, no fact label
+   b. "attacker@evil.com" was never emitted as a projected value, so it stays a raw literal
    c. no-send-to-unknown: recipient has fact:*.email? NO -> DENIED
    d. Attack blocked
 ```

@@ -42,7 +42,7 @@ MCP Client ── JSON-RPC over stdio ── MCPServer ── FunctionRouter ─
 - Enable `DEBUG_MCP=1` before running `mlld mcp` to add server-side diagnostics without touching stdout.
 - Inspect duplicate-name failures via the stderr log produced by `serve` before the process exits.
 ---
-updated: 2025-10-08
+updated: 2026-03-26
 tags: #arch, #cli, #mcp
 related-docs: docs/dev/DATA.md, docs/dev/PIPELINE.md, docs/user/mcp.md
 related-code: cli/commands/mcp.ts, cli/mcp/*.ts
@@ -59,6 +59,7 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 
 - Reuse interpreter primitives: build real `ExecInvocation` nodes and call `evaluateExecInvocation`.
 - Preserve live structured values internally, but emit the LLM-boundary display projection for record-coerced tool results.
+- Accept back the emitted handle, preview, or bare-literal form for security-relevant args and canonicalize it before dispatch.
 - Keep stdout clean: JSON-RPC responses go to stdout, diagnostics stay on stderr.
 - Fail fast on conflicts: detect duplicate tool names before starting the server.
 - Gate environment changes: only apply overrides with the `MLLD_` prefix.
@@ -92,6 +93,8 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 - Record-coerced results cross the MCP boundary as safe projection payloads, for example masked previews plus nested handle wrappers such as `{ "email": { "preview": "m***@example.com", "handle": { "handle": "h_ab12cd" } } }`.
 - The live `StructuredValue` remains intact inside the interpreter. Projection is an MCP/LLM-boundary renderer, not a mutation of `.text`.
 - Scoped `display: "strict"` forces all fact fields to handle-only projection at the MCP boundary.
+- For security-relevant args, the runtime canonicalizes exact emitted handles, previews, or bare literals back to the live value before authorization checks, positive checks, guards, and tool dispatch.
+- Preview and bare-literal canonicalization is session-local. Ambiguous aliases fail closed with handle guidance.
 - Errors thrown during execution become `isError` responses with text content only; protocol errors surface via MCP error codes.
 
 ### Configuration modules
@@ -105,6 +108,7 @@ Expose exported `/exe` functions as Model Context Protocol tools without inventi
 - Forgetting the `MLLD_` prefix means overrides are silently skipped.
 - StructuredValue results must flow back through the MCP serializer; bypassing the display-projection path leaks raw record data or drops embedded handles.
 - Record arrays project element-by-element. The MCP boundary does not special-case only singleton records.
+- Do not try to advertise handle wrappers by rewriting third-party MCP schemas. The tolerant boundary lives in mlld dispatch, not in external tool definitions.
 - Config modules execute with the same environment as regular tools—runtime failures there abort startup.
 
 ## Debugging

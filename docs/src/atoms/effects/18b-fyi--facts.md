@@ -6,7 +6,7 @@ category: effects
 tags: [fyi, facts, handles, discovery, agents, security]
 related: [labels-facts, records-basics, facts-and-handles, pattern-planner, policy-authorizations]
 related-code: [interpreter/fyi/facts-runtime.ts, interpreter/fyi/config.ts, interpreter/env/ValueHandleRegistry.ts, core/policy/fact-requirements.ts]
-updated: 2026-03-25
+updated: 2026-03-26
 qa_tier: 2
 ---
 
@@ -124,7 +124,9 @@ The LLM returns a handle instead of a literal:
 
 The runtime resolves `h_a7x9k2` back to the original live value with its fact labels intact. This is how proof survives the LLM boundary.
 
-If the LLM returns a raw literal instead of a handle, the literal has no proof. Positive checks fail closed.
+Unlike projected record outputs, `@fyi.facts()` candidate labels are not tolerant input aliases. They are selection text. The reusable value is the returned handle.
+
+If the LLM returns a raw literal or a copied label string instead of a handle, the literal has no proof. Positive checks fail closed.
 
 See `facts-and-handles` for the full security model. See `pattern-planner` for using handles in planner-worker authorization.
 

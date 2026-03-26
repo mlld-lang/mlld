@@ -1,5 +1,5 @@
 ---
-updated: 2026-03-25
+updated: 2026-03-26
 tags: #security, #policy, #guards, #records, #handles, #environments
 related-docs: docs/dev/DATA.md, docs/dev/GUARD-ARGS.md, docs/user/security.md
 related-code: core/types/security.ts, core/types/handle.ts, core/policy/*.ts, interpreter/policy/*.ts, interpreter/eval/records/*.ts, interpreter/fyi/*.ts, interpreter/utils/handle-resolution.ts, interpreter/eval/exec/*.ts, interpreter/hooks/*-hook.ts
@@ -171,6 +171,7 @@ Important properties:
 - scoped `display: "strict"` forces all fact fields to handle-only projection
 
 Projected handle payloads use nested compatibility wrappers such as `{ preview, handle: { handle: "..." } }`. The inner single-key wrapper is the actual handle wrapper consumed by recursive handle resolution.
+Projected previews and bare literals are also recorded as session-local aliases for the emitted live value. That aliasing lives only at the LLM boundary. It is not a mutation of the stored value or its labels.
 
 ### Handles
 
@@ -194,6 +195,27 @@ Handle resolution is recursive across:
 
 This is the mechanism that preserves proof across LLM boundaries without trusting copied literals.
 
+### Boundary Input Canonicalization
+
+Security-relevant runtime inputs are canonicalized before authorization checks, inherited positive checks, guards, and tool dispatch.
+
+The resolution order is:
+
+1. explicit handle wrapper
+2. exact emitted preview string from the active LLM tool session
+3. exact emitted bare literal from the active LLM tool session
+4. no match, so the value remains fresh and unproven
+
+Important constraints:
+
+- runtime preview and literal matching is session-local
+- handle resolution remains root-scoped
+- only security-relevant positions are canonicalized
+- freeform payload args are not rewritten
+- handle-only projections create no preview or literal alias
+
+Ambiguous preview or literal matches fail closed and direct the model to use the handle wrapper. The runtime does not guess.
+
 ### Fact Discovery
 
 The primary planner path is projected record results. `@fyi.facts(...)` remains the explicit fact-discovery surface when agents need to search configured roots directly instead of copying handles from projected tool output.
@@ -215,6 +237,8 @@ There are two discovery modes:
 
 - no-arg discovery across configured fact-bearing roots
 - filtered discovery by `(op, arg)`
+
+`@fyi.facts(...)` is a discovery surface, not a projection alias surface. Its `label` field is safe display text for choosing a candidate, not a tolerant input alias. The reusable value is the returned handle.
 
 ### Canonical Operation Identity
 
@@ -281,10 +305,10 @@ It resolves:
 - expression results
 - arrays and objects
 - handle wrappers
+- emitted previews and emitted bare literals for security-relevant authorization args
 
 Compiled authorization proof comes from the resolved live value’s security descriptor, not from a copied literal representation.
-
-For bare-visible fact fields, authorization compilation also performs same-session literal matching against prior auto fact roots before normalization. That allows planner-produced literals to recover live proof when they exactly match a same-session fact value, while keeping copied literals outside that scope unauthenticated.
+For planner-produced authorization bundles, emitted previews and emitted bare literals canonicalize back to live values before normalization. Ambiguous aliases fail closed with handle guidance.
 
 ### Dispatch-Time Authorization And Policy Checks
 
@@ -293,6 +317,7 @@ Runtime exec dispatch lives in [`exec-invocation.ts`](/Users/adam/mlld/mlld/inte
 At dispatch time the runtime:
 
 - resolves effective tool metadata
+- canonicalizes security-relevant args from emitted handles, previews, or bare literals
 - separates policy-guard control args from authorization-validation control args
 - validates runtime authorizations
 - merges matched authorization proof into named arg descriptors
