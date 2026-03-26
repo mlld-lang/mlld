@@ -3,6 +3,8 @@ import {
   validatePolicyAuthorizations,
   type PolicyAuthorizationValidationResult
 } from '@core/policy/authorizations';
+import { resolveFactRequirementsForOperation } from '@core/policy/fact-requirements';
+import { expandOperationLabels } from '@core/policy/label-flow';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
 import { isAttestationLabel } from '@core/types/security';
@@ -12,10 +14,11 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
+import { resolveNamedOperationMetadata } from './tool-metadata';
+import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -31,13 +34,43 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
-function normalizeAttestationLabels(labels: readonly string[] | undefined): string[] {
+function collectPolicyAuthorizationCanonicalizationArgs(options: {
+  env: Environment;
+  toolName: string;
+  policy: PolicyConfig;
+}): string[] {
+  const metadata = resolveNamedOperationMetadata(options.env, options.toolName);
+  if (!metadata) {
+    return [];
+  }
+
+  const resolution = resolveFactRequirementsForOperation({
+    opRef: options.toolName,
+    operationLabels: expandOperationLabels(
+      metadata.labels,
+      options.policy.operations
+    ),
+    controlArgs: metadata.controlArgs,
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    policy: options.policy
+  });
+
+  return Object.keys(resolution.requirementsByArg);
+}
+
+function isAuthorizationProofLabel(label: string): boolean {
+  return isAttestationLabel(label) || label.startsWith('fact:');
+}
+
+function normalizeAuthorizationProofLabels(labels: readonly string[] | undefined): string[] {
   if (!Array.isArray(labels)) {
     return [];
   }
   return Array.from(
     new Set(
-      labels.filter((entry): entry is string => typeof entry === 'string' && isAttestationLabel(entry))
+      labels.filter(
+        (entry): entry is string => typeof entry === 'string' && isAuthorizationProofLabel(entry)
+      )
     )
   );
 }
@@ -159,12 +192,13 @@ async function resolveConstraintSourceValue(
     if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
       const variable = env.getVariable(candidate.identifier);
       if (!variable) {
-        return materializeSessionProofMatches(candidate, env);
+        return canonicalizeProjectedValue(candidate, env, { matchScope: 'global' });
       }
       const resolved = await resolveValueHandles(variable, env);
-      return materializeSessionProofMatches(
+      return canonicalizeProjectedValue(
         await unwrapResolvedConstraintValue(resolved, env),
-        env
+        env,
+        { matchScope: 'global' }
       );
     }
     if (isAstArrayNode(value)) {
@@ -172,7 +206,7 @@ async function resolveConstraintSourceValue(
       for (const item of value.items ?? []) {
         items.push(await resolveConstraintSourceValue(item, env));
       }
-      return materializeSessionProofMatches(items, env);
+      return canonicalizeProjectedValue(items, env, { matchScope: 'global' });
     }
     if (isAstObjectNode(value)) {
       const result: Record<string, unknown> = {};
@@ -182,7 +216,7 @@ async function resolveConstraintSourceValue(
         }
         result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
       }
-      return materializeSessionProofMatches(result, env);
+      return canonicalizeProjectedValue(result, env, { matchScope: 'global' });
     }
   }
   if (
@@ -194,15 +228,17 @@ async function resolveConstraintSourceValue(
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
-    return materializeSessionProofMatches(
+    return canonicalizeProjectedValue(
       await unwrapResolvedConstraintValue(resolved, env),
-      env
+      env,
+      { matchScope: 'global' }
     );
   }
   const resolved = await resolveValueHandles(value, env);
-  return materializeSessionProofMatches(
+  return canonicalizeProjectedValue(
     await unwrapResolvedConstraintValue(resolved, env),
-    env
+    env,
+    { matchScope: 'global' }
   );
 }
 
@@ -215,7 +251,10 @@ async function extractConstraintAttestations(
     recursive: true,
     mergeArrayElements: true
   });
-  return normalizeAttestationLabels(descriptor?.attestations ?? descriptor?.labels);
+  return normalizeAuthorizationProofLabels([
+    ...(descriptor?.attestations ?? []),
+    ...(descriptor?.labels ?? [])
+  ]);
 }
 
 async function compileAuthorizationAttestations(
@@ -316,6 +355,40 @@ async function compileAuthorizationAttestations(
   }
 }
 
+async function canonicalizePolicyAuthorizationConstraints(
+  candidate: PolicyConfig,
+  env: Environment
+): Promise<void> {
+  const allow = candidate.authorizations?.allow;
+  if (!allow) {
+    return;
+  }
+
+  for (const [toolName, entry] of Object.entries(allow)) {
+    if (!isPlainObject(entry) || !isPlainObject(entry.args)) {
+      continue;
+    }
+
+    const targetArgNames = collectPolicyAuthorizationCanonicalizationArgs({
+      env,
+      toolName,
+      policy: candidate
+    });
+    if (targetArgNames.length === 0) {
+      continue;
+    }
+
+    for (const argName of targetArgNames) {
+      if (!Object.prototype.hasOwnProperty.call(entry.args, argName)) {
+        continue;
+      }
+      entry.args[argName] = await canonicalizeProjectedValue(entry.args[argName], env, {
+        matchScope: 'global'
+      });
+    }
+  }
+}
+
 function assertPolicyAuthorizationsShapeValid(candidate: PolicyConfig): void {
   if (candidate.authorizations === undefined) {
     return;
@@ -372,7 +445,6 @@ export async function resolveInvocationPolicyFragment(
   }
   const rawResolvedValue = attestationSource;
   value = await resolveValueHandles(value, env);
-  value = materializeSessionProofMatches(value, env);
   if (isStructuredValue(value)) {
     value = asData(value);
   }
@@ -386,6 +458,7 @@ export async function resolveInvocationPolicyFragment(
   }
 
   assertPolicyAuthorizationsShapeValid(candidate);
+  await canonicalizePolicyAuthorizationConstraints(candidate, env);
 
   const normalized = normalizePolicyConfig(candidate);
   await compileAuthorizationAttestations(rawResolvedValue, normalized, env);

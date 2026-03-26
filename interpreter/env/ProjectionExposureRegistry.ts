@@ -31,6 +31,8 @@ export class ProjectionExposureRegistry {
   private readonly entriesBySession = new Map<string, ProjectionExposureEntry[]>();
   private readonly previewIndex = new Map<string, ProjectionExposureEntry[]>();
   private readonly literalIndex = new Map<string, ProjectionExposureEntry[]>();
+  private readonly previewGlobalIndex = new Map<string, ProjectionExposureEntry[]>();
+  private readonly literalGlobalIndex = new Map<string, ProjectionExposureEntry[]>();
 
   record(entry: ProjectionExposureEntry): void {
     const normalizedSessionId = entry.sessionId.trim();
@@ -52,6 +54,10 @@ export class ProjectionExposureRegistry {
       const entries = this.previewIndex.get(key) ?? [];
       entries.push(stored);
       this.previewIndex.set(key, entries);
+
+      const globalEntries = this.previewGlobalIndex.get(stored.emittedPreview) ?? [];
+      globalEntries.push(stored);
+      this.previewGlobalIndex.set(stored.emittedPreview, globalEntries);
     }
 
     if (typeof stored.emittedLiteral === 'string' && stored.emittedLiteral.length > 0) {
@@ -59,6 +65,10 @@ export class ProjectionExposureRegistry {
       const entries = this.literalIndex.get(key) ?? [];
       entries.push(stored);
       this.literalIndex.set(key, entries);
+
+      const globalEntries = this.literalGlobalIndex.get(stored.emittedLiteral) ?? [];
+      globalEntries.push(stored);
+      this.literalGlobalIndex.set(stored.emittedLiteral, globalEntries);
     }
   }
 
@@ -78,6 +88,14 @@ export class ProjectionExposureRegistry {
     return this.normalizeMatch(this.literalIndex.get(buildIndexKey(sessionId.trim(), literal)) ?? []);
   }
 
+  matchAnyPreview(preview: string): ProjectionExposureMatch {
+    return this.normalizeMatch(this.previewGlobalIndex.get(preview) ?? []);
+  }
+
+  matchAnyLiteral(literal: string): ProjectionExposureMatch {
+    return this.normalizeMatch(this.literalGlobalIndex.get(literal) ?? []);
+  }
+
   clearSession(sessionId: string): void {
     const normalizedSessionId = sessionId.trim();
     if (!normalizedSessionId) {
@@ -88,9 +106,23 @@ export class ProjectionExposureRegistry {
     for (const entry of entries) {
       if (typeof entry.emittedPreview === 'string' && entry.emittedPreview.length > 0) {
         this.previewIndex.delete(buildIndexKey(normalizedSessionId, entry.emittedPreview));
+        const globalEntries = (this.previewGlobalIndex.get(entry.emittedPreview) ?? [])
+          .filter(candidate => candidate !== entry);
+        if (globalEntries.length === 0) {
+          this.previewGlobalIndex.delete(entry.emittedPreview);
+        } else {
+          this.previewGlobalIndex.set(entry.emittedPreview, globalEntries);
+        }
       }
       if (typeof entry.emittedLiteral === 'string' && entry.emittedLiteral.length > 0) {
         this.literalIndex.delete(buildIndexKey(normalizedSessionId, entry.emittedLiteral));
+        const globalEntries = (this.literalGlobalIndex.get(entry.emittedLiteral) ?? [])
+          .filter(candidate => candidate !== entry);
+        if (globalEntries.length === 0) {
+          this.literalGlobalIndex.delete(entry.emittedLiteral);
+        } else {
+          this.literalGlobalIndex.set(entry.emittedLiteral, globalEntries);
+        }
       }
     }
     this.entriesBySession.delete(normalizedSessionId);

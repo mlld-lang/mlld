@@ -13,6 +13,7 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 
 export interface ProjectedValueCanonicalizationOptions {
   sessionId?: string | null | undefined;
+  matchScope?: 'session' | 'global';
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -89,21 +90,20 @@ function resolveMatchedExposure(
 async function canonicalizeAliases(
   value: unknown,
   env: Environment,
-  sessionId: string | undefined
+  sessionId: string | undefined,
+  matchScope: 'session' | 'global'
 ): Promise<unknown> {
-  if (typeof value === 'string' && sessionId) {
-    const preview = resolveMatchedExposure(
-      value,
-      env.matchProjectionPreview(sessionId, value)
-    );
+  if (typeof value === 'string' && (sessionId || matchScope === 'global')) {
+    const preview = resolveMatchedExposure(value, sessionId
+      ? env.matchProjectionPreview(sessionId, value)
+      : env.matchAnyProjectionPreview(value));
     if (preview !== undefined) {
       return preview;
     }
 
-    const literal = resolveMatchedExposure(
-      value,
-      env.matchProjectionLiteral(sessionId, value)
-    );
+    const literal = resolveMatchedExposure(value, sessionId
+      ? env.matchProjectionLiteral(sessionId, value)
+      : env.matchAnyProjectionLiteral(value));
     if (literal !== undefined) {
       return literal;
     }
@@ -111,7 +111,7 @@ async function canonicalizeAliases(
   }
 
   if (isVariable(value)) {
-    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId);
+    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId, matchScope);
     if (resolvedValue === value.value) {
       return value;
     }
@@ -124,7 +124,7 @@ async function canonicalizeAliases(
     if (value.type !== 'object' && value.type !== 'array') {
       return value;
     }
-    const resolvedData = await canonicalizeAliases(value.data, env, sessionId);
+    const resolvedData = await canonicalizeAliases(value.data, env, sessionId, matchScope);
     if (resolvedData === value.data) {
       return value;
     }
@@ -141,13 +141,13 @@ async function canonicalizeAliases(
   }
 
   if (Array.isArray(value)) {
-    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId)));
+    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId, matchScope)));
   }
 
   if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      result[key] = await canonicalizeAliases(entry, env, sessionId);
+      result[key] = await canonicalizeAliases(entry, env, sessionId, matchScope);
     }
     return result;
   }
@@ -160,7 +160,10 @@ export async function canonicalizeProjectedValue(
   env: Environment,
   options: ProjectedValueCanonicalizationOptions = {}
 ): Promise<unknown> {
-  const sessionId = normalizeSessionId(env, options.sessionId);
+  const matchScope = options.matchScope ?? 'session';
+  const sessionId = matchScope === 'session'
+    ? normalizeSessionId(env, options.sessionId)
+    : undefined;
   const handleResolved = await resolveValueHandles(value, env);
-  return canonicalizeAliases(handleResolved, env, sessionId);
+  return canonicalizeAliases(handleResolved, env, sessionId, matchScope);
 }

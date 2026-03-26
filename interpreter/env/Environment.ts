@@ -1964,6 +1964,22 @@ export class Environment
     };
   }
 
+  matchAnyProjectionPreview(preview: string): ProjectionExposureMatch {
+    const root = this.getRootEnvironment();
+    return root.projectionExposureRegistry?.matchAnyPreview(preview) ?? {
+      status: 'none',
+      matches: []
+    };
+  }
+
+  matchAnyProjectionLiteral(literal: string): ProjectionExposureMatch {
+    const root = this.getRootEnvironment();
+    return root.projectionExposureRegistry?.matchAnyLiteral(literal) ?? {
+      status: 'none',
+      matches: []
+    };
+  }
+
   async withPipeContext<T>(
     context: PipelineContextSnapshot,
     fn: () => Promise<T> | T

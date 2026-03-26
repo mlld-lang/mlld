@@ -140,4 +140,25 @@ describe('canonicalizeProjectedValue', () => {
     expect(asText((canonical as unknown[])[0])).toBe('ada@example.com');
     expect(asText((canonical as unknown[])[1])).toBe('grace@example.com');
   });
+
+  it('can resolve emitted aliases globally when no active session is provided', async () => {
+    const env = createEnvironment();
+    const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com');
+
+    env.recordProjectionExposure({
+      sessionId: 'planner-session',
+      value: liveValue,
+      kind: 'mask',
+      handle: 'h_planner1',
+      emittedPreview: 'a***@example.com',
+      issuedAt: 1
+    });
+
+    const canonical = await canonicalizeProjectedValue('a***@example.com', env, {
+      matchScope: 'global'
+    });
+
+    expect(canonical).toBe(liveValue);
+    expect(asText(canonical)).toBe('ada@example.com');
+  });
 });
