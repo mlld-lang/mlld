@@ -26,6 +26,16 @@ describe('canonicalizeProjectedValue', () => {
     await expect(resolveValueHandles(createHandleWrapper(issued.handle), env)).resolves.toBe(liveValue);
   });
 
+  it('resolves bare handle token strings through the existing handle registry', async () => {
+    const env = createEnvironment();
+    const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com');
+    const issued = env.issueHandle(liveValue);
+
+    const canonical = await canonicalizeProjectedValue(issued.handle, env);
+
+    expect(canonical).toBe(liveValue);
+  });
+
   it('resolves a unique emitted preview back to the live value', async () => {
     const env = createEnvironment();
     const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com');
@@ -106,6 +116,16 @@ describe('canonicalizeProjectedValue', () => {
         sessionId: 'session-none'
       })
     ).resolves.toBe('nobody@example.com');
+  });
+
+  it('leaves unknown bare handle-looking strings unchanged', async () => {
+    const env = createEnvironment();
+
+    await expect(
+      canonicalizeProjectedValue('h_missing', env, {
+        sessionId: 'session-none'
+      })
+    ).resolves.toBe('h_missing');
   });
 
   it('canonicalizes arrays of projected strings element-by-element', async () => {

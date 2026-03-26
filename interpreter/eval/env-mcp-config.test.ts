@@ -19,6 +19,9 @@ const callToolSequenceFromConfigPath = fileURLToPath(
 const callProjectedHandleFromConfigPath = fileURLToPath(
   new URL('../../tests/support/mcp/call-projected-handle-from-config.cjs', import.meta.url)
 );
+const callProjectedValueFromConfigPath = fileURLToPath(
+  new URL('../../tests/support/mcp/call-projected-value-from-config.cjs', import.meta.url)
+);
 
 const pathService = new PathService();
 const pathContext = {
@@ -488,6 +491,47 @@ describe('box MCP config integration', () => {
       '  operations: { "exfil:send": ["tool:w"] }',
       '}',
       `/exe llm @agent(prompt, config) = cmd { node "${callProjectedHandleFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' "email.handle" send_email '{"subject":"hi","body":"test"}' }`,
+      '/show @agent("Email Mark", { tools: @toolList }) with { policy: @basePolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('sent:mark@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('accepts bare handle token strings copied from projected results on the MCP bridge path', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, name: string],',
+      '  display: [name, { mask: "email" }]',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@search_contacts, @send_email]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      '/var @basePolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedValueFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' "email.handle.handle" send_email '{"subject":"hi","body":"test"}' }`,
       '/show @agent("Email Mark", { tools: @toolList }) with { policy: @basePolicy }'
     ].join('\n');
 

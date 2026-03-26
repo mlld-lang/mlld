@@ -224,6 +224,43 @@ describe('resolveInvocationPolicyFragment', () => {
     ).rejects.toThrow(/unknown handle/i);
   });
 
+  it('resolves bare handle token authorization constraints to live values before normalization', async () => {
+    const env = createEnv();
+    const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['known']
+      })
+    });
+    const issued = env.issueHandle(liveValue);
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: issued.handle
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+    expect(recipientConstraint.eq).toBe(liveValue);
+    expect(recipientConstraint.attestations).toEqual(['known']);
+  });
+
   it('materializes emitted bare literal authorization constraints from prior projected values', async () => {
     const env = createEnv();
     await evaluateDirective(

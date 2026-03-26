@@ -24,6 +24,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function containsBareHandleToken(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return /^h_[a-z0-9]+$/.test(value.trim());
+  }
+  if (Array.isArray(value)) {
+    return value.some(entry => containsBareHandleToken(entry));
+  }
+  if (isPlainObject(value)) {
+    return Object.values(value).some(entry => containsBareHandleToken(entry));
+  }
+  return false;
+}
+
 function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   if (!isPlainObject(value)) {
     return undefined;
@@ -374,15 +387,14 @@ async function canonicalizePolicyAuthorizationConstraints(
       toolName,
       policy: candidate
     });
-    if (targetArgNames.length === 0) {
-      continue;
-    }
 
-    for (const argName of targetArgNames) {
-      if (!Object.prototype.hasOwnProperty.call(entry.args, argName)) {
+    for (const [argName, argValue] of Object.entries(entry.args)) {
+      const shouldCanonicalize =
+        targetArgNames.includes(argName) || containsBareHandleToken(argValue);
+      if (!shouldCanonicalize) {
         continue;
       }
-      entry.args[argName] = await canonicalizeProjectedValue(entry.args[argName], env, {
+      entry.args[argName] = await canonicalizeProjectedValue(argValue, env, {
         matchScope: 'global'
       });
     }

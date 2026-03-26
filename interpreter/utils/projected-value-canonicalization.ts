@@ -42,6 +42,26 @@ function normalizeSessionId(
   return typeof active === 'string' && active.trim().length > 0 ? active.trim() : undefined;
 }
 
+function looksLikeHandleToken(value: string): boolean {
+  return /^h_[a-z0-9]+$/.test(value.trim());
+}
+
+function resolveBareHandleToken(value: string, env: Environment): unknown {
+  const trimmed = value.trim();
+  if (!looksLikeHandleToken(trimmed)) {
+    return undefined;
+  }
+
+  try {
+    return env.resolveHandle(trimmed);
+  } catch (error) {
+    if (error instanceof MlldSecurityError && error.code === 'HANDLE_NOT_FOUND') {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 function createAmbiguousProjectedValueError(
   emittedValue: string,
   matches: readonly ProjectionExposureEntry[]
@@ -93,7 +113,16 @@ async function canonicalizeAliases(
   sessionId: string | undefined,
   matchScope: 'session' | 'global'
 ): Promise<unknown> {
-  if (typeof value === 'string' && (sessionId || matchScope === 'global')) {
+  if (typeof value === 'string') {
+    const bareHandle = resolveBareHandleToken(value, env);
+    if (bareHandle !== undefined) {
+      return bareHandle;
+    }
+
+    if (!sessionId && matchScope !== 'global') {
+      return value;
+    }
+
     const preview = resolveMatchedExposure(value, sessionId
       ? env.matchProjectionPreview(sessionId, value)
       : env.matchAnyProjectionPreview(value));

@@ -220,6 +220,49 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.mx.has_label?.('fact:*.email')).toBe(true);
   });
 
+  it('resolves bare handle token strings for security-relevant args before execution', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string]
+}
+/exe @emitContact() = js {
+  return { email: 'ada@example.com' };
+} => contact
+/var @contact = @emitContact()
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = \`sent:@recipient:@subject\` with { controlArgs: ["recipient"] }
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+    const contact = env.getVariable('contact');
+    expect(contact).toBeDefined();
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [contact!]
+      }
+    });
+
+    const facts = await evaluateFyiFacts({ op: 'op:named:email.send', arg: 'recipient' }, env);
+    const handle = facts.data[0]?.handle;
+    expect(handle).toMatch(HANDLE_RE);
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'send-email-bare-handle',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'send-email-bare-handle-ref',
+          identifier: 'sendEmail',
+          args: [handle as any, 'hi' as any, 'test' as any]
+        }
+      },
+      env
+    );
+
+    expect(asText(result.value)).toBe('sent:ada@example.com:hi');
+    expect(isStructuredValue(result.value)).toBe(true);
+  });
+
   it('rejects unknown handle wrappers instead of passing them through', async () => {
     const src = '/exe @echo(value) = @value';
     const { ast } = await parse(src);
