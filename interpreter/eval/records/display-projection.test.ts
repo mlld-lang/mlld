@@ -4,7 +4,9 @@ import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import type { RecordDirectiveNode } from '@core/types/record';
+import type { ToolCollection } from '@core/types/tools';
 import { evaluateRecord } from '@interpreter/eval/record';
+import { evaluateDirective } from '@interpreter/eval/directive';
 import { coerceRecordOutput } from './coerce-record';
 import { renderDisplayProjection } from './display-projection';
 import { accessField } from '@interpreter/utils/field-access';
@@ -35,6 +37,18 @@ async function registerRecord(env: Environment, source: string) {
   const definition = env.getRecordDefinition(directive.raw.identifier);
   expect(definition).toBeDefined();
   return definition!;
+}
+
+async function registerExe(env: Environment, source: string) {
+  const directive = parseSync(source)[0] as any;
+  await evaluateDirective(directive, env);
+}
+
+function setScopedTools(env: Environment, tools: ToolCollection, options?: { display?: 'strict' }) {
+  env.setScopedEnvironmentConfig({
+    ...(options?.display ? { display: options.display } : {}),
+    tools
+  });
 }
 
 describe('renderDisplayProjection', () => {
@@ -206,5 +220,79 @@ describe('renderDisplayProjection', () => {
 
     expect(isStructuredValue(resolved)).toBe(true);
     expect(asText(resolved)).toBe('ada@example.com');
+  });
+
+  it('suppresses non-qualifying handles when active tool policy requires stronger fact proof', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  display: [name, { mask: "email" }]
+}
+`);
+    await registerExe(
+      env,
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }'
+    );
+
+    env.setPolicySummary({
+      defaults: { rules: ['no-send-to-external'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+    setScopedTools(env, {
+      send_email: { mlld: 'send_email', controlArgs: ['recipient'] }
+    });
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace'
+      },
+      env
+    });
+
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      name: 'Ada Lovelace',
+      email: {
+        preview: 'a***@example.com'
+      }
+    });
+  });
+
+  it('forces all fact fields to handle-only when display strict mode is active', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}
+`);
+    setScopedTools(env, {}, { display: 'strict' });
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace',
+        notes: 'Visible'
+      },
+      env
+    });
+
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      email: {
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      name: {
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      notes: 'Visible'
+    });
   });
 });

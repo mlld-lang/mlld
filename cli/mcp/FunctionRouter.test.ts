@@ -179,6 +179,113 @@ describe('FunctionRouter', () => {
     ]);
   });
 
+  it('narrows projected handles against the active tool list and policy', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string, name: string],
+        display: [name, { mask: "email" }]
+      }
+
+      /exe @getContact() = js {
+        return { email: 'ada@example.com', name: 'Ada Lovelace' };
+      } => contact
+
+      /exe exfil:send, tool:w @send_email(recipient, subject, body) = js {
+        return 'sent';
+      } with { controlArgs: ["recipient"] }
+
+      /exe @archive_contact(contact) = js {
+        return 'archived';
+      }
+
+      /export { @getContact, @send_email, @archive_contact }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-send-to-external'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+
+    const plannerRouter = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_contact: { mlld: 'getContact' },
+        send_email: { mlld: 'send_email', controlArgs: ['recipient'] }
+      }
+    });
+    const workerRouter = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_contact: { mlld: 'getContact' },
+        archive_contact: { mlld: 'archive_contact' }
+      }
+    });
+
+    expect(JSON.parse(await plannerRouter.executeFunction('get_contact', {}))).toEqual({
+      name: 'Ada Lovelace',
+      email: {
+        preview: 'a***@example.com'
+      }
+    });
+    expect(JSON.parse(await workerRouter.executeFunction('get_contact', {}))).toEqual({
+      name: 'Ada Lovelace',
+      email: {
+        preview: 'a***@example.com',
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      }
+    });
+  });
+
+  it('forces handle-only fact projection when scoped display strict mode is active', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string, name: string],
+        data: [notes: string?],
+        display: [name, { mask: "email" }]
+      }
+
+      /exe @getContact() = js {
+        return {
+          email: 'ada@example.com',
+          name: 'Ada Lovelace',
+          notes: 'Visible'
+        };
+      } => contact
+
+      /export { @getContact }
+    `);
+
+    environment.setScopedEnvironmentConfig({
+      display: 'strict',
+      tools: {
+        get_contact: { mlld: 'getContact' }
+      }
+    });
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_contact: { mlld: 'getContact' }
+      }
+    });
+
+    expect(JSON.parse(await router.executeFunction('get_contact', {}))).toEqual({
+      email: {
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      name: {
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      notes: 'Visible'
+    });
+  });
+
   it('treats missing trailing parameters as undefined', async () => {
     const environment = await createEnvironment(`
       /exe @greet(name, title) = js {
@@ -376,6 +483,47 @@ describe('FunctionRouter', () => {
     await expect(
       router.executeFunction('send_money', { recipient: 'evil-iban', amount: 25 })
     ).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
+  it('matches same-session bare fact literals from prior native tool results', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [email: string],
+        display: [email]
+      }
+
+      /exe @getContact() = js {
+        return { email: 'ada@example.com' };
+      } => contact
+
+      /exe exfil:send, tool:w @send_email(recipient, subject, body) = js {
+        return 'sent ' + subject + ' to ' + recipient;
+      } with { controlArgs: ["recipient"] }
+
+      /export { @getContact, @send_email }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_contact: { mlld: 'getContact' },
+        send_email: { mlld: 'send_email', controlArgs: ['recipient'] }
+      }
+    });
+
+    await expect(router.executeFunction('get_contact', {})).resolves.toContain('ada@example.com');
+    await expect(
+      router.executeFunction('send_email', {
+        recipient: 'ada@example.com',
+        subject: 'hello',
+        body: 'test'
+      })
+    ).resolves.toBe('sent hello to ada@example.com');
   });
 
   it('does not expose src:mcp taint to guards for MCP-served inputs', async () => {

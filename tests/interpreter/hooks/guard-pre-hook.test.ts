@@ -15,7 +15,7 @@ import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
-import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { guardPreHook } from '@interpreter/hooks/guard-pre-hook';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 
@@ -1015,6 +1015,42 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:5');
+  });
+
+  it('carries planner-time fact proof through bare literal with { policy } authorizations', async () => {
+    const env = createEnv();
+    const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact.email']
+      })
+    });
+    const contact = wrapStructured(
+      { email: approvedRecipient },
+      'object',
+      JSON.stringify({ email: 'mark@example.com' })
+    );
+
+    env.recordToolCall({
+      name: 'search_contacts',
+      timestamp: Date.now(),
+      ok: true,
+      result: asData(contact),
+      fyiFactRoot: contact
+    });
+
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "mark@example.com" } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("mark@example.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
     await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
     const effects = env.getEffectHandler() as TestEffectHandler;
     expect(effects.getOutput().trim()).toBe('sent:5');

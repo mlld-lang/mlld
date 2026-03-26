@@ -7,6 +7,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
+import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -407,6 +408,11 @@ export async function evaluateExecInvocationArgs(options: {
     } else {
       argValue = String(arg);
       argValueAny = arg;
+    }
+
+    argValueAny = materializeSessionProofMatches(argValueAny, env);
+    if (isStructuredValue(argValueAny)) {
+      argValue = asText(argValueAny);
     }
 
     evaluatedArgStrings.push(argValue);

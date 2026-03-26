@@ -8,6 +8,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { resolveInvocationPolicyFragment } from './policy-fragment';
+import { asData } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -222,5 +223,57 @@ describe('resolveInvocationPolicyFragment', () => {
         env
       )
     ).rejects.toThrow(/unknown handle/i);
+  });
+
+  it('materializes same-session bare literal authorization constraints from prior fact roots', async () => {
+    const env = createEnv();
+    const contactEmail = wrapStructured('ada@example.com', 'text', 'ada@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact.email']
+      })
+    });
+    const contact = wrapStructured(
+      { email: contactEmail },
+      'object',
+      JSON.stringify({ email: 'ada@example.com' })
+    );
+
+    env.recordToolCall({
+      name: 'search_contacts',
+      timestamp: Date.now(),
+      ok: true,
+      result: asData(contact),
+      fyiFactRoot: contact
+    });
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: 'ada@example.com'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+
+    expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
+    expect((recipientConstraint.eq as any).mx.has_label?.('fact:*.email')).toBe(true);
+    expect(recipientConstraint.eq).not.toBe('ada@example.com');
   });
 });

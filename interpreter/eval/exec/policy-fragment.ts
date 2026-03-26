@@ -12,6 +12,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
@@ -158,17 +159,20 @@ async function resolveConstraintSourceValue(
     if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
       const variable = env.getVariable(candidate.identifier);
       if (!variable) {
-        return candidate;
+        return materializeSessionProofMatches(candidate, env);
       }
       const resolved = await resolveValueHandles(variable, env);
-      return unwrapResolvedConstraintValue(resolved, env);
+      return materializeSessionProofMatches(
+        await unwrapResolvedConstraintValue(resolved, env),
+        env
+      );
     }
     if (isAstArrayNode(value)) {
       const items: unknown[] = [];
       for (const item of value.items ?? []) {
         items.push(await resolveConstraintSourceValue(item, env));
       }
-      return items;
+      return materializeSessionProofMatches(items, env);
     }
     if (isAstObjectNode(value)) {
       const result: Record<string, unknown> = {};
@@ -178,7 +182,7 @@ async function resolveConstraintSourceValue(
         }
         result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
       }
-      return result;
+      return materializeSessionProofMatches(result, env);
     }
   }
   if (
@@ -190,10 +194,16 @@ async function resolveConstraintSourceValue(
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
-    return unwrapResolvedConstraintValue(resolved, env);
+    return materializeSessionProofMatches(
+      await unwrapResolvedConstraintValue(resolved, env),
+      env
+    );
   }
   const resolved = await resolveValueHandles(value, env);
-  return unwrapResolvedConstraintValue(resolved, env);
+  return materializeSessionProofMatches(
+    await unwrapResolvedConstraintValue(resolved, env),
+    env
+  );
 }
 
 async function extractConstraintAttestations(
@@ -362,6 +372,7 @@ export async function resolveInvocationPolicyFragment(
   }
   const rawResolvedValue = attestationSource;
   value = await resolveValueHandles(value, env);
+  value = materializeSessionProofMatches(value, env);
   if (isStructuredValue(value)) {
     value = asData(value);
   }

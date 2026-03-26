@@ -18,6 +18,7 @@ import {
   normalizeSecurityDescriptor
 } from '@core/types/security';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
@@ -492,6 +493,16 @@ export class FunctionRouter {
         })
       );
     }
+
+    const matchedValue = materializeSessionProofMatches(value, this.environment);
+    const matchedDescriptor = extractSecurityDescriptor(matchedValue, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (matchedDescriptor) {
+      parts.push(matchedDescriptor);
+    }
+
     if (parts.length === 0) {
       return undefined;
     }
@@ -735,7 +746,9 @@ export class FunctionRouter {
   private async serializeResult(value: unknown): Promise<string> {
     if (hasDisplayProjectionTarget(value)) {
       try {
-        const projected = await renderDisplayProjection(value, this.environment);
+        const projected = await renderDisplayProjection(value, this.environment, {
+          toolCollection: this.toolCollection
+        });
         return JSON.stringify(projected, null, 2);
       } catch {
         // Fall through to the existing serialization path so projection failures do not

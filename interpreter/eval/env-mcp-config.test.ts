@@ -425,6 +425,58 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('applies box-level display strict mode to MCP-imported executable outputs', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, name: string],',
+      '  data: [notes: string?],',
+      '  display: [name, { mask: "email" }]',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies", notes: "Met at conference" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      '/var @cfg = { display: "strict" }',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' }`,
+      '/box @cfg [',
+      '  show @agent("Find Mark", { tools: @toolList })',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        },
+        name: {
+          handle: {
+            handle: expect.stringMatching(HANDLE_RE)
+          }
+        },
+        notes: 'Met at conference'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves mixed concatenated executable arrays when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
@@ -666,7 +718,7 @@ describe('box MCP config integration', () => {
   it('auto-registers prior native tool results as fyi fact roots within one agent call', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
-      '/record @contact = { facts: [email: string, name: string] }',
+      '/record @contact = { facts: [email: string, name: string], display: [name, { mask: "email" }] }',
       '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
       '/var @toolList = [@search_contacts, @fyi.facts]',
       '/var @cfg = { fyi: { facts: "auto" } }',

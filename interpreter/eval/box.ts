@@ -139,6 +139,37 @@ function toProfileString(
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function toDisplayMode(
+  value: unknown,
+  env: Environment,
+  location?: any
+): 'strict' | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new MlldDirectiveError('display must be "strict".', 'box', {
+      location,
+      env,
+      context: { value }
+    });
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized === 'strict') {
+    return 'strict';
+  }
+
+  throw new MlldDirectiveError('display must be "strict".', 'box', {
+    location,
+    env,
+    context: { value }
+  });
+}
+
 function normalizeVariableName(value: string): string {
   const trimmed = value.trim();
   if (trimmed.startsWith('@')) {
@@ -630,13 +661,19 @@ export async function evaluateBox(
   const withClauseTools = directive.values?.withClause?.tools;
   const withClauseProfile = (directive.values?.withClause as any)?.profile;
   const withClauseFyi = (directive.values?.withClause as any)?.fyi;
+  const withClauseDisplay = (directive.values?.withClause as any)?.display;
   const resolvedConfigFyi = await resolveFyiConfig((config as any).fyi, env);
   const resolvedWithClauseFyi =
     withClauseFyi !== undefined
       ? await resolveFyiConfig(withClauseFyi, env)
       : undefined;
+  const resolvedConfigDisplay = toDisplayMode((config as any).display, env, directive.location);
+  const resolvedWithClauseDisplay =
+    withClauseDisplay !== undefined
+      ? toDisplayMode(await resolveToolsValue(withClauseDisplay, env, context), env, directive.location)
+      : undefined;
   const inheritedScopedConfig = env.getScopedEnvironmentConfig() as
-    | (EnvironmentConfig & { fyi?: unknown })
+    | (EnvironmentConfig & { fyi?: unknown; display?: 'strict' })
     | undefined;
   let resolvedTools =
     withClauseTools !== undefined
@@ -663,6 +700,13 @@ export async function evaluateBox(
     };
   }
 
+  if (resolvedConfigDisplay !== undefined) {
+    mergedConfig = {
+      ...mergedConfig,
+      display: resolvedConfigDisplay
+    };
+  }
+
   if (inheritedScopedConfig?.fyi !== undefined && withClauseFyi === undefined) {
     mergedConfig = {
       ...mergedConfig,
@@ -670,10 +714,28 @@ export async function evaluateBox(
     };
   }
 
+  if (
+    inheritedScopedConfig?.display !== undefined &&
+    withClauseDisplay === undefined &&
+    resolvedConfigDisplay === undefined
+  ) {
+    mergedConfig = {
+      ...mergedConfig,
+      display: inheritedScopedConfig.display
+    };
+  }
+
   if (resolvedWithClauseFyi !== undefined) {
     mergedConfig = {
       ...mergedConfig,
       fyi: resolvedWithClauseFyi
+    };
+  }
+
+  if (resolvedWithClauseDisplay !== undefined) {
+    mergedConfig = {
+      ...mergedConfig,
+      display: resolvedWithClauseDisplay
     };
   }
 
