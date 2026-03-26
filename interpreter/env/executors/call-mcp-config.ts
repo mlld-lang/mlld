@@ -47,12 +47,17 @@ export interface CallMcpConfigOptions {
   conversationDescriptor?: SecurityDescriptor;
 }
 
+export interface AvailableToolDescriptor {
+  readonly name: string;
+}
+
 export interface CallMcpConfig {
   readonly mcpConfigPath: string;
   readonly toolsCsv: string;
   readonly mcpAllowedTools: string;
   readonly nativeAllowedTools: string;
   readonly unifiedAllowedTools: string;
+  readonly availableTools: readonly AvailableToolDescriptor[];
   readonly inBox: boolean;
   cleanup(): Promise<void>;
 }
@@ -299,6 +304,15 @@ function uniquePreservingOrder(values: string[]): string[] {
     unique.push(value);
   }
   return unique;
+}
+
+function buildAvailableTools(names: readonly string[]): AvailableToolDescriptor[] {
+  return uniquePreservingOrder(
+    names
+      .filter((name): name is string => typeof name === 'string')
+      .map(name => name.trim())
+      .filter(Boolean)
+  ).map(name => ({ name }));
 }
 
 function ensureNoMcpCollisions(
@@ -555,6 +569,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const cleanupFns: Array<() => Promise<void>> = [];
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
+  const availableTools = buildAvailableTools([
+    ...(inBox ? vfsTools : builtinTools),
+    ...functionTools
+      .map(tool => (typeof tool.name === 'string' ? mlldNameToMCPName(tool.name) : ''))
+      .filter(Boolean)
+  ]);
 
   if (inBox && vfsTools.length > 0) {
     const activeBridge = options.env.getActiveBridge();
@@ -605,6 +625,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       mcpAllowedTools: '',
       nativeAllowedTools,
       unifiedAllowedTools: nativeAllowedTools,
+      availableTools,
       inBox,
       async cleanup(): Promise<void> {
         // No-op
@@ -643,6 +664,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     mcpAllowedTools,
     nativeAllowedTools,
     unifiedAllowedTools,
+    availableTools,
     inBox,
     cleanup
   };

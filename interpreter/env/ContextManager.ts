@@ -111,10 +111,15 @@ export interface ToolCallRecord {
   fyiFactRoot?: unknown;
 }
 
+export interface AvailableToolContextEntry {
+  name: string;
+}
+
 export interface ToolsContextSnapshot {
   calls: ReadonlyArray<string>;
   allowed: ReadonlyArray<string>;
   denied: ReadonlyArray<string>;
+  available: ReadonlyArray<AvailableToolContextEntry>;
   results: Readonly<Record<string, unknown>>;
   history: ReadonlyArray<ToolProvenance>;
 }
@@ -144,6 +149,7 @@ export class ContextManager {
   private toolCalls: ToolCallRecord[] = [];
   private toolAllowed: string[] = [];
   private toolDenied: string[] = [];
+  private toolAvailable: AvailableToolContextEntry[] = [];
   private toolResults: Record<string, unknown> = {};
   private toolFactRoots: unknown[] = [];
   private sigStatuses: Record<string, unknown> = {};
@@ -287,6 +293,10 @@ export class ContextManager {
     this.toolDenied = this.normalizeToolList(denied);
   }
 
+  setAvailableTools(available?: readonly AvailableToolContextEntry[] | null): void {
+    this.toolAvailable = this.normalizeAvailableTools(available);
+  }
+
   recordToolCall(call: ToolCallRecord): void {
     this.toolCalls.push(Object.freeze({ ...call }));
     if (call.ok) {
@@ -315,6 +325,7 @@ export class ContextManager {
       calls: this.toolCalls.map(call => call.name),
       allowed: [...this.toolAllowed],
       denied: [...this.toolDenied],
+      available: this.toolAvailable.map(entry => ({ ...entry })),
       results: { ...this.toolResults },
       history: []
     };
@@ -481,6 +492,28 @@ export class ContextManager {
       seen.add(trimmed);
       normalized.push(trimmed);
     }
+    return normalized;
+  }
+
+  private normalizeAvailableTools(
+    available?: readonly AvailableToolContextEntry[] | null
+  ): AvailableToolContextEntry[] {
+    if (!available || available.length === 0) {
+      return [];
+    }
+
+    const normalized: AvailableToolContextEntry[] = [];
+    const seen = new Set<string>();
+    for (const entry of available) {
+      const rawName = typeof entry?.name === 'string' ? entry.name : '';
+      const name = rawName.trim();
+      if (!name || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      normalized.push({ name });
+    }
+
     return normalized;
   }
 

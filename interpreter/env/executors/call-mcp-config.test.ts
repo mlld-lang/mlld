@@ -140,6 +140,7 @@ describe('createCallMcpConfig', () => {
       expect(result.inBox).toBe(false);
       expect(result.mcpConfigPath).toBe('');
       expect(result.toolsCsv).toBe('Read,Write');
+      expect(result.availableTools).toEqual([{ name: 'Read' }, { name: 'Write' }]);
     } finally {
       await result.cleanup();
       env.cleanup();
@@ -158,6 +159,7 @@ describe('createCallMcpConfig', () => {
       expect(result.inBox).toBe(false);
       expect(result.mcpConfigPath).not.toBe('');
       expect(result.toolsCsv).toBe('Read,sayHi');
+      expect(result.availableTools).toEqual([{ name: 'Read' }, { name: 'say_hi' }]);
       expect(await fileExists(result.mcpConfigPath)).toBe(true);
 
       const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
@@ -211,6 +213,7 @@ describe('createCallMcpConfig', () => {
       expect(result.inBox).toBe(false);
       expect(result.mcpConfigPath).not.toBe('');
       expect(result.toolsCsv).toBe('facts');
+      expect(result.availableTools).toEqual([{ name: 'facts' }]);
 
       const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
       const config = JSON.parse(configRaw) as {

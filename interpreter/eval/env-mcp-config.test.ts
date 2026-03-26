@@ -188,6 +188,36 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('exposes @mx.tools.available for the active llm tool list', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @sendEmail(recipient, subject, body) = "sent"',
+      '/var @toolList = [@sendEmail, @fyi.facts]',
+      '/exe llm @agent(prompt, config) = js { return JSON.stringify(mx.tools.available); }',
+      '/show @agent("List the active tools", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual([
+        { name: 'send_email' },
+        { name: 'facts' }
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves src:mcp taint and policy checks for tools from mcpConfig', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
@@ -474,6 +504,70 @@ describe('box MCP config integration', () => {
             fact: 'fact:@contact.email'
           }
         ]
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('lets llm guards scope facts enforcement to contexts where the facts tool is available', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = { facts: [email: string] }',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com" }; } => contact',
+      '/var @plannerTools = [@search_contacts, @fyi.facts]',
+      '/var @workerTools = [@search_contacts]',
+      '/guard @requireFacts after op:llm = when [',
+      '  @mx.tools.available[*].name.includes("facts") && !@mx.tools.calls.includes("facts") => deny "Facts required"',
+      '  * => allow',
+      ']',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}}]' }`,
+      '/show @agent("Planner path", { tools: @plannerTools })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      await expect(
+        interpret(source, {
+          fileSystem,
+          pathService,
+          pathContext,
+          format: 'markdown',
+          captureEnvironment: env => {
+            environment = env;
+          }
+        })
+      ).rejects.toThrow(/Facts required/);
+    } finally {
+      environment?.cleanup();
+    }
+
+    const allowSource = [
+      '/record @contact = { facts: [email: string] }',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com" }; } => contact',
+      '/var @workerTools = [@search_contacts]',
+      '/guard @requireFacts after op:llm = when [',
+      '  @mx.tools.available[*].name.includes("facts") && !@mx.tools.calls.includes("facts") => deny "Facts required"',
+      '  * => allow',
+      ']',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}}]' }`,
+      '/show @agent("Worker path", { tools: @workerTools })'
+    ].join('\n');
+
+    environment = undefined;
+    try {
+      const output = await interpret(allowSource, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: 'mark@example.com'
       });
     } finally {
       environment?.cleanup();

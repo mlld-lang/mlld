@@ -2706,6 +2706,7 @@ export class Environment
 
   setLlmToolConfig(config: import('./executors/call-mcp-config').CallMcpConfig | null): void {
     this.llmToolConfig = config;
+    this.contextManager.setAvailableTools(config?.availableTools ?? []);
   }
 
   getLlmToolConfig(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined {
