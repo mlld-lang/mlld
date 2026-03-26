@@ -14,11 +14,12 @@ import { createArrayVariable, createSimpleTextVariable } from '@core/types/varia
 import { attachArrayHelpers } from '@core/types/variable/ArrayHelpers';
 import type { GuardInputHelper } from '@core/types/variable/ArrayHelpers';
 import type { DataLabel } from '@core/types/security';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { PerInputCandidate } from './guard-candidate-selection';
 import type { OperationSnapshot } from './guard-operation-keys';
 import type { GuardAttemptEntry, GuardAttemptState } from './guard-retry-state';
 import type { PolicyArgDescriptor } from '../guards';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
   buildInputPreview,
   buildVariablePreview,
@@ -32,7 +33,7 @@ import { cloneGuardContextSnapshot } from './guard-context-snapshot';
 import { attachGuardHelper } from './guard-helper-injection';
 import { formatGuardFilterForMetadata } from './guard-filter-display';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -147,13 +148,22 @@ function snapshotPolicyArgDescriptors(
       continue;
     }
 
+    const runtimeDescriptor = extractSecurityDescriptor(variable.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const mergedDescriptor = mergeDescriptors(
+      variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined,
+      runtimeDescriptor
+    );
+
     descriptors[name] = Object.freeze({
-      labels: Array.isArray(variable.mx?.labels) ? Object.freeze(variable.mx.labels.slice()) : undefined,
-      taint: Array.isArray(variable.mx?.taint) ? Object.freeze(variable.mx.taint.slice()) : undefined,
-      attestations: Array.isArray(variable.mx?.attestations)
-        ? Object.freeze(variable.mx.attestations.slice())
+      labels: mergedDescriptor.labels.length > 0 ? Object.freeze([...mergedDescriptor.labels]) : undefined,
+      taint: mergedDescriptor.taint.length > 0 ? Object.freeze([...mergedDescriptor.taint]) : undefined,
+      attestations: mergedDescriptor.attestations.length > 0
+        ? Object.freeze([...mergedDescriptor.attestations])
         : undefined,
-      sources: Array.isArray(variable.mx?.sources) ? Object.freeze(variable.mx.sources.slice()) : undefined
+      sources: mergedDescriptor.sources.length > 0 ? Object.freeze([...mergedDescriptor.sources]) : undefined
     });
   }
 

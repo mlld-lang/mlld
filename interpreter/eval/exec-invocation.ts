@@ -80,6 +80,7 @@ import { executeCodeExecutable } from './exec/code-handler';
 import { getCapturedModuleEnv } from './import/variable-importer/executable/CapturedModuleEnvKeychain';
 import {
   applyExecOutputPolicyLabels,
+  cloneExecVariableWithNewValue,
   createExecOperationContextAndEnforcePolicy,
   enforceExecParamLabelFlow,
   handleExecPreGuardDecision,
@@ -1717,6 +1718,31 @@ async function evaluateExecInvocationInternal(
     evaluatedArgs.map(arg => resolveValueHandles(arg, runtimeEnv))
   );
   evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+  for (let i = 0; i < guardVariableCandidates.length; i += 1) {
+    const candidate = guardVariableCandidates[i];
+    if (!candidate) {
+      continue;
+    }
+    const updated = cloneExecVariableWithNewValue(
+      candidate,
+      evaluatedArgs[i],
+      evaluatedArgStrings[i] ?? ''
+    );
+    const resolvedDescriptor = extractSecurityDescriptor(evaluatedArgs[i], {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (resolvedDescriptor) {
+      if (!updated.mx) {
+        updated.mx = {};
+      }
+      updateVarMxFromDescriptor(updated.mx as VariableContext, resolvedDescriptor);
+      if ((updated.mx as any).mxCache) {
+        delete (updated.mx as any).mxCache;
+      }
+    }
+    guardVariableCandidates[i] = updated;
+  }
 
   // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
   // and expose the result on @mx.llm for the exe body to consume.

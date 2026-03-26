@@ -390,6 +390,49 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported @fyi.facts arrays for direct with-clause fyi tool calls', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/mcp_active.mld', [
+      '/var @toolList = [@fyi.facts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/record @contact = { facts: [email: string] }',
+      '/exe @emitContact() = js { return { email: "mark@example.com" }; } => contact',
+      '/var @contact = @emitContact()',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:@email.send","arg":"recipient"}}' }`,
+      '/show @agent("Discover the allowed recipient", { tools: @toolList }) with {',
+      '  fyi: { facts: [@contact] }',
+      '}'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual([
+        {
+          handle: 'h_1',
+          label: 'm***@example.com',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('does not seed native tool bridge policy state from imported toolList capabilities', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

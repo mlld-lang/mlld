@@ -14,11 +14,29 @@ const FYI_SOURCE: VariableSource = {
   isMultiLine: false
 };
 
+function looksLikeEnvironment(value: unknown): value is Environment {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as Environment).getScopedEnvironmentConfig === 'function' &&
+      typeof (value as Environment).issueHandle === 'function' &&
+      typeof (value as Environment).resolveHandle === 'function'
+  );
+}
+
 export function createFyiVariable(env: Environment) {
   const factsDefinition: NodeFunctionExecutable = {
     type: 'nodeFunction',
     name: 'facts',
-    fn: async (query?: unknown, boundEnv?: Environment) => evaluateFyiFacts(query, boundEnv ?? env),
+    fn: async (queryOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(queryOrEnv) ? queryOrEnv : undefined)
+        ?? env;
+      const query = boundEnv || !looksLikeEnvironment(queryOrEnv)
+        ? queryOrEnv
+        : undefined;
+      return evaluateFyiFacts(query, executionEnv);
+    },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['query'],

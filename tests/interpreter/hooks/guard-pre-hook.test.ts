@@ -1072,6 +1072,31 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:hi');
   });
 
+  it('resolves handle-backed recipient args before no-send-to-unknown checks run', async () => {
+    const env = createEnv();
+    const recipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact.email']
+      })
+    });
+    const handle = env.issueHandle(recipient);
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @send_email(recipients, subject, body) = `sent:@subject` with { controlArgs: ["recipients"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync(
+      `/show @send_email(${JSON.stringify([createHandleWrapper(handle.handle)])}, "test", "hello") with { policy: @taskPolicy }`
+    )[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:test');
+  });
+
   it('lets explicit authorization attestations satisfy managed positive checks', async () => {
     const env = createEnv();
     await evaluateDirective(

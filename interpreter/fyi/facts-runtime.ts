@@ -37,6 +37,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
 function normalizeFyiFactsQuery(raw: unknown): FyiFactsQuery {
   if (!raw) {
     return {};
@@ -46,16 +50,43 @@ function normalizeFyiFactsQuery(raw: unknown): FyiFactsQuery {
     ? raw.data
     : raw;
 
-  if (!isPlainObject(source)) {
+  if (!isObjectLike(source)) {
     return {};
   }
 
-  const op = typeof source.op === 'string' ? normalizeNamedOperationRef(source.op) : undefined;
-  const arg = typeof source.arg === 'string' ? source.arg.trim().toLowerCase() : undefined;
+  const op = normalizeNamedOperationRef(readQueryString(source.op));
+  const arg = normalizeQueryArgName(source.arg);
   return {
     ...(op ? { op } : {}),
     ...(arg ? { arg } : {})
   };
+}
+
+function readQueryString(value: unknown): string | undefined {
+  if (isVariable(value)) {
+    return readQueryString(value.value);
+  }
+  if (isStructuredValue(value)) {
+    return readQueryString(value.data);
+  }
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    const trimmed = String(value).trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  return undefined;
+}
+
+function normalizeQueryArgName(value: unknown): string | undefined {
+  const queryString = readQueryString(value);
+  if (!queryString) {
+    return undefined;
+  }
+  const normalized = queryString.toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function resolveQueryOperationContext(

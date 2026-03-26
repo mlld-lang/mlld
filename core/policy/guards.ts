@@ -1,7 +1,6 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
 import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
 import type { PolicyArgDescriptor, PolicyConditionFn } from '../../interpreter/guards';
-import { isAttestationLabel } from '@core/types/security';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import {
@@ -67,7 +66,7 @@ function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
 function collectDescriptorAttestations(descriptor?: PolicyArgDescriptor): string[] {
   return normalizeList([
     ...(descriptor?.attestations ?? []),
-    ...collectDescriptorLabels(descriptor).filter(isAttestationLabel)
+    ...collectDescriptorLabels(descriptor)
   ]);
 }
 
