@@ -4,6 +4,7 @@ import type { DirectiveNode, ExecInvocation } from '@core/types';
 import type { WhenExpressionNode } from '@core/types/when';
 import { GuardError } from '@core/errors/GuardError';
 import { normalizePolicyConfig } from '@core/policy/union';
+import { createHandleWrapper } from '@core/types/handle';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
@@ -14,7 +15,7 @@ import type { PipelineContextSnapshot } from '@interpreter/env/ContextManager';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { guardPreHook } from '@interpreter/hooks/guard-pre-hook';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 
@@ -1017,6 +1018,58 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
     const effects = env.getEffectHandler() as TestEffectHandler;
     expect(effects.getOutput().trim()).toBe('sent:5');
+  });
+
+  it('carries planner-time known attestations through handle-backed with { policy } authorizations', async () => {
+    const env = createEnv();
+    const approvedRecipient = wrapStructured('acct-1', 'text', 'acct-1', {
+      security: makeSecurityDescriptor({
+        attestations: ['known']
+      })
+    });
+    const issued = env.issueHandle(approvedRecipient);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync(`/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: ${JSON.stringify(createHandleWrapper(issued.handle))} } } } } }`)[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:5');
+  });
+
+  it('allows multi-recipient handle-backed authorizations in a single constraint', async () => {
+    const env = createEnv();
+    const recipientA = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
+      security: makeSecurityDescriptor({
+        attestations: ['known']
+      })
+    });
+    const recipientB = wrapStructured('bob@example.com', 'text', 'bob@example.com', {
+      security: makeSecurityDescriptor({
+        attestations: ['known']
+      })
+    });
+    const handleA = env.issueHandle(recipientA);
+    const handleB = env.issueHandle(recipientB);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendEmail(recipients, subject) = `sent:@subject` with { controlArgs: ["recipients"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync(`/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendEmail: { args: { recipients: ${JSON.stringify([createHandleWrapper(handleA.handle), createHandleWrapper(handleB.handle)])} } } } } }`)[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendEmail(["alice@example.com", "bob@example.com"], "hi") with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:hi');
   });
 
   it('lets explicit authorization attestations satisfy managed positive checks', async () => {

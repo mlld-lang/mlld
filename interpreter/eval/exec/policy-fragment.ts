@@ -72,6 +72,83 @@ function getAstObjectEntryValue(node: unknown, key: string): unknown {
   return node.entries?.find(entry => entry?.key === key)?.value;
 }
 
+async function unwrapResolvedConstraintValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (isVariable(value)) {
+    if (extractSecurityDescriptor(value)) {
+      return value;
+    }
+    const extracted = await extractVariableValue(value, env);
+    return unwrapResolvedConstraintValue(extracted, env);
+  }
+  if (Array.isArray(value)) {
+    const items: unknown[] = [];
+    for (const item of value) {
+      items.push(await unwrapResolvedConstraintValue(item, env));
+    }
+    return items;
+  }
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await unwrapResolvedConstraintValue(entry, env);
+    }
+    return result;
+  }
+  return value;
+}
+
+async function materializePolicySourceValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (isVariable(value)) {
+    if (extractSecurityDescriptor(value)) {
+      return value;
+    }
+    const extracted = await extractVariableValue(value, env);
+    return materializePolicySourceValue(extracted, env);
+  }
+
+  if (isStructuredValue(value)) {
+    if (value.type === 'array' && Array.isArray(value.data)) {
+      const items: unknown[] = [];
+      for (const item of value.data) {
+        items.push(await materializePolicySourceValue(item, env));
+      }
+      return items;
+    }
+    if (value.type === 'object' && isPlainObject(value.data)) {
+      const result: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(value.data)) {
+        result[key] = await materializePolicySourceValue(entry, env);
+      }
+      return result;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const items: unknown[] = [];
+    for (const item of value) {
+      items.push(await materializePolicySourceValue(item, env));
+    }
+    return items;
+  }
+
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await materializePolicySourceValue(entry, env);
+    }
+    return result;
+  }
+
+  return value;
+}
+
 async function resolveConstraintSourceValue(
   value: unknown,
   env: Environment
@@ -83,7 +160,8 @@ async function resolveConstraintSourceValue(
       if (!variable) {
         return candidate;
       }
-      return resolveValueHandles(variable, env);
+      const resolved = await resolveValueHandles(variable, env);
+      return unwrapResolvedConstraintValue(resolved, env);
     }
     if (isAstArrayNode(value)) {
       const items: unknown[] = [];
@@ -103,12 +181,19 @@ async function resolveConstraintSourceValue(
       return result;
     }
   }
-  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'type' in (value as Record<string, unknown>) &&
+    !isStructuredValue(value)
+  ) {
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
-    return resolveValueHandles(result.value, env);
+    const resolved = await resolveValueHandles(result.value, env);
+    return unwrapResolvedConstraintValue(resolved, env);
   }
-  return resolveValueHandles(value, env);
+  const resolved = await resolveValueHandles(value, env);
+  return unwrapResolvedConstraintValue(resolved, env);
 }
 
 async function extractConstraintAttestations(
@@ -130,13 +215,17 @@ async function compileAuthorizationAttestations(
 ): Promise<void> {
   const rawValue = isStructuredValue(rawPolicy) ? asData(rawPolicy) : rawPolicy;
   const normalizedAuthorizations = normalizedPolicy?.authorizations;
-  const rawConfig = resolvePolicyConfigSource(rawValue);
-  const rawAuthorizationsNode = getAstObjectEntryValue(rawValue, 'authorizations');
-  const rawAuthorizations =
+  const sourceValue =
+    isAstObjectNode(rawValue) || isAstArrayNode(rawValue)
+      ? rawValue
+      : await materializePolicySourceValue(rawValue, env);
+  let rawConfig = resolvePolicyConfigSource(sourceValue);
+  let rawAuthorizationsNode = getAstObjectEntryValue(sourceValue, 'authorizations');
+  let rawAuthorizations =
     rawConfig && isPlainObject(rawConfig.authorizations)
       ? (rawConfig.authorizations as Record<string, unknown>)
       : undefined;
-  const rawAllow =
+  let rawAllow =
     rawAuthorizations && isPlainObject(rawAuthorizations.allow)
       ? (rawAuthorizations.allow as Record<string, unknown>)
       : undefined;
@@ -173,12 +262,15 @@ async function compileAuthorizationAttestations(
 
       entry.args[argName] = await Promise.all(clauses.map(async clause => {
         if ('eq' in clause) {
-          const compiledAttestations = await extractConstraintAttestations(
+          let compiledAttestations = await extractConstraintAttestations(
             isPlainObject(rawConstraint) && Object.prototype.hasOwnProperty.call(rawConstraint, 'eq')
               ? rawConstraint.eq
               : getAstObjectEntryValue(rawConstraint, 'eq') ?? rawConstraint,
             env
           );
+          if (compiledAttestations.length === 0) {
+            compiledAttestations = await extractConstraintAttestations(clause.eq, env);
+          }
           if (compiledAttestations.length === 0) {
             return clause;
           }
@@ -194,9 +286,14 @@ async function compileAuthorizationAttestations(
             : isAstArrayNode(getAstObjectEntryValue(rawConstraint, 'oneOf'))
               ? (getAstObjectEntryValue(rawConstraint, 'oneOf') as { items: unknown[] }).items
               : clause.oneOf;
-        const oneOfAttestations = await Promise.all(
+        let oneOfAttestations = await Promise.all(
           rawOneOfCandidates.map(candidate => extractConstraintAttestations(candidate, env))
         );
+        if (!oneOfAttestations.some(entry => entry.length > 0)) {
+          oneOfAttestations = await Promise.all(
+            clause.oneOf.map(candidate => extractConstraintAttestations(candidate, env))
+          );
+        }
         if (!oneOfAttestations.some(entry => entry.length > 0)) {
           return clause;
         }

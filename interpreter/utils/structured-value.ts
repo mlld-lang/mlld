@@ -728,7 +728,9 @@ function extractDescriptorInternal(
   }
 
   if (isStructuredValue(value)) {
-    const descriptor = varMxToSecurityDescriptor(value.mx);
+    const descriptor =
+      normalizeIfNeeded(candidateMetadataSecurity(value), options.normalize)
+      ?? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize);
     return normalizeIfNeeded(descriptor, options.normalize);
   }
 
@@ -788,6 +790,12 @@ function extractDescriptorInternal(
     return nestedDescriptors[0];
   }
   return mergeDescriptors(...nestedDescriptors);
+}
+
+function candidateMetadataSecurity(
+  value: { metadata?: { security?: SecurityDescriptor } }
+): SecurityDescriptor | undefined {
+  return value.metadata?.security;
 }
 
 function isSecurityDescriptor(value: SecurityDescriptor | undefined): value is SecurityDescriptor {
