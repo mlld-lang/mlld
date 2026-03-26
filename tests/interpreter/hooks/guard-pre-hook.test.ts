@@ -1265,6 +1265,24 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
   });
 
+  it('lets authorization guards override unlocked no-untrusted-destructive denials', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @payload = "doc-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id) = `deleted:@id` with { controlArgs: ["id"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] }, authorizations: { allow: { deleteDoc: { args: { id: "doc-1" } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc(@payload) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('deleted:doc-1');
+  });
+
   it('increments @mx.guard.try across retries', async () => {
     const env = createEnv();
     const guardDirective = parseSync(

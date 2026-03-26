@@ -975,4 +975,108 @@ describe('box MCP config integration', () => {
       environment?.cleanup();
     }
   });
+
+  it('lets authorization guards override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/mcp_active.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe destructive:targeted, tool:w @delete_doc(id) = [',
+        '  => @mcp.echo(@id)',
+      '] with { controlArgs: ["id"] }',
+      '/var @toolList = [@delete_doc]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/mcp_active.mld"',
+      '/var untrusted @prompt = "Delete doc-1"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive"] },',
+      '  operations: { destructive: ["tool:w"], "destructive:targeted": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      delete_doc: {',
+      '        args: {',
+      '          id: "doc-1"',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" delete_doc '{"id":"doc-1"}' }`,
+      '/show @agent(@prompt, { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('doc-1');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('lets handle-backed authorizations override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/mcp_active.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe destructive:targeted, tool:w @delete_doc(id) = [',
+      '  => @mcp.echo(@id)',
+      '] with { controlArgs: ["id"] }',
+      '/var @toolList = [@delete_doc]',
+      '/export { @toolList, @delete_doc }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList, @delete_doc } from "/mcp_active.mld"',
+      '/record @doc = { facts: [id: string], data: [label: string] }',
+      '/exe @get_doc() = { id: "doc-1", label: "quarterly_plan" } => doc',
+      '/var @doc = @get_doc()',
+      '/var untrusted @prompt = "Delete doc-1"',
+      '/var @matches = @fyi.facts({ op: "delete_doc", arg: "id" }) with { fyi: { facts: [@doc] } }',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive"] },',
+      '  operations: { destructive: ["tool:w"], "destructive:targeted": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      delete_doc: {',
+      '        args: {',
+      '          id: { handle: @matches[0].handle }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" delete_doc '{"id":"doc-1"}' }`,
+      '/show @agent(@prompt, { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('doc-1');
+    } finally {
+      environment?.cleanup();
+    }
+  });
 });
