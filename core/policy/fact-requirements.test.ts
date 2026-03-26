@@ -1,17 +1,67 @@
 import { describe, expect, it } from 'vitest';
 import {
-  deriveBuiltInFactPatternsForOperationArg,
-  deriveBuiltInFactPatternsForQuery,
+  resolveFactRequirementsForOperationArg,
   selectDestinationArgs,
   selectTargetArgs
 } from './fact-requirements';
 
 describe('fact requirements', () => {
-  it('derives built-in fact patterns for supported query args', () => {
-    expect(deriveBuiltInFactPatternsForQuery({ arg: 'recipient' })).toEqual(['fact:*.email']);
-    expect(deriveBuiltInFactPatternsForQuery({ arg: 'id' })).toEqual(['fact:*.id']);
-    expect(deriveBuiltInFactPatternsForQuery({ arg: 'unknown' })).toEqual([]);
-    expect(deriveBuiltInFactPatternsForQuery({})).toBeNull();
+  it('resolves symbolic built-in operations without guessing from arg names alone', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@email.send',
+        argName: 'recipient'
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:@email.send',
+      requirements: [
+        {
+          arg: 'recipient',
+          patterns: ['fact:*.email'],
+          source: 'builtin'
+        }
+      ]
+    });
+
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@crm.delete',
+        argName: 'id'
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:@crm.delete',
+      requirements: [
+        {
+          arg: 'id',
+          patterns: ['fact:*.id'],
+          source: 'builtin'
+        }
+      ]
+    });
+  });
+
+  it('fails closed when operation identity is missing or unknown', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        argName: 'recipient'
+      })
+    ).toEqual({
+      status: 'unknown_operation',
+      requirements: []
+    });
+
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@unknown.tool',
+        argName: 'recipient'
+      })
+    ).toEqual({
+      status: 'unknown_operation',
+      opRef: 'op:@unknown.tool',
+      requirements: []
+    });
   });
 
   it('fails closed for tool:w send operations without declared control args', () => {
@@ -35,23 +85,69 @@ describe('fact requirements', () => {
     ).toEqual(['participants']);
   });
 
-  it('derives fact patterns from live operation metadata when available', () => {
+  it('derives fact requirements from live operation metadata when available', () => {
     expect(
-      deriveBuiltInFactPatternsForOperationArg({
-        arg: 'participants',
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@createCalendarEvent',
+        argName: 'participants',
         operationLabels: ['exfil:send'],
         controlArgs: ['participants'],
         hasControlArgsMetadata: true
       })
-    ).toEqual(['fact:*.email']);
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:@createcalendarevent',
+      requirements: [
+        {
+          arg: 'participants',
+          patterns: ['fact:*.email'],
+          source: 'builtin'
+        }
+      ]
+    });
 
     expect(
-      deriveBuiltInFactPatternsForOperationArg({
-        arg: 'recipient',
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@sendMoney',
+        argName: 'recipient',
         operationLabels: ['exfil:send'],
         hasControlArgsMetadata: false
       })
-    ).toEqual([]);
+    ).toEqual({
+      status: 'no_requirement',
+      opRef: 'op:@sendmoney',
+      requirements: []
+    });
+  });
+
+  it('adds stricter policy-derived requirements on top of built-in op requirements', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:@email.send',
+        argName: 'recipient',
+        policy: {
+          defaults: {
+            rules: ['no-send-to-unknown', 'no-send-to-external']
+          }
+        }
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:@email.send',
+      requirements: [
+        {
+          arg: 'recipient',
+          patterns: ['fact:*.email'],
+          source: 'builtin'
+        },
+        {
+          arg: 'recipient',
+          patterns: ['fact:internal:*.email'],
+          source: 'policy',
+          rule: 'policy.defaults.rules.no-send-to-external'
+        }
+      ]
+    });
   });
 
   it('falls back to the first provided arg for non-tool send operations and targeted destroy', () => {

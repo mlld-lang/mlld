@@ -4,6 +4,7 @@ import { evaluate } from '@interpreter/core/interpreter';
 import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { evaluateFyiFacts } from './facts-runtime';
 
 async function createContactsEnv(): Promise<Environment> {
@@ -138,5 +139,32 @@ describe('evaluateFyiFacts', () => {
         fact: 'fact:@contact.id'
       }
     ]);
+  });
+
+  it('fails closed when only an arg name is provided without canonical operation identity', async () => {
+    const env = await createContactsEnv();
+
+    const result = await evaluateFyiFacts(
+      { arg: 'recipient' },
+      env
+    );
+
+    expect(result.data).toEqual([]);
+  });
+
+  it('applies stricter policy-derived requirements conjunctively', async () => {
+    const env = await createContactsEnv();
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: {
+        rules: ['no-send-to-external']
+      }
+    }));
+
+    const result = await evaluateFyiFacts(
+      { op: 'op:@email.send', arg: 'recipient' },
+      env
+    );
+
+    expect(result.data).toEqual([]);
   });
 });

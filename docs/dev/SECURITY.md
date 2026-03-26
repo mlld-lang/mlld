@@ -1,354 +1,330 @@
 ---
-updated: 2026-01-17
-tags: #security, #policy, #labels, #guards, #environments
-related-docs: todo/spec-security-2026-v3.md
-related-code: core/policy/*.ts, interpreter/policy/*.ts, interpreter/hooks/*-hook.ts
-related-types: core/types/security.ts { SecurityDescriptor, DataLabel }
+updated: 2026-03-25
+tags: #security, #policy, #guards, #records, #handles, #environments
+related-docs: docs/dev/DATA.md, docs/dev/GUARD-ARGS.md, docs/user/security.md
+related-code: core/types/security.ts, core/types/handle.ts, core/policy/*.ts, interpreter/policy/*.ts, interpreter/eval/records/*.ts, interpreter/fyi/*.ts, interpreter/utils/handle-resolution.ts, interpreter/eval/exec/*.ts, interpreter/hooks/*-hook.ts
+related-types: core/types/security.ts { SecurityDescriptor, DataLabel }, core/types/handle.ts { FactSourceHandle, HandleWrapper }
 ---
 
 # Security Model
 
 ## tldr
 
-mlld prevents prompt injection consequences via label flow control. You can't stop LLMs from being tricked, but you can prevent tricked LLMs from causing harm.
+mlld prevents prompt-injection consequences with a layered model:
 
-Four layers:
-- **Labels** track what data IS (`secret`) and where it CAME FROM (`src:mcp`)
-- **Policy** declares what CAN happen (`secret` → deny `op:show`)
-- **Guards** enforce with full context (complex validation logic)
-- **Environments** provide execution contexts with isolation and state management
+- `SecurityDescriptor` carries `labels`, `taint`, `attestations`, and `sources`
+- policy is the non-bypassable enforcement layer
+- guards add contextual checks, deny/retry flow, and environment selection
+- records classify structured outputs and mint field-level `fact:` proof
+- handles preserve trust across LLM boundaries by referring back to live values
+- environments, credentials, and filesystem integrity remain orthogonal security layers
 
-Labels propagate automatically. Policy checks are non-bypassable. Guards are optional and bypassable.
+The important architectural split is between contamination and proof. Negative rules consume taint. Positive rules consume attestations and `fact:` proof on live values.
 
 ## Principles
 
-- **Taint everything** - All data carries `SecurityDescriptor { labels, taint, sources }`
-- **Check before execution** - PolicyEnforcer runs before every operation (cmd, show, output, etc.)
-- **Non-bypassable core** - Policy layer cannot be disabled, even with `guards: false`
-- **Separate concerns** - Op labels for checking (don't propagate), source labels for tracking (do propagate)
-- **Explicit credentials** - Auth flows via `using auth:name` or `using @var as ENV` syntax
+- Separate contamination from proof.
+- Attach trust to live values, not copied literals.
+- Run policy before execution.
+- Keep policy non-bypassable.
+- Use records as the structured shaping and classification boundary.
+- Cross LLM boundaries with opaque handles.
+- Canonicalize named operations before discovery or fact-aware policy checks.
+- Fail closed when discovery lacks operation identity or required control-arg metadata.
 
 ## Details
 
-### Label Types
+### Core Security State
 
-| Type | Applied When | Propagates | Example |
-|------|--------------|------------|---------|
-| User-declared | `var secret @key = ...` | Yes | `secret`, `pii` |
-| Source labels | Data entry points | Yes | `src:mcp`, `src:exec`, `src:file` |
-| Operation labels | Before execution | No | `op:cmd:git:status` |
+[`SecurityDescriptor`](/Users/adam/mlld/mlld/core/types/security.ts) is the common runtime carrier for security state.
 
-**Op labels are for checking, not propagation.** They go in operation context for policy/guard evaluation, then to `sources` for provenance. They do NOT go in output labels/taint.
+- `labels`
+  value properties and classifications, including ordinary user labels and `fact:` labels
+- `taint`
+  contamination and risk labels used by negative flow checks
+- `attestations`
+  explicit positive proof, including `known` and authorization-carried proof
+- `sources`
+  provenance trail for execution history and origin tracking
+- `tools`, `capability`, `policyContext`
+  execution metadata used by policy, auditing, and runtime decisions
 
-### Policy Structure
+The runtime treats `taint` and `attestations` as different channels. They do not imply each other.
 
-```typescript
-PolicyConfig = {
-  default?: 'deny' | 'allow';         // Unlabeled data behavior
-  auth?: Record<string, AuthConfig>;  // Credential paths
-  allow?: Record<string, ...> | string[];  // Capability allowlist
-  deny?: Record<string, ...> | string[];   // Capability denylist
-  danger?: string[];                       // Dangerous capability allowlist
-  labels?: PolicyLabels;              // Label flow rules
-  signers?: Record<string, string[]>; // Verified signer -> applied labels
-  filesystem_integrity?: Record<string, {
-    mutable?: boolean;
-    authorizedIdentities?: string[];
-  }>;
-  env?: { default?: string };         // Default environment provider
-  limits?: PolicyLimits;              // Resource constraints
-}
+### Label Classes
 
-LabelFlowRule = {
-  deny?: string[];   // Block flow to these ops
-  allow?: string[];  // Permit flow to these ops (for default:deny)
-}
+The security model uses several label classes:
 
-AuthConfig = {
-  from: string;  // "keychain:path" or "env:VAR"
-  as: string;    // Env var name
-}
-```
+- user-declared data labels such as `secret`, `pii`, `public`
+- taint labels such as `untrusted` and `influenced`
+- attestation labels such as `known` and `known:*`
+- fact labels such as `fact:@contact.email` and `fact:internal:@contact.email`
+- source labels and provenance entries such as `src:mcp`, `src:file`, and operation/tool sources
+- operation labels such as `exfil:send`, `destructive:targeted`, `tool:w`, `privileged`
 
-**Location:** `core/policy/union.ts` - types and merging
+Operation labels drive policy evaluation and tool metadata. They are not data labels.
 
-### Enforcement Flow
+### Policy
 
-```
-Operation attempted
-    ↓
-PolicyEnforcer.checkLabelFlow()  ← non-bypassable
-    ↓ if allowed
-guard-pre-hook                    ← bypassable
-    ↓ if allowed
-Execute
-    ↓
-guard-post-hook
-```
+Policy is the non-bypassable enforcement layer.
 
-**Critical:** PolicyEnforcer runs BEFORE guards in every evaluator:
-- `interpreter/eval/run.ts`
-- `interpreter/eval/show.ts`
-- `interpreter/eval/output.ts`
-- `interpreter/eval/log.ts`
-- `interpreter/eval/exec-invocation.ts`
-- `interpreter/eval/pipeline/builtin-effects.ts`
+The main policy surfaces live in [`union.ts`](/Users/adam/mlld/mlld/core/policy/union.ts), [`label-flow.ts`](/Users/adam/mlld/mlld/core/policy/label-flow.ts), [`guards.ts`](/Users/adam/mlld/mlld/core/policy/guards.ts), and [`authorizations.ts`](/Users/adam/mlld/mlld/core/policy/authorizations.ts).
 
-### Credential Injection
+Important policy features:
 
-**Syntactic sugar:**
-```mlld
-using auth:claude          → with { auth: "claude" }
-using @token as TOOL_KEY   → with { using: { var: "@token", as: "TOOL_KEY" } }
-```
+- defaults and built-in rules
+- label-flow rules through `policy.labels`
+- operation semantic expansion through `policy.operations`
+- authorizations
+- capabilities, danger rules, filesystem rules, and environment policy
+- signer-to-label mapping and filesystem integrity policy
 
-**Grammar:** Desugars in `grammar/directives/run.peggy` into WithConfig
+Policy merging remains architecture-critical:
 
-**Flow:** `with.auth` or `with.using` present → `flowChannel = 'using'` → bypass label flow check
+- deny-like constraints merge conservatively
+- allow-like constraints narrow capability
+- operation mappings and label rules merge into a single effective policy summary
 
-**Why bypass:** Credentials go to env var (not interpolated into command string). `deny: [op:cmd]` blocks interpolation; `using` avoids it.
+### Enforcement Order
 
-### Label Propagation
+The security model has two enforcement stages around execution:
 
-**File:** `interpreter/hooks/taint-post-hook.ts`
+1. policy preflight
+2. guards
 
-Merges input labels into output automatically. Does NOT merge op labels (those go to sources only).
+The effective flow is:
 
-```typescript
-output.security = {
-  labels: input.labels,           // Data sensitivity
-  taint: input.taint,             // Data sensitivity + source markers
-  sources: [...operation.sources] // Provenance trail (includes op info)
-}
-```
+- resolve handles and live values where required
+- evaluate non-bypassable policy checks
+- run guard pre-hooks
+- execute
+- run guard post-hooks
 
-### Filesystem Integrity
+Policy runs before guards in the evaluators. Guards add context and control flow, but they do not replace policy.
 
-Filesystem trust is split across three layers:
+### Negative And Positive Checks
 
-- `SigService` signs write-executor writes and verifies file bytes on read.
-- Content-loader converts verification results into `SecurityDescriptor` state.
-- `PolicyEnforcer` keeps enforcing normal label-flow rules after labels are attached.
+Negative checks use taint and label flow.
 
-`policy.signers` maps signer identities to labels for verified files. Example:
+- implemented primarily in [`label-flow.ts`](/Users/adam/mlld/mlld/core/policy/label-flow.ts)
+- examples: `no-secret-exfil`, `no-sensitive-exfil`, `no-untrusted-destructive`, `no-untrusted-privileged`
 
-```mlld
-policy @p = {
-  signers: {
-    "user:*": ["trusted"],
-    "agent:deploy": ["release-authored"]
-  }
-}
-```
+Positive checks require proof on specific args.
 
-`policy.filesystem_integrity` adds identity-aware write restrictions on top of `allow.filesystem`:
+- implemented primarily in [`guards.ts`](/Users/adam/mlld/mlld/core/policy/guards.ts)
+- examples: `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`
 
-```mlld
-policy @p = {
-  filesystem_integrity: {
-    "@base/config/**": {
-      mutable: false
-    },
-    "@base/releases/**": {
-      authorizedIdentities: ["user:*", "agent:release"]
-    }
-  }
-}
-```
+Positive checks use named-arg descriptors plus operation metadata. They accept:
 
-Resolution rules:
+- generic attestation such as `known` or `known:internal`
+- matching `fact:` proof such as `fact:*.email`, `fact:internal:*.email`, or `fact:*.id`
 
-- Verified file + matching `signers` pattern: apply those labels
-- Verified file + no match: apply `defaults.unlabeled`
-- Modified or corrupted file: force `untrusted`
-- Unsigned file: apply `defaults.unlabeled`
+### Records And Structured Trust Boundaries
 
-Signer-derived trust labels replace inherited `trusted` / `untrusted` labels from old audit or sig metadata. Source labels such as `src:file` and `dir:*` still merge in additively.
+Records are the structured trust boundary for executable output.
 
-### Policy Merging
+The record path lives in [`coerce-record.ts`](/Users/adam/mlld/mlld/interpreter/eval/records/coerce-record.ts).
 
-When multiple policies compose:
-- `deny`: union (denied by ANY)
-- `allow`: intersection (allowed by ALL)
-- `auth`: last wins (environment-specific)
-- `default`: most restrictive wins (defer - see mlld-wmzl.15)
-- `signers`: union labels for matching identity patterns
-- `filesystem_integrity`: merge by path, incoming fields override base fields
+Responsibilities of record coercion:
 
-**Location:** `core/policy/union.ts`
+- parse structured outputs from objects, arrays, JSON strings, fenced payloads, and YAML strings
+- shape data according to the record definition
+- validate required fields and scalar types
+- apply `when` classification
+- attach schema metadata
+- mint field-level proof through `fact:` labels and `mx.factsources`
+
+Schema metadata is exposed on structured values:
+
+- `@value.mx.schema.valid`
+- `@value.mx.schema.errors`
+- `@value.mx.schema.mode`
+
+Post-guards use that metadata for deny and retry behavior.
+
+### Facts And Fact Sources
+
+Fact-bearing record fields carry two forms of proof:
+
+- `fact:` labels
+- normalized [`FactSourceHandle`](/Users/adam/mlld/mlld/core/types/handle.ts) entries in `mx.factsources`
+
+Field access preserves field-level security metadata in [`field-access.ts`](/Users/adam/mlld/mlld/interpreter/utils/field-access.ts).
+
+This gives the runtime a field-granular proof model:
+
+- a record field can be authoritative while sibling fields are not
+- trust is attached to the accessed live value, not to a serialized parent blob
+
+### Handles
+
+Handles are the boundary primitive for LLM-mediated selection.
+
+Properties of handles:
+
+- opaque
+- execution-scoped
+- runtime-issued
+- resolved back to the original live value
+
+The public wrapper shape is exactly `{ handle: "..." }`. Extra-key objects are plain objects, not handle wrappers. Handle types live in [`handle.ts`](/Users/adam/mlld/mlld/core/types/handle.ts). Resolution lives in [`handle-resolution.ts`](/Users/adam/mlld/mlld/interpreter/utils/handle-resolution.ts).
+
+Handle resolution is recursive across:
+
+- variables
+- structured values
+- arrays
+- plain objects
+
+This is the mechanism that preserves proof across LLM boundaries without trusting copied literals.
+
+### Fact Discovery
+
+`@fyi.facts(...)` is the fact-discovery surface.
+
+The implementation lives in [`facts-runtime.ts`](/Users/adam/mlld/mlld/interpreter/fyi/facts-runtime.ts).
+
+Discovery uses box or call-site `fyi: { facts: [...] }` roots and returns bounded candidate objects:
+
+- `handle`
+- `label`
+- `field`
+- `fact`
+
+It does not return raw live values.
+
+There are two discovery modes:
+
+- no-arg discovery across configured fact-bearing roots
+- filtered discovery by `(op, arg)`
+
+### Canonical Operation Identity
+
+Named operations are canonicalized to `op:@...` in [`operation-labels.ts`](/Users/adam/mlld/mlld/core/policy/operation-labels.ts).
+
+That identity is shared across:
+
+- `@fyi.facts(...)`
+- guard filters
+- runtime operation metadata lookup
+- fact-aware policy checks
+- authorization matching
+
+This keeps discovery and enforcement on the same operation namespace.
+
+### Shared Fact-Requirement Resolver
+
+Discovery and fact-aware positive checks share the fact-requirement model in [`fact-requirements.ts`](/Users/adam/mlld/mlld/core/policy/fact-requirements.ts).
+
+The resolver:
+
+- normalizes operation identity to `op:@...`
+- distinguishes `resolved`, `no_requirement`, and `unknown_operation`
+- derives requirements from live operation metadata when available
+- supports explicit built-in symbolic op specs
+- leaves a narrow integration point for declarative fact-aware policy requirements
+
+Important behavior:
+
+- discovery does not guess from arg names alone
+- unknown operations fail closed
+- live metadata and declared `controlArgs` are authoritative for nonstandard send/target args
+
+This removes the old drift between discovery heuristics and enforcement semantics.
+
+### Tool Metadata And Control Args
+
+Tool and executable metadata are merged in [`tool-metadata.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec/tool-metadata.ts).
+
+That merge supplies:
+
+- effective operation labels
+- param names
+- `controlArgs`
+- whether control-arg metadata was explicitly declared
+
+Security-critical behavior depends on that metadata:
+
+- metadata-driven destination selection for `exfil:send`
+- metadata-driven target selection for `destructive:targeted`
+- discovery for nonstandard args such as `participants`
+- fail-closed behavior for `tool:w` operations without declared control args
+
+### Authorization Compilation
+
+Authorization compilation resolves live values before extracting proof.
+
+The path lives in [`policy-fragment.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec/policy-fragment.ts).
+
+It resolves:
+
+- variable refs
+- expression results
+- arrays and objects
+- handle wrappers
+
+Compiled authorization proof comes from the resolved live value’s security descriptor, not from a copied literal representation.
+
+### Dispatch-Time Authorization And Policy Checks
+
+Runtime exec dispatch lives in [`exec-invocation.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec-invocation.ts).
+
+At dispatch time the runtime:
+
+- resolves effective tool metadata
+- separates policy-guard control args from authorization-validation control args
+- validates runtime authorizations
+- merges matched authorization proof into named arg descriptors
+- runs policy and guard enforcement against those descriptors
+
+This is the path that keeps local exes, imported tools, and MCP-backed tools aligned on the same positive-check semantics.
+
+### Credential Injection And Environments
+
+Credentials and execution environments remain part of the security model.
+
+Important environment-related security surfaces:
+
+- auth injection
+- `using`-style credential flows
+- provider-backed execution environments
+- capability filtering for tools, MCPs, filesystem, and network
+
+These are orthogonal to the record/fact/handle provenance path. They operate through environment config, policy capabilities, and runtime execution boundaries.
+
+### Filesystem Integrity And Signers
+
+Filesystem trust is a separate layer built from:
+
+- signature verification
+- signer-to-label mapping
+- filesystem integrity policy
+
+That layer determines how file content becomes trusted, untrusted, or unlabeled data on read. It feeds labels into the same policy and guard machinery as other security sources.
 
 ## Gotchas
 
-- **Op labels don't propagate** - Only for checking. Don't add to SecurityDescriptor.labels
-- **Policy runs before guards** - Must be first in every evaluator
-- **Taint != labels** - `taint = labels ∪ sources`. Check policy against taint, not just labels
-- **using bypasses deny** - By design. Credentials in env vars, not command strings
-- **Guard label modification** - Affects OUTPUT only. Next operation sees modified labels
-- **Protected labels** - Only privileged guards can remove `src:*` or `secret`
-
-## Environments
-
-Environments are THE primitive for execution contexts. They unify:
-- **Credentials** - Auth configuration
-- **Isolation** - Filesystem, network, resource boundaries
-- **Capabilities** - Available tools, MCPs, operations
-- **State** - Snapshots, session resume (provider-dependent)
-
-### Environment Providers
-
-Providers are optional - they add isolation. Without a provider, commands run locally. `policy.env.default` supplies a default provider when an env config omits one.
-
-| Provider | Isolation | Snapshots | Use Case |
-|----------|-----------|-------------|----------|
-| `@mlld/env-docker` | Container | Limited | Process isolation |
-| `@mlld/env-sprites` | Cloud | Native | Full isolation + state |
-
-### Usage Patterns
-
-**Environment without provider** (local, different auth):
-```mlld
-var @devEnv = {
-  auth: "claude-dev",
-  mcps: ["npx -y @modelcontextprotocol/server-github"],
-}
-```
-
-**Environment with provider** (isolated):
-```mlld
-var @sandbox = {
-  provider: "@mlld/env-docker",
-  fs: { read: [".:/app"] },
-  net: "none",
-}
-```
-
-**Guard-triggered**:
-```mlld
-guard before sandboxed = when [
-  op:cmd => env @sandbox
-  * => deny
-]
-```
-
-Guards select environments. The guard hook returns the env config, and the run evaluator applies it.
-
-### Provider Interface
-
-Provider modules export a standard interface:
-
-```mlld
-// Required: create environment, execute in it, release it
-exe @create(opts) = [
-  // opts = config minus core fields (provider, auth, taint)
-  // Returns: { envName, created: bool }
-]
-
-exe @execute(envName, command) = [
-  // envName from @create
-  // command = { argv, cwd, vars, secrets, stdin? }
-  // Returns: { stdout, stderr, exitCode }
-]
-
-exe @release(envName) = [...]
-
-// Optional: snapshotting
-exe @snapshot(envName, name) = [...]
-
-export { @create, @execute, @release, @snapshot }
-```
-
-**createOrExists semantics in @create:**
-- `opts.name` specified + exists → `{ envName: opts.name, created: false }`
-- `opts.name` specified + not exists → create, `{ envName, created: true }`
-- No name → create anonymous, `{ envName: <auto-id>, created: true }`
-
-**Release behavior:**
-- When `name` is set, mlld treats the environment as reusable and skips `@release` by default
-
-**Core fields** (handled by mlld, not passed to provider):
-- `provider` → routes to module
-- `auth` → resolves credentials from keychain
-- `taint` → applies labels to output
-
-**Opts** (passed to @create): everything else (`fs`, `net`, `image`, etc.)
-
-**Command structure:**
-```mlld
-{
-  argv: ["claude", "-p", "..."],
-  cwd: "/app",
-  vars: { NODE_ENV: "production" },
-  secrets: { ANTHROPIC_API_KEY: "sk-xxx..." },
-  stdin: "optional stdin",
-}
-```
-
-**Result structure:**
-```mlld
-{
-  stdout: "...",
-  stderr: "...",
-  exitCode: 0,
-}
-```
-
-### Provider Trust Model
-
-The `provider:` field is an **explicit trust grant**:
-
-| Module type | Gets secrets? | Why |
-|-------------|---------------|-----|
-| Regular import | No | Just code, no special privileges |
-| `provider:` designation | Yes | User explicitly trusts it |
-
-Providers receive actual secret values in `command.secrets`. This is intentional - the provider controls execution, so it must be trusted. If you don't trust a module, don't use it as a provider.
-
-### Source Labels
-
-Data from isolated environments gets labeled:
-- `src:env:docker` - from Docker provider
-- `src:env:sprites` - from Sprites provider
-- (no provider = `src:exec` as normal)
-
-mlld core applies the source label based on provider designation.
-
-### Lifecycle
-
-- Guard-triggered env: `@release` runs after the single operation completes.
-- Env blocks: `@release` runs when the block exits.
-- Error paths: `@release` runs in a finally block.
-
-### Key Files
-
-- Types: `core/types/environment.ts`
-- Providers: `core/env/*.mld`
+- Fact proof is field-level. A fact-bearing object does not make every descendant authorized.
+- Handles are execution-scoped and are not durable ids.
+- A copied literal carries no proof by itself.
+- `@fyi.facts({ arg: "recipient" })` is intentionally empty.
+- Discovery requires either resolvable live metadata or an explicit symbolic op spec.
+- `tool:w` send operations without declared `controlArgs` fail closed for fact discovery.
+- Plain non-tool runtime compatibility fallbacks for dispatch are not discovery semantics.
+- Record-addressed facts are the shipped proof form. Store-addressed facts are outside this model.
 
 ## Debugging
 
-**Check what labels a value has:**
-```mlld
-show @data.mx.labels   // ["secret", "pii"]
-show @data.mx.taint    // ["secret", "pii", "src:mcp"]
-show @data.mx.sources  // ["mcp:fetchData", "transform:json"]
-```
-
-**Policy denial errors:**
-- Code: `POLICY_LABEL_FLOW_DENIED`
-- Message includes: which label, which rule, which operation
-- Check `policy.labels.<label>.deny` array
-
-**Guard denial errors:**
-- Code: `GUARD_DENIED`
-- Message includes: which guard, why denied
-- Check guard `when` conditions
-
-**Common issues:**
-- "Secret blocked from op:cmd" → use `using @secret as ENV` instead of interpolating
-- "src:mcp denied" → check `policy.labels."src:mcp".allow` list
-- "Privileged guard can't be bypassed" → by design, remove `with { guards: false }`
-
-## References
-
-- Complete spec: `todo/spec-security-2026-v3.md`
-- Implementation plan: `todo/plan-security-2026-v3.md`
-- Epic: `tk show mlld-wmzl`
+- Security descriptor: [`core/types/security.ts`](/Users/adam/mlld/mlld/core/types/security.ts)
+- Handle and fact-source types: [`core/types/handle.ts`](/Users/adam/mlld/mlld/core/types/handle.ts)
+- Record coercion and schema metadata: [`interpreter/eval/records/coerce-record.ts`](/Users/adam/mlld/mlld/interpreter/eval/records/coerce-record.ts)
+- Field metadata propagation: [`interpreter/utils/field-access.ts`](/Users/adam/mlld/mlld/interpreter/utils/field-access.ts)
+- Handle resolution: [`interpreter/utils/handle-resolution.ts`](/Users/adam/mlld/mlld/interpreter/utils/handle-resolution.ts)
+- Fact discovery: [`interpreter/fyi/facts-runtime.ts`](/Users/adam/mlld/mlld/interpreter/fyi/facts-runtime.ts)
+- Fact requirements: [`core/policy/fact-requirements.ts`](/Users/adam/mlld/mlld/core/policy/fact-requirements.ts)
+- Operation normalization: [`core/policy/operation-labels.ts`](/Users/adam/mlld/mlld/core/policy/operation-labels.ts)
+- Tool metadata merge: [`interpreter/eval/exec/tool-metadata.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec/tool-metadata.ts)
+- Authorization compilation: [`interpreter/eval/exec/policy-fragment.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec/policy-fragment.ts)
+- Runtime dispatch path: [`interpreter/eval/exec-invocation.ts`](/Users/adam/mlld/mlld/interpreter/eval/exec-invocation.ts)
+- Positive built-in checks: [`core/policy/guards.ts`](/Users/adam/mlld/mlld/core/policy/guards.ts)
+- Negative label-flow checks: [`core/policy/label-flow.ts`](/Users/adam/mlld/mlld/core/policy/label-flow.ts)

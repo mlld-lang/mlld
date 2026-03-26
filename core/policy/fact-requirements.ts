@@ -1,4 +1,6 @@
 import { matchesLabelPattern } from './fact-labels';
+import { normalizeNamedOperationRef } from './operation-labels';
+import type { PolicyConfig } from './union';
 
 const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
 const TARGET_ARG_SELECTORS = ['id'] as const;
@@ -16,6 +18,56 @@ export interface OperationMetadataLike {
   opLabels?: readonly string[];
   labels?: readonly string[];
 }
+
+export interface FactRequirement {
+  arg: string;
+  patterns: string[];
+  source: 'builtin' | 'policy';
+  rule?: string;
+}
+
+export interface FactRequirementResolution {
+  status: 'resolved' | 'no_requirement' | 'unknown_operation';
+  opRef?: string;
+  requirements: FactRequirement[];
+}
+
+type PositiveFactPolicyRule =
+  | 'no-send-to-unknown'
+  | 'no-send-to-external'
+  | 'no-destroy-unknown';
+
+type BuiltInOperationFactSpec = {
+  opRef: string;
+  argKind: 'controlArgs' | 'target';
+  args: readonly string[];
+  basePatterns: readonly string[];
+  policyPatterns?: Partial<Record<PositiveFactPolicyRule, readonly string[]>>;
+};
+
+const BUILTIN_OPERATION_FACT_SPECS: readonly BuiltInOperationFactSpec[] = [
+  {
+    opRef: 'op:@email.send',
+    argKind: 'controlArgs',
+    args: SEND_DESTINATION_ARG_SELECTORS,
+    basePatterns: SEND_KNOWN_FACT_PATTERNS,
+    policyPatterns: {
+      'no-send-to-external': SEND_INTERNAL_FACT_PATTERNS
+    }
+  },
+  {
+    opRef: 'op:@crm.delete',
+    argKind: 'target',
+    args: TARGET_ARG_SELECTORS,
+    basePatterns: TARGET_KNOWN_FACT_PATTERNS
+  }
+] as const;
+
+const POSITIVE_FACT_POLICY_RULES = new Set<PositiveFactPolicyRule>([
+  'no-send-to-unknown',
+  'no-send-to-external',
+  'no-destroy-unknown'
+]);
 
 function isEmptyAuthorizationValue(value: unknown): boolean {
   return (
@@ -130,55 +182,245 @@ export function selectTargetArgs(
   });
 }
 
-export function deriveBuiltInFactPatternsForQuery(query: {
-  arg?: string;
-}): string[] | null {
-  const arg = typeof query.arg === 'string' ? query.arg.trim().toLowerCase() : '';
-  if (!arg) {
-    return null;
-  }
+function normalizeArgName(argName?: string): string | null {
+  const normalized = typeof argName === 'string' ? argName.trim().toLowerCase() : '';
+  return normalized.length > 0 ? normalized : null;
+}
 
-  if (['recipient', 'recipients', 'cc', 'bcc'].includes(arg)) {
-    return [...SEND_KNOWN_FACT_PATTERNS];
-  }
+function normalizeControlArgs(controlArgs?: readonly string[]): string[] {
+  return (controlArgs ?? [])
+    .map(value => value.trim().toLowerCase())
+    .filter(value => value.length > 0);
+}
 
-  if (arg === 'id') {
-    return [...TARGET_KNOWN_FACT_PATTERNS];
+function getEnabledPositiveFactRules(
+  policy?: Pick<PolicyConfig, 'defaults'>
+): Set<PositiveFactPolicyRule> {
+  const enabled = new Set<PositiveFactPolicyRule>();
+  for (const rule of policy?.defaults?.rules ?? []) {
+    if (POSITIVE_FACT_POLICY_RULES.has(rule as PositiveFactPolicyRule)) {
+      enabled.add(rule as PositiveFactPolicyRule);
+    }
   }
+  return enabled;
+}
 
+function collectDeclarativeFactRequirements(_options: {
+  opRef?: string;
+  argName: string;
+  policy?: Pick<PolicyConfig, 'defaults'>;
+}): FactRequirement[] {
   return [];
 }
 
-export function deriveBuiltInFactPatternsForOperationArg(options: {
-  arg?: string;
+function appendRequirements(
+  output: FactRequirement[],
+  options: {
+    argName: string;
+    basePatterns: readonly string[];
+    enabledRules: ReadonlySet<PositiveFactPolicyRule>;
+    policyPatterns?: Partial<Record<PositiveFactPolicyRule, readonly string[]>>;
+  }
+): void {
+  output.push({
+    arg: options.argName,
+    patterns: [...options.basePatterns],
+    source: 'builtin'
+  });
+
+  for (const [rule, patterns] of Object.entries(options.policyPatterns ?? {}) as Array<
+    [PositiveFactPolicyRule, readonly string[] | undefined]
+  >) {
+    if (!patterns || !options.enabledRules.has(rule)) {
+      continue;
+    }
+    output.push({
+      arg: options.argName,
+      patterns: [...patterns],
+      source: 'policy',
+      rule: `policy.defaults.rules.${rule}`
+    });
+  }
+}
+
+function resolveBuiltInFactRequirementsFromSpec(options: {
+  argName: string;
+  opRef: string;
+  spec: BuiltInOperationFactSpec;
+  enabledRules: ReadonlySet<PositiveFactPolicyRule>;
+}): FactRequirementResolution {
+  const requirements: FactRequirement[] = [];
+
+  if (options.spec.args.includes(options.argName)) {
+    appendRequirements(requirements, {
+      argName: options.argName,
+      basePatterns: options.spec.basePatterns,
+      enabledRules: options.enabledRules,
+      policyPatterns: options.spec.policyPatterns
+    });
+  }
+
+  return {
+    status: requirements.length > 0 ? 'resolved' : 'no_requirement',
+    opRef: options.opRef,
+    requirements
+  };
+}
+
+function resolveBuiltInFactRequirementsFromOperationLabels(options: {
+  argName: string;
+  opRef?: string;
   operationLabels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
-}): string[] | null {
-  const arg = typeof options.arg === 'string' ? options.arg.trim().toLowerCase() : '';
-  if (!arg) {
-    return null;
-  }
-
+  enabledRules: ReadonlySet<PositiveFactPolicyRule>;
+}): FactRequirementResolution | null {
   const operationLabels = options.operationLabels ?? [];
-  const controlArgs = (options.controlArgs ?? []).map(value => value.trim().toLowerCase());
+  const normalizedControlArgs = normalizeControlArgs(options.controlArgs);
   const hasSend = operationLabels.some(label => matchesLabelPattern('exfil:send', label));
   if (hasSend) {
-    if (options.hasControlArgsMetadata === true) {
-      return controlArgs.includes(arg) ? [...SEND_KNOWN_FACT_PATTERNS] : [];
+    if (options.hasControlArgsMetadata !== true) {
+      return {
+        status: 'no_requirement',
+        opRef: options.opRef,
+        requirements: []
+      };
     }
-    return [];
+    const requirements: FactRequirement[] = [];
+    if (normalizedControlArgs.includes(options.argName)) {
+      appendRequirements(requirements, {
+        argName: options.argName,
+        basePatterns: SEND_KNOWN_FACT_PATTERNS,
+        enabledRules: options.enabledRules,
+        policyPatterns: {
+          'no-send-to-external': SEND_INTERNAL_FACT_PATTERNS
+        }
+      });
+    }
+    return {
+      status: requirements.length > 0 ? 'resolved' : 'no_requirement',
+      opRef: options.opRef,
+      requirements
+    };
   }
 
   const hasTargetedDestroy = operationLabels.some(label =>
     matchesLabelPattern('destructive:targeted', label)
   );
   if (hasTargetedDestroy) {
-    if (options.hasControlArgsMetadata === true && controlArgs.length > 0) {
-      return controlArgs.includes(arg) ? [...TARGET_KNOWN_FACT_PATTERNS] : [];
+    if (options.hasControlArgsMetadata !== true) {
+      return {
+        status: 'no_requirement',
+        opRef: options.opRef,
+        requirements: []
+      };
     }
-    return arg === 'id' ? [...TARGET_KNOWN_FACT_PATTERNS] : [];
+    const requirements: FactRequirement[] = [];
+    if (normalizedControlArgs.includes(options.argName)) {
+      appendRequirements(requirements, {
+        argName: options.argName,
+        basePatterns: TARGET_KNOWN_FACT_PATTERNS,
+        enabledRules: options.enabledRules
+      });
+    }
+    return {
+      status: requirements.length > 0 ? 'resolved' : 'no_requirement',
+      opRef: options.opRef,
+      requirements
+    };
   }
 
-  return deriveBuiltInFactPatternsForQuery({ arg });
+  if (operationLabels.length > 0) {
+    return {
+      status: 'no_requirement',
+      opRef: options.opRef,
+      requirements: []
+    };
+  }
+
+  return null;
+}
+
+export function resolveFactRequirementsForOperationArg(options: {
+  opRef?: string;
+  argName?: string;
+  operationLabels?: readonly string[];
+  controlArgs?: readonly string[];
+  hasControlArgsMetadata?: boolean;
+  policy?: Pick<PolicyConfig, 'defaults'>;
+}): FactRequirementResolution {
+  const argName = normalizeArgName(options.argName);
+  const normalizedOpRef = typeof options.opRef === 'string'
+    ? normalizeNamedOperationRef(options.opRef)
+    : undefined;
+
+  if (!argName) {
+    return {
+      status: 'no_requirement',
+      opRef: normalizedOpRef,
+      requirements: []
+    };
+  }
+
+  const enabledRules = getEnabledPositiveFactRules(options.policy);
+
+  const liveMetadataResolution = resolveBuiltInFactRequirementsFromOperationLabels({
+    argName,
+    opRef: normalizedOpRef,
+    operationLabels: options.operationLabels,
+    controlArgs: options.controlArgs,
+    hasControlArgsMetadata: options.hasControlArgsMetadata,
+    enabledRules
+  });
+  if (liveMetadataResolution) {
+    const declarativeRequirements = collectDeclarativeFactRequirements({
+      opRef: normalizedOpRef,
+      argName,
+      policy: options.policy
+    });
+    if (declarativeRequirements.length === 0) {
+      return liveMetadataResolution;
+    }
+    return {
+      status: 'resolved',
+      opRef: normalizedOpRef,
+      requirements: [...liveMetadataResolution.requirements, ...declarativeRequirements]
+    };
+  }
+
+  if (!normalizedOpRef) {
+    return {
+      status: 'unknown_operation',
+      requirements: []
+    };
+  }
+
+  const builtInSpec = BUILTIN_OPERATION_FACT_SPECS.find(spec => spec.opRef === normalizedOpRef);
+  const builtInResolution = builtInSpec
+    ? resolveBuiltInFactRequirementsFromSpec({
+        argName,
+        opRef: normalizedOpRef,
+        spec: builtInSpec,
+        enabledRules
+      })
+    : {
+        status: 'unknown_operation' as const,
+        opRef: normalizedOpRef,
+        requirements: []
+      };
+
+  const declarativeRequirements = collectDeclarativeFactRequirements({
+    opRef: normalizedOpRef,
+    argName,
+    policy: options.policy
+  });
+  if (declarativeRequirements.length === 0) {
+    return builtInResolution;
+  }
+
+  return {
+    status: 'resolved',
+    opRef: normalizedOpRef,
+    requirements: [...builtInResolution.requirements, ...declarativeRequirements]
+  };
 }

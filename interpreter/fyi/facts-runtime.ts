@@ -1,7 +1,7 @@
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import { hasMatchingFactLabel, parseFactLabel } from '@core/policy/fact-labels';
 import { expandOperationLabels } from '@core/policy/label-flow';
-import { deriveBuiltInFactPatternsForOperationArg } from '@core/policy/fact-requirements';
+import { resolveFactRequirementsForOperationArg } from '@core/policy/fact-requirements';
 import type { Environment } from '@interpreter/env/Environment';
 import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { accessField } from '@interpreter/utils/field-access';
@@ -157,12 +157,16 @@ async function collectFactCandidates(
 export async function evaluateFyiFacts(query: unknown, env: Environment): Promise<StructuredValue<FactCandidate[]>> {
   const normalizedQuery = normalizeFyiFactsQuery(query);
   const operationContext = resolveQueryOperationContext(normalizedQuery, env);
-  const requiredPatterns = deriveBuiltInFactPatternsForOperationArg({
-    arg: normalizedQuery.arg,
-    operationLabels: operationContext?.labels,
-    controlArgs: operationContext?.controlArgs,
-    hasControlArgsMetadata: operationContext?.hasControlArgsMetadata
-  });
+  const requirementResolution = normalizedQuery.arg
+    ? resolveFactRequirementsForOperationArg({
+        opRef: normalizedQuery.op,
+        argName: normalizedQuery.arg,
+        operationLabels: operationContext?.labels,
+        controlArgs: operationContext?.controlArgs,
+        hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
+        policy: env.getPolicySummary()
+      })
+    : null;
   const scopedConfig = env.getScopedEnvironmentConfig() as { fyi?: { facts?: unknown[] } } | undefined;
   const configuredRoots = Array.isArray(scopedConfig?.fyi?.facts) ? scopedConfig!.fyi!.facts : [];
 
@@ -170,7 +174,10 @@ export async function evaluateFyiFacts(query: unknown, env: Environment): Promis
     return wrapStructured([], 'array');
   }
 
-  if (Array.isArray(requiredPatterns) && requiredPatterns.length === 0) {
+  if (
+    requirementResolution &&
+    (requirementResolution.status !== 'resolved' || requirementResolution.requirements.length === 0)
+  ) {
     return wrapStructured([], 'array');
   }
 
@@ -181,10 +188,9 @@ export async function evaluateFyiFacts(query: unknown, env: Environment): Promis
 
   const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
   for (const entry of collected) {
-    if (
-      requiredPatterns &&
-      !requiredPatterns.some(pattern => hasMatchingFactLabel([entry.fact], pattern))
-    ) {
+    if (requirementResolution && !requirementResolution.requirements.every(requirement =>
+      requirement.patterns.some(pattern => hasMatchingFactLabel([entry.fact], pattern))
+    )) {
       continue;
     }
     const key = `${entry.ref}\u0000${entry.fact}\u0000${entry.label}`;
