@@ -8,7 +8,10 @@ import {
 import { MlldInterpreterError } from '@core/errors';
 import type {
   RecordDefinition,
+  RecordDisplayMode,
   RecordFieldDefinition,
+  RecordFieldProjectionMetadata,
+  RecordObjectProjectionMetadata,
   RecordSchemaMetadata,
   RecordValidationError,
   RecordWhenCondition,
@@ -32,6 +35,7 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 type NamespaceFieldMetadata = {
   security?: ReturnType<typeof serializeSecurityDescriptor>;
   factsources?: readonly FactSourceHandle[];
+  projection?: RecordFieldProjectionMetadata;
 };
 
 type RecordObjectResult = {
@@ -87,6 +91,56 @@ function setStructuredMetadata(
   };
   value.mx.schema = schema;
   value.mx.factsources = deduped;
+}
+
+function resolveFieldDisplayMode(
+  definition: RecordDefinition,
+  field: RecordFieldDefinition
+): RecordDisplayMode {
+  if (field.classification === 'data') {
+    return 'bare';
+  }
+  if (!Array.isArray(definition.display)) {
+    return 'bare';
+  }
+  const explicit = definition.display.find(entry => entry.field === field.name);
+  if (!explicit) {
+    return 'handle';
+  }
+  return explicit.kind === 'mask' ? 'mask' : 'bare';
+}
+
+function buildRecordObjectProjectionMetadata(
+  definition: RecordDefinition
+): RecordObjectProjectionMetadata {
+  return {
+    kind: 'record',
+    recordName: definition.name,
+    hasDisplay: Array.isArray(definition.display),
+    fields: Object.fromEntries(
+      definition.fields.map(field => [
+        field.name,
+        {
+          classification: field.classification,
+          display: resolveFieldDisplayMode(definition, field)
+        }
+      ])
+    )
+  };
+}
+
+function buildRecordFieldProjectionMetadata(
+  definition: RecordDefinition,
+  field: RecordFieldDefinition
+): RecordFieldProjectionMetadata {
+  return {
+    kind: 'field',
+    recordName: definition.name,
+    fieldName: field.name,
+    classification: field.classification,
+    display: resolveFieldDisplayMode(definition, field),
+    hasDisplay: Array.isArray(definition.display)
+  };
 }
 
 function setNamespaceMetadata(
@@ -413,13 +467,15 @@ async function coerceRecordObject(
             )
           }
         : {}),
-      factsources: fieldFactsources
+      factsources: fieldFactsources,
+      projection: buildRecordFieldProjectionMetadata(definition, field)
     };
   }
 
   const structured = wrapStructured(shaped, 'object', undefined, {
     schema: buildSchemaMetadata(definition, errors),
-    factsources
+    factsources,
+    projection: buildRecordObjectProjectionMetadata(definition)
   });
   setNamespaceMetadata(structured, namespaceMetadata);
   return {

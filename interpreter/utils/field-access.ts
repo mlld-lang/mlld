@@ -23,6 +23,7 @@ import {
   isStructuredValue,
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue,
+  setRecordProjectionMetadata,
   type StructuredValue
 } from './structured-value';
 import { wrapExecResult } from './structured-exec';
@@ -335,7 +336,10 @@ function getFieldMetadata(
 
   return {
     descriptor: legacySecurity ?? deserializeSecurityDescriptor(payload.security as any),
-    factsources: Array.isArray(payload.factsources) ? payload.factsources : undefined
+    factsources: Array.isArray(payload.factsources) ? payload.factsources : undefined,
+    projection: payload.projection && typeof payload.projection === 'object'
+      ? payload.projection
+      : undefined
   };
 }
 
@@ -1126,6 +1130,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         factsources: [...fieldMetadata.factsources]
       };
       accessedValue.mx.factsources = [...fieldMetadata.factsources];
+    }
+  }
+
+  if (fieldMetadata?.projection) {
+    if (accessedValue != null && typeof accessedValue !== 'object') {
+      accessedValue = wrapExecResult(accessedValue);
+    }
+    if (isStructuredValue(accessedValue)) {
+      setRecordProjectionMetadata(accessedValue, fieldMetadata.projection as any);
     }
   }
 

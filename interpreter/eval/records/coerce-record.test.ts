@@ -7,7 +7,7 @@ import type { RecordDirectiveNode } from '@core/types/record';
 import { evaluateRecord } from '@interpreter/eval/record';
 import { coerceRecordOutput } from './coerce-record';
 import { accessField } from '@interpreter/utils/field-access';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { getRecordProjectionMetadata, isStructuredValue } from '@interpreter/utils/structured-value';
 
 function createEnvironment(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -100,11 +100,30 @@ describe('record output coercion', () => {
       '@contact.org',
       '@contact.display'
     ]);
+    expect(getRecordProjectionMetadata(output)).toEqual({
+      kind: 'record',
+      recordName: 'contact',
+      hasDisplay: false,
+      fields: {
+        email: { classification: 'fact', display: 'bare' },
+        org: { classification: 'fact', display: 'bare' },
+        display: { classification: 'fact', display: 'bare' },
+        notes: { classification: 'data', display: 'bare' }
+      }
+    });
 
     const email = await accessNamedField(output, 'email');
     expect(isStructuredValue(email)).toBe(true);
     expect(email.mx.labels).toContain('fact:internal:@contact.email');
     expect(email.mx.factsources?.map(handle => handle.ref)).toEqual(['@contact.email']);
+    expect(getRecordProjectionMetadata(email)).toEqual({
+      kind: 'field',
+      recordName: 'contact',
+      fieldName: 'email',
+      classification: 'fact',
+      display: 'bare',
+      hasDisplay: false
+    });
 
     const org = await accessNamedField(output, 'org');
     expect(isStructuredValue(org)).toBe(true);
@@ -132,10 +151,61 @@ describe('record output coercion', () => {
 
     const first = output.data[0];
     expect(isStructuredValue(first)).toBe(true);
+    expect(getRecordProjectionMetadata(first)).toEqual({
+      kind: 'record',
+      recordName: 'contact',
+      hasDisplay: false,
+      fields: {
+        email: { classification: 'fact', display: 'bare' }
+      }
+    });
     const firstEmail = await accessNamedField(first, 'email');
     expect(isStructuredValue(firstEmail)).toBe(true);
     expect(firstEmail.text).toBe('a@example.com');
     expect(firstEmail.mx.labels).toContain('fact:@contact.email');
+  });
+
+  it('attaches explicit display metadata to record and field values', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: [name, { mask: "email" }]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada',
+        notes: 'hi'
+      },
+      env
+    });
+
+    expect(getRecordProjectionMetadata(output)).toEqual({
+      kind: 'record',
+      recordName: 'contact',
+      hasDisplay: true,
+      fields: {
+        email: { classification: 'fact', display: 'mask' },
+        name: { classification: 'fact', display: 'bare' },
+        notes: { classification: 'data', display: 'bare' }
+      }
+    });
+
+    const email = await accessNamedField(output, 'email');
+    expect(isStructuredValue(email)).toBe(true);
+    expect(getRecordProjectionMetadata(email)).toEqual({
+      kind: 'field',
+      recordName: 'contact',
+      fieldName: 'email',
+      classification: 'fact',
+      display: 'mask',
+      hasDisplay: true
+    });
   });
 
   it('demotes invalid records to data while preserving factsources', async () => {

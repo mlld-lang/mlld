@@ -9,7 +9,12 @@ import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
 import { evaluateExecInvocation } from './exec-invocation';
-import { asText, isStructuredValue, wrapStructured } from '../utils/structured-value';
+import {
+  asText,
+  getRecordProjectionMetadata,
+  isStructuredValue,
+  wrapStructured
+} from '../utils/structured-value';
 import { createExecutableVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
@@ -141,12 +146,30 @@ describe('evaluateExecInvocation (structured)', () => {
       '@contact.org',
       '@contact.display'
     ]);
+    expect(getRecordProjectionMetadata(result.value)).toEqual({
+      kind: 'record',
+      recordName: 'contact',
+      hasDisplay: false,
+      fields: {
+        email: { classification: 'fact', display: 'bare' },
+        org: { classification: 'fact', display: 'bare' },
+        display: { classification: 'data', display: 'bare' }
+      }
+    });
 
     const email = await accessField(result.value, { type: 'field', value: 'email' } as any);
     expect(isStructuredValue(email)).toBe(true);
     expect(email.text).toBe('ada@example.com');
     expect(email.mx.labels).toContain('fact:@contact.email');
     expect(email.mx.factsources?.map(handle => handle.ref)).toEqual(['@contact.email']);
+    expect(getRecordProjectionMetadata(email)).toEqual({
+      kind: 'field',
+      recordName: 'contact',
+      fieldName: 'email',
+      classification: 'fact',
+      display: 'bare',
+      hasDisplay: false
+    });
 
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
     expect(isStructuredValue(display)).toBe(true);

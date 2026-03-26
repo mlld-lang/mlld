@@ -4,7 +4,7 @@ import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
-import type { RecordSchemaMetadata } from '@core/types/record';
+import type { RecordProjectionMetadata, RecordSchemaMetadata } from '@core/types/record';
 import type { FactSourceHandle } from '@core/types/handle';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 
@@ -40,6 +40,7 @@ export interface StructuredValueMetadata {
   security?: SecurityDescriptor;
   schema?: RecordSchemaMetadata;
   factsources?: readonly FactSourceHandle[];
+  projection?: RecordProjectionMetadata;
   loadResult?: StructuredValueLoadResult;
   metrics?: {
     tokens?: number;
@@ -435,6 +436,7 @@ export const structuredValueUtils = {
   wrapStructured,
   isStructuredValue,
   ensureStructuredValue,
+  getRecordProjectionMetadata,
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
@@ -456,6 +458,25 @@ export function applySecurityDescriptorToStructuredValue(
   value.mx.sources = normalized.sources ? [...normalized.sources] : [];
   value.mx.tools = normalized.tools ? [...normalized.tools] : [];
   value.mx.policy = normalized.policyContext ?? null;
+}
+
+export function getRecordProjectionMetadata(
+  value: unknown
+): RecordProjectionMetadata | undefined {
+  if (!isStructuredValue(value)) {
+    return undefined;
+  }
+  return value.metadata?.projection as RecordProjectionMetadata | undefined;
+}
+
+export function setRecordProjectionMetadata(
+  value: StructuredValue,
+  projection: RecordProjectionMetadata
+): void {
+  value.metadata = {
+    ...(value.metadata ?? {}),
+    projection
+  };
 }
 
 function ensureStructuredValueState<T>(value: StructuredValue<T>): StructuredValue<T> {

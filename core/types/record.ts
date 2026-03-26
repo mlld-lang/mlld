@@ -5,9 +5,36 @@ import type { DataValue } from './var';
 export type RecordFieldClassification = 'fact' | 'data';
 export type RecordScalarType = 'string' | 'number' | 'boolean';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
+export type RecordDisplayMode = 'bare' | 'mask' | 'handle';
 export type RecordDisplayEntry =
   | { kind: 'bare'; field: string }
   | { kind: 'mask'; field: string };
+
+export interface RecordFieldProjectionMetadata {
+  kind: 'field';
+  recordName: string;
+  fieldName: string;
+  classification: RecordFieldClassification;
+  display: RecordDisplayMode;
+  hasDisplay: boolean;
+}
+
+export interface RecordObjectProjectionMetadata {
+  kind: 'record';
+  recordName: string;
+  hasDisplay: boolean;
+  fields: Record<
+    string,
+    {
+      classification: RecordFieldClassification;
+      display: RecordDisplayMode;
+    }
+  >;
+}
+
+export type RecordProjectionMetadata =
+  | RecordFieldProjectionMetadata
+  | RecordObjectProjectionMetadata;
 
 export interface RecordInputFieldDefinition {
   kind: 'input';

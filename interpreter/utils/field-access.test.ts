@@ -7,7 +7,11 @@ import {
   createSimpleTextVariable,
   createStructuredValueVariable
 } from '@core/types/variable/VariableFactories';
-import { applySecurityDescriptorToStructuredValue, wrapStructured } from './structured-value';
+import {
+  applySecurityDescriptorToStructuredValue,
+  getRecordProjectionMetadata,
+  wrapStructured
+} from './structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -99,6 +103,57 @@ describe('object mx utilities', () => {
     ], { preserveContext: false });
 
     expect(labels).toEqual(['untrusted']);
+  });
+});
+
+describe('record projection field access', () => {
+  it('preserves field-level projection metadata when accessing structured record fields', async () => {
+    const structured = wrapStructured(
+      { email: 'ada@example.com', name: 'Ada' },
+      'object',
+      '{"email":"ada@example.com","name":"Ada"}',
+      {
+        projection: {
+          kind: 'record',
+          recordName: 'contact',
+          hasDisplay: true,
+          fields: {
+            email: { classification: 'fact', display: 'mask' },
+            name: { classification: 'fact', display: 'bare' }
+          }
+        }
+      }
+    );
+    structured.internal = {
+      ...(structured.internal ?? {}),
+      namespaceMetadata: {
+        email: {
+          projection: {
+            kind: 'field',
+            recordName: 'contact',
+            fieldName: 'email',
+            classification: 'fact',
+            display: 'mask',
+            hasDisplay: true
+          }
+        }
+      }
+    };
+
+    const result = await accessField(
+      createStructuredValueVariable('contact', structured, source),
+      { type: 'field', value: 'email' },
+      { preserveContext: false }
+    );
+
+    expect(getRecordProjectionMetadata(result)).toEqual({
+      kind: 'field',
+      recordName: 'contact',
+      fieldName: 'email',
+      classification: 'fact',
+      display: 'mask',
+      hasDisplay: true
+    });
   });
 });
 
