@@ -4,7 +4,7 @@ title: Security Getting Started
 brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
-related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations, facts-and-handles, pattern-planner]
+related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations, facts-and-handles, pattern-planner, security-url-exfiltration]
 updated: 2026-03-24
 qa_tier: 2
 ---
@@ -91,7 +91,9 @@ exe net:w @postToSlack(channel, msg) = run cmd { curl -X POST @channel -d @msg }
 
 For destination-aware sends, use the narrower `exfil:send` label. `no-send-to-unknown` requires named destination args to carry `known` or a matching `fact:` label. For targeted destructive actions such as delete/cancel/remove, label the operation `destructive:targeted` and enable `no-destroy-unknown` to require the named target arg to carry `known` or `fact:*.id`.
 
-For field-level trust classification, use records to declare which tool output fields are authoritative facts and which are untrusted data. `exe @tool(...) => record` applies the record's classification automatically. See `facts-and-handles` for the full record/fact/handle model.
+For field-level trust classification, use records to declare which tool output fields are authoritative facts and which are untrusted data. `exe @tool(...) => record` applies the record's classification automatically — including trust refinement, which clears `untrusted` on fact fields while preserving it on data fields. See `facts-and-handles` for the full record/fact/handle model.
+
+For URL exfiltration defense, add `no-novel-urls` (with `untrusted-llms-get-influenced`). Any URL the LLM constructs from scratch is blocked. Use `urls.allowConstruction` for legitimate construction domains. See `security-url-exfiltration`.
 
 See `policy-operations` for the two-step labeling pattern. See `policy-label-flow` for custom deny/allow rules.
 

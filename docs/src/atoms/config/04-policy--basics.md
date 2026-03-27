@@ -20,7 +20,10 @@ policy @p = {
       "no-secret-exfil",
       "no-sensitive-exfil",
       "no-untrusted-destructive",
-      "no-untrusted-privileged"
+      "no-untrusted-privileged",
+      "no-send-to-unknown",
+      "no-destroy-unknown",
+      "no-novel-urls"
     ]
   },
   operations: {
@@ -40,7 +43,9 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
-Built-in destination/target rules use the same `defaults.rules` list. `no-send-to-unknown` checks operations labeled `exfil:send` and requires named destination args to carry `known`. `no-send-to-external` is the stricter send variant and requires `known:internal`. `no-destroy-unknown` checks operations labeled `destructive:targeted` and requires named target args to carry `known`, which is useful for delete/cancel/remove flows where the target must be explicitly approved.
+Built-in positive checks use the same `defaults.rules` list. `no-send-to-unknown` checks `exfil:send` operations and requires destination args to carry `fact:*.email` or `known` proof. `no-send-to-external` is the stricter variant requiring `fact:internal:*.email` or `known:internal`. `no-destroy-unknown` checks `destructive:targeted` operations and requires target args to carry `fact:*.id` or `known` proof.
+
+`no-novel-urls` blocks URL exfiltration: any URL in an `influenced` tool-call argument must appear verbatim in a prior tool result or user payload. URLs the LLM constructs from scratch are blocked. Requires `untrusted-llms-get-influenced` to be active. Use `urls.allowConstruction` in policy to allowlist domains where constructed URLs are acceptable. See `security-url-exfiltration`.
 
 `mlld validate` warns on unknown built-in rule names in `defaults.rules` and suggests the closest known rule when it can.
 
