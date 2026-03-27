@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Executables can now declare authorization control args directly with `with { controlArgs: [...] }`. `policy.authorizations`, `mlld validate`, and `mlld analyze` now consume that metadata without requiring a `var tools` wrapper, and native function-tool / MCP bridge calls carry it through at runtime.
 - Boundary input canonicalization for projected record values: native tool calls and `with { policy }` authorization bundles now accept exact emitted handles, masked previews, and bare visible fact literals for security-relevant args, canonicalize them back to live values, and fail closed on ambiguity with handle guidance.
+- URL exfiltration defense: values now expose `mx.urls`, runtime maintains `@mx.urls.registry` from external inputs, and the managed `no-novel-urls` rule blocks influenced exe arguments that introduce URLs not present in execution input context unless `policy.urls.allowConstruction` permits the domain.
 
 ### Fixed
 - `policy.authorizations` now fails closed on native `tool:w` paths. Unconstrained or incomplete authorizations are rejected for bridged tool calls, and when trusted control-arg metadata is missing, every declared parameter is treated as a control arg.

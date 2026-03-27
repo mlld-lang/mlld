@@ -81,6 +81,7 @@ export interface SecurityDescriptor {
   readonly taint: readonly DataLabel[];
   readonly attestations: readonly DataLabel[];
   readonly sources: readonly string[];
+  readonly urls?: readonly string[];
   readonly tools?: readonly ToolProvenance[];
   readonly capability?: CapabilityKind;
   readonly policyContext?: Readonly<Record<string, unknown>>;
@@ -93,6 +94,7 @@ export interface CapabilityContext {
   readonly taint: readonly DataLabel[];
   readonly attestations: readonly DataLabel[];
   readonly sources: readonly string[];
+  readonly urls?: readonly string[];
   readonly policy?: Readonly<Record<string, unknown>>;
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly operation?: Readonly<Record<string, unknown>>;
@@ -104,6 +106,7 @@ export type SerializedSecurityDescriptor = {
   taint: DataLabel[];
   attestations: DataLabel[];
   sources: string[];
+  urls?: string[];
   tools?: ToolProvenance[];
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
@@ -116,6 +119,7 @@ export type SerializedCapabilityContext = {
   taint: DataLabel[];
   attestations: DataLabel[];
   sources: string[];
+  urls?: string[];
   policy?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   operation?: Record<string, unknown>;
@@ -235,6 +239,7 @@ function createDescriptor(
   taint: readonly DataLabel[],
   attestations: readonly DataLabel[],
   sources: readonly string[],
+  urls?: readonly string[],
   tools?: readonly ToolProvenance[],
   capability?: CapabilityKind,
   policyContext?: Readonly<Record<string, unknown>>
@@ -244,6 +249,7 @@ function createDescriptor(
     taint,
     attestations,
     sources,
+    ...(urls && urls.length > 0 ? { urls } : {}),
     ...(tools && tools.length > 0 ? { tools } : {}),
     capability,
     policyContext
@@ -255,6 +261,7 @@ export function makeSecurityDescriptor(options?: {
   taint?: Iterable<DataLabel>;
   attestations?: Iterable<DataLabel>;
   sources?: Iterable<string>;
+  urls?: Iterable<string>;
   tools?: Iterable<ToolProvenance>;
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
@@ -269,6 +276,7 @@ export function makeSecurityDescriptor(options?: {
     ...labels.filter(label => !isAttestationLabel(label))
   ]);
   const sources = freezeArray(options?.sources);
+  const urls = freezeArray(options?.urls);
   const tools = freezeToolArray(options?.tools);
   const policyContext = freezeObject(options?.policyContext);
   return createDescriptor(
@@ -276,6 +284,7 @@ export function makeSecurityDescriptor(options?: {
     taint,
     attestations,
     sources,
+    urls,
     tools,
     options?.capability,
     policyContext
@@ -299,18 +308,27 @@ export function normalizeSecurityDescriptor(
   const candidate = input as SecurityDescriptor;
   const labels = (candidate as any).labels;
   const sources = (candidate as any).sources;
+  const urls = (candidate as any).urls;
   const taint = (candidate as any).taint;
   const attestations = (candidate as any).attestations;
   const tools = (candidate as any).tools;
   const hasIterableLabels = Array.isArray(labels) && typeof labels.forEach === 'function';
   const hasIterableSources = Array.isArray(sources) && typeof sources.forEach === 'function';
+  const hasIterableUrls = urls === undefined || (Array.isArray(urls) && typeof urls.forEach === 'function');
   const hasIterableTaint = Array.isArray(taint) && typeof taint.forEach === 'function';
   const hasIterableAttestations =
     Array.isArray(attestations) && typeof attestations.forEach === 'function';
   const hasIterableTools =
     tools === undefined || (Array.isArray(tools) && typeof tools.forEach === 'function');
 
-  if (hasIterableLabels && hasIterableSources && hasIterableTaint && hasIterableAttestations && hasIterableTools) {
+  if (
+    hasIterableLabels &&
+    hasIterableSources &&
+    hasIterableUrls &&
+    hasIterableTaint &&
+    hasIterableAttestations &&
+    hasIterableTools
+  ) {
     return candidate;
   }
 
@@ -326,6 +344,10 @@ export function normalizeSecurityDescriptor(
     Array.isArray(sources) ? (sources as string[]) :
     sources !== undefined && sources !== null ? [sources as string] :
     undefined;
+  const normalizedUrls =
+    Array.isArray(urls) ? (urls as string[]) :
+    urls !== undefined && urls !== null ? [urls as string] :
+    undefined;
   const normalizedAttestations =
     Array.isArray(attestations) ? (attestations as DataLabel[]) :
     attestations !== undefined && attestations !== null ? [attestations as DataLabel] :
@@ -336,6 +358,7 @@ export function normalizeSecurityDescriptor(
     taint: normalizedTaint,
     attestations: normalizedAttestations,
     sources: normalizedSources,
+    urls: normalizedUrls,
     tools: Array.isArray(tools) ? (tools as ToolProvenance[]) : undefined,
     capability: (candidate as any).capability,
     policyContext: (candidate as any).policyContext
@@ -347,6 +370,7 @@ export function mergeDescriptors(
 ): SecurityDescriptor {
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
+  const urlSet = new Set<string>();
   const taintSet = new Set<DataLabel>();
   const attestationSet = new Set<DataLabel>();
   const toolList: ToolProvenance[] = [];
@@ -370,6 +394,7 @@ export function mergeDescriptors(
       labelSet.add(label);
     });
     descriptor.sources.forEach(source => sourceSet.add(source));
+    descriptor.urls?.forEach(url => urlSet.add(url));
     for (const tool of descriptor.tools ?? []) {
       if (tool.auditRef) {
         if (seenToolAuditRefs.has(tool.auditRef)) {
@@ -394,6 +419,7 @@ export function mergeDescriptors(
     freezeArray(taintSet),
     freezeArray(attestationSet),
     freezeArray(sourceSet),
+    freezeArray(urlSet),
     freezeToolArray(toolList),
     capability,
     freezeObject(policyContext)
@@ -417,6 +443,7 @@ export function serializeSecurityDescriptor(
     taint: Array.from(descriptor.taint),
     attestations: Array.from(descriptor.attestations),
     sources: Array.from(descriptor.sources),
+    ...(descriptor.urls ? { urls: Array.from(descriptor.urls) } : {}),
     tools: descriptor.tools
       ? descriptor.tools.map(tool => ({
           name: tool.name,
@@ -438,6 +465,7 @@ export function deserializeSecurityDescriptor(
     taint: serialized.taint,
     attestations: serialized.attestations,
     sources: serialized.sources,
+    urls: serialized.urls,
     tools: serialized.tools,
     capability: serialized.capability,
     policyContext: serialized.policyContext
@@ -467,6 +495,7 @@ export function createCapabilityContext(
     taint: options.descriptor.taint,
     attestations: options.descriptor.attestations,
     sources: options.descriptor.sources,
+    ...(options.descriptor.urls ? { urls: options.descriptor.urls } : {}),
     policy: policy ? Object.freeze({ ...policy }) : undefined,
     metadata: options.metadata ? Object.freeze({ ...options.metadata }) : undefined,
     operation: options.operation ? Object.freeze({ ...options.operation }) : undefined,
@@ -485,6 +514,7 @@ export function serializeCapabilityContext(
     taint: Array.from(context.taint),
     attestations: Array.from(context.attestations),
     sources: Array.from(context.sources),
+    ...(context.urls ? { urls: Array.from(context.urls) } : {}),
     policy: context.policy ? { ...context.policy } : undefined,
     metadata: context.metadata ? { ...context.metadata } : undefined,
     operation: context.operation ? { ...context.operation } : undefined,

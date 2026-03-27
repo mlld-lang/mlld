@@ -46,6 +46,7 @@ import {
   type ImportType,
   type DataLabel
 } from '@core/types/security';
+import { extractUrlsFromValue } from '@core/security/url-provenance';
 import type { StateWrite } from '@core/types/state';
 import { mergeNeedsDeclarations, ALLOW_ALL_POLICY, type NeedsDeclaration, type PolicyCapabilities, type ProfilesDeclaration } from '@core/policy/needs';
 import {
@@ -1170,6 +1171,7 @@ export class Environment
         sources: this.securityRuntime.descriptor.sources,
         taint: this.securityRuntime.descriptor.taint,
         attestations: this.securityRuntime.descriptor.attestations,
+        urls: this.securityRuntime.descriptor.urls,
         tools: this.securityRuntime.descriptor.tools,
         policy: this.securityRuntime.policy,
         operation: top?.operation
@@ -1188,6 +1190,7 @@ export class Environment
       && descriptor.taint.length === 0
       && descriptor.attestations.length === 0
       && descriptor.sources.length === 0
+      && (descriptor.urls?.length ?? 0) === 0
       && (descriptor.tools?.length ?? 0) === 0
     ) {
       return undefined;
@@ -1204,6 +1207,7 @@ export class Environment
       taint: snapshot.taint,
       attestations: snapshot.attestations,
       sources: snapshot.sources,
+      urls: snapshot.urls,
       tools: snapshot.tools,
       policyContext: snapshot.policy
     });
@@ -1261,6 +1265,20 @@ export class Environment
     }
     const runtime = this.ensureSecurityRuntime();
     runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
+  }
+
+  recordKnownUrls(urls: readonly string[] | undefined): void {
+    this.contextManager.recordKnownUrls(urls);
+  }
+
+  getKnownUrls(): readonly string[] {
+    return this.contextManager.getKnownUrls();
+  }
+
+  recordKnownUrlsFromValue(value: unknown): readonly string[] {
+    const urls = extractUrlsFromValue(value);
+    this.recordKnownUrls(urls);
+    return urls;
   }
 
   recordStateWrite(write: Omit<StateWrite, 'index' | 'timestamp'> & { index?: number; timestamp?: string }): void {
@@ -2846,7 +2864,10 @@ export class Environment
   }
   
   async fetchURL(url: string, options?: FetchURLOptions): Promise<string> {
-    return this.importResolver.fetchURL(url, options);
+    const content = await this.importResolver.fetchURL(url, options);
+    this.recordKnownUrls([url]);
+    this.recordKnownUrlsFromValue(content);
+    return content;
   }
   
   // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager
@@ -2866,7 +2887,10 @@ export class Environment
     headers: Record<string, string>;
     status: number;
   }> {
-    return this.importResolver.fetchURLWithMetadata(url);
+    const response = await this.importResolver.fetchURLWithMetadata(url);
+    this.recordKnownUrls([url]);
+    this.recordKnownUrlsFromValue(response.content);
+    return response;
   }
   
   setURLConfig(config: ResolvedURLConfig): void {

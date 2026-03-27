@@ -43,6 +43,7 @@ export class ContentLoaderFileHandler {
     const resolvedPath = input.resolvedPathOverride ?? (await input.env.resolvePath(input.filePath));
     enforceFilesystemAccess(input.env, 'read', resolvedPath, input.sourceLocation);
     const rawContent = await input.env.readFile(resolvedPath);
+    input.env.recordKnownUrlsFromValue(rawContent);
     const value =
       resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')
         ? await this.loadHtmlFile(rawContent, resolvedPath, input.options, input.env)

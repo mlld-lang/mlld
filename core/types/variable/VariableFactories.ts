@@ -34,6 +34,8 @@ import { legacyMetadataToVarMx, legacyMetadataToInternal } from './VarMxHelpers'
 import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
+import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
+import { normalizeSecurityDescriptor } from '@core/types/security';
 
 export interface VariableFactoryInitOptions {
   mx?: Partial<VariableContext>;
@@ -49,15 +51,30 @@ interface NormalizedFactoryState {
 
 function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {
   const legacyMetadata = variable.metadata;
+  const securityWithUrls = replaceDescriptorUrls(
+    normalizeSecurityDescriptor(legacyMetadata?.security as any),
+    extractUrlsFromValue(variable.value)
+  );
+  if (legacyMetadata || securityWithUrls) {
+    variable.metadata = VariableMetadataUtils.applySecurityMetadata(legacyMetadata, securityWithUrls
+      ? { existingDescriptor: securityWithUrls }
+      : undefined);
+    if (variable.type === 'structured' && variable.value && variable.metadata?.security) {
+      applySecurityDescriptorToStructuredValue(variable.value as StructuredValue, variable.metadata.security);
+    }
+  }
   if (!variable.mx) {
-    variable.mx = legacyMetadata
-      ? legacyMetadataToVarMx(legacyMetadata)
+    variable.mx = variable.metadata
+      ? legacyMetadataToVarMx(variable.metadata)
       : {
           labels: [],
           taint: [],
           sources: [],
           policy: null
         };
+  }
+  if (variable.mx) {
+    variable.mx.urls = securityWithUrls?.urls ? [...securityWithUrls.urls] : [];
   }
   if (variable.mx) {
     variable.mx.name = variable.name;

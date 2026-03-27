@@ -119,6 +119,7 @@ export interface VariableContext {
   length?: number;
   size?: number;
   sources: readonly string[];
+  urls?: readonly string[];
   tools?: readonly ToolProvenance[];
   exported?: boolean;
   policy?: Readonly<Record<string, unknown>> | null;

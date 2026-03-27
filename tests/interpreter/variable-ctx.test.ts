@@ -56,6 +56,27 @@ describe('variable .mx namespace', () => {
     expect(textVar.mx?.length).toBe(10);
   });
 
+  it('extracts url provenance from scalar and container values', () => {
+    const source = VariableMetadataUtils.createSource('quoted', false, false);
+    const textVar = createSimpleTextVariable(
+      'message',
+      'visit https://example.com/path#frag',
+      source
+    );
+    const arrVar = createArrayVariable(
+      'items',
+      ['https://docs.example.com/a', { link: 'https://www.google.com/search?q=ada' }],
+      false,
+      source
+    );
+
+    expect(textVar.mx?.urls).toEqual(['https://example.com/path']);
+    expect(arrVar.mx?.urls).toEqual([
+      'https://docs.example.com/a',
+      'https://www.google.com/search?q=ada'
+    ]);
+  });
+
   it('exposes fact-aware has_label matching on mx contexts', () => {
     const source = VariableMetadataUtils.createSource('quoted', false, false);
     const emailVar = createSimpleTextVariable('email', 'ada@example.com', source, {

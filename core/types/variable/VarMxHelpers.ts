@@ -12,6 +12,7 @@ import type { DataLabel, SecurityDescriptor, ToolProvenance } from '@core/types/
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
+const EMPTY_URLS: readonly string[] = Object.freeze([]);
 const EMPTY_TOOLS: readonly ToolProvenance[] = Object.freeze([]);
 
 interface LegacyLoadResult extends Partial<LoadContentResult> {
@@ -34,6 +35,7 @@ export function varMxToSecurityDescriptor(mx: VariableContext): SecurityDescript
     taint: mx.taint ? [...mx.taint] : [],
     attestations: mx.attestations ? [...mx.attestations] : [],
     sources: mx.sources ? [...mx.sources] : [],
+    urls: mx.urls ? [...mx.urls] : [],
     tools: mx.tools ? [...mx.tools] : [],
     policyContext: mx.policy ?? undefined
   });
@@ -55,6 +57,7 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
       ? cloneArray((metadata as { factsources?: readonly unknown[] }).factsources as readonly any[])
       : undefined,
     sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
+    urls: descriptor.urls ? cloneArray(descriptor.urls) : EMPTY_URLS,
     tools: descriptor.tools ? cloneArray(descriptor.tools) : EMPTY_TOOLS,
     policy: descriptor.policyContext ?? null,
     source: metadata?.source,
@@ -122,6 +125,7 @@ export function updateVarMxFromDescriptor(
   mx.taint = normalized.taint ? [...normalized.taint] : [];
   mx.attestations = normalized.attestations ? [...normalized.attestations] : [];
   mx.sources = normalized.sources ? [...normalized.sources] : [];
+  mx.urls = normalized.urls ? [...normalized.urls] : (mx.urls ? [...mx.urls] : []);
   mx.tools = normalized.tools ? [...normalized.tools] : [];
   mx.policy = normalized.policyContext ?? null;
 }
@@ -131,6 +135,7 @@ export function hasSecurityVarMx(mx: VariableContext): boolean {
     (mx.labels?.length ?? 0) > 0
     || (mx.taint?.length ?? 0) > 0
     || (mx.attestations?.length ?? 0) > 0
+    || (mx.urls?.length ?? 0) > 0
     || (mx.tools?.length ?? 0) > 0
   );
 }
@@ -142,6 +147,7 @@ export function serializeSecurityVarMx(
   taint: readonly DataLabel[];
   attestations: readonly DataLabel[];
   sources: readonly string[];
+  urls: readonly string[];
   tools: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
 } {
@@ -150,6 +156,7 @@ export function serializeSecurityVarMx(
     taint: mx.taint ?? [],
     attestations: mx.attestations ?? EMPTY_LABELS,
     sources: mx.sources ?? EMPTY_SOURCES,
+    urls: mx.urls ?? EMPTY_URLS,
     tools: mx.tools ?? EMPTY_TOOLS,
     policy: mx.policy ?? null
   };

@@ -222,8 +222,11 @@ export class ContentLoaderOrchestrator {
     options: any;
   }): Promise<ContentLoaderProcessResult> {
     const astVariantLoader = new AstVariantLoader({
-      readContent: async (candidatePath, candidateLocation) =>
-        this.dependencies.readFileWithPolicy(candidatePath, context.env, candidateLocation),
+      readContent: async (candidatePath, candidateLocation) => {
+        const content = await this.dependencies.readFileWithPolicy(candidatePath, context.env, candidateLocation);
+        context.env.recordKnownUrlsFromValue(content);
+        return content;
+      },
       formatRelativePath: (targetPath) => this.dependencies.formatRelativePath(context.env, targetPath)
     });
 

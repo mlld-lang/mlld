@@ -58,6 +58,7 @@ export class InputImportHandler {
       exportData = { value: result.content };
     }
 
+    env.recordKnownUrlsFromValue(exportData);
     await this.dataAdapter.importResolverVariables(directive, exportData, env, '@input');
     return { value: undefined, env };
   }

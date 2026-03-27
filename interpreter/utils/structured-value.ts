@@ -1,5 +1,6 @@
 import type { SecurityDescriptor, DataLabel, ToolProvenance } from '@core/types/security';
 import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
+import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
 import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import { isLoadContentResult } from '@core/types/load-content';
@@ -90,6 +91,7 @@ export interface StructuredValueContext {
   schema?: RecordSchemaMetadata;
   factsources?: readonly FactSourceHandle[];
   sources: readonly string[];
+  urls?: readonly string[];
   tools?: readonly ToolProvenance[];
   policy: Readonly<Record<string, unknown>> | null;
   has_label?: (pattern: string) => boolean;
@@ -133,7 +135,15 @@ const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
 const SHOULD_ASSERT_STRUCTURED =
   DEV_ENV?.MLLD_DEV_ASSERTIONS === 'true' || DEV_ENV?.MLLD_DEBUG_STRUCTURED === 'true';
 
-function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: string; sources?: readonly string[]; policy?: Readonly<Record<string, unknown>> | null }): SecurityDescriptor {
+function varMxToSecurityDescriptor(
+  mx: {
+    labels?: readonly DataLabel[];
+    taint?: string;
+    sources?: readonly string[];
+    urls?: readonly string[];
+    policy?: Readonly<Record<string, unknown>> | null;
+  }
+): SecurityDescriptor {
   return makeSecurityDescriptor({
     labels: mx.labels ? [...mx.labels] : [],
     taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
@@ -141,6 +151,7 @@ function varMxToSecurityDescriptor(mx: { labels?: readonly DataLabel[]; taint?: 
       ? [...((mx as { attestations?: readonly DataLabel[] }).attestations ?? [])]
       : [],
     sources: mx.sources ? [...mx.sources] : [],
+    urls: Array.isArray(mx.urls) ? [...mx.urls] : [],
     tools: Array.isArray((mx as { tools?: readonly ToolProvenance[] }).tools)
       ? [...((mx as { tools?: readonly ToolProvenance[] }).tools ?? [])]
       : [],
@@ -376,7 +387,7 @@ function createStructuredValue<T>(
   metadata?: StructuredValueMetadata
 ): StructuredValue<T> {
   const resolvedText = text ?? '';
-  const resolvedMetadata = cloneMetadata(metadata);
+  const resolvedMetadata = cloneMetadataWithDerivedUrls(data, resolvedText, metadata);
   const structuredValue = {
     type,
     text: resolvedText,
@@ -400,14 +411,24 @@ function createStructuredValue<T>(
   return structuredValue;
 }
 
-function cloneMetadata(metadata?: StructuredValueMetadata): StructuredValueMetadata | undefined {
-  if (!metadata) {
+function cloneMetadataWithDerivedUrls(
+  data: unknown,
+  text: string,
+  metadata?: StructuredValueMetadata
+): StructuredValueMetadata | undefined {
+  const urls = extractUrlsFromValue([data, text]);
+  const normalizedDescriptor = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  const security = replaceDescriptorUrls(normalizedDescriptor, urls);
+
+  if (!metadata && !security) {
     return undefined;
   }
-  if (Object.isFrozen(metadata)) {
-    return metadata;
-  }
-  return Object.freeze({ ...metadata });
+
+  const cloned = {
+    ...(metadata ? { ...metadata } : {}),
+    ...(security ? { security } : {})
+  } as StructuredValueMetadata;
+  return Object.freeze(cloned);
 }
 
 function deriveText(value: unknown): string {
@@ -448,16 +469,19 @@ export function applySecurityDescriptorToStructuredValue(
   descriptor: SecurityDescriptor
 ): void {
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
+  const resolvedDescriptor =
+    replaceDescriptorUrls(normalized, extractUrlsFromValue([value.data, value.text])) ?? normalized;
   value.metadata = {
     ...(value.metadata ?? {}),
-    security: normalized
+    security: resolvedDescriptor
   };
-  value.mx.labels = normalized.labels ? [...normalized.labels] : [];
-  value.mx.taint = normalized.taint ? [...normalized.taint] : [];
-  value.mx.attestations = normalized.attestations ? [...normalized.attestations] : [];
-  value.mx.sources = normalized.sources ? [...normalized.sources] : [];
-  value.mx.tools = normalized.tools ? [...normalized.tools] : [];
-  value.mx.policy = normalized.policyContext ?? null;
+  value.mx.labels = resolvedDescriptor.labels ? [...resolvedDescriptor.labels] : [];
+  value.mx.taint = resolvedDescriptor.taint ? [...resolvedDescriptor.taint] : [];
+  value.mx.attestations = resolvedDescriptor.attestations ? [...resolvedDescriptor.attestations] : [];
+  value.mx.sources = resolvedDescriptor.sources ? [...resolvedDescriptor.sources] : [];
+  value.mx.urls = resolvedDescriptor.urls ? [...resolvedDescriptor.urls] : [];
+  value.mx.tools = resolvedDescriptor.tools ? [...resolvedDescriptor.tools] : [];
+  value.mx.policy = resolvedDescriptor.policyContext ?? null;
 }
 
 export function getRecordProjectionMetadata(
@@ -610,6 +634,7 @@ function buildVarMxFromMetadata(
     schema: metadata?.schema,
     factsources: Array.isArray(metadata?.factsources) ? [...metadata.factsources] : undefined,
     sources,
+    urls: normalizedDescriptor.urls ? [...normalizedDescriptor.urls] : [],
     tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
     policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,

@@ -87,6 +87,7 @@ export interface SecuritySnapshotLike {
   sources: readonly string[];
   taint: readonly string[];
   attestations?: readonly string[];
+  urls?: readonly string[];
   tools?: readonly ToolProvenance[];
   policy?: Readonly<Record<string, unknown>>;
   operation?: Readonly<Record<string, unknown>>;
@@ -154,6 +155,7 @@ export class ContextManager {
   private toolFactRoots: unknown[] = [];
   private sigStatuses: Record<string, unknown> = {};
   private sigFilesResolver?: SigFilesResolver;
+  private readonly knownUrls = new Set<string>();
 
   pushOperation(context: OperationContext): void {
     this.opStack.push(Object.freeze({ ...context }));
@@ -357,6 +359,26 @@ export class ContextManager {
     this.sigFilesResolver = resolver;
   }
 
+  recordKnownUrls(urls: readonly string[] | undefined): void {
+    if (!urls || urls.length === 0) {
+      return;
+    }
+    for (const value of urls) {
+      if (typeof value !== 'string') {
+        continue;
+      }
+      const normalized = value.trim();
+      if (!normalized) {
+        continue;
+      }
+      this.knownUrls.add(normalized);
+    }
+  }
+
+  getKnownUrls(): readonly string[] {
+    return Array.from(this.knownUrls);
+  }
+
   buildAmbientContext(options: BuildContextOptions = {}): Record<string, unknown> {
     if (options.testOverride !== undefined) {
       return options.testOverride as Record<string, unknown>;
@@ -404,6 +426,7 @@ export class ContextManager {
       : security?.tools
         ? Array.from(security.tools)
         : [];
+    const registryUrls = this.getKnownUrls();
 
     const mxValue: Record<string, unknown> = {
       ...pipelineFields.root,
@@ -441,6 +464,9 @@ export class ContextManager {
       tools: {
         ...this.getToolsSnapshot(),
         history: toolHistory
+      },
+      urls: {
+        registry: registryUrls
       },
       sig: this.buildSigContext(),
       ...(checkpointContext ? { checkpoint: checkpointContext } : {}),

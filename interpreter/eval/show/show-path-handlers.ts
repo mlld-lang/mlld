@@ -36,7 +36,9 @@ async function readPathContent(
   if (env.isURL(resolvedPath)) {
     return env.fetchURL(resolvedPath);
   }
-  return readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
+  const content = await readFileWithPolicy(env, resolvedPath, directiveLocation ?? undefined);
+  env.recordKnownUrlsFromValue(content);
+  return content;
 }
 
 export async function evaluateShowPath({

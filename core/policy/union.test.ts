@@ -260,6 +260,39 @@ describe('PolicyConfig env', () => {
   });
 });
 
+describe('PolicyConfig urls', () => {
+  it('normalizes url construction allowlists', () => {
+    const config = normalizePolicyConfig({
+      urls: {
+        allowConstruction: ['google.com', ' google.com ', '*.internal.corp']
+      }
+    } as PolicyConfig);
+
+    expect(config.urls).toEqual({
+      allowConstruction: ['google.com', '*.internal.corp']
+    });
+  });
+
+  it('merges url construction allowlists by union', () => {
+    const merged = mergePolicyConfigs(
+      {
+        urls: {
+          allowConstruction: ['google.com']
+        }
+      },
+      {
+        urls: {
+          allowConstruction: ['*.internal.corp', 'google.com']
+        }
+      }
+    );
+
+    expect(merged.urls).toEqual({
+      allowConstruction: ['google.com', '*.internal.corp']
+    });
+  });
+});
+
 describe('PolicyConfig keychain', () => {
   it('normalizes keychain provider and pattern lists', () => {
     const config = normalizePolicyConfig({

@@ -723,6 +723,7 @@ export async function interpret(
         );
 
         const decoratedPayloadValue = applyPayloadFieldLabels(payloadValue, payloadLabels);
+        env.recordKnownUrlsFromValue(decoratedPayloadValue);
         const payloadVar = createRuntimePayloadVariable(decoratedPayloadValue);
         payloadVar.internal = {
           ...(payloadVar.internal ?? {}),

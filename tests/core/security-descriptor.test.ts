@@ -40,20 +40,23 @@ describe('SecurityDescriptor helpers', () => {
     const descriptor = makeSecurityDescriptor({
       labels: ['pii'],
       taint: ['pii', 'src:dynamic'],
-      sources: ['/tmp/data']
+      sources: ['/tmp/data'],
+      urls: ['https://example.com/a']
     });
 
     const serialised = serializeSecurityDescriptor(descriptor);
     expect(serialised).toMatchObject({
       labels: ['pii'],
       taint: ['pii', 'src:dynamic'],
-      sources: ['/tmp/data']
+      sources: ['/tmp/data'],
+      urls: ['https://example.com/a']
     });
 
     const restored = deserializeSecurityDescriptor(serialised);
     expect(restored).toBeDefined();
     expect(restored!.labels).toEqual(['pii']);
     expect(restored!.taint).toEqual(['pii', 'src:dynamic']);
+    expect(restored!.urls).toEqual(['https://example.com/a']);
   });
 
   it('preserves tool provenance order and deduplicates by auditRef', () => {
@@ -82,5 +85,20 @@ describe('SecurityDescriptor helpers', () => {
     const serialized = serializeSecurityDescriptor(merged);
     const restored = deserializeSecurityDescriptor(serialized);
     expect(restored?.tools).toEqual(merged.tools);
+  });
+
+  it('merges and deduplicates url provenance', () => {
+    const first = makeSecurityDescriptor({
+      urls: ['https://example.com/a', 'https://example.com/a']
+    });
+    const second = makeSecurityDescriptor({
+      urls: ['https://docs.example.com/b']
+    });
+
+    const merged = mergeDescriptors(first, second);
+    expect(merged.urls).toEqual([
+      'https://example.com/a',
+      'https://docs.example.com/b'
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
 import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
+import { isUrlAllowedByConstruction } from '@core/security/url-provenance';
 import type { PolicyArgDescriptor, PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
@@ -343,6 +344,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     }
     if (rule === 'no-sensitive-exfil') {
       guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
+    }
+    if (rule === 'no-novel-urls') {
+      guards.push(makeNoNovelUrlsGuard(policy, policyDisplayName, policyLocked));
     }
     if (rule === 'no-send-to-unknown') {
       guards.push(makeNamedArgAttestationGuard({
@@ -1196,6 +1200,54 @@ function makeSensitiveExfilGuard(
         policyName: policyDisplayName,
         locked: locked === true
       };
+    }
+  };
+}
+
+function makeNoNovelUrlsGuard(
+  policy: PolicyConfig,
+  policyDisplayName?: string,
+  locked?: boolean
+): PolicyGuardSpec {
+  return {
+    name: '__policy_rule_no_novel_urls',
+    filterKind: 'operation',
+    filterValue: 'exe',
+    scope: 'perOperation',
+    block: makeGuardBlock(),
+    timing: 'before',
+    privileged: true,
+    policyCondition: ({ argDescriptors, urlRegistry }) => {
+      const knownUrls = new Set(normalizeList(urlRegistry));
+      const allowConstruction = normalizeList(policy.urls?.allowConstruction);
+      const influencedDescriptors = Object.values(argDescriptors ?? {}).filter(descriptor =>
+        hasMatchingLabel(collectDescriptorLabels(descriptor), 'influenced')
+      );
+
+      if (influencedDescriptors.length === 0) {
+        return { decision: 'allow' };
+      }
+
+      for (const descriptor of influencedDescriptors) {
+        for (const url of normalizeList(descriptor?.urls)) {
+          if (knownUrls.has(url) || isUrlAllowedByConstruction(url, allowConstruction)) {
+            continue;
+          }
+          return {
+            decision: 'deny',
+            reason: "Rule 'no-novel-urls': influenced args cannot introduce URLs absent from the execution input registry",
+            policyName: policyDisplayName,
+            rule: 'policy.defaults.rules.no-novel-urls',
+            locked: locked === true,
+            suggestions: [
+              'Pass through a URL that was read from external input, or add the domain to policy.urls.allowConstruction',
+              'Review active policies with @mx.policy.activePolicies'
+            ]
+          };
+        }
+      }
+
+      return { decision: 'allow' };
     }
   };
 }

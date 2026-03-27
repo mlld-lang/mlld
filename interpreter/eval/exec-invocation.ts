@@ -106,6 +106,7 @@ import type { RecordDefinition } from '@core/types/record';
 import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
+import { descriptorHasExternalInputSource } from '@core/security/url-provenance';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -2511,6 +2512,9 @@ async function evaluateExecInvocationInternal(
   }
       });
     });
+    if (descriptorHasExternalInputSource(resultSecurityDescriptor)) {
+      env.recordKnownUrlsFromValue(invocationResult.value);
+    }
     await recordToolAudit(true, invocationResult.value);
     recordToolCall(true);
     return invocationResult;

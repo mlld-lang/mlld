@@ -163,7 +163,8 @@ function snapshotPolicyArgDescriptors(
       attestations: mergedDescriptor.attestations.length > 0
         ? Object.freeze([...mergedDescriptor.attestations])
         : undefined,
-      sources: mergedDescriptor.sources.length > 0 ? Object.freeze([...mergedDescriptor.sources]) : undefined
+      sources: mergedDescriptor.sources.length > 0 ? Object.freeze([...mergedDescriptor.sources]) : undefined,
+      urls: (mergedDescriptor.urls?.length ?? 0) > 0 ? Object.freeze([...(mergedDescriptor.urls ?? [])]) : undefined
     });
   }
 
@@ -289,7 +290,8 @@ export async function evaluateGuardRuntime(
           labels: options.perInput.labels,
           taint: options.perInput.taint,
           attestations: options.perInput.attestations,
-          sources: options.perInput.sources
+          sources: options.perInput.sources,
+          urls: Array.isArray(options.perInput.variable.mx?.urls) ? options.perInput.variable.mx?.urls : []
         }
       : undefined;
     const policyInputs = options.perInput
@@ -299,7 +301,8 @@ export async function evaluateGuardRuntime(
             labels: Array.isArray(variable.mx?.labels) ? variable.mx.labels : [],
             taint: Array.isArray(variable.mx?.taint) ? variable.mx.taint : [],
             attestations: Array.isArray(variable.mx?.attestations) ? variable.mx.attestations : [],
-            sources: Array.isArray(variable.mx?.sources) ? variable.mx.sources : []
+            sources: Array.isArray(variable.mx?.sources) ? variable.mx.sources : [],
+            urls: Array.isArray(variable.mx?.urls) ? variable.mx.urls : []
           }))
         : undefined;
     const policyResult = guard.policyCondition({
@@ -307,7 +310,8 @@ export async function evaluateGuardRuntime(
       args: snapshotPolicyArgs(options.args),
       argDescriptors: snapshotPolicyArgDescriptors(options.args),
       input: policyInput,
-      inputs: policyInputs
+      inputs: policyInputs,
+      urlRegistry: env.getKnownUrls()
     });
     if (policyResult.decision === 'deny') {
       const metadataBase: Record<string, unknown> = {

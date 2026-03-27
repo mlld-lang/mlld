@@ -619,7 +619,9 @@ export class ModuleContentProcessor {
           cacheDurationMs
         });
       }
-      return await this.env.readFile(resolvedPath);
+      const content = await this.env.readFile(resolvedPath);
+      this.env.recordKnownUrlsFromValue(content);
+      return content;
     } catch (error) {
       throw new Error(`Failed to read imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
     }

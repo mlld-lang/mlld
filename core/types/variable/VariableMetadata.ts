@@ -192,6 +192,7 @@ export class VariableMetadataUtils {
       capability?: CapabilityContext;
       taint?: DataLabel[];
       sources?: string[];
+      urls?: string[];
       policyContext?: Record<string, unknown>;
       capabilityKind?: CapabilityKind;
     }
@@ -206,6 +207,7 @@ export class VariableMetadataUtils {
       options?.labels ||
       options?.taint ||
       options?.sources ||
+      options?.urls ||
       options?.policyContext ||
       options?.capabilityKind;
 
@@ -215,6 +217,7 @@ export class VariableMetadataUtils {
           taint: options?.taint ?? baseDescriptor.taint,
           attestations: baseDescriptor.attestations,
           sources: options?.sources ?? baseDescriptor.sources,
+          urls: options?.urls ?? baseDescriptor.urls,
           tools: baseDescriptor.tools,
           capability: options?.capabilityKind ?? baseDescriptor.capability,
           policyContext: {

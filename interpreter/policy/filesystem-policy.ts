@@ -77,11 +77,15 @@ export async function readFileWithPolicy(
   sourceLocation?: SourceLocation
 ): Promise<string> {
   if (env.isURL(pathOrUrl)) {
-    return env.readFile(pathOrUrl);
+    const content = await env.readFile(pathOrUrl);
+    env.recordKnownUrlsFromValue(content);
+    return content;
   }
   const resolvedPath = await env.resolvePath(pathOrUrl);
   enforceFilesystemAccess(env, 'read', resolvedPath, sourceLocation);
-  return env.readFile(resolvedPath);
+  const content = await env.readFile(resolvedPath);
+  env.recordKnownUrlsFromValue(content);
+  return content;
 }
 
 export function enforceFileIntegrity(

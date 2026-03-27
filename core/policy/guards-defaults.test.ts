@@ -8,6 +8,7 @@ describe('generatePolicyGuards defaults rules', () => {
       defaults: {
         rules: [
           'no-secret-exfil',
+          'no-novel-urls',
           'no-send-to-unknown',
           'no-send-to-external',
           'no-destroy-unknown',
@@ -20,6 +21,7 @@ describe('generatePolicyGuards defaults rules', () => {
     const names = guards.map(guard => guard.name);
 
     expect(names).toContain('__policy_rule_no_secret_exfil');
+    expect(names).toContain('__policy_rule_no_novel_urls');
     expect(names).toContain('__policy_rule_no_send_to_unknown');
     expect(names).toContain('__policy_rule_no_send_to_external');
     expect(names).toContain('__policy_rule_no_destroy_unknown');
@@ -34,6 +36,11 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(sendGuard?.filterKind).toBe('operation');
     expect(sendGuard?.filterValue).toBe('exe');
     expect(sendGuard?.privileged).toBe(true);
+
+    const urlGuard = guards.find(guard => guard.name === '__policy_rule_no_novel_urls');
+    expect(urlGuard?.filterKind).toBe('operation');
+    expect(urlGuard?.filterValue).toBe('exe');
+    expect(urlGuard?.privileged).toBe(true);
 
     const destroyGuard = guards.find(guard => guard.name === '__policy_rule_no_destroy_unknown');
     expect(destroyGuard?.filterKind).toBe('operation');
@@ -175,6 +182,99 @@ describe('generatePolicyGuards defaults rules', () => {
         argDescriptors: {
           destination: { attestations: ['known'] }
         }
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('denies influenced args with URLs absent from the registry', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-novel-urls'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const urlGuard = guards.find(guard => guard.name === '__policy_rule_no_novel_urls');
+
+    expect(
+      urlGuard?.policyCondition?.({
+        operation: {
+          name: 'sendMessage',
+          labels: ['tool:w:send_message']
+        },
+        argDescriptors: {
+          body: {
+            labels: ['influenced'],
+            urls: ['https://evil.com/collect?d=secret']
+          }
+        },
+        urlRegistry: ['https://example.com/reference']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      rule: 'policy.defaults.rules.no-novel-urls'
+    });
+  });
+
+  it('allows influenced args when the URL is known or allowlisted', () => {
+    const knownPolicy: PolicyConfig = {
+      defaults: { rules: ['no-novel-urls'] }
+    };
+    const allowlistedPolicy: PolicyConfig = {
+      defaults: { rules: ['no-novel-urls'] },
+      urls: { allowConstruction: ['google.com'] }
+    };
+
+    const knownGuard = generatePolicyGuards(knownPolicy).find(
+      guard => guard.name === '__policy_rule_no_novel_urls'
+    );
+    const allowlistedGuard = generatePolicyGuards(allowlistedPolicy).find(
+      guard => guard.name === '__policy_rule_no_novel_urls'
+    );
+
+    expect(
+      knownGuard?.policyCondition?.({
+        operation: { name: 'fetch' },
+        argDescriptors: {
+          url: {
+            labels: ['influenced'],
+            urls: ['https://known.example.com/page']
+          }
+        },
+        urlRegistry: ['https://known.example.com/page']
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      allowlistedGuard?.policyCondition?.({
+        operation: { name: 'fetch' },
+        argDescriptors: {
+          url: {
+            labels: ['influenced'],
+            urls: ['https://www.google.com/search?q=ada']
+          }
+        },
+        urlRegistry: []
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('does not apply no-novel-urls to args without influenced labels', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-novel-urls'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const urlGuard = guards.find(guard => guard.name === '__policy_rule_no_novel_urls');
+
+    expect(
+      urlGuard?.policyCondition?.({
+        operation: { name: 'fetch' },
+        argDescriptors: {
+          url: {
+            labels: ['public'],
+            urls: ['https://evil.com/collect?d=secret']
+          }
+        },
+        urlRegistry: []
       })
     ).toEqual({ decision: 'allow' });
   });

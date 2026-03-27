@@ -77,6 +77,7 @@ export class ContentLoaderGlobHandler {
     for (const filePath of matches) {
       try {
         const rawContent = await this.dependencies.readContent(filePath, input.env, input.sourceLocation);
+        input.env.recordKnownUrlsFromValue(rawContent);
         const fileVerifyResult = await this.dependencies.verifyFileIntegrity(filePath, rawContent, input.env);
         const fileSecurityDescriptor = await this.dependencies.buildFileSecurityDescriptor(
           filePath,

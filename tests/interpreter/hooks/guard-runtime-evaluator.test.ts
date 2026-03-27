@@ -287,6 +287,44 @@ describe('guard runtime evaluator', () => {
     expect(result.decision).toBe('allow');
   });
 
+  it('passes arg url metadata and the shared registry into policy guards', async () => {
+    const env = createEnv();
+    env.recordKnownUrls(['https://known.example.com/page']);
+    const body = createInput('body', 'see https://known.example.com/page', ['influenced']);
+    const guard = createGuard({
+      scope: 'perOperation',
+      filterKind: 'operation',
+      filterValue: 'exe',
+      policyCondition: ({ argDescriptors, urlRegistry }) => {
+        expect(argDescriptors?.body?.urls).toEqual(['https://known.example.com/page']);
+        expect(urlRegistry).toEqual(['https://known.example.com/page']);
+        return { decision: 'allow' };
+      }
+    });
+
+    const result = await evaluateGuardRuntime(
+      createOptions({
+        env,
+        guard,
+        scope: 'perOperation',
+        operationSnapshot: {
+          variables: [body],
+          aggregate: {
+            labels: [],
+            sources: ['source:body']
+          },
+          taint: [],
+          toolsHistory: []
+        } as any,
+        perInput: undefined,
+        args: buildGuardArgsSnapshot([body], ['body'])
+      }),
+      createDeps()
+    );
+
+    expect(result.decision).toBe('allow');
+  });
+
   it('keeps retry-attempt metadata isolated across sequential attempts', async () => {
     const attemptStore = new Map();
     const optionsBase = createOptions({

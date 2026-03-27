@@ -57,6 +57,10 @@ export type PolicyKeychainConfig = {
   deny?: string[];
 };
 
+export type PolicyUrlsConfig = {
+  allowConstruction?: string[];
+};
+
 export type AuthConfig = {
   from: string;
   as: string;
@@ -120,6 +124,7 @@ export type PolicyConfig = {
   authorizations?: PolicyAuthorizations;
   auth?: Record<string, AuthConfig>;
   keychain?: PolicyKeychainConfig;
+  urls?: PolicyUrlsConfig;
   allow?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny?: Record<string, PolicyCapabilityValue> | string[] | true;
   deny_cmd?: string[] | string;
@@ -185,6 +190,7 @@ export function mergePolicyConfigs(
   );
   const auth = mergePolicyAuth(normalizedBase.auth, normalizedIncoming.auth);
   const keychain = mergePolicyKeychain(normalizedBase.keychain, normalizedIncoming.keychain);
+  const urls = mergePolicyUrls(normalizedBase.urls, normalizedIncoming.urls);
   const defaultStance = mergePolicyDefault(normalizedBase.default, normalizedIncoming.default);
   const defaults = mergePolicyDefaults(normalizedBase.defaults, normalizedIncoming.defaults);
   const authorizations = mergePolicyAuthorizations(
@@ -203,6 +209,7 @@ export function mergePolicyConfigs(
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
+    ...(urls ? { urls } : {}),
     allow: fromAllowShape(mergedAllow),
     deny: fromDenyShape(mergedDeny),
     ...(danger && danger.length > 0 ? { danger } : {}),
@@ -263,6 +270,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const authorizations = normalizePolicyAuthorizations(config.authorizations);
   const auth = normalizePolicyAuth(config.auth);
   const keychain = normalizePolicyKeychain(config.keychain);
+  const urls = normalizePolicyUrls(config.urls);
   const defaultStance = normalizePolicyDefault(config.default);
   const defaults = normalizePolicyDefaults(config.defaults);
   const envConfig = normalizePolicyEnv(config.env);
@@ -275,6 +283,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
+    ...(urls ? { urls } : {}),
     allow,
     deny,
     ...(danger ? { danger } : {}),
@@ -444,6 +453,36 @@ function normalizePolicyDefaults(
     result.trustconflict = trustconflict;
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizePolicyUrls(urls?: PolicyUrlsConfig): PolicyUrlsConfig | undefined {
+  if (!urls || !isPlainObject(urls)) {
+    return undefined;
+  }
+  const allowConstruction = normalizeStringList(urls.allowConstruction);
+  if (!allowConstruction || allowConstruction.length === 0) {
+    return undefined;
+  }
+  return { allowConstruction };
+}
+
+function mergePolicyUrls(
+  base?: PolicyUrlsConfig,
+  incoming?: PolicyUrlsConfig
+): PolicyUrlsConfig | undefined {
+  const normalizedBase = normalizePolicyUrls(base);
+  const normalizedIncoming = normalizePolicyUrls(incoming);
+  if (!normalizedBase && !normalizedIncoming) {
+    return undefined;
+  }
+  const allowConstruction = mergeStringLists(
+    normalizedBase?.allowConstruction,
+    normalizedIncoming?.allowConstruction
+  );
+  if (!allowConstruction || allowConstruction.length === 0) {
+    return undefined;
+  }
+  return { allowConstruction };
 }
 
 function normalizePolicyDanger(value: unknown): string[] | undefined {
