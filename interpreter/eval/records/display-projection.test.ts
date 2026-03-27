@@ -145,6 +145,44 @@ describe('renderDisplayProjection', () => {
     });
   });
 
+  it('renders recipient and sender masks with type-aware previews', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @transaction = {
+  facts: [recipient: string, sender: string],
+  data: [subject: string],
+  display: [{ mask: "recipient" }, { mask: "sender" }]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        recipient: 'SE3550000000054910000003',
+        sender: 'Alice',
+        subject: 'Monthly rent'
+      },
+      env
+    });
+
+    const projected = await renderDisplayProjection(output, env);
+    expect(projected).toEqual({
+      recipient: {
+        preview: 'SE3***00003',
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      sender: {
+        preview: 'A****',
+        handle: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      },
+      subject: 'Monthly rent'
+    });
+  });
+
   it('projects arrays of record results element-by-element', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
