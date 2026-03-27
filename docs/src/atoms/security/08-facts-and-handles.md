@@ -127,25 +127,9 @@ If the match is unique, the runtime canonicalizes that emitted form back to the 
 
 ### Discovery is operation-aware
 
-`@fyi.facts()` remains available when an agent needs explicit discovery across configured roots instead of using projected tool output directly. It is a tool given to agents -- including via MCP. The agent calls it with just the operation name:
+Display projections and boundary canonicalization are both powered by the fact requirement resolver. It derives requirements from built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. Discovery and enforcement use the same model -- they can't drift.
 
-```json
-{ "name": "fyi.facts", "arguments": { "query": "sendEmail" } }
-```
-
-This returns all fact-relevant candidates for `sendEmail`, grouped by arg. For a send operation, that means email facts for the `recipient` arg. Discovery and enforcement use the same shared requirement model.
-
-Requirements come from three sources: built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. If none resolve, discovery returns nothing. It never guesses from arg names. See `fyi-facts` for the full discovery API.
-
-### Configuring fact roots
-
-Discovery searches configured roots, not all of runtime scope. `facts: "auto"` auto-registers successful native tool results from the session:
-
-```mlld
-var @cfg = { fyi: { facts: "auto" } }
-```
-
-The agent's own tool calls become discovery roots automatically. This is useful for explicit discovery flows, but planners that already hold projected tool results usually do not need a second `facts` call. For explicit control, list roots directly with `fyi: { facts: [@contacts] }`. See `fyi-facts` for all configuration modes.
+For explicit cross-root discovery, `@fyi.facts()` remains available as a secondary tool. See `fyi-facts`.
 
 ## Policy rules
 

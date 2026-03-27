@@ -89,23 +89,17 @@ These compose conjunctively with built-in requirements. If both a built-in rule 
 
 ## Discovery
 
-Projected tool results are the primary planner path. `@fyi.facts()` remains the explicit discovery surface when an agent needs to search configured roots instead of copying handles from a projected record result.
+Agents discover facts through display projections on tool results. When a record has a `display` clause, fact fields cross the LLM boundary as masked previews or handle-only references. The agent gets handles directly in the data it fetches -- no extra discovery step.
 
-When used directly, `@fyi.facts()` uses fact requirements to filter candidates. The agent calls it with an operation name:
+The fact requirement resolver powers both display projections and enforcement. It derives requirements from:
 
-```
-@fyi.facts("sendEmail")
-```
-
-This returns candidates grouped by arg, filtered to values whose fact labels satisfy each arg's requirements. For a send operation, that means email facts for the `recipient` arg.
-
-Requirements come from three sources:
-
-1. Built-in symbolic specs (like `op:named:email.send`)
+1. Built-in symbolic specs (like `op:named:email_send`)
 2. Live operation metadata (`labels`, `controlArgs`)
 3. Declarative `policy.facts.requirements`
 
-If none resolve, discovery returns nothing. It never guesses from arg names. See `fyi-facts` for the full discovery API.
+If none resolve, discovery returns nothing. It never guesses from arg names.
+
+For explicit cross-root discovery, `@fyi.facts()` remains available as a secondary tool. See `fyi-facts`.
 
 ## Fact sources
 
