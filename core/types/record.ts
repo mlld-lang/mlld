@@ -3,7 +3,7 @@ import type { SourceLocation, VariableReferenceNode, BaseMlldNode } from './prim
 import type { DataValue } from './var';
 
 export type RecordFieldClassification = 'fact' | 'data';
-export type RecordScalarType = 'string' | 'number' | 'boolean';
+export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
 export type RecordDisplayMode = 'bare' | 'mask' | 'handle';
 export type RecordDisplayEntry =
@@ -41,7 +41,7 @@ export interface RecordInputFieldDefinition {
   name: string;
   classification: RecordFieldClassification;
   source: VariableReferenceNode;
-  valueType?: RecordScalarType;
+  valueType?: RecordFieldValueType;
   optional: boolean;
 }
 
@@ -50,7 +50,7 @@ export interface RecordComputedFieldDefinition {
   name: string;
   classification: RecordFieldClassification;
   expression: DataValue;
-  valueType?: RecordScalarType;
+  valueType?: RecordFieldValueType;
   optional: boolean;
 }
 

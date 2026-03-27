@@ -213,17 +213,18 @@ RecordFieldAlias
   = _ "as" _ alias:BaseIdentifier { return alias; }
 
 RecordFieldTypeAnnotation
-  = _ ":" _ valueType:RecordScalarType optional:"?"? {
+  = _ ":" _ valueType:RecordFieldValueType optional:"?"? {
       return {
         valueType,
         optional: Boolean(optional)
       };
     }
 
-RecordScalarType
+RecordFieldValueType
   = value:$("string" ![a-zA-Z0-9_]) { return value; }
   / value:$("number" ![a-zA-Z0-9_]) { return value; }
   / value:$("boolean" ![a-zA-Z0-9_]) { return value; }
+  / value:$("array" ![a-zA-Z0-9_]) { return value; }
 
 RecordWhenRules
   = first:RecordWhenRule rest:(_ ","? _ rule:RecordWhenRule { return rule; })* _ ","? {

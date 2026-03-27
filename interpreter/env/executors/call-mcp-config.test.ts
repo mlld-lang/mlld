@@ -701,7 +701,7 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('fails closed on ambiguous masked previews with handle guidance', async () => {
+  it('fails closed on ambiguous masked previews with policy denial and handle guidance', async () => {
     const env = await createInterpretedEnv(
       [
         '/record @contact = {',
@@ -768,8 +768,9 @@ describe('createCallMcpConfig', () => {
       });
 
       expect((send.result as any)?.isError).toBe(true);
-      expect(getToolResultText(send)).toMatch(/ambiguous projected value/i);
-      expect(getToolResultText(send)).toMatch(/handle wrapper from the tool result/i);
+      expect(getToolResultText(send)).toMatch(/destination must carry 'known'/i);
+      expect(getToolResultText(send)).toMatch(/projected handle/i);
+      expect(getToolResultText(send)).not.toMatch(/ambiguous projected value/i);
     } finally {
       await result.cleanup();
       env.cleanup();

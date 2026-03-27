@@ -324,6 +324,95 @@ describe('renderDisplayProjection', () => {
     );
   });
 
+  it('projects array fact fields element-by-element for bare, masked, and handle-only displays', async () => {
+    const env = createEnvironment();
+    env.setLlmToolConfig({
+      sessionId: 'session-array-projection',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+    const definition = await registerRecord(env, `
+/record @calendar_evt = {
+  facts: [participants: array, recipients: array, visible: array],
+  data: [title: string],
+  display: [visible, { mask: "participants" }]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        participants: ['ada@example.com', 'grace@example.com'],
+        recipients: ['ops@example.com', 'sales@example.com'],
+        visible: ['alex@example.com', 'sam@example.com'],
+        title: 'Lunch'
+      },
+      env
+    });
+
+    const projected = await renderDisplayProjection(output, env);
+    expect(projected).toEqual({
+      participants: [
+        {
+          preview: 'a***@example.com',
+          handle: { handle: expect.stringMatching(HANDLE_RE) }
+        },
+        {
+          preview: 'g***@example.com',
+          handle: { handle: expect.stringMatching(HANDLE_RE) }
+        }
+      ],
+      recipients: [
+        { handle: { handle: expect.stringMatching(HANDLE_RE) } },
+        { handle: { handle: expect.stringMatching(HANDLE_RE) } }
+      ],
+      visible: ['alex@example.com', 'sam@example.com'],
+      title: 'Lunch'
+    });
+
+    const exposures = env.getProjectionExposures('session-array-projection');
+    expect(exposures).toHaveLength(6);
+    expect(exposures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'mask',
+          field: 'participants',
+          record: 'calendar_evt',
+          emittedPreview: 'a***@example.com'
+        }),
+        expect.objectContaining({
+          kind: 'mask',
+          field: 'participants',
+          record: 'calendar_evt',
+          emittedPreview: 'g***@example.com'
+        }),
+        expect.objectContaining({
+          kind: 'handle',
+          field: 'recipients',
+          record: 'calendar_evt'
+        }),
+        expect.objectContaining({
+          kind: 'bare',
+          field: 'visible',
+          record: 'calendar_evt',
+          emittedLiteral: 'alex@example.com'
+        }),
+        expect.objectContaining({
+          kind: 'bare',
+          field: 'visible',
+          record: 'calendar_evt',
+          emittedLiteral: 'sam@example.com'
+        })
+      ])
+    );
+  });
+
   it('suppresses non-qualifying handles when active tool policy requires stronger fact proof', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

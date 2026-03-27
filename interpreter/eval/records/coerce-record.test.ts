@@ -248,6 +248,95 @@ describe('record output coercion', () => {
     expect(subject.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
   });
 
+  it('coerces fact array fields into structured arrays with per-element proof', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @calendar_evt = {
+  facts: [participants: array],
+  data: [title: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        participants: ['ada@example.com', 'grace@example.com'],
+        title: 'Lunch'
+      },
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted', 'src:mcp'],
+        sources: ['mcp:calendar']
+      })
+    });
+
+    const participants = await accessNamedField(output, 'participants');
+    expect(isStructuredValue(participants)).toBe(true);
+    expect(participants.type).toBe('array');
+    expect(participants.mx.labels).toEqual(
+      expect.arrayContaining(['fact:@calendar_evt.participants', 'src:mcp'])
+    );
+    expect(participants.mx.labels).not.toContain('untrusted');
+    expect(participants.mx.factsources?.map(handle => handle.ref)).toEqual(['@calendar_evt.participants']);
+
+    expect(Array.isArray(participants.data)).toBe(true);
+    expect(participants.data).toHaveLength(2);
+    expect(participants.data.every(item => isStructuredValue(item))).toBe(true);
+
+    const first = participants.data[0] as any;
+    const second = participants.data[1] as any;
+    expect(first.text).toBe('ada@example.com');
+    expect(second.text).toBe('grace@example.com');
+    expect(first.mx.labels).toEqual(
+      expect.arrayContaining(['fact:@calendar_evt.participants', 'src:mcp'])
+    );
+    expect(second.mx.labels).toEqual(
+      expect.arrayContaining(['fact:@calendar_evt.participants', 'src:mcp'])
+    );
+    expect(first.mx.labels).not.toContain('untrusted');
+    expect(second.mx.labels).not.toContain('untrusted');
+    expect(first.mx.factsources?.map((handle: any) => handle.ref)).toEqual(['@calendar_evt.participants']);
+    expect(getRecordProjectionMetadata(first)).toEqual({
+      kind: 'field',
+      recordName: 'calendar_evt',
+      fieldName: 'participants',
+      classification: 'fact',
+      display: 'bare',
+      hasDisplay: false
+    });
+  });
+
+  it('preserves data arrays while keeping inherited untrusted on the container', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @calendar_evt = {
+  facts: [id: string],
+  data: [participants: array?]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        id: 'evt_1',
+        participants: ['ada@example.com', 'grace@example.com']
+      },
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted', 'src:mcp']
+      })
+    });
+
+    const participants = await accessNamedField(output, 'participants');
+    expect(isStructuredValue(participants)).toBe(true);
+    expect(participants.type).toBe('array');
+    expect(participants.mx.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'untrusted'])
+    );
+    expect(participants.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
+    expect(participants.data).toEqual(['ada@example.com', 'grace@example.com']);
+  });
+
   it('keeps inherited untrusted on every field when validation demotes the record', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

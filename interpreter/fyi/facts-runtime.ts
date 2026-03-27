@@ -260,14 +260,6 @@ async function collectFactCandidates(
   const resolved = isVariable(value) ? value.value : value;
 
   if (isStructuredValue(resolved)) {
-    const candidate = extractCandidateFromLeaf({
-      value: resolved,
-      parent: context.parent
-    });
-    if (candidate) {
-      output.push({ value: resolved, ...candidate });
-    }
-
     if (resolved.type === 'object' && resolved.data && typeof resolved.data === 'object' && !Array.isArray(resolved.data)) {
       for (const key of Object.keys(resolved.data as Record<string, unknown>)) {
         const child = await accessField(resolved, { type: 'field', value: key } as any, { env });
@@ -278,9 +270,18 @@ async function collectFactCandidates(
 
     if (resolved.type === 'array' && Array.isArray(resolved.data)) {
       for (let index = 0; index < resolved.data.length; index += 1) {
-        const child = await accessField(resolved, { type: 'index', value: index } as any, { env });
+        const child = await accessField(resolved, { type: 'arrayIndex', value: index } as any, { env });
         await collectFactCandidates(child, env, output, { parent: resolved });
       }
+      return;
+    }
+
+    const candidate = extractCandidateFromLeaf({
+      value: resolved,
+      parent: context.parent
+    });
+    if (candidate) {
+      output.push({ value: resolved, ...candidate });
     }
     return;
   }
@@ -368,7 +369,7 @@ export async function evaluateFyiFacts(
       ) {
         continue;
       }
-      const key = `${entry.ref}\u0000${entry.fact}`;
+      const key = `${entry.ref}\u0000${entry.fact}\u0000${asText(entry.value)}`;
       if (!deduped.has(key)) {
         deduped.set(key, entry);
       }
@@ -399,7 +400,7 @@ export async function evaluateFyiFacts(
       if (!requirementMatchesFact(requirements, entry.fact)) {
         continue;
       }
-      const key = `${entry.ref}\u0000${entry.fact}`;
+      const key = `${entry.ref}\u0000${entry.fact}\u0000${asText(entry.value)}`;
       if (!deduped.has(key)) {
         deduped.set(key, entry);
       }

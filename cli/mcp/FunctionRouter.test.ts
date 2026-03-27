@@ -6,6 +6,8 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
+import { asText } from '@interpreter/utils/structured-value';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -576,6 +578,211 @@ describe('FunctionRouter', () => {
         body: 'test'
       })
     ).resolves.toBe('sent hello to ada@example.com');
+  });
+
+  it('lets masked preview-backed refined fact values satisfy no-untrusted-destructive', async () => {
+    const environment = await createEnvironment(`
+      /record @tx = {
+        facts: [recipient: string],
+        data: [subject: string?],
+        display: [{ mask: "recipient" }]
+      }
+
+      /exe untrusted @getTx() = js {
+        return {
+          recipient: 'US122000000121212121212',
+          subject: 'Monthly rent'
+        };
+      } => tx
+
+      /exe tool:w @updateTx(recipient) = js {
+        return 'updated:' + recipient;
+      } with { controlArgs: ["recipient"] }
+
+      /export { @getTx, @updateTx }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-untrusted-destructive'] },
+      operations: { destructive: ['tool:w'] }
+    } as any);
+    environment.setLlmToolConfig({
+      sessionId: 'router-tx-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_tx: { mlld: 'getTx' },
+        update_tx: { mlld: 'updateTx', controlArgs: ['recipient'] }
+      }
+    });
+
+    await expect(router.executeFunction('get_tx', {})).resolves.toContain('US1***21212');
+    expect(environment.getProjectionExposures('router-tx-session')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: 'router-tx-session',
+          kind: 'mask',
+          field: 'recipient',
+          record: 'tx',
+          emittedPreview: 'US1***21212'
+        })
+      ])
+    );
+    await expect(canonicalizeProjectedValue('US1***21212', environment)).resolves.toSatisfy(value => {
+      return asText(value) === 'US122000000121212121212';
+    });
+    await expect(
+      router.executeFunction('update_tx', { recipient: 'US1***21212' })
+    ).resolves.toBe('updated:US122000000121212121212');
+  });
+
+  it('fails closed on ambiguous projected values during native tool calls', async () => {
+    const environment = await createEnvironment(`
+      /record @contact = {
+        facts: [name: string],
+        display: [name]
+      }
+
+      /exe @getContactA() = js {
+        return { name: 'Charlie' };
+      } => contact
+
+      /exe @getContactB() = js {
+        return { name: 'Charlie' };
+      } => contact
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js {
+        return 'sent';
+      } with { controlArgs: ["recipient"] }
+
+      /export { @getContactA, @getContactB, @sendEmail }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+    environment.setLlmToolConfig({
+      sessionId: 'router-ambiguous-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_contact_a: { mlld: 'getContactA' },
+        get_contact_b: { mlld: 'getContactB' },
+        send_email: { mlld: 'sendEmail', controlArgs: ['recipient'] }
+      }
+    });
+
+    await router.executeFunction('get_contact_a', {});
+    await router.executeFunction('get_contact_b', {});
+    expect(environment.getProjectionExposures('router-ambiguous-session')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: 'router-ambiguous-session',
+          kind: 'bare',
+          field: 'name',
+          record: 'contact',
+          emittedLiteral: 'Charlie'
+        })
+      ])
+    );
+    await expect(canonicalizeProjectedValue('Charlie', environment)).rejects.toThrow(
+      /handle wrapper from the tool result/i
+    );
+
+    try {
+      await router.executeFunction('send_email', {
+        recipient: 'Charlie',
+        subject: 'hi',
+        body: 'test'
+      });
+      throw new Error('Expected send_email to be denied');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/destination must carry 'known'/i);
+      expect(message).not.toMatch(/Ambiguous projected value/i);
+    }
+  });
+
+  it('canonicalizes masked array fact previews back to live values for destructive tool calls', async () => {
+    const environment = await createEnvironment(`
+      /record @calendar_evt = {
+        facts: [participants: array],
+        data: [title: string?],
+        display: [{ mask: "participants" }]
+      }
+
+      /exe untrusted @getEvent() = js {
+        return {
+          participants: ['ada@example.com', 'grace@example.com'],
+          title: 'Lunch'
+        };
+      } => calendar_evt
+
+      /exe tool:w @updateParticipants(participants) = js {
+        return JSON.stringify(participants);
+      } with { controlArgs: ["participants"] }
+
+      /export { @getEvent, @updateParticipants }
+    `);
+
+    environment.setPolicySummary({
+      defaults: { rules: ['no-untrusted-destructive'] },
+      operations: { destructive: ['tool:w'] }
+    } as any);
+    environment.setLlmToolConfig({
+      sessionId: 'router-array-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: {
+        get_event: { mlld: 'getEvent' },
+        update_participants: { mlld: 'updateParticipants', controlArgs: ['participants'] }
+      }
+    });
+
+    await expect(router.executeFunction('get_event', {})).resolves.toContain('a***@example.com');
+    await expect(
+      canonicalizeProjectedValue(['a***@example.com', 'g***@example.com'], environment)
+    ).resolves.toSatisfy(value => {
+      return Array.isArray(value) &&
+        value.every(item => asText(item).endsWith('@example.com')) &&
+        !value.some(item => asText(item).includes('***'));
+    });
+    await expect(
+      router.executeFunction('update_participants', {
+        participants: ['a***@example.com', 'g***@example.com']
+      })
+    ).resolves.toBe('["ada@example.com","grace@example.com"]');
   });
 
   it('does not expose src:mcp taint to guards for MCP-served inputs', async () => {

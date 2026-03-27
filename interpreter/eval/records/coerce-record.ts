@@ -20,12 +20,15 @@ import type {
 import { createFactSourceHandle, type FactSourceHandle } from '@core/types/handle';
 import {
   makeSecurityDescriptor,
+  mergeDescriptors,
   removeLabelsFromDescriptor,
   serializeSecurityDescriptor,
   type SecurityDescriptor
 } from '@core/types/security';
 import {
+  applySecurityDescriptorToStructuredValue,
   asText,
+  extractSecurityDescriptor,
   isStructuredValue,
   wrapStructured,
   type StructuredValue
@@ -214,6 +217,23 @@ function extractRecordInputValue(value: unknown): unknown {
   return value;
 }
 
+function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  const clone = wrapStructured(
+    value.data,
+    value.type,
+    value.text,
+    value.metadata ? { ...value.metadata } : undefined
+  );
+  if (value.internal) {
+    clone.internal = { ...value.internal };
+  }
+  return clone;
+}
+
+function cloneValueIfStructured(value: unknown): unknown {
+  return isStructuredValue(value) ? cloneStructuredValue(value) : value;
+}
+
 function extractStringCandidate(value: unknown): string | undefined {
   if (typeof value === 'string') {
     return value;
@@ -292,43 +312,58 @@ function parseRecordInput(value: unknown): { parsed?: unknown; error?: RecordVal
   };
 }
 
-function coerceScalarValue(
+function describeRecordValueType(value: unknown): string {
+  const extracted = extractRecordInputValue(value);
+  if (extracted === null) {
+    return 'null';
+  }
+  if (Array.isArray(extracted)) {
+    return 'array';
+  }
+  return typeof extracted;
+}
+
+function coerceFieldValue(
   field: RecordFieldDefinition,
   value: unknown
-): { ok: true; value: string | number | boolean } | { ok: false; actual: string } {
+): { ok: true; value: unknown } | { ok: false; actual: string } {
+  const extracted = extractRecordInputValue(value);
   if (!field.valueType) {
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      return { ok: true, value };
+    if (typeof extracted === 'string' || typeof extracted === 'number' || typeof extracted === 'boolean') {
+      return { ok: true, value: extracted };
     }
-    return { ok: false, actual: Array.isArray(value) ? 'array' : typeof value };
+    return { ok: false, actual: describeRecordValueType(value) };
   }
 
   if (field.valueType === 'string') {
-    if (value === null || value === undefined) {
-      return { ok: false, actual: String(value) };
+    if (extracted === null || extracted === undefined) {
+      return { ok: false, actual: String(extracted) };
     }
-    return { ok: true, value: typeof value === 'string' ? value.trim() : String(value) };
+    return {
+      ok: true,
+      value: typeof extracted === 'string' ? extracted.trim() : String(extracted)
+    };
   }
 
   if (field.valueType === 'number') {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return { ok: true, value };
+    if (typeof extracted === 'number' && Number.isFinite(extracted)) {
+      return { ok: true, value: extracted };
     }
-    if (typeof value === 'string' && value.trim().length > 0) {
-      const parsed = Number(value.trim());
+    if (typeof extracted === 'string' && extracted.trim().length > 0) {
+      const parsed = Number(extracted.trim());
       if (Number.isFinite(parsed)) {
         return { ok: true, value: parsed };
       }
     }
-    return { ok: false, actual: Array.isArray(value) ? 'array' : typeof value };
+    return { ok: false, actual: describeRecordValueType(value) };
   }
 
   if (field.valueType === 'boolean') {
-    if (typeof value === 'boolean') {
-      return { ok: true, value };
+    if (typeof extracted === 'boolean') {
+      return { ok: true, value: extracted };
     }
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
+    if (typeof extracted === 'string') {
+      const normalized = extracted.trim().toLowerCase();
       if (normalized === 'true') {
         return { ok: true, value: true };
       }
@@ -336,10 +371,84 @@ function coerceScalarValue(
         return { ok: true, value: false };
       }
     }
-    return { ok: false, actual: Array.isArray(value) ? 'array' : typeof value };
+    return { ok: false, actual: describeRecordValueType(value) };
   }
 
-  return { ok: false, actual: Array.isArray(value) ? 'array' : typeof value };
+  if (field.valueType === 'array') {
+    if (Array.isArray(extracted)) {
+      return { ok: true, value };
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  return { ok: false, actual: describeRecordValueType(value) };
+}
+
+function mergeFieldDescriptorWithValue(
+  value: unknown,
+  fieldDescriptor: SecurityDescriptor | undefined
+): SecurityDescriptor | undefined {
+  const valueDescriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  if (fieldDescriptor && valueDescriptor) {
+    return mergeDescriptors(valueDescriptor, fieldDescriptor);
+  }
+  return fieldDescriptor ?? valueDescriptor;
+}
+
+function applyFieldMetadata(
+  value: StructuredValue,
+  descriptor: SecurityDescriptor | undefined,
+  factsources: readonly FactSourceHandle[],
+  projection: RecordFieldProjectionMetadata
+): StructuredValue {
+  if (descriptor) {
+    applySecurityDescriptorToStructuredValue(value, descriptor);
+  }
+  value.metadata = {
+    ...(value.metadata ?? {}),
+    factsources: [...factsources],
+    projection
+  };
+  value.mx.factsources = [...factsources];
+  return value;
+}
+
+function finalizeArrayFieldValue(options: {
+  value: unknown;
+  descriptor?: SecurityDescriptor;
+  factsources: readonly FactSourceHandle[];
+  projection: RecordFieldProjectionMetadata;
+  materializeElementMetadata: boolean;
+}): StructuredValue<unknown[]> {
+  const extracted = extractRecordInputValue(options.value);
+  const sourceItems = Array.isArray(extracted) ? extracted : [];
+  const items = options.materializeElementMetadata
+    ? sourceItems.map(item => {
+        const child = isStructuredValue(item)
+          ? cloneStructuredValue(item)
+          : wrapStructured(item as any);
+        return applyFieldMetadata(
+          child,
+          mergeFieldDescriptorWithValue(item, options.descriptor),
+          options.factsources,
+          options.projection
+        );
+      })
+    : sourceItems.map(cloneValueIfStructured);
+
+  const wrapped = wrapStructured(items, 'array', undefined, {
+    factsources: [...options.factsources],
+    projection: options.projection
+  });
+  return applyFieldMetadata(
+    wrapped,
+    mergeFieldDescriptorWithValue(options.value, options.descriptor),
+    options.factsources,
+    options.projection
+  ) as StructuredValue<unknown[]>;
 }
 
 async function evaluateFieldValue(
@@ -453,7 +562,7 @@ async function coerceRecordObject(
       continue;
     }
 
-    const coerced = coerceScalarValue(field, rawValue);
+    const coerced = coerceFieldValue(field, rawValue);
     if (!coerced.ok) {
       errors.push({
         path: fieldPath,
@@ -496,11 +605,25 @@ async function coerceRecordObject(
       !allData && field.classification === 'fact'
         ? buildFactLabels(definition, field.name, whenResult.tiers)
         : [];
+    const fieldProjection = buildRecordFieldProjectionMetadata(definition, field);
     const fieldSecurity = buildRecordFieldDescriptor({
       inheritedDescriptor,
       factLabels: labels,
       shouldKeepUntrusted: allData || field.classification === 'data'
     });
+    const effectiveArraySecurity =
+      wrapperSecurity && fieldSecurity
+        ? mergeDescriptors(wrapperSecurity, fieldSecurity)
+        : fieldSecurity ?? wrapperSecurity;
+    if (field.valueType === 'array') {
+      shaped[field.name] = finalizeArrayFieldValue({
+        value: shaped[field.name],
+        descriptor: effectiveArraySecurity,
+        factsources: fieldFactsources,
+        projection: fieldProjection,
+        materializeElementMetadata: !allData && field.classification === 'fact'
+      });
+    }
     namespaceMetadata[field.name] = {
       ...(fieldSecurity
         ? {
@@ -510,7 +633,7 @@ async function coerceRecordObject(
           }
         : {}),
       factsources: fieldFactsources,
-      projection: buildRecordFieldProjectionMetadata(definition, field)
+      projection: fieldProjection
     };
   }
 

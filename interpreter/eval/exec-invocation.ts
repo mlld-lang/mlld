@@ -450,7 +450,16 @@ function collectCanonicalizationArgNames(options: {
     policy: options.policySummary
   });
 
-  return Object.keys(resolution.requirementsByArg);
+  const argNames = new Set(Object.keys(resolution.requirementsByArg));
+  if (options.effectiveToolMetadata.hasControlArgsMetadata) {
+    for (const argName of options.effectiveToolMetadata.controlArgs ?? []) {
+      if (typeof argName === 'string' && argName.trim().length > 0) {
+        argNames.add(argName);
+      }
+    }
+  }
+
+  return [...argNames];
 }
 
 async function canonicalizeSecurityRelevantExecArgs(options: {
@@ -458,21 +467,43 @@ async function canonicalizeSecurityRelevantExecArgs(options: {
   paramNames: readonly string[];
   evaluatedArgs: readonly unknown[];
   targetArgNames: readonly string[];
-}): Promise<unknown[]> {
+}): Promise<{
+  evaluatedArgs: unknown[];
+  canonicalizedArgIndices: ReadonlySet<number>;
+}> {
   if (options.targetArgNames.length === 0) {
-    return [...options.evaluatedArgs];
+    return {
+      evaluatedArgs: [...options.evaluatedArgs],
+      canonicalizedArgIndices: new Set<number>()
+    };
   }
 
   const nextArgs = [...options.evaluatedArgs];
+  const canonicalizedArgIndices = new Set<number>();
   for (const argName of new Set(options.targetArgNames)) {
     const argIndex = options.paramNames.indexOf(argName);
     if (argIndex === -1 || argIndex >= nextArgs.length) {
       continue;
     }
-    nextArgs[argIndex] = await canonicalizeProjectedValue(nextArgs[argIndex], options.env);
+    try {
+      const original = nextArgs[argIndex];
+      const canonicalized = await canonicalizeProjectedValue(original, options.env);
+      nextArgs[argIndex] = canonicalized;
+      if (canonicalized !== original) {
+        canonicalizedArgIndices.add(argIndex);
+      }
+    } catch (error) {
+      if (error instanceof MlldSecurityError && error.code === 'AMBIGUOUS_PROJECTED_VALUE') {
+        continue;
+      }
+      throw error;
+    }
   }
 
-  return nextArgs;
+  return {
+    evaluatedArgs: nextArgs,
+    canonicalizedArgIndices
+  };
 }
 
 function getToolResultLength(value: unknown): number | undefined {
@@ -1893,18 +1924,13 @@ async function evaluateExecInvocationInternal(
       });
     }
   }
-  const inputSecurityDescriptor = normalizeSecurityDescriptor(
+  let inputSecurityDescriptor = normalizeSecurityDescriptor(
     (node as any).meta?.inputSecurityDescriptor as SecurityDescriptor | undefined
   );
-  const argSecurityDescriptors = Array.isArray((node as any).meta?.argSecurityDescriptors)
+  let argSecurityDescriptors = Array.isArray((node as any).meta?.argSecurityDescriptors)
     ? ((node as any).meta.argSecurityDescriptors as Array<SecurityDescriptor | undefined>)
         .map(descriptor => normalizeSecurityDescriptor(descriptor))
     : undefined;
-  if (inputSecurityDescriptor) {
-    resultSecurityDescriptor = resultSecurityDescriptor
-      ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
-      : inputSecurityDescriptor;
-  }
   const mcpToolLabels = (node as any).meta?.mcpToolLabels;
   const toolOperationName =
     typeof (node as any).meta?.toolOperationName === 'string' &&
@@ -1926,18 +1952,38 @@ async function evaluateExecInvocationInternal(
     policySummary: runtimeEnv.getPolicySummary()
   });
   if (canonicalizationArgNames.length > 0) {
-    evaluatedArgs = await canonicalizeSecurityRelevantExecArgs({
+    const canonicalization = await canonicalizeSecurityRelevantExecArgs({
       env: runtimeEnv,
       paramNames: params,
       evaluatedArgs,
       targetArgNames: canonicalizationArgNames
     });
+    evaluatedArgs = canonicalization.evaluatedArgs;
+    if (canonicalization.canonicalizedArgIndices.size > 0 && Array.isArray(argSecurityDescriptors)) {
+      argSecurityDescriptors = argSecurityDescriptors.map((descriptor, index) =>
+        canonicalization.canonicalizedArgIndices.has(index) ? undefined : descriptor
+      );
+      const remainingDescriptors = argSecurityDescriptors.filter(
+        (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
+      );
+      inputSecurityDescriptor =
+        remainingDescriptors.length === 0
+          ? undefined
+          : remainingDescriptors.length === 1
+            ? remainingDescriptors[0]
+            : runtimeEnv.mergeSecurityDescriptors(...remainingDescriptors);
+    }
     evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
     synchronizeGuardVariableCandidates({
       guardVariableCandidates,
       evaluatedArgs,
       evaluatedArgStrings
     });
+  }
+  if (inputSecurityDescriptor) {
+    resultSecurityDescriptor = resultSecurityDescriptor
+      ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
+      : inputSecurityDescriptor;
   }
   const policyGuardControlArgs =
     effectiveToolMetadata.hasControlArgsMetadata

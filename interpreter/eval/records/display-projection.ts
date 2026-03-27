@@ -15,6 +15,7 @@ import {
   asText,
   getRecordProjectionMetadata,
   isStructuredValue,
+  wrapStructured,
   type StructuredValue
 } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
@@ -48,6 +49,10 @@ function isObjectLike(value: unknown): value is Record<string, unknown> {
 
 function toDisplayPrimitive(value: StructuredValue): unknown {
   return value.data;
+}
+
+function toStructuredProjectionElement(value: unknown): StructuredValue {
+  return isStructuredValue(value) ? value : wrapStructured(value as any);
 }
 
 function isToolCollection(value: unknown): value is ToolCollection {
@@ -208,10 +213,67 @@ async function projectFieldValue(
   context: ProjectionContext
 ): Promise<unknown> {
   if (fieldProjection.classification === 'data') {
+    if (value.type === 'array' && Array.isArray(value.data)) {
+      return Promise.all(value.data.map(item => renderDisplayProjection(item, env, context)));
+    }
     return toDisplayPrimitive(value);
   }
 
   const effectiveDisplay = context.strictMode ? 'handle' : fieldProjection.display;
+  if (value.type === 'array' && Array.isArray(value.data)) {
+    const elements = await Promise.all(
+      value.data.map(async (_item, index) => {
+        const resolved = await accessField(value, { type: 'arrayIndex', value: index } as any, { env });
+        return toStructuredProjectionElement(resolved);
+      })
+    );
+
+    if (effectiveDisplay === 'bare') {
+      return elements.map(element => {
+        const primitive = toDisplayPrimitive(element);
+        recordProjectionExposure(env, fieldProjection, element, {
+          kind: 'bare',
+          emittedLiteral: primitive === null || primitive === undefined
+            ? undefined
+            : String(primitive)
+        });
+        return primitive;
+      });
+    }
+
+    const qualifies = fieldSatisfiesActiveRequirements(value, context.activeRequirements);
+    if (!qualifies) {
+      if (effectiveDisplay === 'mask') {
+        return elements.map(element => ({
+          preview: maskFactFieldValue(fieldProjection.fieldName, asText(element).trim())
+        } satisfies PreviewOnlyProjection));
+      }
+      return elements.map(() => ({ unavailable: true } satisfies UnavailableProjection));
+    }
+
+    if (effectiveDisplay === 'mask') {
+      return elements.map(element => {
+        const preview = maskFactFieldValue(fieldProjection.fieldName, asText(element).trim());
+        const handle = issueProjectionHandle(env, element, fieldProjection, preview);
+        recordProjectionExposure(env, fieldProjection, element, {
+          kind: 'mask',
+          handle: handle.handle,
+          emittedPreview: preview
+        });
+        return { preview, handle } satisfies MaskedProjection;
+      });
+    }
+
+    return elements.map(element => {
+      const handle = issueProjectionHandle(env, element, fieldProjection);
+      recordProjectionExposure(env, fieldProjection, element, {
+        kind: 'handle',
+        handle: handle.handle
+      });
+      return { handle } satisfies HandleOnlyProjection;
+    });
+  }
+
   if (effectiveDisplay === 'bare') {
     recordProjectionExposure(env, fieldProjection, value, {
       kind: 'bare',

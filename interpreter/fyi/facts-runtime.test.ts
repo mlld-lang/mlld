@@ -298,4 +298,50 @@ describe('evaluateFyiFacts', () => {
       }
     ]);
   });
+
+  it('discovers each element of an array fact field as its own candidate', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @calendar_evt = {
+  facts: [participants: array],
+  data: [title: string]
+}
+/exe @emitEvent() = js {
+  return {
+    participants: ["ada@example.com", "grace@example.com"],
+    title: "Lunch"
+  };
+} => calendar_evt
+/var @event = @emitEvent()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+    const event = env.getVariable('event');
+    if (!event) {
+      throw new Error('Expected @event to be defined');
+    }
+    env.setScopedEnvironmentConfig({
+      fyi: {
+        facts: [event]
+      }
+    });
+
+    const result = await evaluateFyiFacts(undefined, env);
+
+    expect(result.type).toBe('array');
+    expect(result.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'a***@example.com',
+        field: 'participants',
+        fact: 'fact:@calendar_evt.participants'
+      },
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'g***@example.com',
+        field: 'participants',
+        fact: 'fact:@calendar_evt.participants'
+      }
+    ]);
+  });
 });

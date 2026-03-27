@@ -125,6 +125,28 @@ describe('record grammar', () => {
     expect(directive.values.display).toEqual([]);
   });
 
+  it('parses array and optional array record field annotations', () => {
+    const directive = getFirstDirective(`
+/record @calendar_evt = {
+  facts: [participants: array?, recipients: array],
+  data: [title: string?]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.facts).toEqual([
+      expect.objectContaining({
+        name: 'participants',
+        valueType: 'array',
+        optional: true
+      }),
+      expect.objectContaining({
+        name: 'recipients',
+        valueType: 'array',
+        optional: false
+      })
+    ]);
+  });
+
   it('captures deferred key declarations as unsupported record entries', () => {
     const directive = getFirstDirective(`
 /record @deal = {
