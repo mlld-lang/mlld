@@ -37,6 +37,7 @@ import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor,
+  removeLabelsFromDescriptor,
   type SecurityDescriptor,
   type ToolProvenance
 } from '@core/types/security';
@@ -190,21 +191,19 @@ function hasUntrustedWithoutTrusted(descriptor?: SecurityDescriptor): boolean {
   return hasUntrusted && !hasTrusted;
 }
 
-function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
-  const labels = descriptor.labels.filter(label => label !== 'trusted');
-  const taint = descriptor.taint.filter(label => label !== 'trusted');
-  if (labels.length === descriptor.labels.length && taint.length === descriptor.taint.length) {
-    return descriptor;
+function hasDescriptorLabel(descriptor: SecurityDescriptor | undefined, label: string): boolean {
+  if (!descriptor) {
+    return false;
   }
+  return descriptor.labels.includes(label) || descriptor.taint.includes(label);
+}
 
-  return makeSecurityDescriptor({
-    labels,
-    taint,
-    sources: descriptor.sources,
-    tools: descriptor.tools,
-    capability: descriptor.capability,
-    policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
-  });
+function stripTrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
+  return removeLabelsFromDescriptor(descriptor, ['trusted']) ?? descriptor;
+}
+
+function stripUntrustedFromDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
+  return removeLabelsFromDescriptor(descriptor, ['untrusted']) ?? descriptor;
 }
 
 const resolveVariableIndexValue = async (fieldValue: any, env: Environment): Promise<unknown> => {
@@ -2216,6 +2215,7 @@ async function evaluateExecInvocationInternal(
       }
 
   let result: unknown;
+  let recordTrustRefinementApplied = false;
   let workingDirectory: string | undefined;
   let workspacePushed = false;
   if ('workingDir' in definition && (definition as any).workingDir) {
@@ -2346,11 +2346,23 @@ async function evaluateExecInvocationInternal(
         { code: 'RECORD_NOT_FOUND' }
       );
     }
+    const rawRecordDescriptor = extractSecurityDescriptor(result, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const inheritedRecordDescriptor = resultSecurityDescriptor
+      ? (rawRecordDescriptor
+          ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, rawRecordDescriptor)
+          : resultSecurityDescriptor)
+      : rawRecordDescriptor;
     result = await coerceRecordOutput({
       definition: recordDefinition,
       value: result,
-      env: execEnv
+      env: execEnv,
+      inheritedDescriptor: inheritedRecordDescriptor
     });
+    recordTrustRefinementApplied =
+      isStructuredValue(result) && result.type !== 'text';
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
@@ -2400,6 +2412,14 @@ async function evaluateExecInvocationInternal(
 
   if (shouldPreferUntrustedReturn && resultSecurityDescriptor) {
     resultSecurityDescriptor = stripTrustedFromDescriptor(resultSecurityDescriptor);
+  }
+
+  if (
+    recordTrustRefinementApplied
+    && resultSecurityDescriptor
+    && !hasDescriptorLabel(resultValueDescriptor, 'untrusted')
+  ) {
+    resultSecurityDescriptor = stripUntrustedFromDescriptor(resultSecurityDescriptor);
   }
 
   if (resultSecurityDescriptor) {

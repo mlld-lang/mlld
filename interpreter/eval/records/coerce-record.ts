@@ -20,6 +20,7 @@ import type {
 import { createFactSourceHandle, type FactSourceHandle } from '@core/types/handle';
 import {
   makeSecurityDescriptor,
+  removeLabelsFromDescriptor,
   serializeSecurityDescriptor,
   type SecurityDescriptor
 } from '@core/types/security';
@@ -91,6 +92,42 @@ function setStructuredMetadata(
   };
   value.mx.schema = schema;
   value.mx.factsources = deduped;
+}
+
+function hasDescriptorLabel(
+  descriptor: SecurityDescriptor | undefined,
+  label: string
+): boolean {
+  if (!descriptor) {
+    return false;
+  }
+  return descriptor.labels.includes(label) || descriptor.taint.includes(label);
+}
+
+function sanitizeRecordWrapperDescriptor(
+  descriptor: SecurityDescriptor | undefined
+): SecurityDescriptor | undefined {
+  return removeLabelsFromDescriptor(descriptor, ['untrusted']);
+}
+
+function buildRecordFieldDescriptor(options: {
+  inheritedDescriptor?: SecurityDescriptor;
+  factLabels?: readonly string[];
+  shouldKeepUntrusted: boolean;
+}): SecurityDescriptor | undefined {
+  const labels = options.factLabels ? [...options.factLabels] : [];
+  const taint: string[] = [];
+
+  if (options.shouldKeepUntrusted && hasDescriptorLabel(options.inheritedDescriptor, 'untrusted')) {
+    labels.push('untrusted');
+    taint.push('untrusted');
+  }
+
+  if (labels.length === 0 && taint.length === 0) {
+    return undefined;
+  }
+
+  return makeSecurityDescriptor({ labels, taint });
 }
 
 function resolveFieldDisplayMode(
@@ -377,7 +414,8 @@ async function coerceRecordObject(
   rawInput: unknown,
   definition: RecordDefinition,
   env: Environment,
-  pathPrefix = ''
+  pathPrefix = '',
+  inheritedDescriptor?: SecurityDescriptor
 ): Promise<RecordObjectResult> {
   if (!rawInput || typeof rawInput !== 'object' || Array.isArray(rawInput)) {
     return {
@@ -438,6 +476,7 @@ async function coerceRecordObject(
   const whenResult = resolveRecordWhen(rawInput as Record<string, unknown>, definition.when);
   const allData = validationDemoted || whenResult.demote;
   const factsources: FactSourceHandle[] = [];
+  const wrapperSecurity = sanitizeRecordWrapperDescriptor(inheritedDescriptor);
 
   for (const field of definition.fields) {
     if (!Object.prototype.hasOwnProperty.call(shaped, field.name)) {
@@ -457,13 +496,16 @@ async function coerceRecordObject(
       !allData && field.classification === 'fact'
         ? buildFactLabels(definition, field.name, whenResult.tiers)
         : [];
+    const fieldSecurity = buildRecordFieldDescriptor({
+      inheritedDescriptor,
+      factLabels: labels,
+      shouldKeepUntrusted: allData || field.classification === 'data'
+    });
     namespaceMetadata[field.name] = {
-      ...(labels.length > 0
+      ...(fieldSecurity
         ? {
             security: serializeSecurityDescriptor(
-              makeSecurityDescriptor({
-                labels
-              })
+              fieldSecurity
             )
           }
         : {}),
@@ -475,7 +517,8 @@ async function coerceRecordObject(
   const structured = wrapStructured(shaped, 'object', undefined, {
     schema: buildSchemaMetadata(definition, errors),
     factsources,
-    projection: buildRecordObjectProjectionMetadata(definition)
+    projection: buildRecordObjectProjectionMetadata(definition),
+    ...(wrapperSecurity ? { security: wrapperSecurity } : {})
   });
   setNamespaceMetadata(structured, namespaceMetadata);
   return {
@@ -497,6 +540,7 @@ export async function coerceRecordOutput(options: {
   definition: RecordDefinition;
   value: unknown;
   env: Environment;
+  inheritedDescriptor?: SecurityDescriptor;
 }): Promise<StructuredValue> {
   const parsedInput = parseRecordInput(options.value);
   if (parsedInput.error) {
@@ -520,7 +564,13 @@ export async function coerceRecordOutput(options: {
     const factsources: FactSourceHandle[] = [];
 
     for (let index = 0; index < parsed.length; index += 1) {
-      const item = await coerceRecordObject(parsed[index], options.definition, options.env, `[${index}]`);
+      const item = await coerceRecordObject(
+        parsed[index],
+        options.definition,
+        options.env,
+        `[${index}]`,
+        options.inheritedDescriptor
+      );
       items.push(item.value);
       errors.push(...item.errors);
       factsources.push(...item.factsources);
@@ -533,13 +583,22 @@ export async function coerceRecordOutput(options: {
     const schema = buildSchemaMetadata(options.definition, errors);
     const wrapped = wrapStructured(items, 'array', undefined, {
       schema,
-      factsources: dedupeFactSources(factsources)
+      factsources: dedupeFactSources(factsources),
+      ...(sanitizeRecordWrapperDescriptor(options.inheritedDescriptor)
+        ? { security: sanitizeRecordWrapperDescriptor(options.inheritedDescriptor) }
+        : {})
     });
     setStructuredMetadata(wrapped, schema, factsources);
     return wrapped;
   }
 
-  const objectResult = await coerceRecordObject(parsed, options.definition, options.env);
+  const objectResult = await coerceRecordObject(
+    parsed,
+    options.definition,
+    options.env,
+    '',
+    options.inheritedDescriptor
+  );
   if (options.definition.validate === 'strict' && objectResult.errors.length > 0) {
     throwStrictValidationError(options.definition, objectResult.errors);
   }

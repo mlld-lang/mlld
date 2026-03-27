@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { accessField, accessFields } from './field-access';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, serializeSecurityDescriptor } from '@core/types/security';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import {
   createObjectVariable,
@@ -154,6 +154,46 @@ describe('record projection field access', () => {
       display: 'mask',
       hasDisplay: true
     });
+  });
+
+  it('lets post-coercion parent untrusted taint override refined fact fields', async () => {
+    const structured = wrapStructured(
+      { recipient: 'acct-1', subject: 'Rent' },
+      'object',
+      '{"recipient":"acct-1","subject":"Rent"}',
+      {
+        security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+      }
+    );
+    structured.internal = {
+      ...(structured.internal ?? {}),
+      namespaceMetadata: {
+        recipient: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['fact:@transaction.recipient'] })
+          )
+        },
+        subject: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['untrusted'] })
+          )
+        }
+      }
+    };
+    applySecurityDescriptorToStructuredValue(
+      structured,
+      makeSecurityDescriptor({ labels: ['src:mcp', 'untrusted'] })
+    );
+
+    const result = await accessField(
+      createStructuredValueVariable('tx', structured, source),
+      { type: 'field', value: 'recipient' },
+      { preserveContext: false }
+    );
+
+    expect((result as any).mx.labels).toEqual(
+      expect.arrayContaining(['fact:@transaction.recipient', 'src:mcp', 'untrusted'])
+    );
   });
 });
 

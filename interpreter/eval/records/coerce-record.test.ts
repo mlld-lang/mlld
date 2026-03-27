@@ -4,6 +4,7 @@ import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { Environment } from '@interpreter/env/Environment';
 import type { RecordDirectiveNode } from '@core/types/record';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { evaluateRecord } from '@interpreter/eval/record';
 import { coerceRecordOutput } from './coerce-record';
 import { accessField } from '@interpreter/utils/field-access';
@@ -208,6 +209,98 @@ describe('record output coercion', () => {
     });
   });
 
+  it('clears inherited untrusted from fact fields while preserving it on data fields', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @transaction = {
+  facts: [id: string, recipient: string],
+  data: [subject: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        id: 'tx-1',
+        recipient: 'acct-1',
+        subject: 'Rent'
+      },
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted', 'src:mcp'],
+        sources: ['mcp:bank']
+      })
+    });
+
+    expect(output.mx.labels).toContain('src:mcp');
+    expect(output.mx.labels).not.toContain('untrusted');
+
+    const recipient = await accessNamedField(output, 'recipient');
+    expect(isStructuredValue(recipient)).toBe(true);
+    expect(recipient.mx.labels).toContain('fact:@transaction.recipient');
+    expect(recipient.mx.labels).toContain('src:mcp');
+    expect(recipient.mx.labels).not.toContain('untrusted');
+
+    const subject = await accessNamedField(output, 'subject');
+    expect(isStructuredValue(subject)).toBe(true);
+    expect(subject.mx.labels).toContain('src:mcp');
+    expect(subject.mx.labels).toContain('untrusted');
+    expect(subject.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
+  });
+
+  it('keeps inherited untrusted on every field when validation demotes the record', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @task = {
+  facts: [id: string],
+  data: [priority: number],
+  validate: "demote"
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: { id: 'task-1', priority: 'high' },
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted', 'src:mcp']
+      })
+    });
+
+    const idValue = await accessNamedField(output, 'id');
+    expect(isStructuredValue(idValue)).toBe(true);
+    expect(idValue.mx.labels).toContain('src:mcp');
+    expect(idValue.mx.labels).toContain('untrusted');
+    expect(idValue.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
+  });
+
+  it('keeps inherited untrusted when a when-clause demotes the record to data', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string],
+  when [
+    verified => :verified
+    * => data
+  ]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: { email: 'ada@example.com', verified: false },
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted']
+      })
+    });
+
+    const email = await accessNamedField(output, 'email');
+    expect(isStructuredValue(email)).toBe(true);
+    expect(email.mx.labels).toContain('untrusted');
+    expect(email.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
+  });
+
   it('demotes invalid records to data while preserving factsources', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
@@ -246,10 +339,22 @@ describe('record output coercion', () => {
     const dropped = await coerceRecordOutput({
       definition: dropDefinition,
       value: { id: 'task-1', priority: 'high' },
-      env
+      env,
+      inheritedDescriptor: makeSecurityDescriptor({
+        labels: ['untrusted', 'src:mcp']
+      })
     });
     expect(dropped.mx.schema?.valid).toBe(false);
     expect((dropped.data as Record<string, unknown>).priority).toBeUndefined();
+    expect(dropped.mx.labels).toContain('src:mcp');
+    expect(dropped.mx.labels).not.toContain('untrusted');
+
+    const idValue = await accessNamedField(dropped, 'id');
+    expect(isStructuredValue(idValue)).toBe(true);
+    expect(idValue.mx.labels).toEqual(
+      expect.arrayContaining(['fact:@task.id', 'src:mcp'])
+    );
+    expect(idValue.mx.labels).not.toContain('untrusted');
 
     const strictDefinition = await registerRecord(env, `
 /record @strict_task = {

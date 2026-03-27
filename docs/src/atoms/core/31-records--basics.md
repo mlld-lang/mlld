@@ -6,11 +6,17 @@ category: core
 tags: [records, facts, data, schema, coercion, validation, structured-output]
 related: [exe-simple, labels-overview, labels-attestations, facts-and-handles, labels-facts]
 related-code: [core/types/record.ts, interpreter/eval/record.ts, interpreter/eval/records/coerce-record.ts, grammar/directives/record.peggy]
-updated: 2026-03-25
+updated: 2026-03-27
 qa_tier: 2
 ---
 
 Records declare which fields in structured data are authoritative facts and which are informational content. When an exe returns data through `=> record`, the record's classification applies automatically.
+
+If the exe result is labeled `untrusted`, records also refine that trust at the field level:
+
+- `facts` fields clear the inherited exe `untrusted`
+- `data` fields keep the inherited exe `untrusted`
+- other labels such as `src:mcp` are preserved
 
 **Define a record:**
 
@@ -50,6 +56,8 @@ true
 ```
 
 The `email` field carries `fact:@contact.email`. Schema validation metadata is available on `@output.mx.schema.valid` and `@output.mx.schema.errors`.
+
+This matters for security rules. A fact field from an `exe untrusted ... => record` result keeps its `fact:` proof but loses the inherited exe-level `untrusted`. A data field from the same result stays `untrusted`.
 
 ## Display projections
 
@@ -141,7 +149,7 @@ record @contact = {
 
 The `when` reads the `internal` field from the input. Internal contacts get `fact:internal:@contact.email`. External contacts get `fact:external:@contact.email`. The `*` wildcard is the default.
 
-`=> data` demotes the entire record -- no fact labels are minted:
+`=> data` demotes the entire record -- no fact labels are minted, and inherited exe `untrusted` is preserved on all fields:
 
 ```mlld
 record @contact = {
@@ -157,9 +165,9 @@ record @contact = {
 
 Control what happens when fields fail type coercion:
 
-- `demote` (default) -- invalid fields become data, rest stays valid
+- `demote` (default) -- any validation error demotes the whole record to data; no fact labels are minted
 - `strict` -- any invalid field fails the entire record
-- `drop` -- invalid fields are silently dropped
+- `drop` -- invalid fields are silently dropped; remaining valid fact fields still get normal fact labels
 
 ```mlld
 record @contact = {

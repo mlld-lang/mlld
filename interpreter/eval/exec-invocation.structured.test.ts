@@ -11,6 +11,7 @@ import { evaluate } from '../core/interpreter';
 import { evaluateExecInvocation } from './exec-invocation';
 import {
   asText,
+  extractSecurityDescriptor,
   getRecordProjectionMetadata,
   isStructuredValue,
   wrapStructured
@@ -174,6 +175,63 @@ describe('evaluateExecInvocation (structured)', () => {
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
     expect(isStructuredValue(display)).toBe(true);
     expect(display.text).toBe('Ada Lovelace');
+  });
+
+  it('refines inherited untrusted record output at field level while preserving other labels', async () => {
+    const src = `
+/record @transaction = {
+  facts: [id: string, recipient: string],
+  data: [subject: string]
+}
+/exe untrusted, src:mcp @emitTransaction() = js {
+  return {
+    id: 'tx-1',
+    recipient: 'acct-1',
+    subject: 'Rent'
+  };
+} => transaction
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'emit-transaction',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'emit-transaction-ref',
+          identifier: 'emitTransaction',
+          args: []
+        }
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.mx.labels).toContain('src:mcp');
+    expect(result.value.mx.labels).not.toContain('untrusted');
+
+    const recipient = await accessField(result.value, { type: 'field', value: 'recipient' } as any);
+    expect(isStructuredValue(recipient)).toBe(true);
+    expect(recipient.mx.labels).toEqual(
+      expect.arrayContaining(['fact:@transaction.recipient', 'src:mcp'])
+    );
+    expect(recipient.mx.labels).not.toContain('untrusted');
+
+    const subject = await accessField(result.value, { type: 'field', value: 'subject' } as any);
+    expect(isStructuredValue(subject)).toBe(true);
+    expect(subject.mx.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'untrusted'])
+    );
+
+    const recursive = extractSecurityDescriptor(result.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    expect(recursive?.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'fact:@transaction.recipient', 'untrusted'])
+    );
   });
 
   it('resolves exact handle wrappers back to live values before execution', async () => {

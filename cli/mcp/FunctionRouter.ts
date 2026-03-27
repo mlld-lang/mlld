@@ -56,6 +56,10 @@ function collectDescriptorAttestations(descriptor: SecurityDescriptor | undefine
   );
 }
 
+function isPositiveProofLabel(label: string): boolean {
+  return isAttestationLabel(label) || label.startsWith('fact:');
+}
+
 function unwrapAttestedValue(value: unknown): unknown {
   if (isStructuredValue(value)) {
     return asData(value);
@@ -398,9 +402,12 @@ export class FunctionRouter {
     if (!normalized) {
       return undefined;
     }
+    const labels = normalized.labels.filter(label => !isPositiveProofLabel(label));
+    const taint = descriptorToInputTaint(normalized)
+      .filter(label => !isPositiveProofLabel(label));
     return makeSecurityDescriptor({
-      labels: normalized.labels.filter(label => !isAttestationLabel(label)),
-      taint: descriptorToInputTaint(normalized),
+      labels,
+      taint,
       sources: normalized.sources,
       tools: normalized.tools,
       policyContext: normalized.policyContext ?? undefined

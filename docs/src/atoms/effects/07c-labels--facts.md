@@ -7,7 +7,7 @@ parent: labels
 tags: [labels, facts, records, proof, security, authorization]
 related: [labels-overview, labels-attestations, records-basics, facts-and-handles, policy-authorizations]
 related-code: [core/policy/fact-labels.ts, core/policy/fact-requirements.ts, interpreter/eval/records/coerce-record.ts]
-updated: 2026-03-25
+updated: 2026-03-27
 qa_tier: 2
 ---
 
@@ -31,6 +31,14 @@ When `@getContact("1")` returns `{ email: "ada@example.com", name: "Ada", notes:
 - `email` gets `fact:@contact.email`
 - `name` gets `fact:@contact.name`
 - `notes` gets no fact label
+
+If the exe result also carries `untrusted`, record coercion refines that inherited taint:
+
+- fact fields keep their `fact:` proof and clear inherited exe `untrusted`
+- data fields keep inherited exe `untrusted`
+- other labels such as `src:mcp` stay attached
+
+If a `when` clause demotes the record to data, or validation demotes the record, no fact labels are minted and `untrusted` is preserved on every field.
 
 ## Fact label anatomy
 

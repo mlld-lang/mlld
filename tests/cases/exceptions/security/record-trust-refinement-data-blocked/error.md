@@ -1,0 +1,1 @@
+Rule 'no-untrusted-destructive'

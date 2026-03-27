@@ -1,7 +1,12 @@
 import type { SecurityDescriptor, DataLabel, ToolProvenance } from '@core/types/security';
-import { makeSecurityDescriptor, mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
+import {
+  deserializeSecurityDescriptor,
+  makeSecurityDescriptor,
+  mergeDescriptors,
+  normalizeSecurityDescriptor
+} from '@core/types/security';
 import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
-import type { Variable } from '@core/types/variable';
+import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import { isLoadContentResult } from '@core/types/load-content';
 import { getExpressionProvenance } from './expression-provenance';
@@ -774,10 +779,40 @@ function extractDescriptorInternal(
   }
 
   if (isStructuredValue(value)) {
-    const descriptor =
+    const metadataDescriptor =
       normalizeIfNeeded(candidateMetadataSecurity(value), options.normalize)
       ?? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize);
-    return normalizeIfNeeded(descriptor, options.normalize);
+    if (!options.recursive) {
+      return normalizeIfNeeded(metadataDescriptor, options.normalize);
+    }
+
+    if (seen.has(value)) {
+      return normalizeIfNeeded(metadataDescriptor, options.normalize);
+    }
+    seen.add(value);
+
+    const nestedDescriptors = getStructuredChildValues(value)
+      .map(item => extractDescriptorInternal(item, options, seen))
+      .filter(isSecurityDescriptor);
+
+    if (nestedDescriptors.length === 0) {
+      return normalizeIfNeeded(metadataDescriptor, options.normalize);
+    }
+
+    if (metadataDescriptor) {
+      if (Array.isArray(value.data) && !options.mergeArrayElements && nestedDescriptors.length > 1) {
+        return mergeDescriptors(metadataDescriptor, nestedDescriptors[0]);
+      }
+      return mergeDescriptors(metadataDescriptor, ...nestedDescriptors);
+    }
+
+    if (Array.isArray(value.data) && !options.mergeArrayElements && nestedDescriptors.length > 1) {
+      return nestedDescriptors[0];
+    }
+    if (nestedDescriptors.length === 1) {
+      return nestedDescriptors[0];
+    }
+    return mergeDescriptors(...nestedDescriptors);
   }
 
   if (isVariableLike(value)) {
@@ -842,6 +877,86 @@ function candidateMetadataSecurity(
   value: { metadata?: { security?: SecurityDescriptor } }
 ): SecurityDescriptor | undefined {
   return value.metadata?.security;
+}
+
+function getStructuredNamespaceMetadata(
+  value: StructuredValue
+): Record<string, unknown> | undefined {
+  const namespaceMetadata = value.internal &&
+    typeof value.internal === 'object' &&
+    'namespaceMetadata' in value.internal
+      ? (value.internal as Record<string, unknown>).namespaceMetadata
+      : undefined;
+  return namespaceMetadata && typeof namespaceMetadata === 'object'
+    ? namespaceMetadata as Record<string, unknown>
+    : undefined;
+}
+
+function deserializeNamespaceChildDescriptor(
+  payload: Record<string, unknown>
+): SecurityDescriptor | undefined {
+  const legacyDescriptor = VariableMetadataUtils.deserializeSecurityMetadata(
+    payload as ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
+  ).security;
+  return legacyDescriptor ?? deserializeSecurityDescriptor(payload.security as any);
+}
+
+function materializeStructuredNamespaceChild(
+  fieldValue: unknown,
+  payload: Record<string, unknown>
+): unknown {
+  const descriptor = deserializeNamespaceChildDescriptor(payload);
+  const hasFactsources = Array.isArray(payload.factsources);
+  const hasProjection = Boolean(payload.projection && typeof payload.projection === 'object');
+  if (!descriptor && !hasFactsources && !hasProjection) {
+    return fieldValue;
+  }
+
+  const child = isStructuredValue(fieldValue)
+    ? fieldValue
+    : wrapStructured(fieldValue as any);
+
+  if (descriptor) {
+    applySecurityDescriptorToStructuredValue(child, descriptor);
+  }
+  if (hasFactsources) {
+    child.metadata = {
+      ...(child.metadata ?? {}),
+      factsources: [...(payload.factsources as readonly FactSourceHandle[])]
+    };
+    child.mx.factsources = [...(payload.factsources as readonly FactSourceHandle[])];
+  }
+  if (hasProjection) {
+    setRecordProjectionMetadata(child, payload.projection as RecordProjectionMetadata);
+  }
+  return child;
+}
+
+export function getStructuredChildValues(value: StructuredValue): unknown[] {
+  if (Array.isArray(value.data)) {
+    return value.data;
+  }
+
+  if (!value.data || typeof value.data !== 'object' || Array.isArray(value.data)) {
+    return [];
+  }
+
+  const objectData = value.data as Record<string, unknown>;
+  const namespaceMetadata = getStructuredNamespaceMetadata(value);
+  if (!namespaceMetadata) {
+    return Object.values(objectData);
+  }
+
+  const children: unknown[] = [];
+  for (const [fieldName, fieldValue] of Object.entries(objectData)) {
+    const rawMetadata = namespaceMetadata[fieldName];
+    if (!rawMetadata || typeof rawMetadata !== 'object') {
+      children.push(fieldValue);
+      continue;
+    }
+    children.push(materializeStructuredNamespaceChild(fieldValue, rawMetadata as Record<string, unknown>));
+  }
+  return children;
 }
 
 function isSecurityDescriptor(value: SecurityDescriptor | undefined): value is SecurityDescriptor {

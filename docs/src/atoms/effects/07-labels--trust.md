@@ -8,7 +8,7 @@ parent: labels
 tags: [labels, trust, untrusted, security, policy]
 related: [labels-overview, labels-sensitivity, labels-source-auto, labels-attestations, policy-label-flow, policy-operations]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
-updated: 2026-03-24
+updated: 2026-03-27
 ---
 
 Trust labels classify data reliability: `trusted` or `untrusted`.
@@ -85,3 +85,31 @@ show @wipe(@data)
 Error: `Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'` -- file-loaded data has no user labels, so `defaults.unlabeled: "untrusted"` applies the `untrusted` label automatically.
 
 This is opt-in via policy config, not default behavior. Data with explicit labels (e.g., `var trusted @clean = ...`) is unaffected.
+
+## Trust refinement via records
+
+When `=> record` coercion runs on an `untrusted`-labeled exe result, the record refines trust at the field level:
+
+- **Fact fields**: `untrusted` is cleared. The record declares the source authoritative for these fields.
+- **Data fields**: `untrusted` is preserved. The record declares these are content, not authoritative.
+
+```mlld
+record @transaction = {
+  facts: [id: string, recipient: string, amount: number],
+  data: [subject: string]
+}
+
+exe untrusted @getTransactions() = run cmd {
+  bank-cli list --format json
+} => transaction
+```
+
+After coercion:
+- `recipient` carries `fact:@transaction.recipient` and `untrusted` is cleared
+- `subject` carries `untrusted` (preserved as data)
+
+The `facts` declaration is already a trust assertion -- the developer is saying the source is authoritative for these fields. Trust refinement gives that assertion teeth. Fact fields pass `no-untrusted-destructive` cleanly while data fields remain tainted.
+
+Trust refinement only applies to fields that survive as facts after `when` evaluation. If a `when` clause demotes the record to data, no fact labels are minted and `untrusted` is preserved on all fields. Records that fail schema validation are also not refined.
+
+This is the one built-in field-level trust refinement at the exe boundary. The refined record wrapper may no longer carry `untrusted`, but recursive whole-object checks still see `untrusted` data children. Passing the whole mixed-trust record into a destructive operation still fails closed.

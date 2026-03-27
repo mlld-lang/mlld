@@ -426,6 +426,45 @@ export function mergeDescriptors(
   );
 }
 
+export function removeLabelsFromDescriptor(
+  descriptor: SecurityDescriptor | undefined,
+  labelsToRemove: Iterable<DataLabel>
+): SecurityDescriptor | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+
+  const removalSet = new Set(
+    Array.from(labelsToRemove)
+      .map(label => String(label).trim())
+      .filter((label): label is DataLabel => label.length > 0)
+  );
+  if (removalSet.size === 0) {
+    return descriptor;
+  }
+
+  const labels = descriptor.labels.filter(label => !removalSet.has(label));
+  const taint = descriptor.taint.filter(label => !removalSet.has(label));
+  const attestations = descriptor.attestations.filter(label => !removalSet.has(label));
+  if (
+    labels.length === descriptor.labels.length
+    && taint.length === descriptor.taint.length
+    && attestations.length === descriptor.attestations.length
+  ) {
+    return descriptor;
+  }
+
+  return makeSecurityDescriptor({
+    labels,
+    taint,
+    attestations,
+    sources: descriptor.sources,
+    tools: descriptor.tools,
+    capability: descriptor.capability,
+    policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined
+  });
+}
+
 export function hasLabel(
   descriptor: SecurityDescriptor | undefined,
   label: DataLabel

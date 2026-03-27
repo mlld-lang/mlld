@@ -5,6 +5,7 @@ import { Resolver, ResolverContent } from './types';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { performance } from 'node:perf_hooks';
 
 // Mock resolver that returns predictable content
 class TestResolver implements Resolver {
@@ -258,7 +259,7 @@ describe('ResolverManager with Cache Integration', () => {
         }
         
         async resolve(ref: string): Promise<ResolverContent> {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 150));
           this.callCount++;
           return {
             content: `Slow content for ${ref}`,
@@ -268,6 +269,10 @@ describe('ResolverManager with Cache Integration', () => {
               size: 100
             }
           };
+        }
+
+        getCallCount(): number {
+          return this.callCount;
         }
       }
       
@@ -279,19 +284,21 @@ describe('ResolverManager with Cache Integration', () => {
       ]);
       
       // First resolution - slow
-      const start1 = Date.now();
+      const start1 = performance.now();
       const result1 = await manager.resolve('@slow/module');
-      const time1 = Date.now() - start1;
+      const time1 = performance.now() - start1;
       
-      expect(time1).toBeGreaterThan(40); // Should take at least 50ms
+      expect(time1).toBeGreaterThan(120); // Should reflect the artificial resolver delay
+      expect(result1.resolverName).toBe('slow-test');
       
       // Second resolution - fast (from cache)
-      const start2 = Date.now();
+      const start2 = performance.now();
       const result2 = await manager.resolve('@slow/module');
-      const time2 = Date.now() - start2;
+      const time2 = performance.now() - start2;
       
       expect(time2).toBeLessThan(time1 / 2); // Should be at least 2x faster than uncached
       expect(result2.resolverName).toBe('cache');
+      expect(slowResolver.getCallCount()).toBe(1);
     });
   });
 });

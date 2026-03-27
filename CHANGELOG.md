@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - URL exfiltration defense: values now expose `mx.urls`, runtime maintains `@mx.urls.registry` from external inputs, and the managed `no-novel-urls` rule blocks influenced exe arguments that introduce URLs not present in execution input context unless `policy.urls.allowConstruction` permits the domain.
 
 ### Fixed
+- `exe ... => record` now refines inherited exe `untrusted` at field granularity: fact fields clear the inherited taint, data and demoted fields keep it, whole-object checks still see mixed-trust records recursively, and record wrappers no longer hoist child fact labels during assignment or handle discovery.
 - `policy.authorizations` now fails closed on native `tool:w` paths. Unconstrained or incomplete authorizations are rejected for bridged tool calls, and when trusted control-arg metadata is missing, every declared parameter is treated as a control arg.
 - Authorization-generated privileged guards now preserve built-in positive checks for destination/target trust and untrusted privileged inputs. Matching authorizations no longer punch through rules like `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, or `no-untrusted-privileged`.
 - Native bridged tool calls now key `policy.authorizations.allow` against the exposed tool name instead of an internal temporary bridge executable name.

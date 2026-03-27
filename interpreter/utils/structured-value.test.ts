@@ -4,11 +4,16 @@ import {
   parseAndWrapJson,
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
+  extractSecurityDescriptor,
   wrapStructured,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import {
+  makeSecurityDescriptor,
+  mergeDescriptors,
+  serializeSecurityDescriptor
+} from '@core/types/security';
 
 const SOURCE: VariableSource = {
   directive: 'var',
@@ -117,5 +122,112 @@ describe('text serialization fallbacks', () => {
 
     expect(asText(value)).toBe('[unserializable object]');
     expect(wrapStructured(value, 'object').text).toBe('[unserializable object]');
+  });
+});
+
+describe('extractSecurityDescriptor with refined record metadata', () => {
+  it('keeps wrapper descriptors shallow but includes namespace field descriptors recursively', () => {
+    const structured = wrapStructured(
+      { recipient: 'acct-1', subject: 'Rent' },
+      'object',
+      '{"recipient":"acct-1","subject":"Rent"}',
+      {
+        security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+      }
+    );
+    structured.internal = {
+      ...(structured.internal ?? {}),
+      namespaceMetadata: {
+        recipient: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['fact:@transaction.recipient'] })
+          )
+        },
+        subject: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['untrusted'] })
+          )
+        }
+      }
+    };
+
+    const shallow = extractSecurityDescriptor(structured);
+    expect(shallow?.labels).toEqual(['src:mcp']);
+
+    const recursive = extractSecurityDescriptor(structured, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    expect(recursive?.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'fact:@transaction.recipient', 'untrusted'])
+    );
+  });
+
+  it('does not reintroduce untrusted when every refined child stays a fact', () => {
+    const structured = wrapStructured(
+      { recipient: 'acct-1' },
+      'object',
+      '{"recipient":"acct-1"}',
+      {
+        security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+      }
+    );
+    structured.internal = {
+      ...(structured.internal ?? {}),
+      namespaceMetadata: {
+        recipient: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['fact:@transaction.recipient'] })
+          )
+        }
+      }
+    };
+
+    const recursive = extractSecurityDescriptor(structured, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    expect(recursive?.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'fact:@transaction.recipient'])
+    );
+    expect(recursive?.labels).not.toContain('untrusted');
+  });
+
+  it('recursively merges array children from refined record results', () => {
+    const child = wrapStructured(
+      { recipient: 'acct-1', subject: 'Rent' },
+      'object',
+      '{"recipient":"acct-1","subject":"Rent"}',
+      {
+        security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+      }
+    );
+    child.internal = {
+      ...(child.internal ?? {}),
+      namespaceMetadata: {
+        recipient: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['fact:@transaction.recipient'] })
+          )
+        },
+        subject: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['untrusted'] })
+          )
+        }
+      }
+    };
+
+    const wrappedArray = wrapStructured([child], 'array', undefined, {
+      security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+    });
+
+    const recursive = extractSecurityDescriptor(wrappedArray, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    expect(recursive?.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'fact:@transaction.recipient', 'untrusted'])
+    );
   });
 });
