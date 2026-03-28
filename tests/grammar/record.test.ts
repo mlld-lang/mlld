@@ -102,10 +102,13 @@ describe('record grammar', () => {
 }
 `) as RecordDirectiveNode;
 
-    expect(directive.values.display).toEqual([
-      { kind: 'bare', field: 'name' },
-      { kind: 'mask', field: 'email' }
-    ]);
+    expect(directive.values.display).toEqual({
+      kind: 'legacy',
+      entries: [
+        { kind: 'bare', field: 'name' },
+        { kind: 'mask', field: 'email' }
+      ]
+    });
     expect(directive.values.facts?.[2]).toMatchObject({
       kind: 'computed',
       name: 'display',
@@ -122,13 +125,16 @@ describe('record grammar', () => {
 }
 `) as RecordDirectiveNode;
 
-    expect(directive.values.display).toEqual([]);
+    expect(directive.values.display).toEqual({
+      kind: 'legacy',
+      entries: []
+    });
   });
 
-  it('parses array and optional array record field annotations', () => {
+  it('parses array, handle, and optional record field annotations', () => {
     const directive = getFirstDirective(`
 /record @calendar_evt = {
-  facts: [participants: array?, recipients: array],
+  facts: [participants: array?, recipients: array, channel: handle],
   data: [title: string?]
 }
 `) as RecordDirectiveNode;
@@ -143,8 +149,41 @@ describe('record grammar', () => {
         name: 'recipients',
         valueType: 'array',
         optional: false
+      }),
+      expect.objectContaining({
+        name: 'channel',
+        valueType: 'handle',
+        optional: false
       })
     ]);
+  });
+
+  it('parses named display modes with bare, ref, mask, and handle entries', () => {
+    const directive = getFirstDirective(`
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    worker: [{ mask: "from" }, subject, body],
+    planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.display).toEqual({
+      kind: 'named',
+      modes: {
+        worker: [
+          { kind: 'mask', field: 'from' },
+          { kind: 'bare', field: 'subject' },
+          { kind: 'bare', field: 'body' }
+        ],
+        planner: [
+          { kind: 'ref', field: 'from' },
+          { kind: 'handle', field: 'message_id' }
+        ]
+      }
+    });
   });
 
   it('parses bare root adapters for scalar and map-entry record fields', () => {

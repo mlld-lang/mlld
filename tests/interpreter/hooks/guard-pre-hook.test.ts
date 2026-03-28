@@ -25,6 +25,20 @@ function createEnv(): Environment {
   return env;
 }
 
+function setActiveLlmSession(env: Environment, sessionId: string): void {
+  env.setLlmToolConfig({
+    sessionId,
+    mcpConfigPath: '',
+    toolsCsv: '',
+    mcpAllowedTools: '',
+    nativeAllowedTools: '',
+    unifiedAllowedTools: '',
+    availableTools: [],
+    inBox: false,
+    cleanup: async () => {}
+  });
+}
+
 describe('guard pre-hook integration', () => {
   it('denies per-input guard when labels match', async () => {
     const env = createEnv();
@@ -1022,6 +1036,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('carries planner-time fact proof through emitted bare literals in with { policy } authorizations', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
@@ -1054,6 +1069,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('ignores planner-pinned data args when matching with { policy } authorizations', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
@@ -1122,6 +1138,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('carries planner-time fact proof through emitted masked previews in with { policy } authorizations', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
@@ -1207,6 +1224,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('allows mixed handle and masked-preview authorizations in a single recipient array', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     const recipientA = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
       security: makeSecurityDescriptor({
         attestations: ['known']
@@ -1340,13 +1358,14 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('allows authorization entries when duplicate exposures collapse to the same canonical value', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
       })
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: approvedRecipient,
       kind: 'bare',
       field: 'recipient',
@@ -1355,7 +1374,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       issuedAt: 1
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-b',
+      sessionId: 'planner-session',
       value: approvedRecipient,
       kind: 'bare',
       field: 'recipient',
@@ -1379,13 +1398,14 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
   it('distinguishes compile-dropped authorizations from never-listed authorizations', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
       env
     );
 
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -1396,7 +1416,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       issuedAt: 1
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-b',
+      sessionId: 'planner-session',
       value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']

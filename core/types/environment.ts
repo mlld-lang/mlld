@@ -11,7 +11,7 @@ export type PolicyDerivedConstraints = {
 export type EnvironmentConfig = {
   provider?: string;
   auth?: string | string[];
-  display?: 'strict';
+  display?: string;
   taint?: DataLabel[];
   name?: string;
   from?: string;

@@ -129,15 +129,20 @@ function getPathValue(root, path) {
     fail(error instanceof Error ? error.message : String(error));
   }
 
-  const handleWrapper = getPathValue(parsedLookup, handlePath);
-  if (
-    !handleWrapper ||
-    typeof handleWrapper !== 'object' ||
-    Array.isArray(handleWrapper) ||
-    Object.keys(handleWrapper).length !== 1 ||
-    typeof handleWrapper.handle !== 'string'
+  const handleValue = getPathValue(parsedLookup, handlePath);
+  let handleArg;
+  if (typeof handleValue === 'string' && /^h_[a-z0-9]+$/.test(handleValue.trim())) {
+    handleArg = handleValue.trim();
+  } else if (
+    handleValue &&
+    typeof handleValue === 'object' &&
+    !Array.isArray(handleValue) &&
+    Object.keys(handleValue).length === 1 &&
+    typeof handleValue.handle === 'string'
   ) {
-    fail(`Expected handle wrapper at path '${handlePath}'`);
+    handleArg = handleValue;
+  } else {
+    fail(`Expected handle token or wrapper at path '${handlePath}'`);
   }
 
   const response = await sendJsonRpc(socketPath, {
@@ -148,7 +153,7 @@ function getPathValue(root, path) {
       name: targetTool,
       arguments: {
         ...(targetArgs && typeof targetArgs === 'object' && !Array.isArray(targetArgs) ? targetArgs : {}),
-        [targetArgName]: handleWrapper
+        [targetArgName]: handleArg
       }
     }
   });

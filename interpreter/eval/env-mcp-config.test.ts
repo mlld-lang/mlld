@@ -482,9 +482,7 @@ describe('box MCP config integration', () => {
         name: 'Mark Davies',
         email: {
           preview: 'm***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         },
         notes: 'Met at conference'
       });
@@ -593,7 +591,7 @@ describe('box MCP config integration', () => {
       '  defaults: { rules: ["no-send-to-unknown"] },',
       '  operations: { "exfil:send": ["tool:w"] }',
       '}',
-      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedValueFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' "email.handle.handle" send_email '{"subject":"hi","body":"test"}' }`,
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedValueFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' "email.handle" send_email '{"subject":"hi","body":"test"}' }`,
       '/show @agent("Email Mark", { tools: @toolList }) with { policy: @basePolicy }'
     ].join('\n');
 
@@ -692,16 +690,11 @@ describe('box MCP config integration', () => {
 
       expect(JSON.parse(output.trim())).toEqual({
         email: {
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         },
         name: {
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
-        },
-        notes: 'Met at conference'
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();

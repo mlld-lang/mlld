@@ -126,14 +126,10 @@ describe('FunctionRouter', () => {
       name: 'Ada Lovelace',
       email: {
         preview: 'a***@example.com',
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       phone: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       notes: 'Met at conference'
     });
@@ -164,18 +160,14 @@ describe('FunctionRouter', () => {
         name: 'Ada',
         email: {
           preview: 'a***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       },
       {
         name: 'Grace',
         email: {
           preview: 'g***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       }
     ]);
@@ -285,9 +277,7 @@ describe('FunctionRouter', () => {
       name: 'Ada Lovelace',
       email: {
         preview: 'a***@example.com',
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       }
     });
   });
@@ -327,16 +317,11 @@ describe('FunctionRouter', () => {
 
     expect(JSON.parse(await router.executeFunction('get_contact', {}))).toEqual({
       email: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       name: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
-      },
-      notes: 'Visible'
+        handle: expect.stringMatching(HANDLE_RE)
+      }
     });
   });
 

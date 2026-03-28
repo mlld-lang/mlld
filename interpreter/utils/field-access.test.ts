@@ -116,10 +116,16 @@ describe('record projection field access', () => {
         projection: {
           kind: 'record',
           recordName: 'contact',
-          hasDisplay: true,
+          display: {
+            kind: 'legacy',
+            entries: [
+              { kind: 'mask', field: 'email' },
+              { kind: 'bare', field: 'name' }
+            ]
+          },
           fields: {
-            email: { classification: 'fact', display: 'mask' },
-            name: { classification: 'fact', display: 'bare' }
+            email: { classification: 'fact' },
+            name: { classification: 'fact' }
           }
         }
       }
@@ -133,8 +139,13 @@ describe('record projection field access', () => {
             recordName: 'contact',
             fieldName: 'email',
             classification: 'fact',
-            display: 'mask',
-            hasDisplay: true
+            display: {
+              kind: 'legacy',
+              entries: [
+                { kind: 'mask', field: 'email' },
+                { kind: 'bare', field: 'name' }
+              ]
+            }
           }
         }
       }
@@ -151,8 +162,13 @@ describe('record projection field access', () => {
       recordName: 'contact',
       fieldName: 'email',
       classification: 'fact',
-      display: 'mask',
-      hasDisplay: true
+      display: {
+        kind: 'legacy',
+        entries: [
+          { kind: 'mask', field: 'email' },
+          { kind: 'bare', field: 'name' }
+        ]
+      }
     });
   });
 

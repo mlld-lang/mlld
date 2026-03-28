@@ -17,6 +17,20 @@ function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
 }
 
+function setActiveLlmSession(env: Environment, sessionId: string): void {
+  env.setLlmToolConfig({
+    sessionId,
+    mcpConfigPath: '',
+    toolsCsv: '',
+    mcpAllowedTools: '',
+    nativeAllowedTools: '',
+    unifiedAllowedTools: '',
+    availableTools: [],
+    inBox: false,
+    cleanup: async () => {}
+  });
+}
+
 function createFactEmailValue(email: string, sourceRef: string): ReturnType<typeof wrapStructured> {
   return wrapStructured(email, 'text', email, {
     security: makeSecurityDescriptor({
@@ -462,6 +476,7 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('materializes emitted bare literal authorization constraints from prior projected values', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
@@ -534,6 +549,7 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('materializes emitted masked preview authorization constraints from prior projected values', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
@@ -588,13 +604,14 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('skips ambiguous projected preview authorization entries during policy compilation', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
     );
 
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -606,7 +623,7 @@ describe('resolveInvocationPolicyFragment', () => {
       issuedAt: 1
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-b',
+      sessionId: 'planner-session',
       value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -657,13 +674,14 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('keeps ambiguous literal authorization entries when all matches collapse to the same canonical value', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
     );
 
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -674,7 +692,7 @@ describe('resolveInvocationPolicyFragment', () => {
       issuedAt: 1
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-b',
+      sessionId: 'planner-session',
       value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -715,13 +733,14 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('drops only ambiguous array elements during policy compilation', async () => {
     const env = createEnv();
+    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
       env
     );
 
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: wrapStructured('ada@example.com', 'text', 'ada@example.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -732,7 +751,7 @@ describe('resolveInvocationPolicyFragment', () => {
       issuedAt: 1
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-a',
+      sessionId: 'planner-session',
       value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
@@ -743,7 +762,7 @@ describe('resolveInvocationPolicyFragment', () => {
       issuedAt: 2
     });
     env.recordProjectionExposure({
-      sessionId: 'planner-b',
+      sessionId: 'planner-session',
       value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']

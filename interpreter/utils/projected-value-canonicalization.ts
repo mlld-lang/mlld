@@ -153,7 +153,6 @@ async function canonicalizeAliases(
   value: unknown,
   env: Environment,
   sessionId: string | undefined,
-  matchScope: 'session' | 'global',
   collapseEquivalentMatches: boolean
 ): Promise<unknown> {
   if (typeof value === 'string') {
@@ -162,20 +161,24 @@ async function canonicalizeAliases(
       return bareHandle;
     }
 
-    if (!sessionId && matchScope !== 'global') {
+    if (!sessionId) {
       return value;
     }
 
-    const preview = resolveMatchedExposure(value, sessionId
-      ? env.matchProjectionPreview(sessionId, value)
-      : env.matchAnyProjectionPreview(value), collapseEquivalentMatches);
+    const preview = resolveMatchedExposure(
+      value,
+      env.matchProjectionPreview(sessionId, value),
+      collapseEquivalentMatches
+    );
     if (preview !== undefined) {
       return preview;
     }
 
-    const literal = resolveMatchedExposure(value, sessionId
-      ? env.matchProjectionLiteral(sessionId, value)
-      : env.matchAnyProjectionLiteral(value), collapseEquivalentMatches);
+    const literal = resolveMatchedExposure(
+      value,
+      env.matchProjectionLiteral(sessionId, value),
+      collapseEquivalentMatches
+    );
     if (literal !== undefined) {
       return literal;
     }
@@ -183,7 +186,7 @@ async function canonicalizeAliases(
   }
 
   if (isVariable(value)) {
-    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId, matchScope, collapseEquivalentMatches);
+    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId, collapseEquivalentMatches);
     if (resolvedValue === value.value) {
       return value;
     }
@@ -196,7 +199,7 @@ async function canonicalizeAliases(
     if (value.type !== 'object' && value.type !== 'array') {
       return value;
     }
-    const resolvedData = await canonicalizeAliases(value.data, env, sessionId, matchScope, collapseEquivalentMatches);
+    const resolvedData = await canonicalizeAliases(value.data, env, sessionId, collapseEquivalentMatches);
     if (resolvedData === value.data) {
       return value;
     }
@@ -213,13 +216,13 @@ async function canonicalizeAliases(
   }
 
   if (Array.isArray(value)) {
-    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId, matchScope, collapseEquivalentMatches)));
+    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId, collapseEquivalentMatches)));
   }
 
   if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      result[key] = await canonicalizeAliases(entry, env, sessionId, matchScope, collapseEquivalentMatches);
+      result[key] = await canonicalizeAliases(entry, env, sessionId, collapseEquivalentMatches);
     }
     return result;
   }
@@ -232,11 +235,8 @@ export async function canonicalizeProjectedValue(
   env: Environment,
   options: ProjectedValueCanonicalizationOptions = {}
 ): Promise<unknown> {
-  const matchScope = options.matchScope ?? 'session';
-  const sessionId = matchScope === 'session'
-    ? normalizeSessionId(env, options.sessionId)
-    : undefined;
+  const sessionId = normalizeSessionId(env, options.sessionId);
   const collapseEquivalentMatches = options.collapseEquivalentMatches === true;
   const handleResolved = await resolveValueHandles(value, env);
-  return canonicalizeAliases(handleResolved, env, sessionId, matchScope, collapseEquivalentMatches);
+  return canonicalizeAliases(handleResolved, env, sessionId, collapseEquivalentMatches);
 }

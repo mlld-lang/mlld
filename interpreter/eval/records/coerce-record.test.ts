@@ -4,6 +4,7 @@ import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { Environment } from '@interpreter/env/Environment';
 import type { RecordDirectiveNode } from '@core/types/record';
+import { createHandleWrapper } from '@core/types/handle';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { evaluateRecord } from '@interpreter/eval/record';
 import { coerceRecordOutput } from './coerce-record';
@@ -13,6 +14,15 @@ import {
   isStructuredValue,
   wrapStructured
 } from '@interpreter/utils/structured-value';
+
+const OPEN_DISPLAY = { kind: 'open' } as const;
+
+function legacyDisplay(entries: Array<{ kind: 'bare' | 'ref' | 'mask' | 'handle'; field: string }>) {
+  return {
+    kind: 'legacy' as const,
+    entries
+  };
+}
 
 function createEnvironment(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -90,9 +100,9 @@ describe('record output coercion', () => {
     expect(getRecordProjectionMetadata(output)).toEqual({
       kind: 'record',
       recordName: 'slack_channel',
-      hasDisplay: true,
+      display: legacyDisplay([{ kind: 'bare', field: 'name' }]),
       fields: {
-        name: { classification: 'fact', display: 'bare' }
+        name: { classification: 'fact' }
       }
     });
 
@@ -168,10 +178,10 @@ describe('record output coercion', () => {
     expect(getRecordProjectionMetadata(first)).toEqual({
       kind: 'record',
       recordName: 'hotel_price',
-      hasDisplay: false,
+      display: OPEN_DISPLAY,
       fields: {
-        hotel: { classification: 'fact', display: 'bare' },
-        price_range: { classification: 'data', display: 'bare' }
+        hotel: { classification: 'fact' },
+        price_range: { classification: 'data' }
       }
     });
 
@@ -226,12 +236,12 @@ describe('record output coercion', () => {
     expect(getRecordProjectionMetadata(output)).toEqual({
       kind: 'record',
       recordName: 'contact',
-      hasDisplay: false,
+      display: OPEN_DISPLAY,
       fields: {
-        email: { classification: 'fact', display: 'bare' },
-        org: { classification: 'fact', display: 'bare' },
-        display: { classification: 'fact', display: 'bare' },
-        notes: { classification: 'data', display: 'bare' }
+        email: { classification: 'fact' },
+        org: { classification: 'fact' },
+        display: { classification: 'fact' },
+        notes: { classification: 'data' }
       }
     });
 
@@ -244,8 +254,7 @@ describe('record output coercion', () => {
       recordName: 'contact',
       fieldName: 'email',
       classification: 'fact',
-      display: 'bare',
-      hasDisplay: false
+      display: OPEN_DISPLAY
     });
 
     const org = await accessNamedField(output, 'org');
@@ -277,9 +286,9 @@ describe('record output coercion', () => {
     expect(getRecordProjectionMetadata(first)).toEqual({
       kind: 'record',
       recordName: 'contact',
-      hasDisplay: false,
+      display: OPEN_DISPLAY,
       fields: {
-        email: { classification: 'fact', display: 'bare' }
+        email: { classification: 'fact' }
       }
     });
     const firstEmail = await accessNamedField(first, 'email');
@@ -311,11 +320,14 @@ describe('record output coercion', () => {
     expect(getRecordProjectionMetadata(output)).toEqual({
       kind: 'record',
       recordName: 'contact',
-      hasDisplay: true,
+      display: legacyDisplay([
+        { kind: 'bare', field: 'name' },
+        { kind: 'mask', field: 'email' }
+      ]),
       fields: {
-        email: { classification: 'fact', display: 'mask' },
-        name: { classification: 'fact', display: 'bare' },
-        notes: { classification: 'data', display: 'bare' }
+        email: { classification: 'fact' },
+        name: { classification: 'fact' },
+        notes: { classification: 'data' }
       }
     });
 
@@ -326,9 +338,119 @@ describe('record output coercion', () => {
       recordName: 'contact',
       fieldName: 'email',
       classification: 'fact',
-      display: 'mask',
-      hasDisplay: true
+      display: legacyDisplay([
+        { kind: 'bare', field: 'name' },
+        { kind: 'mask', field: 'email' }
+      ])
     });
+  });
+
+  it('preserves named display declarations in projection metadata', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string],
+  display: {
+    worker: [{ mask: "from" }, subject],
+    planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        message_id: 'msg-1',
+        subject: 'Update'
+      },
+      env
+    });
+
+    expect(getRecordProjectionMetadata(output)).toEqual({
+      kind: 'record',
+      recordName: 'email',
+      display: {
+        kind: 'named',
+        modes: {
+          worker: [
+            { kind: 'mask', field: 'from' },
+            { kind: 'bare', field: 'subject' }
+          ],
+          planner: [
+            { kind: 'ref', field: 'from' },
+            { kind: 'handle', field: 'message_id' }
+          ]
+        }
+      },
+      fields: {
+        from: { classification: 'fact' },
+        message_id: { classification: 'fact' },
+        subject: { classification: 'data' }
+      }
+    });
+
+    const from = await accessNamedField(output, 'from');
+    expect(isStructuredValue(from)).toBe(true);
+    expect(getRecordProjectionMetadata(from)).toEqual({
+      kind: 'field',
+      recordName: 'email',
+      fieldName: 'from',
+      classification: 'fact',
+      display: {
+        kind: 'named',
+        modes: {
+          worker: [
+            { kind: 'mask', field: 'from' },
+            { kind: 'bare', field: 'subject' }
+          ],
+          planner: [
+            { kind: 'ref', field: 'from' },
+            { kind: 'handle', field: 'message_id' }
+          ]
+        }
+      }
+    });
+  });
+
+  it('coerces handle-typed fields from bare handle tokens and wrappers', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @ticket = {
+  facts: [channel: handle],
+  data: [title: string]
+}
+`);
+
+    const issued = env.issueHandle(wrapStructured('C123456', 'text', 'C123456'));
+    const outputFromToken = await coerceRecordOutput({
+      definition,
+      value: {
+        channel: issued.handle,
+        title: 'Deploy'
+      },
+      env
+    });
+    const outputFromWrapper = await coerceRecordOutput({
+      definition,
+      value: {
+        channel: createHandleWrapper(issued.handle),
+        title: 'Investigate'
+      },
+      env
+    });
+
+    const channelFromToken = await accessNamedField(outputFromToken, 'channel');
+    const channelFromWrapper = await accessNamedField(outputFromWrapper, 'channel');
+
+    expect(isStructuredValue(channelFromToken)).toBe(true);
+    expect(channelFromToken.text).toBe('C123456');
+    expect(channelFromToken.mx.labels).toContain('fact:@ticket.channel');
+
+    expect(isStructuredValue(channelFromWrapper)).toBe(true);
+    expect(channelFromWrapper.text).toBe('C123456');
+    expect(channelFromWrapper.mx.labels).toContain('fact:@ticket.channel');
   });
 
   it('clears inherited untrusted from fact fields while preserving it on data fields', async () => {
@@ -423,8 +545,7 @@ describe('record output coercion', () => {
       recordName: 'calendar_evt',
       fieldName: 'participants',
       classification: 'fact',
-      display: 'bare',
-      hasDisplay: false
+      display: OPEN_DISPLAY
     });
   });
 
@@ -582,5 +703,28 @@ describe('record output coercion', () => {
         env
       })
     ).rejects.toThrow(/expected number/i);
+
+    const strictHandleDefinition = await registerRecord(env, `
+/record @strict_ticket = {
+  facts: [channel: handle],
+  validate: "strict"
+}
+`);
+
+    await expect(
+      coerceRecordOutput({
+        definition: strictHandleDefinition,
+        value: { channel: 'general' },
+        env
+      })
+    ).rejects.toThrow(/expected handle/i);
+
+    await expect(
+      coerceRecordOutput({
+        definition: strictHandleDefinition,
+        value: { channel: 'h_missing' },
+        env
+      })
+    ).rejects.toThrow(/expected handle/i);
   });
 });

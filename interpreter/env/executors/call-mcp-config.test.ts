@@ -370,9 +370,7 @@ describe('createCallMcpConfig', () => {
         name: 'Mark Davies',
         email: {
           preview: 'm***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         },
         notes: 'Met at conference'
       });
@@ -524,16 +522,14 @@ describe('createCallMcpConfig', () => {
         name?: string;
         email?: {
           preview?: string;
-          handle?: { handle?: string };
+          handle?: string;
         };
       };
       expect(projected).toEqual({
         name: 'Mark Davies',
         email: {
           preview: 'm***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       });
 

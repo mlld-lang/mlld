@@ -143,12 +143,12 @@ function toDisplayMode(
   value: unknown,
   env: Environment,
   location?: any
-): 'strict' | undefined {
+): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== 'string') {
-    throw new MlldDirectiveError('display must be "strict".', 'box', {
+    throw new MlldDirectiveError('display must be a string.', 'box', {
       location,
       env,
       context: { value }
@@ -159,15 +159,7 @@ function toDisplayMode(
   if (!normalized) {
     return undefined;
   }
-  if (normalized === 'strict') {
-    return 'strict';
-  }
-
-  throw new MlldDirectiveError('display must be "strict".', 'box', {
-    location,
-    env,
-    context: { value }
-  });
+  return value.trim();
 }
 
 function normalizeVariableName(value: string): string {
@@ -673,7 +665,7 @@ export async function evaluateBox(
       ? toDisplayMode(await resolveToolsValue(withClauseDisplay, env, context), env, directive.location)
       : undefined;
   const inheritedScopedConfig = env.getScopedEnvironmentConfig() as
-    | (EnvironmentConfig & { fyi?: unknown; display?: 'strict' })
+    | (EnvironmentConfig & { fyi?: unknown; display?: string })
     | undefined;
   let resolvedTools =
     withClauseTools !== undefined

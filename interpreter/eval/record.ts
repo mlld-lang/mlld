@@ -4,6 +4,8 @@ import type {
   RecordDirectiveNode,
   RecordDefinition,
   RecordFieldDefinition,
+  RecordDisplayConfig,
+  RecordDisplayDeclaration,
   RecordDisplayEntry,
   RecordWhenCondition,
   RecordRootMode
@@ -75,10 +77,7 @@ export async function evaluateRecord(
     assertRecordFieldIsPure(field, name);
   }
 
-  const hasDisplayClause = Object.prototype.hasOwnProperty.call(directive.values ?? {}, 'display');
-  const display = hasDisplayClause
-    ? normalizeDisplayEntries(directive.values?.display ?? [], fields, name)
-    : undefined;
+  const display = normalizeDisplay(directive.values?.display, fields, name);
 
   const when = directive.values?.when;
   if (Array.isArray(when)) {
@@ -91,7 +90,7 @@ export async function evaluateRecord(
     name,
     fields,
     rootMode: inferRecordRootMode(fields),
-    ...(hasDisplayClause ? { display: display ?? [] } : {}),
+    display,
     validate: directive.values?.validate ?? DEFAULT_VALIDATE_MODE,
     ...(Array.isArray(when) && when.length > 0 ? { when: [...when] } : {}),
     location: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
@@ -114,27 +113,64 @@ function normalizeFields(
   }));
 }
 
-function normalizeDisplayEntries(
-  entries: RecordDisplayEntry[],
+function normalizeDisplay(
+  declaration: RecordDisplayDeclaration | undefined,
   fields: RecordFieldDefinition[],
   recordName: string
-): RecordDisplayEntry[] {
-  const fieldByName = new Map(fields.map(field => [field.name, field]));
-  const seen = new Set<string>();
+): RecordDisplayConfig {
+  if (!declaration) {
+    return { kind: 'open' };
+  }
 
-  return entries.map(entry => {
-    const field = fieldByName.get(entry.field);
-    if (!field) {
+  if (declaration.kind === 'legacy') {
+    return {
+      kind: 'legacy',
+      entries: normalizeDisplayEntries(declaration.entries, fields, recordName)
+    };
+  }
+
+  const normalizedModes: Record<string, RecordDisplayEntry[]> = {};
+  for (const [modeName, entries] of Object.entries(declaration.modes)) {
+    if (modeName.trim().toLowerCase() === 'strict') {
       throw new MlldInterpreterError(
-        `Record '@${recordName}' display entry references unknown field '${entry.field}'`,
+        `Record '@${recordName}' cannot declare display mode 'strict'`,
         'record',
         undefined,
         { code: 'INVALID_RECORD_DISPLAY' }
       );
     }
-    if (field.classification !== 'fact') {
+    normalizedModes[modeName] = normalizeDisplayEntries(entries, fields, recordName, modeName);
+  }
+
+  return {
+    kind: 'named',
+    modes: normalizedModes
+  };
+}
+
+function normalizeDisplayEntries(
+  entries: RecordDisplayEntry[],
+  fields: RecordFieldDefinition[],
+  recordName: string,
+  modeName?: string
+): RecordDisplayEntry[] {
+  const fieldByName = new Map(fields.map(field => [field.name, field]));
+  const seen = new Set<string>();
+  const modePrefix = modeName ? ` display mode '${modeName}'` : '';
+
+  return entries.map(entry => {
+    const field = fieldByName.get(entry.field);
+    if (!field) {
       throw new MlldInterpreterError(
-        `Record '@${recordName}' display entry '${entry.field}' must reference a fact field`,
+        `Record '@${recordName}'${modePrefix} references unknown field '${entry.field}'`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_DISPLAY' }
+      );
+    }
+    if (field.classification !== 'fact' && entry.kind !== 'bare') {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}'${modePrefix} entry '${entry.field}' must reference a fact field`,
         'record',
         undefined,
         { code: 'INVALID_RECORD_DISPLAY' }
@@ -142,7 +178,7 @@ function normalizeDisplayEntries(
     }
     if (seen.has(entry.field)) {
       throw new MlldInterpreterError(
-        `Record '@${recordName}' display entry '${entry.field}' is duplicated`,
+        `Record '@${recordName}'${modePrefix} entry '${entry.field}' is duplicated`,
         'record',
         undefined,
         { code: 'INVALID_RECORD_DISPLAY' }

@@ -8,7 +8,6 @@ import {
 import { MlldInterpreterError } from '@core/errors';
 import type {
   RecordDefinition,
-  RecordDisplayMode,
   RecordFieldDefinition,
   RecordFieldProjectionMetadata,
   RecordObjectProjectionMetadata,
@@ -17,7 +16,11 @@ import type {
   RecordWhenCondition,
   RecordWhenRule
 } from '@core/types/record';
-import { createFactSourceHandle, type FactSourceHandle } from '@core/types/handle';
+import {
+  createFactSourceHandle,
+  isHandleWrapper,
+  type FactSourceHandle
+} from '@core/types/handle';
 import {
   makeSecurityDescriptor,
   mergeDescriptors,
@@ -143,36 +146,18 @@ function buildRecordFieldDescriptor(options: {
   return makeSecurityDescriptor({ labels, taint });
 }
 
-function resolveFieldDisplayMode(
-  definition: RecordDefinition,
-  field: RecordFieldDefinition
-): RecordDisplayMode {
-  if (field.classification === 'data') {
-    return 'bare';
-  }
-  if (!Array.isArray(definition.display)) {
-    return 'bare';
-  }
-  const explicit = definition.display.find(entry => entry.field === field.name);
-  if (!explicit) {
-    return 'handle';
-  }
-  return explicit.kind === 'mask' ? 'mask' : 'bare';
-}
-
 function buildRecordObjectProjectionMetadata(
   definition: RecordDefinition
 ): RecordObjectProjectionMetadata {
   return {
     kind: 'record',
     recordName: definition.name,
-    hasDisplay: Array.isArray(definition.display),
+    display: definition.display,
     fields: Object.fromEntries(
       definition.fields.map(field => [
         field.name,
         {
-          classification: field.classification,
-          display: resolveFieldDisplayMode(definition, field)
+          classification: field.classification
         }
       ])
     )
@@ -188,8 +173,7 @@ function buildRecordFieldProjectionMetadata(
     recordName: definition.name,
     fieldName: field.name,
     classification: field.classification,
-    display: resolveFieldDisplayMode(definition, field),
-    hasDisplay: Array.isArray(definition.display)
+    display: definition.display
   };
 }
 
@@ -356,9 +340,40 @@ function describeRecordValueType(value: unknown): string {
   return typeof extracted;
 }
 
+function isHandleToken(value: unknown): value is string {
+  return typeof value === 'string' && /^h_[a-z0-9]+$/.test(value.trim());
+}
+
+function resolveHandleTypedFieldValue(
+  value: unknown,
+  env: Environment
+): { ok: true; value: unknown } | { ok: false; actual: string } {
+  const extracted = extractRecordInputValue(value);
+  let handle: string | undefined;
+
+  if (isHandleToken(extracted)) {
+    handle = extracted.trim();
+  } else if (isHandleWrapper(extracted)) {
+    handle = extracted.handle.trim();
+  } else if (isHandleToken(asText(value).trim())) {
+    handle = asText(value).trim();
+  }
+
+  if (!handle) {
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  try {
+    return { ok: true, value: env.resolveHandle(handle) };
+  } catch {
+    return { ok: false, actual: 'unknown-handle' };
+  }
+}
+
 function coerceFieldValue(
   field: RecordFieldDefinition,
-  value: unknown
+  value: unknown,
+  env: Environment
 ): { ok: true; value: unknown } | { ok: false; actual: string } {
   const extracted = extractRecordInputValue(value);
   if (!field.valueType) {
@@ -412,6 +427,10 @@ function coerceFieldValue(
       return { ok: true, value };
     }
     return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  if (field.valueType === 'handle') {
+    return resolveHandleTypedFieldValue(value, env);
   }
 
   return { ok: false, actual: describeRecordValueType(value) };
@@ -622,9 +641,9 @@ async function coerceRecordEntry(
       continue;
     }
 
-    const coerced = coerceFieldValue(field, rawValue);
-    rawFieldValues[field.name] = rawValue;
+    const coerced = coerceFieldValue(field, rawValue, env);
     if (!coerced.ok) {
+      rawFieldValues[field.name] = rawValue;
       errors.push({
         path: fieldPath,
         code: 'type',
@@ -639,6 +658,7 @@ async function coerceRecordEntry(
       continue;
     }
 
+    rawFieldValues[field.name] = field.valueType === 'handle' ? coerced.value : rawValue;
     shaped[field.name] = coerced.value;
   }
 

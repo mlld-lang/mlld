@@ -187,7 +187,7 @@ describe('canonicalizeProjectedValue', () => {
     expect(asText((canonical as unknown[])[1])).toBe('grace@example.com');
   });
 
-  it('can resolve emitted aliases globally when no active session is provided', async () => {
+  it('does not resolve emitted aliases across sessions without an active matching session', async () => {
     const env = createEnvironment();
     const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com');
 
@@ -200,11 +200,6 @@ describe('canonicalizeProjectedValue', () => {
       issuedAt: 1
     });
 
-    const canonical = await canonicalizeProjectedValue('a***@example.com', env, {
-      matchScope: 'global'
-    });
-
-    expect(canonical).toBe(liveValue);
-    expect(asText(canonical)).toBe('ada@example.com');
+    await expect(canonicalizeProjectedValue('a***@example.com', env)).resolves.toBe('a***@example.com');
   });
 });

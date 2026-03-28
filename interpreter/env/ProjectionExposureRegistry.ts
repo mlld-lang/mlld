@@ -1,4 +1,4 @@
-export type ProjectionExposureKind = 'bare' | 'mask' | 'handle';
+export type ProjectionExposureKind = 'bare' | 'ref' | 'mask' | 'handle';
 
 export interface ProjectionExposureEntry {
   sessionId: string;

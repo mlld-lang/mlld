@@ -1,4 +1,8 @@
-import type { RecordFieldProjectionMetadata } from '@core/types/record';
+import type {
+  RecordDisplayEntry,
+  RecordDisplayMode,
+  RecordFieldProjectionMetadata
+} from '@core/types/record';
 import type { ToolCollection } from '@core/types/tools';
 import { isExecutableVariable } from '@core/types/variable';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
@@ -21,15 +25,18 @@ import {
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { maskFactFieldValue } from './display-masking';
 
-type HandleWrapper = { handle: string };
-type MaskedProjection = { preview: string; handle: HandleWrapper };
-type HandleOnlyProjection = { handle: HandleWrapper };
+type RefProjection = { value: unknown; handle: string };
+type MaskedProjection = { preview: string; handle: string };
+type HandleOnlyProjection = { handle: string };
 type PreviewOnlyProjection = { preview: string };
+type ValueOnlyProjection = { value: unknown };
 type UnavailableProjection = { unavailable: true };
+const OMITTED_FIELD = Symbol('omitted-display-field');
 
 export interface DisplayProjectionOptions {
   toolCollection?: ToolCollection;
   strict?: boolean;
+  displayMode?: string;
 }
 
 type ActiveRequirementGroup = {
@@ -40,6 +47,7 @@ type ActiveRequirementGroup = {
 
 type ProjectionContext = {
   strictMode: boolean;
+  modeName?: string;
   activeRequirements: ActiveRequirementGroup[];
 };
 
@@ -59,8 +67,24 @@ function isToolCollection(value: unknown): value is ToolCollection {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function normalizeStrictMode(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().toLowerCase() === 'strict';
+function normalizeDisplaySelection(value: unknown): { strictMode: boolean; modeName?: string } {
+  if (typeof value !== 'string') {
+    return { strictMode: false };
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { strictMode: false };
+  }
+
+  if (trimmed.toLowerCase() === 'strict') {
+    return { strictMode: true };
+  }
+
+  return {
+    strictMode: false,
+    modeName: trimmed
+  };
 }
 
 function collectActiveRequirementGroups(
@@ -124,11 +148,12 @@ function createProjectionContext(
   env: Environment,
   options?: DisplayProjectionOptions
 ): ProjectionContext {
-  const strictMode =
-    options?.strict === true ||
-    normalizeStrictMode(env.getScopedEnvironmentConfig()?.display);
+  const selection = options?.strict === true
+    ? { strictMode: true }
+    : normalizeDisplaySelection(options?.displayMode ?? env.getScopedEnvironmentConfig()?.display);
   return {
-    strictMode,
+    strictMode: selection.strictMode,
+    ...(selection.modeName ? { modeName: selection.modeName } : {}),
     activeRequirements: collectActiveRequirementGroups(env, options?.toolCollection)
   };
 }
@@ -159,16 +184,15 @@ function issueProjectionHandle(
   value: StructuredValue,
   fieldProjection: RecordFieldProjectionMetadata,
   preview?: string
-): HandleWrapper {
+): string {
   const issued = env.issueHandle(value, {
     ...(preview ? { preview } : {}),
     metadata: {
       record: fieldProjection.recordName,
-      field: fieldProjection.fieldName,
-      display: fieldProjection.display
+      field: fieldProjection.fieldName
     }
   });
-  return { handle: issued.handle };
+  return issued.handle;
 }
 
 function currentProjectionSessionId(env: Environment): string | undefined {
@@ -211,15 +235,13 @@ async function projectFieldValue(
   fieldProjection: RecordFieldProjectionMetadata,
   env: Environment,
   context: ProjectionContext
-): Promise<unknown> {
-  if (fieldProjection.classification === 'data') {
-    if (value.type === 'array' && Array.isArray(value.data)) {
-      return Promise.all(value.data.map(item => renderDisplayProjection(item, env, context)));
-    }
-    return toDisplayPrimitive(value);
+): Promise<unknown | typeof OMITTED_FIELD> {
+  const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
+  if (resolution.omitted) {
+    return OMITTED_FIELD;
   }
 
-  const effectiveDisplay = context.strictMode ? 'handle' : fieldProjection.display;
+  const effectiveDisplay = resolution.mode;
   if (value.type === 'array' && Array.isArray(value.data)) {
     const elements = await Promise.all(
       value.data.map(async (_item, index) => {
@@ -242,6 +264,25 @@ async function projectFieldValue(
     }
 
     const qualifies = fieldSatisfiesActiveRequirements(value, context.activeRequirements);
+    if (effectiveDisplay === 'ref') {
+      return elements.map(element => {
+        const primitive = toDisplayPrimitive(element);
+        if (!qualifies) {
+          return { value: primitive } satisfies ValueOnlyProjection;
+        }
+
+        const handle = issueProjectionHandle(env, element, fieldProjection);
+        recordProjectionExposure(env, fieldProjection, element, {
+          kind: 'ref',
+          handle,
+          emittedLiteral: primitive === null || primitive === undefined
+            ? undefined
+            : String(primitive)
+        });
+        return { value: primitive, handle } satisfies RefProjection;
+      });
+    }
+
     if (!qualifies) {
       if (effectiveDisplay === 'mask') {
         return elements.map(element => ({
@@ -257,7 +298,7 @@ async function projectFieldValue(
         const handle = issueProjectionHandle(env, element, fieldProjection, preview);
         recordProjectionExposure(env, fieldProjection, element, {
           kind: 'mask',
-          handle: handle.handle,
+          handle,
           emittedPreview: preview
         });
         return { preview, handle } satisfies MaskedProjection;
@@ -268,7 +309,7 @@ async function projectFieldValue(
       const handle = issueProjectionHandle(env, element, fieldProjection);
       recordProjectionExposure(env, fieldProjection, element, {
         kind: 'handle',
-        handle: handle.handle
+        handle
       });
       return { handle } satisfies HandleOnlyProjection;
     });
@@ -284,8 +325,30 @@ async function projectFieldValue(
     return toDisplayPrimitive(value);
   }
 
+  const primitive = toDisplayPrimitive(value);
   const rawText = asText(value).trim();
   const qualifies = fieldSatisfiesActiveRequirements(value, context.activeRequirements);
+
+  if (effectiveDisplay === 'ref') {
+    if (!qualifies) {
+      return {
+        value: primitive
+      } satisfies ValueOnlyProjection;
+    }
+
+    const handle = issueProjectionHandle(env, value, fieldProjection);
+    recordProjectionExposure(env, fieldProjection, value, {
+      kind: 'ref',
+      handle,
+      emittedLiteral: primitive === null || primitive === undefined
+        ? undefined
+        : String(primitive)
+    });
+    return {
+      value: primitive,
+      handle
+    } satisfies RefProjection;
+  }
 
   if (!qualifies) {
     if (effectiveDisplay === 'mask') {
@@ -304,7 +367,7 @@ async function projectFieldValue(
     const handle = issueProjectionHandle(env, value, fieldProjection, preview);
     recordProjectionExposure(env, fieldProjection, value, {
       kind: 'mask',
-      handle: handle.handle,
+      handle,
       emittedPreview: preview
     });
     const projected: MaskedProjection = { preview, handle };
@@ -314,7 +377,7 @@ async function projectFieldValue(
   const handle = issueProjectionHandle(env, value, fieldProjection);
   recordProjectionExposure(env, fieldProjection, value, {
     kind: 'handle',
-    handle: handle.handle
+    handle
   });
   const projected: HandleOnlyProjection = { handle };
   return projected;
@@ -333,7 +396,11 @@ async function projectStructuredRecord(
   const projected: Record<string, unknown> = {};
   for (const key of Object.keys(projection.fields)) {
     const child = await accessField(value, { type: 'field', value: key } as any, { env });
-    projected[key] = await renderDisplayProjection(child, env, context);
+    const rendered = await renderDisplayProjection(child, env, context);
+    if (rendered === OMITTED_FIELD) {
+      continue;
+    }
+    projected[key] = rendered;
   }
   return projected;
 }
@@ -377,10 +444,73 @@ export async function renderDisplayProjection(
         await renderDisplayProjection(entryValue, env, context)
       ] as const)
     );
-    return Object.fromEntries(projectedEntries);
+    return Object.fromEntries(projectedEntries.filter(([, value]) => value !== OMITTED_FIELD));
   }
 
   return resolved;
+}
+
+function resolveEffectiveDisplayMode(
+  fieldProjection: RecordFieldProjectionMetadata,
+  context: ProjectionContext
+): { omitted: boolean; mode: RecordDisplayMode } {
+  if (context.strictMode) {
+    return fieldProjection.classification === 'fact'
+      ? { omitted: false, mode: 'handle' }
+      : { omitted: true, mode: 'bare' };
+  }
+
+  const display = fieldProjection.display;
+  if (display.kind === 'open') {
+    return { omitted: false, mode: 'bare' };
+  }
+
+  if (display.kind === 'legacy') {
+    if (fieldProjection.classification === 'data') {
+      return { omitted: false, mode: 'bare' };
+    }
+    const explicit = findDisplayEntry(display.entries, fieldProjection.fieldName);
+    return explicit
+      ? { omitted: false, mode: displayEntryToMode(explicit) }
+      : { omitted: false, mode: 'handle' };
+  }
+
+  const selectedMode = context.modeName ?? (Object.prototype.hasOwnProperty.call(display.modes, 'default')
+    ? 'default'
+    : undefined);
+  if (!selectedMode) {
+    throw new Error(
+      `Record '@${fieldProjection.recordName}' requires an explicit display mode before '${fieldProjection.fieldName}' can be projected`
+    );
+  }
+
+  const entries = display.modes[selectedMode];
+  if (!entries) {
+    throw new Error(
+      `Record '@${fieldProjection.recordName}' does not declare display mode '${selectedMode}'`
+    );
+  }
+
+  const explicit = findDisplayEntry(entries, fieldProjection.fieldName);
+  if (!explicit) {
+    return { omitted: true, mode: 'bare' };
+  }
+
+  return {
+    omitted: false,
+    mode: displayEntryToMode(explicit)
+  };
+}
+
+function findDisplayEntry(
+  entries: readonly RecordDisplayEntry[],
+  fieldName: string
+): RecordDisplayEntry | undefined {
+  return entries.find(entry => entry.field === fieldName);
+}
+
+function displayEntryToMode(entry: RecordDisplayEntry): RecordDisplayMode {
+  return entry.kind;
 }
 
 export function hasDisplayProjectionTarget(value: unknown): boolean {

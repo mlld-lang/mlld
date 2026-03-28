@@ -117,10 +117,13 @@ describe('exe evaluator characterization', () => {
     await evaluateExe(exeDirective, env);
 
     const variable = env.getVariable('getContact') as any;
-    expect(variable.internal?.recordDefinitions?.contact?.display).toEqual([
-      { kind: 'bare', field: 'name' },
-      { kind: 'mask', field: 'email' }
-    ]);
+    expect(variable.internal?.recordDefinitions?.contact?.display).toEqual({
+      kind: 'legacy',
+      entries: [
+        { kind: 'bare', field: 'name' },
+        { kind: 'mask', field: 'email' }
+      ]
+    });
   });
 
   it('rejects exe-level controlArgs that are not declared parameters', async () => {

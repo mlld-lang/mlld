@@ -150,11 +150,11 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(getRecordProjectionMetadata(result.value)).toEqual({
       kind: 'record',
       recordName: 'contact',
-      hasDisplay: false,
+      display: { kind: 'open' },
       fields: {
-        email: { classification: 'fact', display: 'bare' },
-        org: { classification: 'fact', display: 'bare' },
-        display: { classification: 'data', display: 'bare' }
+        email: { classification: 'fact' },
+        org: { classification: 'fact' },
+        display: { classification: 'data' }
       }
     });
 
@@ -168,8 +168,7 @@ describe('evaluateExecInvocation (structured)', () => {
       recordName: 'contact',
       fieldName: 'email',
       classification: 'fact',
-      display: 'bare',
-      hasDisplay: false
+      display: { kind: 'open' }
     });
 
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);

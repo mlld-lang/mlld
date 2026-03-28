@@ -70,7 +70,10 @@ describe('evaluateRecord', () => {
           optional: false
         }
       ],
-      display: [{ kind: 'bare', field: 'email' }],
+      display: {
+        kind: 'legacy',
+        entries: [{ kind: 'bare', field: 'email' }]
+      },
       when: [
         {
           condition: {
@@ -144,7 +147,10 @@ describe('evaluateRecord', () => {
     await evaluateDirective(directive, env);
 
     expect(env.getRecordDefinition('contact')).toMatchObject({
-      display: []
+      display: {
+        kind: 'legacy',
+        entries: []
+      }
     });
   });
 
@@ -207,7 +213,7 @@ describe('evaluateRecord', () => {
     });
   });
 
-  it('rejects display entries that target data fields', async () => {
+  it('allows bare data fields in legacy display lists', async () => {
     const env = createEnv();
     const directive = parseRecord(`
 /record @contact = {
@@ -217,8 +223,70 @@ describe('evaluateRecord', () => {
 }
 `);
 
-    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
-      code: 'INVALID_RECORD_DISPLAY'
+    await evaluateRecord(directive, env);
+
+    expect(env.getRecordDefinition('contact')).toMatchObject({
+      display: {
+        kind: 'legacy',
+        entries: [{ kind: 'bare', field: 'notes' }]
+      }
     });
+  });
+
+  it('supports named display modes for opposite visibility needs', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    worker: [{ mask: "from" }, subject, body],
+    planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('email')).toMatchObject({
+      display: {
+        kind: 'named',
+        modes: {
+          worker: [
+            { kind: 'mask', field: 'from' },
+            { kind: 'bare', field: 'subject' },
+            { kind: 'bare', field: 'body' }
+          ],
+          planner: [
+            { kind: 'ref', field: 'from' },
+            { kind: 'handle', field: 'message_id' }
+          ]
+        }
+      }
+    });
+  });
+
+  it('rejects ref, mask, and handle entries on data fields', async () => {
+    const env = createEnv();
+
+    await expect(
+      evaluateRecord(parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  data: [notes: string?],
+  display: [{ ref: "notes" }]
+}
+`), env)
+    ).rejects.toMatchObject({ code: 'INVALID_RECORD_DISPLAY' });
+
+    await expect(
+      evaluateRecord(parseRecord(`
+/record @contact = {
+  facts: [email: string],
+  data: [notes: string?],
+  display: [{ handle: "notes" }]
+}
+`), env)
+    ).rejects.toMatchObject({ code: 'INVALID_RECORD_DISPLAY' });
   });
 });

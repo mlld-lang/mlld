@@ -301,7 +301,7 @@ async function resolveConstraintSourceValue(
           await repairSecurityRelevantValue({
             value: candidate,
             env,
-            matchScope: 'global',
+            matchScope: 'session',
             includeSessionProofMatches: true,
             dropAmbiguousArrayElements: isArrayLikeConstraintValue(candidate),
             collapseEquivalentProjectedMatches: true
@@ -314,7 +314,7 @@ async function resolveConstraintSourceValue(
         await repairSecurityRelevantValue({
           value: unwrapped,
           env,
-          matchScope: 'global',
+          matchScope: 'session',
           includeSessionProofMatches: true,
           dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
           collapseEquivalentProjectedMatches: true
@@ -330,7 +330,7 @@ async function resolveConstraintSourceValue(
         await repairSecurityRelevantValue({
           value: items,
           env,
-          matchScope: 'global',
+          matchScope: 'session',
           includeSessionProofMatches: true,
           dropAmbiguousArrayElements: true,
           collapseEquivalentProjectedMatches: true
@@ -349,7 +349,7 @@ async function resolveConstraintSourceValue(
         await repairSecurityRelevantValue({
           value: result,
           env,
-          matchScope: 'global',
+          matchScope: 'session',
           includeSessionProofMatches: true,
           collapseEquivalentProjectedMatches: true
         })
@@ -370,7 +370,7 @@ async function resolveConstraintSourceValue(
       await repairSecurityRelevantValue({
         value: unwrapped,
         env,
-        matchScope: 'global',
+        matchScope: 'session',
         includeSessionProofMatches: true,
         dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
         collapseEquivalentProjectedMatches: true
@@ -383,7 +383,7 @@ async function resolveConstraintSourceValue(
     await repairSecurityRelevantValue({
       value: unwrapped,
       env,
-      matchScope: 'global',
+      matchScope: 'session',
       includeSessionProofMatches: true,
       dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
       collapseEquivalentProjectedMatches: true
@@ -551,7 +551,7 @@ async function canonicalizePolicyAuthorizationConstraints(
         const repaired = await repairSecurityRelevantValue({
           value: argValue,
           env,
-          matchScope: 'global',
+          matchScope: 'session',
           includeSessionProofMatches: true,
           dropAmbiguousArrayElements: isArrayLikeConstraintValue(argValue),
           collapseEquivalentProjectedMatches: true

@@ -3,33 +3,41 @@ import type { SourceLocation, VariableReferenceNode, BaseMlldNode } from './prim
 import type { DataValue } from './var';
 
 export type RecordFieldClassification = 'fact' | 'data';
-export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array';
+export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'handle';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
-export type RecordDisplayMode = 'bare' | 'mask' | 'handle';
+export type RecordDisplayMode = 'bare' | 'ref' | 'mask' | 'handle';
 export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
 export type RecordInputSourceRoot = 'input' | 'key' | 'value';
 export type RecordDisplayEntry =
   | { kind: 'bare'; field: string }
-  | { kind: 'mask'; field: string };
+  | { kind: 'ref'; field: string }
+  | { kind: 'mask'; field: string }
+  | { kind: 'handle'; field: string };
+
+export type RecordDisplayDeclaration =
+  | { kind: 'legacy'; entries: RecordDisplayEntry[] }
+  | { kind: 'named'; modes: Record<string, RecordDisplayEntry[]> };
+
+export type RecordDisplayConfig =
+  | { kind: 'open' }
+  | RecordDisplayDeclaration;
 
 export interface RecordFieldProjectionMetadata {
   kind: 'field';
   recordName: string;
   fieldName: string;
   classification: RecordFieldClassification;
-  display: RecordDisplayMode;
-  hasDisplay: boolean;
+  display: RecordDisplayConfig;
 }
 
 export interface RecordObjectProjectionMetadata {
   kind: 'record';
   recordName: string;
-  hasDisplay: boolean;
+  display: RecordDisplayConfig;
   fields: Record<
     string,
     {
       classification: RecordFieldClassification;
-      display: RecordDisplayMode;
     }
   >;
 }
@@ -84,7 +92,7 @@ export interface RecordDefinition {
   name: string;
   fields: RecordFieldDefinition[];
   rootMode: RecordRootMode;
-  display?: RecordDisplayEntry[];
+  display: RecordDisplayConfig;
   validate: RecordValidationMode;
   when?: RecordWhenRule[];
   location?: SourceLocation;
@@ -109,7 +117,7 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     identifier: VariableReferenceNode[];
     facts?: RecordFieldDefinition[];
     data?: RecordFieldDefinition[];
-    display?: RecordDisplayEntry[];
+    display?: RecordDisplayDeclaration;
     when?: RecordWhenRule[];
     validate?: RecordValidationMode;
     unsupported?: Array<{ key: string; value?: BaseMlldNode | DataValue }>;

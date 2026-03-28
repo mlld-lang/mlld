@@ -11,9 +11,7 @@ SlashRecord
       const data = body.entries.filter(entry => entry.kind === 'data').flatMap(entry => entry.fields);
       const whenEntry = body.entries.find(entry => entry.kind === 'when');
       const validateEntry = body.entries.find(entry => entry.kind === 'validate');
-      const displayEntries = body.entries
-        .filter(entry => entry.kind === 'display')
-        .flatMap(entry => entry.entries);
+      const displayEntry = body.entries.find(entry => entry.kind === 'display');
       const unsupported = body.entries
         .filter(entry => entry.kind === 'unsupported')
         .map(entry => ({ key: entry.key, value: entry.value }));
@@ -22,8 +20,8 @@ SlashRecord
         identifier: [identifierNode],
         ...(facts.length > 0 ? { facts } : {}),
         ...(data.length > 0 ? { data } : {}),
-        ...(displayEntries.length > 0 || body.entries.some(entry => entry.kind === 'display')
-          ? { display: displayEntries }
+        ...(displayEntry
+          ? { display: displayEntry.value }
           : {}),
         ...(whenEntry ? { when: whenEntry.rules } : {}),
         ...(validateEntry ? { validate: validateEntry.mode } : {}),
@@ -84,8 +82,8 @@ RecordDataEntry
     }
 
 RecordDisplayEntry
-  = "display" _ ":" _ entries:RecordDisplayList {
-      return { kind: 'display', entries };
+  = "display" _ ":" _ value:(RecordNamedDisplayModes / RecordDisplayList) {
+      return { kind: 'display', value };
     }
 
 RecordValidateEntry
@@ -127,7 +125,35 @@ RecordFieldList
 
 RecordDisplayList
   = "[" _ entries:RecordDisplayEntries? _ "]" {
-      return entries || [];
+      return {
+        kind: 'legacy',
+        entries: entries || []
+      };
+    }
+
+RecordNamedDisplayModes
+  = "{" _ entries:RecordNamedDisplayEntries? _ "}" {
+      const seen = new Set();
+      for (const [name] of entries || []) {
+        if (seen.has(name)) {
+          error(`Duplicate display mode '${name}'`);
+        }
+        seen.add(name);
+      }
+      return {
+        kind: 'named',
+        modes: Object.fromEntries(entries || [])
+      };
+    }
+
+RecordNamedDisplayEntries
+  = first:RecordNamedDisplayMode rest:(_ ","? _ entry:RecordNamedDisplayMode { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordNamedDisplayMode
+  = name:RecordDisplayModeName _ ":" _ entries:RecordDisplayList {
+      return [name, entries.entries];
     }
 
 RecordDisplayEntries
@@ -136,7 +162,9 @@ RecordDisplayEntries
     }
 
 RecordDisplayItem
-  = RecordDisplayMaskItem
+  = RecordDisplayRefItem
+  / RecordDisplayHandleItem
+  / RecordDisplayMaskItem
   / RecordDisplayBareItem
 
 RecordDisplayBareItem
@@ -155,9 +183,31 @@ RecordDisplayMaskItem
       };
     }
 
+RecordDisplayRefItem
+  = "{" _ "ref" _ ":" _ field:RecordDisplayFieldName _ "}" {
+      return {
+        kind: 'ref',
+        field
+      };
+    }
+
+RecordDisplayHandleItem
+  = "{" _ "handle" _ ":" _ field:RecordDisplayFieldName _ "}" {
+      return {
+        kind: 'handle',
+        field
+      };
+    }
+
 RecordDisplayFieldName
   = "\"" field:BaseIdentifier "\"" { return field; }
   / "'" field:BaseIdentifier "'" { return field; }
+  / field:BaseIdentifier { return field; }
+
+RecordDisplayModeName
+  = "\"" field:BaseIdentifier "\"" { return field; }
+  / "'" field:BaseIdentifier "'" { return field; }
+  / field:BaseIdentifier { return field; }
 
 RecordFields
   = first:RecordField rest:(_ "," _ field:RecordField { return field; })* _ ","? {
@@ -238,6 +288,7 @@ RecordFieldValueType
   / value:$("number" ![a-zA-Z0-9_]) { return value; }
   / value:$("boolean" ![a-zA-Z0-9_]) { return value; }
   / value:$("array" ![a-zA-Z0-9_]) { return value; }
+  / value:$("handle" ![a-zA-Z0-9_]) { return value; }
 
 RecordWhenRules
   = first:RecordWhenRule rest:(_ ","? _ rule:RecordWhenRule { return rule; })* _ ","? {

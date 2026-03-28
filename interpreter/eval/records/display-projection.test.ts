@@ -44,7 +44,7 @@ async function registerExe(env: Environment, source: string) {
   await evaluateDirective(directive, env);
 }
 
-function setScopedTools(env: Environment, tools: ToolCollection, options?: { display?: 'strict' }) {
+function setScopedTools(env: Environment, tools: ToolCollection, options?: { display?: string }) {
   env.setScopedEnvironmentConfig({
     ...(options?.display ? { display: options.display } : {}),
     tools
@@ -52,7 +52,7 @@ function setScopedTools(env: Environment, tools: ToolCollection, options?: { dis
 }
 
 describe('renderDisplayProjection', () => {
-  it('renders bare, masked, and handle-only fields with nested handle wrappers', async () => {
+  it('renders bare, masked, and handle-only fields with flat handle payloads', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
 /record @contact = {
@@ -78,14 +78,10 @@ describe('renderDisplayProjection', () => {
       name: 'Ada Lovelace',
       email: {
         preview: 'a***@example.com',
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       phone: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       notes: 'Met at conference'
     });
@@ -139,9 +135,7 @@ describe('renderDisplayProjection', () => {
     const projected = await renderDisplayProjection(email, env);
     expect(projected).toEqual({
       preview: 'a***@example.com',
-      handle: {
-        handle: expect.stringMatching(HANDLE_RE)
-      }
+      handle: expect.stringMatching(HANDLE_RE)
     });
   });
 
@@ -169,15 +163,11 @@ describe('renderDisplayProjection', () => {
     expect(projected).toEqual({
       recipient: {
         preview: 'SE3***00003',
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       sender: {
         preview: 'A****',
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       subject: 'Monthly rent'
     });
@@ -217,24 +207,20 @@ describe('renderDisplayProjection', () => {
         name: 'Ada',
         email: {
           preview: 'a***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       },
       {
         name: 'Grace',
         email: {
           preview: 'g***@example.com',
-          handle: {
-            handle: expect.stringMatching(HANDLE_RE)
-          }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       }
     ]);
   });
 
-  it('keeps the inner nested handle wrapper compatible with existing resolution', async () => {
+  it('keeps flat projection handles compatible with existing wrapper-based resolution', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
 /record @contact = {
@@ -252,9 +238,9 @@ describe('renderDisplayProjection', () => {
     });
 
     const projected = await renderDisplayProjection(output, env) as {
-      email: { preview: string; handle: { handle: string } };
+      email: { preview: string; handle: string };
     };
-    const resolved = await resolveValueHandles(projected.email.handle, env);
+    const resolved = await resolveValueHandles({ handle: projected.email.handle }, env);
 
     expect(isStructuredValue(resolved)).toBe(true);
     expect(asText(resolved)).toBe('ada@example.com');
@@ -295,7 +281,7 @@ describe('renderDisplayProjection', () => {
     await renderDisplayProjection(output, env);
 
     const exposures = env.getProjectionExposures('session-projection-test');
-    expect(exposures).toHaveLength(3);
+    expect(exposures).toHaveLength(4);
     expect(exposures).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -319,6 +305,13 @@ describe('renderDisplayProjection', () => {
           field: 'phone',
           record: 'contact',
           handle: expect.stringMatching(HANDLE_RE)
+        }),
+        expect.objectContaining({
+          sessionId: 'session-projection-test',
+          kind: 'bare',
+          field: 'notes',
+          record: 'contact',
+          emittedLiteral: 'Met at conference'
         })
       ])
     );
@@ -361,23 +354,23 @@ describe('renderDisplayProjection', () => {
       participants: [
         {
           preview: 'a***@example.com',
-          handle: { handle: expect.stringMatching(HANDLE_RE) }
+          handle: expect.stringMatching(HANDLE_RE)
         },
         {
           preview: 'g***@example.com',
-          handle: { handle: expect.stringMatching(HANDLE_RE) }
+          handle: expect.stringMatching(HANDLE_RE)
         }
       ],
       recipients: [
-        { handle: { handle: expect.stringMatching(HANDLE_RE) } },
-        { handle: { handle: expect.stringMatching(HANDLE_RE) } }
+        { handle: expect.stringMatching(HANDLE_RE) },
+        { handle: expect.stringMatching(HANDLE_RE) }
       ],
       visible: ['alex@example.com', 'sam@example.com'],
       title: 'Lunch'
     });
 
     const exposures = env.getProjectionExposures('session-array-projection');
-    expect(exposures).toHaveLength(6);
+    expect(exposures).toHaveLength(7);
     expect(exposures).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -408,6 +401,12 @@ describe('renderDisplayProjection', () => {
           field: 'visible',
           record: 'calendar_evt',
           emittedLiteral: 'sam@example.com'
+        }),
+        expect.objectContaining({
+          kind: 'bare',
+          field: 'title',
+          record: 'calendar_evt',
+          emittedLiteral: 'Lunch'
         })
       ])
     );
@@ -474,16 +473,189 @@ describe('renderDisplayProjection', () => {
 
     expect(await renderDisplayProjection(output, env)).toEqual({
       email: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
+        handle: expect.stringMatching(HANDLE_RE)
       },
       name: {
-        handle: {
-          handle: expect.stringMatching(HANDLE_RE)
-        }
-      },
-      notes: 'Visible'
+        handle: expect.stringMatching(HANDLE_RE)
+      }
     });
+  });
+
+  it('supports named display modes with worker/planner visibility splits', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    worker: [{ mask: "from" }, subject, body],
+    planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        message_id: 'msg-1',
+        subject: 'Update',
+        body: 'Body'
+      },
+      env
+    });
+
+    setScopedTools(env, {}, { display: 'worker' });
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      from: {
+        preview: 'a***@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      subject: 'Update',
+      body: 'Body'
+    });
+
+    setScopedTools(env, {}, { display: 'planner' });
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      from: {
+        value: 'ada@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      message_id: {
+        handle: expect.stringMatching(HANDLE_RE)
+      }
+    });
+  });
+
+  it('uses default named display mode when no explicit box mode is selected', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  display: {
+    default: [name, { mask: "email" }],
+    planner: [{ ref: "email" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada'
+      },
+      env
+    });
+
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      name: 'Ada',
+      email: {
+        preview: 'a***@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      }
+    });
+  });
+
+  it('fails closed when a named display mode is not declared by the record', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string],
+  display: {
+    planner: [{ ref: "email" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: { email: 'ada@example.com' },
+      env
+    });
+
+    setScopedTools(env, {}, { display: 'worker' });
+    await expect(renderDisplayProjection(output, env)).rejects.toThrow(/does not declare display mode 'worker'/i);
+  });
+
+  it('fails closed when a named display record is rendered without an explicit or default mode', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string],
+  display: {
+    planner: [{ ref: "email" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: { email: 'ada@example.com' },
+      env
+    });
+
+    await expect(renderDisplayProjection(output, env)).rejects.toThrow(/requires an explicit display mode/i);
+  });
+
+  it('degrades ref fields to visible-only values when policy filtering denies the handle', async () => {
+    const env = createEnvironment();
+    env.setLlmToolConfig({
+      sessionId: 'session-ref-degrade',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  display: {
+    planner: [name, { ref: "email" }]
+  }
+}
+`);
+    await registerExe(
+      env,
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }'
+    );
+
+    env.setPolicySummary({
+      defaults: { rules: ['no-send-to-external'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    } as any);
+    setScopedTools(env, {
+      send_email: { mlld: 'send_email', controlArgs: ['recipient'] }
+    }, { display: 'planner' });
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace'
+      },
+      env
+    });
+
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      name: 'Ada Lovelace',
+      email: {
+        value: 'ada@example.com'
+      }
+    });
+
+    const exposures = env.getProjectionExposures('session-ref-degrade');
+    expect(exposures).toEqual([
+      expect.objectContaining({
+        kind: 'bare',
+        field: 'name',
+        emittedLiteral: 'Ada Lovelace'
+      })
+    ]);
   });
 });
