@@ -147,6 +147,44 @@ describe('record grammar', () => {
     ]);
   });
 
+  it('parses bare root adapters for scalar and map-entry record fields', () => {
+    const directive = getFirstDirective(`
+/record @hotel_price = {
+  facts: [@input as name: string, @key as hotel: string],
+  data: [@value as price_range: string?]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.facts?.[0]).toMatchObject({
+      kind: 'input',
+      name: 'name',
+      sourceRoot: 'input',
+      source: {
+        identifier: 'input',
+        fields: []
+      }
+    });
+    expect(directive.values.facts?.[1]).toMatchObject({
+      kind: 'input',
+      name: 'hotel',
+      sourceRoot: 'key',
+      source: {
+        identifier: 'key',
+        fields: []
+      }
+    });
+    expect(directive.values.data?.[0]).toMatchObject({
+      kind: 'input',
+      name: 'price_range',
+      sourceRoot: 'value',
+      source: {
+        identifier: 'value',
+        fields: []
+      },
+      optional: true
+    });
+  });
+
   it('captures deferred key declarations as unsupported record entries', () => {
     const directive = getFirstDirective(`
 /record @deal = {

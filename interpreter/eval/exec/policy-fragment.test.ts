@@ -7,7 +7,10 @@ import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { evaluateDirective } from '@interpreter/eval/directive';
-import { resolveInvocationPolicyFragment } from './policy-fragment';
+import {
+  getInvocationPolicyFragmentCompileReport,
+  resolveInvocationPolicyFragment
+} from './policy-fragment';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -315,6 +318,15 @@ describe('resolveInvocationPolicyFragment', () => {
         }
       }
     });
+    expect(getInvocationPolicyFragmentCompileReport(policy)).toMatchObject({
+      strippedArgs: [
+        { tool: 'createCalendarEvent', arg: 'title' },
+        { tool: 'createCalendarEvent', arg: 'start_time' }
+      ],
+      droppedEntries: [],
+      ambiguousValues: [],
+      compiledProofs: []
+    });
   });
 
   it('keeps constrained-empty entries when data args strip away for tools with control args', async () => {
@@ -483,6 +495,25 @@ describe('resolveInvocationPolicyFragment', () => {
     expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
     expect((recipientConstraint.eq as any).mx.has_label?.('fact:*.email')).toBe(true);
     expect(recipientConstraint.eq).not.toBe('ada@example.com');
+    expect(getInvocationPolicyFragmentCompileReport(policy)).toEqual({
+      strippedArgs: [],
+      repairedArgs: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipient',
+          steps: ['canonicalized_projected_value']
+        }
+      ],
+      droppedEntries: [],
+      ambiguousValues: [],
+      compiledProofs: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipient',
+          labels: ['fact:@contact.email']
+        }
+      ]
+    });
   });
 
   it('materializes emitted masked preview authorization constraints from prior projected values', async () => {
@@ -587,6 +618,24 @@ describe('resolveInvocationPolicyFragment', () => {
     );
 
     expect(policy?.authorizations?.allow.sendEmail).toBeUndefined();
+    expect(getInvocationPolicyFragmentCompileReport(policy)).toEqual({
+      strippedArgs: [],
+      repairedArgs: [],
+      droppedEntries: [
+        {
+          tool: 'sendEmail',
+          reason: 'ambiguous_projected_value'
+        }
+      ],
+      ambiguousValues: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipient',
+          value: 's***@company.com'
+        }
+      ],
+      compiledProofs: []
+    });
   });
 
   it('skips ambiguous literal authorization entries during policy compilation', async () => {

@@ -8,7 +8,11 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import { evaluateRecord } from '@interpreter/eval/record';
 import { coerceRecordOutput } from './coerce-record';
 import { accessField } from '@interpreter/utils/field-access';
-import { getRecordProjectionMetadata, isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  getRecordProjectionMetadata,
+  isStructuredValue,
+  wrapStructured
+} from '@interpreter/utils/structured-value';
 
 function createEnvironment(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -64,6 +68,124 @@ describe('record output coercion', () => {
     const org = await accessNamedField(output, 'org');
     expect(isStructuredValue(org)).toBe(true);
     expect(org.text).toBe('analytical');
+  });
+
+  it('coerces scalar-root records from a single scalar value', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @slack_channel = {
+  facts: [@input as name: string],
+  display: [name]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: 'general',
+      env
+    });
+
+    expect(output.type).toBe('object');
+    expect(output.mx.schema?.valid).toBe(true);
+    expect(getRecordProjectionMetadata(output)).toEqual({
+      kind: 'record',
+      recordName: 'slack_channel',
+      hasDisplay: true,
+      fields: {
+        name: { classification: 'fact', display: 'bare' }
+      }
+    });
+
+    const name = await accessNamedField(output, 'name');
+    expect(isStructuredValue(name)).toBe(true);
+    expect(name.text).toBe('general');
+    expect(name.mx.labels).toContain('fact:@slack_channel.name');
+  });
+
+  it('coerces scalar arrays into arrays of fact-carrying records', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @slack_channel = {
+  facts: [@input as name: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: ['general', 'random'],
+      env
+    });
+
+    expect(output.type).toBe('array');
+    expect(output.mx.schema?.valid).toBe(true);
+    expect(Array.isArray(output.data)).toBe(true);
+    expect(output.data).toHaveLength(2);
+
+    const first = output.data[0];
+    expect(isStructuredValue(first)).toBe(true);
+    const firstName = await accessNamedField(first, 'name');
+    expect(isStructuredValue(firstName)).toBe(true);
+    expect(firstName.text).toBe('general');
+    expect(firstName.mx.labels).toContain('fact:@slack_channel.name');
+
+    const second = output.data[1];
+    expect(isStructuredValue(second)).toBe(true);
+    const secondName = await accessNamedField(second, 'name');
+    expect(isStructuredValue(secondName)).toBe(true);
+    expect(secondName.text).toBe('random');
+    expect(secondName.mx.labels).toContain('fact:@slack_channel.name');
+  });
+
+  it('coerces map-entry roots into record rows with @key and @value bindings', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @hotel_price = {
+  facts: [@key as hotel: string],
+  data: [@value as price_range: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        'City Hub': wrapStructured('Price range: 100 - 180', 'text', 'Price range: 100 - 180', {
+          security: makeSecurityDescriptor({
+            labels: ['src:mcp']
+          })
+        }),
+        'Airport Inn': 'Price range: 220 - 260'
+      },
+      env
+    });
+
+    expect(output.type).toBe('array');
+    expect(output.mx.schema?.valid).toBe(true);
+    expect(Array.isArray(output.data)).toBe(true);
+    expect(output.data).toHaveLength(2);
+
+    const first = output.data[0];
+    expect(isStructuredValue(first)).toBe(true);
+    expect(getRecordProjectionMetadata(first)).toEqual({
+      kind: 'record',
+      recordName: 'hotel_price',
+      hasDisplay: false,
+      fields: {
+        hotel: { classification: 'fact', display: 'bare' },
+        price_range: { classification: 'data', display: 'bare' }
+      }
+    });
+
+    const hotel = await accessNamedField(first, 'hotel');
+    expect(isStructuredValue(hotel)).toBe(true);
+    expect(hotel.text).toBe('City Hub');
+    expect(hotel.mx.labels).toContain('fact:@hotel_price.hotel');
+
+    const priceRange = await accessNamedField(first, 'price_range');
+    expect(isStructuredValue(priceRange)).toBe(true);
+    expect(priceRange.text).toBe('Price range: 100 - 180');
+    expect(priceRange.mx.labels).toContain('src:mcp');
+    expect(priceRange.mx.labels.some(label => label.startsWith('fact:'))).toBe(false);
+    expect(priceRange.mx.factsources?.map(handle => handle.ref)).toEqual(['@hotel_price.price_range']);
   });
 
   it('coerces objects, remaps fields, evaluates computed fields, and attaches fact metadata', async () => {

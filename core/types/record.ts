@@ -6,6 +6,8 @@ export type RecordFieldClassification = 'fact' | 'data';
 export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
 export type RecordDisplayMode = 'bare' | 'mask' | 'handle';
+export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
+export type RecordInputSourceRoot = 'input' | 'key' | 'value';
 export type RecordDisplayEntry =
   | { kind: 'bare'; field: string }
   | { kind: 'mask'; field: string };
@@ -40,6 +42,7 @@ export interface RecordInputFieldDefinition {
   kind: 'input';
   name: string;
   classification: RecordFieldClassification;
+  sourceRoot: RecordInputSourceRoot;
   source: VariableReferenceNode;
   valueType?: RecordFieldValueType;
   optional: boolean;
@@ -80,6 +83,7 @@ export interface RecordWhenRule {
 export interface RecordDefinition {
   name: string;
   fields: RecordFieldDefinition[];
+  rootMode: RecordRootMode;
   display?: RecordDisplayEntry[];
   validate: RecordValidationMode;
   when?: RecordWhenRule[];

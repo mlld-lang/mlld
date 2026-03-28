@@ -4,11 +4,14 @@ import {
   validatePolicyAuthorizations,
   type PolicyAuthorizationValidationResult
 } from '@core/policy/authorizations';
-import { resolveFactRequirementsForOperation } from '@core/policy/fact-requirements';
-import { expandOperationLabels } from '@core/policy/label-flow';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
-import { isAttestationLabel } from '@core/types/security';
+import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
+import {
+  collectSecurityRelevantArgNamesForOperation,
+  repairSecurityRelevantValue,
+  type RuntimeRepairEvent
+} from '@interpreter/security/runtime-repair';
 import type { Environment } from '@interpreter/env/Environment';
 import {
   asData,
@@ -17,11 +20,7 @@ import {
 } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
-import {
-  buildRuntimeAuthorizationToolContext,
-  resolveNamedOperationMetadata
-} from './tool-metadata';
-import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
+import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -54,33 +53,77 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
-function collectPolicyAuthorizationCanonicalizationArgs(options: {
-  env: Environment;
-  toolName: string;
-  policy: PolicyConfig;
-}): string[] {
-  const metadata = resolveNamedOperationMetadata(options.env, options.toolName);
-  if (!metadata) {
-    return [];
+export interface PolicyAuthorizationCompileReport {
+  strippedArgs: Array<{ tool: string; arg: string }>;
+  repairedArgs: Array<{ tool: string; arg: string; steps: string[] }>;
+  droppedEntries: Array<{ tool: string; reason: string }>;
+  ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
+  compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
+}
+
+const policyAuthorizationCompileReports = new WeakMap<PolicyConfig, PolicyAuthorizationCompileReport>();
+
+function createEmptyPolicyAuthorizationCompileReport(): PolicyAuthorizationCompileReport {
+  return {
+    strippedArgs: [],
+    repairedArgs: [],
+    droppedEntries: [],
+    ambiguousValues: [],
+    compiledProofs: []
+  };
+}
+
+function clonePolicyAuthorizationCompileReport(
+  report: PolicyAuthorizationCompileReport
+): PolicyAuthorizationCompileReport {
+  return {
+    strippedArgs: report.strippedArgs.map(entry => ({ ...entry })),
+    repairedArgs: report.repairedArgs.map(entry => ({ ...entry, steps: [...entry.steps] })),
+    droppedEntries: report.droppedEntries.map(entry => ({ ...entry })),
+    ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
+    compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] }))
+  };
+}
+
+function hasPolicyAuthorizationCompileActivity(
+  report: PolicyAuthorizationCompileReport
+): boolean {
+  return (
+    report.strippedArgs.length > 0
+    || report.repairedArgs.length > 0
+    || report.droppedEntries.length > 0
+    || report.ambiguousValues.length > 0
+    || report.compiledProofs.length > 0
+  );
+}
+
+export function getInvocationPolicyFragmentCompileReport(
+  policy: PolicyConfig | undefined
+): PolicyAuthorizationCompileReport | undefined {
+  if (!policy) {
+    return undefined;
   }
+  const report = policyAuthorizationCompileReports.get(policy);
+  return report ? clonePolicyAuthorizationCompileReport(report) : undefined;
+}
 
-  const resolution = resolveFactRequirementsForOperation({
-    opRef: options.toolName,
-    operationLabels: expandOperationLabels(
-      metadata.labels,
-      options.policy.operations
-    ),
-    controlArgs: metadata.controlArgs,
-    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
-    policy: options.policy
-  });
-
-  return Object.keys(resolution.requirementsByArg);
+function runtimeRepairEventLabel(event: RuntimeRepairEvent): string {
+  switch (event.kind) {
+    case 'resolved_handle':
+      return 'resolved_handle';
+    case 'canonicalized_projected_value':
+      return 'canonicalized_projected_value';
+    case 'rebound_session_proof':
+      return 'rebound_session_proof';
+    case 'ambiguous_projected_value':
+      return 'ambiguous_projected_value';
+  }
 }
 
 function stripNonControlArgsFromRawPolicyAuthorizations(
   candidate: PolicyConfig,
-  toolContext: ReadonlyMap<string, { controlArgs: Set<string>; hasControlArgsMetadata: boolean }>
+  toolContext: ReadonlyMap<string, { controlArgs: Set<string>; hasControlArgsMetadata: boolean }>,
+  report: PolicyAuthorizationCompileReport
 ): void {
   const allow = candidate.authorizations?.allow;
   if (!isPlainObject(allow)) {
@@ -102,14 +145,12 @@ function stripNonControlArgsFromRawPolicyAuthorizations(
     for (const [argName, argValue] of Object.entries(args)) {
       if (tool.controlArgs.has(argName)) {
         strippedArgs[argName] = argValue;
+      } else {
+        report.strippedArgs.push({ tool: toolName, arg: argName });
       }
     }
     entry.args = strippedArgs;
   }
-}
-
-function isAuthorizationProofLabel(label: string): boolean {
-  return isAttestationLabel(label) || label.startsWith('fact:');
 }
 
 function normalizeAuthorizationProofLabels(labels: readonly string[] | undefined): string[] {
@@ -117,11 +158,7 @@ function normalizeAuthorizationProofLabels(labels: readonly string[] | undefined
     return [];
   }
   return Array.from(
-    new Set(
-      labels.filter(
-        (entry): entry is string => typeof entry === 'string' && isAuthorizationProofLabel(entry)
-      )
-    )
+    new Set(labels.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0))
   );
 }
 
@@ -242,21 +279,38 @@ async function resolveConstraintSourceValue(
     if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
       const variable = env.getVariable(candidate.identifier);
       if (!variable) {
-        return canonicalizeProjectedValue(candidate, env, { matchScope: 'global' });
+        return (
+          await repairSecurityRelevantValue({
+            value: candidate,
+            env,
+            matchScope: 'global',
+            includeSessionProofMatches: true
+          })
+        ).value;
       }
       const resolved = await resolveValueHandles(variable, env);
-      return canonicalizeProjectedValue(
-        await unwrapResolvedConstraintValue(resolved, env),
-        env,
-        { matchScope: 'global' }
-      );
+      return (
+        await repairSecurityRelevantValue({
+          value: await unwrapResolvedConstraintValue(resolved, env),
+          env,
+          matchScope: 'global',
+          includeSessionProofMatches: true
+        })
+      ).value;
     }
     if (isAstArrayNode(value)) {
       const items: unknown[] = [];
       for (const item of value.items ?? []) {
         items.push(await resolveConstraintSourceValue(item, env));
       }
-      return canonicalizeProjectedValue(items, env, { matchScope: 'global' });
+      return (
+        await repairSecurityRelevantValue({
+          value: items,
+          env,
+          matchScope: 'global',
+          includeSessionProofMatches: true
+        })
+      ).value;
     }
     if (isAstObjectNode(value)) {
       const result: Record<string, unknown> = {};
@@ -266,7 +320,14 @@ async function resolveConstraintSourceValue(
         }
         result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
       }
-      return canonicalizeProjectedValue(result, env, { matchScope: 'global' });
+      return (
+        await repairSecurityRelevantValue({
+          value: result,
+          env,
+          matchScope: 'global',
+          includeSessionProofMatches: true
+        })
+      ).value;
     }
   }
   if (
@@ -278,18 +339,24 @@ async function resolveConstraintSourceValue(
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
-    return canonicalizeProjectedValue(
-      await unwrapResolvedConstraintValue(resolved, env),
-      env,
-      { matchScope: 'global' }
-    );
+    return (
+      await repairSecurityRelevantValue({
+        value: await unwrapResolvedConstraintValue(resolved, env),
+        env,
+        matchScope: 'global',
+        includeSessionProofMatches: true
+      })
+    ).value;
   }
   const resolved = await resolveValueHandles(value, env);
-  return canonicalizeProjectedValue(
-    await unwrapResolvedConstraintValue(resolved, env),
-    env,
-    { matchScope: 'global' }
-  );
+  return (
+    await repairSecurityRelevantValue({
+      value: await unwrapResolvedConstraintValue(resolved, env),
+      env,
+      matchScope: 'global',
+      includeSessionProofMatches: true
+    })
+  ).value;
 }
 
 async function extractConstraintAttestations(
@@ -301,16 +368,14 @@ async function extractConstraintAttestations(
     recursive: true,
     mergeArrayElements: true
   });
-  return normalizeAuthorizationProofLabels([
-    ...(descriptor?.attestations ?? []),
-    ...(descriptor?.labels ?? [])
-  ]);
+  return normalizeAuthorizationProofLabels(collectProofClaimLabels(descriptor));
 }
 
 async function compileAuthorizationAttestations(
   rawPolicy: unknown,
   normalizedPolicy: PolicyConfig | undefined,
-  env: Environment
+  env: Environment,
+  report: PolicyAuthorizationCompileReport
 ): Promise<void> {
   const rawValue = isStructuredValue(rawPolicy) ? asData(rawPolicy) : rawPolicy;
   const normalizedAuthorizations = normalizedPolicy?.authorizations;
@@ -374,6 +439,11 @@ async function compileAuthorizationAttestations(
             if (compiledAttestations.length === 0) {
               return clause;
             }
+            report.compiledProofs.push({
+              tool: toolName,
+              arg: argName,
+              labels: [...compiledAttestations]
+            });
             return {
               ...clause,
               attestations: compiledAttestations
@@ -397,6 +467,11 @@ async function compileAuthorizationAttestations(
           if (!oneOfAttestations.some(entry => entry.length > 0)) {
             return clause;
           }
+          report.compiledProofs.push({
+            tool: toolName,
+            arg: argName,
+            labels: Array.from(new Set(oneOfAttestations.flatMap(entry => entry)))
+          });
           return {
             ...clause,
             oneOfAttestations
@@ -415,7 +490,8 @@ async function compileAuthorizationAttestations(
 
 async function canonicalizePolicyAuthorizationConstraints(
   candidate: PolicyConfig,
-  env: Environment
+  env: Environment,
+  report: PolicyAuthorizationCompileReport
 ): Promise<void> {
   const allow = candidate.authorizations?.allow;
   if (!allow) {
@@ -427,9 +503,9 @@ async function canonicalizePolicyAuthorizationConstraints(
       continue;
     }
 
-    const targetArgNames = collectPolicyAuthorizationCanonicalizationArgs({
+    const targetArgNames = collectSecurityRelevantArgNamesForOperation({
       env,
-      toolName,
+      operationName: toolName,
       policy: candidate
     });
 
@@ -440,13 +516,36 @@ async function canonicalizePolicyAuthorizationConstraints(
         continue;
       }
       try {
-        entry.args[argName] = await canonicalizeProjectedValue(argValue, env, {
-          matchScope: 'global'
+        const repaired = await repairSecurityRelevantValue({
+          value: argValue,
+          env,
+          matchScope: 'global',
+          includeSessionProofMatches: true
         });
+        entry.args[argName] = repaired.value;
+        const repairSteps = repaired.events
+          .filter(event => event.kind !== 'ambiguous_projected_value')
+          .map(runtimeRepairEventLabel);
+        if (repairSteps.length > 0) {
+          report.repairedArgs.push({
+            tool: toolName,
+            arg: argName,
+            steps: repairSteps
+          });
+        }
       } catch (error) {
         if (isAmbiguousProjectedValueError(error)) {
           // Fail closed on the specific authorization entry instead of aborting
           // the entire invocation. The later authorization check will deny it.
+          report.droppedEntries.push({
+            tool: toolName,
+            reason: 'ambiguous_projected_value'
+          });
+          report.ambiguousValues.push({
+            tool: toolName,
+            arg: argName,
+            value: typeof argValue === 'string' ? argValue : String(argValue)
+          });
           delete allow[toolName];
           break;
         }
@@ -531,9 +630,10 @@ export async function resolveInvocationPolicyFragment(
   }
 
   const toolContext = buildRuntimeAuthorizationToolContext(env);
+  const compileReport = createEmptyPolicyAuthorizationCompileReport();
   assertPolicyAuthorizationsShapeValid(candidate, toolContext);
-  stripNonControlArgsFromRawPolicyAuthorizations(candidate, toolContext);
-  await canonicalizePolicyAuthorizationConstraints(candidate, env);
+  stripNonControlArgsFromRawPolicyAuthorizations(candidate, toolContext, compileReport);
+  await canonicalizePolicyAuthorizationConstraints(candidate, env, compileReport);
 
   const normalized = normalizePolicyConfig(candidate);
   const normalizedAuthorizations = normalizePolicyAuthorizations(
@@ -544,7 +644,10 @@ export async function resolveInvocationPolicyFragment(
   if (normalizedAuthorizations) {
     normalized.authorizations = normalizedAuthorizations;
   }
-  await compileAuthorizationAttestations(rawResolvedValue, normalized, env);
+  await compileAuthorizationAttestations(rawResolvedValue, normalized, env, compileReport);
+  if (hasPolicyAuthorizationCompileActivity(compileReport)) {
+    policyAuthorizationCompileReports.set(normalized, clonePolicyAuthorizationCompileReport(compileReport));
+  }
   return normalized;
 }
 
@@ -557,12 +660,14 @@ export function createInvocationPolicyScope(
   child.setPolicySummary(effectivePolicy);
 
   const existing = (env.getPolicyContext() as Record<string, unknown> | undefined) ?? {};
+  const compileReport = getInvocationPolicyFragmentCompileReport(policyFragment);
   child.setPolicyContext({
     tier: (existing as any).tier ?? null,
     configs: effectivePolicy ?? {},
     activePolicies: Array.isArray((existing as any).activePolicies)
       ? [...(existing as any).activePolicies]
       : [],
+    ...(compileReport ? { authorizationsCompile: compileReport } : {}),
     ...((existing as any).environment ? { environment: (existing as any).environment } : {})
   });
 

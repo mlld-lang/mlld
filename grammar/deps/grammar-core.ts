@@ -402,6 +402,17 @@ export const helpers = {
     return 'value';
   },
 
+  recordFieldSourceRoot(source: any): 'input' | 'key' | 'value' {
+    if (!source || typeof source !== 'object') {
+      return 'input';
+    }
+    const identifier = typeof source.identifier === 'string' ? source.identifier : '';
+    if (identifier === 'key' || identifier === 'value') {
+      return identifier;
+    }
+    return 'input';
+  },
+
   normalizePathVar(id: string) {
     return id;
   },

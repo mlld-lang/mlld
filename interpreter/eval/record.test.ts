@@ -45,6 +45,7 @@ describe('evaluateRecord', () => {
     expect(result.value).toBe(definition);
     expect(definition).toMatchObject({
       name: 'contact',
+      rootMode: 'object',
       validate: 'drop',
       fields: [
         {
@@ -144,6 +145,37 @@ describe('evaluateRecord', () => {
 
     expect(env.getRecordDefinition('contact')).toMatchObject({
       display: []
+    });
+  });
+
+  it('infers scalar-root records from bare @input fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @slack_channel = {
+  facts: [@input as name: string]
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('slack_channel')).toMatchObject({
+      rootMode: 'scalar'
+    });
+  });
+
+  it('infers map-entry records from @key and @value fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @hotel_price = {
+  facts: [@key as hotel: string],
+  data: [@value as price_range: string]
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('hotel_price')).toMatchObject({
+      rootMode: 'map-entry'
     });
   });
 

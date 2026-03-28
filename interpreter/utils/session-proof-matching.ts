@@ -1,6 +1,8 @@
 import type { Environment } from '@interpreter/env/Environment';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { deserializeSecurityDescriptor } from '@core/types/security';
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+import { proofStrengthForValue } from '@interpreter/security/proof-claims';
 import {
   applySecurityDescriptorToStructuredValue,
   isStructuredValue,
@@ -18,86 +20,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   }
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
-}
-
-function canonicalizeValue(value: unknown): string | undefined {
-  const raw = isVariable(value)
-    ? value.value
-    : isStructuredValue(value)
-      ? asData(value)
-      : value;
-
-  const encode = (entry: unknown, seen: WeakSet<object>): string | undefined => {
-    if (entry === undefined) {
-      return 'undefined';
-    }
-    if (entry === null) {
-      return 'null';
-    }
-    if (typeof entry === 'string') {
-      return `string:${JSON.stringify(entry)}`;
-    }
-    if (typeof entry === 'number') {
-      return Number.isNaN(entry) ? 'number:NaN' : `number:${entry}`;
-    }
-    if (typeof entry === 'boolean') {
-      return `boolean:${entry ? '1' : '0'}`;
-    }
-    if (Array.isArray(entry)) {
-      const items: string[] = [];
-      for (const item of entry) {
-        const encoded = encode(item, seen);
-        if (encoded === undefined) {
-          return undefined;
-        }
-        items.push(encoded);
-      }
-      return `array:[${items.join(',')}]`;
-    }
-    if (!entry || typeof entry !== 'object') {
-      return undefined;
-    }
-    if (seen.has(entry as object)) {
-      return undefined;
-    }
-    seen.add(entry as object);
-    const record = entry as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    const parts: string[] = [];
-    for (const key of keys) {
-      const encoded = encode(record[key], seen);
-      if (encoded === undefined) {
-        return undefined;
-      }
-      parts.push(`${JSON.stringify(key)}:${encoded}`);
-    }
-    return `object:{${parts.join(',')}}`;
-  };
-
-  return encode(raw, new WeakSet<object>());
-}
-
-function proofStrength(value: unknown): number {
-  const descriptor = extractSecurityDescriptor(value, { recursive: false });
-  if (!descriptor) {
-    return 0;
-  }
-
-  const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
-  const attestations = Array.isArray(descriptor.attestations) ? descriptor.attestations : [];
-  const factsources = Array.isArray(descriptor.sources) ? descriptor.sources : [];
-
-  const hasFact = labels.some(label => typeof label === 'string' && label.startsWith('fact:'));
-  if (hasFact) {
-    return 3;
-  }
-  if (attestations.length > 0) {
-    return 2;
-  }
-  if (labels.length > 0 || factsources.length > 0) {
-    return 1;
-  }
-  return 0;
 }
 
 function iterateChildren(value: unknown): unknown[] {
@@ -179,7 +101,7 @@ function getNamespaceChildren(value: StructuredValue): unknown[] {
 }
 
 export function findSessionProofMatch(value: unknown, env: Environment): unknown | undefined {
-  const targetKey = canonicalizeValue(value);
+  const targetKey = encodeCanonicalValue(value);
   if (!targetKey) {
     return undefined;
   }
@@ -189,8 +111,8 @@ export function findSessionProofMatch(value: unknown, env: Environment): unknown
   const seen = new WeakSet<object>();
 
   const visit = (entry: unknown): void => {
-    const candidateKey = canonicalizeValue(entry);
-    const candidateStrength = proofStrength(entry);
+    const candidateKey = encodeCanonicalValue(entry);
+    const candidateStrength = proofStrengthForValue(entry);
     if (candidateKey === targetKey && candidateStrength > bestStrength) {
       bestMatch = entry;
       bestStrength = candidateStrength;

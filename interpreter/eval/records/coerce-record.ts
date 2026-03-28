@@ -48,12 +48,22 @@ type RecordObjectResult = {
   factsources: FactSourceHandle[];
 };
 
+type RecordRootContext = {
+  input: unknown;
+  key?: unknown;
+  value?: unknown;
+};
+
 const RECORD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
   syntax: 'reference',
   hasInterpolation: false,
   isMultiLine: false
 };
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
 
 function createRecordError(
   definition: RecordDefinition,
@@ -193,9 +203,12 @@ function setNamespaceMetadata(
   (value.internal as Record<string, unknown>).namespaceMetadata = metadata;
 }
 
-function createInputVariable(value: unknown): Variable {
+function createRecordRootVariable(
+  name: 'input' | 'key' | 'value',
+  value: unknown
+): Variable {
   return createStructuredValueVariable(
-    'input',
+    name,
     isStructuredValue(value) ? value : wrapStructured(value as any),
     RECORD_INPUT_SOURCE,
     {
@@ -234,6 +247,13 @@ function cloneValueIfStructured(value: unknown): unknown {
   return isStructuredValue(value) ? cloneStructuredValue(value) : value;
 }
 
+function hasRecordRootBinding(
+  context: RecordRootContext,
+  binding: 'input' | 'key' | 'value'
+): boolean {
+  return Object.prototype.hasOwnProperty.call(context, binding);
+}
+
 function extractStringCandidate(value: unknown): string | undefined {
   if (typeof value === 'string') {
     return value;
@@ -270,21 +290,10 @@ function parseStructuredCandidate(candidate: string): unknown {
   return yaml.load(candidate);
 }
 
-function parseRecordInput(value: unknown): { parsed?: unknown; error?: RecordValidationError } {
-  const extracted = extractRecordInputValue(value);
-  if (Array.isArray(extracted) || (extracted && typeof extracted === 'object')) {
-    return { parsed: extracted };
-  }
-
+function tryParseStructuredRecordInput(value: unknown): unknown {
   const text = extractStringCandidate(value);
   if (typeof text !== 'string') {
-    return {
-      error: {
-        path: '$',
-        code: 'parse',
-        message: 'Record output must be an object, array, or structured string payload'
-      }
-    };
+    return undefined;
   }
 
   const trimmed = text.trim();
@@ -299,15 +308,39 @@ function parseRecordInput(value: unknown): { parsed?: unknown; error?: RecordVal
 
   for (const candidate of candidates) {
     try {
-      return { parsed: parseStructuredCandidate(candidate) };
+      return parseStructuredCandidate(candidate);
     } catch {}
+  }
+
+  return undefined;
+}
+
+function parseRecordInput(
+  value: unknown,
+  rootMode: RecordDefinition['rootMode']
+): { parsed?: unknown; error?: RecordValidationError } {
+  const extracted = extractRecordInputValue(value);
+  if (Array.isArray(extracted) || (extracted && typeof extracted === 'object')) {
+    return { parsed: extracted };
+  }
+
+  const parsedStructured = tryParseStructuredRecordInput(value);
+  if (parsedStructured !== undefined) {
+    return { parsed: parsedStructured };
+  }
+
+  if (rootMode === 'scalar') {
+    return { parsed: extracted };
   }
 
   return {
     error: {
       path: '$',
       code: 'parse',
-      message: 'Failed to parse structured record output'
+      message:
+        typeof extractStringCandidate(value) === 'string'
+          ? 'Failed to parse structured record output'
+          : 'Record output must be an object, array, or structured string payload'
     }
   };
 }
@@ -452,13 +485,18 @@ function finalizeArrayFieldValue(options: {
 }
 
 async function evaluateFieldValue(
-  definition: RecordDefinition,
   field: RecordFieldDefinition,
-  input: unknown,
+  context: RecordRootContext,
   env: Environment
 ): Promise<unknown> {
   const child = env.createChild();
-  child.setVariable('input', createInputVariable(input));
+  child.setVariable('input', createRecordRootVariable('input', context.input));
+  if (hasRecordRootBinding(context, 'key')) {
+    child.setVariable('key', createRecordRootVariable('key', context.key));
+  }
+  if (hasRecordRootBinding(context, 'value')) {
+    child.setVariable('value', createRecordRootVariable('value', context.value));
+  }
 
   try {
     if (field.kind === 'input') {
@@ -519,14 +557,35 @@ function buildFactLabels(
   return [`fact:${tiers.join(':')}:${address}`];
 }
 
-async function coerceRecordObject(
-  rawInput: unknown,
+function buildRecordWhenInput(
+  definition: RecordDefinition,
+  context: RecordRootContext
+): Record<string, unknown> {
+  const inputValue = extractRecordInputValue(context.input);
+  if (definition.rootMode === 'object' && isPlainObject(inputValue)) {
+    return inputValue;
+  }
+
+  return {
+    input: inputValue,
+    ...(hasRecordRootBinding(context, 'key')
+      ? { key: extractRecordInputValue(context.key) }
+      : {}),
+    ...(hasRecordRootBinding(context, 'value')
+      ? { value: extractRecordInputValue(context.value) }
+      : {})
+  };
+}
+
+async function coerceRecordEntry(
+  context: RecordRootContext,
   definition: RecordDefinition,
   env: Environment,
   pathPrefix = '',
   inheritedDescriptor?: SecurityDescriptor
 ): Promise<RecordObjectResult> {
-  if (!rawInput || typeof rawInput !== 'object' || Array.isArray(rawInput)) {
+  const rootInput = extractRecordInputValue(context.input);
+  if (definition.rootMode === 'object' && !isPlainObject(rootInput)) {
     return {
       value: wrapStructured({}, 'object'),
       errors: [
@@ -535,7 +594,7 @@ async function coerceRecordObject(
           code: 'type',
           message: 'Record input must be an object',
           expected: 'object',
-          actual: Array.isArray(rawInput) ? 'array' : typeof rawInput
+          actual: Array.isArray(rootInput) ? 'array' : typeof rootInput
         }
       ],
       factsources: []
@@ -543,11 +602,12 @@ async function coerceRecordObject(
   }
 
   const shaped: Record<string, unknown> = {};
+  const rawFieldValues: Record<string, unknown> = {};
   const namespaceMetadata: Record<string, NamespaceFieldMetadata> = {};
   const errors: RecordValidationError[] = [];
 
   for (const field of definition.fields) {
-    const rawValue = await evaluateFieldValue(definition, field, rawInput, env);
+    const rawValue = await evaluateFieldValue(field, context, env);
     const fieldPath = pathPrefix ? `${pathPrefix}.${field.name}` : field.name;
 
     if (rawValue === undefined || rawValue === null) {
@@ -563,6 +623,7 @@ async function coerceRecordObject(
     }
 
     const coerced = coerceFieldValue(field, rawValue);
+    rawFieldValues[field.name] = rawValue;
     if (!coerced.ok) {
       errors.push({
         path: fieldPath,
@@ -582,7 +643,7 @@ async function coerceRecordObject(
   }
 
   const validationDemoted = definition.validate === 'demote' && errors.length > 0;
-  const whenResult = resolveRecordWhen(rawInput as Record<string, unknown>, definition.when);
+  const whenResult = resolveRecordWhen(buildRecordWhenInput(definition, context), definition.when);
   const allData = validationDemoted || whenResult.demote;
   const factsources: FactSourceHandle[] = [];
   const wrapperSecurity = sanitizeRecordWrapperDescriptor(inheritedDescriptor);
@@ -611,6 +672,10 @@ async function coerceRecordObject(
       factLabels: labels,
       shouldKeepUntrusted: allData || field.classification === 'data'
     });
+    const namespaceSecurity = mergeFieldDescriptorWithValue(
+      rawFieldValues[field.name],
+      fieldSecurity
+    );
     const effectiveArraySecurity =
       wrapperSecurity && fieldSecurity
         ? mergeDescriptors(wrapperSecurity, fieldSecurity)
@@ -625,10 +690,10 @@ async function coerceRecordObject(
       });
     }
     namespaceMetadata[field.name] = {
-      ...(fieldSecurity
+      ...(namespaceSecurity
         ? {
             security: serializeSecurityDescriptor(
-              fieldSecurity
+              namespaceSecurity
             )
           }
         : {}),
@@ -651,6 +716,81 @@ async function coerceRecordObject(
   };
 }
 
+function buildRecordArrayOutput(options: {
+  definition: RecordDefinition;
+  items: StructuredValue<Record<string, unknown>>[];
+  errors: RecordValidationError[];
+  factsources: FactSourceHandle[];
+  inheritedDescriptor?: SecurityDescriptor;
+}): StructuredValue {
+  const schema = buildSchemaMetadata(options.definition, options.errors);
+  const wrapperSecurity = sanitizeRecordWrapperDescriptor(options.inheritedDescriptor);
+  const wrapped = wrapStructured(options.items, 'array', undefined, {
+    schema,
+    factsources: dedupeFactSources(options.factsources),
+    ...(wrapperSecurity ? { security: wrapperSecurity } : {})
+  });
+  setStructuredMetadata(wrapped, schema, options.factsources);
+  return wrapped;
+}
+
+function formatMapEntryPath(pathPrefix: string, key: string): string {
+  const serializedKey = JSON.stringify(key);
+  return pathPrefix ? `${pathPrefix}[${serializedKey}]` : `[${serializedKey}]`;
+}
+
+function collectMapEntryContexts(parsed: unknown): {
+  entries: Array<{ context: RecordRootContext; pathPrefix: string }>;
+  errors: RecordValidationError[];
+} {
+  const entries: Array<{ context: RecordRootContext; pathPrefix: string }> = [];
+  const errors: RecordValidationError[] = [];
+
+  const pushMapEntries = (value: Record<string, unknown>, pathPrefix: string): void => {
+    for (const [key, entryValue] of Object.entries(value)) {
+      entries.push({
+        context: {
+          input: entryValue,
+          key,
+          value: entryValue
+        },
+        pathPrefix: formatMapEntryPath(pathPrefix, key)
+      });
+    }
+  };
+
+  if (isPlainObject(parsed)) {
+    pushMapEntries(parsed, '');
+    return { entries, errors };
+  }
+
+  if (Array.isArray(parsed)) {
+    parsed.forEach((item, index) => {
+      if (isPlainObject(item)) {
+        pushMapEntries(item, `[${index}]`);
+        return;
+      }
+      errors.push({
+        path: `[${index}]`,
+        code: 'type',
+        message: 'Record input must be an object map',
+        expected: 'object',
+        actual: Array.isArray(item) ? 'array' : typeof item
+      });
+    });
+    return { entries, errors };
+  }
+
+  errors.push({
+    path: '$',
+    code: 'type',
+    message: 'Record input must be an object map',
+    expected: 'object',
+    actual: Array.isArray(parsed) ? 'array' : typeof parsed
+  });
+  return { entries, errors };
+}
+
 function throwStrictValidationError(
   definition: RecordDefinition,
   errors: readonly RecordValidationError[]
@@ -665,7 +805,7 @@ export async function coerceRecordOutput(options: {
   env: Environment;
   inheritedDescriptor?: SecurityDescriptor;
 }): Promise<StructuredValue> {
-  const parsedInput = parseRecordInput(options.value);
+  const parsedInput = parseRecordInput(options.value, options.definition.rootMode);
   if (parsedInput.error) {
     if (options.definition.validate === 'strict') {
       throwStrictValidationError(options.definition, [parsedInput.error]);
@@ -681,14 +821,47 @@ export async function coerceRecordOutput(options: {
   }
 
   const parsed = parsedInput.parsed;
+
+  if (options.definition.rootMode === 'map-entry') {
+    const mapEntries = collectMapEntryContexts(parsed);
+    const items: StructuredValue<Record<string, unknown>>[] = [];
+    const errors: RecordValidationError[] = [...mapEntries.errors];
+    const factsources: FactSourceHandle[] = [];
+
+    for (const entry of mapEntries.entries) {
+      const item = await coerceRecordEntry(
+        entry.context,
+        options.definition,
+        options.env,
+        entry.pathPrefix,
+        options.inheritedDescriptor
+      );
+      items.push(item.value);
+      errors.push(...item.errors);
+      factsources.push(...item.factsources);
+    }
+
+    if (options.definition.validate === 'strict' && errors.length > 0) {
+      throwStrictValidationError(options.definition, errors);
+    }
+
+    return buildRecordArrayOutput({
+      definition: options.definition,
+      items,
+      errors,
+      factsources,
+      inheritedDescriptor: options.inheritedDescriptor
+    });
+  }
+
   if (Array.isArray(parsed)) {
     const items: StructuredValue<Record<string, unknown>>[] = [];
     const errors: RecordValidationError[] = [];
     const factsources: FactSourceHandle[] = [];
 
     for (let index = 0; index < parsed.length; index += 1) {
-      const item = await coerceRecordObject(
-        parsed[index],
+      const item = await coerceRecordEntry(
+        { input: parsed[index] },
         options.definition,
         options.env,
         `[${index}]`,
@@ -703,20 +876,17 @@ export async function coerceRecordOutput(options: {
       throwStrictValidationError(options.definition, errors);
     }
 
-    const schema = buildSchemaMetadata(options.definition, errors);
-    const wrapped = wrapStructured(items, 'array', undefined, {
-      schema,
-      factsources: dedupeFactSources(factsources),
-      ...(sanitizeRecordWrapperDescriptor(options.inheritedDescriptor)
-        ? { security: sanitizeRecordWrapperDescriptor(options.inheritedDescriptor) }
-        : {})
+    return buildRecordArrayOutput({
+      definition: options.definition,
+      items,
+      errors,
+      factsources,
+      inheritedDescriptor: options.inheritedDescriptor
     });
-    setStructuredMetadata(wrapped, schema, factsources);
-    return wrapped;
   }
 
-  const objectResult = await coerceRecordObject(
-    parsed,
+  const objectResult = await coerceRecordEntry(
+    { input: parsed },
     options.definition,
     options.env,
     '',

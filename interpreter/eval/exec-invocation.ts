@@ -47,7 +47,6 @@ import type { WhenExpressionNode } from '@core/types/when';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
-import { resolveFactRequirementsForOperation } from '@core/policy/fact-requirements';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
 import { expandOperationLabels } from '@core/policy/label-flow';
@@ -106,8 +105,11 @@ import { coerceRecordOutput } from './records/coerce-record';
 import type { RecordDefinition } from '@core/types/record';
 import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
-import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
 import { descriptorHasExternalInputSource } from '@core/security/url-provenance';
+import {
+  collectSecurityRelevantArgNamesForOperation,
+  repairSecurityRelevantValue
+} from '@interpreter/security/runtime-repair';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -430,7 +432,8 @@ function mergeResolvedArgValueDescriptors(options: {
   return changed ? descriptors : argSecurityDescriptors;
 }
 
-function collectCanonicalizationArgNames(options: {
+async function repairSecurityRelevantExecArgs(options: {
+  env: Environment;
   operationName: string;
   effectiveToolMetadata: {
     labels: readonly string[];
@@ -438,71 +441,51 @@ function collectCanonicalizationArgNames(options: {
     hasControlArgsMetadata: boolean;
   };
   policySummary: ReturnType<Environment['getPolicySummary']>;
-}): string[] {
-  const resolution = resolveFactRequirementsForOperation({
-    opRef: options.operationName,
-    operationLabels: expandOperationLabels(
-      options.effectiveToolMetadata.labels,
-      options.policySummary?.operations
-    ),
+  paramNames: readonly string[];
+  evaluatedArgs: readonly unknown[];
+}): Promise<{
+  evaluatedArgs: unknown[];
+  repairedArgIndices: ReadonlySet<number>;
+}> {
+  const targetArgNames = collectSecurityRelevantArgNamesForOperation({
+    env: options.env,
+    operationName: options.operationName,
+    labels: options.effectiveToolMetadata.labels,
     controlArgs: options.effectiveToolMetadata.controlArgs,
     hasControlArgsMetadata: options.effectiveToolMetadata.hasControlArgsMetadata,
     policy: options.policySummary
   });
 
-  const argNames = new Set(Object.keys(resolution.requirementsByArg));
-  if (options.effectiveToolMetadata.hasControlArgsMetadata) {
-    for (const argName of options.effectiveToolMetadata.controlArgs ?? []) {
-      if (typeof argName === 'string' && argName.trim().length > 0) {
-        argNames.add(argName);
-      }
-    }
-  }
-
-  return [...argNames];
-}
-
-async function canonicalizeSecurityRelevantExecArgs(options: {
-  env: Environment;
-  paramNames: readonly string[];
-  evaluatedArgs: readonly unknown[];
-  targetArgNames: readonly string[];
-}): Promise<{
-  evaluatedArgs: unknown[];
-  canonicalizedArgIndices: ReadonlySet<number>;
-}> {
-  if (options.targetArgNames.length === 0) {
+  if (targetArgNames.length === 0) {
     return {
       evaluatedArgs: [...options.evaluatedArgs],
-      canonicalizedArgIndices: new Set<number>()
+      repairedArgIndices: new Set<number>()
     };
   }
 
   const nextArgs = [...options.evaluatedArgs];
-  const canonicalizedArgIndices = new Set<number>();
-  for (const argName of new Set(options.targetArgNames)) {
+  const repairedArgIndices = new Set<number>();
+  for (const argName of new Set(targetArgNames)) {
     const argIndex = options.paramNames.indexOf(argName);
     if (argIndex === -1 || argIndex >= nextArgs.length) {
       continue;
     }
-    try {
-      const original = nextArgs[argIndex];
-      const canonicalized = await canonicalizeProjectedValue(original, options.env);
-      nextArgs[argIndex] = canonicalized;
-      if (canonicalized !== original) {
-        canonicalizedArgIndices.add(argIndex);
-      }
-    } catch (error) {
-      if (error instanceof MlldSecurityError && error.code === 'AMBIGUOUS_PROJECTED_VALUE') {
-        continue;
-      }
-      throw error;
+
+    const original = nextArgs[argIndex];
+    const repaired = await repairSecurityRelevantValue({
+      value: original,
+      env: options.env,
+      preserveOnAmbiguous: true
+    });
+    nextArgs[argIndex] = repaired.value;
+    if (repaired.value !== original) {
+      repairedArgIndices.add(argIndex);
     }
   }
 
   return {
     evaluatedArgs: nextArgs,
-    canonicalizedArgIndices
+    repairedArgIndices
   };
 }
 
@@ -1946,22 +1929,19 @@ async function evaluateExecInvocationInternal(
       : undefined
   });
   const toolLabels = effectiveToolMetadata.labels;
-  const canonicalizationArgNames = collectCanonicalizationArgNames({
+  const argRepair = await repairSecurityRelevantExecArgs({
+    env: runtimeEnv,
     operationName: toolOperationName ?? variable.name ?? commandName,
     effectiveToolMetadata,
-    policySummary: runtimeEnv.getPolicySummary()
+    policySummary: runtimeEnv.getPolicySummary(),
+    paramNames: params,
+    evaluatedArgs
   });
-  if (canonicalizationArgNames.length > 0) {
-    const canonicalization = await canonicalizeSecurityRelevantExecArgs({
-      env: runtimeEnv,
-      paramNames: params,
-      evaluatedArgs,
-      targetArgNames: canonicalizationArgNames
-    });
-    evaluatedArgs = canonicalization.evaluatedArgs;
-    if (canonicalization.canonicalizedArgIndices.size > 0 && Array.isArray(argSecurityDescriptors)) {
+  evaluatedArgs = argRepair.evaluatedArgs;
+  if (argRepair.repairedArgIndices.size > 0) {
+    if (Array.isArray(argSecurityDescriptors)) {
       argSecurityDescriptors = argSecurityDescriptors.map((descriptor, index) =>
-        canonicalization.canonicalizedArgIndices.has(index) ? undefined : descriptor
+        argRepair.repairedArgIndices.has(index) ? undefined : descriptor
       );
       const remainingDescriptors = argSecurityDescriptors.filter(
         (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
@@ -1976,6 +1956,7 @@ async function evaluateExecInvocationInternal(
     evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
     synchronizeGuardVariableCandidates({
       guardVariableCandidates,
+      env: runtimeEnv,
       evaluatedArgs,
       evaluatedArgStrings
     });

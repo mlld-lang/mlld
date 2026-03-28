@@ -175,6 +175,7 @@ RecordInputField
       return {
         kind: 'input',
         name: fieldName,
+        sourceRoot: helpers.recordFieldSourceRoot(source),
         source,
         valueType: fieldType?.valueType,
         optional: fieldType?.optional === true
@@ -202,9 +203,21 @@ RecordFieldSource
     }
 
 RecordInputReference
-  = "@input" fields:AnyFieldAccessOptional+ {
+  = "@input" fields:AnyFieldAccessOptional* {
       return helpers.createVariableReferenceNode('identifier', {
         identifier: 'input',
+        fields
+      }, location());
+    }
+  / "@key" fields:AnyFieldAccessOptional* {
+      return helpers.createVariableReferenceNode('identifier', {
+        identifier: 'key',
+        fields
+      }, location());
+    }
+  / "@value" fields:AnyFieldAccessOptional* {
+      return helpers.createVariableReferenceNode('identifier', {
+        identifier: 'value',
         fields
       }, location());
     }

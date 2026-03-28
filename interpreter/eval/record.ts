@@ -5,7 +5,8 @@ import type {
   RecordDefinition,
   RecordFieldDefinition,
   RecordDisplayEntry,
-  RecordWhenCondition
+  RecordWhenCondition,
+  RecordRootMode
 } from '@core/types/record';
 import { MlldInterpreterError } from '@core/errors';
 import { astLocationToSourceLocation } from '@core/types';
@@ -89,6 +90,7 @@ export async function evaluateRecord(
   const definition: RecordDefinition = {
     name,
     fields,
+    rootMode: inferRecordRootMode(fields),
     ...(hasDisplayClause ? { display: display ?? [] } : {}),
     validate: directive.values?.validate ?? DEFAULT_VALIDATE_MODE,
     ...(Array.isArray(when) && when.length > 0 ? { when: [...when] } : {}),
@@ -153,9 +155,9 @@ function normalizeDisplayEntries(
 
 function assertRecordFieldIsPure(field: RecordFieldDefinition, recordName: string): void {
   if (field.kind === 'input') {
-    if (field.source.identifier !== 'input') {
+    if (!['input', 'key', 'value'].includes(field.source.identifier)) {
       throw new MlldInterpreterError(
-        `Record '@${recordName}' input field '${field.name}' must read from @input`,
+        `Record '@${recordName}' input field '${field.name}' must read from @input, @key, or @value`,
         'record',
         undefined,
         { code: 'INVALID_RECORD_FIELD' }
@@ -214,4 +216,67 @@ function assertRecordConditionIsSupported(condition: RecordWhenCondition, record
       { code: 'INVALID_RECORD_WHEN' }
     );
   }
+}
+
+function inferRecordRootMode(fields: RecordFieldDefinition[]): RecordRootMode {
+  let usesMapEntryRoot = false;
+  let hasBareInputRoot = false;
+  let hasNestedInputAccess = false;
+
+  const visitExpression = (node: unknown): void => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+
+    const candidate = node as { type?: unknown; identifier?: unknown; fields?: unknown };
+    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
+      if (candidate.identifier === 'key' || candidate.identifier === 'value') {
+        usesMapEntryRoot = true;
+      }
+      if (candidate.identifier === 'input') {
+        const fields = Array.isArray(candidate.fields) ? candidate.fields : [];
+        if (fields.length === 0) {
+          hasBareInputRoot = true;
+        } else {
+          hasNestedInputAccess = true;
+        }
+      }
+    }
+
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          visitExpression(item);
+        }
+      } else {
+        visitExpression(value);
+      }
+    }
+  };
+
+  for (const field of fields) {
+    if (field.kind === 'input') {
+      if (field.sourceRoot === 'key' || field.sourceRoot === 'value') {
+        usesMapEntryRoot = true;
+      }
+      const sourceFields = Array.isArray(field.source.fields) ? field.source.fields : [];
+      if (field.sourceRoot === 'input') {
+        if (sourceFields.length === 0) {
+          hasBareInputRoot = true;
+        } else {
+          hasNestedInputAccess = true;
+        }
+      }
+      continue;
+    }
+    visitExpression(field.expression);
+  }
+
+  if (usesMapEntryRoot) {
+    return 'map-entry';
+  }
+  if (hasBareInputRoot && !hasNestedInputAccess) {
+    return 'scalar';
+  }
+  return 'object';
 }

@@ -17,6 +17,8 @@ import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor
 } from '@core/types/security';
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+import { collectAttestationLabels, isFactProofLabel } from '@interpreter/security/proof-claims';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
@@ -43,21 +45,8 @@ type SyntheticCommandReference = Omit<CommandReference, 'identifier' | 'args'> &
   name: string;
 };
 
-function collectDescriptorAttestations(descriptor: SecurityDescriptor | undefined): string[] {
-  const normalized = normalizeSecurityDescriptor(descriptor);
-  if (!normalized) {
-    return [];
-  }
-  return Array.from(
-    new Set([
-      ...(normalized.attestations ?? []),
-      ...normalized.labels.filter(isAttestationLabel)
-    ])
-  );
-}
-
 function isPositiveProofLabel(label: string): boolean {
-  return isAttestationLabel(label) || label.startsWith('fact:');
+  return isFactProofLabel(label) || isAttestationLabel(label);
 }
 
 function unwrapAttestedValue(value: unknown): unknown {
@@ -69,58 +58,6 @@ function unwrapAttestedValue(value: unknown): unknown {
     return isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
   }
   return value;
-}
-
-function canonicalizeAttestedValue(value: unknown): CanonicalValueKey | undefined {
-  const raw = unwrapAttestedValue(value);
-  const encode = (entry: unknown, seen: WeakSet<object>): string | undefined => {
-    if (entry === undefined) {
-      return 'undefined';
-    }
-    if (entry === null) {
-      return 'null';
-    }
-    if (typeof entry === 'string') {
-      return `string:${JSON.stringify(entry)}`;
-    }
-    if (typeof entry === 'number') {
-      return Number.isNaN(entry) ? 'number:NaN' : `number:${entry}`;
-    }
-    if (typeof entry === 'boolean') {
-      return `boolean:${entry ? '1' : '0'}`;
-    }
-    if (Array.isArray(entry)) {
-      const items: string[] = [];
-      for (const item of entry) {
-        const encoded = encode(item, seen);
-        if (encoded === undefined) {
-          return undefined;
-        }
-        items.push(encoded);
-      }
-      return `array:[${items.join(',')}]`;
-    }
-    if (!entry || typeof entry !== 'object') {
-      return undefined;
-    }
-    if (seen.has(entry as object)) {
-      return undefined;
-    }
-    seen.add(entry as object);
-    const record = entry as Record<string, unknown>;
-    const keys = Object.keys(record).sort();
-    const parts: string[] = [];
-    for (const key of keys) {
-      const encoded = encode(record[key], seen);
-      if (encoded === undefined) {
-        return undefined;
-      }
-      parts.push(`${JSON.stringify(key)}:${encoded}`);
-    }
-    return `object:{${parts.join(',')}}`;
-  };
-
-  return encode(raw, new WeakSet<object>());
 }
 
 export class FunctionRouter {
@@ -520,7 +457,7 @@ export class FunctionRouter {
   }
 
   private lookupAttestations(value: unknown): string[] {
-    const key = canonicalizeAttestedValue(value);
+    const key = encodeCanonicalValue(unwrapAttestedValue(value));
     if (!key) {
       return [];
     }
@@ -532,8 +469,8 @@ export class FunctionRouter {
     const seen = new WeakSet<object>();
     const visit = (entry: unknown): void => {
       const descriptor = extractSecurityDescriptor(entry, { recursive: false });
-      const attestationLabels = collectDescriptorAttestations(descriptor);
-      const canonicalKey = canonicalizeAttestedValue(entry);
+      const attestationLabels = collectAttestationLabels(normalizeSecurityDescriptor(descriptor));
+      const canonicalKey = encodeCanonicalValue(unwrapAttestedValue(entry));
       if (attestationLabels.length > 0 && canonicalKey) {
         const existing = this.attestationIndex.get(canonicalKey) ?? [];
         this.attestationIndex.set(
