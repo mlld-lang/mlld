@@ -134,6 +134,32 @@ record @contact = {
 
 The `display` field is computed from `first` and `last` and carries the same fact classification.
 
+## Root adapters
+
+Records default to object-root input (`@input.field` accesses fields on the input object). For non-object inputs, root adapters make scalars and maps first-class:
+
+**Scalar root** -- coerce a single value:
+
+```mlld
+record @username = {
+  facts: [@input: string]
+}
+```
+
+When applied to `"alice"`, produces a record where the value carries `fact:@username.input`. When applied to `["alice", "bob"]`, each element is coerced individually.
+
+**Map entries** -- coerce an object as key-value pairs:
+
+```mlld
+record @channel_member = {
+  facts: [@key: string, @value: string]
+}
+```
+
+When applied to `{ "general": "alice", "random": "bob" }`, produces two records: one for each key-value pair. Each key and value carries its own fact label.
+
+Root adapters compose with display projections, trust refinement, and all other record features.
+
 ## When clauses
 
 Classify records conditionally based on input data:

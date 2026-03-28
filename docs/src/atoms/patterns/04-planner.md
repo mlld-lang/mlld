@@ -112,6 +112,12 @@ If the worker copies a masked preview that uniquely matches a projected contact,
 
 Declare control args on write executables with `with { controlArgs: [...] }`. If a `tool:w` exe has no `controlArgs` metadata, built-in send/destroy checks fail closed for that operation.
 
+### Data args are stripped from authorization
+
+The planner doesn't need to know which args are control args. If the planner includes data args (title, description, start_time, etc.) in the authorization, the runtime silently strips them at compilation time. Only declared `controlArgs` are compiled into authorization constraints.
+
+This avoids mismatches where the planner pins a data arg value and the worker produces a slightly different one. The planner can be thorough — the runtime only enforces what's security-relevant.
+
 ### Inherited positive checks
 
 Authorization alone is not enough. Even with a planner-approved value, inherited positive checks from the base policy still apply:
