@@ -70,9 +70,11 @@ Wildcard `*` matches any record name. Tier-qualified patterns only match values 
 
 Built-in positive checks accept both `fact:` labels and `known` attestations:
 
-- `no-send-to-unknown` -- destination args must carry `fact:*.email` or `known`
-- `no-send-to-external` -- destination args must carry `fact:internal:*.email` or `known:internal`
-- `no-destroy-unknown` -- target args must carry `fact:*.id` or `known`
+- `no-send-to-unknown` -- destination args must carry fact proof or `known`
+- `no-send-to-external` -- destination args must carry `fact:internal:*` or `known:internal`
+- `no-destroy-unknown` -- target args must carry fact proof or `known`
+
+When `controlArgs` is explicitly declared on the exe, any `fact:*` proof satisfies the check — the developer already asserted which args are destinations/targets. Without `controlArgs`, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes).
 
 ## Declarative fact requirements
 

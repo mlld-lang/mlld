@@ -95,7 +95,7 @@ At dispatch time:
 
 1. The runtime canonicalizes the authorized recipient back to the live value. The strongest path is `{ "handle": "h_a7x9k2" }`, but the exact emitted preview or bare visible value also resolves when the match is unique.
 2. The authorization guard checks: is `sendEmail` allowed? Is `recipient` the pinned value? Yes
-3. The inherited positive check runs: does `recipient` carry `fact:*.email` or `known`? Yes
+3. The inherited positive check runs: does `recipient` carry fact proof or `known`? Yes
 4. The call proceeds
 
 If injection tricks the worker into calling `sendEmail(recipient: "attacker@evil.com")`:
@@ -116,10 +116,10 @@ Declare control args on write executables with `with { controlArgs: [...] }`. If
 
 Authorization alone is not enough. Even with a planner-approved value, inherited positive checks from the base policy still apply:
 
-- `no-send-to-unknown` requires `fact:*.email` or `known` on destination args
-- `no-destroy-unknown` requires `fact:*.id` or `known` on target args
+- `no-send-to-unknown` requires fact proof or `known` on destination args
+- `no-destroy-unknown` requires fact proof or `known` on target args
 
-If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the pinned value had no proof, the inherited check still fails.
+When `controlArgs` is explicitly declared, any `fact:*` label satisfies the check — the developer already asserted which args are destinations. If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the pinned value had no proof, the inherited check still fails.
 
 ### Tolerant comparison
 

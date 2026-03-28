@@ -29,6 +29,8 @@ record @contact = {
 
 `facts` fields get `fact:` labels -- the source is authoritative for these values. `data` fields don't -- they're content that could contain anything. `?` marks optional fields.
 
+Supported field types: `string`, `number`, `boolean`, `array`. Array fact fields carry per-element proof -- each element gets its own `fact:` label and display projection.
+
 **Connect to an exe with `=> record`:**
 
 ```mlld
@@ -204,6 +206,26 @@ Output:
 a@example.com
 fact:@contact.email
 ```
+
+## Array fact fields
+
+A record field can be typed as `array`. Each element carries its own fact label and display projection:
+
+```mlld
+record @event = {
+  facts: [participants: array, organizer: string],
+  data: [title: string?],
+  display: [title, { mask: "organizer" }]
+}
+```
+
+When the exe returns `{ participants: ["a@x.com", "b@x.com"], organizer: "c@x.com", title: "Standup" }`:
+
+- Each element of `participants` gets `fact:@event.participants`
+- `organizer` gets `fact:@event.organizer`
+- Display projection applies per element -- masked arrays render each element as `{ preview, handle }`
+
+This is important for `exfil:send` operations where the destination is an array of recipients. Positive checks like `no-send-to-unknown` verify each element individually.
 
 ## Schema metadata
 

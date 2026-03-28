@@ -58,6 +58,6 @@ If a planner pins `recipient: @approvedRecipient` and `@approvedRecipient` carri
 
 ## Facts
 
-Record-derived `fact:` labels also satisfy positive checks. `fact:*.email` satisfies `no-send-to-unknown` and `fact:*.id` satisfies `no-destroy-unknown`, alongside `known` attestations.
+Record-derived `fact:` labels also satisfy positive checks. When `controlArgs` is explicitly declared, any `fact:*` proof satisfies the check. Without `controlArgs`, field-name patterns apply (`fact:*.email` for sends, `fact:*.id` for deletes). `known` attestations also satisfy both checks.
 
 Facts provide field-level proof from authoritative sources (contacts databases, CRM systems), while `known` attestations are value-scoped approvals. Both are valid proof for positive checks. See `facts-and-handles` for the full record/fact/handle model.
