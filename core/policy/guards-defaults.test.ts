@@ -48,6 +48,80 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(destroyGuard?.privileged).toBe(true);
   });
 
+  it('scopes no-untrusted-destructive to non-empty controlArgs and falls back on empty lists', () => {
+    const scopedPolicy: PolicyConfig = {
+      defaults: { rules: ['no-untrusted-destructive'] },
+      operations: { destructive: ['tool:w'] }
+    };
+
+    const scopedGuard = generatePolicyGuards(scopedPolicy).find(
+      guard => guard.name === '__policy_rule_no_untrusted_destructive'
+    );
+
+    expect(
+      scopedGuard?.policyCondition?.({
+        operation: {
+          name: 'transfer',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
+        argName: 'memo',
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      scopedGuard?.policyCondition?.({
+        operation: {
+          name: 'transfer',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: [] }
+        },
+        argName: 'memo',
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'"
+    });
+  });
+
+  it('checks all args for no-untrusted-privileged when policy taintFacts is enabled', () => {
+    const policy: PolicyConfig = {
+      defaults: {
+        rules: [{ rule: 'no-untrusted-privileged', taintFacts: true }]
+      },
+      operations: { privileged: ['tool:w'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const privilegedGuard = guards.find(guard => guard.name === '__policy_rule_no_untrusted_privileged');
+
+    expect(
+      privilegedGuard?.policyCondition?.({
+        operation: {
+          name: 'grantRole',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
+        argName: 'memo',
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'"
+    });
+  });
+
   it('checks named destination arg attestations for send rules', () => {
     const policy: PolicyConfig = {
       defaults: { rules: ['no-send-to-unknown', 'no-send-to-external'] },
@@ -702,5 +776,66 @@ describe('generatePolicyGuards defaults rules', () => {
         }
       })
     ).toBeUndefined();
+  });
+
+  it('scopes inherited no-untrusted-privileged checks to non-empty controlArgs unless taintFacts is enabled', () => {
+    const scopedPolicy: PolicyConfig = {
+      defaults: { rules: ['no-untrusted-privileged'] },
+      operations: { privileged: ['tool:w'] }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy: scopedPolicy,
+        operation: {
+          name: 'grantRole',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy: scopedPolicy,
+        operation: {
+          name: 'grantRole',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: [] }
+        },
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-untrusted-privileged'
+    });
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy: {
+          defaults: {
+            rules: [{ rule: 'no-untrusted-privileged', taintFacts: true }]
+          },
+          operations: { privileged: ['tool:w'] }
+        },
+        operation: {
+          name: 'grantRole',
+          labels: ['tool:w'],
+          metadata: { authorizationControlArgs: ['recipient'] }
+        },
+        argDescriptors: {
+          recipient: { labels: ['known'] },
+          memo: { labels: ['untrusted'], taint: ['untrusted'] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-untrusted-privileged'
+    });
   });
 });

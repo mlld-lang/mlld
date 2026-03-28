@@ -1,5 +1,10 @@
 import type { GuardBlockNode, GuardRuleNode, GuardActionNode } from '@core/types/guard';
-import { normalizePolicyConfig, type PolicyConfig, type PolicyOperations } from './union';
+import {
+  resolvePolicyDefaultRuleOptions,
+  type PolicyConfig,
+  type PolicyOperations,
+  normalizePolicyConfig
+} from './union';
 import { isUrlAllowedByConstruction } from '@core/security/url-provenance';
 import type { PolicyArgDescriptor, PolicyConditionFn } from '../../interpreter/guards';
 import { v4 as uuid } from 'uuid';
@@ -17,6 +22,7 @@ import {
   getPositiveCheckAcceptedPatterns,
   SEND_INTERNAL_PATTERNS,
   collectDeclarativeFactRequirementEntries,
+  getScopedTaintControlArgs,
   selectDestinationArgs,
   selectTargetArgs
 } from './fact-requirements';
@@ -131,7 +137,10 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
   authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
-  const enabledRules = normalizeRuleList(options.policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  const enabledRules = resolvePolicyDefaultRuleOptions(options.policy.defaults?.rules).filter(entry =>
+    isBuiltinPolicyRuleName(entry.rule)
+  );
+  const enabledRuleNames = new Set(enabledRules.map(entry => entry.rule));
   const normalizedOperationRef =
     typeof (options.operation as { named?: unknown }).named === 'string'
       ? normalizeNamedOperationRef((options.operation as { named?: string }).named)
@@ -149,7 +158,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   );
 
   if (
-    enabledRules.includes('no-send-to-unknown') &&
+    enabledRuleNames.has('no-send-to-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'exfil:send')
   ) {
     const destinationArgs = selectDestinationArgs(options.operation, options.args);
@@ -188,7 +197,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   }
 
   if (
-    enabledRules.includes('no-send-to-external') &&
+    enabledRuleNames.has('no-send-to-external') &&
     hasMatchingLabel(expandedOperationLabels, 'exfil:send')
   ) {
     const destinationArgs = selectDestinationArgs(options.operation, options.args);
@@ -220,7 +229,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   }
 
   if (
-    enabledRules.includes('no-destroy-unknown') &&
+    enabledRuleNames.has('no-destroy-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'destructive:targeted')
   ) {
     const targetArgs = selectTargetArgs(options.operation, options.args);
@@ -259,10 +268,21 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   }
 
   if (
-    enabledRules.includes('no-untrusted-privileged') &&
+    enabledRuleNames.has('no-untrusted-privileged') &&
     hasMatchingLabel(expandedOperationLabels, 'privileged')
   ) {
-    for (const descriptor of Object.values(options.argDescriptors ?? {})) {
+    const scopedArgs = getScopedTaintControlArgs({
+      operation: options.operation,
+      ruleTaintFacts:
+        enabledRules.find(entry => entry.rule === 'no-untrusted-privileged')?.taintFacts === true
+    });
+    const descriptorsToCheck = scopedArgs
+      ? scopedArgs
+          .map(argName => options.argDescriptors?.[argName])
+          .filter((descriptor): descriptor is PolicyArgDescriptor => Boolean(descriptor))
+      : Object.values(options.argDescriptors ?? {});
+
+    for (const descriptor of descriptorsToCheck) {
       if (hasMatchingLabel(collectDescriptorLabels(descriptor), 'untrusted')) {
         return {
           reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
@@ -340,11 +360,13 @@ function makeGuardBlock(): GuardBlockNode {
 
 export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: string): PolicyGuardSpec[] {
   const guards: PolicyGuardSpec[] = [];
-  const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  const enabledRules = resolvePolicyDefaultRuleOptions(policy.defaults?.rules).filter(entry =>
+    isBuiltinPolicyRuleName(entry.rule)
+  );
   const policyLocked = policy.locked === true;
 
   for (const rule of enabledRules) {
-    if (rule === 'no-secret-exfil') {
+    if (rule.rule === 'no-secret-exfil') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_secret_exfil',
         label: 'secret',
@@ -355,13 +377,13 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         locked: policyLocked
       }));
     }
-    if (rule === 'no-sensitive-exfil') {
+    if (rule.rule === 'no-sensitive-exfil') {
       guards.push(makeSensitiveExfilGuard(policy.operations, policyDisplayName, policyLocked));
     }
-    if (rule === 'no-novel-urls') {
+    if (rule.rule === 'no-novel-urls') {
       guards.push(makeNoNovelUrlsGuard(policy, policyDisplayName, policyLocked));
     }
-    if (rule === 'no-send-to-unknown') {
+    if (rule.rule === 'no-send-to-unknown') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_unknown',
         ruleName: 'no-send-to-unknown',
@@ -376,7 +398,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         locked: policyLocked
       }));
     }
-    if (rule === 'no-send-to-external') {
+    if (rule.rule === 'no-send-to-external') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_external',
         ruleName: 'no-send-to-external',
@@ -391,7 +413,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         locked: policyLocked
       }));
     }
-    if (rule === 'no-destroy-unknown') {
+    if (rule.rule === 'no-destroy-unknown') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_destroy_unknown',
         ruleName: 'no-destroy-unknown',
@@ -407,7 +429,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         locked: policyLocked
       }));
     }
-    if (rule === 'no-untrusted-destructive') {
+    if (rule.rule === 'no-untrusted-destructive') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_destructive',
         label: 'untrusted',
@@ -415,10 +437,11 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
         operations: policy.operations,
         policyDisplayName,
-        locked: policyLocked
+        locked: policyLocked,
+        taintFacts: rule.taintFacts === true
       }));
     }
-    if (rule === 'no-untrusted-privileged') {
+    if (rule.rule === 'no-untrusted-privileged') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_privileged',
         label: 'untrusted',
@@ -426,10 +449,11 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
         operations: policy.operations,
         policyDisplayName,
-        locked: policyLocked
+        locked: policyLocked,
+        taintFacts: rule.taintFacts === true
       }));
     }
-    if (rule === 'no-influenced-advice') {
+    if (rule.rule === 'no-influenced-advice') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_influenced_advice',
         label: 'influenced',
@@ -736,16 +760,6 @@ function normalizeList(values?: readonly string[]): string[] {
     result.push(entry);
   }
   return result;
-}
-
-function normalizeRuleList(value: unknown): string[] {
-  if (!value) {
-    return [];
-  }
-  if (Array.isArray(value)) {
-    return normalizeList(value.map(entry => String(entry)));
-  }
-  return normalizeList([String(value)]);
 }
 
 function normalizeCommandPatternList(value: unknown): { all: boolean; patterns: string[] } {
@@ -1082,6 +1096,7 @@ function makeDataRuleGuard(options: {
   operations?: PolicyOperations;
   policyDisplayName?: string;
   locked?: boolean;
+  taintFacts?: boolean;
 }): PolicyGuardSpec {
   return {
     name: options.name,
@@ -1091,21 +1106,30 @@ function makeDataRuleGuard(options: {
     block: makeGuardBlock(),
     timing: 'before',
     privileged: true,
-    policyCondition: ({ operation }) => {
+    policyCondition: ({ operation, argName }) => {
       const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
       ];
       const opLabels = expandOperationLabels(rawOpLabels, options.operations);
-      if (hasMatchingLabel(opLabels, options.operationLabel)) {
-        return {
-          decision: 'deny',
-          reason: options.reason,
-          policyName: options.policyDisplayName,
-          locked: options.locked === true
-        };
+      if (!hasMatchingLabel(opLabels, options.operationLabel)) {
+        return { decision: 'allow' };
       }
-      return { decision: 'allow' };
+
+      const scopedArgs = getScopedTaintControlArgs({
+        operation,
+        ruleTaintFacts: options.taintFacts === true
+      });
+      if (scopedArgs && (!argName || !scopedArgs.includes(argName))) {
+        return { decision: 'allow' };
+      }
+
+      return {
+        decision: 'deny',
+        reason: options.reason,
+        policyName: options.policyDisplayName,
+        locked: options.locked === true
+      };
     }
   };
 }

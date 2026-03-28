@@ -9,6 +9,7 @@ export interface EffectiveToolMetadata {
   labels: string[];
   controlArgs?: string[];
   hasControlArgsMetadata: boolean;
+  taintFacts: boolean;
 }
 
 function normalizeStringList(values: readonly unknown[] | undefined): string[] {
@@ -88,6 +89,11 @@ function getExecutableControlArgs(executable: ExecutableVariable): string[] | un
   return Array.isArray(controlArgs) ? normalizeStringList(controlArgs) : undefined;
 }
 
+function getExecutableTaintFacts(executable: ExecutableVariable): boolean {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  return (executableDef as any)?.taintFacts === true;
+}
+
 function buildToolContextFromExecutable(
   name: string,
   executable: ExecutableVariable
@@ -99,7 +105,8 @@ function buildToolContextFromExecutable(
     params,
     labels: getExecutableLabels(executable),
     ...(controlArgs ? { controlArgs } : {}),
-    hasControlArgsMetadata: Array.isArray(controlArgs)
+    hasControlArgsMetadata: Array.isArray(controlArgs),
+    taintFacts: getExecutableTaintFacts(executable)
   };
 }
 

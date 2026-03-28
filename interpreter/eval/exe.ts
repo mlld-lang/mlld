@@ -6,7 +6,8 @@ import { astLocationToSourceLocation } from '@core/types';
 import {
   extractParamTypes,
   resolveExeControlArgs,
-  resolveExeDescription
+  resolveExeDescription,
+  resolveExeTaintFacts
 } from './exe/definition-helpers';
 import { buildCoreExecutableFamily } from './exe/core-definition-builders';
 import { buildControlFlowExecutableDefinition } from './exe/control-flow-definition-builders';
@@ -96,6 +97,12 @@ export async function evaluateExe(
   const controlArgs = await resolveExeControlArgs(rawControlArgs, env, executableDef.paramNames);
   if (controlArgs !== undefined) {
     executableDef.controlArgs = controlArgs;
+  }
+
+  const rawTaintFacts = getWithClauseField(directive.values?.withClause, 'taintFacts');
+  const taintFacts = await resolveExeTaintFacts(rawTaintFacts, env);
+  if (taintFacts !== undefined) {
+    executableDef.taintFacts = taintFacts;
   }
 
   const rawDescription = getWithClauseField(directive.values?.withClause, 'description');

@@ -161,11 +161,17 @@ function buildInterpolatedPolicyGuardResult(options: {
   locked: boolean;
 }): GuardResult | null {
   const policy = options.env.getPolicySummary();
+  const hasControlArgsMetadata = Array.isArray(options.operation.metadata?.authorizationControlArgs);
   const result = checkLabelFlow(
     {
       inputTaint: options.inputTaint,
       opLabels: options.operation.opLabels ?? [],
-      exeLabels: options.operation.labels ?? []
+      exeLabels: options.operation.labels ?? [],
+      controlArgs: hasControlArgsMetadata
+        ? getAuthorizationControlArgs(options.operation)
+        : undefined,
+      hasControlArgsMetadata,
+      taintFacts: options.operation.metadata?.taintFacts === true
     },
     policy
   );
@@ -317,7 +323,8 @@ function mergeRuntimePerInputPolicyGuards(
   candidates: readonly PerInputCandidate[],
   inputs: readonly Variable[],
   runtimePolicyGuards: readonly GuardDefinition[],
-  override: ReturnType<typeof normalizeGuardOverride>
+  override: ReturnType<typeof normalizeGuardOverride>,
+  argNames?: readonly (string | null | undefined)[]
 ): PerInputCandidate[] {
   if (runtimePolicyGuards.length === 0) {
     return candidates.map(candidate => ({
@@ -360,6 +367,9 @@ function mergeRuntimePerInputPolicyGuards(
 
     byIndex.set(index, {
       index,
+      argName: Array.isArray(argNames)
+        ? (typeof argNames[index] === 'string' && argNames[index]!.trim().length > 0 ? argNames[index]!.trim() : null)
+        : existing?.argName,
       variable: input,
       labels: Array.isArray(input.mx?.labels) ? input.mx.labels : [],
       sources: Array.isArray(input.mx?.sources) ? input.mx.sources : [],
@@ -505,13 +515,15 @@ export const guardPreHook: PreHook = async (
     logGuardEmitContextDebug(env, operation);
     const registry = env.getGuardRegistry();
     const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
+    const guardArgNames = getGuardArgNamesFromMetadata(operation.metadata);
 
     const runtimePolicyGuards = buildRuntimePolicyGuards(env);
     const perInputCandidates = mergeRuntimePerInputPolicyGuards(
-      buildPerInputCandidates(registry, variableInputs, guardOverride),
+      buildPerInputCandidates(registry, variableInputs, guardOverride, 'before', guardArgNames),
       variableInputs,
       runtimePolicyGuards,
-      guardOverride
+      guardOverride,
+      guardArgNames
     );
     const operationGuards = mergeRuntimeOperationPolicyGuards(
       collectOperationGuards(registry, operation, guardOverride, {
@@ -553,8 +565,6 @@ export const guardPreHook: PreHook = async (
     const decisionState = createGuardDecisionState();
 
     const transformedInputs: Variable[] = [...variableInputs];
-    const guardArgNames = getGuardArgNamesFromMetadata(operation.metadata);
-
     for (const candidate of perInputCandidates) {
       const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
       usedAttemptKeys.add(attemptKey);

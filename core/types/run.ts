@@ -37,6 +37,7 @@ export interface WithClause {
   auth?: string;
   using?: { var: string; as: string };
   guards?: GuardOverrideOptions | false;
+  taintFacts?: boolean;
   stream?: boolean;
   streamFormat?: any;
   [key: string]: any; // For other with clause properties

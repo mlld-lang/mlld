@@ -43,9 +43,16 @@ export type PolicyEnvironmentConfig = {
 export type PolicyTrustStance = 'trusted' | 'untrusted';
 export type PolicyTrustConflict = 'warn' | 'error' | 'silent';
 
+export type PolicyDefaultRuleObject = {
+  rule: string;
+  taintFacts?: boolean;
+};
+
+export type PolicyDefaultRule = string | PolicyDefaultRuleObject;
+
 export type PolicyDefaults = {
   unlabeled?: PolicyTrustStance;
-  rules?: string[];
+  rules?: PolicyDefaultRule[];
   autosign?: unknown;
   autoverify?: unknown;
   trustconflict?: PolicyTrustConflict;
@@ -432,7 +439,7 @@ function normalizePolicyDefaults(
     return undefined;
   }
   const unlabeled = normalizePolicyUnlabeled(defaults.unlabeled);
-  const rules = normalizeStringList(defaults.rules);
+  const rules = normalizePolicyDefaultRuleList(defaults.rules);
   const autosign = normalizeAutosign(defaults.autosign);
   const autoverify = normalizeAutoverify(defaults.autoverify);
   const trustconflict = normalizeTrustConflict(defaults.trustconflict);
@@ -558,7 +565,7 @@ function mergePolicyDefaults(
     normalizedBase?.unlabeled,
     normalizedIncoming?.unlabeled
   );
-  const rules = mergeStringLists(normalizedBase?.rules, normalizedIncoming?.rules);
+  const rules = mergePolicyDefaultRuleLists(normalizedBase?.rules, normalizedIncoming?.rules);
   const autosign = mergeAutosign(normalizedBase?.autosign, normalizedIncoming?.autosign);
   const autoverify = normalizedIncoming?.autoverify ?? normalizedBase?.autoverify;
   const trustconflict = normalizedIncoming?.trustconflict ?? normalizedBase?.trustconflict;
@@ -643,6 +650,105 @@ function normalizeStringList(value: unknown): string[] | undefined {
     return normalized ? [normalized] : [];
   }
   return undefined;
+}
+
+function normalizePolicyDefaultRuleName(entry: unknown): string | undefined {
+  if (
+    entry &&
+    typeof entry === 'object' &&
+    !Array.isArray(entry) &&
+    typeof (entry as { rule?: unknown }).rule === 'string'
+  ) {
+    const normalized = (entry as { rule: string }).rule.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  if (
+    typeof entry === 'string' ||
+    typeof entry === 'number' ||
+    typeof entry === 'boolean'
+  ) {
+    const normalized = String(entry).trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  return undefined;
+}
+
+export function resolvePolicyDefaultRuleOptions(
+  value: unknown
+): PolicyDefaultRuleObject[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  const entries = Array.isArray(value) ? value : [value];
+  const seen = new Map<string, PolicyDefaultRuleObject>();
+  const order: string[] = [];
+
+  for (const entry of entries) {
+    const rule = normalizePolicyDefaultRuleName(entry);
+    if (!rule) {
+      continue;
+    }
+
+    const current = seen.get(rule) ?? { rule };
+    if (!seen.has(rule)) {
+      order.push(rule);
+    }
+
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry) &&
+      (entry as { taintFacts?: unknown }).taintFacts === true
+    ) {
+      current.taintFacts = true;
+    }
+
+    seen.set(rule, current);
+  }
+
+  return order.map(rule => seen.get(rule)!);
+}
+
+export function normalizePolicyDefaultRuleList(
+  value: unknown
+): PolicyDefaultRule[] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const normalized = resolvePolicyDefaultRuleOptions(value).map(entry =>
+    entry.taintFacts === true ? { rule: entry.rule, taintFacts: true } : entry.rule
+  );
+  return normalized.length > 0 ? normalized : [];
+}
+
+export function listPolicyDefaultRuleNames(value: unknown): string[] {
+  return resolvePolicyDefaultRuleOptions(value).map(entry => entry.rule);
+}
+
+export function getPolicyDefaultRuleOptions(
+  value: unknown,
+  ruleName: string
+): PolicyDefaultRuleObject | undefined {
+  const normalizedRuleName = normalizePolicyDefaultRuleName(ruleName);
+  if (!normalizedRuleName) {
+    return undefined;
+  }
+
+  return resolvePolicyDefaultRuleOptions(value).find(entry => entry.rule === normalizedRuleName);
+}
+
+function mergePolicyDefaultRuleLists(
+  base?: PolicyDefaultRule[],
+  incoming?: PolicyDefaultRule[]
+): PolicyDefaultRule[] | undefined {
+  if (!base && !incoming) {
+    return undefined;
+  }
+  return normalizePolicyDefaultRuleList([...(base ?? []), ...(incoming ?? [])]);
 }
 
 function normalizeDenyCommandList(value: unknown): string[] | undefined {

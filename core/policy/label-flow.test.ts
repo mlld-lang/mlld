@@ -449,3 +449,81 @@ describe('checkLabelFlow operations mapping', () => {
     expect(result.allowed).toBe(true);
   });
 });
+
+describe('checkLabelFlow taint scoping', () => {
+  it('scopes no-untrusted-destructive to non-empty controlArgs by default', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-untrusted-destructive'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: ['untrusted'],
+        opLabels: ['destructive'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known'], taint: [] },
+          { labels: ['untrusted'], taint: ['untrusted'] }
+        ],
+        inputNames: ['recipient', 'memo'],
+        controlArgs: ['recipient'],
+        hasControlArgsMetadata: true
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
+  it('falls back to all args when controlArgs is explicitly empty', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-untrusted-destructive'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: ['untrusted'],
+        opLabels: ['destructive'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known'], taint: [] },
+          { labels: ['untrusted'], taint: ['untrusted'] }
+        ],
+        inputNames: ['recipient', 'memo'],
+        controlArgs: [],
+        hasControlArgsMetadata: true
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.rule).toBe('policy.defaults.rules.no-untrusted-destructive');
+  });
+
+  it('applies all-arg taint checks when the policy rule enables taintFacts', () => {
+    const policy: PolicyConfig = {
+      defaults: {
+        rules: [{ rule: 'no-untrusted-destructive', taintFacts: true }]
+      }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: ['untrusted'],
+        opLabels: ['destructive'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['known'], taint: [] },
+          { labels: ['untrusted'], taint: ['untrusted'] }
+        ],
+        inputNames: ['recipient', 'memo'],
+        controlArgs: ['recipient'],
+        hasControlArgsMetadata: true
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.rule).toBe('policy.defaults.rules.no-untrusted-destructive');
+  });
+});

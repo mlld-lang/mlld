@@ -112,4 +112,8 @@ The `facts` declaration is already a trust assertion -- the developer is saying 
 
 Trust refinement only applies to fields that survive as facts after `when` evaluation. If a `when` clause demotes the record to data, no fact labels are minted and `untrusted` is preserved on all fields. Records that fail schema validation are also not refined.
 
-This is the one built-in field-level trust refinement at the exe boundary. The refined record wrapper may no longer carry `untrusted`, but recursive whole-object checks still see `untrusted` data children. Passing the whole mixed-trust record into a destructive operation still fails closed.
+This is the one built-in field-level trust refinement at the exe boundary.
+
+When the operation has explicit `controlArgs`, `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to those control args only. Fact-bearing control args pass (trust refinement cleared `untrusted`). Tainted data args (body, title, description) are not checked — they're expected payload in the planner-worker model.
+
+Without `controlArgs`, behavior is unchanged — all args are checked. Override with `taintFacts: true` on the exe, invocation, or policy rule to force all-arg checking even when `controlArgs` is declared.

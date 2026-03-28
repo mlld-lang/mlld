@@ -1,4 +1,11 @@
-import type { PolicyConfig, PolicyLabels, PolicyOperations } from './union';
+import {
+  getPolicyDefaultRuleOptions,
+  listPolicyDefaultRuleNames,
+  resolvePolicyDefaultRuleOptions,
+  type PolicyConfig,
+  type PolicyLabels,
+  type PolicyOperations
+} from './union';
 import { isBuiltinPolicyRuleName } from './builtin-rules';
 import { resolveInputTaint } from './input-taint';
 import { isAttestationLabel } from '@core/types/security';
@@ -29,6 +36,10 @@ export interface FlowContext {
   flowChannel?: FlowChannel;
   command?: string;
   inputs?: readonly FlowInputDescriptor[];
+  inputNames?: readonly (string | null | undefined)[];
+  controlArgs?: readonly string[];
+  hasControlArgsMetadata?: boolean;
+  taintFacts?: boolean;
 }
 
 export interface LabelFlowCheckResult {
@@ -154,7 +165,7 @@ export function hasManagedPolicyLabelFlow(policy?: PolicyConfig): boolean {
   if (policy.labels && Object.keys(policy.labels).length > 0) {
     return true;
   }
-  return normalizeRuleList(policy.defaults?.rules).some(rule => LABEL_FLOW_BUILTIN_RULES.has(rule));
+  return listPolicyDefaultRuleNames(policy.defaults?.rules).some(rule => LABEL_FLOW_BUILTIN_RULES.has(rule));
 }
 
 export function checkExplicitLabelFlowRules(
@@ -247,18 +258,20 @@ export function checkLabelFlow(
     return { allowed: true };
   }
 
-  const enabledRules = normalizeRuleList(policy.defaults?.rules).filter(isBuiltinPolicyRuleName);
+  const enabledRules = resolvePolicyDefaultRuleOptions(policy.defaults?.rules).filter(entry =>
+    isBuiltinPolicyRuleName(entry.rule)
+  );
   const requiresPrimaryInputCheck = enabledRules.some(rule =>
-    rule === 'no-send-to-unknown' ||
-    rule === 'no-send-to-external' ||
-    rule === 'no-destroy-unknown'
+    rule.rule === 'no-send-to-unknown' ||
+    rule.rule === 'no-send-to-external' ||
+    rule.rule === 'no-destroy-unknown'
   );
   if (inputTaint.length === 0 && !requiresPrimaryInputCheck) {
     return { allowed: true };
   }
 
   const opTargets = expandOperationLabels(rawOpTargets, policy.operations);
-  const builtInResult = checkBuiltinPolicyRules(ctx, inputTaint, opTargets, enabledRules);
+  const builtInResult = checkBuiltinPolicyRules(ctx, inputTaint, opTargets, enabledRules, policy);
   if (builtInResult) {
     return builtInResult;
   }
@@ -268,16 +281,6 @@ export function checkLabelFlow(
   }
 
   return checkExplicitLabelFlowRules(ctx, policy);
-}
-
-function normalizeRuleList(value: unknown): string[] {
-  if (!value) {
-    return [];
-  }
-  if (Array.isArray(value)) {
-    return normalizeList(value.map(entry => String(entry)));
-  }
-  return normalizeList([String(value)]);
 }
 
 function hasTargetLabel(targets: readonly string[], label: string): boolean {
@@ -297,20 +300,67 @@ function collectInputAttestations(input?: FlowInputDescriptor): string[] {
   ]);
 }
 
+function collectInputTaintLabels(input?: FlowInputDescriptor): string[] {
+  return normalizeList([
+    ...(input?.labels ?? []).filter(label => !isAttestationLabel(label)),
+    ...(input?.taint ?? [])
+  ]);
+}
+
+function getScopedTaintInputLabels(
+  ctx: FlowContext,
+  inputTaint: readonly string[],
+  ruleName: 'no-untrusted-destructive' | 'no-untrusted-privileged',
+  policy?: PolicyConfig
+): string[] {
+  const policyRuleTaintFacts =
+    getPolicyDefaultRuleOptions(policy?.defaults?.rules, ruleName)?.taintFacts === true;
+  if (ctx.taintFacts === true || policyRuleTaintFacts) {
+    return normalizeList([...inputTaint]);
+  }
+
+  if (ctx.hasControlArgsMetadata !== true) {
+    return normalizeList([...inputTaint]);
+  }
+
+  const controlArgs = normalizeList(ctx.controlArgs);
+  if (controlArgs.length === 0) {
+    return normalizeList([...inputTaint]);
+  }
+
+  if (!Array.isArray(ctx.inputs) || !Array.isArray(ctx.inputNames)) {
+    return [];
+  }
+
+  const scoped = new Set<string>();
+  const limit = Math.min(ctx.inputs.length, ctx.inputNames.length);
+  for (let index = 0; index < limit; index += 1) {
+    const inputName = ctx.inputNames[index];
+    if (typeof inputName !== 'string' || !controlArgs.includes(inputName)) {
+      continue;
+    }
+    for (const label of collectInputTaintLabels(ctx.inputs[index])) {
+      scoped.add(label);
+    }
+  }
+
+  return Array.from(scoped);
+}
+
 function checkBuiltinPolicyRules(
   ctx: FlowContext,
   inputTaint: readonly string[],
   opTargets: readonly string[],
-  rules: readonly string[]
+  rules: ReadonlyArray<{ rule: string; taintFacts?: boolean }>,
+  policy?: PolicyConfig
 ): LabelFlowCheckResult | null {
-  const enabledRules = rules.filter(rule => isBuiltinPolicyRuleName(rule));
+  const enabledRules = rules.filter(rule => isBuiltinPolicyRuleName(rule.rule));
   if (enabledRules.length === 0) {
     return null;
   }
 
   const hasSecret = inputTaint.includes('secret');
   const hasSensitive = inputTaint.includes('sensitive');
-  const hasUntrusted = inputTaint.includes('untrusted');
   const hasInfluenced = inputTaint.includes('influenced');
   const hasExfil = hasTargetLabel(opTargets, 'exfil');
   const hasSend = hasTargetLabel(opTargets, 'exfil:send');
@@ -318,6 +368,20 @@ function checkBuiltinPolicyRules(
   const hasAdvice = hasTargetLabel(opTargets, 'advice');
   const hasTargetedDestructive = hasTargetLabel(opTargets, 'destructive:targeted');
   const hasPrivileged = hasTargetLabel(opTargets, 'privileged');
+  const destructiveInputTaint = getScopedTaintInputLabels(
+    ctx,
+    inputTaint,
+    'no-untrusted-destructive',
+    policy
+  );
+  const privilegedInputTaint = getScopedTaintInputLabels(
+    ctx,
+    inputTaint,
+    'no-untrusted-privileged',
+    policy
+  );
+  const hasUntrustedDestructiveInput = destructiveInputTaint.includes('untrusted');
+  const hasUntrustedPrivilegedInput = privilegedInputTaint.includes('untrusted');
   const primaryInput = ctx.inputs?.[0];
   const primaryInputAttestations = collectInputAttestations(primaryInput);
   const primaryInputKnown = hasAnyTargetLabel(primaryInputAttestations, SEND_KNOWN_PATTERNS);
@@ -325,7 +389,7 @@ function checkBuiltinPolicyRules(
   const primaryInputKnownTarget = hasAnyTargetLabel(primaryInputAttestations, TARGET_KNOWN_PATTERNS);
 
   for (const rule of enabledRules) {
-    if (rule === 'no-secret-exfil' && hasSecret && hasExfil) {
+    if (rule.rule === 'no-secret-exfil' && hasSecret && hasExfil) {
       return {
         allowed: false,
         reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
@@ -334,7 +398,7 @@ function checkBuiltinPolicyRules(
         matched: 'exfil'
       };
     }
-    if (rule === 'no-sensitive-exfil' && hasSensitive && hasExfil) {
+    if (rule.rule === 'no-sensitive-exfil' && hasSensitive && hasExfil) {
       return {
         allowed: false,
         reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'",
@@ -343,7 +407,7 @@ function checkBuiltinPolicyRules(
         matched: 'exfil'
       };
     }
-    if (rule === 'no-send-to-unknown' && hasSend && !primaryInputKnown) {
+    if (rule.rule === 'no-send-to-unknown' && hasSend && !primaryInputKnown) {
       return {
         allowed: false,
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
@@ -352,7 +416,7 @@ function checkBuiltinPolicyRules(
         matched: 'exfil:send'
       };
     }
-    if (rule === 'no-send-to-external' && hasSend && !primaryInputKnownInternal) {
+    if (rule.rule === 'no-send-to-external' && hasSend && !primaryInputKnownInternal) {
       return {
         allowed: false,
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
@@ -361,7 +425,7 @@ function checkBuiltinPolicyRules(
         matched: 'exfil:send'
       };
     }
-    if (rule === 'no-destroy-unknown' && hasTargetedDestructive && !primaryInputKnownTarget) {
+    if (rule.rule === 'no-destroy-unknown' && hasTargetedDestructive && !primaryInputKnownTarget) {
       return {
         allowed: false,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
@@ -370,7 +434,7 @@ function checkBuiltinPolicyRules(
         matched: 'destructive:targeted'
       };
     }
-    if (rule === 'no-untrusted-destructive' && hasUntrusted && hasDestructive) {
+    if (rule.rule === 'no-untrusted-destructive' && hasUntrustedDestructiveInput && hasDestructive) {
       return {
         allowed: false,
         reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
@@ -379,7 +443,7 @@ function checkBuiltinPolicyRules(
         matched: 'destructive'
       };
     }
-    if (rule === 'no-untrusted-privileged' && hasUntrusted && hasPrivileged) {
+    if (rule.rule === 'no-untrusted-privileged' && hasUntrustedPrivilegedInput && hasPrivileged) {
       return {
         allowed: false,
         reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
@@ -388,7 +452,7 @@ function checkBuiltinPolicyRules(
         matched: 'privileged'
       };
     }
-    if (rule === 'no-influenced-advice' && hasInfluenced && hasAdvice) {
+    if (rule.rule === 'no-influenced-advice' && hasInfluenced && hasAdvice) {
       return {
         allowed: false,
         reason: "Rule 'no-influenced-advice': label 'influenced' cannot flow to 'advice' — use structured extraction to debias evaluative output",

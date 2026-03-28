@@ -1,6 +1,10 @@
 import { matchesLabelPattern } from './fact-labels';
 import { normalizeNamedOperationRef } from './operation-labels';
-import { normalizePolicyConfig, type PolicyConfig } from './union';
+import {
+  listPolicyDefaultRuleNames,
+  normalizePolicyConfig,
+  type PolicyConfig
+} from './union';
 
 const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
 const TARGET_ARG_SELECTORS = ['id'] as const;
@@ -152,6 +156,27 @@ export function getOperationControlArgs(operation: OperationMetadataLike): {
   return { declared: false, args: [] };
 }
 
+export function getScopedTaintControlArgs(options: {
+  operation: OperationMetadataLike;
+  ruleTaintFacts?: boolean;
+}): string[] | undefined {
+  if (options.ruleTaintFacts === true) {
+    return undefined;
+  }
+
+  const operationTaintFacts = options.operation.metadata?.taintFacts === true;
+  if (operationTaintFacts) {
+    return undefined;
+  }
+
+  const controlArgInfo = getOperationControlArgs(options.operation);
+  if (!controlArgInfo.declared || controlArgInfo.args.length === 0) {
+    return undefined;
+  }
+
+  return controlArgInfo.args;
+}
+
 export function selectDestinationArgs(
   operation: OperationMetadataLike,
   args: Readonly<Record<string, unknown>> | undefined
@@ -252,7 +277,7 @@ function getEnabledPositiveFactRules(
   policy?: Pick<PolicyConfig, 'defaults'>
 ): Set<PositiveFactPolicyRule> {
   const enabled = new Set<PositiveFactPolicyRule>();
-  for (const rule of policy?.defaults?.rules ?? []) {
+  for (const rule of listPolicyDefaultRuleNames(policy?.defaults?.rules)) {
     if (POSITIVE_FACT_POLICY_RULES.has(rule as PositiveFactPolicyRule)) {
       enabled.add(rule as PositiveFactPolicyRule);
     }

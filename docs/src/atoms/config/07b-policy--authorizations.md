@@ -186,7 +186,7 @@ If the planner had written `"send_email": true`, validation would reject it beca
 
 `authorizations` compiles to internal privileged guards. These are the same guards that `defaults.rules` and `labels` produce — they participate in the standard guard override mechanism:
 
-- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires the named destination args to carry `known`, and `no-untrusted-privileged` still blocks untrusted privileged calls.
+- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires destination args to carry fact proof or `known`. `no-untrusted-destructive` and `no-untrusted-privileged` scope to control args when `controlArgs` is declared — tainted data args (body, title) don't block the authorized operation.
 - `locked: true` disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials
 - Capability denials (`capabilities.allow/deny/danger`), `env` restrictions, `auth`, and `limits` are separate enforcement paths and are not affected by `authorizations`
 

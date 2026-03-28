@@ -14,6 +14,23 @@ describe('PolicyConfig defaults', () => {
     expect(config.defaults?.rules).toEqual(['no-secret-exfil']);
   });
 
+  it('normalizes defaults rule objects and collapses duplicate taintFacts overrides', () => {
+    const config = normalizePolicyConfig({
+      defaults: {
+        rules: [
+          'no-untrusted-destructive',
+          { rule: ' no-untrusted-destructive ', taintFacts: true },
+          { rule: 'no-untrusted-privileged', taintFacts: false }
+        ]
+      }
+    } as PolicyConfig);
+
+    expect(config.defaults?.rules).toEqual([
+      { rule: 'no-untrusted-destructive', taintFacts: true },
+      'no-untrusted-privileged'
+    ]);
+  });
+
   it('merges defaults with untrusted winning and rule union', () => {
     const base: PolicyConfig = {
       defaults: {
@@ -33,6 +50,24 @@ describe('PolicyConfig defaults', () => {
     expect(merged.defaults?.rules?.sort()).toEqual(
       ['no-secret-exfil', 'no-untrusted-destructive'].sort()
     );
+  });
+
+  it('merges defaults rules conservatively when incoming policy enables taintFacts', () => {
+    const base: PolicyConfig = {
+      defaults: {
+        rules: ['no-untrusted-destructive']
+      }
+    };
+    const incoming: PolicyConfig = {
+      defaults: {
+        rules: [{ rule: 'no-untrusted-destructive', taintFacts: true }]
+      }
+    };
+
+    const merged = mergePolicyConfigs(base, incoming);
+    expect(merged.defaults?.rules).toEqual([
+      { rule: 'no-untrusted-destructive', taintFacts: true }
+    ]);
   });
 
   it('expands verify_all_instructions shorthand', () => {

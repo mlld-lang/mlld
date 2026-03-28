@@ -1,4 +1,4 @@
-import type { PolicyConfig } from './union';
+import { listPolicyDefaultRuleNames, type PolicyConfig } from './union';
 import { resolveInputTaint } from './input-taint';
 
 export const BUILTIN_POLICY_RULES = [
@@ -20,33 +20,22 @@ export function isBuiltinPolicyRuleName(value: string): value is BuiltinPolicyRu
   return (BUILTIN_POLICY_RULES as readonly string[]).includes(value);
 }
 
-function normalizeStringList(values?: readonly unknown[]): string[] {
-  if (!values) {
-    return [];
-  }
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const entry = String(value).trim();
-    if (!entry || seen.has(entry)) {
-      continue;
-    }
-    seen.add(entry);
-    result.push(entry);
-  }
-  return result;
-}
-
 export function shouldAddInfluencedLabel(
   policy: PolicyConfig | undefined,
   inputTaint: readonly string[] | undefined,
   exeLabels: readonly string[] | undefined
 ): boolean {
-  const enabledRules = normalizeStringList(policy?.defaults?.rules);
+  const enabledRules = listPolicyDefaultRuleNames(policy?.defaults?.rules);
   if (!enabledRules.includes('untrusted-llms-get-influenced')) {
     return false;
   }
-  const normalizedExeLabels = normalizeStringList(exeLabels);
+  const normalizedExeLabels = Array.from(
+    new Set(
+      (exeLabels ?? [])
+        .map(label => String(label).trim())
+        .filter(label => label.length > 0)
+    )
+  );
   if (!normalizedExeLabels.includes('llm')) {
     return false;
   }

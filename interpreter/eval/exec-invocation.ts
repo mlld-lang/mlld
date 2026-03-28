@@ -98,6 +98,7 @@ import {
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
 import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
+import { resolveExeTaintFacts } from './exe/definition-helpers';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
@@ -1928,6 +1929,9 @@ async function evaluateExecInvocationInternal(
       ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
       : undefined
   });
+  const invocationTaintFacts = await resolveExeTaintFacts(invocationWithClause?.taintFacts, runtimeEnv);
+  const effectiveOperationTaintFacts =
+    invocationTaintFacts === true || effectiveToolMetadata.taintFacts === true;
   const toolLabels = effectiveToolMetadata.labels;
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,
@@ -2121,6 +2125,7 @@ async function evaluateExecInvocationInternal(
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs: policyGuardControlArgs,
+      operationTaintFacts: effectiveOperationTaintFacts,
       env: runtimeEnv,
       execEnv,
       policyEnforcer: activePolicyEnforcer,

@@ -98,6 +98,7 @@ export type CreateExecOperationPolicyContextOptions = {
   operationName?: string;
   toolLabels: readonly string[];
   authorizationControlArgs?: readonly string[];
+  operationTaintFacts?: boolean;
   env: Environment;
   execEnv: Environment;
   policyEnforcer: PolicyEnforcer;
@@ -422,7 +423,8 @@ export async function createExecOperationContextAndEnforcePolicy(
       sourceRetryable: true,
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
-        : {})
+        : {}),
+      ...(options.operationTaintFacts === true ? { taintFacts: true } : {})
     }
   };
   operationContext.metadata = mergeGuardArgNamesIntoMetadata(operationContext.metadata, guardArgNames);

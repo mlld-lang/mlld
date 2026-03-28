@@ -153,8 +153,8 @@ var @policyConfig = {
 |---|---|
 | `no-send-to-unknown` | Recipient must carry fact proof or `known` attestation |
 | `no-destroy-unknown` | Deletion target must carry fact proof or `known` attestation |
-| `no-untrusted-destructive` | Tainted data can't flow into write operations |
-| `no-untrusted-privileged` | Tainted data can't flow into credential/account operations |
+| `no-untrusted-destructive` | Tainted data can't flow into write operations (scopes to control args when declared) |
+| `no-untrusted-privileged` | Tainted data can't flow into credential/account operations (scopes to control args when declared) |
 | `no-secret-exfil` | Secret-labeled data can't be sent to external destinations |
 
 The first two are *positive checks* -- they require proof on specific values. The rest are *negative checks* -- they block contamination.

@@ -11,6 +11,7 @@ export type GuardTiming = 'before' | 'after';
 
 export interface PerInputCandidate {
   index: number;
+  argName?: string | null;
   variable: Variable;
   labels: readonly DataLabel[];
   sources: readonly string[];
@@ -24,7 +25,8 @@ export function buildPerInputCandidates(
   registry: ReturnType<Environment['getGuardRegistry']>,
   inputs: readonly Variable[],
   override: NormalizedGuardOverride,
-  timing: GuardTiming = 'before'
+  timing: GuardTiming = 'before',
+  argNames?: readonly (string | null | undefined)[]
 ): PerInputCandidate[] {
   const results: PerInputCandidate[] = [];
 
@@ -51,7 +53,20 @@ export function buildPerInputCandidates(
 
     const filteredGuards = applyGuardOverrideFilter(guards, override);
     if (filteredGuards.length > 0) {
-      results.push({ index, variable, labels, sources, taint, attestations, toolsHistory, guards: filteredGuards });
+      const argName = Array.isArray(argNames)
+        ? (typeof argNames[index] === 'string' && argNames[index]!.trim().length > 0 ? argNames[index]!.trim() : null)
+        : undefined;
+      results.push({
+        index,
+        argName,
+        variable,
+        labels,
+        sources,
+        taint,
+        attestations,
+        toolsHistory,
+        guards: filteredGuards
+      });
     }
   }
 

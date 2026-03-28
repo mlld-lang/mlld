@@ -307,6 +307,7 @@ export async function evaluateGuardRuntime(
         : undefined;
     const policyResult = guard.policyCondition({
       operation,
+      argName: options.perInput?.argName ?? undefined,
       args: snapshotPolicyArgs(options.args),
       argDescriptors: snapshotPolicyArgDescriptors(options.args),
       input: policyInput,

@@ -50,6 +50,9 @@ WithProperty
   / "description" _ ":" _ description:DataString {
       return ["description", description];
     }
+  / "taintFacts" _ ":" _ taintFacts:BooleanLiteral {
+      return ["taintFacts", taintFacts === 'true' || taintFacts === true];
+    }
   / "tools" _ ":" _ tools:Expression {
       return ["tools", tools];
     }

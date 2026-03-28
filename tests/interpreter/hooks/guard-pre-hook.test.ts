@@ -1474,6 +1474,72 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
   });
 
+  it('scopes no-untrusted-destructive to non-empty controlArgs by default', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id, memo) = `deleted:@id:@memo` with { controlArgs: ["id"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('deleted:doc-1:user requested delete');
+  });
+
+  it('falls back to all args when controlArgs is explicitly empty', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id, memo) = `deleted:@id:@memo` with { controlArgs: [] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+  });
+
+  it('re-checks all args when invocation taintFacts is enabled', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id, memo) = `deleted:@id:@memo` with { controlArgs: ["id"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy, taintFacts: true }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+  });
+
+  it('re-checks all args when exe taintFacts is enabled', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id, memo) = `deleted:@id:@memo` with { controlArgs: ["id"], taintFacts: true }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+  });
+
   it('lets authorization guards override unlocked no-untrusted-destructive denials', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var untrusted @payload = "doc-1"')[0] as DirectiveNode, env);
