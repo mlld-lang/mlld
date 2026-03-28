@@ -34,6 +34,9 @@ describe('fact label helpers', () => {
     expect(matchesFactPattern('fact:internal:*.email', 'fact:internal:@contact.email')).toBe(true);
     expect(matchesFactPattern('fact:internal:*.email', 'fact:external:@contact.email')).toBe(false);
     expect(matchesFactPattern('fact:*.email', 'fact:internal:@contact.phone')).toBe(false);
+    expect(matchesFactPattern('fact:*', 'fact:internal:@contact.phone')).toBe(true);
+    expect(matchesFactPattern('fact:internal:*', 'fact:internal:@contact.phone')).toBe(true);
+    expect(matchesFactPattern('fact:internal:*', 'fact:external:@contact.phone')).toBe(false);
   });
 
   it('dedupes collected fact labels and exposes generic label matching', () => {
@@ -47,6 +50,7 @@ describe('fact label helpers', () => {
     ).toEqual(['fact:internal:@contact.email', 'fact:@contact.phone']);
 
     expect(matchesLabelPattern('fact:*.email', 'fact:internal:@contact.email')).toBe(true);
+    expect(matchesLabelPattern('fact:*', 'fact:internal:@contact.email')).toBe(true);
     expect(matchesLabelPattern('known', 'known:internal')).toBe(true);
     expect(hasMatchingFactLabel(['fact:internal:@contact.email'], 'fact:internal:*.email')).toBe(true);
   });
@@ -57,6 +61,9 @@ describe('fact label helpers', () => {
     );
     expect(getLabelPatternSpecificity('fact:@contact.email')).toBeGreaterThan(
       getLabelPatternSpecificity('fact:*.email')
+    );
+    expect(getLabelPatternSpecificity('fact:*.email')).toBeGreaterThan(
+      getLabelPatternSpecificity('fact:*')
     );
   });
 });

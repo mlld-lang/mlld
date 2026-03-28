@@ -5,6 +5,7 @@ import { normalizePolicyConfig, type PolicyConfig } from './union';
 const SEND_DESTINATION_ARG_SELECTORS = ['recipient', 'recipients', 'cc', 'bcc'] as const;
 const TARGET_ARG_SELECTORS = ['id'] as const;
 
+export const ANY_FACT_PATTERNS = ['fact:*'] as const;
 export const SEND_KNOWN_FACT_PATTERNS = ['fact:*.email'] as const;
 export const SEND_INTERNAL_FACT_PATTERNS = ['fact:internal:*.email'] as const;
 export const TARGET_KNOWN_FACT_PATTERNS = ['fact:*.id'] as const;
@@ -12,6 +13,7 @@ export const TARGET_KNOWN_FACT_PATTERNS = ['fact:*.id'] as const;
 export const SEND_KNOWN_PATTERNS = ['known', ...SEND_KNOWN_FACT_PATTERNS] as const;
 export const SEND_INTERNAL_PATTERNS = ['known:internal', ...SEND_INTERNAL_FACT_PATTERNS] as const;
 export const TARGET_KNOWN_PATTERNS = ['known', ...TARGET_KNOWN_FACT_PATTERNS] as const;
+export const DECLARED_CONTROL_ARG_KNOWN_PATTERNS = ['known', ...ANY_FACT_PATTERNS] as const;
 
 export interface OperationMetadataLike {
   metadata?: Record<string, unknown>;
@@ -181,8 +183,22 @@ export function selectDestinationArgs(
 }
 
 export function selectTargetArgs(
+  operation: OperationMetadataLike,
   args: Readonly<Record<string, unknown>> | undefined
 ): string[] {
+  if (!args) {
+    return [];
+  }
+
+  const controlArgInfo = getOperationControlArgs(operation);
+  if (controlArgInfo.declared) {
+    return controlArgInfo.args.filter(
+      controlArg =>
+        Object.prototype.hasOwnProperty.call(args, controlArg) &&
+        !isEmptyAuthorizationValue(args[controlArg])
+    );
+  }
+
   return selectNamedArgsWithFallback(args, TARGET_ARG_SELECTORS, {
     fallbackToFirstProvided: true
   });
@@ -197,6 +213,39 @@ function normalizeControlArgs(controlArgs?: readonly string[]): string[] {
   return (controlArgs ?? [])
     .map(value => value.trim().toLowerCase())
     .filter(value => value.length > 0);
+}
+
+function isDeclaredControlArg(
+  operation: OperationMetadataLike,
+  argName: string
+): boolean {
+  const normalizedArgName = normalizeArgName(argName);
+  if (!normalizedArgName) {
+    return false;
+  }
+
+  const controlArgInfo = getOperationControlArgs(operation);
+  if (!controlArgInfo.declared) {
+    return false;
+  }
+
+  return normalizeControlArgs(controlArgInfo.args).includes(normalizedArgName);
+}
+
+export function getPositiveCheckAcceptedPatterns(options: {
+  rule: 'no-send-to-unknown' | 'no-send-to-external' | 'no-destroy-unknown';
+  operation: OperationMetadataLike;
+  argName: string;
+}): readonly string[] {
+  if (options.rule === 'no-send-to-external') {
+    return SEND_INTERNAL_PATTERNS;
+  }
+
+  if (isDeclaredControlArg(options.operation, options.argName)) {
+    return DECLARED_CONTROL_ARG_KNOWN_PATTERNS;
+  }
+
+  return options.rule === 'no-send-to-unknown' ? SEND_KNOWN_PATTERNS : TARGET_KNOWN_PATTERNS;
 }
 
 function getEnabledPositiveFactRules(
@@ -337,7 +386,7 @@ function resolveBuiltInFactRequirementsFromOperationLabels(options: {
     if (normalizedControlArgs.includes(options.argName)) {
       appendRequirements(requirements, {
         argName: options.argName,
-        basePatterns: SEND_KNOWN_FACT_PATTERNS,
+        basePatterns: ANY_FACT_PATTERNS,
         enabledRules: options.enabledRules,
         policyPatterns: {
           'no-send-to-external': SEND_INTERNAL_FACT_PATTERNS
@@ -366,7 +415,7 @@ function resolveBuiltInFactRequirementsFromOperationLabels(options: {
     if (normalizedControlArgs.includes(options.argName)) {
       appendRequirements(requirements, {
         argName: options.argName,
-        basePatterns: TARGET_KNOWN_FACT_PATTERNS,
+        basePatterns: ANY_FACT_PATTERNS,
         enabledRules: options.enabledRules
       });
     }

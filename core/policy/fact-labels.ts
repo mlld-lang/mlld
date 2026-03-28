@@ -10,7 +10,7 @@ export interface ParsedFactLabel {
 interface ParsedFactPattern {
   raw: string;
   tiers: readonly string[];
-  matchKind: 'exact' | 'fieldSuffix';
+  matchKind: 'any' | 'exact' | 'fieldSuffix';
   ref: string;
   sourceRef?: string;
   field: string;
@@ -78,6 +78,22 @@ function parseFieldSuffixPattern(ref: string): ParsedFactPattern | null {
   };
 }
 
+function parseAnyFactPattern(ref: string): ParsedFactPattern | null {
+  const trimmed = ref.trim();
+  if (trimmed !== '*') {
+    return null;
+  }
+
+  return {
+    raw: '',
+    tiers: [],
+    matchKind: 'any',
+    ref: '*',
+    field: '*',
+    fieldSegments: Object.freeze([] as string[])
+  };
+}
+
 export function parseFactLabel(label: string): ParsedFactLabel | null {
   if (typeof label !== 'string') {
     return null;
@@ -136,6 +152,15 @@ function parseFactPattern(pattern: string): ParsedFactPattern | null {
     };
   }
 
+  const anyPattern = parseAnyFactPattern(ref);
+  if (anyPattern) {
+    return {
+      ...anyPattern,
+      raw: trimmed.toLowerCase(),
+      tiers: Object.freeze(normalizeParts(segments.slice(1, -1)))
+    };
+  }
+
   const suffixPattern = parseFieldSuffixPattern(ref);
   if (!suffixPattern) {
     return null;
@@ -185,6 +210,10 @@ export function matchesFactPattern(pattern: string, label: string): boolean {
 
   if (parsedPattern.matchKind === 'exact') {
     return parsedPattern.ref === parsedLabel.ref;
+  }
+
+  if (parsedPattern.matchKind === 'any') {
+    return true;
   }
 
   return hasMatchingFieldSuffix(parsedPattern.fieldSegments, parsedLabel.fieldSegments);
@@ -242,6 +271,11 @@ export function getLabelPatternSpecificity(pattern: string): number {
     return pattern.split(':').length;
   }
 
-  const fieldWeight = parsedPattern.matchKind === 'exact' ? 100 : 10;
+  const fieldWeight =
+    parsedPattern.matchKind === 'exact'
+      ? 100
+      : parsedPattern.matchKind === 'fieldSuffix'
+        ? 10
+        : 1;
   return parsedPattern.tiers.length * 1000 + fieldWeight + parsedPattern.fieldSegments.length;
 }

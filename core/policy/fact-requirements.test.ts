@@ -102,7 +102,27 @@ describe('fact requirements', () => {
       requirements: [
         {
           arg: 'participants',
-          patterns: ['fact:*.email'],
+          patterns: ['fact:*'],
+          source: 'builtin'
+        }
+      ]
+    });
+
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:named:deleteCalendarEvent',
+        argName: 'eventRef',
+        operationLabels: ['destructive:targeted'],
+        controlArgs: ['eventRef'],
+        hasControlArgsMetadata: true
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:named:deletecalendarevent',
+      requirements: [
+        {
+          arg: 'eventref',
+          patterns: ['fact:*'],
           source: 'builtin'
         }
       ]
@@ -223,6 +243,18 @@ describe('fact requirements', () => {
       )
     ).toEqual(['destination']);
 
-    expect(selectTargetArgs({ fileId: 'file-1' })).toEqual(['fileId']);
+    expect(selectTargetArgs({}, { fileId: 'file-1' })).toEqual(['fileId']);
+  });
+
+  it('uses declared control args for targeted destroy selection', () => {
+    expect(
+      selectTargetArgs(
+        {
+          labels: ['tool:w:delete_calendar_event'],
+          metadata: { authorizationControlArgs: ['eventRef'] }
+        },
+        { eventRef: 'evt-1', note: 'cleanup' }
+      )
+    ).toEqual(['eventRef']);
   });
 });

@@ -14,9 +14,8 @@ import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries }
 import { expandOperationLabels } from './label-flow';
 import { matchesLabelPattern } from './fact-labels';
 import {
-  SEND_KNOWN_PATTERNS,
+  getPositiveCheckAcceptedPatterns,
   SEND_INTERNAL_PATTERNS,
-  TARGET_KNOWN_PATTERNS,
   collectDeclarativeFactRequirementEntries,
   selectDestinationArgs,
   selectTargetArgs
@@ -169,7 +168,14 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
         ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
       ]);
-      if (!hasAnyMatchingLabel(effectiveAttestations, SEND_KNOWN_PATTERNS)) {
+      if (!hasAnyMatchingLabel(
+        effectiveAttestations,
+        getPositiveCheckAcceptedPatterns({
+          rule: 'no-send-to-unknown',
+          operation: options.operation,
+          argName
+        })
+      )) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
           rule: 'policy.defaults.rules.no-send-to-unknown',
@@ -217,7 +223,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     enabledRules.includes('no-destroy-unknown') &&
     hasMatchingLabel(expandedOperationLabels, 'destructive:targeted')
   ) {
-    const targetArgs = selectTargetArgs(options.args);
+    const targetArgs = selectTargetArgs(options.operation, options.args);
     if (targetArgs.length === 0) {
       return buildInheritedPositiveCheckFailure({
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
@@ -233,7 +239,14 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
         ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
       ]);
-      if (!hasAnyMatchingLabel(effectiveAttestations, TARGET_KNOWN_PATTERNS)) {
+      if (!hasAnyMatchingLabel(
+        effectiveAttestations,
+        getPositiveCheckAcceptedPatterns({
+          rule: 'no-destroy-unknown',
+          operation: options.operation,
+          argName
+        })
+      )) {
         return buildInheritedPositiveCheckFailure({
           reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
           rule: 'policy.defaults.rules.no-destroy-unknown',
@@ -351,9 +364,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule === 'no-send-to-unknown') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_unknown',
+        ruleName: 'no-send-to-unknown',
         operationLabel: 'exfil:send',
         requiredLabel: 'known',
-        acceptedPatterns: SEND_KNOWN_PATTERNS,
         reason: "Rule 'no-send-to-unknown': exfil:send destination must carry 'known'",
         missingLabelSuggestion: projectedHandleSuggestion(
           "Use a projected handle for the destination"
@@ -366,9 +379,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule === 'no-send-to-external') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_send_to_external',
+        ruleName: 'no-send-to-external',
         operationLabel: 'exfil:send',
         requiredLabel: 'known:internal',
-        acceptedPatterns: SEND_INTERNAL_PATTERNS,
         reason: "Rule 'no-send-to-external': exfil:send destination must carry 'known:internal'",
         missingLabelSuggestion: projectedHandleSuggestion(
           "Use a projected handle for an approved internal destination"
@@ -381,9 +394,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule === 'no-destroy-unknown') {
       guards.push(makeNamedArgAttestationGuard({
         name: '__policy_rule_no_destroy_unknown',
+        ruleName: 'no-destroy-unknown',
         operationLabel: 'destructive:targeted',
         requiredLabel: 'known',
-        acceptedPatterns: TARGET_KNOWN_PATTERNS,
         reason: "Rule 'no-destroy-unknown': destructive:targeted target must carry 'known'",
         missingLabelSuggestion: projectedHandleSuggestion(
           "Use a projected handle for the target"
@@ -1099,9 +1112,9 @@ function makeDataRuleGuard(options: {
 
 function makeNamedArgAttestationGuard(options: {
   name: string;
+  ruleName: 'no-send-to-unknown' | 'no-send-to-external' | 'no-destroy-unknown';
   operationLabel: string;
   requiredLabel: string;
-  acceptedPatterns?: readonly string[];
   reason: string;
   missingLabelSuggestion: string;
   fallbackToFirstProvided?: boolean;
@@ -1134,7 +1147,7 @@ function makeNamedArgAttestationGuard(options: {
       const selectedArgs =
         options.operationLabel === 'exfil:send'
           ? selectDestinationArgs(operation, args)
-          : selectTargetArgs(args);
+          : selectTargetArgs(operation, args);
       if (selectedArgs.length === 0) {
         return {
           decision: 'deny',
@@ -1150,10 +1163,11 @@ function makeNamedArgAttestationGuard(options: {
 
       for (const argName of selectedArgs) {
         const attestations = collectDescriptorAttestations(argDescriptors?.[argName]);
-        if (!hasAnyMatchingLabel(
-          attestations,
-          options.acceptedPatterns ?? [options.requiredLabel]
-        )) {
+        if (!hasAnyMatchingLabel(attestations, getPositiveCheckAcceptedPatterns({
+          rule: options.ruleName,
+          operation,
+          argName
+        }))) {
           return {
             decision: 'deny',
             reason: options.reason,

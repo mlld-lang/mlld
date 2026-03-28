@@ -1052,6 +1052,42 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
+  it('trusts non-email fact proofs on declared send control args in with { policy } authorizations', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'participants',
+      createSimpleTextVariable(
+        'participants',
+        'group-1',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({
+            labels: ['fact:@calendar_evt.participants']
+          })
+        }
+      )
+    );
+
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @createCalendarEvent(participants, title) = `sent:@title` with { controlArgs: ["participants"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { createCalendarEvent: { args: { participants: "group-1" } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @createCalendarEvent(@participants, "Lunch") with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:Lunch');
+  });
+
   it('carries planner-time fact proof through emitted masked previews in with { policy } authorizations', async () => {
     const env = createEnv();
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
@@ -1199,6 +1235,42 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
     const effects = env.getEffectHandler() as TestEffectHandler;
     expect(effects.getOutput().trim()).toBe('sent:test');
+  });
+
+  it('trusts non-id fact proofs on declared targeted control args in with { policy } authorizations', async () => {
+    const env = createEnv();
+    env.setVariable(
+      'targetRef',
+      createSimpleTextVariable(
+        'targetRef',
+        'evt-1',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({
+            labels: ['fact:@calendar_evt.target_ref']
+          })
+        }
+      )
+    );
+
+    await evaluateDirective(
+      parseSync('/exe destructive:targeted, tool:w @deleteCalendarEvent(targetRef) = `deleted:@targetRef` with { controlArgs: ["targetRef"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-destroy-unknown"] }, operations: { "destructive:targeted": ["tool:w"] }, authorizations: { allow: { deleteCalendarEvent: { args: { targetRef: "evt-1" } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteCalendarEvent(@targetRef) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('deleted:evt-1');
   });
 
   it('lets explicit authorization attestations satisfy managed positive checks', async () => {

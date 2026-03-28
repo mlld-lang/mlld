@@ -157,6 +157,20 @@ describe('generatePolicyGuards defaults rules', () => {
         },
         args: { participants: ['acct-1'] },
         argDescriptors: {
+          participants: { attestations: ['fact:@calendar_evt.participants'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      sendUnknown?.policyCondition?.({
+        operation: {
+          name: 'createCalendarEvent',
+          labels: ['mail:send'],
+          metadata: { authorizationControlArgs: ['participants'] }
+        },
+        args: { participants: ['acct-1'] },
+        argDescriptors: {
           participants: { attestations: ['known'] }
         }
       })
@@ -326,6 +340,20 @@ describe('generatePolicyGuards defaults rules', () => {
 
     expect(
       destroyGuard?.policyCondition?.({
+        operation: {
+          name: 'deleteCalendarEvent',
+          labels: ['tool:w:delete'],
+          metadata: { authorizationControlArgs: ['eventRef'] }
+        },
+        args: { eventRef: 'evt-1' },
+        argDescriptors: {
+          eventRef: { attestations: ['fact:@calendar_evt.event_ref'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      destroyGuard?.policyCondition?.({
         operation: { name: 'delete', labels: ['tool:w:delete'] },
         args: { id: 'tx-1' },
         argDescriptors: {
@@ -480,6 +508,42 @@ describe('generatePolicyGuards defaults rules', () => {
       })
     ).toBeUndefined();
 
+    const controlArgPolicy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown', 'no-destroy-unknown'] },
+      operations: {
+        'exfil:send': ['tool:w:send_mail'],
+        'destructive:targeted': ['tool:w:delete_record']
+      }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy: controlArgPolicy,
+        operation: {
+          labels: ['tool:w:send_mail'],
+          metadata: { authorizationControlArgs: ['participants'] }
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:@calendar_evt.participants'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy: controlArgPolicy,
+        operation: {
+          labels: ['tool:w:delete_record'],
+          metadata: { authorizationControlArgs: ['targetRef'] }
+        },
+        args: { targetRef: 'tx-1' },
+        argDescriptors: {
+          targetRef: { attestations: ['fact:@task.target_ref'] }
+        }
+      })
+    ).toBeUndefined();
+
     expect(
       evaluateAuthorizationInheritedPolicyChecks({
         policy,
@@ -490,6 +554,46 @@ describe('generatePolicyGuards defaults rules', () => {
         }
       })
     ).toBeUndefined();
+  });
+
+  it('keeps field-name heuristics on inferred positive-check paths', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-send-to-unknown', 'no-destroy-unknown'] },
+      operations: {
+        'exfil:send': ['mail:send'],
+        'destructive:targeted': ['tool:w:delete_record']
+      }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          labels: ['mail:send']
+        },
+        args: { participants: ['ada@example.com'] },
+        argDescriptors: {
+          participants: { attestations: ['fact:@calendar_evt.participants'] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-send-to-unknown'
+    });
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          labels: ['tool:w:delete_record']
+        },
+        args: { targetRef: 'tx-1' },
+        argDescriptors: {
+          targetRef: { attestations: ['fact:@task.target_ref'] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-destroy-unknown'
+    });
   });
 
   it('uses projection-first suggestions for inherited positive checks', () => {

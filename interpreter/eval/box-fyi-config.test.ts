@@ -98,7 +98,7 @@ describe('box fyi config integration', () => {
     ]);
   });
 
-  it('filters discovery for in-scope tool ops using canonical op:named refs', async () => {
+  it('uses canonical op:named refs when discovering declared control-arg fact candidates', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/record @contact = { facts: [email: string, name: string] }',
@@ -125,6 +125,12 @@ describe('box fyi config integration', () => {
         label: 'Mark',
         field: 'email',
         fact: 'fact:@contact.email'
+      },
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'M***',
+        field: 'name',
+        fact: 'fact:@contact.name'
       }
     ]);
   });
