@@ -2415,14 +2415,18 @@ async function evaluateExecInvocationInternal(
   if (result && typeof result === 'object') {
     const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
     if (isVariable(result)) {
-      const extracted = await extractVariableValue(result, execEnv);
-      const typeHint = Array.isArray(extracted)
-        ? 'array'
-        : typeof extracted === 'object' && extracted !== null
-          ? 'object'
-          : 'text';
-      const structured = wrapStructured(extracted as any, typeHint as any);
-      result = structured;
+      if (isExecutableVariable(result)) {
+        result = wrapStructured(result as any, 'object');
+      } else {
+        const extracted = await extractVariableValue(result, execEnv);
+        const typeHint = Array.isArray(extracted)
+          ? 'array'
+          : typeof extracted === 'object' && extracted !== null
+            ? 'object'
+            : 'text';
+        const structured = wrapStructured(extracted as any, typeHint as any);
+        result = structured;
+      }
     }
   }
 

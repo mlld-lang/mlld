@@ -3,6 +3,7 @@ import type {
   ForExpression,
   VariableReferenceNode
 } from '@core/types';
+import { isExecutableVariable } from '@core/types/variable';
 import { evaluate, type EvalResult } from '@interpreter/core/interpreter';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from '@interpreter/eval/when';
@@ -194,7 +195,9 @@ export async function evaluateForExpressionIteration(
 
   let exprResult: unknown;
   if (isVariable(branchValue)) {
-    exprResult = await extractVariableValue(branchValue, childEnv);
+    exprResult = isExecutableVariable(branchValue)
+      ? branchValue
+      : await extractVariableValue(branchValue, childEnv);
   } else {
     exprResult = branchValue;
   }

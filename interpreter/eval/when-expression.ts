@@ -8,6 +8,7 @@
 import type { WhenExpressionNode, WhenConditionPair, WhenEntry } from '@core/types/when';
 import { isLetAssignment, isAugmentedAssignment, isConditionPair, isDirectAction, normalizeWhenCondition } from '@core/types/when';
 import { astLocationToSourceLocation, type BaseMlldNode } from '@core/types';
+import { isExecutableVariable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { GuardError, isBailError, MlldDenialError, MlldWhenExpressionError } from '@core/errors';
@@ -229,6 +230,9 @@ async function normalizeActionValue(value: unknown, actionEnv: Environment): Pro
   }
 
   if (isVariable(normalized)) {
+    if (isExecutableVariable(normalized)) {
+      return normalized;
+    }
     normalized = await extractVariableValue(normalized, actionEnv);
   }
 

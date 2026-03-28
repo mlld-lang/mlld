@@ -349,6 +349,68 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves when-selected executable refs when passed to config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe llm @agent(prompt, config) = `@mx.llm.allowed`',
+      '/exe @hello() = "hi"',
+      '/exe @bye() = "bye"',
+      '/exe @pick(name) = when @name [',
+      '  "hello" => @hello',
+      '  "bye" => @bye',
+      '  * => null',
+      ']',
+      '/var @subset = for @name in ["hello"] => @pick(@name)',
+      '/show @agent("Email the summary", { tools: @subset })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves object-indexed executable refs through for-expressions when passed to config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe llm @agent(prompt, config) = `@mx.llm.allowed`',
+      '/exe @hello() = "hi"',
+      '/exe @bye() = "bye"',
+      '/var @toolMap = { hello: @hello, bye: @bye }',
+      '/var @subset = for @name in ["hello"] => @toolMap[@name]',
+      '/show @agent("Email the summary", { tools: @subset })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves record coercion for MCP-imported executables from the same module', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/contacts_tools.mld', [
