@@ -194,6 +194,14 @@ Authorization matching is not enough by itself for positive checks. If the plann
 
 Authorization denials behave like any other guard denial — they can be caught with `denied =>` handlers and are surfaced through the SDK's existing denial reporting.
 
+Authorization denial reasons distinguish the cause:
+
+- `policy.authorizations.unlisted` — tool was never authorized
+- `policy.authorizations.compile_dropped` — tool was authorized but the entry was dropped during compilation (ambiguity, proof loss)
+- `policy.authorizations.args_mismatch` — tool was authorized but args don't match the constraint
+
+When an array control arg has one ambiguous element, only that element is dropped — the rest of the array and the tool entry are preserved. Ambiguous matches that resolve to the same canonical value are treated as equivalent and kept.
+
 ## Planner Use
 
 The primary use case is planner-authorized agent execution. A planning LLM produces a JSON authorization fragment. The step script parses it and injects it via `with { policy }`:
