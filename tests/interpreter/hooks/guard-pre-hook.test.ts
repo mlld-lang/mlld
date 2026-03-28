@@ -1338,7 +1338,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
   });
 
-  it('denies cleanly when an ambiguous literal authorization entry is skipped during with { policy } compilation', async () => {
+  it('allows authorization entries when duplicate exposures collapse to the same canonical value', async () => {
     const env = createEnv();
     const approvedRecipient = wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
       security: makeSecurityDescriptor({
@@ -1374,15 +1374,73 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("mark.davies@hotmail.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    try {
-      await evaluateDirective(directive, env);
-      throw new Error('Expected sendMoney to be denied');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      expect(message).toMatch(/operation not authorized by policy\.authorizations/i);
-      expect(message).not.toMatch(/ambiguous projected value/i);
-      expect(message).not.toMatch(/handle wrapper from the tool result/i);
-    }
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+  });
+
+  it('distinguishes compile-dropped authorizations from never-listed authorizations', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+
+    env.recordProjectionExposure({
+      sessionId: 'planner-a',
+      value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'mask',
+      emittedPreview: 's***@company.com',
+      issuedAt: 1
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-b',
+      value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'mask',
+      emittedPreview: 's***@company.com',
+      issuedAt: 2
+    });
+
+    await evaluateDirective(
+      parseSync('/var @compileDropPolicy = { operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "s***@company.com" } } } } }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @neverListedPolicy = { operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: {} } }')[0] as DirectiveNode,
+      env
+    );
+
+    await expect(
+      evaluateDirective(
+        parseSync('/show @sendMoney("sarah@company.com", 5) with { policy: @compileDropPolicy }')[0] as DirectiveNode,
+        env
+      )
+    ).rejects.toMatchObject({
+      context: {
+        blocker: {
+          rule: 'policy.authorizations.compile_dropped'
+        }
+      }
+    });
+
+    await expect(
+      evaluateDirective(
+        parseSync('/show @sendMoney("sarah@company.com", 5) with { policy: @neverListedPolicy }')[0] as DirectiveNode,
+        env
+      )
+    ).rejects.toMatchObject({
+      context: {
+        blocker: {
+          rule: 'policy.authorizations.unlisted'
+        }
+      }
+    });
   });
 
   it('activates no-send-to-unknown for with { policy } without authorizations', async () => {

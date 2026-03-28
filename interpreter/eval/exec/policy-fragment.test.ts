@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHandleWrapper, createFactSourceHandle } from '@core/types/handle';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { createObjectVariable } from '@core/types/variable';
 import { parseSync } from '@grammar/parser';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -14,6 +15,20 @@ import {
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
+}
+
+function createFactEmailValue(email: string, sourceRef: string): ReturnType<typeof wrapStructured> {
+  return wrapStructured(email, 'text', email, {
+    security: makeSecurityDescriptor({
+      labels: [`fact:${sourceRef}.email`]
+    }),
+    factsources: [
+      createFactSourceHandle({
+        sourceRef,
+        field: 'email'
+      })
+    ]
+  });
 }
 
 describe('resolveInvocationPolicyFragment', () => {
@@ -504,6 +519,7 @@ describe('resolveInvocationPolicyFragment', () => {
           steps: ['canonicalized_projected_value']
         }
       ],
+      droppedArrayElements: [],
       droppedEntries: [],
       ambiguousValues: [],
       compiledProofs: [
@@ -621,6 +637,7 @@ describe('resolveInvocationPolicyFragment', () => {
     expect(getInvocationPolicyFragmentCompileReport(policy)).toEqual({
       strippedArgs: [],
       repairedArgs: [],
+      droppedArrayElements: [],
       droppedEntries: [
         {
           tool: 'sendEmail',
@@ -638,7 +655,7 @@ describe('resolveInvocationPolicyFragment', () => {
     });
   });
 
-  it('skips ambiguous literal authorization entries during policy compilation', async () => {
+  it('keeps ambiguous literal authorization entries when all matches collapse to the same canonical value', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
@@ -683,6 +700,327 @@ describe('resolveInvocationPolicyFragment', () => {
       env
     );
 
-    expect(policy?.authorizations?.allow.sendEmail).toBeUndefined();
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+    expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
+    expect((recipientConstraint.eq as any).text).toBe('mark.davies@hotmail.com');
+  });
+
+  it('drops only ambiguous array elements during policy compilation', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
+
+    env.recordProjectionExposure({
+      sessionId: 'planner-a',
+      value: wrapStructured('ada@example.com', 'text', 'ada@example.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'bare',
+      emittedLiteral: 'ada@example.com',
+      issuedAt: 1
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-a',
+      value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'mask',
+      emittedPreview: 's***@company.com',
+      issuedAt: 2
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-b',
+      value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'mask',
+      emittedPreview: 's***@company.com',
+      issuedAt: 3
+    });
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipients: ['ada@example.com', 's***@company.com']
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientsConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipients?.[0]
+      : undefined;
+    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
+    if (!recipientsConstraint || !('eq' in recipientsConstraint)) {
+      return;
+    }
+    expect(Array.isArray(recipientsConstraint.eq)).toBe(true);
+    const values = recipientsConstraint.eq as unknown[];
+    expect(values).toHaveLength(1);
+    expect(isStructuredValue(values[0])).toBe(true);
+    expect((values[0] as any).text).toBe('ada@example.com');
+    expect(getInvocationPolicyFragmentCompileReport(policy)).toMatchObject({
+      droppedEntries: [],
+      droppedArrayElements: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipients',
+          index: 1,
+          reason: 'ambiguous_projected_value',
+          value: 's***@company.com'
+        }
+      ],
+      ambiguousValues: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipients',
+          value: 's***@company.com'
+        }
+      ]
+    });
+  });
+
+  it('preserves fact-bearing array leaves in variable-held policy fragments', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
+    env.setVariable(
+      'contactA',
+      createObjectVariable(
+        'contactA',
+        {
+          email: createFactEmailValue('alice@example.com', '@contact_a')
+        },
+        false,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+    env.setVariable(
+      'contactB',
+      createObjectVariable(
+        'contactB',
+        {
+          email: createFactEmailValue('bob@example.com', '@contact_b')
+        },
+        false,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { authorizations: { allow: { sendEmail: { args: { recipients: [@contactA.email, @contactB.email] } } } } }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        type: 'VariableReference',
+        nodeId: 'task-policy-ref',
+        identifier: 'taskPolicy',
+        fields: []
+      } as any,
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientsConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipients?.[0]
+      : undefined;
+    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
+    if (!recipientsConstraint || !('eq' in recipientsConstraint)) {
+      return;
+    }
+    expect(Array.isArray(recipientsConstraint.eq)).toBe(true);
+    const recipients = recipientsConstraint.eq as unknown[];
+    expect(recipients).toHaveLength(2);
+    expect(recipients.every(item => isStructuredValue(item))).toBe(true);
+    expect(recipientsConstraint.attestations).toEqual(
+      expect.arrayContaining(['fact:@contact_a.email', 'fact:@contact_b.email'])
+    );
+  });
+
+  it('preserves fact-bearing array leaves through object-spread-built policy fragments', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
+    env.setVariable(
+      'contactA',
+      createObjectVariable(
+        'contactA',
+        {
+          email: createFactEmailValue('alice@example.com', '@contact_a')
+        },
+        false,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+    env.setVariable(
+      'contactB',
+      createObjectVariable(
+        'contactB',
+        {
+          email: createFactEmailValue('bob@example.com', '@contact_b')
+        },
+        false,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    await evaluateDirective(
+      parseSync('/var @basePolicy = { authorizations: { allow: { sendEmail: { args: { recipients: [@contactA.email, @contactB.email] } } } } }')[0] as any,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { ...@basePolicy }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        type: 'VariableReference',
+        nodeId: 'task-policy-ref',
+        identifier: 'taskPolicy',
+        fields: []
+      } as any,
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientsConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipients?.[0]
+      : undefined;
+    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
+    if (!recipientsConstraint || !('eq' in recipientsConstraint)) {
+      return;
+    }
+    expect(Array.isArray(recipientsConstraint.eq)).toBe(true);
+    const recipients = recipientsConstraint.eq as unknown[];
+    expect(recipients).toHaveLength(2);
+    expect(recipients.every(item => isStructuredValue(item))).toBe(true);
+  });
+
+  it('lifts fact-bearing array leaves onto stronger same-session fact roots during compilation', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
+
+    const sourceLeaf = createFactEmailValue('alice@example.com', '@contact_a');
+    const sourceRoot = wrapStructured(
+      {
+        email: sourceLeaf
+      },
+      'object',
+      '{"email":"alice@example.com"}'
+    );
+    env.recordToolCall({
+      name: 'lookupContact',
+      timestamp: 1,
+      ok: true,
+      result: sourceRoot,
+      fyiFactRoot: sourceRoot
+    });
+
+    const weakLeaf = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact_a.email']
+      })
+    });
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipients: [weakLeaf]
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientsConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipients?.[0]
+      : undefined;
+    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
+    if (!recipientsConstraint || !('eq' in recipientsConstraint) || !Array.isArray(recipientsConstraint.eq)) {
+      return;
+    }
+
+    const recipient = recipientsConstraint.eq[0];
+    expect(isStructuredValue(recipient)).toBe(true);
+    expect((recipient as any).mx.factsources?.map((handle: any) => handle.ref)).toEqual(['@contact_a.email']);
+    expect(getInvocationPolicyFragmentCompileReport(policy)).toMatchObject({
+      repairedArgs: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipients',
+          steps: expect.arrayContaining(['lifted_fact_value'])
+        }
+      ],
+      compiledProofs: [
+        {
+          tool: 'sendEmail',
+          arg: 'recipients',
+          labels: ['fact:@contact_a.email']
+        }
+      ]
+    });
   });
 });

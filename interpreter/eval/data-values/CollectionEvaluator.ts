@@ -2,7 +2,13 @@ import * as fs from 'fs';
 import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
-import { asData, isStructuredValue, extractSecurityDescriptor } from '@interpreter/utils/structured-value';
+import {
+  asData,
+  isStructuredValue,
+  extractSecurityDescriptor,
+  getRecordProjectionMetadata
+} from '@interpreter/utils/structured-value';
+import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
 import { FieldAccessError } from '@core/errors';
@@ -476,8 +482,29 @@ function collectDescriptorFromSource(
   }
 }
 
+function shouldPreserveStructuredLeaf(value: unknown): boolean {
+  if (!isStructuredValue(value)) {
+    return false;
+  }
+
+  const descriptor = extractSecurityDescriptor(value, { recursive: false, normalize: true });
+  if (collectProofClaimLabels(descriptor).length > 0) {
+    return true;
+  }
+
+  if (Array.isArray(value.mx?.factsources) && value.mx.factsources.length > 0) {
+    return true;
+  }
+
+  return getRecordProjectionMetadata(value) !== undefined;
+}
+
 function unwrapStructuredPrimitive(value: any): any {
   if (!isStructuredValue(value)) {
+    return value;
+  }
+
+  if (shouldPreserveStructuredLeaf(value)) {
     return value;
   }
 

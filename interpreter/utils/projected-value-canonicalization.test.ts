@@ -108,6 +108,32 @@ describe('canonicalizeProjectedValue', () => {
     ).rejects.toThrow(/use the handle wrapper from the tool result/i);
   });
 
+  it('keeps ambiguous projected literals when all matches collapse to the same canonical value', async () => {
+    const env = createEnvironment();
+
+    env.recordProjectionExposure({
+      sessionId: 'session-ambiguous',
+      value: wrapStructured('Ada Lovelace', 'text', 'Ada Lovelace'),
+      kind: 'bare',
+      emittedLiteral: 'Ada Lovelace',
+      issuedAt: 1
+    });
+    env.recordProjectionExposure({
+      sessionId: 'session-ambiguous',
+      value: wrapStructured('Ada Lovelace', 'text', 'Ada Lovelace'),
+      kind: 'bare',
+      emittedLiteral: 'Ada Lovelace',
+      issuedAt: 2
+    });
+
+    const canonical = await canonicalizeProjectedValue('Ada Lovelace', env, {
+      sessionId: 'session-ambiguous',
+      collapseEquivalentMatches: true
+    });
+
+    expect(asText(canonical)).toBe('Ada Lovelace');
+  });
+
   it('leaves unmatched emitted strings unchanged', async () => {
     const env = createEnvironment();
 

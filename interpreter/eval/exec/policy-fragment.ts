@@ -57,6 +57,7 @@ export interface PolicyAuthorizationCompileReport {
   strippedArgs: Array<{ tool: string; arg: string }>;
   repairedArgs: Array<{ tool: string; arg: string; steps: string[] }>;
   droppedEntries: Array<{ tool: string; reason: string }>;
+  droppedArrayElements: Array<{ tool: string; arg: string; index: number; reason: string; value: string }>;
   ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
   compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
 }
@@ -68,6 +69,7 @@ function createEmptyPolicyAuthorizationCompileReport(): PolicyAuthorizationCompi
     strippedArgs: [],
     repairedArgs: [],
     droppedEntries: [],
+    droppedArrayElements: [],
     ambiguousValues: [],
     compiledProofs: []
   };
@@ -80,6 +82,7 @@ function clonePolicyAuthorizationCompileReport(
     strippedArgs: report.strippedArgs.map(entry => ({ ...entry })),
     repairedArgs: report.repairedArgs.map(entry => ({ ...entry, steps: [...entry.steps] })),
     droppedEntries: report.droppedEntries.map(entry => ({ ...entry })),
+    droppedArrayElements: report.droppedArrayElements.map(entry => ({ ...entry })),
     ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
     compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] }))
   };
@@ -92,6 +95,7 @@ function hasPolicyAuthorizationCompileActivity(
     report.strippedArgs.length > 0
     || report.repairedArgs.length > 0
     || report.droppedEntries.length > 0
+    || report.droppedArrayElements.length > 0
     || report.ambiguousValues.length > 0
     || report.compiledProofs.length > 0
   );
@@ -111,13 +115,27 @@ function runtimeRepairEventLabel(event: RuntimeRepairEvent): string {
   switch (event.kind) {
     case 'resolved_handle':
       return 'resolved_handle';
+    case 'lifted_fact_value':
+      return 'lifted_fact_value';
     case 'canonicalized_projected_value':
       return 'canonicalized_projected_value';
     case 'rebound_session_proof':
       return 'rebound_session_proof';
+    case 'dropped_ambiguous_array_element':
+      return 'dropped_ambiguous_array_element';
     case 'ambiguous_projected_value':
       return 'ambiguous_projected_value';
   }
+}
+
+function isArrayLikeConstraintValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return true;
+  }
+  if (isVariable(value)) {
+    return isArrayLikeConstraintValue(value.value);
+  }
+  return isStructuredValue(value) && value.type === 'array' && Array.isArray(value.data);
 }
 
 function stripNonControlArgsFromRawPolicyAuthorizations(
@@ -284,17 +302,22 @@ async function resolveConstraintSourceValue(
             value: candidate,
             env,
             matchScope: 'global',
-            includeSessionProofMatches: true
+            includeSessionProofMatches: true,
+            dropAmbiguousArrayElements: isArrayLikeConstraintValue(candidate),
+            collapseEquivalentProjectedMatches: true
           })
         ).value;
       }
       const resolved = await resolveValueHandles(variable, env);
+      const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
       return (
         await repairSecurityRelevantValue({
-          value: await unwrapResolvedConstraintValue(resolved, env),
+          value: unwrapped,
           env,
           matchScope: 'global',
-          includeSessionProofMatches: true
+          includeSessionProofMatches: true,
+          dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
+          collapseEquivalentProjectedMatches: true
         })
       ).value;
     }
@@ -308,7 +331,9 @@ async function resolveConstraintSourceValue(
           value: items,
           env,
           matchScope: 'global',
-          includeSessionProofMatches: true
+          includeSessionProofMatches: true,
+          dropAmbiguousArrayElements: true,
+          collapseEquivalentProjectedMatches: true
         })
       ).value;
     }
@@ -325,7 +350,8 @@ async function resolveConstraintSourceValue(
           value: result,
           env,
           matchScope: 'global',
-          includeSessionProofMatches: true
+          includeSessionProofMatches: true,
+          collapseEquivalentProjectedMatches: true
         })
       ).value;
     }
@@ -339,22 +365,28 @@ async function resolveConstraintSourceValue(
     const { evaluate } = await import('@interpreter/core/interpreter');
     const result = await evaluate(value as any, env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
+    const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
     return (
       await repairSecurityRelevantValue({
-        value: await unwrapResolvedConstraintValue(resolved, env),
+        value: unwrapped,
         env,
         matchScope: 'global',
-        includeSessionProofMatches: true
+        includeSessionProofMatches: true,
+        dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
+        collapseEquivalentProjectedMatches: true
       })
     ).value;
   }
   const resolved = await resolveValueHandles(value, env);
+  const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
   return (
     await repairSecurityRelevantValue({
-      value: await unwrapResolvedConstraintValue(resolved, env),
+      value: unwrapped,
       env,
       matchScope: 'global',
-      includeSessionProofMatches: true
+      includeSessionProofMatches: true,
+      dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
+      collapseEquivalentProjectedMatches: true
     })
   ).value;
 }
@@ -520,17 +552,40 @@ async function canonicalizePolicyAuthorizationConstraints(
           value: argValue,
           env,
           matchScope: 'global',
-          includeSessionProofMatches: true
+          includeSessionProofMatches: true,
+          dropAmbiguousArrayElements: isArrayLikeConstraintValue(argValue),
+          collapseEquivalentProjectedMatches: true
         });
         entry.args[argName] = repaired.value;
+        for (const event of repaired.events) {
+          if (event.kind !== 'dropped_ambiguous_array_element') {
+            continue;
+          }
+          report.droppedArrayElements.push({
+            tool: toolName,
+            arg: argName,
+            index: event.index,
+            reason: 'ambiguous_projected_value',
+            value: event.value
+          });
+          report.ambiguousValues.push({
+            tool: toolName,
+            arg: argName,
+            value: event.value
+          });
+        }
         const repairSteps = repaired.events
-          .filter(event => event.kind !== 'ambiguous_projected_value')
+          .filter(
+            event =>
+              event.kind !== 'ambiguous_projected_value'
+              && event.kind !== 'dropped_ambiguous_array_element'
+          )
           .map(runtimeRepairEventLabel);
         if (repairSteps.length > 0) {
           report.repairedArgs.push({
             tool: toolName,
             arg: argName,
-            steps: repairSteps
+            steps: Array.from(new Set(repairSteps))
           });
         }
       } catch (error) {

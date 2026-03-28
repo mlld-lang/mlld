@@ -214,6 +214,61 @@ function getGuardKey(guard: GuardDefinition): string {
   return guard.name ?? guard.id;
 }
 
+type AuthorizationFailureClassification = {
+  rule: string;
+  reason: string;
+};
+
+function classifyAuthorizationFailure(
+  env: Parameters<PreHook>[2],
+  operationName: string,
+  code: 'unlisted' | 'args_mismatch',
+  defaultReason: string
+): AuthorizationFailureClassification {
+  if (code === 'args_mismatch') {
+    return {
+      rule: 'policy.authorizations.args',
+      reason: defaultReason
+    };
+  }
+
+  const policyContext = (env.getPolicyContext() as Record<string, unknown> | undefined) ?? {};
+  const compileReport = policyContext.authorizationsCompile as {
+    droppedEntries?: Array<{ tool?: string; reason?: string }>;
+    ambiguousValues?: Array<{ tool?: string; arg?: string; value?: string }>;
+  } | undefined;
+  const droppedEntry = Array.isArray(compileReport?.droppedEntries)
+    ? compileReport!.droppedEntries.find(entry => entry?.tool === operationName)
+    : undefined;
+
+  if (!droppedEntry) {
+    return {
+      rule: 'policy.authorizations.unlisted',
+      reason: defaultReason
+    };
+  }
+
+  const ambiguousValues = Array.isArray(compileReport?.ambiguousValues)
+    ? compileReport!.ambiguousValues
+        .filter(entry => entry?.tool === operationName)
+        .map(entry => entry?.value)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : [];
+
+  const reason = droppedEntry.reason === 'ambiguous_projected_value'
+    ? (
+        ambiguousValues.length > 0
+          ? `operation authorization was dropped during policy.authorizations compilation due to ambiguous values: ${ambiguousValues.join(', ')}`
+          : 'operation authorization was dropped during policy.authorizations compilation due to ambiguous projected values'
+      )
+    : 'operation authorization was dropped during policy.authorizations compilation';
+
+  return {
+    rule: 'policy.authorizations.compile_dropped',
+    reason
+  };
+}
+
 function isRegistryPolicyGuard(guard: GuardDefinition): boolean {
   return typeof guard.policyCondition === 'function' && guard.policyGuardMode !== 'authorization';
 }
@@ -393,14 +448,17 @@ function createAuthorizationGuard(
           locked: true
         };
       }
+      const failure = classifyAuthorizationFailure(
+        env,
+        operation.name!,
+        decision.code,
+        decision.reason
+      );
       return {
         decision: 'deny',
-        reason: decision.reason,
+        reason: failure.reason,
         policyName: getActivePolicyName(env),
-        rule:
-          decision.code === 'unlisted'
-            ? 'policy.authorizations.unlisted'
-            : 'policy.authorizations.args',
+        rule: failure.rule,
         locked: true
       };
     }

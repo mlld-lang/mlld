@@ -1,5 +1,7 @@
 import { MlldSecurityError } from '@core/errors';
 import type { Environment } from '@interpreter/env/Environment';
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+import { proofStrengthForValue } from '@interpreter/security/proof-claims';
 import type {
   ProjectionExposureEntry,
   ProjectionExposureMatch
@@ -14,6 +16,7 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 export interface ProjectedValueCanonicalizationOptions {
   sessionId?: string | null | undefined;
   matchScope?: 'session' | 'global';
+  collapseEquivalentMatches?: boolean;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -96,22 +99,62 @@ function createAmbiguousProjectedValueError(
 
 function resolveMatchedExposure(
   emittedValue: string,
-  match: ProjectionExposureMatch
+  match: ProjectionExposureMatch,
+  collapseEquivalentMatches: boolean
 ): unknown {
   if (match.status === 'none') {
     return undefined;
   }
   if (match.status === 'ambiguous') {
+    if (collapseEquivalentMatches) {
+      const collapsed = collapseEquivalentProjectedMatches(match.matches);
+      if (collapsed !== undefined) {
+        return collapsed;
+      }
+    }
     throw createAmbiguousProjectedValueError(emittedValue, match.matches);
   }
   return match.matches[0]?.value;
+}
+
+function collapseEquivalentProjectedMatches(
+  matches: readonly ProjectionExposureEntry[]
+): unknown {
+  if (matches.length === 0) {
+    return undefined;
+  }
+
+  let canonicalKey: string | undefined;
+  let bestValue: unknown = matches[0]?.value;
+  let bestStrength = bestValue === undefined ? -1 : proofStrengthForValue(bestValue);
+
+  for (const match of matches) {
+    const nextKey = encodeCanonicalValue(match.value);
+    if (!nextKey) {
+      return undefined;
+    }
+    if (canonicalKey === undefined) {
+      canonicalKey = nextKey;
+    } else if (canonicalKey !== nextKey) {
+      return undefined;
+    }
+
+    const strength = proofStrengthForValue(match.value);
+    if (strength > bestStrength) {
+      bestValue = match.value;
+      bestStrength = strength;
+    }
+  }
+
+  return bestValue;
 }
 
 async function canonicalizeAliases(
   value: unknown,
   env: Environment,
   sessionId: string | undefined,
-  matchScope: 'session' | 'global'
+  matchScope: 'session' | 'global',
+  collapseEquivalentMatches: boolean
 ): Promise<unknown> {
   if (typeof value === 'string') {
     const bareHandle = resolveBareHandleToken(value, env);
@@ -125,14 +168,14 @@ async function canonicalizeAliases(
 
     const preview = resolveMatchedExposure(value, sessionId
       ? env.matchProjectionPreview(sessionId, value)
-      : env.matchAnyProjectionPreview(value));
+      : env.matchAnyProjectionPreview(value), collapseEquivalentMatches);
     if (preview !== undefined) {
       return preview;
     }
 
     const literal = resolveMatchedExposure(value, sessionId
       ? env.matchProjectionLiteral(sessionId, value)
-      : env.matchAnyProjectionLiteral(value));
+      : env.matchAnyProjectionLiteral(value), collapseEquivalentMatches);
     if (literal !== undefined) {
       return literal;
     }
@@ -140,7 +183,7 @@ async function canonicalizeAliases(
   }
 
   if (isVariable(value)) {
-    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId, matchScope);
+    const resolvedValue = await canonicalizeAliases(value.value, env, sessionId, matchScope, collapseEquivalentMatches);
     if (resolvedValue === value.value) {
       return value;
     }
@@ -153,7 +196,7 @@ async function canonicalizeAliases(
     if (value.type !== 'object' && value.type !== 'array') {
       return value;
     }
-    const resolvedData = await canonicalizeAliases(value.data, env, sessionId, matchScope);
+    const resolvedData = await canonicalizeAliases(value.data, env, sessionId, matchScope, collapseEquivalentMatches);
     if (resolvedData === value.data) {
       return value;
     }
@@ -170,13 +213,13 @@ async function canonicalizeAliases(
   }
 
   if (Array.isArray(value)) {
-    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId, matchScope)));
+    return Promise.all(value.map(item => canonicalizeAliases(item, env, sessionId, matchScope, collapseEquivalentMatches)));
   }
 
   if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      result[key] = await canonicalizeAliases(entry, env, sessionId, matchScope);
+      result[key] = await canonicalizeAliases(entry, env, sessionId, matchScope, collapseEquivalentMatches);
     }
     return result;
   }
@@ -193,6 +236,7 @@ export async function canonicalizeProjectedValue(
   const sessionId = matchScope === 'session'
     ? normalizeSessionId(env, options.sessionId)
     : undefined;
+  const collapseEquivalentMatches = options.collapseEquivalentMatches === true;
   const handleResolved = await resolveValueHandles(value, env);
-  return canonicalizeAliases(handleResolved, env, sessionId, matchScope);
+  return canonicalizeAliases(handleResolved, env, sessionId, matchScope, collapseEquivalentMatches);
 }
