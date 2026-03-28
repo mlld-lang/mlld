@@ -63,7 +63,7 @@ describe('policy authorizations', () => {
     expect(normalizePolicyAuthorizations(normalized)).toEqual(normalized);
   });
 
-  it('fails validation when a tool with control args uses true or omits a required control arg', () => {
+  it('fails validation when a tool with effective control args uses true', () => {
     const toolContext = new Map([
       [
         'send_email',
@@ -133,7 +133,7 @@ describe('policy authorizations', () => {
       ]
     ]);
 
-    const validation = validatePolicyAuthorizations(
+    const authorizations = normalizePolicyAuthorizations(
       {
         allow: {
           send_money: {
@@ -143,19 +143,182 @@ describe('policy authorizations', () => {
           }
         }
       },
-      toolContext,
+      undefined,
+      toolContext
+    );
+    if (!authorizations) {
+      throw new Error('Expected normalized authorizations');
+    }
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'send_money',
+        args: {
+          recipient: 'acct-1'
+        },
+        controlArgs: ['recipient', 'amount']
+      })
+    ).toEqual({ decision: 'allow', matched: true });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'send_money',
+        args: {
+          recipient: 'acct-1',
+          amount: 100
+        },
+        controlArgs: ['recipient', 'amount']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      code: 'args_mismatch'
+    });
+  });
+
+  it('strips non-control args when trusted control arg metadata is available', () => {
+    const toolContext = new Map([
+      [
+        'create_calendar_event',
+        {
+          name: 'create_calendar_event',
+          params: new Set(['participants', 'title', 'start_time', 'location']),
+          controlArgs: new Set(['participants']),
+          hasControlArgsMetadata: true
+        }
+      ]
+    ]);
+
+    const authorizations = normalizePolicyAuthorizations(
       {
-        requireKnownTools: true,
-        requireControlArgsMetadata: true
-      }
+        allow: {
+          create_calendar_event: {
+            args: {
+              participants: ['ada@example.com'],
+              title: 'Dinner at New Israeli Restaurant',
+              start_time: '2026-09-26',
+              location: '123 Rue de Rivoli'
+            }
+          }
+        }
+      },
+      undefined,
+      toolContext
     );
 
-    expect(validation.errors.map(issue => issue.code)).toContain(
-      'authorizations-missing-control-arg'
+    expect(authorizations).toEqual({
+      allow: {
+        create_calendar_event: {
+          kind: 'constrained',
+          args: {
+            participants: [{ eq: ['ada@example.com'] }]
+          }
+        }
+      }
+    });
+  });
+
+  it('preserves constrained-empty entries after stripping data args for tools with control args', () => {
+    const toolContext = new Map([
+      [
+        'create_calendar_event',
+        {
+          name: 'create_calendar_event',
+          params: new Set(['participants', 'title', 'start_time']),
+          controlArgs: new Set(['participants']),
+          hasControlArgsMetadata: true
+        }
+      ]
+    ]);
+
+    const authorizations = normalizePolicyAuthorizations(
+      {
+        allow: {
+          create_calendar_event: {
+            args: {
+              title: 'Dinner at New Israeli Restaurant',
+              start_time: '2026-09-26'
+            }
+          }
+        }
+      },
+      undefined,
+      toolContext
     );
-    expect(validation.errors.map(issue => issue.message).join('\n')).toContain(
-      "must constrain control arg 'amount'"
+    if (!authorizations) {
+      throw new Error('Expected normalized authorizations');
+    }
+
+    expect(authorizations).toEqual({
+      allow: {
+        create_calendar_event: {
+          kind: 'constrained',
+          args: {}
+        }
+      }
+    });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'create_calendar_event',
+        args: {
+          participants: []
+        },
+        controlArgs: ['participants']
+      })
+    ).toEqual({ decision: 'allow', matched: true });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'create_calendar_event',
+        args: {
+          participants: ['ada@example.com']
+        },
+        controlArgs: ['participants']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      code: 'args_mismatch'
+    });
+  });
+
+  it('normalizes stripped-all entries to true when metadata declares no control args', () => {
+    const toolContext = new Map([
+      [
+        'create_file',
+        {
+          name: 'create_file',
+          params: new Set(['title', 'body']),
+          controlArgs: new Set<string>(),
+          hasControlArgsMetadata: true
+        }
+      ]
+    ]);
+
+    const authorizations = normalizePolicyAuthorizations(
+      {
+        allow: {
+          create_file: {
+            args: {
+              title: 'Quarterly update'
+            }
+          }
+        }
+      },
+      undefined,
+      toolContext
     );
+
+    expect(authorizations).toEqual({
+      allow: {
+        create_file: {
+          kind: 'unconstrained'
+        }
+      }
+    });
   });
 
   it('allows listed operations, enforces empty omitted control args, and denies unlisted tools', () => {

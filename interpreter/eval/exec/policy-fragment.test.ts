@@ -16,6 +16,10 @@ function createEnv(): Environment {
 describe('resolveInvocationPolicyFragment', () => {
   it('resolves handle-backed authorization constraints to live values before normalization', async () => {
     const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
     const approvedRecipient = wrapStructured('acct-1', 'text', 'acct-1', {
       security: makeSecurityDescriptor({
         attestations: ['known']
@@ -61,6 +65,10 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('resolves handle-backed constraints issued from fact-bearing live values', async () => {
     const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
     const email = wrapStructured('ada@example.com', 'text', 'ada@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
@@ -108,6 +116,10 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('resolves arrays of handle-backed authorization constraints to live values', async () => {
     const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
     const recipientA = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
       security: makeSecurityDescriptor({
         attestations: ['known']
@@ -164,6 +176,10 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('compiles attestation proof for arrays of handle-backed constraints coming from policy variables', async () => {
     const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
+      env
+    );
     const recipientA = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
       security: makeSecurityDescriptor({
         attestations: ['known']
@@ -226,6 +242,10 @@ describe('resolveInvocationPolicyFragment', () => {
 
   it('resolves bare handle token authorization constraints to live values before normalization', async () => {
     const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
     const liveValue = wrapStructured('ada@example.com', 'text', 'ada@example.com', {
       security: makeSecurityDescriptor({
         labels: ['known']
@@ -259,6 +279,158 @@ describe('resolveInvocationPolicyFragment', () => {
     }
     expect(recipientConstraint.eq).toBe(liveValue);
     expect(recipientConstraint.attestations).toEqual(['known']);
+  });
+
+  it('strips non-control args from with { policy } authorizations using executable controlArgs metadata', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @createCalendarEvent(participants, title, start_time) = `sent` with { controlArgs: ["participants"] }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            createCalendarEvent: {
+              args: {
+                participants: ['ada@example.com'],
+                title: 'Dinner at New Israeli Restaurant',
+                start_time: '2026-09-26'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations).toEqual({
+      allow: {
+        createCalendarEvent: {
+          kind: 'constrained',
+          args: {
+            participants: [{ eq: ['ada@example.com'] }]
+          }
+        }
+      }
+    });
+  });
+
+  it('keeps constrained-empty entries when data args strip away for tools with control args', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @createCalendarEvent(participants, title, start_time) = `sent` with { controlArgs: ["participants"] }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            createCalendarEvent: {
+              args: {
+                title: 'Dinner at New Israeli Restaurant',
+                start_time: '2026-09-26'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations).toEqual({
+      allow: {
+        createCalendarEvent: {
+          kind: 'constrained',
+          args: {}
+        }
+      }
+    });
+  });
+
+  it('strips non-control args using scoped tool collection metadata', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent`')[0] as any,
+      env
+    );
+    env.setScopedEnvironmentConfig({
+      tools: {
+        send_email: {
+          mlld: 'send_email',
+          controlArgs: ['recipient']
+        }
+      }
+    } as any);
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            send_email: {
+              args: {
+                recipient: 'ada@example.com',
+                subject: 'hello',
+                body: 'details'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations).toEqual({
+      allow: {
+        send_email: {
+          kind: 'constrained',
+          args: {
+            recipient: [{ eq: 'ada@example.com' }]
+          }
+        }
+      }
+    });
+  });
+
+  it('normalizes stripped-all entries to true when scoped metadata declares no control args', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe tool:w @create_file(title, body) = `sent`')[0] as any,
+      env
+    );
+    env.setScopedEnvironmentConfig({
+      tools: {
+        create_file: {
+          mlld: 'create_file',
+          controlArgs: []
+        }
+      }
+    } as any);
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            create_file: {
+              args: {
+                title: 'Quarterly update'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations).toEqual({
+      allow: {
+        create_file: {
+          kind: 'unconstrained'
+        }
+      }
+    });
   });
 
   it('materializes emitted bare literal authorization constraints from prior projected values', async () => {

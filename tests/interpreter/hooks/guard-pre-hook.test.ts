@@ -1052,6 +1052,38 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
+  it('ignores planner-pinned data args when matching with { policy } authorizations', async () => {
+    const env = createEnv();
+    const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact.email']
+      })
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-session',
+      value: approvedRecipient,
+      kind: 'bare',
+      field: 'recipient',
+      record: 'contact',
+      emittedLiteral: 'mark@example.com',
+      issuedAt: Date.now()
+    });
+
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "mark@example.com", amount: 5 } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("mark@example.com", 10) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('sent:10');
+  });
+
   it('trusts non-email fact proofs on declared send control args in with { policy } authorizations', async () => {
     const env = createEnv();
     env.setVariable(

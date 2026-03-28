@@ -1,4 +1,5 @@
 import {
+  normalizePolicyAuthorizations,
   validateNormalizedPolicyAuthorizations,
   validatePolicyAuthorizations,
   type PolicyAuthorizationValidationResult
@@ -16,8 +17,10 @@ import {
 } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
-import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
-import { resolveNamedOperationMetadata } from './tool-metadata';
+import {
+  buildRuntimeAuthorizationToolContext,
+  resolveNamedOperationMetadata
+} from './tool-metadata';
 import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -73,6 +76,36 @@ function collectPolicyAuthorizationCanonicalizationArgs(options: {
   });
 
   return Object.keys(resolution.requirementsByArg);
+}
+
+function stripNonControlArgsFromRawPolicyAuthorizations(
+  candidate: PolicyConfig,
+  toolContext: ReadonlyMap<string, { controlArgs: Set<string>; hasControlArgsMetadata: boolean }>
+): void {
+  const allow = candidate.authorizations?.allow;
+  if (!isPlainObject(allow)) {
+    return;
+  }
+
+  for (const [toolName, entry] of Object.entries(allow)) {
+    const tool = toolContext.get(toolName);
+    if (!tool?.hasControlArgsMetadata || entry === true || !isPlainObject(entry)) {
+      continue;
+    }
+
+    const args = isPlainObject(entry.args) ? (entry.args as Record<string, unknown>) : undefined;
+    if (!args) {
+      continue;
+    }
+
+    const strippedArgs: Record<string, unknown> = {};
+    for (const [argName, argValue] of Object.entries(args)) {
+      if (tool.controlArgs.has(argName)) {
+        strippedArgs[argName] = argValue;
+      }
+    }
+    entry.args = strippedArgs;
+  }
 }
 
 function isAuthorizationProofLabel(label: string): boolean {
@@ -423,23 +456,29 @@ async function canonicalizePolicyAuthorizationConstraints(
   }
 }
 
-function assertPolicyAuthorizationsShapeValid(candidate: PolicyConfig): void {
+function assertPolicyAuthorizationsShapeValid(
+  candidate: PolicyConfig,
+  toolContext?: ReturnType<typeof buildRuntimeAuthorizationToolContext>
+): void {
   if (candidate.authorizations === undefined) {
     return;
   }
 
-  const validation = validatePolicyAuthorizations(candidate.authorizations);
+  const validation = validatePolicyAuthorizations(candidate.authorizations, toolContext);
   if (validation.errors.length === 0) {
     return;
   }
 
-  throw new MlldSecurityError('with { policy } includes invalid policy.authorizations', {
-    code: 'POLICY_AUTHORIZATIONS_INVALID',
-    details: {
-      errors: validation.errors,
-      warnings: validation.warnings
+  throw new MlldSecurityError(
+    validation.errors[0]?.message ?? 'with { policy } includes invalid policy.authorizations',
+    {
+      code: 'POLICY_AUTHORIZATIONS_INVALID',
+      details: {
+        errors: validation.errors,
+        warnings: validation.warnings
+      }
     }
-  });
+  );
 }
 
 export async function resolveInvocationPolicyFragment(
@@ -491,10 +530,20 @@ export async function resolveInvocationPolicyFragment(
     });
   }
 
-  assertPolicyAuthorizationsShapeValid(candidate);
+  const toolContext = buildRuntimeAuthorizationToolContext(env);
+  assertPolicyAuthorizationsShapeValid(candidate, toolContext);
+  stripNonControlArgsFromRawPolicyAuthorizations(candidate, toolContext);
   await canonicalizePolicyAuthorizationConstraints(candidate, env);
 
   const normalized = normalizePolicyConfig(candidate);
+  const normalizedAuthorizations = normalizePolicyAuthorizations(
+    candidate.authorizations,
+    undefined,
+    toolContext
+  );
+  if (normalizedAuthorizations) {
+    normalized.authorizations = normalizedAuthorizations;
+  }
   await compileAuthorizationAttestations(rawResolvedValue, normalized, env);
   return normalized;
 }
@@ -529,6 +578,14 @@ export function validateRuntimePolicyAuthorizations(
   }
 
   const toolContext = buildRuntimeAuthorizationToolContext(env);
+  const normalizedAuthorizations = normalizePolicyAuthorizations(
+    policy.authorizations,
+    undefined,
+    toolContext
+  );
+  if (normalizedAuthorizations) {
+    policy.authorizations = normalizedAuthorizations;
+  }
   return validateNormalizedPolicyAuthorizations(policy.authorizations, toolContext, {
     requireKnownTools: true,
     requireControlArgsMetadata: true

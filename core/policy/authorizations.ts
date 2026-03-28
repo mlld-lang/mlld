@@ -100,6 +100,32 @@ function cloneAuthorizationEntry(entry: AuthorizationEntry): AuthorizationEntry 
   return { kind: 'constrained', args };
 }
 
+function stripEntryToDeclaredControlArgs(
+  entry: AuthorizationEntry,
+  tool?: AuthorizationToolContext
+): AuthorizationEntry {
+  const cloned = cloneAuthorizationEntry(entry);
+  if (!tool?.hasControlArgsMetadata || cloned.kind === 'unconstrained') {
+    return cloned;
+  }
+
+  const args: Record<string, AuthorizationConstraintClause[]> = {};
+  for (const [argName, clauses] of Object.entries(cloned.args)) {
+    if (!tool.controlArgs.has(argName)) {
+      continue;
+    }
+    args[argName] = clauses.map(cloneConstraintClause);
+  }
+
+  if (Object.keys(args).length === 0) {
+    return tool.controlArgs.size === 0
+      ? { kind: 'unconstrained' }
+      : { kind: 'constrained', args: {} };
+  }
+
+  return { kind: 'constrained', args };
+}
+
 function cloneAuthorizations(authorizations?: PolicyAuthorizations): PolicyAuthorizations | undefined {
   if (!authorizations) {
     return undefined;
@@ -266,10 +292,11 @@ function normalizeEntry(
   toolName: string,
   raw: unknown,
   errors: PolicyAuthorizationIssue[],
-  warnings: PolicyAuthorizationIssue[]
+  warnings: PolicyAuthorizationIssue[],
+  tool?: AuthorizationToolContext
 ): AuthorizationEntry | undefined {
   if (isNormalizedAuthorizationEntry(raw)) {
-    return cloneAuthorizationEntry(raw);
+    return stripEntryToDeclaredControlArgs(raw, tool);
   }
 
   if (raw === true) {
@@ -334,8 +361,14 @@ function normalizeEntry(
     return undefined;
   }
 
-  const argKeys = Object.keys(rawArgs);
-  if (argKeys.length === 0) {
+  const rawArgEntries = Object.entries(rawArgs);
+  if (rawArgEntries.length === 0) {
+    if (tool?.hasControlArgsMetadata) {
+      return tool.controlArgs.size === 0
+        ? { kind: 'unconstrained' }
+        : { kind: 'constrained', args: {} };
+    }
+
     addIssue(warnings, {
       code: 'authorizations-empty-entry',
       severity: 'warning',
@@ -346,8 +379,18 @@ function normalizeEntry(
     return { kind: 'unconstrained' };
   }
 
+  const argEntries =
+    tool?.hasControlArgsMetadata
+      ? rawArgEntries.filter(([argName]) => tool.controlArgs.has(argName))
+      : rawArgEntries;
+  if (argEntries.length === 0) {
+    return tool?.hasControlArgsMetadata && tool.controlArgs.size > 0
+      ? { kind: 'constrained', args: {} }
+      : { kind: 'unconstrained' };
+  }
+
   const args: Record<string, AuthorizationConstraintClause[]> = {};
-  for (const [argName, rawConstraint] of Object.entries(rawArgs)) {
+  for (const [argName, rawConstraint] of argEntries) {
     const clause = normalizeConstraint(toolName, argName, rawConstraint, errors);
     if (!clause) {
       continue;
@@ -355,7 +398,7 @@ function normalizeEntry(
     args[argName] = [clause];
   }
 
-  return { kind: 'constrained', args };
+  return stripEntryToDeclaredControlArgs({ kind: 'constrained', args }, tool);
 }
 
 export function normalizePolicyAuthorizations(
@@ -363,7 +406,8 @@ export function normalizePolicyAuthorizations(
   issues?: {
     errors?: PolicyAuthorizationIssue[];
     warnings?: PolicyAuthorizationIssue[];
-  }
+  },
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>
 ): PolicyAuthorizations | undefined {
   if (raw === undefined || raw === null) {
     return undefined;
@@ -406,7 +450,13 @@ export function normalizePolicyAuthorizations(
 
   const allow: Record<string, AuthorizationEntry> = {};
   for (const [toolName, rawEntry] of Object.entries(rawAllow)) {
-    const normalizedEntry = normalizeEntry(toolName, rawEntry, errors, warnings);
+    const normalizedEntry = normalizeEntry(
+      toolName,
+      rawEntry,
+      errors,
+      warnings,
+      toolContext?.get(toolName)
+    );
     if (normalizedEntry) {
       allow[toolName] = normalizedEntry;
     }
@@ -467,7 +517,7 @@ export function validatePolicyAuthorizations(
 ): PolicyAuthorizationValidationResult {
   const errors: PolicyAuthorizationIssue[] = [];
   const warnings: PolicyAuthorizationIssue[] = [];
-  const normalized = normalizePolicyAuthorizations(raw, { errors, warnings });
+  const normalized = normalizePolicyAuthorizations(raw, { errors, warnings }, toolContext);
 
   if (!normalized) {
     return { normalized, errors, warnings };
@@ -501,7 +551,7 @@ function validateNormalizedPolicyAuthorizationsInto(
   for (const [toolName, entry] of Object.entries(normalized.allow)) {
     const tool = toolContext?.get(toolName);
     if (!tool) {
-      if (requireKnownTools || toolContext?.size) {
+      if (requireKnownTools) {
         addIssue(errors, {
           code: 'authorizations-unknown-tool',
           severity: 'error',
@@ -549,19 +599,6 @@ function validateNormalizedPolicyAuthorizationsInto(
         });
       }
       continue;
-    }
-
-    for (const controlArg of effectiveControlArgs) {
-      if (!Object.prototype.hasOwnProperty.call(entry.args, controlArg)) {
-        addIssue(errors, {
-          code: 'authorizations-missing-control-arg',
-          severity: 'error',
-          tool: toolName,
-          arg: controlArg,
-          path: `authorizations.allow.${toolName}.args`,
-          message: `Tool '${toolName}' must constrain control arg '${controlArg}' in policy.authorizations`
-        });
-      }
     }
   }
 }
