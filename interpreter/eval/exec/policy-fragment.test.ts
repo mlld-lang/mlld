@@ -367,7 +367,7 @@ describe('resolveInvocationPolicyFragment', () => {
     expect(recipientConstraint.eq).not.toBe('m***@example.com');
   });
 
-  it('fails closed on ambiguous projected previews in authorization constraints', async () => {
+  it('skips ambiguous projected preview authorization entries during policy compilation', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
@@ -399,21 +399,69 @@ describe('resolveInvocationPolicyFragment', () => {
       issuedAt: 2
     });
 
-    await expect(
-      resolveInvocationPolicyFragment(
-        {
-          authorizations: {
-            allow: {
-              sendEmail: {
-                args: {
-                  recipient: 's***@company.com'
-                }
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: 's***@company.com'
               }
             }
           }
-        },
-        env
-      )
-    ).rejects.toThrow(/handle wrapper from the tool result/i);
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations?.allow.sendEmail).toBeUndefined();
+  });
+
+  it('skips ambiguous literal authorization entries during policy compilation', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
+
+    env.recordProjectionExposure({
+      sessionId: 'planner-a',
+      value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'bare',
+      emittedLiteral: 'mark.davies@hotmail.com',
+      issuedAt: 1
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-b',
+      value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
+        security: makeSecurityDescriptor({
+          labels: ['fact:@contact.email']
+        })
+      }),
+      kind: 'bare',
+      emittedLiteral: 'mark.davies@hotmail.com',
+      issuedAt: 2
+    });
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: 'mark.davies@hotmail.com'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    expect(policy?.authorizations?.allow.sendEmail).toBeUndefined();
   });
 });

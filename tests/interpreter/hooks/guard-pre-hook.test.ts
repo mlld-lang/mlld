@@ -1306,6 +1306,53 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
   });
 
+  it('denies cleanly when an ambiguous literal authorization entry is skipped during with { policy } compilation', async () => {
+    const env = createEnv();
+    const approvedRecipient = wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
+      security: makeSecurityDescriptor({
+        labels: ['fact:@contact.email']
+      })
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-a',
+      value: approvedRecipient,
+      kind: 'bare',
+      field: 'recipient',
+      record: 'contact',
+      emittedLiteral: 'mark.davies@hotmail.com',
+      issuedAt: 1
+    });
+    env.recordProjectionExposure({
+      sessionId: 'planner-b',
+      value: approvedRecipient,
+      kind: 'bare',
+      field: 'recipient',
+      record: 'contact',
+      emittedLiteral: 'mark.davies@hotmail.com',
+      issuedAt: 2
+    });
+
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "mark.davies@hotmail.com" } } } } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney("mark.davies@hotmail.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    try {
+      await evaluateDirective(directive, env);
+      throw new Error('Expected sendMoney to be denied');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/operation not authorized by policy\.authorizations/i);
+      expect(message).not.toMatch(/ambiguous projected value/i);
+      expect(message).not.toMatch(/handle wrapper from the tool result/i);
+    }
+  });
+
   it('activates no-send-to-unknown for with { policy } without authorizations', async () => {
     const env = createEnv();
     await evaluateDirective(

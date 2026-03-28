@@ -457,7 +457,7 @@ export function mergePolicyAuthorizations(
 }
 
 export function hasToolWriteAuthorizationPolicy(authorizations?: PolicyAuthorizations): boolean {
-  return Boolean(authorizations && Object.keys(authorizations.allow).length > 0);
+  return Boolean(authorizations);
 }
 
 export function validatePolicyAuthorizations(

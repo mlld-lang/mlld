@@ -24,6 +24,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isAmbiguousProjectedValueError(error: unknown): boolean {
+  return error instanceof MlldSecurityError && error.code === 'AMBIGUOUS_PROJECTED_VALUE';
+}
+
 function containsBareHandleToken(value: unknown): boolean {
   if (typeof value === 'string') {
     return /^h_[a-z0-9]+$/.test(value.trim());
@@ -300,70 +304,78 @@ async function compileAuthorizationAttestations(
     if (entry.kind !== 'constrained') {
       continue;
     }
-    const rawEntry = rawAllow?.[toolName];
-    const rawArgsObject =
-      isPlainObject(rawEntry) && isPlainObject(rawEntry.args)
-        ? (rawEntry.args as Record<string, unknown>)
-        : undefined;
-    const rawArgsNode = getAstObjectEntryValue(
-      getAstObjectEntryValue(
-        getAstObjectEntryValue(rawAuthorizationsNode, 'allow'),
-        toolName
-      ),
-      'args'
-    );
-    if (!rawArgsObject && !rawArgsNode) {
-      continue;
-    }
-
-    for (const [argName, clauses] of Object.entries(entry.args)) {
-      const rawConstraint = rawArgsObject?.[argName] ?? getAstObjectEntryValue(rawArgsNode, argName);
-      if (rawConstraint === undefined) {
+    try {
+      const rawEntry = rawAllow?.[toolName];
+      const rawArgsObject =
+        isPlainObject(rawEntry) && isPlainObject(rawEntry.args)
+          ? (rawEntry.args as Record<string, unknown>)
+          : undefined;
+      const rawArgsNode = getAstObjectEntryValue(
+        getAstObjectEntryValue(
+          getAstObjectEntryValue(rawAuthorizationsNode, 'allow'),
+          toolName
+        ),
+        'args'
+      );
+      if (!rawArgsObject && !rawArgsNode) {
         continue;
       }
 
-      entry.args[argName] = await Promise.all(clauses.map(async clause => {
-        if ('eq' in clause) {
-          let compiledAttestations = await extractConstraintAttestations(
-            isPlainObject(rawConstraint) && Object.prototype.hasOwnProperty.call(rawConstraint, 'eq')
-              ? rawConstraint.eq
-              : getAstObjectEntryValue(rawConstraint, 'eq') ?? rawConstraint,
-            env
-          );
-          if (compiledAttestations.length === 0) {
-            compiledAttestations = await extractConstraintAttestations(clause.eq, env);
+      for (const [argName, clauses] of Object.entries(entry.args)) {
+        const rawConstraint = rawArgsObject?.[argName] ?? getAstObjectEntryValue(rawArgsNode, argName);
+        if (rawConstraint === undefined) {
+          continue;
+        }
+
+        entry.args[argName] = await Promise.all(clauses.map(async clause => {
+          if ('eq' in clause) {
+            let compiledAttestations = await extractConstraintAttestations(
+              isPlainObject(rawConstraint) && Object.prototype.hasOwnProperty.call(rawConstraint, 'eq')
+                ? rawConstraint.eq
+                : getAstObjectEntryValue(rawConstraint, 'eq') ?? rawConstraint,
+              env
+            );
+            if (compiledAttestations.length === 0) {
+              compiledAttestations = await extractConstraintAttestations(clause.eq, env);
+            }
+            if (compiledAttestations.length === 0) {
+              return clause;
+            }
+            return {
+              ...clause,
+              attestations: compiledAttestations
+            };
           }
-          if (compiledAttestations.length === 0) {
+
+          const rawOneOfCandidates =
+            isPlainObject(rawConstraint) && Array.isArray(rawConstraint.oneOf)
+              ? rawConstraint.oneOf
+              : isAstArrayNode(getAstObjectEntryValue(rawConstraint, 'oneOf'))
+                ? (getAstObjectEntryValue(rawConstraint, 'oneOf') as { items: unknown[] }).items
+                : clause.oneOf;
+          let oneOfAttestations = await Promise.all(
+            rawOneOfCandidates.map(candidate => extractConstraintAttestations(candidate, env))
+          );
+          if (!oneOfAttestations.some(entry => entry.length > 0)) {
+            oneOfAttestations = await Promise.all(
+              clause.oneOf.map(candidate => extractConstraintAttestations(candidate, env))
+            );
+          }
+          if (!oneOfAttestations.some(entry => entry.length > 0)) {
             return clause;
           }
           return {
             ...clause,
-            attestations: compiledAttestations
+            oneOfAttestations
           };
-        }
-
-        const rawOneOfCandidates =
-          isPlainObject(rawConstraint) && Array.isArray(rawConstraint.oneOf)
-            ? rawConstraint.oneOf
-            : isAstArrayNode(getAstObjectEntryValue(rawConstraint, 'oneOf'))
-              ? (getAstObjectEntryValue(rawConstraint, 'oneOf') as { items: unknown[] }).items
-              : clause.oneOf;
-        let oneOfAttestations = await Promise.all(
-          rawOneOfCandidates.map(candidate => extractConstraintAttestations(candidate, env))
-        );
-        if (!oneOfAttestations.some(entry => entry.length > 0)) {
-          oneOfAttestations = await Promise.all(
-            clause.oneOf.map(candidate => extractConstraintAttestations(candidate, env))
-          );
-        }
-        if (!oneOfAttestations.some(entry => entry.length > 0)) {
-          return clause;
-        }
-        return {
-          ...clause,
-          oneOfAttestations
-        };
-      }));
+        }));
+      }
+    } catch (error) {
+      if (isAmbiguousProjectedValueError(error)) {
+        delete normalizedAuthorizations.allow[toolName];
+        continue;
+      }
+      throw error;
     }
   }
 }
@@ -394,9 +406,19 @@ async function canonicalizePolicyAuthorizationConstraints(
       if (!shouldCanonicalize) {
         continue;
       }
-      entry.args[argName] = await canonicalizeProjectedValue(argValue, env, {
-        matchScope: 'global'
-      });
+      try {
+        entry.args[argName] = await canonicalizeProjectedValue(argValue, env, {
+          matchScope: 'global'
+        });
+      } catch (error) {
+        if (isAmbiguousProjectedValueError(error)) {
+          // Fail closed on the specific authorization entry instead of aborting
+          // the entire invocation. The later authorization check will deny it.
+          delete allow[toolName];
+          break;
+        }
+        throw error;
+      }
     }
   }
 }
