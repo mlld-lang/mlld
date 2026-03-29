@@ -7,11 +7,13 @@ category: config
 parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto]
-related-code: [core/policy/authorizations.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/eval/var/tool-scope.ts, interpreter/hooks/guard-pre-hook.ts]
-updated: 2026-03-24
+related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
+updated: 2026-03-29
 ---
 
-The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. In the current phase it applies only to `tool:w`. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
+The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
+
+Control arg values in authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, hand-built `with { policy }` hard-fails.
 
 ```mlld
 policy @base = {
@@ -202,16 +204,94 @@ Authorization denial reasons distinguish the cause:
 
 When an array control arg has one ambiguous element, only that element is dropped — the rest of the array and the tool entry are preserved. Ambiguous matches that resolve to the same canonical value are treated as equivalent and kept.
 
-## Planner Use
+## Deny list
 
-The primary use case is planner-authorized agent execution. A planning LLM produces a JSON authorization fragment. The step script parses it and injects it via `with { policy }`:
+`authorizations.deny` prevents specific tools from ever being planner-authorized:
+
+```mlld
+policy @base = {
+  defaults: { rules: ["no-send-to-unknown", "no-untrusted-destructive"] },
+  authorizations: {
+    deny: ["update_password", "update_user_info"]
+  }
+}
+```
+
+Denied tools are rejected in both `@policy.build` and `with { policy }` compilation. Authorizations open narrow windows in policy — `deny` prevents certain windows from ever opening.
+
+## Policy builder
+
+`@policy.build(@intent, @tools)` validates planner intent against tool metadata and active policy:
+
+```mlld
+var @plannerResult = @planner(@task) | @parse
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
+var @result = @worker(@task) with { policy: @auth.policy }
+```
+
+The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues }`:
+
+- `policy` — valid auth fragment, ready for `with { policy }`
+- `valid` — boolean
+- `issues` — array of `{ tool, reason, arg?, element? }` describing what was dropped
+
+What the builder checks:
+
+- Denied tools → dropped (`denied_by_policy`)
+- Unknown tools → dropped (`unknown_tool`)
+- `true` for tools with `controlArgs` → dropped (`requires_control_args`)
+- Proofless control arg values → tool dropped (`proofless_control_arg`)
+- Non-control args → silently stripped
+
+The builder accepts flat intent (simpler for LLMs) or nested `authorizations.allow` shape:
+
+```json
+{ "send_email": { "recipients": "h_2l5r36" }, "create_file": true }
+```
+
+For array control args, proof is checked per element. Proofless elements are dropped individually. The issues report identifies which element lost proof.
+
+### Planner retry via guard
+
+Use `@policy.validate` in a guard to retry the planner when its auth has issues:
+
+```mlld
+exe @plan(task) = @claude(@task, { tools: @allTools }) with { display: "planner" }
+
+guard after @validateAuth for op:named:plan = when [
+  @policy.validate(@output, @writeTools).valid == false && @mx.guard.try < 2
+    => retry "Fix authorization: @policy.validate(@output, @writeTools).issues"
+  * => allow
+]
+```
+
+### User-provided values
+
+The planner can vouch for values from the user's task with `known` attestation:
+
+```json
+{
+  "send_email": {
+    "recipients": {
+      "eq": ["john.doe@clientcorp.com"],
+      "attestations": ["known"]
+    }
+  }
+}
+```
+
+This satisfies the proof requirement. Handles, fact labels, and `known` attestation all count as proof.
+
+## Direct planner use
+
+`with { policy }` still works for hand-built auth. The same proof rules apply — proofless control args are hard-rejected at compilation:
 
 ```mlld
 var @plannerOutput = @planner(@task) | @parse
 var @result = @agent(@prompt) with { policy: @plannerOutput }
 ```
 
-The planner's output should contain only `authorizations` — not `defaults`, `rules`, `locked`, `labels`, `operations`, or other policy sections. Those are developer-controlled. The runtime treats `with { policy }` as a generic policy merge path, so the host is responsible for restricting planner output before injection.
+The planner's output should contain only `authorizations` — not `defaults`, `rules`, `locked`, `labels`, `operations`, or other policy sections. Those are developer-controlled.
 
 ## Validation
 

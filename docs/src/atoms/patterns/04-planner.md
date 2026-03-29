@@ -28,7 +28,7 @@ The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can'
 record @contact = {
   facts: [email: string, name: string],
   data: [notes: string?],
-  display: [name, { mask: "email" }]
+  display: [name, { ref: "email" }]
 }
 
 exe @searchContacts(query) = run cmd {
@@ -40,61 +40,61 @@ exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
 } with { controlArgs: ["recipient"] }
 ```
 
-The `controlArgs` declaration marks `recipient` as a security-relevant parameter that must be constrained in any authorization.
+The `controlArgs` declaration marks `recipient` as a security-relevant parameter. The `ref` on `email` means the LLM sees the value AND gets a handle — it can read the email for reasoning and reference it by handle for tool calls.
 
 ### Planner phase
 
-The planner looks up contacts and receives a projected result with embedded handles:
+The planner looks up contacts and receives a projected result with `ref` handles:
 
 ```json
 {
   "name": "Mark Davies",
-  "email": {
-    "preview": "m***@example.com",
-    "handle": { "handle": "h_a7x9k2" }
-  }
+  "email": { "value": "mark@example.com", "handle": "h_a7x9k2" }
 }
 ```
 
-The planner copies the inner handle wrapper into a JSON authorization bundle:
+The planner produces a simple authorization intent:
 
 ```json
-{
-  "authorizations": {
-    "allow": {
-      "sendEmail": {
-        "args": {
-          "recipient": { "handle": "h_a7x9k2" }
-        }
-      }
-    }
-  }
-}
+{ "sendEmail": { "recipient": "h_a7x9k2" } }
 ```
 
-The outer `{ preview, handle }` object is display-only. The planner copies the inner single-key wrapper. The handle `h_a7x9k2` refers to the live contact value with `fact:@contact.email` still attached. The planner pins the exact recipient without copying the raw email address.
+The orchestrator validates it through the policy builder:
 
-`@fyi.facts(...)` remains available for explicit cross-root discovery, but it is no longer the primary planner workflow.
+```mlld
+var @plannerResult = @plan(@task) | @parse
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
+var @result = @worker(@task) with { policy: @auth.policy }
+```
+
+`@policy.build` checks the intent against tool metadata and the active policy:
+- Denied tools are dropped
+- Proofless control arg values are dropped (the planner must use handles or `known`-attested values)
+- Data args are stripped
+- The result is a valid auth fragment ready for `with { policy }`
+
+If the builder drops tools, a guard on the planner exe can retry with the issues as feedback (same pattern as schema validation).
 
 ### Worker phase
 
-The worker executes under the combined base policy plus planner authorization:
+The worker executes under the combined base policy plus validated authorization:
 
 ```mlld
 var @base = {
   defaults: {
     rules: ["no-send-to-unknown", "no-untrusted-destructive"]
   },
-  operations: { "exfil:send": ["exfil:send"] }
+  operations: { "exfil:send": ["exfil:send"] },
+  authorizations: {
+    deny: ["update_password"]
+  }
 }
-
-var @result = @worker(@task) with { policy: @plannerAuth }
 ```
 
 At dispatch time:
 
-1. The runtime canonicalizes the authorized recipient back to the live value. The strongest path is `{ "handle": "h_a7x9k2" }`, but the exact emitted preview or bare visible value also resolves when the match is unique.
-2. The authorization guard checks: is `sendEmail` allowed? Is `recipient` the pinned value? Yes
+1. The runtime resolves `h_a7x9k2` to the live contact value with `fact:@contact.email`
+2. The authorization guard checks: is `sendEmail` allowed with this recipient? Yes
 3. The inherited positive check runs: does `recipient` carry fact proof or `known`? Yes
 4. `no-untrusted-destructive` scopes to control args — `recipient` has `untrusted` cleared by trust refinement. Tainted data args (subject, body) are not checked.
 5. The call proceeds
@@ -146,13 +146,54 @@ The runtime does not rewrite arbitrary payloads or tool schemas. Tolerant bounda
 - Tools authorized with `true` (unconstrained) when they have declared control args
 - Missing control-arg metadata on `tool:w` executables
 
+## Worker returns with handle field type
+
+Workers that pass security-critical values across phases should return handle-bearing structures. The `handle` field type enforces this:
+
+```mlld
+record @reader_result = {
+  facts: [channel: handle],
+  data: [needs_reply: boolean, summary: string]
+}
+
+exe @readWorker(task) = @claude(@task, @tools) => reader_result
+```
+
+The `handle` type requires a resolvable handle — plain strings fail validation. If the LLM returns `"general"` instead of copying the handle from the tool result, `=> record` validation fails and a guard can retry.
+
+## Named display modes
+
+Different agents need different visibility. Use named modes and box config:
+
+```mlld
+record @email_msg = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string, needs_reply: boolean],
+  display: {
+    worker: [{ mask: "from" }, subject, body],
+    planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
+  }
+}
+
+box @worker with { tools: [@readEmail], display: "worker" } [...]
+box @planner with { tools: [@searchContacts], display: "planner" } [...]
+
+>> Or per call-site without boxes:
+var @readResult = @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+var @plan = @claude(@prompt, { tools: @plannerTools }) with { display: "planner" }
+```
+
+Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
+
+Worker sees subject and body (its job), from is masked. Planner sees from and message_id as ref, sees needs_reply, doesn't see subject or body (injection surfaces omitted).
+
 ## Full example
 
 ```mlld
 record @contact = {
   facts: [email: string, name: string],
   data: [notes: string?],
-  display: [name, { mask: "email" }],
+  display: [name, { ref: "email" }],
   when [
     internal => :internal
     * => :external
@@ -174,17 +215,14 @@ var @base = {
   operations: { "exfil:send": ["exfil:send"] }
 }
 
->> Step 1: Planner calls @searchContacts
->> The result already carries a projected email handle on @result.email.handle
->> The planner copies that handle into the authorization bundle
-
->> Step 2: Orchestrator wires planner output into worker policy
+>> Step 1: Planner calls @searchContacts, gets ref handle on email
+>> Step 2: Planner copies handle into authorization
 var @plannerAuth = {
   authorizations: {
     allow: {
       sendEmail: {
         args: {
-          recipient: { handle: "h_a7x9k2" }
+          recipient: "h_a7x9k2"
         }
       }
     }
@@ -195,4 +233,4 @@ var @plannerAuth = {
 show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @plannerAuth }
 ```
 
-For explicit cross-root discovery, a planner can still use `@fyi.facts(...)` as a compatibility tool. See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.
+See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.

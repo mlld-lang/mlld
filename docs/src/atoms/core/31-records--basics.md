@@ -29,7 +29,7 @@ record @contact = {
 
 `facts` fields get `fact:` labels -- the source is authoritative for these values. `data` fields don't -- they're content that could contain anything. `?` marks optional fields.
 
-Supported field types: `string`, `number`, `boolean`, `array`. Array fact fields carry per-element proof -- each element gets its own `fact:` label and display projection.
+Supported field types: `string`, `number`, `boolean`, `array`, `handle`. Array fact fields carry per-element proof. The `handle` type requires a resolvable handle -- plain strings fail validation. Use `handle` for worker return fields that carry cross-phase identity.
 
 **Connect to an exe with `=> record`:**
 
@@ -63,46 +63,70 @@ This matters for security rules. A fact field from an `exe untrusted ... => reco
 
 ## Display projections
 
-Records can also define how fact fields cross an LLM or MCP boundary:
+`display` controls how fields cross the LLM boundary. Five visibility modes:
+
+| Mode | Syntax | LLM sees | Handle? |
+|---|---|---|---|
+| **Bare** | `name` | Full value | No |
+| **Ref** | `{ ref: "name" }` | Full value + handle | Yes |
+| **Masked** | `{ mask: "email" }` | Preview + handle | Yes |
+| **Handle** | `{ handle: "id" }` | Handle only | Yes |
+| **Omitted** | (not listed) | Nothing | No |
 
 ```mlld
 record @contact = {
   facts: [email: string, name: string, phone: string?],
   data: [notes: string?],
-  display: [name, { mask: "email" }]
+  display: [name, { ref: "email" }]
 }
 ```
 
-This does **not** change ordinary runtime behavior:
-
-- `show @contact.email` still prints the actual email
-- interpolation still sees the live value
-- field-level proof stays attached to the live structured value
-
-It only changes the projected form used at the LLM boundary. With the definition above, a projected tool result looks like:
+Projected tool result:
 
 ```json
 {
   "name": "Ada Lovelace",
-  "email": {
-    "preview": "a***@example.com",
-    "handle": { "handle": "h_ab12cd" }
-  },
-  "phone": {
-    "handle": { "handle": "h_ef34gh" }
-  },
+  "email": { "value": "ada@example.com", "handle": "h_ab12cd" },
   "notes": "Met at conference"
 }
 ```
 
-Rules:
+`name` is bare (readable, no handle). `email` is ref (readable + handle for downstream tool calls). `phone` is omitted (not listed — no value, no handle). `notes` is data (visible in single-list mode).
 
-- listed fact fields are bare-visible unless wrapped with `{ mask: "field" }`
-- masked fact fields emit a safe preview plus a nested handle wrapper
-- omitted fact fields become handle-only when any `display:` clause is present
-- data fields remain bare
+This does **not** change ordinary runtime behavior — `show @contact.email` still prints the actual email. Display only applies at the LLM boundary.
 
-This is the primary planner-facing handle path. See `facts-and-handles` for the boundary model.
+### Named display modes
+
+Different agents need different visibility. Named modes let one record serve both:
+
+```mlld
+record @email_msg = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string, needs_reply: boolean],
+  display: {
+    worker: [{ mask: "from" }, subject, body],
+    planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
+  }
+}
+```
+
+Worker sees subject and body (its job to read them), from is masked. Planner sees from and message_id as ref (readable + handle), sees needs_reply, doesn't see subject or body (injection surfaces omitted).
+
+Select the mode at the box level or per LLM call:
+
+```mlld
+>> Box-level (all tool results in the box use this mode)
+box @worker with { tools: [@readEmail], display: "worker" } [...]
+
+>> Call-site (this LLM session uses this mode)
+var @result = @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+```
+
+Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
+
+In named modes, unlisted fields are omitted entirely (strict whitelist). Single-list display preserves backward compatibility (unlisted facts are handle-only, data fields remain visible). `"strict"` is a built-in override that makes all facts handle-only and omits all data.
+
+See `facts-and-handles` for the boundary model and `pattern-planner` for the cross-phase pattern.
 
 ## Field remapping
 

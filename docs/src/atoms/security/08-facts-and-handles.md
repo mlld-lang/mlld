@@ -91,33 +91,38 @@ The agent gets a contact where `email: "mark@example.com"` carries `fact:@contac
 
 mlld gives the LLM opaque references to live values instead of copyable literals.
 
-The primary path is record display projection. A tool returning a contact record with:
+The primary path is record display projection. Use `ref` for fields the LLM needs to both see and reference:
 
 ```mlld
-display: [name, { mask: "email" }]
+record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: [name, { ref: "email" }]
+}
 ```
 
-crosses the LLM boundary as:
+The tool result crosses the LLM boundary as:
 
 ```json
 {
   "name": "Mark Davies",
-  "email": {
-    "preview": "m***@example.com",
-    "handle": { "handle": "h_a7x9k2" }
-  }
+  "email": { "value": "mark@example.com", "handle": "h_a7x9k2" },
+  "notes": "Met at conference"
 }
 ```
 
-The LLM copies the inner handle wrapper into its tool call or authorization:
+The LLM passes the handle in tool calls or authorization:
 
 ```json
+{ "recipient": "h_a7x9k2" }
 { "recipient": { "handle": "h_a7x9k2" } }
 ```
 
-The outer `{ preview, handle }` object is display-only. The actual reusable handle wrapper is the inner single-key `{ "handle": "..." }` object.
+Both forms work. In control-arg positions, a bare handle string resolves the same as the object wrapper.
 
 The runtime resolves `h_a7x9k2` back to the original live value with `fact:external:@contact.email` still attached. The positive check passes because the value has real provenance.
+
+Handles are root-scoped — a handle minted in one `@claude()` session resolves in any other session in the same execution. This is how values survive across planner/worker phase boundaries. See `pattern-planner` for the cross-phase pattern.
 
 For security-relevant args, mlld also accepts exact projected forms it emitted in the same tool session:
 
