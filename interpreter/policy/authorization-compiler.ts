@@ -45,6 +45,8 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'requires_control_args'
     | 'unknown_arg'
     | 'proofless_control_arg'
+    | 'superseded_by_resolved'
+    | 'known_from_influenced_source'
     | 'ambiguous_projected_value';
   message: string;
   tool?: string;
@@ -153,15 +155,332 @@ function isArrayLikeConstraintValue(value: unknown): boolean {
   return isStructuredValue(value) && value.type === 'array' && Array.isArray(value.data);
 }
 
-function normalizeAuthorizationIntentSource(raw: unknown): unknown {
-  if (!isPlainObject(raw)) {
-    return raw;
+function unwrapAuthorizationIntentContainer(raw: unknown): unknown {
+  if (isPlainObject(raw) && isPlainObject(raw.authorizations)) {
+    return raw.authorizations;
+  }
+  return raw;
+}
+
+function hasOwnProperty(value: unknown, key: string): boolean {
+  return !!value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function getAuthorizationIntentSourceChild(value: unknown, key: string): unknown {
+  if (isStructuredValue(value) && value.type === 'object' && isPlainObject(value.data)) {
+    return hasOwnProperty(value.data, key)
+      ? (value.data as Record<string, unknown>)[key]
+      : undefined;
+  }
+  if (isPlainObject(value)) {
+    return hasOwnProperty(value, key)
+      ? value[key]
+      : undefined;
+  }
+  return getAstObjectEntryValue(value, key);
+}
+
+function descriptorHasInfluenced(value: ReturnType<typeof extractSecurityDescriptor>): boolean {
+  if (!value) {
+    return false;
+  }
+  return (
+    (Array.isArray(value.labels) && value.labels.includes('influenced'))
+    || (Array.isArray(value.taint) && value.taint.includes('influenced'))
+  );
+}
+
+function findAuthorizationIntentSourceDescriptor(
+  source: unknown,
+  path: readonly string[]
+): ReturnType<typeof extractSecurityDescriptor> | undefined {
+  const root = source;
+  const fullPath =
+    getAuthorizationIntentSourceChild(source, 'authorizations') !== undefined
+      ? ['authorizations', ...path]
+      : [...path];
+  const candidates: unknown[] = [root];
+  let current = root;
+
+  for (const segment of fullPath) {
+    const next = getAuthorizationIntentSourceChild(current, segment);
+    if (next === undefined) {
+      break;
+    }
+    current = next;
+    candidates.unshift(current);
   }
 
-  const container =
-    isPlainObject(raw.authorizations)
-      ? raw.authorizations
-      : raw;
+  for (const candidate of candidates) {
+    const descriptor = extractSecurityDescriptor(candidate, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (descriptor) {
+      return descriptor;
+    }
+  }
+
+  return undefined;
+}
+
+function hasBucketedAuthorizationIntent(raw: unknown): boolean {
+  const container = unwrapAuthorizationIntentContainer(raw);
+  if (!isPlainObject(container)) {
+    return false;
+  }
+  return (
+    hasOwnProperty(container, 'resolved')
+    || hasOwnProperty(container, 'known')
+    || Array.isArray(container.allow)
+  );
+}
+
+function cloneRawAuthorizationEntry(entry: unknown): unknown {
+  if (entry === true || !isPlainObject(entry)) {
+    return entry;
+  }
+
+  if (isPlainObject(entry.args)) {
+    return {
+      ...entry,
+      args: { ...entry.args }
+    };
+  }
+
+  if (hasOwnProperty(entry, 'args') || hasOwnProperty(entry, 'kind')) {
+    return { ...entry };
+  }
+
+  return {
+    args: { ...entry }
+  };
+}
+
+function getOrCreateRawAuthorizationArgs(
+  allow: Record<string, unknown>,
+  toolName: string
+): Record<string, unknown> {
+  const existing = allow[toolName];
+  if (!isPlainObject(existing)) {
+    allow[toolName] = { args: {} };
+    return (allow[toolName] as { args: Record<string, unknown> }).args;
+  }
+
+  if (!isPlainObject(existing.args)) {
+    existing.args = {};
+  }
+
+  return existing.args as Record<string, unknown>;
+}
+
+function mergeRawAuthorizationEntry(
+  existing: unknown,
+  incoming: unknown
+): unknown {
+  if (existing === undefined) {
+    return cloneRawAuthorizationEntry(incoming);
+  }
+  if (incoming === true) {
+    return existing;
+  }
+  if (existing === true) {
+    return cloneRawAuthorizationEntry(incoming);
+  }
+  if (!isPlainObject(existing) || !isPlainObject(incoming)) {
+    return cloneRawAuthorizationEntry(incoming);
+  }
+
+  const existingArgs = isPlainObject(existing.args) ? existing.args as Record<string, unknown> : {};
+  const incomingArgs = isPlainObject(incoming.args) ? incoming.args as Record<string, unknown> : {};
+  return {
+    ...existing,
+    ...incoming,
+    args: {
+      ...existingArgs,
+      ...incomingArgs
+    }
+  };
+}
+
+function extractKnownBucketValue(
+  raw: unknown
+): { value?: unknown; hasValue: boolean } {
+  if (!isPlainObject(raw)) {
+    return { value: raw, hasValue: true };
+  }
+
+  if (hasOwnProperty(raw, 'value') || hasOwnProperty(raw, 'source')) {
+    return {
+      value: raw.value,
+      hasValue: hasOwnProperty(raw, 'value')
+    };
+  }
+
+  return { value: raw, hasValue: true };
+}
+
+function normalizeBucketedAuthorizationIntentSource(options: {
+  raw: unknown;
+  rawSource: unknown;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): { rawAuthorizations: unknown; rawSource: unknown } {
+  const container = unwrapAuthorizationIntentContainer(options.raw);
+  if (!isPlainObject(container)) {
+    return {
+      rawAuthorizations: container,
+      rawSource: options.rawSource
+    };
+  }
+
+  const source = options.rawSource ?? options.raw;
+  const nextAllow: Record<string, unknown> = {};
+  const resolvedArgKeys = new Set<string>();
+
+  if (isPlainObject(container.allow)) {
+    const explicitAllow = cloneRawAllowEntries(container.allow);
+    if (isPlainObject(explicitAllow)) {
+      for (const [toolName, entry] of Object.entries(explicitAllow)) {
+        nextAllow[toolName] = cloneRawAuthorizationEntry(entry);
+      }
+    }
+  }
+
+  if (hasOwnProperty(container, 'resolved')) {
+    if (!isPlainObject(container.resolved)) {
+      pushCompilerIssue(options.issues, {
+        reason: 'invalid_authorization',
+        message: 'policy authorization intent bucket \'resolved\' must be an object'
+      });
+    } else {
+      const resolvedAllow = cloneRawAllowEntries(container.resolved);
+      if (isPlainObject(resolvedAllow)) {
+        for (const [toolName, entry] of Object.entries(resolvedAllow)) {
+          nextAllow[toolName] = mergeRawAuthorizationEntry(nextAllow[toolName], entry);
+          if (isPlainObject(entry) && isPlainObject(entry.args)) {
+            for (const argName of Object.keys(entry.args)) {
+              resolvedArgKeys.add(`${toolName}.${argName}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (Array.isArray(container.allow)) {
+    for (const entry of container.allow) {
+      if (typeof entry !== 'string' || entry.trim().length === 0) {
+        pushCompilerIssue(options.issues, {
+          reason: 'invalid_authorization',
+          message: 'policy authorization intent bucket \'allow\' must be an array of tool names'
+        });
+        continue;
+      }
+      const toolName = entry.trim();
+      if (!hasOwnProperty(nextAllow, toolName)) {
+        nextAllow[toolName] = true;
+      }
+    }
+  } else if (container.allow !== undefined && !isPlainObject(container.allow)) {
+    pushCompilerIssue(options.issues, {
+      reason: 'invalid_authorization',
+      message: 'policy authorization intent bucket \'allow\' must be an object or array of tool names'
+    });
+  }
+
+  if (hasOwnProperty(container, 'known')) {
+    if (!isPlainObject(container.known)) {
+      pushCompilerIssue(options.issues, {
+        reason: 'invalid_authorization',
+        message: 'policy authorization intent bucket \'known\' must be an object'
+      });
+    } else {
+      for (const [toolName, rawToolEntry] of Object.entries(container.known)) {
+        if (!isPlainObject(rawToolEntry)) {
+          pushCompilerIssue(options.issues, {
+            reason: 'invalid_authorization',
+            message: `Known authorization entry for '${toolName}' must be an object`,
+            tool: toolName
+          });
+          continue;
+        }
+
+        for (const [argName, rawArgEntry] of Object.entries(rawToolEntry)) {
+          if (resolvedArgKeys.has(`${toolName}.${argName}`)) {
+            pushCompilerIssue(options.issues, {
+              reason: 'superseded_by_resolved',
+              message: `Tool '${toolName}' authorization for '${argName}' was dropped because 'resolved' already provided stronger proof`,
+              tool: toolName,
+              arg: argName
+            });
+            continue;
+          }
+
+          const descriptor = findAuthorizationIntentSourceDescriptor(source, ['known', toolName, argName]);
+          if (descriptorHasInfluenced(descriptor)) {
+            pushCompilerIssue(options.issues, {
+              reason: 'known_from_influenced_source',
+              message: `Tool '${toolName}' authorization for '${argName}' cannot mint 'known' proof from influenced input`,
+              tool: toolName,
+              arg: argName
+            });
+            continue;
+          }
+
+          const { value, hasValue } = extractKnownBucketValue(rawArgEntry);
+          if (!hasValue) {
+            pushCompilerIssue(options.issues, {
+              reason: 'invalid_authorization',
+              message: `Known authorization entry for '${toolName}.${argName}' must include 'value'`,
+              tool: toolName,
+              arg: argName
+            });
+            continue;
+          }
+
+          const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
+          if (!hasOwnProperty(args, argName)) {
+            args[argName] = {
+              eq: value,
+              attestations: ['known']
+            };
+          }
+        }
+      }
+    }
+  }
+
+  const next: Record<string, unknown> = {
+    allow: nextAllow
+  };
+  if (hasOwnProperty(container, 'deny')) {
+    next.deny = Array.isArray(container.deny) ? container.deny.slice() : container.deny;
+  }
+
+  return {
+    rawAuthorizations: next,
+    rawSource: next
+  };
+}
+
+function normalizeAuthorizationIntentSource(options: {
+  raw: unknown;
+  rawSource: unknown;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): { rawAuthorizations: unknown; rawSource: unknown } {
+  if (hasBucketedAuthorizationIntent(options.raw) || hasBucketedAuthorizationIntent(options.rawSource)) {
+    return normalizeBucketedAuthorizationIntentSource(options);
+  }
+
+  const raw = options.raw;
+  if (!isPlainObject(raw)) {
+    return {
+      rawAuthorizations: raw,
+      rawSource: options.rawSource
+    };
+  }
+
+  const container = unwrapAuthorizationIntentContainer(raw);
   if (
     Object.prototype.hasOwnProperty.call(container, 'allow')
     || Object.prototype.hasOwnProperty.call(container, 'deny')
@@ -173,11 +492,17 @@ function normalizeAuthorizationIntentSource(raw: unknown): unknown {
     if (Object.prototype.hasOwnProperty.call(container, 'deny')) {
       next.deny = Array.isArray(container.deny) ? container.deny.slice() : container.deny;
     }
-    return next;
+    return {
+      rawAuthorizations: next,
+      rawSource: options.rawSource
+    };
   }
 
   return {
-    allow: cloneRawAllowEntries(container)
+    rawAuthorizations: {
+      allow: cloneRawAllowEntries(container)
+    },
+    rawSource: options.rawSource
   };
 }
 
@@ -880,6 +1205,10 @@ function validateAuthorizationsOrThrow(
   );
 }
 
+function isFatalRuntimeCompilerIssue(issue: PolicyAuthorizationCompilerIssue): boolean {
+  return issue.reason !== 'superseded_by_resolved';
+}
+
 function buildProoflessIssueMessage(toolName: string, argName: string, element?: number): string {
   if (typeof element === 'number') {
     return `Tool '${toolName}' authorization for '${argName}[${element}]' lacks required proof`;
@@ -1126,7 +1455,12 @@ export async function compilePolicyAuthorizations(
   const report = createEmptyPolicyAuthorizationCompileReport();
   const issues: PolicyAuthorizationCompilerIssue[] = [];
 
-  const rawAuthorizations = normalizeAuthorizationIntentSource(options.rawAuthorizations);
+  const normalizedIntent = normalizeAuthorizationIntentSource({
+    raw: options.rawAuthorizations,
+    rawSource: options.rawSource ?? options.rawAuthorizations,
+    issues
+  });
+  const rawAuthorizations = normalizedIntent.rawAuthorizations;
   if (rawAuthorizations === undefined || rawAuthorizations === null) {
     return { authorizations: undefined, issues, report };
   }
@@ -1170,25 +1504,23 @@ export async function compilePolicyAuthorizations(
   }
 
   await compileAuthorizationAttestations(
-    options.rawSource ?? rawAuthorizations,
+    normalizedIntent.rawSource,
     normalized,
     options.env,
     report
   );
 
-  if (options.mode === 'builder') {
-    await enforceControlArgProof({
-      authorizations: normalized,
-      env: options.env,
-      toolContext: options.toolContext,
-      mode: options.mode,
-      issues
-    });
-  }
+  await enforceControlArgProof({
+    authorizations: normalized,
+    env: options.env,
+    toolContext: options.toolContext,
+    mode: options.mode,
+    issues
+  });
 
-  if (options.mode === 'runtime' && issues.length > 0) {
+  if (options.mode === 'runtime' && issues.some(isFatalRuntimeCompilerIssue)) {
     throw new MlldSecurityError(
-      issues[0]?.message ?? 'policy.authorizations validation failed',
+      issues.find(isFatalRuntimeCompilerIssue)?.message ?? 'policy.authorizations validation failed',
       {
         code: 'POLICY_AUTHORIZATIONS_INVALID',
         details: {

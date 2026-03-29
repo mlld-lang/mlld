@@ -1195,7 +1195,7 @@ describe('box MCP config integration', () => {
       '    allow: {',
       '      delete_doc: {',
       '        args: {',
-      '          id: "doc-1"',
+      '          id: { eq: "doc-1", attestations: ["known"] }',
       '        }',
       '      }',
       '    }',

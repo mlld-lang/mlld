@@ -5,8 +5,8 @@ brief: Split agent execution into a planner that authorizes and a worker that ex
 category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
 related: [facts-and-handles, policy-authorizations, security-getting-started, labels-attestations, security-guards-basics]
-related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/utils/handle-resolution.ts, interpreter/fyi/facts-runtime.ts]
-updated: 2026-03-26
+related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/policy/authorization-compiler.ts, interpreter/env/builtins/policy.ts, interpreter/utils/handle-resolution.ts]
+updated: 2026-03-29
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -53,11 +53,28 @@ The planner looks up contacts and receives a projected result with `ref` handles
 }
 ```
 
-The planner produces a simple authorization intent:
+The planner produces a bucketed authorization intent, organized by proof source:
 
 ```json
-{ "sendEmail": { "recipient": "h_a7x9k2" } }
+{
+  "resolved": {
+    "sendEmail": { "recipient": "h_a7x9k2" }
+  },
+  "known": {
+    "sendEmail": {
+      "recipient": {
+        "value": "john@example.com",
+        "source": "user asked to email john"
+      }
+    }
+  },
+  "allow": ["create_file"]
+}
 ```
+
+- `resolved` — handle values from tool results
+- `known` — values the user explicitly provided in their task
+- `allow` — tools needing no argument constraints
 
 The orchestrator validates it through the policy builder:
 
@@ -67,13 +84,7 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
 var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
-`@policy.build` checks the intent against tool metadata and the active policy:
-- Denied tools are dropped
-- Proofless control arg values are dropped (the planner must use handles or `known`-attested values)
-- Data args are stripped
-- The result is a valid auth fragment ready for `with { policy }`
-
-If the builder drops tools, a guard on the planner exe can retry with the issues as feedback (same pattern as schema validation).
+The builder treats each bucket with the right proof level. `known` can only come from uninfluenced sources (the clean planner). If the builder drops tools, a guard on the planner exe can retry with the issues as feedback.
 
 ### Worker phase
 
@@ -126,7 +137,7 @@ Authorization alone is not enough. Even with a planner-approved value, inherited
 - `no-send-to-unknown` requires fact proof or `known` on destination args
 - `no-destroy-unknown` requires fact proof or `known` on target args
 
-When `controlArgs` is explicitly declared, any `fact:*` label satisfies the check — the developer already asserted which args are destinations. If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the pinned value had no proof, the inherited check still fails.
+When `controlArgs` is explicitly declared, any `fact:*` label satisfies the check — the developer already asserted which args are destinations. If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the planner proposes a proofless literal, `@policy.build` drops it and hand-built `with { policy }` rejects it before dispatch.
 
 ### Tolerant comparison
 
@@ -216,21 +227,14 @@ var @base = {
 }
 
 >> Step 1: Planner calls @searchContacts, gets ref handle on email
->> Step 2: Planner copies handle into authorization
-var @plannerAuth = {
-  authorizations: {
-    allow: {
-      sendEmail: {
-        args: {
-          recipient: "h_a7x9k2"
-        }
-      }
-    }
-  }
-}
+>> Step 2: Planner produces bucketed intent
+var @plannerResult = @plan(@task) | @parse
 
->> Step 3: Worker runs under combined policy
-show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @plannerAuth }
+>> Step 3: Builder validates intent against tools and policy
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
+
+>> Step 4: Worker runs under validated policy
+show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @auth.policy }
 ```
 
 See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.

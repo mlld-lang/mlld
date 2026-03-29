@@ -284,40 +284,29 @@ describe('resolveInvocationPolicyFragment', () => {
     ).rejects.toThrow(/denied by policy\.authorizations\.deny/i);
   });
 
-  it('preserves proofless scalar control args for runtime inherited checks', async () => {
+  it('rejects proofless scalar control args during runtime policy compilation', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
     );
 
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipient: 'ada@example.com'
+    await expect(
+      resolveInvocationPolicyFragment(
+        {
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipient: 'ada@example.com'
+                }
               }
             }
           }
-        }
-      },
-      env
-    );
-
-    const clause = policy?.authorizations?.allow?.sendEmail;
-    expect(clause?.kind).toBe('constrained');
-    const recipientConstraint = clause?.kind === 'constrained'
-      ? clause.args.recipient?.[0]
-      : undefined;
-    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
-    if (!recipientConstraint || !('eq' in recipientConstraint)) {
-      return;
-    }
-
-    expect(recipientConstraint.eq).toBe('ada@example.com');
-    expect(recipientConstraint.attestations).toBeUndefined();
+        },
+        env
+      )
+    ).rejects.toThrow(/lacks required proof/i);
   });
 
   it('accepts explicit known-attested literals for control args', async () => {
@@ -357,6 +346,44 @@ describe('resolveInvocationPolicyFragment', () => {
 
     expect(recipientConstraint.eq).toBe('ada@example.com');
     expect(recipientConstraint.attestations).toEqual(['known']);
+  });
+
+  it('accepts bucketed known intent and strips audit-only source metadata', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          known: {
+            sendEmail: {
+              recipient: {
+                value: 'ada@example.com',
+                source: 'user asked to email Ada'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow?.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+
+    expect(recipientConstraint.eq).toBe('ada@example.com');
+    expect(recipientConstraint.attestations).toEqual(['known']);
+    expect(Object.prototype.hasOwnProperty.call(recipientConstraint, 'source')).toBe(false);
   });
 
   it('fails closed when authorization constraints reference unknown handles', async () => {

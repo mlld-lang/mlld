@@ -1126,7 +1126,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       env
     );
     await evaluateDirective(
-      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { createCalendarEvent: { args: { participants: "group-1" } } } } }')[0] as DirectiveNode,
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { createCalendarEvent: { args: { participants: @participants } } } } }')[0] as DirectiveNode,
       env
     );
 
@@ -1313,7 +1313,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       env
     );
     await evaluateDirective(
-      parseSync('/var @taskPolicy = { defaults: { rules: ["no-destroy-unknown"] }, operations: { "destructive:targeted": ["tool:w"] }, authorizations: { allow: { deleteCalendarEvent: { args: { targetRef: "evt-1" } } } } }')[0] as DirectiveNode,
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-destroy-unknown"] }, operations: { "destructive:targeted": ["tool:w"] }, authorizations: { allow: { deleteCalendarEvent: { args: { targetRef: @targetRef } } } } }')[0] as DirectiveNode,
       env
     );
 
@@ -1340,7 +1340,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
-  it('does not let unattested pinned values override inherited known checks in with { policy }', async () => {
+  it('rejects proofless live refs in with { policy } authorizations before inherited known checks run', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var @approvedRecipient = "acct-1"')[0] as DirectiveNode, env);
     await evaluateDirective(
@@ -1353,7 +1353,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("acct-1", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/lacks required proof/i);
   });
 
   it('allows authorization entries when duplicate exposures collapse to the same canonical value', async () => {
@@ -1568,7 +1568,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       env
     );
     await evaluateDirective(
-      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] }, authorizations: { allow: { deleteDoc: { args: { id: "doc-1" } } } } }')[0] as DirectiveNode,
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] }, authorizations: { allow: { deleteDoc: { args: { id: { eq: "doc-1", attestations: ["known"] } } } } } }')[0] as DirectiveNode,
       env
     );
 

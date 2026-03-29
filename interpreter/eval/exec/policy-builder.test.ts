@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { interpret } from '@interpreter/index';
 import type { Environment } from '@interpreter/env/Environment';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { compilePolicyAuthorizations } from '@interpreter/policy/authorization-compiler';
+import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
+import type { ToolCollection } from '@core/types/tools';
+import { createSimpleTextVariable } from '@core/types/variable';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
@@ -137,5 +142,163 @@ describe('@policy builtin', () => {
       ])
     );
     expect(built.policy.authorizations.allow).toEqual({});
+  });
+
+  it('builds bucketed intent, prefers resolved entries, and preserves unconstrained allow tools', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = { facts: [email: string], data: [name: string] }
+      /exe @getContact() = { email: "ada@example.com", name: "Ada" } => contact
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] },
+        createDraft: { mlld: @createDraft, expose: ["subject", "body"], controlArgs: [] }
+      }
+
+      /var @contact = @getContact()
+      /var @contactEmail = @contact.email
+    `);
+
+    const contactEmail = await extractVariableValue(env.getVariable('contactEmail') as any, env);
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          sendEmail: {
+            recipient: contactEmail
+          }
+        },
+        known: {
+          sendEmail: {
+            recipient: {
+              value: 'ignored@example.com',
+              source: 'user asked for a different email'
+            }
+          }
+        },
+        allow: ['createDraft']
+      },
+      rawSource: {
+        resolved: {
+          sendEmail: {
+            recipient: contactEmail
+          }
+        },
+        known: {
+          sendEmail: {
+            recipient: {
+              value: 'ignored@example.com',
+              source: 'user asked for a different email'
+            }
+          }
+        },
+        allow: ['createDraft']
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'superseded_by_resolved',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow?.createDraft).toEqual({
+      kind: 'unconstrained'
+    });
+
+    const sendEmailEntry = compilation.authorizations?.allow?.sendEmail;
+    expect(sendEmailEntry?.kind).toBe('constrained');
+    const recipientConstraint = sendEmailEntry?.kind === 'constrained'
+      ? sendEmailEntry.args.recipient[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+
+    expect((recipientConstraint.eq as any)?.data ?? recipientConstraint.eq).toBe('ada@example.com');
+    expect(recipientConstraint.attestations).toEqual(['fact:@contact.email']);
+    expect(Object.prototype.hasOwnProperty.call(recipientConstraint, 'source')).toBe(false);
+  });
+
+  it('drops known bucket entries that try to mint proof from influenced inputs', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    env.setVariable(
+      'plannerRecipient',
+      createSimpleTextVariable(
+        'plannerRecipient',
+        'ada@example.com',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({
+            labels: ['influenced']
+          })
+        }
+      )
+    );
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        known: {
+          sendEmail: {
+            recipient: {
+              value: env.getVariable('plannerRecipient'),
+              source: 'planner summary'
+            }
+          }
+        }
+      },
+      rawSource: {
+        known: {
+          sendEmail: {
+            recipient: {
+              value: env.getVariable('plannerRecipient'),
+              source: 'planner summary'
+            }
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'known_from_influenced_source',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow).toEqual({});
   });
 });

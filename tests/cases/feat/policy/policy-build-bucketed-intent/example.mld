@@ -1,0 +1,29 @@
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent:@subject` with { controlArgs: ["recipient"] }
+/exe tool:w @createDraft(subject, body) = `draft:@subject` with { controlArgs: [] }
+
+/var tools @writeTools = {
+  sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] },
+  createDraft: { mlld: @createDraft, expose: ["subject", "body"], controlArgs: [] }
+}
+
+/var @intentJson = ::
+{
+  "known": {
+    "sendEmail": {
+      "recipient": {
+        "value": "ada@example.com",
+        "source": "user asked to email Ada"
+      }
+    }
+  },
+  "allow": ["createDraft"]
+}
+::
+
+/var @intent = @intentJson | @parse
+/var @built = @policy.build(@intent, @writeTools)
+/show @built.valid
+/show @built.policy.authorizations.allow.sendEmail.args.recipient[0].eq
+/show @built.policy.authorizations.allow.sendEmail.args.recipient[0].attestations[0]
+/show @built.policy.authorizations.allow.createDraft.kind
+/show @built.issues.length

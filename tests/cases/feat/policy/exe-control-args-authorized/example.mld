@@ -7,7 +7,7 @@
     allow: {
       sendMoney: {
         args: {
-          recipient: "acct-1"
+          recipient: @recipient
         }
       }
     }

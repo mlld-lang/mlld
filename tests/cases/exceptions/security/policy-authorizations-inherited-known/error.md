@@ -1,1 +1,1 @@
-destination must carry 'known'
+lacks required proof

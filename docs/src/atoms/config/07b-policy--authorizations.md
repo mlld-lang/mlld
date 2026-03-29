@@ -8,6 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
+related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner]
 updated: 2026-03-29
 ---
 
@@ -16,6 +17,8 @@ The `authorizations` section in policy declares which `tool:w` operations are au
 Control arg values in authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, hand-built `with { policy }` hard-fails.
 
 ```mlld
+var known @approvedRecipient = "mark@example.com"
+
 policy @base = {
   defaults: { rules: ["no-send-to-unknown", "no-destroy-unknown"] },
   operations: {
@@ -29,7 +32,7 @@ var @taskPolicy = {
     allow: {
       send_email: {
         args: {
-          recipients: ["mark@example.com"]
+          recipients: [@approvedRecipient]
         }
       },
       create_file: true
@@ -94,15 +97,17 @@ Keys under `authorizations.allow` are exact operation names matching `@mx.op.nam
 
 Each constrained argument accepts:
 
-**Literal value** — uses tolerant comparison (`~=`):
+**Proof-bearing literal value** — uses tolerant comparison (`~=`):
 
 ```mlld
+var known @approvedRecipient = "mark@example.com"
+
 var @taskPolicy = {
   authorizations: {
     allow: {
       send_email: {
         args: {
-          recipients: ["mark@example.com"]
+          recipients: [@approvedRecipient]
         }
       }
     }
@@ -115,7 +120,7 @@ var @taskPolicy = {
 ```mlld
 send_email: {
   args: {
-    recipients: { eq: ["mark@example.com"] }
+    recipients: { eq: [@approvedRecipient] }
   }
 }
 ```
@@ -123,9 +128,12 @@ send_email: {
 **One-of** — arg must match any candidate:
 
 ```mlld
+var known @markRecipient = "mark@example.com"
+var known @sarahRecipient = "sarah@example.com"
+
 send_email: {
   args: {
-    recipients: { oneOf: [["mark@example.com"], ["sarah@example.com"]] }
+    recipients: { oneOf: [[@markRecipient], [@sarahRecipient]] }
   }
 }
 ```
@@ -144,6 +152,8 @@ send_email: {
 ```
 
 This is the bridge format for planner/worker handoff. If the planner already verified the pinned value from a trusted source, `attestations` lets the later worker call satisfy inherited positive checks such as `no-send-to-unknown` without re-looking the value up in the worker session.
+
+For planner outputs, prefer the bucketed `resolved` / `known` / `allow` builder input over hand-writing `attestations`.
 
 Tolerant comparison (`~=`) handles string-vs-array, ordering, null equivalence, and subset matching. The worker can do *less* than authorized (fewer recipients) but not *more* (additional unauthorized recipients).
 
@@ -172,7 +182,10 @@ Tools declare which arguments are security-relevant (control args) via `controlA
     "allow": {
       "send_email": {
         "args": {
-          "recipients": ["mark@example.com"]
+          "recipients": {
+            "eq": ["mark@example.com"],
+            "attestations": ["known"]
+          }
         }
       }
     }
@@ -180,7 +193,7 @@ Tools declare which arguments are security-relevant (control args) via `controlA
 }
 ```
 
-This authorizes `send_email` with `recipients` pinned to `mark@example.com`. Because `cc` and `bcc` are declared control args but omitted from the constraint, they are enforced as empty/null at runtime. The planner doesn't need to mention `subject` or `body` — those are data args.
+This authorizes `send_email` with `recipients` pinned to `mark@example.com` and carries the required proof forward. Because `cc` and `bcc` are declared control args but omitted from the constraint, they are enforced as empty/null at runtime. The planner doesn't need to mention `subject` or `body` — those are data args.
 
 If the planner had written `"send_email": true`, validation would reject it because `send_email` has declared control args.
 
@@ -192,7 +205,7 @@ If the planner had written `"send_email": true`, validation would reject it beca
 - `locked: true` disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials
 - Capability denials (`capabilities.allow/deny/danger`), `env` restrictions, `auth`, and `limits` are separate enforcement paths and are not affected by `authorizations`
 
-Authorization matching is not enough by itself for positive checks. If the planner pins `"acct-1"` as a raw literal, the worker still needs a matching attestation for rules like `no-send-to-unknown`. If the planner pins `@approvedRecipient` and that value carried `known`, the authorization guard carries that attestation requirement forward so the later worker call can satisfy the inherited check.
+Authorization matching is not enough by itself for positive checks, and proofless raw literals do not make it to dispatch. `@policy.build` drops them with issues, and hand-built `with { policy }` fragments hard-fail compilation. If the planner pins `@approvedRecipient` and that value carried `known`, or uses the bucketed `known` shape, the authorization guard carries that attestation forward so the later worker call can satisfy inherited positive checks.
 
 Authorization denials behave like any other guard denial — they can be caught with `denied =>` handlers and are surfaced through the SDK's existing denial reporting.
 
@@ -241,15 +254,45 @@ What the builder checks:
 - Unknown tools → dropped (`unknown_tool`)
 - `true` for tools with `controlArgs` → dropped (`requires_control_args`)
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
+- `known` values from influenced sources → dropped (`known_from_influenced_source`)
+- `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
 - Non-control args → silently stripped
 
-The builder accepts flat intent (simpler for LLMs) or nested `authorizations.allow` shape:
+### Bucketed intent shape
+
+The planner structures its authorization output by proof source:
+
+```json
+{
+  "resolved": {
+    "append_to_file": { "file_id": "h_upt8mo" },
+    "send_email": { "recipients": ["h_2l5r36"] }
+  },
+  "known": {
+    "send_email": {
+      "recipients": {
+        "value": "john@example.com",
+        "source": "user asked to email john"
+      }
+    }
+  },
+  "allow": ["create_file"]
+}
+```
+
+Three buckets:
+
+- **`resolved`** — values from tool results. Validated as handles or fact-bearing values. Can come from influenced steps (proof comes from the values, not the source's trust level).
+- **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy). Must come from uninfluenced sources only — this is a hard invariant, not an opt-in rule.
+- **`allow`** — tools needing no argument constraints. Validated against `controlArgs` metadata.
+
+The builder also accepts flat and nested intent shapes for backward compatibility:
 
 ```json
 { "send_email": { "recipients": "h_2l5r36" }, "create_file": true }
 ```
 
-For array control args, proof is checked per element. Proofless elements are dropped individually. The issues report identifies which element lost proof.
+For array control args, proof is checked per element. Proofless elements are dropped individually. If the same tool+arg appears in both `resolved` and `known`, `resolved` wins and an issue is emitted.
 
 ### Planner retry via guard
 
@@ -265,22 +308,7 @@ guard after @validateAuth for op:named:plan = when [
 ]
 ```
 
-### User-provided values
-
-The planner can vouch for values from the user's task with `known` attestation:
-
-```json
-{
-  "send_email": {
-    "recipients": {
-      "eq": ["john.doe@clientcorp.com"],
-      "attestations": ["known"]
-    }
-  }
-}
-```
-
-This satisfies the proof requirement. Handles, fact labels, and `known` attestation all count as proof.
+The planner prompt is: "Put handle values from tool results in `resolved`. Put values the user explicitly provided in `known`. Put tools that need no arguments in `allow`."
 
 ## Direct planner use
 

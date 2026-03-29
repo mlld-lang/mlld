@@ -257,8 +257,11 @@ describe('tool collections', () => {
     ).rejects.toThrow(/blocked/i);
   });
 
-  it('keeps no-send-to-unknown enforced even when policy.authorizations matches', async () => {
-    await expect(interpret(`
+  it('propagates matched authorization attestations on box tool collection calls', async () => {
+    const output = await interpret(`
+      /record @contact = { facts: [email: string], data: [name: string] }
+      /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
+
       /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
 
       /var tools @agentTools = {
@@ -274,6 +277,7 @@ describe('tool collections', () => {
         => @send_email(["mark@example.com"], [], [], "hello")
       ]
 
+      /var @contact = @get_contact()
       /var @taskPolicy = {
         defaults: { rules: ["no-send-to-unknown"] },
         operations: {
@@ -283,9 +287,7 @@ describe('tool collections', () => {
           allow: {
             send_email: {
               args: {
-                recipients: ["mark@example.com"],
-                cc: [],
-                bcc: []
+                recipients: [@contact.email]
               }
             }
           }
@@ -300,12 +302,16 @@ describe('tool collections', () => {
       filePath: pathContext.filePath,
       format: 'markdown',
       normalizeBlankLines: true
-    })).rejects.toThrow(/destination must carry 'known'/i);
+    });
+    expect(output.trim()).toBe('sent:hello');
   });
 
   it('denies unlisted tool:w operations under policy.authorizations', async () => {
     await expect(
       interpretWithEnv(`
+        /record @contact = { facts: [email: string], data: [name: string] }
+        /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
+
         /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
         /exe tool:w @archive_email(id) = \`archived:@id\`
 
@@ -328,14 +334,13 @@ describe('tool collections', () => {
           => @archive_email("msg-1")
         ]
 
+        /var @contact = @get_contact()
         /var @taskPolicy = {
           authorizations: {
             allow: {
               send_email: {
                 args: {
-                  recipients: ["mark@example.com"],
-                  cc: [],
-                  bcc: []
+                  recipients: [@contact.email]
                 }
               }
             }
