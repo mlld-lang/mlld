@@ -1,6 +1,10 @@
 import { builtinModules, createRequire } from 'module';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
+import {
+  attachToolCollectionMetadata,
+  getToolCollectionMetadata
+} from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import type {
   ExecutableDefinition,
@@ -400,6 +404,10 @@ export function toJsValue(value: unknown): unknown {
       const result: Record<string, unknown> = {};
       for (const [key, entry] of Object.entries(value)) {
         result[key] = toJsValue(entry);
+      }
+      const toolCollectionMetadata = getToolCollectionMetadata(value);
+      if (toolCollectionMetadata) {
+        attachToolCollectionMetadata(result, toolCollectionMetadata);
       }
       return result;
     }

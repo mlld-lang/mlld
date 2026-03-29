@@ -1,6 +1,9 @@
 import type { Environment } from '@interpreter/env/Environment';
 import type { NodeFunctionExecutable } from '@core/types/executable';
-import type { ToolCollection } from '@core/types/tools';
+import {
+  getToolCollectionAuthorizationContext,
+  type ToolCollection
+} from '@core/types/tools';
 import {
   createExecutableVariable,
   createObjectVariable,
@@ -57,6 +60,10 @@ function resolveToolCollection(
 
   if (!rawTools || typeof rawTools !== 'object' || Array.isArray(rawTools)) {
     return undefined;
+  }
+
+  if (getToolCollectionAuthorizationContext(rawTools)) {
+    return rawTools as ToolCollection;
   }
 
   try {

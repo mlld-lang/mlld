@@ -1,5 +1,11 @@
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
-import type { ToolCollection, ToolDefinition } from '@core/types/tools';
+import {
+  getToolCollectionAuthorizationContext,
+  type ToolAuthorizationContextEntry,
+  type ToolCollection,
+  type ToolCollectionAuthorizationContext,
+  type ToolDefinition
+} from '@core/types/tools';
 import { isExecutableVariable, type ExecutableVariable, type Variable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 
@@ -40,6 +46,10 @@ function mergeStringLists(...lists: Array<readonly unknown[] | undefined>): stri
     }
   }
   return merged;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function resolveExecutableVariable(
@@ -110,6 +120,86 @@ function buildToolContextFromExecutable(
   };
 }
 
+function getToolDefinitionBindKeys(definition?: ToolDefinition): string[] {
+  if (!isPlainObject(definition?.bind)) {
+    return [];
+  }
+
+  return Object.keys(definition.bind).filter(
+    (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
+  );
+}
+
+function getEffectiveToolParams(
+  baseParams: string[],
+  definition?: ToolDefinition
+): string[] {
+  if (!definition) {
+    return baseParams;
+  }
+
+  if (Array.isArray(definition.expose)) {
+    return normalizeStringList(definition.expose);
+  }
+
+  const boundKeys = new Set(getToolDefinitionBindKeys(definition));
+  return baseParams.filter(paramName => !boundKeys.has(paramName));
+}
+
+function getEffectiveToolControlArgs(options: {
+  params: readonly string[];
+  baseControlArgs?: readonly string[];
+  baseHasControlArgsMetadata: boolean;
+  definition?: ToolDefinition;
+}): { controlArgs: string[]; hasControlArgsMetadata: boolean } {
+  const visibleParams = new Set(options.params);
+
+  if (Array.isArray(options.definition?.controlArgs)) {
+    return {
+      controlArgs: normalizeStringList(options.definition.controlArgs).filter(arg => visibleParams.has(arg)),
+      hasControlArgsMetadata: true
+    };
+  }
+
+  if (options.baseHasControlArgsMetadata) {
+    return {
+      controlArgs: normalizeStringList(options.baseControlArgs).filter(arg => visibleParams.has(arg)),
+      hasControlArgsMetadata: true
+    };
+  }
+
+  return {
+    controlArgs: [],
+    hasControlArgsMetadata: false
+  };
+}
+
+function applyToolDefinitionAuthMetadata(
+  base: EffectiveToolMetadata,
+  definition?: ToolDefinition
+): EffectiveToolMetadata {
+  if (!definition) {
+    return base;
+  }
+
+  const labels = mergeStringLists(base.labels, definition.labels);
+  const params = getEffectiveToolParams(base.params, definition);
+  const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
+    params,
+    baseControlArgs: base.controlArgs,
+    baseHasControlArgsMetadata: base.hasControlArgsMetadata,
+    definition
+  });
+
+  return {
+    ...base,
+    params,
+    labels,
+    ...(hasControlArgsMetadata ? { controlArgs } : {}),
+    hasControlArgsMetadata
+  };
+}
+
 function mergeToolDefinitionMetadata(
   base: EffectiveToolMetadata,
   definition?: ToolDefinition
@@ -139,11 +229,50 @@ function getScopedToolCollection(env: Environment): ToolCollection | undefined {
   return tools as ToolCollection;
 }
 
-function buildAuthorizationToolContextFromCollection(
-  env: Environment,
-  collection: ToolCollection
+function createAuthorizationToolContextEntry(
+  toolName: string,
+  metadata: Pick<EffectiveToolMetadata, 'params' | 'controlArgs' | 'hasControlArgsMetadata'>
+): AuthorizationToolContext {
+  return {
+    name: toolName,
+    params: new Set(metadata.params),
+    controlArgs: new Set(metadata.controlArgs ?? []),
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+  };
+}
+
+function buildAuthorizationToolContextFromStoredContext(
+  stored: ToolCollectionAuthorizationContext
 ): Map<string, AuthorizationToolContext> {
   const contexts = new Map<string, AuthorizationToolContext>();
+
+  for (const [toolName, entry] of Object.entries(stored)) {
+    contexts.set(toolName, {
+      name: toolName,
+      params: new Set(entry.params),
+      controlArgs: new Set(entry.controlArgs),
+      hasControlArgsMetadata: entry.hasControlArgsMetadata
+    });
+  }
+
+  return contexts;
+}
+
+function toStoredAuthorizationContextEntry(
+  metadata: Pick<EffectiveToolMetadata, 'params' | 'controlArgs' | 'hasControlArgsMetadata'>
+): ToolAuthorizationContextEntry {
+  return {
+    params: [...metadata.params],
+    controlArgs: [...(metadata.controlArgs ?? [])],
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+  };
+}
+
+export function buildCanonicalAuthorizationToolContextForCollection(
+  env: Environment,
+  collection: ToolCollection
+): ToolCollectionAuthorizationContext {
+  const contexts: ToolCollectionAuthorizationContext = {};
 
   for (const [toolName, definition] of Object.entries(collection)) {
     const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
@@ -156,16 +285,45 @@ function buildAuthorizationToolContextFromCollection(
       continue;
     }
 
-    const merged = mergeToolDefinitionMetadata(
+    const merged = applyToolDefinitionAuthMetadata(
       buildToolContextFromExecutable(toolName, executable),
       definition
     );
-    contexts.set(toolName, {
-      name: toolName,
-      params: new Set(merged.params),
-      controlArgs: new Set(merged.controlArgs ?? []),
-      hasControlArgsMetadata: merged.hasControlArgsMetadata
-    });
+    contexts[toolName] = toStoredAuthorizationContextEntry(merged);
+  }
+
+  return contexts;
+}
+
+function buildAuthorizationToolContextFromCollection(
+  env: Environment,
+  collection: ToolCollection
+): Map<string, AuthorizationToolContext> {
+  const stored = getToolCollectionAuthorizationContext(collection);
+  const contexts = stored
+    ? buildAuthorizationToolContextFromStoredContext(stored)
+    : new Map<string, AuthorizationToolContext>();
+
+  for (const [toolName, definition] of Object.entries(collection)) {
+    if (contexts.has(toolName)) {
+      continue;
+    }
+
+    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
+    if (!execName) {
+      continue;
+    }
+
+    const executable = resolveExecutableVariable(env, execName);
+    if (!executable) {
+      continue;
+    }
+
+    const merged = applyToolDefinitionAuthMetadata(
+      buildToolContextFromExecutable(toolName, executable),
+      definition
+    );
+    contexts.set(toolName, createAuthorizationToolContextEntry(toolName, merged));
   }
 
   return contexts;
@@ -183,12 +341,7 @@ export function buildRuntimeAuthorizationToolContext(
     }
 
     const direct = buildToolContextFromExecutable(name, variable);
-    contexts.set(name, {
-      name,
-      params: new Set(direct.params),
-      controlArgs: new Set(direct.controlArgs ?? []),
-      hasControlArgsMetadata: direct.hasControlArgsMetadata
-    });
+    contexts.set(name, createAuthorizationToolContextEntry(name, direct));
   }
 
   const scopedTools = getScopedToolCollection(env);
@@ -234,7 +387,7 @@ export function resolveEffectiveToolMetadata(options: {
       : undefined;
 
   if (directDefinition) {
-    const merged = mergeToolDefinitionMetadata(base, directDefinition);
+    const merged = applyToolDefinitionAuthMetadata(base, directDefinition);
     return {
       ...merged,
       labels: mergeStringLists(merged.labels, additionalLabels)

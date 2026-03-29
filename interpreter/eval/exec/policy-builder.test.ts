@@ -42,6 +42,36 @@ async function interpretWithEnv(source: string): Promise<Environment> {
   return environment;
 }
 
+async function interpretWithEnvAndFiles(
+  source: string,
+  files: Record<string, string>
+): Promise<Environment> {
+  const fileSystem = new MemoryFileSystem();
+  let environment: Environment | null = null;
+
+  for (const [filePath, content] of Object.entries(files)) {
+    await fileSystem.writeFile(filePath, content);
+  }
+
+  await interpret(source, {
+    fileSystem,
+    pathService,
+    pathContext,
+    filePath: pathContext.filePath,
+    format: 'markdown',
+    normalizeBlankLines: true,
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
+
+  if (!environment) {
+    throw new Error('Failed to capture environment');
+  }
+
+  return environment;
+}
+
 describe('@policy builtin', () => {
   it('builds canonical allow fragments, strips data args, and drops denied tools', async () => {
     const env = await interpretWithEnv(`
@@ -142,6 +172,160 @@ describe('@policy builtin', () => {
       ])
     );
     expect(built.policy.authorizations.allow).toEqual({});
+  });
+
+  it('accepts imported tool collections without importing the underlying executables', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          sendEmail: {
+            recipient: { eq: "ada@example.com", attestations: ["known"] }
+          }
+        }
+
+        /var @built = @policy.build(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+          /var tools @writeTools = {
+            sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    expect(env.getVariable('sendEmail')).toBeUndefined();
+
+    const builtVar = env.getVariable('built');
+    const builtResolved = await extractVariableValue(builtVar as any, env) as any;
+    const built = builtResolved?.data ?? builtResolved;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'ada@example.com',
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('preserves shaped auth params for imported tool collections', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          sendEmail: {
+            recipient: { eq: "ada@example.com", attestations: ["known"] },
+            subject: "hello"
+          }
+        }
+
+        /var @built = @policy.build(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe exfil:send, tool:w @sendEmail(owner, repo, recipient, subject, body) = js { return recipient; } with { controlArgs: ["owner", "recipient"] }
+
+          /var tools @writeTools = {
+            sendEmail: {
+              mlld: @sendEmail,
+              bind: { owner: "mlld", repo: "main", body: "fixed" },
+              expose: ["recipient", "subject"],
+              controlArgs: ["recipient"]
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const importedCollection = env.getVariable('writeTools')?.value as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, importedCollection);
+    const sendEmailContext = toolContext.get('sendEmail');
+
+    expect(sendEmailContext).toBeDefined();
+    expect([...sendEmailContext!.params]).toEqual(['recipient', 'subject']);
+    expect([...sendEmailContext!.controlArgs]).toEqual(['recipient']);
+    expect(sendEmailContext!.hasControlArgsMetadata).toBe(true);
+
+    const builtVar = env.getVariable('built');
+    const builtResolved = await extractVariableValue(builtVar as any, env) as any;
+    const built = builtResolved?.data ?? builtResolved;
+
+    expect(built.valid).toBe(true);
+    expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'ada@example.com',
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('preserves explicit empty control-arg metadata for imported tool collections', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          createDraft: true
+        }
+
+        /var @built = @policy.build(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: ["subject"] }
+
+          /var tools @writeTools = {
+            createDraft: {
+              mlld: @createDraft,
+              expose: ["subject", "body"],
+              controlArgs: []
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const importedCollection = env.getVariable('writeTools')?.value as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, importedCollection);
+    const createDraftContext = toolContext.get('createDraft');
+
+    expect(createDraftContext).toBeDefined();
+    expect([...createDraftContext!.params]).toEqual(['subject', 'body']);
+    expect([...createDraftContext!.controlArgs]).toEqual([]);
+    expect(createDraftContext!.hasControlArgsMetadata).toBe(true);
+
+    const builtVar = env.getVariable('built');
+    const builtResolved = await extractVariableValue(builtVar as any, env) as any;
+    const built = builtResolved?.data ?? builtResolved;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.createDraft).toEqual({
+      kind: 'unconstrained'
+    });
   });
 
   it('builds bucketed intent, prefers resolved entries, and preserves unconstrained allow tools', async () => {

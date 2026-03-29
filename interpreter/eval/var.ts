@@ -1,5 +1,8 @@
 import type { DirectiveNode, SourceLocation, VarValue } from '@core/types';
-import type { ToolCollection } from '@core/types/tools';
+import {
+  attachToolCollectionMetadata,
+  type ToolCollection
+} from '@core/types/tools';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
@@ -30,6 +33,7 @@ import { createRhsDispatcher } from './var/rhs-dispatcher';
 import { createPipelineFinalizer } from './var/pipeline-finalizer';
 import { normalizeToolCollection } from './var/tool-scope';
 import { createVariableBuilder } from './var/variable-builder';
+import { buildCanonicalAuthorizationToolContextForCollection } from './exec/tool-metadata';
 
 export { extractDescriptorsFromDataAst };
 
@@ -260,6 +264,12 @@ export async function prepareVarAssignment(
     toolCollection = rhsResult.handler === 'mcp-tool-source'
       ? resolvedValue as ToolCollection
       : normalizeToolCollection(resolvedValue, env);
+    attachToolCollectionMetadata(
+      toolCollection,
+      {
+        auth: buildCanonicalAuthorizationToolContextForCollection(env, toolCollection)
+      }
+    );
     resolvedValue = toolCollection;
   }
 

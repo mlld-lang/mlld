@@ -1,5 +1,9 @@
 import type { Environment } from '@interpreter/env/Environment';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import {
+  getToolCollectionMetadata,
+  TOOL_COLLECTION_METADATA_EXPORT_KEY
+} from '@core/types/tools';
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import {
   getCapturedModuleEnv,
@@ -150,6 +154,10 @@ export class ModuleExportSerializer {
       );
       if (variable.internal?.isNamespace && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
         (resolved as Record<string, unknown>).__namespace = true;
+      }
+      const toolCollectionMetadata = getToolCollectionMetadata(variable.value);
+      if (toolCollectionMetadata && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
+        (resolved as Record<string, unknown>)[TOOL_COLLECTION_METADATA_EXPORT_KEY] = toolCollectionMetadata;
       }
       return resolved;
     }

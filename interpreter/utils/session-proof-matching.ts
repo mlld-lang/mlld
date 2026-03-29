@@ -1,4 +1,8 @@
 import type { Environment } from '@interpreter/env/Environment';
+import {
+  attachToolCollectionMetadata,
+  getToolCollectionMetadata
+} from '@core/types/tools';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { deserializeSecurityDescriptor } from '@core/types/security';
 import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
@@ -158,12 +162,17 @@ export function materializeSessionProofMatches(value: unknown, env: Environment)
   }
 
   if (isPlainObject(value)) {
-    return Object.fromEntries(
+    const materialized = Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
         key,
         materializeSessionProofMatches(entry, env)
       ])
     );
+    const toolCollectionMetadata = getToolCollectionMetadata(value);
+    if (toolCollectionMetadata) {
+      attachToolCollectionMetadata(materialized, toolCollectionMetadata);
+    }
+    return materialized;
   }
 
   return value;

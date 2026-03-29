@@ -1,4 +1,8 @@
 import { isHandleWrapper } from '@core/types/handle';
+import {
+  attachToolCollectionMetadata,
+  getToolCollectionMetadata
+} from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import {
   isStructuredValue,
@@ -63,6 +67,10 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = await resolveValueHandles(entry, env);
+    }
+    const toolCollectionMetadata = getToolCollectionMetadata(value);
+    if (toolCollectionMetadata) {
+      attachToolCollectionMetadata(result, toolCollectionMetadata);
     }
     return result;
   }

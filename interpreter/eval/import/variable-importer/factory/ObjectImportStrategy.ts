@@ -1,4 +1,8 @@
 import * as fs from 'fs';
+import {
+  attachToolCollectionMetadata,
+  takeSerializedToolCollectionMetadata
+} from '@core/types/tools';
 import { createObjectVariable, type VariableTypeDiscriminator } from '@core/types/variable';
 import type { ImportValueComplexityHelpers, ImportVariableFactoryRequest } from './types';
 
@@ -14,6 +18,10 @@ export class ObjectImportStrategy {
     }
 
     const normalizedObject = this.complexityHelpers.unwrapArraySnapshots(request.value, request.importPath);
+    const toolCollectionMetadata = takeSerializedToolCollectionMetadata(normalizedObject);
+    if (toolCollectionMetadata) {
+      attachToolCollectionMetadata(normalizedObject, toolCollectionMetadata);
+    }
     const isComplex = this.complexityHelpers.hasComplexContent(normalizedObject);
     if (process.env.MLLD_DEBUG_FIX === 'true') {
       console.error('[VariableImporter] create object variable', {
@@ -50,11 +58,21 @@ export class ObjectImportStrategy {
       normalizedObject,
       isComplex,
       request.metadata.source,
-      request.metadata.buildMetadata({
-        isImported: true,
-        importPath: request.importPath,
-        originalName: request.originalName !== request.name ? request.originalName : undefined
-      })
+      {
+        metadata: request.metadata.buildMetadata({
+          isImported: true,
+          importPath: request.importPath,
+          originalName: request.originalName !== request.name ? request.originalName : undefined
+        }),
+        ...(toolCollectionMetadata?.auth
+          ? {
+              internal: {
+                toolCollection: normalizedObject,
+                isToolsCollection: true
+              }
+            }
+          : {})
+      }
     );
 
     if (isNamespace) {
