@@ -107,6 +107,7 @@ import type { RecordDefinition } from '@core/types/record';
 import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { descriptorHasExternalInputSource } from '@core/security/url-provenance';
+import { getWithClauseField, normalizeWithClauseFields } from '@interpreter/utils/with-clause';
 import {
   collectSecurityRelevantArgNamesForOperation,
   repairSecurityRelevantValue
@@ -516,7 +517,7 @@ function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any
   }
 
   if (!Array.isArray(withClause)) {
-    return withClause;
+    return normalizeWithClauseFields(withClause) ?? withClause;
   }
 
   const inlineValue = withClause[0];
@@ -525,6 +526,79 @@ function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any
   }
 
   return convertEntriesToProperties(inlineValue.value.entries ?? []);
+}
+
+async function resolveScopedExecConfigValue(
+  raw: unknown,
+  env: Environment
+): Promise<unknown> {
+  let value = raw;
+
+  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+    const { evaluate } = await import('../core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    value = result.value;
+  }
+
+  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+  if (isVariable(value)) {
+    value = await extractVariableValue(value, env);
+  }
+
+  if (isStructuredValue(value)) {
+    value = asData(value);
+  }
+
+  return value;
+}
+
+async function resolveScopedExecDisplayMode(
+  raw: unknown,
+  env: Environment
+): Promise<string | undefined> {
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+
+  const value = await resolveScopedExecConfigValue(raw, env);
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new MlldInterpreterError('display must be a string.');
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getExecutableDefinitionWithClauseField(
+  definition: ExecutableDefinition,
+  field: string
+): unknown {
+  const direct = getWithClauseField((definition as any).withClause, field);
+  if (direct !== undefined) {
+    return direct;
+  }
+  return getWithClauseField((definition as any).meta?.withClause, field);
+}
+
+function getInvocationWithClauseField(
+  node: ExecInvocation,
+  invocationWithClause: Record<string, any> | undefined,
+  field: string
+): unknown {
+  if (invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, field)) {
+    return invocationWithClause[field];
+  }
+
+  const normalizedMetaWithClause = normalizeWithClauseFields(node.meta?.withClause);
+  if (normalizedMetaWithClause && Object.prototype.hasOwnProperty.call(normalizedMetaWithClause, field)) {
+    return normalizedMetaWithClause[field];
+  }
+
+  return getWithClauseField(node.meta?.withClause, field);
 }
 
 /**
@@ -1702,17 +1776,38 @@ async function evaluateExecInvocationInternal(
     runtimeEnv = policyScope.env;
   }
 
+  const resolvedScopedConfig: Record<string, unknown> = {};
+  const resolvedDefinitionDisplay = await resolveScopedExecDisplayMode(
+    getExecutableDefinitionWithClauseField(definition, 'display'),
+    env
+  );
+  if (resolvedDefinitionDisplay !== undefined) {
+    resolvedScopedConfig.display = resolvedDefinitionDisplay;
+  }
+
   if (invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'fyi')) {
     const resolvedFyi = await resolveFyiConfig(invocationWithClause.fyi, env);
     if (resolvedFyi !== undefined) {
-      const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
-      const scopedEnv = runtimeEnv.createChild();
-      scopedEnv.setScopedEnvironmentConfig({
-        ...(scopedConfig ?? {}),
-        fyi: resolvedFyi
-      });
-      runtimeEnv = scopedEnv;
+      resolvedScopedConfig.fyi = resolvedFyi;
     }
+  }
+
+  const resolvedInvocationDisplay = await resolveScopedExecDisplayMode(
+    getInvocationWithClauseField(node, invocationWithClause, 'display'),
+    env
+  );
+  if (resolvedInvocationDisplay !== undefined) {
+    resolvedScopedConfig.display = resolvedInvocationDisplay;
+  }
+
+  if (Object.keys(resolvedScopedConfig).length > 0) {
+    const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
+    const scopedEnv = runtimeEnv.createChild();
+    scopedEnv.setScopedEnvironmentConfig({
+      ...(scopedConfig ?? {}),
+      ...resolvedScopedConfig
+    });
+    runtimeEnv = scopedEnv;
   }
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());

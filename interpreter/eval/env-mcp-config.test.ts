@@ -701,6 +701,104 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('applies exe definition display mode to llm tool bridge sessions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, contact_id: string],',
+      '  data: [name: string],',
+      '  display: {',
+      '    worker: [name, { mask: "email" }],',
+      '    planner: [{ ref: "email" }, { handle: "contact_id" }]',
+      '  }',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", contact_id: "c-1", name: "Mark Davies" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' } with { display: "planner" }`,
+      '/show @agent("Find Mark", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          value: 'mark@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        },
+        contact_id: {
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('lets call-site display override definition and box display for a single llm session', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = {',
+      '  facts: [email: string, contact_id: string],',
+      '  data: [name: string],',
+      '  display: {',
+      '    worker: [name, { mask: "email" }],',
+      '    planner: [{ ref: "email" }, { handle: "contact_id" }]',
+      '  }',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", contact_id: "c-1", name: "Mark Davies" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/export { @toolList }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList } from "/contacts_tools.mld"',
+      '/var @cfg = { display: "planner" }',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Mark"}' } with { display: "planner" }`,
+      '/box @cfg [',
+      '  let @result = @agent("Find Mark", { tools: @toolList }) with { display: "worker" }',
+      '  show @result',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        name: 'Mark Davies',
+        email: {
+          preview: 'm***@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves mixed concatenated executable arrays when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
