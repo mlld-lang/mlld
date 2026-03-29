@@ -139,6 +139,38 @@ function getScopedToolCollection(env: Environment): ToolCollection | undefined {
   return tools as ToolCollection;
 }
 
+function buildAuthorizationToolContextFromCollection(
+  env: Environment,
+  collection: ToolCollection
+): Map<string, AuthorizationToolContext> {
+  const contexts = new Map<string, AuthorizationToolContext>();
+
+  for (const [toolName, definition] of Object.entries(collection)) {
+    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
+    if (!execName) {
+      continue;
+    }
+
+    const executable = resolveExecutableVariable(env, execName);
+    if (!executable) {
+      continue;
+    }
+
+    const merged = mergeToolDefinitionMetadata(
+      buildToolContextFromExecutable(toolName, executable),
+      definition
+    );
+    contexts.set(toolName, {
+      name: toolName,
+      params: new Set(merged.params),
+      controlArgs: new Set(merged.controlArgs ?? []),
+      hasControlArgsMetadata: merged.hasControlArgsMetadata
+    });
+  }
+
+  return contexts;
+}
+
 export function buildRuntimeAuthorizationToolContext(
   env: Environment
 ): Map<string, AuthorizationToolContext> {
@@ -164,30 +196,18 @@ export function buildRuntimeAuthorizationToolContext(
     return contexts;
   }
 
-  for (const [toolName, definition] of Object.entries(scopedTools)) {
-    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
-    if (!execName) {
-      continue;
-    }
-
-    const executable = resolveExecutableVariable(env, execName);
-    if (!executable) {
-      continue;
-    }
-
-    const merged = mergeToolDefinitionMetadata(
-      buildToolContextFromExecutable(toolName, executable),
-      definition
-    );
-    contexts.set(toolName, {
-      name: toolName,
-      params: new Set(merged.params),
-      controlArgs: new Set(merged.controlArgs ?? []),
-      hasControlArgsMetadata: merged.hasControlArgsMetadata
-    });
+  for (const [toolName, context] of buildAuthorizationToolContextFromCollection(env, scopedTools)) {
+    contexts.set(toolName, context);
   }
 
   return contexts;
+}
+
+export function buildAuthorizationToolContextForCollection(
+  env: Environment,
+  collection: ToolCollection
+): Map<string, AuthorizationToolContext> {
+  return buildAuthorizationToolContextFromCollection(env, collection);
 }
 
 export function resolveEffectiveToolMetadata(options: {

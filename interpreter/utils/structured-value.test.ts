@@ -14,6 +14,7 @@ import {
   mergeDescriptors,
   serializeSecurityDescriptor
 } from '@core/types/security';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 const SOURCE: VariableSource = {
   directive: 'var',
@@ -126,6 +127,22 @@ describe('text serialization fallbacks', () => {
 });
 
 describe('extractSecurityDescriptor with refined record metadata', () => {
+  it('does not let empty expression provenance mask structured metadata', () => {
+    const structured = wrapStructured(
+      'alice@example.com',
+      'text',
+      'alice@example.com',
+      {
+        security: makeSecurityDescriptor({ labels: ['fact:@contact.email'] })
+      }
+    );
+
+    setExpressionProvenance(structured, makeSecurityDescriptor());
+
+    const descriptor = extractSecurityDescriptor(structured);
+    expect(descriptor?.labels).toContain('fact:@contact.email');
+  });
+
   it('keeps wrapper descriptors shallow but includes namespace field descriptors recursively', () => {
     const structured = wrapStructured(
       { recipient: 'acct-1', subject: 'Rent' },

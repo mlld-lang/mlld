@@ -1,46 +1,24 @@
 import {
   normalizePolicyAuthorizations,
   validateNormalizedPolicyAuthorizations,
-  validatePolicyAuthorizations,
   type PolicyAuthorizationValidationResult
 } from '@core/policy/authorizations';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
-import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
-import {
-  collectSecurityRelevantArgNamesForOperation,
-  repairSecurityRelevantValue,
-  type RuntimeRepairEvent
-} from '@interpreter/security/runtime-repair';
 import type { Environment } from '@interpreter/env/Environment';
 import {
-  asData,
-  extractSecurityDescriptor,
-  isStructuredValue
-} from '@interpreter/utils/structured-value';
-import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+  clonePolicyAuthorizationCompileReport,
+  compilePolicyAuthorizations,
+  hasPolicyAuthorizationCompileActivity,
+  type PolicyAuthorizationCompileReport
+} from '@interpreter/policy/authorization-compiler';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
+import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isAmbiguousProjectedValueError(error: unknown): boolean {
-  return error instanceof MlldSecurityError && error.code === 'AMBIGUOUS_PROJECTED_VALUE';
-}
-
-function containsBareHandleToken(value: unknown): boolean {
-  if (typeof value === 'string') {
-    return /^h_[a-z0-9]+$/.test(value.trim());
-  }
-  if (Array.isArray(value)) {
-    return value.some(entry => containsBareHandleToken(entry));
-  }
-  if (isPlainObject(value)) {
-    return Object.values(value).some(entry => containsBareHandleToken(entry));
-  }
-  return false;
 }
 
 function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
@@ -53,53 +31,7 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
-export interface PolicyAuthorizationCompileReport {
-  strippedArgs: Array<{ tool: string; arg: string }>;
-  repairedArgs: Array<{ tool: string; arg: string; steps: string[] }>;
-  droppedEntries: Array<{ tool: string; reason: string }>;
-  droppedArrayElements: Array<{ tool: string; arg: string; index: number; reason: string; value: string }>;
-  ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
-  compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
-}
-
 const policyAuthorizationCompileReports = new WeakMap<PolicyConfig, PolicyAuthorizationCompileReport>();
-
-function createEmptyPolicyAuthorizationCompileReport(): PolicyAuthorizationCompileReport {
-  return {
-    strippedArgs: [],
-    repairedArgs: [],
-    droppedEntries: [],
-    droppedArrayElements: [],
-    ambiguousValues: [],
-    compiledProofs: []
-  };
-}
-
-function clonePolicyAuthorizationCompileReport(
-  report: PolicyAuthorizationCompileReport
-): PolicyAuthorizationCompileReport {
-  return {
-    strippedArgs: report.strippedArgs.map(entry => ({ ...entry })),
-    repairedArgs: report.repairedArgs.map(entry => ({ ...entry, steps: [...entry.steps] })),
-    droppedEntries: report.droppedEntries.map(entry => ({ ...entry })),
-    droppedArrayElements: report.droppedArrayElements.map(entry => ({ ...entry })),
-    ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
-    compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] }))
-  };
-}
-
-function hasPolicyAuthorizationCompileActivity(
-  report: PolicyAuthorizationCompileReport
-): boolean {
-  return (
-    report.strippedArgs.length > 0
-    || report.repairedArgs.length > 0
-    || report.droppedEntries.length > 0
-    || report.droppedArrayElements.length > 0
-    || report.ambiguousValues.length > 0
-    || report.compiledProofs.length > 0
-  );
-}
 
 export function getInvocationPolicyFragmentCompileReport(
   policy: PolicyConfig | undefined
@@ -109,530 +41,6 @@ export function getInvocationPolicyFragmentCompileReport(
   }
   const report = policyAuthorizationCompileReports.get(policy);
   return report ? clonePolicyAuthorizationCompileReport(report) : undefined;
-}
-
-function runtimeRepairEventLabel(event: RuntimeRepairEvent): string {
-  switch (event.kind) {
-    case 'resolved_handle':
-      return 'resolved_handle';
-    case 'lifted_fact_value':
-      return 'lifted_fact_value';
-    case 'canonicalized_projected_value':
-      return 'canonicalized_projected_value';
-    case 'rebound_session_proof':
-      return 'rebound_session_proof';
-    case 'dropped_ambiguous_array_element':
-      return 'dropped_ambiguous_array_element';
-    case 'ambiguous_projected_value':
-      return 'ambiguous_projected_value';
-  }
-}
-
-function isArrayLikeConstraintValue(value: unknown): boolean {
-  if (Array.isArray(value)) {
-    return true;
-  }
-  if (isVariable(value)) {
-    return isArrayLikeConstraintValue(value.value);
-  }
-  return isStructuredValue(value) && value.type === 'array' && Array.isArray(value.data);
-}
-
-function stripNonControlArgsFromRawPolicyAuthorizations(
-  candidate: PolicyConfig,
-  toolContext: ReadonlyMap<string, { controlArgs: Set<string>; hasControlArgsMetadata: boolean }>,
-  report: PolicyAuthorizationCompileReport
-): void {
-  const allow = candidate.authorizations?.allow;
-  if (!isPlainObject(allow)) {
-    return;
-  }
-
-  for (const [toolName, entry] of Object.entries(allow)) {
-    const tool = toolContext.get(toolName);
-    if (!tool?.hasControlArgsMetadata || entry === true || !isPlainObject(entry)) {
-      continue;
-    }
-
-    const args = isPlainObject(entry.args) ? (entry.args as Record<string, unknown>) : undefined;
-    if (!args) {
-      continue;
-    }
-
-    const strippedArgs: Record<string, unknown> = {};
-    for (const [argName, argValue] of Object.entries(args)) {
-      if (tool.controlArgs.has(argName)) {
-        strippedArgs[argName] = argValue;
-      } else {
-        report.strippedArgs.push({ tool: toolName, arg: argName });
-      }
-    }
-    entry.args = strippedArgs;
-  }
-}
-
-function normalizeAuthorizationProofLabels(labels: readonly string[] | undefined): string[] {
-  if (!Array.isArray(labels)) {
-    return [];
-  }
-  return Array.from(
-    new Set(labels.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0))
-  );
-}
-
-function isAstObjectNode(value: unknown): value is {
-  type: 'object';
-  entries?: Array<{ key?: string; value?: unknown }>;
-} {
-  return Boolean(
-    value
-      && typeof value === 'object'
-      && (value as { type?: unknown }).type === 'object'
-      && Array.isArray((value as { entries?: unknown }).entries)
-  );
-}
-
-function isAstArrayNode(value: unknown): value is {
-  type: 'array';
-  items?: unknown[];
-} {
-  return Boolean(
-    value
-      && typeof value === 'object'
-      && (value as { type?: unknown }).type === 'array'
-      && Array.isArray((value as { items?: unknown }).items)
-  );
-}
-
-function getAstObjectEntryValue(node: unknown, key: string): unknown {
-  if (!isAstObjectNode(node)) {
-    return undefined;
-  }
-  return node.entries?.find(entry => entry?.key === key)?.value;
-}
-
-async function unwrapResolvedConstraintValue(
-  value: unknown,
-  env: Environment
-): Promise<unknown> {
-  if (isVariable(value)) {
-    if (extractSecurityDescriptor(value)) {
-      return value;
-    }
-    const extracted = await extractVariableValue(value, env);
-    return unwrapResolvedConstraintValue(extracted, env);
-  }
-  if (Array.isArray(value)) {
-    const items: unknown[] = [];
-    for (const item of value) {
-      items.push(await unwrapResolvedConstraintValue(item, env));
-    }
-    return items;
-  }
-  if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      result[key] = await unwrapResolvedConstraintValue(entry, env);
-    }
-    return result;
-  }
-  return value;
-}
-
-async function materializePolicySourceValue(
-  value: unknown,
-  env: Environment
-): Promise<unknown> {
-  if (isVariable(value)) {
-    if (extractSecurityDescriptor(value)) {
-      return value;
-    }
-    const extracted = await extractVariableValue(value, env);
-    return materializePolicySourceValue(extracted, env);
-  }
-
-  if (isStructuredValue(value)) {
-    if (value.type === 'array' && Array.isArray(value.data)) {
-      const items: unknown[] = [];
-      for (const item of value.data) {
-        items.push(await materializePolicySourceValue(item, env));
-      }
-      return items;
-    }
-    if (value.type === 'object' && isPlainObject(value.data)) {
-      const result: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value.data)) {
-        result[key] = await materializePolicySourceValue(entry, env);
-      }
-      return result;
-    }
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    const items: unknown[] = [];
-    for (const item of value) {
-      items.push(await materializePolicySourceValue(item, env));
-    }
-    return items;
-  }
-
-  if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      result[key] = await materializePolicySourceValue(entry, env);
-    }
-    return result;
-  }
-
-  return value;
-}
-
-async function resolveConstraintSourceValue(
-  value: unknown,
-  env: Environment
-): Promise<unknown> {
-  if (value && typeof value === 'object') {
-    const candidate = value as Record<string, unknown>;
-    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
-      const variable = env.getVariable(candidate.identifier);
-      if (!variable) {
-        return (
-          await repairSecurityRelevantValue({
-            value: candidate,
-            env,
-            matchScope: 'session',
-            includeSessionProofMatches: true,
-            dropAmbiguousArrayElements: isArrayLikeConstraintValue(candidate),
-            collapseEquivalentProjectedMatches: true
-          })
-        ).value;
-      }
-      const resolved = await resolveValueHandles(variable, env);
-      const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
-      return (
-        await repairSecurityRelevantValue({
-          value: unwrapped,
-          env,
-          matchScope: 'session',
-          includeSessionProofMatches: true,
-          dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
-          collapseEquivalentProjectedMatches: true
-        })
-      ).value;
-    }
-    if (isAstArrayNode(value)) {
-      const items: unknown[] = [];
-      for (const item of value.items ?? []) {
-        items.push(await resolveConstraintSourceValue(item, env));
-      }
-      return (
-        await repairSecurityRelevantValue({
-          value: items,
-          env,
-          matchScope: 'session',
-          includeSessionProofMatches: true,
-          dropAmbiguousArrayElements: true,
-          collapseEquivalentProjectedMatches: true
-        })
-      ).value;
-    }
-    if (isAstObjectNode(value)) {
-      const result: Record<string, unknown> = {};
-      for (const entry of value.entries ?? []) {
-        if (typeof entry?.key !== 'string') {
-          continue;
-        }
-        result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
-      }
-      return (
-        await repairSecurityRelevantValue({
-          value: result,
-          env,
-          matchScope: 'session',
-          includeSessionProofMatches: true,
-          collapseEquivalentProjectedMatches: true
-        })
-      ).value;
-    }
-  }
-  if (
-    value &&
-    typeof value === 'object' &&
-    'type' in (value as Record<string, unknown>) &&
-    !isStructuredValue(value)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    const resolved = await resolveValueHandles(result.value, env);
-    const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
-    return (
-      await repairSecurityRelevantValue({
-        value: unwrapped,
-        env,
-        matchScope: 'session',
-        includeSessionProofMatches: true,
-        dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
-        collapseEquivalentProjectedMatches: true
-      })
-    ).value;
-  }
-  const resolved = await resolveValueHandles(value, env);
-  const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
-  return (
-    await repairSecurityRelevantValue({
-      value: unwrapped,
-      env,
-      matchScope: 'session',
-      includeSessionProofMatches: true,
-      dropAmbiguousArrayElements: isArrayLikeConstraintValue(unwrapped),
-      collapseEquivalentProjectedMatches: true
-    })
-  ).value;
-}
-
-async function extractConstraintAttestations(
-  value: unknown,
-  env: Environment
-): Promise<string[]> {
-  const resolvedValue = await resolveConstraintSourceValue(value, env);
-  const descriptor = extractSecurityDescriptor(resolvedValue, {
-    recursive: true,
-    mergeArrayElements: true
-  });
-  return normalizeAuthorizationProofLabels(collectProofClaimLabels(descriptor));
-}
-
-async function compileAuthorizationAttestations(
-  rawPolicy: unknown,
-  normalizedPolicy: PolicyConfig | undefined,
-  env: Environment,
-  report: PolicyAuthorizationCompileReport
-): Promise<void> {
-  const rawValue = isStructuredValue(rawPolicy) ? asData(rawPolicy) : rawPolicy;
-  const normalizedAuthorizations = normalizedPolicy?.authorizations;
-  const sourceValue =
-    isAstObjectNode(rawValue) || isAstArrayNode(rawValue)
-      ? rawValue
-      : await materializePolicySourceValue(rawValue, env);
-  let rawConfig = resolvePolicyConfigSource(sourceValue);
-  let rawAuthorizationsNode = getAstObjectEntryValue(sourceValue, 'authorizations');
-  let rawAuthorizations =
-    rawConfig && isPlainObject(rawConfig.authorizations)
-      ? (rawConfig.authorizations as Record<string, unknown>)
-      : undefined;
-  let rawAllow =
-    rawAuthorizations && isPlainObject(rawAuthorizations.allow)
-      ? (rawAuthorizations.allow as Record<string, unknown>)
-      : undefined;
-
-  if (!normalizedAuthorizations || (!rawAllow && !rawAuthorizationsNode)) {
-    return;
-  }
-
-  for (const [toolName, entry] of Object.entries(normalizedAuthorizations.allow)) {
-    if (entry.kind !== 'constrained') {
-      continue;
-    }
-    try {
-      const rawEntry = rawAllow?.[toolName];
-      const rawArgsObject =
-        isPlainObject(rawEntry) && isPlainObject(rawEntry.args)
-          ? (rawEntry.args as Record<string, unknown>)
-          : undefined;
-      const rawArgsNode = getAstObjectEntryValue(
-        getAstObjectEntryValue(
-          getAstObjectEntryValue(rawAuthorizationsNode, 'allow'),
-          toolName
-        ),
-        'args'
-      );
-      if (!rawArgsObject && !rawArgsNode) {
-        continue;
-      }
-
-      for (const [argName, clauses] of Object.entries(entry.args)) {
-        const rawConstraint = rawArgsObject?.[argName] ?? getAstObjectEntryValue(rawArgsNode, argName);
-        if (rawConstraint === undefined) {
-          continue;
-        }
-
-        entry.args[argName] = await Promise.all(clauses.map(async clause => {
-          if ('eq' in clause) {
-            let compiledAttestations = await extractConstraintAttestations(
-              isPlainObject(rawConstraint) && Object.prototype.hasOwnProperty.call(rawConstraint, 'eq')
-                ? rawConstraint.eq
-                : getAstObjectEntryValue(rawConstraint, 'eq') ?? rawConstraint,
-              env
-            );
-            if (compiledAttestations.length === 0) {
-              compiledAttestations = await extractConstraintAttestations(clause.eq, env);
-            }
-            if (compiledAttestations.length === 0) {
-              return clause;
-            }
-            report.compiledProofs.push({
-              tool: toolName,
-              arg: argName,
-              labels: [...compiledAttestations]
-            });
-            return {
-              ...clause,
-              attestations: compiledAttestations
-            };
-          }
-
-          const rawOneOfCandidates =
-            isPlainObject(rawConstraint) && Array.isArray(rawConstraint.oneOf)
-              ? rawConstraint.oneOf
-              : isAstArrayNode(getAstObjectEntryValue(rawConstraint, 'oneOf'))
-                ? (getAstObjectEntryValue(rawConstraint, 'oneOf') as { items: unknown[] }).items
-                : clause.oneOf;
-          let oneOfAttestations = await Promise.all(
-            rawOneOfCandidates.map(candidate => extractConstraintAttestations(candidate, env))
-          );
-          if (!oneOfAttestations.some(entry => entry.length > 0)) {
-            oneOfAttestations = await Promise.all(
-              clause.oneOf.map(candidate => extractConstraintAttestations(candidate, env))
-            );
-          }
-          if (!oneOfAttestations.some(entry => entry.length > 0)) {
-            return clause;
-          }
-          report.compiledProofs.push({
-            tool: toolName,
-            arg: argName,
-            labels: Array.from(new Set(oneOfAttestations.flatMap(entry => entry)))
-          });
-          return {
-            ...clause,
-            oneOfAttestations
-          };
-        }));
-      }
-    } catch (error) {
-      if (isAmbiguousProjectedValueError(error)) {
-        delete normalizedAuthorizations.allow[toolName];
-        continue;
-      }
-      throw error;
-    }
-  }
-}
-
-async function canonicalizePolicyAuthorizationConstraints(
-  candidate: PolicyConfig,
-  env: Environment,
-  report: PolicyAuthorizationCompileReport
-): Promise<void> {
-  const allow = candidate.authorizations?.allow;
-  if (!allow) {
-    return;
-  }
-
-  for (const [toolName, entry] of Object.entries(allow)) {
-    if (!isPlainObject(entry) || !isPlainObject(entry.args)) {
-      continue;
-    }
-
-    const targetArgNames = collectSecurityRelevantArgNamesForOperation({
-      env,
-      operationName: toolName,
-      policy: candidate
-    });
-
-    for (const [argName, argValue] of Object.entries(entry.args)) {
-      const shouldCanonicalize =
-        targetArgNames.includes(argName) || containsBareHandleToken(argValue);
-      if (!shouldCanonicalize) {
-        continue;
-      }
-      try {
-        const repaired = await repairSecurityRelevantValue({
-          value: argValue,
-          env,
-          matchScope: 'session',
-          includeSessionProofMatches: true,
-          dropAmbiguousArrayElements: isArrayLikeConstraintValue(argValue),
-          collapseEquivalentProjectedMatches: true
-        });
-        entry.args[argName] = repaired.value;
-        for (const event of repaired.events) {
-          if (event.kind !== 'dropped_ambiguous_array_element') {
-            continue;
-          }
-          report.droppedArrayElements.push({
-            tool: toolName,
-            arg: argName,
-            index: event.index,
-            reason: 'ambiguous_projected_value',
-            value: event.value
-          });
-          report.ambiguousValues.push({
-            tool: toolName,
-            arg: argName,
-            value: event.value
-          });
-        }
-        const repairSteps = repaired.events
-          .filter(
-            event =>
-              event.kind !== 'ambiguous_projected_value'
-              && event.kind !== 'dropped_ambiguous_array_element'
-          )
-          .map(runtimeRepairEventLabel);
-        if (repairSteps.length > 0) {
-          report.repairedArgs.push({
-            tool: toolName,
-            arg: argName,
-            steps: Array.from(new Set(repairSteps))
-          });
-        }
-      } catch (error) {
-        if (isAmbiguousProjectedValueError(error)) {
-          // Fail closed on the specific authorization entry instead of aborting
-          // the entire invocation. The later authorization check will deny it.
-          report.droppedEntries.push({
-            tool: toolName,
-            reason: 'ambiguous_projected_value'
-          });
-          report.ambiguousValues.push({
-            tool: toolName,
-            arg: argName,
-            value: typeof argValue === 'string' ? argValue : String(argValue)
-          });
-          delete allow[toolName];
-          break;
-        }
-        throw error;
-      }
-    }
-  }
-}
-
-function assertPolicyAuthorizationsShapeValid(
-  candidate: PolicyConfig,
-  toolContext?: ReturnType<typeof buildRuntimeAuthorizationToolContext>
-): void {
-  if (candidate.authorizations === undefined) {
-    return;
-  }
-
-  const validation = validatePolicyAuthorizations(candidate.authorizations, toolContext);
-  if (validation.errors.length === 0) {
-    return;
-  }
-
-  throw new MlldSecurityError(
-    validation.errors[0]?.message ?? 'with { policy } includes invalid policy.authorizations',
-    {
-      code: 'POLICY_AUTHORIZATIONS_INVALID',
-      details: {
-        errors: validation.errors,
-        warnings: validation.warnings
-      }
-    }
-  );
 }
 
 export async function resolveInvocationPolicyFragment(
@@ -684,25 +92,30 @@ export async function resolveInvocationPolicyFragment(
     });
   }
 
-  const toolContext = buildRuntimeAuthorizationToolContext(env);
-  const compileReport = createEmptyPolicyAuthorizationCompileReport();
-  assertPolicyAuthorizationsShapeValid(candidate, toolContext);
-  stripNonControlArgsFromRawPolicyAuthorizations(candidate, toolContext, compileReport);
-  await canonicalizePolicyAuthorizationConstraints(candidate, env, compileReport);
-
   const normalized = normalizePolicyConfig(candidate);
-  const normalizedAuthorizations = normalizePolicyAuthorizations(
-    candidate.authorizations,
-    undefined,
-    toolContext
-  );
-  if (normalizedAuthorizations) {
-    normalized.authorizations = normalizedAuthorizations;
+  if (candidate.authorizations !== undefined) {
+    const toolContext = buildRuntimeAuthorizationToolContext(env);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: candidate.authorizations,
+      rawSource: rawResolvedValue,
+      env,
+      toolContext,
+      policy: mergePolicyConfigs(env.getPolicySummary(), candidate),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'runtime'
+    });
+
+    if (compilation.authorizations) {
+      normalized.authorizations = compilation.authorizations;
+    }
+    if (hasPolicyAuthorizationCompileActivity(compilation.report)) {
+      policyAuthorizationCompileReports.set(
+        normalized,
+        clonePolicyAuthorizationCompileReport(compilation.report)
+      );
+    }
   }
-  await compileAuthorizationAttestations(rawResolvedValue, normalized, env, compileReport);
-  if (hasPolicyAuthorizationCompileActivity(compileReport)) {
-    policyAuthorizationCompileReports.set(normalized, clonePolicyAuthorizationCompileReport(compileReport));
-  }
+
   return normalized;
 }
 

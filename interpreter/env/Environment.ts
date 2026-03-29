@@ -128,6 +128,7 @@ import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { createFyiVariable } from './builtins/fyi';
+import { createPolicyVariable } from './builtins/policy';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
@@ -522,6 +523,7 @@ export class Environment
 
       // Register keep/keepStructured builtins
       this.registerKeepBuiltins();
+      this.registerPolicyBuiltins();
       
       // Reserve module prefixes from resolver configuration and create path variables
       this.reserveModulePrefixes();
@@ -557,6 +559,7 @@ export class Environment
 
     // Ensure keep/keepStructured helpers are available even from child environments
     this.getRootEnvironment().registerKeepBuiltins();
+    this.getRootEnvironment().registerPolicyBuiltins();
 
     // Command executor factory: eagerly create for root environments, lazy-init for children.
     // Most child environments (e.g., for-loop iterations doing field access) never execute
@@ -2235,6 +2238,17 @@ export class Environment
       this.variableManager.setVariable('keepStructured', keepStructuredExec as any);
     } catch (error) {
       logger.warn('Failed to register keep builtins', error);
+    }
+  }
+
+  private registerPolicyBuiltins(): void {
+    try {
+      if (this.variableManager.hasVariable('policy')) {
+        return;
+      }
+      this.variableManager.setVariable('policy', createPolicyVariable(this) as any);
+    } catch (error) {
+      logger.warn('Failed to register policy builtins', error);
     }
   }
 

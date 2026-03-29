@@ -773,15 +773,17 @@ function extractDescriptorInternal(
     return undefined;
   }
 
-  const provenanceDescriptor = getExpressionProvenance(value);
-  if (provenanceDescriptor) {
-    return normalizeIfNeeded(provenanceDescriptor, options.normalize);
-  }
+  const provenanceDescriptor = normalizeIfNeeded(
+    getExpressionProvenance(value),
+    options.normalize
+  );
 
   if (isStructuredValue(value)) {
-    const metadataDescriptor =
+    const metadataDescriptor = mergeDescriptorSources(
+      provenanceDescriptor,
       normalizeIfNeeded(candidateMetadataSecurity(value), options.normalize)
-      ?? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize);
+      ?? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize)
+    );
     if (!options.recursive) {
       return normalizeIfNeeded(metadataDescriptor, options.normalize);
     }
@@ -816,12 +818,14 @@ function extractDescriptorInternal(
   }
 
   if (isVariableLike(value)) {
-    const descriptor = value.mx ? varMxToSecurityDescriptor(value.mx) : undefined;
-    return normalizeIfNeeded(descriptor, options.normalize);
+    const descriptor = value.mx
+      ? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize)
+      : undefined;
+    return mergeDescriptorSources(provenanceDescriptor, descriptor);
   }
 
   if (!options.recursive || typeof value !== 'object') {
-    return undefined;
+    return provenanceDescriptor;
   }
 
   if (seen.has(value)) {
@@ -853,9 +857,12 @@ function extractDescriptorInternal(
       policy?: Readonly<Record<string, unknown>> | null;
     };
   };
-  const metadataDescriptor = candidate.mx
-    ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
-    : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize);
+  const metadataDescriptor = mergeDescriptorSources(
+    provenanceDescriptor,
+    candidate.mx
+      ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
+      : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize)
+  );
   const nestedDescriptors = Object.values(value as Record<string, unknown>)
     .map(item => extractDescriptorInternal(item, options, seen))
     .filter(isSecurityDescriptor);
@@ -971,6 +978,16 @@ function normalizeIfNeeded(
     return undefined;
   }
   return normalize ? normalizeSecurityDescriptor(descriptor) : descriptor;
+}
+
+function mergeDescriptorSources(
+  left: SecurityDescriptor | undefined,
+  right: SecurityDescriptor | undefined
+): SecurityDescriptor | undefined {
+  if (left && right) {
+    return mergeDescriptors(left, right);
+  }
+  return left ?? right;
 }
 
 export interface WhenShowEffectResult {

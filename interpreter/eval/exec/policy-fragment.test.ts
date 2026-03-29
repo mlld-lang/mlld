@@ -251,6 +251,114 @@ describe('resolveInvocationPolicyFragment', () => {
     expect(recipientsConstraint.attestations).toEqual(['known']);
   });
 
+  it('rejects authorization entries for tools denied by the ambient policy', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
+    env.setPolicySummary({
+      authorizations: {
+        deny: ['sendEmail']
+      }
+    });
+
+    await expect(
+      resolveInvocationPolicyFragment(
+        {
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipient: {
+                    eq: 'ada@example.com',
+                    attestations: ['known']
+                  }
+                }
+              }
+            }
+          }
+        },
+        env
+      )
+    ).rejects.toThrow(/denied by policy\.authorizations\.deny/i);
+  });
+
+  it('preserves proofless scalar control args for runtime inherited checks', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: 'ada@example.com'
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow?.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+
+    expect(recipientConstraint.eq).toBe('ada@example.com');
+    expect(recipientConstraint.attestations).toBeUndefined();
+  });
+
+  it('accepts explicit known-attested literals for control args', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
+      env
+    );
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        authorizations: {
+          allow: {
+            sendEmail: {
+              args: {
+                recipient: {
+                  eq: 'ada@example.com',
+                  attestations: ['known']
+                }
+              }
+            }
+          }
+        }
+      },
+      env
+    );
+
+    const clause = policy?.authorizations?.allow?.sendEmail;
+    expect(clause?.kind).toBe('constrained');
+    const recipientConstraint = clause?.kind === 'constrained'
+      ? clause.args.recipient?.[0]
+      : undefined;
+    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+    if (!recipientConstraint || !('eq' in recipientConstraint)) {
+      return;
+    }
+
+    expect(recipientConstraint.eq).toBe('ada@example.com');
+    expect(recipientConstraint.attestations).toEqual(['known']);
+  });
+
   it('fails closed when authorization constraints reference unknown handles', async () => {
     const env = createEnv();
 
@@ -326,7 +434,10 @@ describe('resolveInvocationPolicyFragment', () => {
           allow: {
             createCalendarEvent: {
               args: {
-                participants: ['ada@example.com'],
+                participants: {
+                  eq: ['ada@example.com'],
+                  attestations: ['known']
+                },
                 title: 'Dinner at New Israeli Restaurant',
                 start_time: '2026-09-26'
               }
@@ -342,7 +453,7 @@ describe('resolveInvocationPolicyFragment', () => {
         createCalendarEvent: {
           kind: 'constrained',
           args: {
-            participants: [{ eq: ['ada@example.com'] }]
+            participants: [{ eq: ['ada@example.com'], attestations: ['known'] }]
           }
         }
       }
@@ -412,7 +523,10 @@ describe('resolveInvocationPolicyFragment', () => {
           allow: {
             send_email: {
               args: {
-                recipient: 'ada@example.com',
+                recipient: {
+                  eq: 'ada@example.com',
+                  attestations: ['known']
+                },
                 subject: 'hello',
                 body: 'details'
               }
@@ -428,7 +542,7 @@ describe('resolveInvocationPolicyFragment', () => {
         send_email: {
           kind: 'constrained',
           args: {
-            recipient: [{ eq: 'ada@example.com' }]
+            recipient: [{ eq: 'ada@example.com', attestations: ['known'] }]
           }
         }
       }

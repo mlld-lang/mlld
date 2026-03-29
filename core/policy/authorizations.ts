@@ -12,7 +12,8 @@ export type AuthorizationEntry =
     };
 
 export type PolicyAuthorizations = {
-  allow: Record<string, AuthorizationEntry>;
+  allow?: Record<string, AuthorizationEntry>;
+  deny?: string[];
 };
 
 export interface AuthorizationToolContext {
@@ -27,6 +28,7 @@ export interface PolicyAuthorizationIssue {
     | 'authorizations-invalid'
     | 'authorizations-unknown-field'
     | 'authorizations-unknown-tool'
+    | 'authorizations-denied-tool'
     | 'authorizations-unknown-arg'
     | 'authorizations-unsupported-constraint'
     | 'authorizations-missing-control-arg'
@@ -50,6 +52,7 @@ export interface PolicyAuthorizationValidationResult {
 export interface AuthorizationValidationOptions {
   requireKnownTools?: boolean;
   requireControlArgsMetadata?: boolean;
+  deniedTools?: ReadonlySet<string> | readonly string[];
 }
 
 export type PolicyAuthorizationDecision =
@@ -131,11 +134,28 @@ function cloneAuthorizations(authorizations?: PolicyAuthorizations): PolicyAutho
     return undefined;
   }
 
-  const allow: Record<string, AuthorizationEntry> = {};
-  for (const [toolName, entry] of Object.entries(authorizations.allow)) {
-    allow[toolName] = cloneAuthorizationEntry(entry);
+  const allow =
+    authorizations.allow !== undefined
+      ? Object.fromEntries(
+          Object.entries(authorizations.allow).map(([toolName, entry]) => [
+            toolName,
+            cloneAuthorizationEntry(entry)
+          ])
+        )
+      : undefined;
+  const deny =
+    Array.isArray(authorizations.deny)
+      ? authorizations.deny.slice()
+      : undefined;
+
+  if (!allow && !deny) {
+    return undefined;
   }
-  return { allow };
+
+  return {
+    ...(allow ? { allow } : {}),
+    ...(deny ? { deny } : {})
+  };
 }
 
 function addIssue(
@@ -150,6 +170,24 @@ function getEffectiveControlArgs(tool: AuthorizationToolContext): Set<string> {
     return tool.controlArgs;
   }
   return tool.params;
+}
+
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      return undefined;
+    }
+    const trimmed = entry.trim();
+    if (trimmed.length > 0 && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
 }
 
 function isNormalizedConstraintClause(value: unknown): value is AuthorizationConstraintClause {
@@ -427,7 +465,7 @@ export function normalizePolicyAuthorizations(
   }
 
   const keys = Object.keys(raw);
-  const unsupportedKeys = keys.filter(key => key !== 'allow');
+  const unsupportedKeys = keys.filter(key => key !== 'allow' && key !== 'deny');
   if (unsupportedKeys.length > 0) {
     addIssue(errors, {
       code: 'authorizations-unknown-field',
@@ -437,32 +475,60 @@ export function normalizePolicyAuthorizations(
     });
   }
 
-  const rawAllow = raw.allow;
-  if (!isPlainObject(rawAllow)) {
-    addIssue(errors, {
-      code: 'authorizations-invalid',
-      severity: 'error',
-      path: 'authorizations.allow',
-      message: 'policy.authorizations.allow must be an object'
-    });
+  const hasAllow = Object.prototype.hasOwnProperty.call(raw, 'allow');
+  const hasDeny = Object.prototype.hasOwnProperty.call(raw, 'deny');
+  if (!hasAllow && !hasDeny) {
     return undefined;
   }
 
-  const allow: Record<string, AuthorizationEntry> = {};
-  for (const [toolName, rawEntry] of Object.entries(rawAllow)) {
-    const normalizedEntry = normalizeEntry(
-      toolName,
-      rawEntry,
-      errors,
-      warnings,
-      toolContext?.get(toolName)
-    );
-    if (normalizedEntry) {
-      allow[toolName] = normalizedEntry;
+  let allow: Record<string, AuthorizationEntry> | undefined;
+  if (hasAllow) {
+    const rawAllow = raw.allow;
+    if (!isPlainObject(rawAllow)) {
+      addIssue(errors, {
+        code: 'authorizations-invalid',
+        severity: 'error',
+        path: 'authorizations.allow',
+        message: 'policy.authorizations.allow must be an object'
+      });
+    } else {
+      allow = {};
+      for (const [toolName, rawEntry] of Object.entries(rawAllow)) {
+        const normalizedEntry = normalizeEntry(
+          toolName,
+          rawEntry,
+          errors,
+          warnings,
+          toolContext?.get(toolName)
+        );
+        if (normalizedEntry) {
+          allow[toolName] = normalizedEntry;
+        }
+      }
     }
   }
 
-  return { allow };
+  let deny: string[] | undefined;
+  if (hasDeny) {
+    deny = normalizeStringList(raw.deny);
+    if (!deny) {
+      addIssue(errors, {
+        code: 'authorizations-invalid',
+        severity: 'error',
+        path: 'authorizations.deny',
+        message: 'policy.authorizations.deny must be an array of strings'
+      });
+    }
+  }
+
+  if (!allow && !deny) {
+    return undefined;
+  }
+
+  return {
+    ...(allow ? { allow } : {}),
+    ...(deny ? { deny } : {})
+  };
 }
 
 export function mergePolicyAuthorizations(
@@ -476,38 +542,55 @@ export function mergePolicyAuthorizations(
     return cloneAuthorizations(base);
   }
 
-  const allow: Record<string, AuthorizationEntry> = {};
-  const sharedTools = Object.keys(base.allow).filter(toolName => Object.prototype.hasOwnProperty.call(incoming.allow, toolName));
+  let allow: Record<string, AuthorizationEntry> | undefined;
+  if (base.allow && incoming.allow) {
+    allow = {};
+    const sharedTools = Object.keys(base.allow).filter(toolName =>
+      Object.prototype.hasOwnProperty.call(incoming.allow!, toolName)
+    );
 
-  for (const toolName of sharedTools) {
-    const left = base.allow[toolName];
-    const right = incoming.allow[toolName];
+    for (const toolName of sharedTools) {
+      const left = base.allow[toolName];
+      const right = incoming.allow[toolName];
 
-    if (left.kind === 'unconstrained' && right.kind === 'unconstrained') {
-      allow[toolName] = { kind: 'unconstrained' };
-      continue;
+      if (left.kind === 'unconstrained' && right.kind === 'unconstrained') {
+        allow[toolName] = { kind: 'unconstrained' };
+        continue;
+      }
+
+      const leftArgs = left.kind === 'constrained' ? left.args : {};
+      const rightArgs = right.kind === 'constrained' ? right.args : {};
+      const args: Record<string, AuthorizationConstraintClause[]> = {};
+      const argNames = new Set<string>([...Object.keys(leftArgs), ...Object.keys(rightArgs)]);
+
+      for (const argName of argNames) {
+        args[argName] = [
+          ...(leftArgs[argName] ?? []).map(cloneConstraintClause),
+          ...(rightArgs[argName] ?? []).map(cloneConstraintClause)
+        ];
+      }
+
+      allow[toolName] = { kind: 'constrained', args };
     }
-
-    const leftArgs = left.kind === 'constrained' ? left.args : {};
-    const rightArgs = right.kind === 'constrained' ? right.args : {};
-    const args: Record<string, AuthorizationConstraintClause[]> = {};
-    const argNames = new Set<string>([...Object.keys(leftArgs), ...Object.keys(rightArgs)]);
-
-    for (const argName of argNames) {
-      args[argName] = [
-        ...(leftArgs[argName] ?? []).map(cloneConstraintClause),
-        ...(rightArgs[argName] ?? []).map(cloneConstraintClause)
-      ];
-    }
-
-    allow[toolName] = { kind: 'constrained', args };
+  } else if (base.allow) {
+    allow = cloneAuthorizations(base)?.allow;
+  } else if (incoming.allow) {
+    allow = cloneAuthorizations(incoming)?.allow;
   }
 
-  return { allow };
+  const deny = Array.from(new Set([...(base.deny ?? []), ...(incoming.deny ?? [])]));
+  if (!allow && deny.length === 0) {
+    return undefined;
+  }
+
+  return {
+    ...(allow ? { allow } : {}),
+    ...(deny.length > 0 ? { deny } : {})
+  };
 }
 
 export function hasToolWriteAuthorizationPolicy(authorizations?: PolicyAuthorizations): boolean {
-  return Boolean(authorizations);
+  return authorizations?.allow !== undefined;
 }
 
 export function validatePolicyAuthorizations(
@@ -537,6 +620,16 @@ function validateNormalizedPolicyAuthorizationsInto(
 ): void {
   const requireKnownTools = options.requireKnownTools === true;
   const requireControlArgsMetadata = options.requireControlArgsMetadata === true;
+  const deniedTools = new Set<string>([
+    ...(normalized.deny ?? []),
+    ...(
+      options.deniedTools instanceof Set
+        ? [...options.deniedTools]
+        : Array.isArray(options.deniedTools)
+          ? options.deniedTools
+          : []
+    )
+  ]);
 
   if ((requireKnownTools || requireControlArgsMetadata) && (!toolContext || toolContext.size === 0)) {
     addIssue(errors, {
@@ -548,7 +641,18 @@ function validateNormalizedPolicyAuthorizationsInto(
     return;
   }
 
-  for (const [toolName, entry] of Object.entries(normalized.allow)) {
+  for (const [toolName, entry] of Object.entries(normalized.allow ?? {})) {
+    if (deniedTools.has(toolName)) {
+      addIssue(errors, {
+        code: 'authorizations-denied-tool',
+        severity: 'error',
+        tool: toolName,
+        path: `authorizations.allow.${toolName}`,
+        message: `Tool '${toolName}' is denied by policy.authorizations.deny`
+      });
+      continue;
+    }
+
     const tool = toolContext?.get(toolName);
     if (!tool) {
       if (requireKnownTools) {
@@ -647,7 +751,16 @@ export function evaluatePolicyAuthorizationDecision(params: {
   controlArgs: readonly string[];
 }): PolicyAuthorizationDecision {
   const { authorizations, operationName, args, controlArgs } = params;
-  const entry = authorizations.allow[operationName];
+  if (authorizations.deny?.includes(operationName)) {
+    return {
+      decision: 'deny',
+      matched: true,
+      code: 'unlisted',
+      reason: 'operation denied by policy.authorizations'
+    };
+  }
+
+  const entry = authorizations.allow?.[operationName];
   if (!entry) {
     return {
       decision: 'deny',

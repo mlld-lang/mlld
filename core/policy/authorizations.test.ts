@@ -7,6 +7,16 @@ import {
 } from './authorizations';
 
 describe('policy authorizations', () => {
+  it('normalizes deny-only authorizations', () => {
+    expect(
+      normalizePolicyAuthorizations({
+        deny: ['update_password', 'update_user_info']
+      })
+    ).toEqual({
+      deny: ['update_password', 'update_user_info']
+    });
+  });
+
   it('intersects allowed tools and conjoins argument constraints on merge', () => {
     const base = normalizePolicyAuthorizations({
       allow: {
@@ -43,6 +53,34 @@ describe('policy authorizations', () => {
           }
         }
       }
+    });
+  });
+
+  it('preserves allow entries when only one side declares allow and unions deny lists', () => {
+    const base = normalizePolicyAuthorizations({
+      deny: ['update_password']
+    });
+    const incoming = normalizePolicyAuthorizations({
+      allow: {
+        send_email: {
+          args: {
+            recipients: ['alice@example.com']
+          }
+        }
+      },
+      deny: ['update_user_info']
+    });
+
+    expect(mergePolicyAuthorizations(base, incoming)).toEqual({
+      allow: {
+        send_email: {
+          kind: 'constrained',
+          args: {
+            recipients: [{ eq: ['alice@example.com'] }]
+          }
+        }
+      },
+      deny: ['update_password', 'update_user_info']
     });
   });
 
@@ -118,6 +156,40 @@ describe('policy authorizations', () => {
     expect(validation.warnings.map(issue => issue.code)).toEqual(
       expect.arrayContaining(['authorizations-empty-entry', 'authorizations-unconstrained-tool'])
     );
+  });
+
+  it('fails validation when an allowed tool is denied by policy', () => {
+    const toolContext = new Map([
+      [
+        'send_email',
+        {
+          name: 'send_email',
+          params: new Set(['recipients']),
+          controlArgs: new Set(['recipients']),
+          hasControlArgsMetadata: true
+        }
+      ]
+    ]);
+
+    const validation = validatePolicyAuthorizations(
+      {
+        allow: {
+          send_email: {
+            args: {
+              recipients: ['alice@example.com']
+            }
+          }
+        }
+      },
+      toolContext,
+      {
+        requireKnownTools: true,
+        requireControlArgsMetadata: true,
+        deniedTools: ['send_email']
+      }
+    );
+
+    expect(validation.errors.map(issue => issue.code)).toContain('authorizations-denied-tool');
   });
 
   it('fails closed by treating all params as control args when metadata is absent', () => {
