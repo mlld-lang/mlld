@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { createHandleWrapper } from '@core/types/handle';
 import { interpret } from '@interpreter/index';
 import type { Environment } from '@interpreter/env/Environment';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { compilePolicyAuthorizations } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import type { ToolCollection } from '@core/types/tools';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { createSimpleTextVariable, createStructuredValueVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
@@ -40,6 +42,14 @@ async function interpretWithEnv(source: string): Promise<Environment> {
   }
 
   return environment;
+}
+
+function createKnownStructuredText(value: string) {
+  return wrapStructured(value, 'text', value, {
+    security: makeSecurityDescriptor({
+      attestations: ['known']
+    })
+  });
 }
 
 async function interpretWithEnvAndFiles(
@@ -346,13 +356,14 @@ describe('@policy builtin', () => {
     `);
 
     const contactEmail = await extractVariableValue(env.getVariable('contactEmail') as any, env);
+    const issued = env.issueHandle(contactEmail);
     const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
     const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
     const compilation = await compilePolicyAuthorizations({
       rawAuthorizations: {
         resolved: {
           sendEmail: {
-            recipient: contactEmail
+            recipient: issued.handle
           }
         },
         known: {
@@ -368,7 +379,7 @@ describe('@policy builtin', () => {
       rawSource: {
         resolved: {
           sendEmail: {
-            recipient: contactEmail
+            recipient: issued.handle
           }
         },
         known: {
@@ -416,7 +427,291 @@ describe('@policy builtin', () => {
     expect(Object.prototype.hasOwnProperty.call(recipientConstraint, 'source')).toBe(false);
   });
 
-  it('drops known bucket entries that try to mint proof from influenced inputs', async () => {
+  it('accepts handle wrapper values in the resolved bucket', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('ada@example.com');
+    const issued = env.issueHandle(approvedRecipient);
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          sendEmail: {
+            recipient: createHandleWrapper(issued.handle)
+          }
+        }
+      },
+      rawSource: {
+        resolved: {
+          sendEmail: {
+            recipient: createHandleWrapper(issued.handle)
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: approvedRecipient,
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('rejects bare literal strings in the resolved bucket as proofless values', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          sendEmail: {
+            recipient: 'ada@example.com'
+          }
+        }
+      },
+      rawSource: {
+        resolved: {
+          sendEmail: {
+            recipient: 'ada@example.com'
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_resolved_value',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow).toEqual({});
+  });
+
+  it('drops proofless resolved array elements individually and preserves handle-backed elements', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipients, subject, body) = js { return recipients; } with { controlArgs: ["recipients"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipients", "subject", "body"], controlArgs: ["recipients"] }
+      }
+    `);
+
+    const recipientA = createKnownStructuredText('alice@example.com');
+    const recipientB = createKnownStructuredText('bob@example.com');
+    const handleA = env.issueHandle(recipientA);
+    const handleB = env.issueHandle(recipientB);
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          sendEmail: {
+            recipients: [handleA.handle, 'mask@example.com', createHandleWrapper(handleB.handle)]
+          }
+        }
+      },
+      rawSource: {
+        resolved: {
+          sendEmail: {
+            recipients: [handleA.handle, 'mask@example.com', createHandleWrapper(handleB.handle)]
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_resolved_value',
+          tool: 'sendEmail',
+          arg: 'recipients',
+          element: 1
+        })
+      ])
+    );
+
+    const entry = compilation.authorizations?.allow.sendEmail;
+    expect(entry?.kind).toBe('constrained');
+    const recipientsConstraint = entry?.kind === 'constrained'
+      ? entry.args.recipients?.[0]
+      : undefined;
+    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
+    if (!recipientsConstraint || !('eq' in recipientsConstraint) || !Array.isArray(recipientsConstraint.eq)) {
+      return;
+    }
+
+    expect(recipientsConstraint.eq).toEqual([recipientA, recipientB]);
+    expect(recipientsConstraint.attestations).toEqual(['known']);
+  });
+
+  it('accepts explicit empty arrays in the resolved bucket', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @createCalendarEvent(participants, title, start_time) = js { return title; } with { controlArgs: ["participants"] }
+
+      /var tools @writeTools = {
+        createCalendarEvent: {
+          mlld: @createCalendarEvent,
+          expose: ["participants", "title", "start_time"],
+          controlArgs: ["participants"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          createCalendarEvent: {
+            participants: []
+          }
+        }
+      },
+      rawSource: {
+        resolved: {
+          createCalendarEvent: {
+            participants: []
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow.createCalendarEvent).toEqual({
+      kind: 'constrained',
+      args: {
+        participants: [
+          {
+            eq: []
+          }
+        ]
+      }
+    });
+  });
+
+  it('rejects bucketed intent from influenced sources even when resolved handles and allow tools are otherwise valid', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] },
+        createDraft: { mlld: @createDraft, expose: ["subject", "body"], controlArgs: [] }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('ada@example.com');
+    const issued = env.issueHandle(approvedRecipient);
+    const influencedSource = wrapStructured(
+      {
+        resolved: {
+          sendEmail: {
+            recipient: issued.handle
+          }
+        },
+        allow: ['createDraft']
+      },
+      'object',
+      JSON.stringify({
+        resolved: {
+          sendEmail: {
+            recipient: issued.handle
+          }
+        },
+        allow: ['createDraft']
+      }),
+      {
+        security: makeSecurityDescriptor({
+          labels: ['influenced']
+        })
+      }
+    );
+    env.setVariable(
+      'plannerIntent',
+      createStructuredValueVariable(
+        'plannerIntent',
+        influencedSource,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        resolved: {
+          sendEmail: {
+            recipient: issued.handle
+          }
+        },
+        allow: ['createDraft']
+      },
+      rawSource: env.getVariable('plannerIntent'),
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([
+      expect.objectContaining({
+        reason: 'bucketed_intent_from_influenced_source'
+      })
+    ]);
+    expect(compilation.authorizations).toBeUndefined();
+  });
+
+  it('rejects known-bucket intent from influenced sources before minting proof', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
 
@@ -475,14 +770,12 @@ describe('@policy builtin', () => {
     });
 
     expect(compilation.issues).toEqual(
-      expect.arrayContaining([
+      [
         expect.objectContaining({
-          reason: 'known_from_influenced_source',
-          tool: 'sendEmail',
-          arg: 'recipient'
+          reason: 'bucketed_intent_from_influenced_source'
         })
-      ])
+      ]
     );
-    expect(compilation.authorizations?.allow).toEqual({});
+    expect(compilation.authorizations).toBeUndefined();
   });
 });

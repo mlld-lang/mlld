@@ -252,6 +252,7 @@ What the builder checks:
 
 - Denied tools → dropped (`denied_by_policy`)
 - Unknown tools → dropped (`unknown_tool`)
+- Bucketed intent from influenced sources → rejected (`bucketed_intent_from_influenced_source`)
 - `true` for tools with `controlArgs` → dropped (`requires_control_args`)
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
@@ -282,9 +283,11 @@ The planner structures its authorization output by proof source:
 
 Three buckets:
 
-- **`resolved`** — values from tool results. Validated as handles or fact-bearing values. Can come from influenced steps (proof comes from the values, not the source's trust level).
-- **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy). Must come from uninfluenced sources only — this is a hard invariant, not an opt-in rule.
+- **`resolved`** — values from tool results. Every non-empty control arg value must be a resolvable handle. Bare literals are rejected — handles are the only proof a value came from a tool.
+- **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
 - **`allow`** — tools needing no argument constraints. Validated against `controlArgs` metadata.
+
+The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
 The builder also accepts flat and nested intent shapes for backward compatibility:
 

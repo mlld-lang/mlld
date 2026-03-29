@@ -1,0 +1,23 @@
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent:@subject` with { controlArgs: ["recipient"] }
+
+/var tools @writeTools = {
+  sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+}
+
+/var @intentJson = ::
+{
+  "resolved": {
+    "sendEmail": {
+      "recipient": "ada@example.com"
+    }
+  }
+}
+::
+
+/var @intent = @intentJson | @parse
+/var @built = @policy.build(@intent, @writeTools)
+/show @built.valid
+/show @built.issues[0].reason
+/show @built.issues[0].tool
+/show @built.issues[0].arg
+/show @built.issues.length

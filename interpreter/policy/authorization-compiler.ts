@@ -8,6 +8,7 @@ import {
   type PolicyAuthorizationValidationResult,
   type PolicyAuthorizations
 } from '@core/policy/authorizations';
+import { isHandleWrapper } from '@core/types/handle';
 import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import type { PolicyConfig } from '@core/policy/union';
@@ -45,6 +46,8 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'requires_control_args'
     | 'unknown_arg'
     | 'proofless_control_arg'
+    | 'proofless_resolved_value'
+    | 'bucketed_intent_from_influenced_source'
     | 'superseded_by_resolved'
     | 'known_from_influenced_source'
     | 'ambiguous_projected_value';
@@ -190,6 +193,16 @@ function descriptorHasInfluenced(value: ReturnType<typeof extractSecurityDescrip
   );
 }
 
+function bucketedIntentSourceHasInfluenced(source: unknown): boolean {
+  if (descriptorHasInfluenced(findAuthorizationIntentSourceDescriptor(source, []))) {
+    return true;
+  }
+
+  return ['resolved', 'known', 'allow', 'deny'].some(bucketKey =>
+    descriptorHasInfluenced(findAuthorizationIntentSourceDescriptor(source, [bucketKey]))
+  );
+}
+
 function findAuthorizationIntentSourceDescriptor(
   source: unknown,
   path: readonly string[]
@@ -235,6 +248,8 @@ function hasBucketedAuthorizationIntent(raw: unknown): boolean {
     || Array.isArray(container.allow)
   );
 }
+
+const HANDLE_TOKEN_RE = /^h_[a-z0-9]+$/;
 
 function cloneRawAuthorizationEntry(entry: unknown): unknown {
   if (entry === true || !isPlainObject(entry)) {
@@ -320,11 +335,178 @@ function extractKnownBucketValue(
   return { value: raw, hasValue: true };
 }
 
-function normalizeBucketedAuthorizationIntentSource(options: {
+function buildProoflessResolvedValueMessage(
+  toolName: string,
+  argName: string,
+  element?: number
+): string {
+  if (typeof element === 'number') {
+    return `Tool '${toolName}' resolved authorization for '${argName}[${element}]' must use a handle-backed value`;
+  }
+  return `Tool '${toolName}' resolved authorization for '${argName}' must use a handle-backed value`;
+}
+
+async function normalizeResolvedHandleCandidate(
+  value: unknown,
+  env: Environment
+): Promise<unknown | undefined> {
+  if (typeof value === 'string') {
+    const handle = value.trim();
+    if (!HANDLE_TOKEN_RE.test(handle)) {
+      return undefined;
+    }
+    env.resolveHandle(handle);
+    return handle;
+  }
+
+  if (!isHandleWrapper(value)) {
+    return undefined;
+  }
+
+  const handle = value.handle.trim();
+  if (!HANDLE_TOKEN_RE.test(handle)) {
+    return undefined;
+  }
+  env.resolveHandle(handle);
+  return handle === value.handle
+    ? value
+    : { handle };
+}
+
+async function normalizeResolvedControlArgValue(options: {
+  toolName: string;
+  argName: string;
+  value: unknown;
+  env: Environment;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): Promise<unknown | undefined> {
+  const materialized = await materializePolicySourceValue(options.value, options.env);
+
+  if (materialized === null) {
+    return null;
+  }
+
+  if (Array.isArray(materialized)) {
+    if (materialized.length === 0) {
+      return [];
+    }
+
+    const retained: unknown[] = [];
+    for (let index = 0; index < materialized.length; index += 1) {
+      const normalizedElement = await normalizeResolvedHandleCandidate(
+        materialized[index],
+        options.env
+      );
+      if (normalizedElement !== undefined) {
+        retained.push(normalizedElement);
+        continue;
+      }
+
+      pushCompilerIssue(options.issues, {
+        reason: 'proofless_resolved_value',
+        message: buildProoflessResolvedValueMessage(options.toolName, options.argName, index),
+        tool: options.toolName,
+        arg: options.argName,
+        element: index
+      });
+    }
+
+    return retained.length > 0
+      ? retained
+      : undefined;
+  }
+
+  const normalizedValue = await normalizeResolvedHandleCandidate(materialized, options.env);
+  if (normalizedValue !== undefined) {
+    return normalizedValue;
+  }
+
+  pushCompilerIssue(options.issues, {
+    reason: 'proofless_resolved_value',
+    message: buildProoflessResolvedValueMessage(options.toolName, options.argName),
+    tool: options.toolName,
+    arg: options.argName
+  });
+  return undefined;
+}
+
+async function normalizeResolvedBucketToolEntry(options: {
+  toolName: string;
+  entry: unknown;
+  env: Environment;
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): Promise<{ entry: unknown; resolvedArgNames: string[] } | undefined> {
+  const normalizedEntry = cloneRawAuthorizationEntry(options.entry);
+  if (!isPlainObject(normalizedEntry)) {
+    return { entry: normalizedEntry, resolvedArgNames: [] };
+  }
+
+  const tool = options.toolContext?.get(options.toolName);
+  const hasStructuredArgs = isPlainObject(normalizedEntry.args);
+  const rawArgs =
+    hasStructuredArgs
+      ? (normalizedEntry.args as Record<string, unknown>)
+      : (!hasOwnProperty(normalizedEntry, 'args') && !hasOwnProperty(normalizedEntry, 'kind')
+        ? (normalizedEntry as Record<string, unknown>)
+        : undefined);
+  if (!rawArgs) {
+    return { entry: normalizedEntry, resolvedArgNames: [] };
+  }
+
+  const nextArgs: Record<string, unknown> = {};
+  const resolvedArgNames: string[] = [];
+  let sawResolvedControlArg = false;
+
+  for (const [argName, rawArgValue] of Object.entries(rawArgs)) {
+    const shouldValidate =
+      tool?.hasControlArgsMetadata === true && tool.controlArgs.has(argName);
+    if (!shouldValidate) {
+      nextArgs[argName] = rawArgValue;
+      continue;
+    }
+
+    sawResolvedControlArg = true;
+    const normalizedValue = await normalizeResolvedControlArgValue({
+      toolName: options.toolName,
+      argName,
+      value: rawArgValue,
+      env: options.env,
+      issues: options.issues
+    });
+    if (normalizedValue === undefined) {
+      continue;
+    }
+
+    nextArgs[argName] = normalizedValue;
+    resolvedArgNames.push(argName);
+  }
+
+  if (sawResolvedControlArg && resolvedArgNames.length === 0) {
+    return undefined;
+  }
+
+  return {
+    entry:
+      hasStructuredArgs || hasOwnProperty(normalizedEntry, 'args') || hasOwnProperty(normalizedEntry, 'kind')
+        ? {
+            ...normalizedEntry,
+            args: nextArgs
+          }
+        : {
+            args: nextArgs
+          },
+    resolvedArgNames
+  };
+}
+
+async function normalizeBucketedAuthorizationIntentSource(options: {
   raw: unknown;
   rawSource: unknown;
+  env: Environment;
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   issues: PolicyAuthorizationCompilerIssue[];
-}): { rawAuthorizations: unknown; rawSource: unknown } {
+}): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
   const container = unwrapAuthorizationIntentContainer(options.raw);
   if (!isPlainObject(container)) {
     return {
@@ -334,6 +516,17 @@ function normalizeBucketedAuthorizationIntentSource(options: {
   }
 
   const source = options.rawSource ?? options.raw;
+  if (bucketedIntentSourceHasInfluenced(source)) {
+    pushCompilerIssue(options.issues, {
+      reason: 'bucketed_intent_from_influenced_source',
+      message: 'Bucketed policy authorization intent cannot come from influenced input'
+    });
+    return {
+      rawAuthorizations: undefined,
+      rawSource: source
+    };
+  }
+
   const nextAllow: Record<string, unknown> = {};
   const resolvedArgKeys = new Set<string>();
 
@@ -356,11 +549,23 @@ function normalizeBucketedAuthorizationIntentSource(options: {
       const resolvedAllow = cloneRawAllowEntries(container.resolved);
       if (isPlainObject(resolvedAllow)) {
         for (const [toolName, entry] of Object.entries(resolvedAllow)) {
-          nextAllow[toolName] = mergeRawAuthorizationEntry(nextAllow[toolName], entry);
-          if (isPlainObject(entry) && isPlainObject(entry.args)) {
-            for (const argName of Object.keys(entry.args)) {
-              resolvedArgKeys.add(`${toolName}.${argName}`);
-            }
+          const normalizedEntry = await normalizeResolvedBucketToolEntry({
+            toolName,
+            entry,
+            env: options.env,
+            toolContext: options.toolContext,
+            issues: options.issues
+          });
+          if (!normalizedEntry) {
+            continue;
+          }
+
+          nextAllow[toolName] = mergeRawAuthorizationEntry(
+            nextAllow[toolName],
+            normalizedEntry.entry
+          );
+          for (const argName of normalizedEntry.resolvedArgNames) {
+            resolvedArgKeys.add(`${toolName}.${argName}`);
           }
         }
       }
@@ -463,13 +668,15 @@ function normalizeBucketedAuthorizationIntentSource(options: {
   };
 }
 
-function normalizeAuthorizationIntentSource(options: {
+async function normalizeAuthorizationIntentSource(options: {
   raw: unknown;
   rawSource: unknown;
+  env: Environment;
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   issues: PolicyAuthorizationCompilerIssue[];
-}): { rawAuthorizations: unknown; rawSource: unknown } {
+}): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
   if (hasBucketedAuthorizationIntent(options.raw) || hasBucketedAuthorizationIntent(options.rawSource)) {
-    return normalizeBucketedAuthorizationIntentSource(options);
+    return await normalizeBucketedAuthorizationIntentSource(options);
   }
 
   const raw = options.raw;
@@ -1455,9 +1662,11 @@ export async function compilePolicyAuthorizations(
   const report = createEmptyPolicyAuthorizationCompileReport();
   const issues: PolicyAuthorizationCompilerIssue[] = [];
 
-  const normalizedIntent = normalizeAuthorizationIntentSource({
+  const normalizedIntent = await normalizeAuthorizationIntentSource({
     raw: options.rawAuthorizations,
     rawSource: options.rawSource ?? options.rawAuthorizations,
+    env: options.env,
+    toolContext: options.toolContext,
     issues
   });
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
