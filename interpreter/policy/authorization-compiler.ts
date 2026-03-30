@@ -479,7 +479,7 @@ async function normalizeResolvedHandleCandidate(
       : { handle };
   }
 
-  if (!isPlainObject(value) || Array.isArray(value) || Object.keys(value).length !== 1 || !hasOwnProperty(value, 'handle')) {
+  if (!isPlainObject(value) || Array.isArray(value) || !hasOwnProperty(value, 'handle')) {
     return undefined;
   }
 
