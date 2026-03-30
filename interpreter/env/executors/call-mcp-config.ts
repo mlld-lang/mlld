@@ -10,7 +10,11 @@ import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
-import { resolveEffectiveToolMetadata } from '@interpreter/eval/exec/tool-metadata';
+import {
+  resolveEffectiveToolMetadata,
+  shouldAutoExposeFyiKnown,
+  type EffectiveToolMetadata
+} from '@interpreter/eval/exec/tool-metadata';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -60,6 +64,7 @@ export interface CallMcpConfig {
   readonly nativeAllowedTools: string;
   readonly unifiedAllowedTools: string;
   readonly availableTools: readonly AvailableToolDescriptor[];
+  readonly toolMetadata?: readonly EffectiveToolMetadata[];
   readonly inBox: boolean;
   cleanup(): Promise<void>;
 }
@@ -551,21 +556,6 @@ async function createFilteredVfsBridge(options: {
   };
 }
 
-function isWriteToolWithControlArgs(
-  env: Environment,
-  executable: ExecutableVariable
-): boolean {
-  const metadata = resolveEffectiveToolMetadata({
-    env,
-    executable,
-    operationName: executable.name
-  });
-  return (
-    (metadata.controlArgs?.length ?? 0) > 0
-    && metadata.labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'))
-  );
-}
-
 function resolveImplicitFyiKnownTool(env: Environment): ExecutableVariable | undefined {
   const fyi = env.getVariable('fyi');
   const known = fyi?.value && typeof fyi.value === 'object'
@@ -574,15 +564,54 @@ function resolveImplicitFyiKnownTool(env: Environment): ExecutableVariable | und
   return isExecutableVariable(known) ? known : undefined;
 }
 
+function buildFunctionToolMetadata(
+  env: Environment,
+  functionTools: readonly ExecutableVariable[]
+): EffectiveToolMetadata[] {
+  return functionTools.map(tool =>
+    resolveEffectiveToolMetadata({
+      env,
+      executable: tool,
+      operationName: mlldNameToMCPName(tool.name)
+    })
+  );
+}
+
+function buildBuiltinToolMetadata(
+  builtinTools: readonly string[]
+): EffectiveToolMetadata[] {
+  return uniquePreservingOrder(
+    builtinTools
+      .filter((name): name is string => typeof name === 'string')
+      .map(name => name.trim())
+      .filter(Boolean)
+  ).map(name => ({
+    name,
+    params: [],
+    labels: [],
+    hasControlArgsMetadata: false,
+    correlateControlArgs: false,
+    taintFacts: false
+  }));
+}
+
 export async function createCallMcpConfig(options: CallMcpConfigOptions): Promise<CallMcpConfig> {
   const { builtinTools, functionTools } = resolveToolInput(options.tools);
   const implicitKnownTool = resolveImplicitFyiKnownTool(options.env);
+  const functionToolMetadata = buildFunctionToolMetadata(options.env, functionTools);
   if (
     implicitKnownTool
     && !functionTools.some(tool => tool.name === implicitKnownTool.name)
-    && functionTools.some(tool => isWriteToolWithControlArgs(options.env, tool))
+    && shouldAutoExposeFyiKnown(options.env, functionToolMetadata)
   ) {
     functionTools.push(implicitKnownTool);
+    functionToolMetadata.push(
+      resolveEffectiveToolMetadata({
+        env: options.env,
+        executable: implicitKnownTool,
+        operationName: mlldNameToMCPName(implicitKnownTool.name)
+      })
+    );
   }
   const inBox = Boolean(options.env.getActiveBridge());
   const workingDirectory = options.workingDirectory ?? options.env.getExecutionDirectory();
@@ -603,6 +632,10 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const sessionId = randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
+  const toolMetadata = [
+    ...buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools),
+    ...functionToolMetadata
+  ];
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
     ...functionTools
@@ -643,6 +676,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       functions: functionMap,
       sessionId,
       availableTools,
+      toolMetadata,
       conversationDescriptor: options.conversationDescriptor
     });
     cleanupFns.push(functionBridge.cleanup);
@@ -663,6 +697,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       nativeAllowedTools,
       unifiedAllowedTools: nativeAllowedTools,
       availableTools,
+      toolMetadata,
       inBox,
       async cleanup(): Promise<void> {
         // No-op
@@ -703,6 +738,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     nativeAllowedTools,
     unifiedAllowedTools,
     availableTools,
+    toolMetadata,
     inBox,
     cleanup
   };

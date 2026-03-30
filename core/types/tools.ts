@@ -10,6 +10,7 @@ export interface ToolDefinition {
   expose?: string[];
   optional?: string[];
   controlArgs?: string[];
+  correlateControlArgs?: boolean;
 }
 
 export type ToolCollection = Record<string, ToolDefinition>;
@@ -18,6 +19,9 @@ export interface ToolAuthorizationContextEntry {
   params: string[];
   controlArgs: string[];
   hasControlArgsMetadata: boolean;
+  labels?: string[];
+  description?: string;
+  correlateControlArgs?: boolean;
 }
 
 export type ToolCollectionAuthorizationContext = Record<string, ToolAuthorizationContextEntry>;
@@ -48,6 +52,10 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
     && Array.isArray(candidate.controlArgs)
     && candidate.controlArgs.every(entry => typeof entry === 'string')
     && typeof candidate.hasControlArgsMetadata === 'boolean'
+    && (candidate.labels === undefined
+      || (Array.isArray(candidate.labels) && candidate.labels.every(entry => typeof entry === 'string')))
+    && (candidate.description === undefined || typeof candidate.description === 'string')
+    && (candidate.correlateControlArgs === undefined || typeof candidate.correlateControlArgs === 'boolean')
   );
 }
 
@@ -70,7 +78,16 @@ export function cloneToolCollectionAuthorizationContext(
       {
         params: cloneStringList(entry.params),
         controlArgs: cloneStringList(entry.controlArgs),
-        hasControlArgsMetadata: entry.hasControlArgsMetadata === true
+        hasControlArgsMetadata: entry.hasControlArgsMetadata === true,
+        ...(Array.isArray(entry.labels)
+          ? { labels: cloneStringList(entry.labels) }
+          : {}),
+        ...(typeof entry.description === 'string'
+          ? { description: entry.description }
+          : {}),
+        ...(entry.correlateControlArgs === true
+          ? { correlateControlArgs: true }
+          : {})
       }
     ])
   );

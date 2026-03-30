@@ -5,6 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   extractParamTypes,
+  resolveExeCorrelateControlArgs,
   resolveExeControlArgs,
   resolveExeDescription
 } from './exe/definition-helpers';
@@ -96,6 +97,12 @@ export async function evaluateExe(
   const controlArgs = await resolveExeControlArgs(rawControlArgs, env, executableDef.paramNames);
   if (controlArgs !== undefined) {
     executableDef.controlArgs = controlArgs;
+  }
+
+  const rawCorrelateControlArgs = getWithClauseField(directive.values?.withClause, 'correlateControlArgs');
+  const correlateControlArgs = await resolveExeCorrelateControlArgs(rawCorrelateControlArgs, env);
+  if (correlateControlArgs !== undefined) {
+    executableDef.correlateControlArgs = correlateControlArgs;
   }
 
   const rawDescription = getWithClauseField(directive.values?.withClause, 'description');

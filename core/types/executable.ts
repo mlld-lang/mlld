@@ -26,6 +26,8 @@ export interface BaseExecutable {
   optionalParams?: string[];
   /** Security-relevant args that must be pinned by policy.authorizations */
   controlArgs?: string[];
+  /** Whether multiple control args must be authorized from the same source record */
+  correlateControlArgs?: boolean;
   /** Human-readable summary for tool metadata */
   description?: string;
   /** Optional record definition applied to executable output */

@@ -65,6 +65,24 @@ export async function resolveExeDescription(raw: unknown, env: Environment): Pro
   return undefined;
 }
 
+async function resolveExecutableWithClauseValue(
+  raw: unknown,
+  env: Environment
+): Promise<unknown> {
+  let value = raw;
+  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    value = result.value;
+  }
+
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+
+  return value;
+}
+
 export async function resolveExeControlArgs(
   raw: unknown,
   env: Environment,
@@ -74,16 +92,7 @@ export async function resolveExeControlArgs(
     return undefined;
   }
 
-  let value = raw;
-  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    value = result.value;
-  }
-
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
+  const value = await resolveExecutableWithClauseValue(raw, env);
 
   if (!Array.isArray(value)) {
     throw new Error('Executable controlArgs must be an array of parameter names');
@@ -109,6 +118,22 @@ export async function resolveExeControlArgs(
   }
 
   return normalized;
+}
+
+export async function resolveExeCorrelateControlArgs(
+  raw: unknown,
+  env: Environment
+): Promise<boolean | undefined> {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const value = await resolveExecutableWithClauseValue(raw, env);
+  if (typeof value !== 'boolean') {
+    throw new Error('Executable correlateControlArgs must be a boolean');
+  }
+
+  return value;
 }
 
 export function extractParamNames(params: unknown[]): string[] {

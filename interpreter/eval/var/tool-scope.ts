@@ -116,6 +116,10 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     if (description !== undefined && typeof description !== 'string') {
       throw new Error(`Tool '${toolName}' description must be a string`);
     }
+    const correlateControlArgs = toolValue.correlateControlArgs;
+    if (correlateControlArgs !== undefined && typeof correlateControlArgs !== 'boolean') {
+      throw new Error(`Tool '${toolName}' correlateControlArgs must be a boolean`);
+    }
 
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
     const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
@@ -220,7 +224,8 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ...(bind ? { bind } : {}),
       ...(expose ? { expose } : {}),
       ...(optional ? { optional } : {}),
-      ...(controlArgs ? { controlArgs } : {})
+      ...(controlArgs ? { controlArgs } : {}),
+      ...(correlateControlArgs === true ? { correlateControlArgs: true } : {})
     };
   }
 

@@ -4,7 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
-import type { AvailableToolDescriptor } from '@interpreter/env/executors/call-mcp-config';
+import type {
+  AvailableToolDescriptor,
+  CallMcpConfig
+} from '@interpreter/env/executors/call-mcp-config';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
@@ -37,6 +40,7 @@ export interface FunctionMcpBridgeOptions {
   functions: Map<string, ExecutableVariable>; // key is exposed MCP tool name
   sessionId: string;
   availableTools?: readonly AvailableToolDescriptor[];
+  toolMetadata?: CallMcpConfig['toolMetadata'];
   conversationDescriptor?: SecurityDescriptor;
 }
 
@@ -60,6 +64,7 @@ class FunctionMcpBridgeServer {
     private readonly socketPath: string,
     sessionId: string,
     availableTools: readonly AvailableToolDescriptor[] | undefined,
+    toolMetadata: CallMcpConfig['toolMetadata'],
     conversationDescriptor?: SecurityDescriptor
   ) {
     this.toolEnv = env.createChild();
@@ -71,6 +76,7 @@ class FunctionMcpBridgeServer {
       nativeAllowedTools: '',
       unifiedAllowedTools: '',
       availableTools: availableTools ?? [],
+      toolMetadata: toolMetadata ?? [],
       inBox: false,
       cleanup: async () => {}
     });
@@ -104,8 +110,13 @@ class FunctionMcpBridgeServer {
         mlld: tempName,
         ...(Array.isArray(executable.mx?.labels) ? { labels: executable.mx.labels } : {}),
         ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
+        ...(clonedExecutableDef?.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
         ...(Array.isArray(clonedExecutableDef?.optionalParams) ? { optional: clonedExecutableDef.optionalParams } : {}),
-        ...(typeof executable.description === 'string' ? { description: executable.description } : {})
+        ...(typeof executable.description === 'string'
+          ? { description: executable.description }
+          : typeof clonedExecutableDef?.description === 'string'
+            ? { description: clonedExecutableDef.description }
+            : {})
       };
       const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
       this.toolSchemas.push(schema);
@@ -391,6 +402,7 @@ export async function createFunctionMcpBridge(
     socketPath,
     options.sessionId,
     options.availableTools,
+    options.toolMetadata,
     options.conversationDescriptor
   );
   await server.start();

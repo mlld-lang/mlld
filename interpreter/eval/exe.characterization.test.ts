@@ -85,6 +85,16 @@ describe('exe evaluator characterization', () => {
     expect(getExecutableDef(env, 'createFile').controlArgs).toEqual([]);
   });
 
+  it('materializes exe-level correlateControlArgs from with-clause metadata', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @updateScheduledTransaction(id, recipient, amount) = run { echo ok } with { controlArgs: ["id", "recipient"], correlateControlArgs: true }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'updateScheduledTransaction').correlateControlArgs).toBe(true);
+  });
+
   it('ignores exe-level taintFacts metadata now that the override has been removed', async () => {
     const env = createEnvironment();
     const directive = parseSync(

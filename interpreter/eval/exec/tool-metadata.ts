@@ -1,3 +1,5 @@
+import { mcpNameToMlldName } from '@core/mcp/names';
+import { expandOperationLabels } from '@core/policy/label-flow';
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
 import {
   getToolCollectionAuthorizationContext,
@@ -6,15 +8,17 @@ import {
   type ToolCollectionAuthorizationContext,
   type ToolDefinition
 } from '@core/types/tools';
-import { isExecutableVariable, type ExecutableVariable, type Variable } from '@core/types/variable';
+import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 
 export interface EffectiveToolMetadata {
   name: string;
   params: string[];
   labels: string[];
+  description?: string;
   controlArgs?: string[];
   hasControlArgsMetadata: boolean;
+  correlateControlArgs: boolean;
   taintFacts: boolean;
 }
 
@@ -34,6 +38,15 @@ function normalizeStringList(values: readonly unknown[] | undefined): string[] {
     }
   }
   return normalized;
+}
+
+function normalizeTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function mergeStringLists(...lists: Array<readonly unknown[] | undefined>): string[] {
@@ -99,6 +112,19 @@ function getExecutableControlArgs(executable: ExecutableVariable): string[] | un
   return Array.isArray(controlArgs) ? normalizeStringList(controlArgs) : undefined;
 }
 
+function getExecutableCorrelateControlArgs(executable: ExecutableVariable): boolean {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  return (executableDef as any)?.correlateControlArgs === true;
+}
+
+function getExecutableDescription(executable: ExecutableVariable): string | undefined {
+  return normalizeTrimmedString(
+    executable.description
+    ?? executable.internal?.executableDef?.description
+    ?? executable.mx?.description
+  );
+}
+
 function getExecutableTaintFacts(executable: ExecutableVariable): boolean {
   void executable;
   return false;
@@ -110,12 +136,15 @@ function buildToolContextFromExecutable(
 ): EffectiveToolMetadata {
   const params = getExecutableParamNames(executable);
   const controlArgs = getExecutableControlArgs(executable);
+  const description = getExecutableDescription(executable);
   return {
     name,
     params,
     labels: getExecutableLabels(executable),
+    ...(description ? { description } : {}),
     ...(controlArgs ? { controlArgs } : {}),
     hasControlArgsMetadata: Array.isArray(controlArgs),
+    correlateControlArgs: getExecutableCorrelateControlArgs(executable),
     taintFacts: getExecutableTaintFacts(executable)
   };
 }
@@ -174,6 +203,17 @@ function getEffectiveToolControlArgs(options: {
   };
 }
 
+function getEffectiveToolCorrelateControlArgs(
+  baseCorrelateControlArgs: boolean,
+  definition?: ToolDefinition
+): boolean {
+  if (typeof definition?.correlateControlArgs === 'boolean') {
+    return definition.correlateControlArgs;
+  }
+
+  return baseCorrelateControlArgs;
+}
+
 function applyToolDefinitionAuthMetadata(
   base: EffectiveToolMetadata,
   definition?: ToolDefinition
@@ -190,13 +230,16 @@ function applyToolDefinitionAuthMetadata(
     baseHasControlArgsMetadata: base.hasControlArgsMetadata,
     definition
   });
+  const description = normalizeTrimmedString(definition.description) ?? base.description;
 
   return {
     ...base,
     params,
     labels,
+    ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
-    hasControlArgsMetadata
+    hasControlArgsMetadata,
+    correlateControlArgs: getEffectiveToolCorrelateControlArgs(base.correlateControlArgs, definition)
   };
 }
 
@@ -212,12 +255,15 @@ function mergeToolDefinitionMetadata(
   const mergedControlArgs = mergeStringLists(base.controlArgs, definition.controlArgs);
   const hasControlArgsMetadata =
     base.hasControlArgsMetadata || Array.isArray(definition.controlArgs);
+  const description = base.description ?? normalizeTrimmedString(definition.description);
 
   return {
     ...base,
     labels,
+    ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs: mergedControlArgs } : {}),
-    hasControlArgsMetadata
+    hasControlArgsMetadata,
+    correlateControlArgs: base.correlateControlArgs || definition.correlateControlArgs === true
   };
 }
 
@@ -258,13 +304,46 @@ function buildAuthorizationToolContextFromStoredContext(
   return contexts;
 }
 
+function buildToolContextFromStoredEntry(
+  toolName: string,
+  entry: ToolAuthorizationContextEntry,
+  definition?: ToolDefinition
+): EffectiveToolMetadata {
+  const params = normalizeStringList(entry.params);
+  const labels = mergeStringLists(entry.labels, definition?.labels);
+  const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
+    params,
+    baseControlArgs: entry.controlArgs,
+    baseHasControlArgsMetadata: entry.hasControlArgsMetadata,
+    definition
+  });
+  const description = normalizeTrimmedString(definition?.description) ?? normalizeTrimmedString(entry.description);
+
+  return {
+    name: toolName,
+    params,
+    labels,
+    ...(description ? { description } : {}),
+    ...(hasControlArgsMetadata ? { controlArgs } : {}),
+    hasControlArgsMetadata,
+    correlateControlArgs: getEffectiveToolCorrelateControlArgs(entry.correlateControlArgs === true, definition),
+    taintFacts: false
+  };
+}
+
 function toStoredAuthorizationContextEntry(
-  metadata: Pick<EffectiveToolMetadata, 'params' | 'controlArgs' | 'hasControlArgsMetadata'>
+  metadata: Pick<
+    EffectiveToolMetadata,
+    'params' | 'controlArgs' | 'hasControlArgsMetadata' | 'labels' | 'description' | 'correlateControlArgs'
+  >
 ): ToolAuthorizationContextEntry {
   return {
     params: [...metadata.params],
     controlArgs: [...(metadata.controlArgs ?? [])],
-    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    ...(metadata.labels.length > 0 ? { labels: [...metadata.labels] } : {}),
+    ...(metadata.description ? { description: metadata.description } : {}),
+    ...(metadata.correlateControlArgs ? { correlateControlArgs: true } : {})
   };
 }
 
@@ -363,6 +442,91 @@ export function buildAuthorizationToolContextForCollection(
   return buildAuthorizationToolContextFromCollection(env, collection);
 }
 
+export function expandToolLabels(
+  env: Environment,
+  labels: readonly string[]
+): string[] {
+  return mergeStringLists(labels, expandOperationLabels(labels, env.getPolicySummary()?.operations));
+}
+
+export function isWriteToolMetadata(
+  env: Environment,
+  metadata: Pick<EffectiveToolMetadata, 'labels'>
+): boolean {
+  return expandToolLabels(env, metadata.labels).some(
+    label => label === 'tool:w' || label.startsWith('tool:w:')
+  );
+}
+
+export function shouldAutoExposeFyiKnown(
+  env: Environment,
+  toolMetadata: readonly Pick<EffectiveToolMetadata, 'labels' | 'controlArgs'>[]
+): boolean {
+  return toolMetadata.some(metadata =>
+    (metadata.controlArgs?.length ?? 0) > 0 && isWriteToolMetadata(env, metadata)
+  );
+}
+
+export function resolveToolCollectionEntryMetadata(
+  env: Environment,
+  collection: ToolCollection,
+  toolName: string
+): EffectiveToolMetadata | undefined {
+  const definition = collection[toolName];
+  if (!definition) {
+    return undefined;
+  }
+
+  const execName = typeof definition.mlld === 'string' ? definition.mlld : '';
+  if (execName) {
+    const executable = resolveExecutableVariableCaseInsensitive(env, execName);
+    if (executable) {
+      return applyToolDefinitionAuthMetadata(
+        buildToolContextFromExecutable(toolName, executable),
+        definition
+      );
+    }
+  }
+
+  const storedEntry = getToolCollectionAuthorizationContext(collection)?.[toolName];
+  if (storedEntry) {
+    return buildToolContextFromStoredEntry(toolName, storedEntry, definition);
+  }
+
+  const params = getEffectiveToolParams([], definition);
+  const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
+    params,
+    baseHasControlArgsMetadata: false,
+    definition
+  });
+  const description = normalizeTrimmedString(definition.description);
+
+  return {
+    name: toolName,
+    params,
+    labels: normalizeStringList(definition.labels),
+    ...(description ? { description } : {}),
+    ...(hasControlArgsMetadata ? { controlArgs } : {}),
+    hasControlArgsMetadata,
+    correlateControlArgs: definition.correlateControlArgs === true,
+    taintFacts: false
+  };
+}
+
+export function resolveToolCollectionMetadataEntries(
+  env: Environment,
+  collection: ToolCollection
+): EffectiveToolMetadata[] {
+  const resolved: EffectiveToolMetadata[] = [];
+  for (const toolName of Object.keys(collection)) {
+    const metadata = resolveToolCollectionEntryMetadata(env, collection, toolName);
+    if (metadata) {
+      resolved.push(metadata);
+    }
+  }
+  return resolved;
+}
+
 export function resolveEffectiveToolMetadata(options: {
   env: Environment;
   executable: ExecutableVariable;
@@ -425,21 +589,23 @@ export function resolveNamedOperationMetadata(
   }
 
   const scopedTools = getScopedToolCollection(env);
-  const directDefinition =
-    scopedTools?.[trimmed] ??
-    Object.entries(scopedTools ?? {}).find(([name]) => name.trim().toLowerCase() === trimmed.toLowerCase())?.[1];
-  if (directDefinition?.mlld) {
-    const executable = resolveExecutableVariableCaseInsensitive(env, directDefinition.mlld);
-    if (executable) {
-      return resolveEffectiveToolMetadata({
-        env,
-        executable,
-        operationName: trimmed
-      });
+  const scopedToolName =
+    Object.keys(scopedTools ?? {}).find(name => name.trim().toLowerCase() === trimmed.toLowerCase());
+  if (scopedTools && scopedToolName) {
+    const metadata = resolveToolCollectionEntryMetadata(env, scopedTools, scopedToolName);
+    if (metadata) {
+      return metadata;
     }
   }
 
-  const executable = resolveExecutableVariableCaseInsensitive(env, trimmed);
+  const executable =
+    resolveExecutableVariableCaseInsensitive(env, trimmed)
+    ?? (() => {
+      const mlldName = mcpNameToMlldName(trimmed);
+      return mlldName !== trimmed
+        ? resolveExecutableVariableCaseInsensitive(env, mlldName)
+        : undefined;
+    })();
   if (!executable) {
     return undefined;
   }

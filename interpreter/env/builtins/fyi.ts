@@ -6,6 +6,7 @@ import {
   type VariableSource
 } from '@core/types/variable';
 import { evaluateFyiKnown } from '@interpreter/fyi/facts-runtime';
+import { evaluateFyiTools } from '@interpreter/fyi/tool-docs';
 
 const FYI_SOURCE: VariableSource = {
   directive: 'var',
@@ -52,10 +53,38 @@ export function createFyiVariable(env: Environment) {
     }
   });
 
+  const toolsDefinition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'tools',
+    fn: async (toolsOrEnv?: unknown, optionsOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined)
+        ?? (looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined)
+        ?? env;
+      const tools = boundEnv || !looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined;
+      const options = boundEnv || !looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined;
+      return evaluateFyiTools(tools, executionEnv, options);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['tools', 'options'],
+    optionalParams: ['tools', 'options'],
+    description: 'Render LLM-oriented tool docs from live tool metadata'
+  };
+
+  const toolsExecutable = createExecutableVariable('tools', 'command', '', ['tools', 'options'], undefined, FYI_SOURCE, {
+    internal: {
+      executableDef: toolsDefinition,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+
   return createObjectVariable(
     'fyi',
     {
-      known: knownExecutable
+      known: knownExecutable,
+      tools: toolsExecutable
     },
     false,
     FYI_SOURCE,

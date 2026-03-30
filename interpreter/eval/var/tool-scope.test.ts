@@ -67,7 +67,8 @@ describe('tool scope helpers', () => {
             repo: 'mlld'
           },
           expose: ['title', 'body'],
-          controlArgs: ['title']
+          controlArgs: ['title'],
+          correlateControlArgs: true
         }
       },
       env
@@ -82,8 +83,27 @@ describe('tool scope helpers', () => {
         repo: 'mlld'
       },
       expose: ['title', 'body'],
-      controlArgs: ['title']
+      controlArgs: ['title'],
+      correlateControlArgs: true
     });
+  });
+
+  it('rejects non-boolean correlateControlArgs values', () => {
+    const env = createEnvWithExecutables({
+      createIssue: ['owner', 'repo', 'title']
+    });
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@createIssue',
+            correlateControlArgs: 'yes'
+          }
+        },
+        env
+      )
+    ).toThrow(/correlateControlArgs must be a boolean/i);
   });
 
   it('rejects non-executable tool references', () => {
