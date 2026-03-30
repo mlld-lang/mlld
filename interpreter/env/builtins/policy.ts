@@ -16,6 +16,8 @@ import {
 } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
+import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 
 const POLICY_SOURCE: VariableSource = {
   directive: 'var',
@@ -94,6 +96,21 @@ function resolveToolCollection(
   }
 }
 
+async function normalizeIntentContainer(
+  rawIntent: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (isVariable(rawIntent)) {
+    return normalizeIntentContainer(await extractVariableValue(rawIntent, env), env);
+  }
+
+  if (isStructuredValue(rawIntent) && (rawIntent.type === 'object' || rawIntent.type === 'array')) {
+    return rawIntent.data;
+  }
+
+  return rawIntent;
+}
+
 async function buildPolicyAuthorizations(
   intentOrEnv?: unknown,
   toolsOrEnv?: unknown,
@@ -115,9 +132,10 @@ async function buildPolicyAuthorizations(
     return createEmptyPolicyResult('Policy builder requires a valid tool collection');
   }
 
+  const rawAuthorizations = await normalizeIntentContainer(intent, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
   const compilation = await compilePolicyAuthorizations({
-    rawAuthorizations: intent,
+    rawAuthorizations,
     rawSource: intent,
     env: executionEnv,
     toolContext,

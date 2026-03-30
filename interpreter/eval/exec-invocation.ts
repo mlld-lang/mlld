@@ -6,6 +6,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import {
   isCommandExecutable,
+  isCommandRefExecutable,
   isCodeExecutable,
   isPartialExecutable
 } from '@core/types/executable';
@@ -135,6 +136,135 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   }
   // Plain objects
   return record[name];
+}
+
+function isPassthroughVariableReferenceArg(
+  value: unknown,
+  paramName: string | undefined
+): boolean {
+  if (!paramName || !value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as {
+    type?: unknown;
+    identifier?: unknown;
+    fields?: unknown;
+    pipes?: unknown;
+  };
+
+  return (
+    candidate.type === 'VariableReference' &&
+    candidate.identifier === paramName &&
+    (!Array.isArray(candidate.fields) || candidate.fields.length === 0) &&
+    (!Array.isArray(candidate.pipes) || candidate.pipes.length === 0)
+  );
+}
+
+function getCommandRefTargetInfo(
+  source: unknown
+): {
+  targetName?: string;
+  objectName?: string;
+  methodName?: string;
+  firstArg?: unknown;
+} | null {
+  const commandRef =
+    source && typeof source === 'object' && (source as { type?: unknown }).type === 'ExecInvocation'
+      ? (source as { commandRef?: unknown }).commandRef
+      : source;
+
+  if (!commandRef || typeof commandRef !== 'object') {
+    return null;
+  }
+
+  const ref = commandRef as {
+    name?: unknown;
+    identifier?: unknown;
+    args?: unknown[];
+    objectReference?: { type?: unknown; identifier?: unknown };
+  };
+  const firstArg = Array.isArray(ref.args) ? ref.args[0] : undefined;
+  const methodName = typeof ref.name === 'string' ? ref.name : undefined;
+  const objectName =
+    ref.objectReference?.type === 'VariableReference' && typeof ref.objectReference.identifier === 'string'
+      ? ref.objectReference.identifier
+      : undefined;
+
+  if (objectName && methodName) {
+    return { objectName, methodName, firstArg };
+  }
+
+  if (typeof ref.identifier === 'string') {
+    return { targetName: ref.identifier, firstArg };
+  }
+
+  if (Array.isArray(ref.identifier) && ref.identifier.length > 0) {
+    const identifierNode = ref.identifier[0] as { type?: unknown; identifier?: unknown } | undefined;
+    if (identifierNode?.type === 'VariableReference' && typeof identifierNode.identifier === 'string') {
+      return { targetName: identifierNode.identifier, firstArg };
+    }
+  }
+
+  if (methodName) {
+    return { targetName: methodName, firstArg };
+  }
+
+  return null;
+}
+
+function preservesFirstArgForPolicyBuilderChain(
+  variable: Variable | undefined,
+  definition: ExecutableDefinition | undefined,
+  env: Environment,
+  seen = new Set<string>()
+): boolean {
+  if (!variable || !definition || !isCommandRefExecutable(definition)) {
+    return false;
+  }
+
+  const variableKey = variable.name || '__anonymous_exec__';
+  if (seen.has(variableKey)) {
+    return false;
+  }
+  seen.add(variableKey);
+
+  const target = getCommandRefTargetInfo(definition.commandRefAst ?? {
+    name: definition.commandRef,
+    identifier: definition.commandRef,
+    args: definition.commandArgs
+  });
+  if (!target) {
+    return false;
+  }
+
+  const firstParam = definition.paramNames?.[0];
+  if (!isPassthroughVariableReferenceArg(target.firstArg, firstParam)) {
+    return false;
+  }
+
+  if (
+    target.objectName === 'policy' &&
+    (target.methodName === 'build' || target.methodName === 'validate')
+  ) {
+    return true;
+  }
+
+  if (!target.targetName) {
+    return false;
+  }
+
+  const nextVariable = env.getVariable(target.targetName);
+  if (!isExecutableVariable(nextVariable)) {
+    return false;
+  }
+
+  return preservesFirstArgForPolicyBuilderChain(
+    nextVariable,
+    nextVariable.internal?.executableDef as ExecutableDefinition | undefined,
+    env,
+    seen
+  );
 }
 
 /**
@@ -1932,8 +2062,23 @@ async function evaluateExecInvocationInternal(
     argSourceNames.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
   }
 
+  const policyObjectRef = (node.commandRef as any)?.objectReference;
+  const preserveDirectPolicyIntentHandles =
+    policyObjectRef &&
+    typeof policyObjectRef === 'object' &&
+    policyObjectRef.type === 'VariableReference' &&
+    policyObjectRef.identifier === 'policy' &&
+    (variable.name === 'build' || variable.name === 'validate');
+  const preservePolicyIntentHandles =
+    preserveDirectPolicyIntentHandles ||
+    preservesFirstArgForPolicyBuilderChain(variable, definition, env);
+
   evaluatedArgs = await Promise.all(
-    evaluatedArgs.map(arg => resolveValueHandles(arg, runtimeEnv))
+    evaluatedArgs.map((arg, index) =>
+      preservePolicyIntentHandles && index === 0
+        ? arg
+        : resolveValueHandles(arg, runtimeEnv)
+    )
   );
   evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
   synchronizeGuardVariableCandidates({
