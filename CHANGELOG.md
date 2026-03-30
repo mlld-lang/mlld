@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `@policy.build(...)` and `@policy.validate(...)` now return additive compiler diagnostics in `report`, exposing stripped args, repair steps, dropped entries/elements, ambiguous values, and compiled proofs without changing existing `policy` / `valid` / `issues` consumers.
+
+### Fixed
+- Imported `var tools` collections now have explicit acceptance coverage as first-class inputs to `@policy.build(...)` and `@policy.validate(...)`, including preserved shaped auth metadata from `bind` / `expose` and explicit empty `controlArgs: []` across module export/import.
+
 ## [2.0.6]
 
 ### Added

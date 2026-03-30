@@ -82,6 +82,27 @@ async function interpretWithEnvAndFiles(
   return environment;
 }
 
+async function extractBuiltinResult(env: Environment, name: string) {
+  const variable = env.getVariable(name);
+  const resolved = await extractVariableValue(variable as any, env) as any;
+  return resolved?.data ?? resolved;
+}
+
+async function invokePolicyBuiltin(
+  env: Environment,
+  method: 'build' | 'validate',
+  intent: unknown,
+  tools: unknown
+) {
+  const policyVar = env.getVariable('policy') as any;
+  const executable = policyVar?.value?.[method];
+  const fn = executable?.internal?.executableDef?.fn;
+  if (typeof fn !== 'function') {
+    throw new Error(`Expected @policy.${method} builtin`);
+  }
+  return fn(intent, tools, env);
+}
+
 describe('@policy builtin', () => {
   it('builds canonical allow fragments, strips data args, and drops denied tools', async () => {
     const env = await interpretWithEnv(`
@@ -184,6 +205,58 @@ describe('@policy builtin', () => {
     expect(built.policy.authorizations.allow).toEqual({});
   });
 
+  it('returns compiler reports from build and validate as additive diagnostics', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = { facts: [email: string], data: [name: string] }
+      /exe @getContact() = { email: "ada@example.com", name: "Ada" } => contact
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+
+      /var @contact = @getContact()
+      /var @contactEmail = @contact.email
+    `);
+
+    const contactEmail = await extractVariableValue(env.getVariable('contactEmail') as any, env);
+    const issued = env.issueHandle(contactEmail);
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+    const intent = {
+      sendEmail: {
+        recipient: issued.handle,
+        subject: 'hello'
+      }
+    };
+
+    const built = await invokePolicyBuiltin(env, 'build', intent, writeTools) as any;
+    const validated = await invokePolicyBuiltin(env, 'validate', intent, writeTools) as any;
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      const sendEmail = result.policy.authorizations.allow.sendEmail;
+      expect(sendEmail?.kind).toBe('constrained');
+      const recipientConstraint =
+        sendEmail?.kind === 'constrained'
+          ? sendEmail.args.recipient?.[0]
+          : undefined;
+      expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
+      if (!recipientConstraint || !('eq' in recipientConstraint)) {
+        continue;
+      }
+
+      expect((recipientConstraint.eq as any)?.data ?? recipientConstraint.eq).toBe('ada@example.com');
+      expect(recipientConstraint.attestations).toEqual(['fact:@contact.email']);
+      expect(result.report).toMatchObject({
+        strippedArgs: [{ tool: 'sendEmail', arg: 'subject' }],
+        repairedArgs: [{ tool: 'sendEmail', arg: 'recipient', steps: ['resolved_handle'] }],
+        compiledProofs: [{ tool: 'sendEmail', arg: 'recipient', labels: ['fact:@contact.email'] }]
+      });
+    }
+  });
+
   it('accepts imported tool collections without importing the underlying executables', async () => {
     const env = await interpretWithEnvAndFiles(
       `
@@ -219,6 +292,59 @@ describe('@policy builtin', () => {
     expect(built.valid).toBe(true);
     expect(built.issues).toEqual([]);
     expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'ada@example.com',
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('validates imported tool collections without importing the underlying executables', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          sendEmail: {
+            recipient: { eq: "ada@example.com", attestations: ["known"] }
+          }
+        }
+
+        /var @validated = @policy.validate(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+          /var tools @writeTools = {
+            sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    expect(env.getVariable('sendEmail')).toBeUndefined();
+
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    expect(validated.valid).toBe(true);
+    expect(validated.issues).toEqual([]);
+    expect(validated.report).toEqual({
+      strippedArgs: [],
+      repairedArgs: [],
+      droppedEntries: [],
+      droppedArrayElements: [],
+      ambiguousValues: [],
+      compiledProofs: []
+    });
+    expect(validated.policy.authorizations.allow.sendEmail).toEqual({
       kind: 'constrained',
       args: {
         recipient: [
@@ -290,6 +416,58 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('preserves shaped auth params for imported tool collections during validation', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          sendEmail: {
+            recipient: { eq: "ada@example.com", attestations: ["known"] },
+            subject: "hello"
+          }
+        }
+
+        /var @validated = @policy.validate(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe exfil:send, tool:w @sendEmail(owner, repo, recipient, subject, body) = js { return recipient; } with { controlArgs: ["owner", "recipient"] }
+
+          /var tools @writeTools = {
+            sendEmail: {
+              mlld: @sendEmail,
+              bind: { owner: "mlld", repo: "main", body: "fixed" },
+              expose: ["recipient", "subject"],
+              controlArgs: ["recipient"]
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    expect(validated.valid).toBe(true);
+    expect(validated.issues).toEqual([]);
+    expect(validated.report).toMatchObject({
+      strippedArgs: [{ tool: 'sendEmail', arg: 'subject' }]
+    });
+    expect(validated.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'ada@example.com',
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
   it('preserves explicit empty control-arg metadata for imported tool collections', async () => {
     const env = await interpretWithEnvAndFiles(
       `
@@ -334,6 +512,51 @@ describe('@policy builtin', () => {
     expect(built.valid).toBe(true);
     expect(built.issues).toEqual([]);
     expect(built.policy.authorizations.allow.createDraft).toEqual({
+      kind: 'unconstrained'
+    });
+  });
+
+  it('preserves explicit empty control-arg metadata for imported tool collections during validation', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @intent = {
+          createDraft: true
+        }
+
+        /var @validated = @policy.validate(@intent, @writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: ["subject"] }
+
+          /var tools @writeTools = {
+            createDraft: {
+              mlld: @createDraft,
+              expose: ["subject", "body"],
+              controlArgs: []
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    expect(validated.valid).toBe(true);
+    expect(validated.issues).toEqual([]);
+    expect(validated.report).toEqual({
+      strippedArgs: [],
+      repairedArgs: [],
+      droppedEntries: [],
+      droppedArrayElements: [],
+      ambiguousValues: [],
+      compiledProofs: []
+    });
+    expect(validated.policy.authorizations.allow.createDraft).toEqual({
       kind: 'unconstrained'
     });
   });

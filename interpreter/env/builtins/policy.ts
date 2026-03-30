@@ -9,7 +9,11 @@ import {
   createObjectVariable,
   type VariableSource
 } from '@core/types/variable';
-import { compilePolicyAuthorizations } from '@interpreter/policy/authorization-compiler';
+import {
+  clonePolicyAuthorizationCompileReport,
+  compilePolicyAuthorizations,
+  createEmptyPolicyAuthorizationCompileReport
+} from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 
@@ -42,7 +46,24 @@ function createEmptyPolicyResult(message: string) {
         reason: 'missing_tool_context',
         message
       }
-    ]
+    ],
+    report: createEmptyPolicyAuthorizationCompileReport()
+  };
+}
+
+function createPolicyBuilderResult(compilation: Awaited<ReturnType<typeof compilePolicyAuthorizations>>) {
+  const authorizations = compilation.authorizations ?? {};
+
+  return {
+    policy: {
+      authorizations: {
+        allow: authorizations.allow ?? {},
+        ...(authorizations.deny ? { deny: authorizations.deny } : {})
+      }
+    },
+    valid: compilation.issues.length === 0,
+    issues: compilation.issues,
+    report: clonePolicyAuthorizationCompileReport(compilation.report)
   };
 }
 
@@ -104,18 +125,8 @@ async function buildPolicyAuthorizations(
     ambientDeniedTools: executionEnv.getPolicySummary()?.authorizations?.deny,
     mode: 'builder'
   });
-  const authorizations = compilation.authorizations ?? {};
 
-  return {
-    policy: {
-      authorizations: {
-        allow: authorizations.allow ?? {},
-        ...(authorizations.deny ? { deny: authorizations.deny } : {})
-      }
-    },
-    valid: compilation.issues.length === 0,
-    issues: compilation.issues
-  };
+  return createPolicyBuilderResult(compilation);
 }
 
 function createPolicyMethod(

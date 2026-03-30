@@ -242,11 +242,14 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
 var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
-The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues }`:
+Imported `var tools` collections are valid inputs here. The builder uses the collection's stored authorization metadata first, so callers do not need to redundantly import every underlying executable just to build or validate auth.
+
+The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues, report }`:
 
 - `policy` — valid auth fragment, ready for `with { policy }`
 - `valid` — boolean
 - `issues` — array of `{ tool, reason, arg?, element? }` describing what was dropped
+- `report` — compiler diagnostics describing strips, repairs, dropped entries/elements, ambiguity, and compiled proofs
 
 What the builder checks:
 
@@ -258,6 +261,26 @@ What the builder checks:
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
 - `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
 - Non-control args → silently stripped
+
+Builder and validator results are additive:
+
+```json
+{
+  "policy": { "authorizations": { "allow": {} } },
+  "valid": false,
+  "issues": [ ... ],
+  "report": {
+    "strippedArgs": [ ... ],
+    "repairedArgs": [ ... ],
+    "droppedEntries": [ ... ],
+    "droppedArrayElements": [ ... ],
+    "ambiguousValues": [ ... ],
+    "compiledProofs": [ ... ]
+  }
+}
+```
+
+`report` is runtime-native compiler diagnostics. Use it to distinguish "the planner asked for something invalid" from "the runtime repaired or stripped part of the intent successfully."
 
 ### Bucketed intent shape
 
@@ -306,7 +329,7 @@ exe @plan(task) = @claude(@task, { tools: @allTools }) with { display: "planner"
 
 guard after @validateAuth for op:named:plan = when [
   @policy.validate(@output, @writeTools).valid == false && @mx.guard.try < 2
-    => retry "Fix authorization: @policy.validate(@output, @writeTools).issues"
+    => retry "Fix authorization: @policy.validate(@output, @writeTools).issues. Report: @policy.validate(@output, @writeTools).report"
   * => allow
 ]
 ```
