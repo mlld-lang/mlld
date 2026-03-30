@@ -440,27 +440,56 @@ async function normalizeResolvedHandleCandidate(
   value: unknown,
   env: Environment
 ): Promise<unknown | undefined> {
-  if (typeof value === 'string') {
-    const handle = value.trim();
+  const extractHandleToken = (candidate: unknown): string | undefined => {
+    if (typeof candidate === 'string') {
+      const handle = candidate.trim();
+      return HANDLE_TOKEN_RE.test(handle) ? handle : undefined;
+    }
+
+    if (isStructuredValue(candidate)) {
+      const data = candidate.data;
+      if (typeof data === 'string') {
+        const handle = data.trim();
+        if (HANDLE_TOKEN_RE.test(handle)) {
+          return handle;
+        }
+      }
+
+      const text = asText(candidate).trim();
+      return HANDLE_TOKEN_RE.test(text) ? text : undefined;
+    }
+
+    return undefined;
+  };
+
+  const directHandle = extractHandleToken(value);
+  if (directHandle) {
+    env.resolveHandle(directHandle);
+    return directHandle;
+  }
+
+  if (isHandleWrapper(value)) {
+    const handle = value.handle.trim();
     if (!HANDLE_TOKEN_RE.test(handle)) {
       return undefined;
     }
     env.resolveHandle(handle);
-    return handle;
+    return handle === value.handle
+      ? value
+      : { handle };
   }
 
-  if (!isHandleWrapper(value)) {
+  if (!isPlainObject(value) || Array.isArray(value) || Object.keys(value).length !== 1 || !hasOwnProperty(value, 'handle')) {
     return undefined;
   }
 
-  const handle = value.handle.trim();
-  if (!HANDLE_TOKEN_RE.test(handle)) {
+  const wrappedHandle = extractHandleToken((value as Record<string, unknown>).handle);
+  if (!wrappedHandle) {
     return undefined;
   }
-  env.resolveHandle(handle);
-  return handle === value.handle
-    ? value
-    : { handle };
+
+  env.resolveHandle(wrappedHandle);
+  return { handle: wrappedHandle };
 }
 
 async function normalizeResolvedControlArgValue(options: {

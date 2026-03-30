@@ -699,6 +699,100 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('accepts StructuredValue handle strings in resolved planner intent', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('ada@example.com');
+    const issued = env.issueHandle(approvedRecipient);
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+    const plannerIntent = {
+      resolved: {
+        sendEmail: {
+          recipient: wrapStructured(issued.handle, 'text', issued.handle)
+        }
+      }
+    };
+
+    const built = await invokePolicyBuiltin(env, 'build', plannerIntent, writeTools) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_resolved_value',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: approvedRecipient,
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('accepts StructuredValue handle wrappers in resolved planner intent', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('ada@example.com');
+    const issued = env.issueHandle(approvedRecipient);
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+    const plannerIntent = {
+      resolved: {
+        sendEmail: {
+          recipient: [
+            {
+              handle: wrapStructured(issued.handle, 'text', issued.handle)
+            }
+          ]
+        }
+      }
+    };
+
+    const built = await invokePolicyBuiltin(env, 'build', plannerIntent, writeTools) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_resolved_value',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: [approvedRecipient],
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
   it('rejects bare literal strings in the resolved bucket as proofless values', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
