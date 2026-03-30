@@ -7,16 +7,22 @@ import {
   type FactRequirement
 } from '@core/policy/fact-requirements';
 import type { Environment } from '@interpreter/env/Environment';
+import type { ValueHandleEntry } from '@interpreter/env/ValueHandleRegistry';
 import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { maskFactFieldValue } from '@interpreter/eval/records/display-masking';
-import { accessField } from '@interpreter/utils/field-access';
-import { asText, isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
+import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
+import {
+  asText,
+  extractSecurityDescriptor,
+  isStructuredValue,
+  wrapStructured,
+  type StructuredValue
+} from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
-const MAX_FYI_FACT_CANDIDATES = 25;
-const FACT_DISPLAY_FIELD_PREFERENCES = ['name', 'title', 'display', 'display_name', 'label'] as const;
+const MAX_FYI_KNOWN_CANDIDATES = 25;
 
-type FyiFactsQuery = {
+type FyiKnownQuery = {
   op?: string;
   arg?: string;
 };
@@ -28,7 +34,14 @@ type FactCandidate = {
   fact: string;
 };
 
-type GroupedFactCandidates = Record<string, FactCandidate[]>;
+type KnownAttestationCandidate = {
+  handle: string;
+  label: string;
+  proof: 'known';
+};
+
+type KnownCandidate = FactCandidate | KnownAttestationCandidate;
+type GroupedKnownCandidates = Record<string, KnownCandidate[]>;
 
 type QueryOperationContext = {
   labels?: readonly string[];
@@ -65,30 +78,6 @@ function unwrapQueryEnvelope(raw: unknown): unknown {
   return raw;
 }
 
-function normalizeFyiFactsQuery(raw: unknown, argOverride?: unknown): FyiFactsQuery {
-  const unwrapped = unwrapQueryEnvelope(raw);
-  if (!unwrapped && argOverride === undefined) {
-    return {};
-  }
-
-  if (!isObjectLike(unwrapped)) {
-    const op = normalizeNamedOperationRef(readQueryString(unwrapped));
-    const arg = normalizeQueryArgName(argOverride);
-    return {
-      ...(op ? { op } : {}),
-      ...(arg ? { arg } : {})
-    };
-  }
-
-  const source = unwrapped;
-  const op = normalizeNamedOperationRef(readQueryString(source.op));
-  const arg = normalizeQueryArgName(argOverride ?? source.arg);
-  return {
-    ...(op ? { op } : {}),
-    ...(arg ? { arg } : {})
-  };
-}
-
 function readQueryString(value: unknown): string | undefined {
   if (isVariable(value)) {
     return readQueryString(value.value);
@@ -97,9 +86,9 @@ function readQueryString(value: unknown): string | undefined {
     return readQueryString(value.data);
   }
   if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
+    typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
   ) {
     const trimmed = String(value).trim();
     return trimmed.length > 0 ? trimmed : undefined;
@@ -116,15 +105,40 @@ function normalizeQueryArgName(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeFyiKnownQuery(raw: unknown, argOverride?: unknown): FyiKnownQuery {
+  const unwrapped = unwrapQueryEnvelope(raw);
+  if (!unwrapped && argOverride === undefined) {
+    return {};
+  }
+
+  if (!isObjectLike(unwrapped)) {
+    const op = normalizeNamedOperationRef(readQueryString(unwrapped));
+    const arg = normalizeQueryArgName(argOverride);
+    return {
+      ...(op ? { op } : {}),
+      ...(arg ? { arg } : {})
+    };
+  }
+
+  const op = normalizeNamedOperationRef(readQueryString(unwrapped.op));
+  const arg = normalizeQueryArgName(argOverride ?? unwrapped.arg);
+  return {
+    ...(op ? { op } : {}),
+    ...(arg ? { arg } : {})
+  };
+}
+
 function resolveQueryOperationContext(
-  query: FyiFactsQuery,
+  query: FyiKnownQuery,
   env: Environment
 ): QueryOperationContext | undefined {
   if (!query.op) {
     return undefined;
   }
 
-  const operationName = query.op.startsWith('op:named:') ? query.op.slice('op:named:'.length) : query.op;
+  const operationName = query.op.startsWith('op:named:')
+    ? query.op.slice('op:named:'.length)
+    : query.op;
   const metadata = resolveNamedOperationMetadata(env, operationName);
   if (!metadata) {
     return undefined;
@@ -146,167 +160,169 @@ function requirementMatchesFact(requirements: readonly FactRequirement[], fact: 
   );
 }
 
-function issueFactCandidate(options: {
-  env: Environment;
-  entry: { value: StructuredValue; label: string; field: string; fact: string; ref: string };
-  op?: string;
-  arg?: string;
-}): FactCandidate {
-  const issued = options.env.issueHandle(options.entry.value, {
-    preview: options.entry.label,
-    metadata: {
-      field: options.entry.field,
-      ref: options.entry.ref,
-      fact: options.entry.fact,
-      ...(options.op ? { op: options.op } : {}),
-      ...(options.arg ? { arg: options.arg } : {})
-    }
+function normalizeMetadataString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function extractEntryFactCandidate(entry: ValueHandleEntry): FactCandidate | undefined {
+  const descriptor = extractSecurityDescriptor(entry.value, {
+    recursive: true,
+    mergeArrayElements: true
   });
-
-  return {
-    handle: issued.handle,
-    label: options.entry.label,
-    field: options.entry.field,
-    fact: options.entry.fact
-  };
-}
-
-function readDisplayText(value: unknown): string | null {
-  const resolved = isVariable(value) ? value.value : value;
-  if (isStructuredValue(resolved)) {
-    const text = asText(resolved).trim();
-    return text.length > 0 ? text : null;
-  }
-  if (
-    typeof resolved === 'string' ||
-    typeof resolved === 'number' ||
-    typeof resolved === 'boolean'
-  ) {
-    const text = String(resolved).trim();
-    return text.length > 0 ? text : null;
-  }
-  return null;
-}
-
-function deriveSafeCandidateLabel(options: {
-  value: StructuredValue;
-  field: string;
-  parent?: StructuredValue;
-}): string {
-  const parent = options.parent;
-  if (parent?.type === 'object' && parent.data && typeof parent.data === 'object' && !Array.isArray(parent.data)) {
-    const objectData = parent.data as Record<string, unknown>;
-    for (const preferredField of FACT_DISPLAY_FIELD_PREFERENCES) {
-      if (preferredField === options.field) {
-        continue;
-      }
-      if (!Object.prototype.hasOwnProperty.call(objectData, preferredField)) {
-        continue;
-      }
-      const displayText = readDisplayText(objectData[preferredField]);
-      if (displayText) {
-        return displayText;
-      }
-    }
+  const fact = collectProofClaimLabels(descriptor).find(label => label.startsWith('fact:'));
+  if (!fact) {
+    return undefined;
   }
 
-  const rawText = asText(options.value).trim();
-  return maskFactFieldValue(options.field, rawText);
-}
-
-function extractCandidateFromLeaf(options: {
-  value: StructuredValue;
-  parent?: StructuredValue;
-}): {
-  label: string;
-  field: string;
-  fact: string;
-  ref: string;
-} | null {
-  const value = options.value;
-  const labels = Array.isArray(value.mx?.labels) ? value.mx.labels : [];
-  const facts = labels.filter((label): label is string => typeof label === 'string' && label.startsWith('fact:'));
-  if (facts.length === 0) {
-    return null;
-  }
-
-  const fact = facts[0]!;
   const parsed = parseFactLabel(fact);
-  const factSource = value.mx.factsources?.[0];
-  const field = factSource?.field ?? parsed?.field;
-  const ref = factSource?.ref ?? parsed?.ref;
-  if (!field || !ref) {
-    return null;
+  const metadataField = normalizeMetadataString(entry.metadata?.field);
+  const field = metadataField ?? parsed?.field;
+  if (!field) {
+    return undefined;
   }
 
+  const preview = normalizeMetadataString(entry.preview);
+  const label =
+    preview
+    ?? maskFactFieldValue(field, asText(entry.value).trim());
+
   return {
-    label: deriveSafeCandidateLabel({
-      value,
-      field,
-      parent: options.parent
-    }),
+    handle: entry.handle,
+    label,
     field,
-    fact,
-    ref
+    fact
   };
 }
 
-async function collectFactCandidates(
-  value: unknown,
-  env: Environment,
-  output: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }>,
-  context: { parent?: StructuredValue } = {}
-): Promise<void> {
-  const resolved = isVariable(value) ? value.value : value;
-
-  if (isStructuredValue(resolved)) {
-    if (resolved.type === 'object' && resolved.data && typeof resolved.data === 'object' && !Array.isArray(resolved.data)) {
-      for (const key of Object.keys(resolved.data as Record<string, unknown>)) {
-        const child = await accessField(resolved, { type: 'field', value: key } as any, { env });
-        await collectFactCandidates(child, env, output, { parent: resolved });
-      }
-      return;
-    }
-
-    if (resolved.type === 'array' && Array.isArray(resolved.data)) {
-      for (let index = 0; index < resolved.data.length; index += 1) {
-        const child = await accessField(resolved, { type: 'arrayIndex', value: index } as any, { env });
-        await collectFactCandidates(child, env, output, { parent: resolved });
-      }
-      return;
-    }
-
-    const candidate = extractCandidateFromLeaf({
-      value: resolved,
-      parent: context.parent
-    });
-    if (candidate) {
-      output.push({ value: resolved, ...candidate });
-    }
-    return;
+function extractKnownAttestationCandidate(
+  entry: ValueHandleEntry,
+  query?: FyiKnownQuery
+): KnownAttestationCandidate | undefined {
+  if (entry.metadata?.proof !== 'known') {
+    return undefined;
   }
 
-  if (Array.isArray(resolved)) {
-    for (const item of resolved) {
-      await collectFactCandidates(item, env, output, context);
-    }
-    return;
+  const entryOp = normalizeNamedOperationRef(normalizeMetadataString(entry.metadata?.op));
+  const entryArg = normalizeQueryArgName(entry.metadata?.arg);
+  if (query?.op && entryOp !== query.op) {
+    return undefined;
+  }
+  if (query?.arg && entryArg !== query.arg) {
+    return undefined;
   }
 
-  if (isPlainObject(resolved)) {
-    for (const item of Object.values(resolved)) {
-      await collectFactCandidates(item, env, output, context);
-    }
-  }
+  const preview = normalizeMetadataString(entry.preview);
+  const label =
+    preview
+    ?? (() => {
+      const text = asText(entry.value).trim();
+      return text.length > 0 ? text : entry.handle;
+    })();
+
+  return {
+    handle: entry.handle,
+    label,
+    proof: 'known'
+  };
 }
 
-export async function evaluateFyiFacts(
+function collectAllKnownCandidates(
+  entries: readonly ValueHandleEntry[]
+): KnownCandidate[] {
+  const candidates: KnownCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    const candidate =
+      extractEntryFactCandidate(entry)
+      ?? extractKnownAttestationCandidate(entry);
+    if (!candidate || seen.has(candidate.handle)) {
+      continue;
+    }
+    seen.add(candidate.handle);
+    candidates.push(candidate);
+    if (candidates.length >= MAX_FYI_KNOWN_CANDIDATES) {
+      break;
+    }
+  }
+
+  return candidates;
+}
+
+function collectArgKnownCandidates(
+  entries: readonly ValueHandleEntry[],
+  query: FyiKnownQuery,
+  requirements: readonly FactRequirement[]
+): KnownCandidate[] {
+  const candidates: KnownCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    const factCandidate = extractEntryFactCandidate(entry);
+    if (factCandidate && requirementMatchesFact(requirements, factCandidate.fact)) {
+      if (!seen.has(factCandidate.handle)) {
+        seen.add(factCandidate.handle);
+        candidates.push(factCandidate);
+      }
+    } else {
+      const knownCandidate = extractKnownAttestationCandidate(entry, query);
+      if (knownCandidate && !seen.has(knownCandidate.handle)) {
+        seen.add(knownCandidate.handle);
+        candidates.push(knownCandidate);
+      }
+    }
+
+    if (candidates.length >= MAX_FYI_KNOWN_CANDIDATES) {
+      break;
+    }
+  }
+
+  return candidates;
+}
+
+function collectGroupedKnownCandidates(
+  entries: readonly ValueHandleEntry[],
+  query: FyiKnownQuery,
+  requirementsByArg: Readonly<Record<string, readonly FactRequirement[]>>
+): GroupedKnownCandidates {
+  const grouped: GroupedKnownCandidates = {};
+
+  for (const [argName, requirements] of Object.entries(requirementsByArg)) {
+    grouped[argName] = collectArgKnownCandidates(entries, {
+      ...query,
+      arg: argName
+    }, requirements);
+  }
+
+  return grouped;
+}
+
+export async function evaluateFyiKnown(
   query: unknown,
   env: Environment,
   argOverride?: unknown
-): Promise<StructuredValue<FactCandidate[] | GroupedFactCandidates>> {
-  const normalizedQuery = normalizeFyiFactsQuery(query, argOverride);
-  const isBroadDiscovery = !normalizedQuery.op && !normalizedQuery.arg;
+): Promise<StructuredValue<KnownCandidate[] | GroupedKnownCandidates>> {
+  const normalizedQuery = normalizeFyiKnownQuery(query, argOverride);
+  const entries = env.getIssuedHandles();
+
+  if (entries.length === 0) {
+    return normalizedQuery.op && !normalizedQuery.arg
+      ? wrapStructured({}, 'object')
+      : wrapStructured([], 'array');
+  }
+
+  if (!normalizedQuery.op && !normalizedQuery.arg) {
+    return wrapStructured(collectAllKnownCandidates(entries), 'array');
+  }
+
+  if (!normalizedQuery.op && normalizedQuery.arg) {
+    return wrapStructured([], 'array');
+  }
+
   const operationContext = resolveQueryOperationContext(normalizedQuery, env);
   const requirementResolution = normalizedQuery.arg
     ? resolveFactRequirementsForOperationArg({
@@ -317,109 +333,46 @@ export async function evaluateFyiFacts(
         hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
         policy: env.getPolicySummary()
       })
-    : normalizedQuery.op
-      ? resolveFactRequirementsForOperation({
-          opRef: normalizedQuery.op,
-          operationLabels: operationContext?.labels,
-          controlArgs: operationContext?.controlArgs,
-          hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
-          policy: env.getPolicySummary()
-        })
-      : null;
-  const scopedConfig = env.getScopedEnvironmentConfig() as
-    | { fyi?: { facts?: unknown[]; autoFacts?: boolean } }
-    | undefined;
-  const configuredRoots = Array.isArray(scopedConfig?.fyi?.facts) ? scopedConfig!.fyi!.facts : [];
-  const autoRoots = scopedConfig?.fyi?.autoFacts ? env.getFyiAutoFactRoots() : [];
-  const discoveryRoots = [...configuredRoots, ...autoRoots];
+    : resolveFactRequirementsForOperation({
+        opRef: normalizedQuery.op,
+        operationLabels: operationContext?.labels,
+        controlArgs: operationContext?.controlArgs,
+        hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
+        policy: env.getPolicySummary()
+      });
 
-  if (discoveryRoots.length === 0) {
-    return normalizedQuery.op && !normalizedQuery.arg
-      ? wrapStructured({}, 'object')
-      : wrapStructured([], 'array');
+  if (
+    normalizedQuery.arg &&
+    (requirementResolution.status !== 'resolved' || requirementResolution.requirements.length === 0)
+  ) {
+    return wrapStructured([], 'array');
   }
 
   if (
-    requirementResolution &&
-    (
-      (normalizedQuery.arg &&
-        (requirementResolution.status !== 'resolved' || requirementResolution.requirements.length === 0)) ||
-      (!normalizedQuery.arg &&
-        (requirementResolution.status !== 'resolved' ||
-          Object.keys(requirementResolution.requirementsByArg).length === 0))
-    )
+    !normalizedQuery.arg &&
+    (requirementResolution.status !== 'resolved'
+      || Object.keys(requirementResolution.requirementsByArg).length === 0)
   ) {
-    return normalizedQuery.op && !normalizedQuery.arg
-      ? wrapStructured({}, 'object')
-      : wrapStructured([], 'array');
+    return wrapStructured({}, 'object');
   }
 
-  const collected: Array<{ value: StructuredValue; label: string; field: string; fact: string; ref: string }> = [];
-  for (const root of discoveryRoots) {
-    await collectFactCandidates(root, env, collected);
+  if (normalizedQuery.arg) {
+    return wrapStructured(
+      collectArgKnownCandidates(
+        entries,
+        normalizedQuery,
+        requirementResolution.requirements
+      ),
+      'array'
+    );
   }
 
-  if (isBroadDiscovery || normalizedQuery.arg) {
-    const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
-    for (const entry of collected) {
-      if (
-        normalizedQuery.arg &&
-        requirementResolution &&
-        !requirementMatchesFact(requirementResolution.requirements, entry.fact)
-      ) {
-        continue;
-      }
-      const key = `${entry.ref}\u0000${entry.fact}\u0000${asText(entry.value)}`;
-      if (!deduped.has(key)) {
-        deduped.set(key, entry);
-      }
-    }
-
-    const candidates: FactCandidate[] = [];
-    for (const entry of deduped.values()) {
-      if (candidates.length >= MAX_FYI_FACT_CANDIDATES) {
-        break;
-      }
-      candidates.push(
-        issueFactCandidate({
-          env,
-          entry,
-          op: normalizedQuery.op,
-          arg: normalizedQuery.arg
-        })
-      );
-    }
-
-    return wrapStructured(candidates, 'array');
-  }
-
-  const groupedCandidates: GroupedFactCandidates = {};
-  for (const [argName, requirements] of Object.entries(requirementResolution?.requirementsByArg ?? {})) {
-    const deduped = new Map<string, { value: StructuredValue; label: string; field: string; fact: string; ref: string }>();
-    for (const entry of collected) {
-      if (!requirementMatchesFact(requirements, entry.fact)) {
-        continue;
-      }
-      const key = `${entry.ref}\u0000${entry.fact}\u0000${asText(entry.value)}`;
-      if (!deduped.has(key)) {
-        deduped.set(key, entry);
-      }
-    }
-
-    groupedCandidates[argName] = [];
-    for (const entry of deduped.values()) {
-      if (groupedCandidates[argName]!.length >= MAX_FYI_FACT_CANDIDATES) {
-        break;
-      }
-      groupedCandidates[argName]!.push(
-        issueFactCandidate({
-          env,
-          entry,
-          op: normalizedQuery.op
-        })
-      );
-    }
-  }
-
-  return wrapStructured(groupedCandidates, 'object');
+  return wrapStructured(
+    collectGroupedKnownCandidates(
+      entries,
+      normalizedQuery,
+      requirementResolution.requirementsByArg
+    ),
+    'object'
+  );
 }

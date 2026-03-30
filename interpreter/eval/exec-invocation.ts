@@ -98,13 +98,11 @@ import {
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
 import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
-import { resolveExeTaintFacts } from './exe/definition-helpers';
 import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
 import type { RecordDefinition } from '@core/types/record';
-import { resolveFyiConfig } from '@interpreter/fyi/config';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { descriptorHasExternalInputSource } from '@core/security/url-provenance';
 import { getWithClauseField, normalizeWithClauseFields } from '@interpreter/utils/with-clause';
@@ -1785,13 +1783,6 @@ async function evaluateExecInvocationInternal(
     resolvedScopedConfig.display = resolvedDefinitionDisplay;
   }
 
-  if (invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'fyi')) {
-    const resolvedFyi = await resolveFyiConfig(invocationWithClause.fyi, env);
-    if (resolvedFyi !== undefined) {
-      resolvedScopedConfig.fyi = resolvedFyi;
-    }
-  }
-
   const resolvedInvocationDisplay = await resolveScopedExecDisplayMode(
     getInvocationWithClauseField(node, invocationWithClause, 'display'),
     env
@@ -2024,9 +2015,7 @@ async function evaluateExecInvocationInternal(
       ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
       : undefined
   });
-  const invocationTaintFacts = await resolveExeTaintFacts(invocationWithClause?.taintFacts, runtimeEnv);
-  const effectiveOperationTaintFacts =
-    invocationTaintFacts === true || effectiveToolMetadata.taintFacts === true;
+  const effectiveOperationTaintFacts = false;
   const toolLabels = effectiveToolMetadata.labels;
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,

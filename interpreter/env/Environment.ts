@@ -140,13 +140,9 @@ import { DEFAULT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 import { extractGuardDenial } from '@interpreter/eval/guard-denial-events';
 import {
   ValueHandleRegistry,
+  type ValueHandleEntry,
   type IssueValueHandleOptions
 } from './ValueHandleRegistry';
-import {
-  ProjectionExposureRegistry,
-  type ProjectionExposureEntry,
-  type ProjectionExposureMatch
-} from './ProjectionExposureRegistry';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 
@@ -268,7 +264,6 @@ export class Environment
   private mcpServerMap?: Record<string, string>;
   private recordDefinitions?: Map<string, RecordDefinition>;
   private valueHandleRegistry?: ValueHandleRegistry;
-  private projectionExposureRegistry?: ProjectionExposureRegistry;
 
   // Shadow environments for language-specific function injection
   private readonly shadowEnvs: Map<string, ShadowFunctions> = new Map();
@@ -423,7 +418,6 @@ export class Environment
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
     this.valueHandleRegistry = parent?.valueHandleRegistry ?? new ValueHandleRegistry();
-    this.projectionExposureRegistry = parent?.projectionExposureRegistry ?? new ProjectionExposureRegistry();
     if (parent) {
       this.streamingOptions = { ...parent.streamingOptions };
     }
@@ -936,6 +930,16 @@ export class Environment
       });
     }
     return entry.value;
+  }
+
+  getIssuedHandles(): readonly ValueHandleEntry[] {
+    const root = this.getRootEnvironment();
+    return root.valueHandleRegistry?.getEntries() ?? [];
+  }
+
+  findIssuedHandlesByCanonicalValue(value: unknown): readonly ValueHandleEntry[] {
+    const root = this.getRootEnvironment();
+    return root.valueHandleRegistry?.findByCanonicalValue(value) ?? [];
   }
 
   getExeLabels(): readonly string[] | undefined {
@@ -1950,55 +1954,6 @@ export class Environment
 
   resetToolCalls(): void {
     this.contextManager.resetToolCalls();
-  }
-
-  getFyiAutoFactRoots(): readonly unknown[] {
-    return this.contextManager.getFyiAutoFactRoots();
-  }
-
-  recordProjectionExposure(entry: ProjectionExposureEntry): void {
-    const root = this.getRootEnvironment();
-    if (!root.projectionExposureRegistry) {
-      root.projectionExposureRegistry = new ProjectionExposureRegistry();
-    }
-    root.projectionExposureRegistry.record(entry);
-  }
-
-  getProjectionExposures(sessionId: string): readonly ProjectionExposureEntry[] {
-    const root = this.getRootEnvironment();
-    return root.projectionExposureRegistry?.getEntries(sessionId) ?? [];
-  }
-
-  matchProjectionPreview(sessionId: string, preview: string): ProjectionExposureMatch {
-    const root = this.getRootEnvironment();
-    return root.projectionExposureRegistry?.matchPreview(sessionId, preview) ?? {
-      status: 'none',
-      matches: []
-    };
-  }
-
-  matchProjectionLiteral(sessionId: string, literal: string): ProjectionExposureMatch {
-    const root = this.getRootEnvironment();
-    return root.projectionExposureRegistry?.matchLiteral(sessionId, literal) ?? {
-      status: 'none',
-      matches: []
-    };
-  }
-
-  matchAnyProjectionPreview(preview: string): ProjectionExposureMatch {
-    const root = this.getRootEnvironment();
-    return root.projectionExposureRegistry?.matchAnyPreview(preview) ?? {
-      status: 'none',
-      matches: []
-    };
-  }
-
-  matchAnyProjectionLiteral(literal: string): ProjectionExposureMatch {
-    const root = this.getRootEnvironment();
-    return root.projectionExposureRegistry?.matchAnyLiteral(literal) ?? {
-      status: 'none',
-      matches: []
-    };
   }
 
   async withPipeContext<T>(

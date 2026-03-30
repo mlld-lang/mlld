@@ -109,7 +109,7 @@ The fact requirement resolver powers both display projections and enforcement. I
 
 If none resolve, discovery returns nothing. It never guesses from arg names.
 
-For explicit cross-root discovery, `@fyi.facts()` remains available as a secondary tool. See `fyi-facts`.
+For explicit handle discovery beyond the current tool result, use `@fyi.known()`. See `fyi-known`.
 
 ## Fact sources
 

@@ -20,7 +20,6 @@ import { createExecutableVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { accessField } from '../utils/field-access';
-import { evaluateFyiFacts } from '@interpreter/fyi/facts-runtime';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -248,15 +247,11 @@ describe('evaluateExecInvocation (structured)', () => {
     await evaluate(ast, env);
     const contact = env.getVariable('contact');
     expect(contact).toBeDefined();
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [contact!]
-      }
+    const email = await accessField(contact!.value, { type: 'field', value: 'email' } as any, { env });
+    const issued = env.issueHandle(email, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
     });
-
-    const facts = await evaluateFyiFacts({ op: 'op:named:email.send', arg: 'recipient' }, env);
-    const handle = facts.data[0]?.handle;
-    expect(handle).toMatch(HANDLE_RE);
 
     const result = await evaluateExecInvocation(
       {
@@ -266,7 +261,7 @@ describe('evaluateExecInvocation (structured)', () => {
           type: 'CommandReference',
           nodeId: 'echo-handle-ref',
           identifier: 'echo',
-          args: [{ handle } as any]
+          args: [{ handle: issued.handle } as any]
         }
       },
       env
@@ -292,15 +287,11 @@ describe('evaluateExecInvocation (structured)', () => {
     await evaluate(ast, env);
     const contact = env.getVariable('contact');
     expect(contact).toBeDefined();
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [contact!]
-      }
+    const email = await accessField(contact!.value, { type: 'field', value: 'email' } as any, { env });
+    const issued = env.issueHandle(email, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
     });
-
-    const facts = await evaluateFyiFacts({ op: 'op:named:email.send', arg: 'recipient' }, env);
-    const handle = facts.data[0]?.handle;
-    expect(handle).toMatch(HANDLE_RE);
 
     const result = await evaluateExecInvocation(
       {
@@ -310,7 +301,7 @@ describe('evaluateExecInvocation (structured)', () => {
           type: 'CommandReference',
           nodeId: 'send-email-bare-handle-ref',
           identifier: 'sendEmail',
-          args: [handle as any, 'hi' as any, 'test' as any]
+          args: [issued.handle as any, 'hi' as any, 'test' as any]
         }
       },
       env
@@ -365,23 +356,30 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.data).toEqual({ handle: 'h_fake12', label: 'not-a-wrapper' });
   });
 
-  it('lets call-site fyi roots override inherited scoped roots for a specific invocation', async () => {
+  it('uses registry-backed @fyi.known inside exec invocations', async () => {
     const src = `
 /record @contact = { facts: [email: string] }
 /exe @emitA() = js { return { email: 'ada@example.com' }; } => contact
 /exe @emitB() = js { return { email: 'grace@example.com' }; } => contact
 /var @contactA = @emitA()
 /var @contactB = @emitB()
-/exe @discover() = @fyi.facts({ op: "op:named:email.send", arg: "recipient" })
+/exe @discover() = @fyi.known({ op: "op:named:email.send", arg: "recipient" })
 `;
     const { ast } = await parse(src);
     await evaluate(ast, env);
     const contactA = env.getVariable('contactA');
+    const contactB = env.getVariable('contactB');
     expect(contactA).toBeDefined();
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [contactA!]
-      }
+    expect(contactB).toBeDefined();
+    const emailA = await accessField(contactA!.value, { type: 'field', value: 'email' } as any, { env });
+    const emailB = await accessField(contactB!.value, { type: 'field', value: 'email' } as any, { env });
+    env.issueHandle(emailA, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
+    });
+    env.issueHandle(emailB, {
+      preview: 'g***@example.com',
+      metadata: { field: 'email' }
     });
 
     const result = await evaluateExecInvocation(
@@ -393,35 +391,19 @@ describe('evaluateExecInvocation (structured)', () => {
           nodeId: 'discover-override-ref',
           identifier: 'discover',
           args: []
-        },
-        withClause: {
-          fyi: {
-            type: 'object',
-            entries: [
-              {
-                type: 'pair',
-                key: 'facts',
-                value: {
-                  type: 'array',
-                  items: [
-                    {
-                      type: 'VariableReference',
-                      nodeId: 'contact-b-ref',
-                      identifier: 'contactB',
-                      fields: []
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        } as any
+        }
       },
       env
     );
 
     expect(isStructuredValue(result.value)).toBe(true);
     expect(result.value.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'a***@example.com',
+        field: 'email',
+        fact: 'fact:@contact.email'
+      },
       {
         handle: expect.stringMatching(HANDLE_RE),
         label: 'g***@example.com',

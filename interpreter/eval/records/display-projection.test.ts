@@ -80,10 +80,6 @@ describe('renderDisplayProjection', () => {
         preview: 'a***@example.com',
         handle: expect.stringMatching(HANDLE_RE)
       },
-      phone: {
-        handle: expect.stringMatching(HANDLE_RE)
-      },
-      notes: 'Met at conference'
     });
   });
 
@@ -168,8 +164,7 @@ describe('renderDisplayProjection', () => {
       sender: {
         preview: 'A****',
         handle: expect.stringMatching(HANDLE_RE)
-      },
-      subject: 'Monthly rent'
+      }
     });
   });
 
@@ -246,7 +241,7 @@ describe('renderDisplayProjection', () => {
     expect(asText(resolved)).toBe('ada@example.com');
   });
 
-  it('records emitted projection aliases for the active llm tool session', async () => {
+  it('stores safe previews on issued handles for displayed fact fields', async () => {
     const env = createEnvironment();
     env.setLlmToolConfig({
       sessionId: 'session-projection-test',
@@ -280,38 +275,16 @@ describe('renderDisplayProjection', () => {
 
     await renderDisplayProjection(output, env);
 
-    const exposures = env.getProjectionExposures('session-projection-test');
-    expect(exposures).toHaveLength(4);
-    expect(exposures).toEqual(
+    const handles = env.getIssuedHandles();
+    expect(handles).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sessionId: 'session-projection-test',
-          kind: 'bare',
-          field: 'name',
-          record: 'contact',
-          emittedLiteral: 'Ada Lovelace'
-        }),
-        expect.objectContaining({
-          sessionId: 'session-projection-test',
-          kind: 'mask',
-          field: 'email',
-          record: 'contact',
-          emittedPreview: 'a***@example.com',
-          handle: expect.stringMatching(HANDLE_RE)
-        }),
-        expect.objectContaining({
-          sessionId: 'session-projection-test',
-          kind: 'handle',
-          field: 'phone',
-          record: 'contact',
-          handle: expect.stringMatching(HANDLE_RE)
-        }),
-        expect.objectContaining({
-          sessionId: 'session-projection-test',
-          kind: 'bare',
-          field: 'notes',
-          record: 'contact',
-          emittedLiteral: 'Met at conference'
+          handle: expect.stringMatching(HANDLE_RE),
+          preview: 'a***@example.com',
+          metadata: expect.objectContaining({
+            field: 'email',
+            record: 'contact'
+          })
         })
       ])
     );
@@ -361,55 +334,8 @@ describe('renderDisplayProjection', () => {
           handle: expect.stringMatching(HANDLE_RE)
         }
       ],
-      recipients: [
-        { handle: expect.stringMatching(HANDLE_RE) },
-        { handle: expect.stringMatching(HANDLE_RE) }
-      ],
-      visible: ['alex@example.com', 'sam@example.com'],
-      title: 'Lunch'
+      visible: ['alex@example.com', 'sam@example.com']
     });
-
-    const exposures = env.getProjectionExposures('session-array-projection');
-    expect(exposures).toHaveLength(7);
-    expect(exposures).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'mask',
-          field: 'participants',
-          record: 'calendar_evt',
-          emittedPreview: 'a***@example.com'
-        }),
-        expect.objectContaining({
-          kind: 'mask',
-          field: 'participants',
-          record: 'calendar_evt',
-          emittedPreview: 'g***@example.com'
-        }),
-        expect.objectContaining({
-          kind: 'handle',
-          field: 'recipients',
-          record: 'calendar_evt'
-        }),
-        expect.objectContaining({
-          kind: 'bare',
-          field: 'visible',
-          record: 'calendar_evt',
-          emittedLiteral: 'alex@example.com'
-        }),
-        expect.objectContaining({
-          kind: 'bare',
-          field: 'visible',
-          record: 'calendar_evt',
-          emittedLiteral: 'sam@example.com'
-        }),
-        expect.objectContaining({
-          kind: 'bare',
-          field: 'title',
-          record: 'calendar_evt',
-          emittedLiteral: 'Lunch'
-        })
-      ])
-    );
   });
 
   it('suppresses non-qualifying handles when active tool policy requires stronger fact proof', async () => {
@@ -649,13 +575,6 @@ describe('renderDisplayProjection', () => {
       }
     });
 
-    const exposures = env.getProjectionExposures('session-ref-degrade');
-    expect(exposures).toEqual([
-      expect.objectContaining({
-        kind: 'bare',
-        field: 'name',
-        emittedLiteral: 'Ada Lovelace'
-      })
-    ]);
+    expect(env.getIssuedHandles()).toEqual([]);
   });
 });

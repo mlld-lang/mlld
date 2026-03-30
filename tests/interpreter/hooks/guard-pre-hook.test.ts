@@ -1034,22 +1034,16 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
-  it('carries planner-time fact proof through emitted bare literals in with { policy } authorizations', async () => {
+  it('rejects planner-pinned bare literals in with { policy } authorizations', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
       })
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: approvedRecipient,
-      kind: 'bare',
-      field: 'recipient',
-      record: 'contact',
-      emittedLiteral: 'mark@example.com',
-      issuedAt: Date.now()
+    env.issueHandle(approvedRecipient, {
+      preview: 'm***@example.com',
+      metadata: { field: 'recipient' }
     });
 
     await evaluateDirective(
@@ -1062,27 +1056,19 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("mark@example.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
-    const effects = env.getEffectHandler() as TestEffectHandler;
-    expect(effects.getOutput().trim()).toBe('sent:5');
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/lacks required proof/i);
   });
 
   it('ignores planner-pinned data args when matching with { policy } authorizations', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
       })
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: approvedRecipient,
-      kind: 'bare',
-      field: 'recipient',
-      record: 'contact',
-      emittedLiteral: 'mark@example.com',
-      issuedAt: Date.now()
+    const issued = env.issueHandle(approvedRecipient, {
+      preview: 'm***@example.com',
+      metadata: { field: 'recipient' }
     });
 
     await evaluateDirective(
@@ -1090,7 +1076,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       env
     );
     await evaluateDirective(
-      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "mark@example.com", amount: 5 } } } } }')[0] as DirectiveNode,
+      parseSync(`/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown"] }, operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: ${JSON.stringify(createHandleWrapper(issued.handle))}, amount: 5 } } } } }`)[0] as DirectiveNode,
       env
     );
 
@@ -1136,23 +1122,16 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:Lunch');
   });
 
-  it('carries planner-time fact proof through emitted masked previews in with { policy } authorizations', async () => {
+  it('rejects planner-pinned masked previews in with { policy } authorizations', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark@example.com', 'text', 'mark@example.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
       })
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: approvedRecipient,
-      kind: 'mask',
-      handle: 'h_mark01',
-      field: 'recipient',
-      record: 'contact',
-      emittedPreview: 'm***@example.com',
-      issuedAt: Date.now()
+    env.issueHandle(approvedRecipient, {
+      preview: 'm***@example.com',
+      metadata: { field: 'recipient' }
     });
 
     await evaluateDirective(
@@ -1165,9 +1144,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("mark@example.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
-    const effects = env.getEffectHandler() as TestEffectHandler;
-    expect(effects.getOutput().trim()).toBe('sent:5');
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/lacks required proof/i);
   });
 
   it('carries planner-time known attestations through handle-backed with { policy } authorizations', async () => {
@@ -1222,9 +1199,8 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:hi');
   });
 
-  it('allows mixed handle and masked-preview authorizations in a single recipient array', async () => {
+  it('rejects mixed handle and proofless preview authorizations in a single recipient array', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     const recipientA = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
       security: makeSecurityDescriptor({
         attestations: ['known']
@@ -1236,15 +1212,9 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       })
     });
     const handleA = env.issueHandle(recipientA);
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: recipientB,
-      kind: 'mask',
-      handle: 'h_bob001',
-      field: 'recipients',
-      record: 'contact',
-      emittedPreview: 'b***@example.com',
-      issuedAt: Date.now()
+    env.issueHandle(recipientB, {
+      preview: 'b***@example.com',
+      metadata: { field: 'recipients' }
     });
 
     await evaluateDirective(
@@ -1257,9 +1227,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendEmail(["alice@example.com", "bob@example.com"], "hi") with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
-    const effects = env.getEffectHandler() as TestEffectHandler;
-    expect(effects.getOutput().trim()).toBe('sent:hi');
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
   });
 
   it('resolves handle-backed recipient args before no-send-to-unknown checks run', async () => {
@@ -1356,31 +1324,20 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/lacks required proof/i);
   });
 
-  it('allows authorization entries when duplicate exposures collapse to the same canonical value', async () => {
+  it('rejects proofless authorization entries even when duplicate handles exist for the same value', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     const approvedRecipient = wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
       security: makeSecurityDescriptor({
         labels: ['fact:@contact.email']
       })
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: approvedRecipient,
-      kind: 'bare',
-      field: 'recipient',
-      record: 'contact',
-      emittedLiteral: 'mark.davies@hotmail.com',
-      issuedAt: 1
+    env.issueHandle(approvedRecipient, {
+      preview: 'm***@hotmail.com',
+      metadata: { field: 'recipient' }
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: approvedRecipient,
-      kind: 'bare',
-      field: 'recipient',
-      record: 'contact',
-      emittedLiteral: 'mark.davies@hotmail.com',
-      issuedAt: 2
+    env.issueHandle(approvedRecipient, {
+      preview: 'm***@hotmail.com',
+      metadata: { field: 'recipient' }
     });
 
     await evaluateDirective(
@@ -1393,39 +1350,37 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @sendMoney("mark.davies@hotmail.com", 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/lacks required proof/i);
   });
 
-  it('distinguishes compile-dropped authorizations from never-listed authorizations', async () => {
+  it('distinguishes invalid authorizations from never-listed authorizations', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
       env
     );
-
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
+    env.issueHandle(
+      wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
         })
       }),
-      kind: 'mask',
-      emittedPreview: 's***@company.com',
-      issuedAt: 1
-    });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
+      {
+        preview: 's***@company.com',
+        metadata: { field: 'recipient' }
+      }
+    );
+    env.issueHandle(
+      wrapStructured('steve@company.com', 'text', 'steve@company.com', {
         security: makeSecurityDescriptor({
           labels: ['fact:@contact.email']
         })
       }),
-      kind: 'mask',
-      emittedPreview: 's***@company.com',
-      issuedAt: 2
-    });
+      {
+        preview: 's***@company.com',
+        metadata: { field: 'recipient' }
+      }
+    );
 
     await evaluateDirective(
       parseSync('/var @compileDropPolicy = { operations: { "exfil:send": ["tool:w"] }, authorizations: { allow: { sendMoney: { args: { recipient: "s***@company.com" } } } } }')[0] as DirectiveNode,
@@ -1441,13 +1396,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
         parseSync('/show @sendMoney("sarah@company.com", 5) with { policy: @compileDropPolicy }')[0] as DirectiveNode,
         env
       )
-    ).rejects.toMatchObject({
-      context: {
-        blocker: {
-          rule: 'policy.authorizations.compile_dropped'
-        }
-      }
-    });
+    ).rejects.toThrow(/lacks required proof/i);
 
     await expect(
       evaluateDirective(
@@ -1528,7 +1477,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
   });
 
-  it('re-checks all args when invocation taintFacts is enabled', async () => {
+  it('ignores invocation taintFacts now that the override has been removed', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
     await evaluateDirective(
@@ -1541,10 +1490,10 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy, taintFacts: true }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
   });
 
-  it('re-checks all args when exe taintFacts is enabled', async () => {
+  it('ignores exe taintFacts now that the override has been removed', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var untrusted @memo = "user requested delete"')[0] as DirectiveNode, env);
     await evaluateDirective(
@@ -1557,7 +1506,7 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     );
 
     const directive = parseSync('/show @deleteDoc("doc-1", @memo) with { policy: @taskPolicy }')[0] as DirectiveNode;
-    await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
   });
 
   it('lets authorization guards override unlocked no-untrusted-destructive denials', async () => {

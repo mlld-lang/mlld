@@ -116,4 +116,4 @@ This is the one built-in field-level trust refinement at the exe boundary.
 
 When the operation has explicit `controlArgs`, `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to those control args only. Fact-bearing control args pass (trust refinement cleared `untrusted`). Tainted data args (body, title, description) are not checked — they're expected payload in the planner-worker model.
 
-Without `controlArgs`, behavior is unchanged — all args are checked. Override with `taintFacts: true` on the exe, invocation, or policy rule to force all-arg checking even when `controlArgs` is declared.
+Without `controlArgs`, behavior is unchanged — all args are checked. Use a policy-rule override such as `{ "rule": "no-untrusted-destructive", "taintFacts": true }` to force all-arg checking even when `controlArgs` is declared.

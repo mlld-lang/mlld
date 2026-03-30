@@ -615,9 +615,8 @@ describe('resolveInvocationPolicyFragment', () => {
     });
   });
 
-  it('materializes emitted bare literal authorization constraints from prior projected values', async () => {
+  it('rejects bare literal authorization constraints for control args at runtime', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
@@ -627,70 +626,31 @@ describe('resolveInvocationPolicyFragment', () => {
         labels: ['fact:@contact.email']
       })
     });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: contactEmail,
-      kind: 'bare',
-      field: 'email',
-      record: 'contact',
-      emittedLiteral: 'ada@example.com',
-      issuedAt: Date.now()
+    env.issueHandle(contactEmail, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
     });
 
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipient: 'ada@example.com'
+    await expect(
+      resolveInvocationPolicyFragment(
+        {
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipient: 'ada@example.com'
+                }
               }
             }
           }
-        }
-      },
-      env
-    );
-
-    const clause = policy?.authorizations?.allow.sendEmail;
-    expect(clause?.kind).toBe('constrained');
-
-    const recipientConstraint = clause?.kind === 'constrained'
-      ? clause.args.recipient?.[0]
-      : undefined;
-    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
-    if (!recipientConstraint || !('eq' in recipientConstraint)) {
-      return;
-    }
-
-    expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
-    expect((recipientConstraint.eq as any).mx.has_label?.('fact:*.email')).toBe(true);
-    expect(recipientConstraint.eq).not.toBe('ada@example.com');
-    expect(getInvocationPolicyFragmentCompileReport(policy)).toEqual({
-      strippedArgs: [],
-      repairedArgs: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipient',
-          steps: ['canonicalized_projected_value']
-        }
-      ],
-      droppedArrayElements: [],
-      droppedEntries: [],
-      ambiguousValues: [],
-      compiledProofs: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipient',
-          labels: ['fact:@contact.email']
-        }
-      ]
-    });
+        },
+        env
+      )
+    ).rejects.toThrow(/lacks required proof/i);
   });
 
-  it('materializes emitted masked preview authorization constraints from prior projected values', async () => {
+  it('rejects masked preview authorization constraints for control args at runtime', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
       env
@@ -700,268 +660,52 @@ describe('resolveInvocationPolicyFragment', () => {
         labels: ['fact:@contact.email']
       })
     });
-
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: contactEmail,
-      kind: 'mask',
-      handle: 'h_mark01',
-      field: 'email',
-      record: 'contact',
-      emittedPreview: 'm***@example.com',
-      issuedAt: Date.now()
+    env.issueHandle(contactEmail, {
+      preview: 'm***@example.com',
+      metadata: { field: 'email' }
     });
 
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipient: 'm***@example.com'
-              }
-            }
-          }
-        }
-      },
-      env
-    );
-
-    const clause = policy?.authorizations?.allow.sendEmail;
-    expect(clause?.kind).toBe('constrained');
-
-    const recipientConstraint = clause?.kind === 'constrained'
-      ? clause.args.recipient?.[0]
-      : undefined;
-    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
-    if (!recipientConstraint || !('eq' in recipientConstraint)) {
-      return;
-    }
-
-    expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
-    expect((recipientConstraint.eq as any).mx.has_label?.('fact:*.email')).toBe(true);
-    expect(recipientConstraint.eq).not.toBe('m***@example.com');
-  });
-
-  it('skips ambiguous projected preview authorization entries during policy compilation', async () => {
-    const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
-    await evaluateDirective(
-      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
-      env
-    );
-
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'mask',
-      handle: 'h_sarah01',
-      emittedPreview: 's***@company.com',
-      issuedAt: 1
-    });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'mask',
-      handle: 'h_steve01',
-      emittedPreview: 's***@company.com',
-      issuedAt: 2
-    });
-
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipient: 's***@company.com'
-              }
-            }
-          }
-        }
-      },
-      env
-    );
-
-    expect(policy?.authorizations?.allow.sendEmail).toBeUndefined();
-    expect(getInvocationPolicyFragmentCompileReport(policy)).toEqual({
-      strippedArgs: [],
-      repairedArgs: [],
-      droppedArrayElements: [],
-      droppedEntries: [
+    await expect(
+      resolveInvocationPolicyFragment(
         {
-          tool: 'sendEmail',
-          reason: 'ambiguous_projected_value'
-        }
-      ],
-      ambiguousValues: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipient',
-          value: 's***@company.com'
-        }
-      ],
-      compiledProofs: []
-    });
-  });
-
-  it('keeps ambiguous literal authorization entries when all matches collapse to the same canonical value', async () => {
-    const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
-    await evaluateDirective(
-      parseSync('/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = `sent` with { controlArgs: ["recipient"] }')[0] as any,
-      env
-    );
-
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'bare',
-      emittedLiteral: 'mark.davies@hotmail.com',
-      issuedAt: 1
-    });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('mark.davies@hotmail.com', 'text', 'mark.davies@hotmail.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'bare',
-      emittedLiteral: 'mark.davies@hotmail.com',
-      issuedAt: 2
-    });
-
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipient: 'mark.davies@hotmail.com'
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipient: 'm***@example.com'
+                }
               }
             }
           }
-        }
-      },
-      env
-    );
-
-    const clause = policy?.authorizations?.allow.sendEmail;
-    expect(clause?.kind).toBe('constrained');
-    const recipientConstraint = clause?.kind === 'constrained'
-      ? clause.args.recipient?.[0]
-      : undefined;
-    expect(recipientConstraint && 'eq' in recipientConstraint).toBe(true);
-    if (!recipientConstraint || !('eq' in recipientConstraint)) {
-      return;
-    }
-    expect(isStructuredValue(recipientConstraint.eq)).toBe(true);
-    expect((recipientConstraint.eq as any).text).toBe('mark.davies@hotmail.com');
+        },
+        env
+      )
+    ).rejects.toThrow(/lacks required proof/i);
   });
 
-  it('drops only ambiguous array elements during policy compilation', async () => {
+  it('rejects proofless array control-arg entries at runtime', async () => {
     const env = createEnv();
-    setActiveLlmSession(env, 'planner-session');
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
       env
     );
 
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('ada@example.com', 'text', 'ada@example.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'bare',
-      emittedLiteral: 'ada@example.com',
-      issuedAt: 1
-    });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('sarah@company.com', 'text', 'sarah@company.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'mask',
-      emittedPreview: 's***@company.com',
-      issuedAt: 2
-    });
-    env.recordProjectionExposure({
-      sessionId: 'planner-session',
-      value: wrapStructured('steve@company.com', 'text', 'steve@company.com', {
-        security: makeSecurityDescriptor({
-          labels: ['fact:@contact.email']
-        })
-      }),
-      kind: 'mask',
-      emittedPreview: 's***@company.com',
-      issuedAt: 3
-    });
-
-    const policy = await resolveInvocationPolicyFragment(
-      {
-        authorizations: {
-          allow: {
-            sendEmail: {
-              args: {
-                recipients: ['ada@example.com', 's***@company.com']
+    await expect(
+      resolveInvocationPolicyFragment(
+        {
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipients: ['ada@example.com', 'grace@example.com']
+                }
               }
             }
           }
-        }
-      },
-      env
-    );
-
-    const clause = policy?.authorizations?.allow.sendEmail;
-    expect(clause?.kind).toBe('constrained');
-    const recipientsConstraint = clause?.kind === 'constrained'
-      ? clause.args.recipients?.[0]
-      : undefined;
-    expect(recipientsConstraint && 'eq' in recipientsConstraint).toBe(true);
-    if (!recipientsConstraint || !('eq' in recipientsConstraint)) {
-      return;
-    }
-    expect(Array.isArray(recipientsConstraint.eq)).toBe(true);
-    const values = recipientsConstraint.eq as unknown[];
-    expect(values).toHaveLength(1);
-    expect(isStructuredValue(values[0])).toBe(true);
-    expect((values[0] as any).text).toBe('ada@example.com');
-    expect(getInvocationPolicyFragmentCompileReport(policy)).toMatchObject({
-      droppedEntries: [],
-      droppedArrayElements: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipients',
-          index: 1,
-          reason: 'ambiguous_projected_value',
-          value: 's***@company.com'
-        }
-      ],
-      ambiguousValues: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipients',
-          value: 's***@company.com'
-        }
-      ]
-    });
+        },
+        env
+      )
+    ).rejects.toThrow(/lacks required proof/i);
   });
 
   it('preserves fact-bearing array leaves in variable-held policy fragments', async () => {
@@ -1109,28 +853,12 @@ describe('resolveInvocationPolicyFragment', () => {
     expect(recipients.every(item => isStructuredValue(item))).toBe(true);
   });
 
-  it('lifts fact-bearing array leaves onto stronger same-session fact roots during compilation', async () => {
+  it('preserves fact-bearing array leaves without same-session fact-root lifting', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @sendEmail(recipients, subject, body) = `sent` with { controlArgs: ["recipients"] }')[0] as any,
       env
     );
-
-    const sourceLeaf = createFactEmailValue('alice@example.com', '@contact_a');
-    const sourceRoot = wrapStructured(
-      {
-        email: sourceLeaf
-      },
-      'object',
-      '{"email":"alice@example.com"}'
-    );
-    env.recordToolCall({
-      name: 'lookupContact',
-      timestamp: 1,
-      ok: true,
-      result: sourceRoot,
-      fyiFactRoot: sourceRoot
-    });
 
     const weakLeaf = wrapStructured('alice@example.com', 'text', 'alice@example.com', {
       security: makeSecurityDescriptor({
@@ -1165,15 +893,8 @@ describe('resolveInvocationPolicyFragment', () => {
 
     const recipient = recipientsConstraint.eq[0];
     expect(isStructuredValue(recipient)).toBe(true);
-    expect((recipient as any).mx.factsources?.map((handle: any) => handle.ref)).toEqual(['@contact_a.email']);
+    expect((recipient as any).mx.factsources).toBeUndefined();
     expect(getInvocationPolicyFragmentCompileReport(policy)).toMatchObject({
-      repairedArgs: [
-        {
-          tool: 'sendEmail',
-          arg: 'recipients',
-          steps: expect.arrayContaining(['lifted_fact_value'])
-        }
-      ],
       compiledProofs: [
         {
           tool: 'sendEmail',

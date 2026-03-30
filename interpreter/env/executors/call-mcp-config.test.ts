@@ -12,6 +12,7 @@ import type { ExecutableVariable, VariableSource } from '@core/types/variable';
 import { createCallMcpConfig, normalizeToolsArg } from './call-mcp-config';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { accessField } from '@interpreter/utils/field-access';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -193,21 +194,24 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('serves @fyi.facts through the generated function MCP bridge', async () => {
+  it('serves @fyi.known through the generated function MCP bridge', async () => {
     const env = await createInterpretedEnv(
       [
         '/record @contact = { facts: [email: string] }',
         '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
         '/var @contact = @emitContact()',
-        '/var @toolList = [@fyi.facts]'
+        '/var @toolList = [@fyi.known]'
       ].join('\n')
     );
 
-    const scopedConfig = env.getScopedEnvironmentConfig() ?? {};
     const contact = env.getVariable('contact');
-    env.setScopedEnvironmentConfig({
-      ...scopedConfig,
-      fyi: { facts: [contact] }
+    if (!contact) {
+      throw new Error('Expected @contact to be defined');
+    }
+    const email = await accessField(contact.value, { type: 'field', value: 'email' } as any, { env });
+    env.issueHandle(email, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
     });
 
     let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
@@ -228,8 +232,8 @@ describe('createCallMcpConfig', () => {
     try {
       expect(result.inBox).toBe(false);
       expect(result.mcpConfigPath).not.toBe('');
-      expect(result.toolsCsv).toBe('facts');
-      expect(result.availableTools).toEqual([{ name: 'facts' }]);
+      expect(result.toolsCsv).toBe('known');
+      expect(result.availableTools).toEqual([{ name: 'known' }]);
 
       const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
       const config = JSON.parse(configRaw) as {
@@ -251,16 +255,16 @@ describe('createCallMcpConfig', () => {
         name?: string;
         inputSchema?: { properties?: Record<string, unknown> };
       }>;
-      expect(tools.map(tool => tool.name)).toContain('facts');
-      const factsSchema = tools.find(tool => tool.name === 'facts')?.inputSchema;
-      expect(Object.keys(factsSchema?.properties ?? {})).toEqual(['query']);
+      expect(tools.map(tool => tool.name)).toContain('known');
+      const knownSchema = tools.find(tool => tool.name === 'known')?.inputSchema;
+      expect(Object.keys(knownSchema?.properties ?? {})).toEqual(['query']);
 
       const called = await sendJsonRpc(socketPath, {
         jsonrpc: '2.0',
         id: 2,
         method: 'tools/call',
         params: {
-          name: 'facts',
+          name: 'known',
           arguments: {
             query: { op: 'op:named:email.send', arg: 'recipient' }
           }
@@ -284,7 +288,7 @@ describe('createCallMcpConfig', () => {
         id: 3,
         method: 'tools/call',
         params: {
-          name: 'facts',
+          name: 'known',
           arguments: {
             query: 'email.send'
           }
@@ -371,8 +375,7 @@ describe('createCallMcpConfig', () => {
         email: {
           preview: 'm***@example.com',
           handle: expect.stringMatching(HANDLE_RE)
-        },
-        notes: 'Met at conference'
+        }
       });
     } finally {
       await result.cleanup();
@@ -380,20 +383,25 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('discovers auto fact roots from prior native tool results in the same MCP session', async () => {
+  it('implicitly adds @fyi.known for write-tool MCP bridges and discovers prior projected handles', async () => {
     const env = await createInterpretedEnv(
       [
-        '/record @contact = { facts: [email: string, name: string] }',
+        '/record @contact = {',
+        '  facts: [email: string, name: string],',
+        '  display: [name, { mask: "email" }]',
+        '}',
         '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
-        '/var @toolList = [@search_contacts, @fyi.facts]'
+        '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@search_contacts, @send_email]'
       ].join('\n')
     );
 
-    const scopedConfig = env.getScopedEnvironmentConfig() ?? {};
-    env.setScopedEnvironmentConfig({
-      ...scopedConfig,
-      fyi: { autoFacts: true }
-    });
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        defaults: { rules: ['no-send-to-unknown'] },
+        operations: { 'exfil:send': ['tool:w'] }
+      })!
+    );
 
     let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
     if (isStructuredValue(toolList)) {
@@ -411,6 +419,12 @@ describe('createCallMcpConfig', () => {
     });
 
     try {
+      expect(result.availableTools).toEqual([
+        { name: 'search_contacts' },
+        { name: 'send_email' },
+        { name: 'known' }
+      ]);
+
       const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
       const config = JSON.parse(configRaw) as {
         mcpServers: {
@@ -435,31 +449,27 @@ describe('createCallMcpConfig', () => {
 
       expect((search.result as any)?.isError).not.toBe(true);
 
-      const facts = await sendJsonRpc(socketPath, {
+      const known = await sendJsonRpc(socketPath, {
         jsonrpc: '2.0',
         id: 11,
         method: 'tools/call',
         params: {
-          name: 'facts',
-          arguments: {}
+          name: 'known',
+          arguments: {
+            query: { op: 'send_email', arg: 'recipient' }
+          }
         }
       });
 
-      expect((facts.result as any)?.isError).not.toBe(true);
-      const text = String((facts.result as any)?.content?.[0]?.text ?? '');
+      expect((known.result as any)?.isError).not.toBe(true);
+      const text = String((known.result as any)?.content?.[0]?.text ?? '');
       const parsed = JSON.parse(text) as Array<Record<string, unknown>>;
       expect(parsed).toEqual([
         {
           handle: expect.stringMatching(HANDLE_RE),
-          label: 'Mark Davies',
+          label: 'm***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'
-        },
-        {
-          handle: expect.stringMatching(HANDLE_RE),
-          label: 'M*** D*****',
-          field: 'name',
-          fact: 'fact:@contact.name'
         }
       ]);
     } finally {
@@ -555,7 +565,7 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('canonicalizes masked preview strings for security-relevant tool args in the same session', async () => {
+  it('does not authorize masked preview strings for security-relevant tool args without handles', async () => {
     const env = await createInterpretedEnv(
       [
         '/record @contact = {',
@@ -618,15 +628,15 @@ describe('createCallMcpConfig', () => {
         }
       });
 
-      expect((send.result as any)?.isError).not.toBe(true);
-      expect(getToolResultText(send)).toBe('sent:mark@example.com:hi');
+      expect((send.result as any)?.isError).toBe(true);
+      expect(getToolResultText(send)).toMatch(/destination must carry 'known'/i);
     } finally {
       await result.cleanup();
       env.cleanup();
     }
   });
 
-  it('canonicalizes emitted bare literals for security-relevant tool args in the same session', async () => {
+  it('does not authorize emitted bare literals for security-relevant tool args without handles', async () => {
     const env = await createInterpretedEnv(
       [
         '/record @contact = {',
@@ -689,8 +699,8 @@ describe('createCallMcpConfig', () => {
         }
       });
 
-      expect((send.result as any)?.isError).not.toBe(true);
-      expect(getToolResultText(send)).toBe('sent:mark@example.com:hi');
+      expect((send.result as any)?.isError).toBe(true);
+      expect(getToolResultText(send)).toMatch(/destination must carry 'known'/i);
     } finally {
       await result.cleanup();
       env.cleanup();

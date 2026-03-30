@@ -6,8 +6,6 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
-import { canonicalizeProjectedValue } from '@interpreter/utils/projected-value-canonicalization';
-import { asText } from '@interpreter/utils/structured-value';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -127,11 +125,7 @@ describe('FunctionRouter', () => {
       email: {
         preview: 'a***@example.com',
         handle: expect.stringMatching(HANDLE_RE)
-      },
-      phone: {
-        handle: expect.stringMatching(HANDLE_RE)
-      },
-      notes: 'Met at conference'
+      }
     });
   });
 
@@ -173,7 +167,7 @@ describe('FunctionRouter', () => {
     ]);
   });
 
-  it('records projection exposures for the active llm tool session while serializing tool results', async () => {
+  it('issues handles for display-projected fact fields while serializing tool results', async () => {
     const environment = await createEnvironment(`
       /record @contact = {
         facts: [email: string, name: string],
@@ -202,24 +196,15 @@ describe('FunctionRouter', () => {
     const router = new FunctionRouter({ environment });
     await router.executeFunction('get_contact', {});
 
-    const exposures = environment.getProjectionExposures('router-projection-session');
-    expect(exposures).toHaveLength(2);
-    expect(exposures).toEqual(
+    expect(environment.getIssuedHandles()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sessionId: 'router-projection-session',
-          kind: 'bare',
-          field: 'name',
-          record: 'contact',
-          emittedLiteral: 'Ada Lovelace'
-        }),
-        expect.objectContaining({
-          sessionId: 'router-projection-session',
-          kind: 'mask',
-          field: 'email',
-          record: 'contact',
-          emittedPreview: 'a***@example.com',
-          handle: expect.stringMatching(HANDLE_RE)
+          handle: expect.stringMatching(HANDLE_RE),
+          preview: 'a***@example.com',
+          metadata: expect.objectContaining({
+            field: 'email',
+            record: 'contact'
+          })
         })
       ])
     );
@@ -463,7 +448,7 @@ describe('FunctionRouter', () => {
     expect(securitySnapshot?.sources ?? []).not.toContain('mcp:getTime');
   });
 
-  it('rebinds known attestations only for exact native tool arg matches', async () => {
+  it('does not rebind known attestations from prior native tool results without handles', async () => {
     const environment = await createEnvironment(`
       /exe known @getIban() = js {
         return 'acct-good';
@@ -489,9 +474,6 @@ describe('FunctionRouter', () => {
     await expect(router.executeFunction('get_iban', {})).resolves.toBe('acct-good');
     await expect(
       router.executeFunction('send_money', { recipient: 'acct-good', amount: 100 })
-    ).resolves.toBe('sent 100 to acct-good');
-    await expect(
-      router.executeFunction('send_money', { recipient: 'attacker-iban', amount: 100 })
     ).rejects.toThrow(/destination must carry 'known'/i);
   });
 
@@ -524,7 +506,7 @@ describe('FunctionRouter', () => {
     ).rejects.toThrow(/destination must carry 'known'/i);
   });
 
-  it('matches same-session bare fact literals from prior native tool results', async () => {
+  it('does not authorize bare fact literals from prior native tool results', async () => {
     const environment = await createEnvironment(`
       /record @contact = {
         facts: [email: string],
@@ -562,10 +544,10 @@ describe('FunctionRouter', () => {
         subject: 'hello',
         body: 'test'
       })
-    ).resolves.toBe('sent hello to ada@example.com');
+    ).rejects.toThrow(/destination must carry 'known'/i);
   });
 
-  it('lets masked preview-backed refined fact values satisfy no-untrusted-destructive', async () => {
+  it('does not let handle-backed untrusted fact values bypass no-untrusted-destructive', async () => {
     const environment = await createEnvironment(`
       /record @tx = {
         facts: [recipient: string],
@@ -611,27 +593,19 @@ describe('FunctionRouter', () => {
       }
     });
 
-    await expect(router.executeFunction('get_tx', {})).resolves.toContain('US1***21212');
-    expect(environment.getProjectionExposures('router-tx-session')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sessionId: 'router-tx-session',
-          kind: 'mask',
-          field: 'recipient',
-          record: 'tx',
-          emittedPreview: 'US1***21212'
-        })
-      ])
-    );
-    await expect(canonicalizeProjectedValue('US1***21212', environment)).resolves.toSatisfy(value => {
-      return asText(value) === 'US122000000121212121212';
+    const getTxResult = JSON.parse(await router.executeFunction('get_tx', {})) as {
+      recipient: { preview: string; handle: string };
+    };
+    expect(getTxResult.recipient).toEqual({
+      preview: 'US1***21212',
+      handle: expect.stringMatching(HANDLE_RE)
     });
     await expect(
-      router.executeFunction('update_tx', { recipient: 'US1***21212' })
-    ).resolves.toBe('updated:US122000000121212121212');
+      router.executeFunction('update_tx', { recipient: getTxResult.recipient.handle })
+    ).rejects.toThrow(/cannot flow to 'destructive'/i);
   });
 
-  it('fails closed on ambiguous projected values during native tool calls', async () => {
+  it('fails closed on bare projected literals during native tool calls', async () => {
     const environment = await createEnvironment(`
       /record @contact = {
         facts: [name: string],
@@ -680,20 +654,6 @@ describe('FunctionRouter', () => {
 
     await router.executeFunction('get_contact_a', {});
     await router.executeFunction('get_contact_b', {});
-    expect(environment.getProjectionExposures('router-ambiguous-session')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sessionId: 'router-ambiguous-session',
-          kind: 'bare',
-          field: 'name',
-          record: 'contact',
-          emittedLiteral: 'Charlie'
-        })
-      ])
-    );
-    await expect(canonicalizeProjectedValue('Charlie', environment)).rejects.toThrow(
-      /handle wrapper from the tool result/i
-    );
 
     try {
       await router.executeFunction('send_email', {
@@ -705,11 +665,11 @@ describe('FunctionRouter', () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       expect(message).toMatch(/destination must carry 'known'/i);
-      expect(message).not.toMatch(/Ambiguous projected value/i);
+      expect(message).not.toMatch(/Ambiguous/i);
     }
   });
 
-  it('canonicalizes masked array fact previews back to live values for destructive tool calls', async () => {
+  it('resolves arrays of handles for destructive tool calls', async () => {
     const environment = await createEnvironment(`
       /record @calendar_evt = {
         facts: [participants: array],
@@ -755,17 +715,22 @@ describe('FunctionRouter', () => {
       }
     });
 
-    await expect(router.executeFunction('get_event', {})).resolves.toContain('a***@example.com');
-    await expect(
-      canonicalizeProjectedValue(['a***@example.com', 'g***@example.com'], environment)
-    ).resolves.toSatisfy(value => {
-      return Array.isArray(value) &&
-        value.every(item => asText(item).endsWith('@example.com')) &&
-        !value.some(item => asText(item).includes('***'));
-    });
+    const eventResult = JSON.parse(await router.executeFunction('get_event', {})) as {
+      participants: Array<{ preview: string; handle: string }>;
+    };
+    expect(eventResult.participants).toEqual([
+      {
+        preview: 'a***@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      {
+        preview: 'g***@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      }
+    ]);
     await expect(
       router.executeFunction('update_participants', {
-        participants: ['a***@example.com', 'g***@example.com']
+        participants: eventResult.participants.map(entry => entry.handle)
       })
     ).resolves.toBe('["ada@example.com","grace@example.com"]');
   });

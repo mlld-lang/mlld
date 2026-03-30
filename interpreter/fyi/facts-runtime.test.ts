@@ -5,7 +5,13 @@ import { Environment } from '@interpreter/env/Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { normalizePolicyConfig } from '@core/policy/union';
-import { evaluateFyiFacts } from './facts-runtime';
+import { makeSecurityDescriptor } from '@core/types/security';
+import { accessField } from '@interpreter/utils/field-access';
+import {
+  applySecurityDescriptorToStructuredValue,
+  wrapStructured
+} from '@interpreter/utils/structured-value';
+import { evaluateFyiKnown } from './facts-runtime';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -15,6 +21,9 @@ async function createContactsEnv(): Promise<Environment> {
 /record @contact = {
   facts: [email: string, id: string],
   data: [name: string]
+}
+/exe exfil:send, tool:w @send_email(recipient, subject, body) = "sent" with {
+  controlArgs: ["recipient"]
 }
 /exe @emitContact() = js {
   return {
@@ -27,23 +36,43 @@ async function createContactsEnv(): Promise<Environment> {
 `;
   const { ast } = await parse(source);
   await evaluate(ast, env);
+
   const contact = env.getVariable('contact');
   if (!contact) {
     throw new Error('Expected @contact to be defined');
   }
-  env.setScopedEnvironmentConfig({
-    fyi: {
-      facts: [contact]
-    }
+
+  const contactValue = contact.value;
+  const email = await accessField(contactValue, { type: 'field', value: 'email' } as any, { env });
+  const id = await accessField(contactValue, { type: 'field', value: 'id' } as any, { env });
+  env.issueHandle(email, {
+    preview: 'Ada Lovelace',
+    metadata: { field: 'email' }
   });
+  env.issueHandle(id, {
+    preview: 'Ada Lovelace',
+    metadata: { field: 'id' }
+  });
+
   return env;
 }
 
-describe('evaluateFyiFacts', () => {
-  it('returns bounded fact candidates without exposing raw values', async () => {
+function createKnownStructuredText(value: string) {
+  const structured = wrapStructured(value, 'text', value);
+  applySecurityDescriptorToStructuredValue(
+    structured,
+    makeSecurityDescriptor({
+      attestations: ['known']
+    })
+  );
+  return structured;
+}
+
+describe('evaluateFyiKnown', () => {
+  it('returns bounded handle-backed candidates without exposing raw values', async () => {
     const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts(undefined, env);
+    const result = await evaluateFyiKnown(undefined, env);
 
     expect(result.type).toBe('array');
     expect(result.data).toHaveLength(2);
@@ -61,18 +90,12 @@ describe('evaluateFyiFacts', () => {
         fact: 'fact:@contact.id'
       }
     ]);
-    for (const candidate of result.data) {
-      expect(candidate).not.toHaveProperty('value');
-      expect(candidate.handle).toMatch(HANDLE_RE);
-      expect(candidate.label).not.toContain('ada@example.com');
-      expect(candidate.label).not.toContain('contact-1');
-    }
   });
 
   it('filters send destinations to email facts by arg semantics', async () => {
     const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { op: 'op:named:email.send', arg: 'recipient' },
       env
     );
@@ -88,40 +111,40 @@ describe('evaluateFyiFacts', () => {
   });
 
   it('supports bare-string op queries and groups candidates by arg', async () => {
-    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
-    const source = `
-/record @contact = {
-  facts: [email: string]
-  data: [name: string]
-}
-/exe @emitContact() = js {
-  return { email: "mark@example.com", name: "Mark Davies" };
-} => contact
-/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = "sent" with {
-  controlArgs: ["recipient"]
-}
-/var @contact = @emitContact()
-`;
-    const { ast } = await parse(source);
-    await evaluate(ast, env);
-    const contact = env.getVariable('contact');
-    if (!contact) {
-      throw new Error('Expected @contact to be defined');
-    }
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [contact]
-      }
-    });
+    const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts('sendEmail', env);
+    const result = await evaluateFyiKnown('email.send', env);
 
     expect(result.type).toBe('object');
     expect(result.data).toEqual({
+      bcc: [
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Ada Lovelace',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ],
+      cc: [
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Ada Lovelace',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ],
       recipient: [
         {
           handle: expect.stringMatching(HANDLE_RE),
-          label: 'Mark Davies',
+          label: 'Ada Lovelace',
+          field: 'email',
+          fact: 'fact:@contact.email'
+        }
+      ],
+      recipients: [
+        {
+          handle: expect.stringMatching(HANDLE_RE),
+          label: 'Ada Lovelace',
           field: 'email',
           fact: 'fact:@contact.email'
         }
@@ -132,7 +155,7 @@ describe('evaluateFyiFacts', () => {
   it('supports bare-string op queries with a separate arg override', async () => {
     const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts('email.send', env, 'recipient');
+    const result = await evaluateFyiKnown('email.send', env, 'recipient');
 
     expect(result.data).toEqual([
       {
@@ -160,17 +183,18 @@ describe('evaluateFyiFacts', () => {
 `;
     const { ast } = await parse(source);
     await evaluate(ast, env);
+
     const contact = env.getVariable('contact');
     if (!contact) {
       throw new Error('Expected @contact to be defined');
     }
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [contact]
-      }
+    const email = await accessField(contact.value, { type: 'field', value: 'email' } as any, { env });
+    env.issueHandle(email, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
     });
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { op: 'op:named:createCalendarEvent', arg: 'participants' },
       env
     );
@@ -188,7 +212,7 @@ describe('evaluateFyiFacts', () => {
   it('filters destructive targets to id facts', async () => {
     const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { op: 'op:named:crm.delete', arg: 'id' },
       env
     );
@@ -206,7 +230,7 @@ describe('evaluateFyiFacts', () => {
   it('fails closed when only an arg name is provided without canonical operation identity', async () => {
     const env = await createContactsEnv();
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { arg: 'recipient' },
       env
     );
@@ -222,7 +246,7 @@ describe('evaluateFyiFacts', () => {
       }
     }));
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { op: 'op:named:email.send', arg: 'recipient' },
       env
     );
@@ -242,7 +266,7 @@ describe('evaluateFyiFacts', () => {
       }
     }));
 
-    const result = await evaluateFyiFacts(
+    const result = await evaluateFyiKnown(
       { op: 'op:named:createCalendarEvent', arg: 'participants' },
       env
     );
@@ -257,31 +281,50 @@ describe('evaluateFyiFacts', () => {
     ]);
   });
 
-  it('discovers fact candidates from auto-registered tool results', async () => {
-    const env = await createContactsEnv();
+  it('returns builder-minted known handles alongside fact-backed handles', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+/exe exfil:send, tool:w @send_email(recipient, subject, body) = "sent" with {
+  controlArgs: ["recipient"]
+}
+/exe @emitContact() = js {
+  return {
+    name: "Ada Lovelace",
+    email: "ada@example.com"
+  };
+} => contact
+/var @contact = @emitContact()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+
     const contact = env.getVariable('contact');
     if (!contact) {
       throw new Error('Expected @contact to be defined');
     }
+    const email = await accessField(contact.value, { type: 'field', value: 'email' } as any, { env });
+    env.issueHandle(email, {
+      preview: 'Ada Lovelace',
+      metadata: { field: 'email' }
+    });
 
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        autoFacts: true
+    env.issueHandle(createKnownStructuredText('john@example.com'), {
+      preview: 'john@example.com',
+      metadata: {
+        proof: 'known',
+        op: 'op:named:send_email',
+        arg: 'recipient'
       }
     });
-    env.recordToolCall({
-      name: 'search_contacts',
-      timestamp: Date.now(),
-      ok: true,
-      result: {
-        name: 'Ada Lovelace',
-        email: 'ada@example.com',
-        id: 'contact-1'
-      },
-      fyiFactRoot: contact
-    });
 
-    const result = await evaluateFyiFacts(undefined, env);
+    const result = await evaluateFyiKnown(
+      { op: 'send_email', arg: 'recipient' },
+      env
+    );
 
     expect(result.data).toEqual([
       {
@@ -292,14 +335,13 @@ describe('evaluateFyiFacts', () => {
       },
       {
         handle: expect.stringMatching(HANDLE_RE),
-        label: 'Ada Lovelace',
-        field: 'id',
-        fact: 'fact:@contact.id'
+        label: 'john@example.com',
+        proof: 'known'
       }
     ]);
   });
 
-  it('discovers each element of an array fact field as its own candidate', async () => {
+  it('discovers each separately registered element of an array fact field', async () => {
     const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
     const source = `
 /record @calendar_evt = {
@@ -316,17 +358,25 @@ describe('evaluateFyiFacts', () => {
 `;
     const { ast } = await parse(source);
     await evaluate(ast, env);
+
     const event = env.getVariable('event');
     if (!event) {
       throw new Error('Expected @event to be defined');
     }
-    env.setScopedEnvironmentConfig({
-      fyi: {
-        facts: [event]
-      }
+
+    const participants = await accessField(event.value, { type: 'field', value: 'participants' } as any, { env });
+    const first = await accessField(participants, { type: 'arrayIndex', value: 0 } as any, { env });
+    const second = await accessField(participants, { type: 'arrayIndex', value: 1 } as any, { env });
+    env.issueHandle(first, {
+      preview: 'a***@example.com',
+      metadata: { field: 'participants' }
+    });
+    env.issueHandle(second, {
+      preview: 'g***@example.com',
+      metadata: { field: 'participants' }
     });
 
-    const result = await evaluateFyiFacts(undefined, env);
+    const result = await evaluateFyiKnown(undefined, env);
 
     expect(result.type).toBe('array');
     expect(result.data).toEqual([

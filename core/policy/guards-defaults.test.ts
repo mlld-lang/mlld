@@ -688,7 +688,7 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(failure?.suggestions).toContain(
       'Use a projected handle for the destination from an approved tool result or another approved source'
     );
-    expect(failure?.suggestions?.join('\n')).not.toContain('@fyi.facts');
+    expect(failure?.suggestions?.join('\n')).not.toContain('@fyi.known');
   });
 
   it('enforces declarative fact requirements for runtime guards and inherited checks', () => {
@@ -761,7 +761,7 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(inheritedFailure?.suggestions).toContain(
       "Use a projected handle for 'participants' from an approved tool result or another approved source"
     );
-    expect(inheritedFailure?.suggestions?.join('\n')).not.toContain('@fyi.facts');
+    expect(inheritedFailure?.suggestions?.join('\n')).not.toContain('@fyi.known');
 
     expect(
       evaluateAuthorizationInheritedPolicyChecks({

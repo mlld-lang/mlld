@@ -202,43 +202,38 @@ Security-relevant runtime inputs are canonicalized before authorization checks, 
 The resolution order is:
 
 1. explicit handle wrapper
-2. exact emitted preview string from the active LLM tool session
-3. exact emitted bare literal from the active LLM tool session
-4. no match, so the value remains fresh and unproven
+2. bare handle string in a security-relevant position
+3. no match, so the value remains fresh and unproven
 
 Important constraints:
 
-- runtime preview and literal matching is session-local
 - handle resolution remains root-scoped
 - only security-relevant positions are canonicalized
 - freeform payload args are not rewritten
-- handle-only projections create no preview or literal alias
-
-Ambiguous preview or literal matches fail closed and direct the model to use the handle wrapper. The runtime does not guess.
+- the runtime does not treat previews or copied literals as proof
 
 ### Fact Discovery
 
-The primary planner path is projected record results. `@fyi.facts(...)` remains the explicit fact-discovery surface when agents need to search configured roots directly instead of copying handles from projected tool output.
+The primary planner path is projected record results. `@fyi.known(...)` is the discovery surface when an agent needs to browse proof-bearing handles already registered in the execution instead of copying a handle from the latest tool output.
 
 The implementation lives in [`facts-runtime.ts`](/Users/adam/mlld/mlld/interpreter/fyi/facts-runtime.ts).
 
-Discovery uses box or call-site `fyi: { facts: [...] }` roots and returns bounded candidate objects:
+Discovery queries the root-scoped handle registry and returns bounded candidate objects:
 
 - `handle`
 - `label`
-- `field`
-- `fact`
+- optional `field`
+- optional `fact`
+- optional `proof: "known"`
 
 It does not return raw live values or raw authorization-critical literals. `label` is a safe display string derived from sibling record context when possible and otherwise falls back to a masked preview.
 
-`facts: "auto"` remains available as a same-session compatibility path that reuses successful native tool results as discovery roots. It is not required for the primary projection-based planner workflow.
-
 There are two discovery modes:
 
-- no-arg discovery across configured fact-bearing roots
+- no-arg discovery across all proof-bearing handles in the registry
 - filtered discovery by `(op, arg)`
 
-`@fyi.facts(...)` is a discovery surface, not a projection alias surface. Its `label` field is safe display text for choosing a candidate, not a tolerant input alias. The reusable value is the returned handle.
+`@fyi.known(...)` is a discovery surface, not a projection alias surface. Its `label` field is safe display text for choosing a candidate, not a tolerant input alias. The reusable value is the returned handle.
 
 ### Canonical Operation Identity
 
@@ -246,7 +241,7 @@ Named operations are canonicalized to `op:named:...` in [`operation-labels.ts`](
 
 That identity is shared across:
 
-- `@fyi.facts(...)`
+- `@fyi.known(...)`
 - guard filters
 - runtime operation metadata lookup
 - fact-aware policy checks
@@ -305,10 +300,10 @@ It resolves:
 - expression results
 - arrays and objects
 - handle wrappers
-- emitted previews and emitted bare literals for security-relevant authorization args
+- bare handle strings for security-relevant authorization args
 
 Compiled authorization proof comes from the resolved live value’s security descriptor, not from a copied literal representation.
-For planner-produced authorization bundles, emitted previews and emitted bare literals canonicalize back to live values before normalization. Ambiguous aliases fail closed with handle guidance.
+For planner-produced bucketed intent, `@policy.build` also upgrades exact `known` matches to stronger existing handles in the registry and mints `known` handles for user-provided values that survive validation.
 
 ### Dispatch-Time Authorization And Policy Checks
 
@@ -317,7 +312,7 @@ Runtime exec dispatch lives in [`exec-invocation.ts`](/Users/adam/mlld/mlld/inte
 At dispatch time the runtime:
 
 - resolves effective tool metadata
-- canonicalizes security-relevant args from emitted handles, previews, or bare literals
+- canonicalizes security-relevant args from handles only
 - separates policy-guard control args from authorization-validation control args
 - validates runtime authorizations
 - merges matched authorization proof into named arg descriptors
@@ -353,7 +348,7 @@ That layer determines how file content becomes trusted, untrusted, or unlabeled 
 - Fact proof is field-level. A fact-bearing object does not make every descendant authorized.
 - Handles are execution-scoped and are not durable ids.
 - A copied literal carries no proof by itself.
-- `@fyi.facts({ arg: "recipient" })` is intentionally empty.
+- `@fyi.known({ arg: "recipient" })` is intentionally empty.
 - Discovery requires either resolvable live metadata, an explicit symbolic op spec, or declarative `policy.facts.requirements`.
 - `tool:w` send operations without declared `controlArgs` fail closed for fact discovery.
 - Plain non-tool runtime compatibility fallbacks for dispatch are not discovery semantics.

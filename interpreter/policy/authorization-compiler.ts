@@ -11,9 +11,12 @@ import {
 import { isHandleWrapper } from '@core/types/handle';
 import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import type { PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
+import { proofStrengthForValue } from '@interpreter/security/proof-claims';
 import {
   collectSecurityRelevantArgNamesForOperation,
   repairSecurityRelevantValue,
@@ -22,8 +25,11 @@ import {
 import type { Environment } from '@interpreter/env/Environment';
 import {
   asData,
+  asText,
+  applySecurityDescriptorToStructuredValue,
   extractSecurityDescriptor,
-  isStructuredValue
+  isStructuredValue,
+  wrapStructured
 } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
@@ -335,6 +341,90 @@ function extractKnownBucketValue(
   return { value: raw, hasValue: true };
 }
 
+function deriveKnownHandlePreview(value: unknown): string | undefined {
+  const text =
+    isStructuredValue(value)
+      ? asText(value).trim()
+      : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ? String(value).trim()
+        : '';
+  return text.length > 0 ? text : undefined;
+}
+
+function createKnownHandleValue(value: unknown): unknown {
+  const wrapped =
+    isStructuredValue(value)
+      ? wrapStructured(value.data, value.type, value.text, value.metadata)
+      : wrapStructured(value as any);
+  if (isStructuredValue(value) && value.internal) {
+    wrapped.internal = { ...value.internal };
+  }
+  applySecurityDescriptorToStructuredValue(
+    wrapped,
+    makeSecurityDescriptor({
+      attestations: ['known']
+    })
+  );
+  return wrapped;
+}
+
+function entryHasFactProof(value: unknown): boolean {
+  if (proofStrengthForValue(value) < 3) {
+    return false;
+  }
+  return collectProofClaimLabels(
+    extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    })
+  ).some(label => label.startsWith('fact:'));
+}
+
+function normalizeKnownHandleOp(value: string): string {
+  return normalizeNamedOperationRef(value) ?? value.trim();
+}
+
+function findUniqueFactBackedHandleMatch(
+  env: Environment,
+  value: unknown
+): string | undefined {
+  const matches = env.findIssuedHandlesByCanonicalValue(value)
+    .filter(entry => entryHasFactProof(entry.value));
+  return matches.length === 1 ? matches[0]!.handle : undefined;
+}
+
+function findReusableKnownHandleMatch(options: {
+  env: Environment;
+  value: unknown;
+  toolName: string;
+  argName: string;
+}): string | undefined {
+  const normalizedOp = normalizeKnownHandleOp(options.toolName);
+  const matches = options.env.findIssuedHandlesByCanonicalValue(options.value).filter(entry =>
+    entry.metadata?.proof === 'known'
+    && entry.metadata?.op === normalizedOp
+    && entry.metadata?.arg === options.argName
+  );
+  return matches.length > 0 ? matches[0]!.handle : undefined;
+}
+
+function registerKnownHandle(options: {
+  env: Environment;
+  toolName: string;
+  argName: string;
+  value: unknown;
+}): void {
+  const preview = deriveKnownHandlePreview(options.value);
+  options.env.issueHandle(createKnownHandleValue(options.value), {
+    ...(preview ? { preview } : {}),
+    metadata: {
+      proof: 'known',
+      op: normalizeKnownHandleOp(options.toolName),
+      arg: options.argName
+    }
+  });
+}
+
 function buildProoflessResolvedValueMessage(
   toolName: string,
   argName: string,
@@ -643,10 +733,37 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
             continue;
           }
 
+          const materializedValue = await materializePolicySourceValue(value, options.env);
+          const upgradedHandle = findUniqueFactBackedHandleMatch(options.env, materializedValue);
+          if (upgradedHandle) {
+            const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
+            if (!hasOwnProperty(args, argName)) {
+              args[argName] = {
+                eq: { handle: upgradedHandle }
+              };
+            }
+            continue;
+          }
+
+          const reusableKnownHandle = findReusableKnownHandleMatch({
+            env: options.env,
+            value: materializedValue,
+            toolName,
+            argName
+          });
+          if (!reusableKnownHandle) {
+            registerKnownHandle({
+              env: options.env,
+              toolName,
+              argName,
+              value: materializedValue
+            });
+          }
+
           const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
           if (!hasOwnProperty(args, argName)) {
             args[argName] = {
-              eq: value,
+              eq: materializedValue,
               attestations: ['known']
             };
           }

@@ -198,7 +198,7 @@ describe('box MCP config integration', () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent"',
-      '/var @toolList = [@sendEmail, @fyi.facts]',
+      '/var @toolList = [@sendEmail, @fyi.known]',
       '/exe llm @agent(prompt, config) = js { return JSON.stringify(mx.tools.available); }',
       '/show @agent("List the active tools", { tools: @toolList })'
     ].join('\n');
@@ -217,7 +217,7 @@ describe('box MCP config integration', () => {
 
       expect(JSON.parse(output.trim())).toEqual([
         { name: 'send_email' },
-        { name: 'facts' }
+        { name: 'known' }
       ]);
     } finally {
       environment?.cleanup();
@@ -483,8 +483,7 @@ describe('box MCP config integration', () => {
         email: {
           preview: 'm***@example.com',
           handle: expect.stringMatching(HANDLE_RE)
-        },
-        notes: 'Met at conference'
+        }
       });
     } finally {
       environment?.cleanup();
@@ -613,7 +612,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('canonicalizes masked previews for imported tool lists in the same MCP session', async () => {
+  it('does not authorize masked previews for imported tool lists in the same MCP session', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/contacts_tools.mld', [
       '/record @contact = {',
@@ -648,7 +647,7 @@ describe('box MCP config integration', () => {
         }
       });
 
-      expect(output.trim()).toBe('sent:mark@example.com:hi');
+      expect(output.trim()).toMatch(/destination must carry 'known'/i);
     } finally {
       environment?.cleanup();
     }
@@ -837,23 +836,19 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('preserves imported @fyi.facts arrays when passed to config.tools', async () => {
+  it('preserves imported @fyi.known arrays when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/mcp_active.mld', [
-      '/var @toolList = [@fyi.facts]',
+      '/record @contact = { facts: [email: string], data: [name: string], display: [name, { mask: "email" }] }',
+      '/exe @search_contacts(query) = js { return { email: "ada@example.com", name: "Ada" }; } => contact',
+      '/var @toolList = [@search_contacts, @fyi.known]',
       '/export { @toolList }'
     ].join('\n'));
 
     const source = [
       '/import { @toolList } from "/mcp_active.mld"',
-      '/record @contact = { facts: [email: string] }',
-      '/exe @emitContact() = js { return { email: "ada@example.com" }; } => contact',
-      '/var @contact = @emitContact()',
-      '/var @cfg = { fyi: { facts: [@contact] } }',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:named:email.send","arg":"recipient"}}' }`,
-      '/box @cfg [',
-      '  show @agent("Discover the allowed recipient", { tools: @toolList })',
-      ']'
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Ada"}},{"name":"known","arguments":{"query":{"op":"op:named:email.send","arg":"recipient"}}}]' }`,
+      '/show @agent("Discover the allowed recipient", { tools: @toolList })'
     ].join('\n');
 
     let environment: Environment | undefined;
@@ -881,26 +876,19 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('supports imported @fyi.facts op-only grouped discovery for agent tool usage', async () => {
+  it('supports imported @fyi.known discovery for agent tool usage', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/mcp_active.mld', [
-      '/var @toolList = [@fyi.facts]',
+      '/record @contact = { facts: [email: string], data: [name: string], display: [name, { mask: "email" }] }',
+      '/exe @search_contacts(query) = js { return { email: "ada@example.com", name: "Ada" }; } => contact',
+      '/var @toolList = [@search_contacts, @fyi.known]',
       '/export { @toolList }'
     ].join('\n'));
 
     const source = [
       '/import { @toolList } from "/mcp_active.mld"',
-      '/record @contact = { facts: [email: string], data: [name: string] }',
-      '/exe @emitContact() = js { return { email: "ada@example.com", name: "Ada" }; } => contact',
-      '/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = "sent" with {',
-      '  controlArgs: ["recipient"]',
-      '}',
-      '/var @contact = @emitContact()',
-      '/var @cfg = { fyi: { facts: [@contact] } }',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":"sendEmail"}' }`,
-      '/box @cfg [',
-      '  show @agent("Discover the allowed sendEmail facts", { tools: @toolList })',
-      ']'
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Ada"}},{"name":"known","arguments":{"query":"email.send"}}]' }`,
+      '/show @agent("Discover the available known handles", { tools: @toolList })'
     ].join('\n');
 
     let environment: Environment | undefined;
@@ -919,7 +907,31 @@ describe('box MCP config integration', () => {
         recipient: [
           {
             handle: expect.stringMatching(HANDLE_RE),
-            label: 'Ada',
+            label: 'a***@example.com',
+            field: 'email',
+            fact: 'fact:@contact.email'
+          }
+        ],
+        recipients: [
+          {
+            handle: expect.stringMatching(HANDLE_RE),
+            label: 'a***@example.com',
+            field: 'email',
+            fact: 'fact:@contact.email'
+          }
+        ],
+        cc: [
+          {
+            handle: expect.stringMatching(HANDLE_RE),
+            label: 'a***@example.com',
+            field: 'email',
+            fact: 'fact:@contact.email'
+          }
+        ],
+        bcc: [
+          {
+            handle: expect.stringMatching(HANDLE_RE),
+            label: 'a***@example.com',
             field: 'email',
             fact: 'fact:@contact.email'
           }
@@ -930,15 +942,15 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('lets llm guards scope facts enforcement to contexts where the facts tool is available', async () => {
+  it('lets llm guards scope discovery enforcement to contexts where the known tool is available', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/record @contact = { facts: [email: string] }',
       '/exe @search_contacts(query) = js { return { email: "mark@example.com" }; } => contact',
-      '/var @plannerTools = [@search_contacts, @fyi.facts]',
+      '/var @plannerTools = [@search_contacts, @fyi.known]',
       '/var @workerTools = [@search_contacts]',
-      '/guard @requireFacts after op:llm = when [',
-      '  @mx.tools.available[*].name.includes("facts") && !@mx.tools.calls.includes("facts") => deny "Facts required"',
+      '/guard @requireKnown after op:llm = when [',
+      '  @mx.tools.available[*].name.includes("known") && !@mx.tools.calls.includes("known") => deny "Known required"',
       '  * => allow',
       ']',
       `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}}]' }`,
@@ -957,7 +969,7 @@ describe('box MCP config integration', () => {
             environment = env;
           }
         })
-      ).rejects.toThrow(/Facts required/);
+      ).rejects.toThrow(/Known required/);
     } finally {
       environment?.cleanup();
     }
@@ -966,8 +978,8 @@ describe('box MCP config integration', () => {
       '/record @contact = { facts: [email: string] }',
       '/exe @search_contacts(query) = js { return { email: "mark@example.com" }; } => contact',
       '/var @workerTools = [@search_contacts]',
-      '/guard @requireFacts after op:llm = when [',
-      '  @mx.tools.available[*].name.includes("facts") && !@mx.tools.calls.includes("facts") => deny "Facts required"',
+      '/guard @requireKnown after op:llm = when [',
+      '  @mx.tools.available[*].name.includes("known") && !@mx.tools.calls.includes("known") => deny "Known required"',
       '  * => allow',
       ']',
       `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}}]' }`,
@@ -994,22 +1006,19 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('preserves imported @fyi.facts arrays for direct with-clause fyi tool calls', async () => {
+  it('preserves imported @fyi.known arrays for direct tool calls', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/mcp_active.mld', [
-      '/var @toolList = [@fyi.facts]',
+      '/record @contact = { facts: [email: string], data: [name: string], display: [name, { mask: "email" }] }',
+      '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark" }; } => contact',
+      '/var @toolList = [@search_contacts, @fyi.known]',
       '/export { @toolList }'
     ].join('\n'));
 
     const source = [
       '/import { @toolList } from "/mcp_active.mld"',
-      '/record @contact = { facts: [email: string] }',
-      '/exe @emitContact() = js { return { email: "mark@example.com" }; } => contact',
-      '/var @contact = @emitContact()',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" facts '{"query":{"op":"op:named:email.send","arg":"recipient"}}' }`,
-      '/show @agent("Discover the allowed recipient", { tools: @toolList }) with {',
-      '  fyi: { facts: [@contact] }',
-      '}'
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}},{"name":"known","arguments":{"query":{"op":"op:named:email.send","arg":"recipient"}}}]' }`,
+      '/show @agent("Discover the allowed recipient", { tools: @toolList })'
     ].join('\n');
 
     let environment: Environment | undefined;
@@ -1037,17 +1046,15 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('auto-registers prior native tool results as fyi fact roots within one agent call', async () => {
+  it('discovers prior projected handles within one agent call via implicit known injection', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/record @contact = { facts: [email: string, name: string], display: [name, { mask: "email" }] }',
       '/exe @search_contacts(query) = js { return { email: "mark@example.com", name: "Mark Davies" }; } => contact',
-      '/var @toolList = [@search_contacts, @fyi.facts]',
-      '/var @cfg = { fyi: { facts: "auto" } }',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}},{"name":"facts","arguments":{}}]' }`,
-      '/box @cfg [',
-      '  show @agent("Find Mark", { tools: @toolList })',
-      ']'
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject` with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@search_contacts, @send_email]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"search_contacts","arguments":{"query":"Mark"}},{"name":"known","arguments":{"query":{"op":"send_email","arg":"recipient"}}}]' }`,
+      '/show @agent("Find Mark", { tools: @toolList })'
     ].join('\n');
 
     let environment: Environment | undefined;
@@ -1065,15 +1072,9 @@ describe('box MCP config integration', () => {
       expect(JSON.parse(output.trim())).toEqual([
         {
           handle: expect.stringMatching(HANDLE_RE),
-          label: 'Mark Davies',
+          label: 'm***@example.com',
           field: 'email',
           fact: 'fact:@contact.email'
-        },
-        {
-          handle: expect.stringMatching(HANDLE_RE),
-          label: 'M*** D*****',
-          field: 'name',
-          fact: 'fact:@contact.name'
         }
       ]);
     } finally {
@@ -1223,57 +1224,4 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('lets handle-backed authorizations override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
-    const fileSystem = new MemoryFileSystem();
-    const serverSpec = `${process.execPath} ${fakeServerPath}`;
-    await fileSystem.writeFile('/mcp_active.mld', [
-      `/import tools from mcp "${serverSpec}" as @mcp`,
-      '/exe destructive:targeted, tool:w @delete_doc(id) = [',
-      '  => @mcp.echo(@id)',
-      '] with { controlArgs: ["id"] }',
-      '/var @toolList = [@delete_doc]',
-      '/export { @toolList, @delete_doc }'
-    ].join('\n'));
-
-    const source = [
-      '/import { @toolList, @delete_doc } from "/mcp_active.mld"',
-      '/record @doc = { facts: [id: string], data: [label: string] }',
-      '/exe @get_doc() = { id: "doc-1", label: "quarterly_plan" } => doc',
-      '/var @doc = @get_doc()',
-      '/var untrusted @prompt = "Delete doc-1"',
-      '/var @matches = @fyi.facts({ op: "delete_doc", arg: "id" }) with { fyi: { facts: [@doc] } }',
-      '/var @taskPolicy = {',
-      '  defaults: { rules: ["no-untrusted-destructive"] },',
-      '  operations: { destructive: ["tool:w"], "destructive:targeted": ["tool:w"] },',
-      '  authorizations: {',
-      '    allow: {',
-      '      delete_doc: {',
-      '        args: {',
-      '          id: { handle: @matches[0].handle }',
-      '        }',
-      '      }',
-      '    }',
-      '  }',
-      '}',
-      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" delete_doc '{"id":"doc-1"}' }`,
-      '/show @agent(@prompt, { tools: @toolList }) with { policy: @taskPolicy }'
-    ].join('\n');
-
-    let environment: Environment | undefined;
-    try {
-      const output = await interpret(source, {
-        fileSystem,
-        pathService,
-        pathContext,
-        format: 'markdown',
-        captureEnvironment: env => {
-          environment = env;
-        }
-      });
-
-      expect(output.trim()).toBe('doc-1');
-    } finally {
-      environment?.cleanup();
-    }
-  });
 });

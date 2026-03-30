@@ -24,9 +24,17 @@ function cloneWithOwnDescriptors<T extends object>(value: T): T {
   return clone;
 }
 
+function isBareHandleToken(value: string): boolean {
+  return /^h_[a-z0-9]+$/.test(value.trim());
+}
+
 export async function resolveValueHandles(value: unknown, env: Environment): Promise<unknown> {
   if (isHandleWrapper(value)) {
     return env.resolveHandle(value.handle);
+  }
+
+  if (typeof value === 'string' && isBareHandleToken(value)) {
+    return env.resolveHandle(value.trim());
   }
 
   if (isVariable(value)) {
@@ -65,7 +73,14 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
 
   if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
+    const keys = Object.keys(value);
+    const suppressNestedHandleKeyResolution =
+      keys.length > 1 && typeof value.handle === 'string' && isBareHandleToken(value.handle);
     for (const [key, entry] of Object.entries(value)) {
+      if (suppressNestedHandleKeyResolution && key === 'handle') {
+        result[key] = entry;
+        continue;
+      }
       result[key] = await resolveValueHandles(entry, env);
     }
     const toolCollectionMetadata = getToolCollectionMetadata(value);

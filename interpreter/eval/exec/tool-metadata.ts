@@ -100,8 +100,8 @@ function getExecutableControlArgs(executable: ExecutableVariable): string[] | un
 }
 
 function getExecutableTaintFacts(executable: ExecutableVariable): boolean {
-  const executableDef = executable.internal?.executableDef ?? executable.value;
-  return (executableDef as any)?.taintFacts === true;
+  void executable;
+  return false;
 }
 
 function buildToolContextFromExecutable(

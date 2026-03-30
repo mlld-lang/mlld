@@ -26,8 +26,6 @@ export interface BaseExecutable {
   optionalParams?: string[];
   /** Security-relevant args that must be pinned by policy.authorizations */
   controlArgs?: string[];
-  /** When true, taint checks apply to all args even when controlArgs are declared */
-  taintFacts?: boolean;
   /** Human-readable summary for tool metadata */
   description?: string;
   /** Optional record definition applied to executable output */

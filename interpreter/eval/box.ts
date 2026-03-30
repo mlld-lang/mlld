@@ -16,7 +16,6 @@ import { evaluateExeBlock } from './exe';
 import { normalizeMcpConfig, registerMcpToolsFromConfig } from '../mcp/config-spawner';
 import { VirtualFS } from '@services/fs/VirtualFS';
 import { applyEnvironmentDefaults } from '@interpreter/env/environment-provider';
-import { resolveFyiConfig } from '@interpreter/fyi/config';
 import {
   createPolicyAuthorizationValidationError,
   validateRuntimePolicyAuthorizations
@@ -652,20 +651,14 @@ export async function evaluateBox(
   const config = resolvedConfig.config;
   const withClauseTools = directive.values?.withClause?.tools;
   const withClauseProfile = (directive.values?.withClause as any)?.profile;
-  const withClauseFyi = (directive.values?.withClause as any)?.fyi;
   const withClauseDisplay = (directive.values?.withClause as any)?.display;
-  const resolvedConfigFyi = await resolveFyiConfig((config as any).fyi, env);
-  const resolvedWithClauseFyi =
-    withClauseFyi !== undefined
-      ? await resolveFyiConfig(withClauseFyi, env)
-      : undefined;
   const resolvedConfigDisplay = toDisplayMode((config as any).display, env, directive.location);
   const resolvedWithClauseDisplay =
     withClauseDisplay !== undefined
       ? toDisplayMode(await resolveToolsValue(withClauseDisplay, env, context), env, directive.location)
       : undefined;
   const inheritedScopedConfig = env.getScopedEnvironmentConfig() as
-    | (EnvironmentConfig & { fyi?: unknown; display?: string })
+    | (EnvironmentConfig & { display?: string })
     | undefined;
   let resolvedTools =
     withClauseTools !== undefined
@@ -685,24 +678,10 @@ export async function evaluateBox(
         }
       : config;
 
-  if (resolvedConfigFyi !== undefined) {
-    mergedConfig = {
-      ...mergedConfig,
-      fyi: resolvedConfigFyi
-    };
-  }
-
   if (resolvedConfigDisplay !== undefined) {
     mergedConfig = {
       ...mergedConfig,
       display: resolvedConfigDisplay
-    };
-  }
-
-  if (inheritedScopedConfig?.fyi !== undefined && withClauseFyi === undefined) {
-    mergedConfig = {
-      ...mergedConfig,
-      fyi: inheritedScopedConfig.fyi
     };
   }
 
@@ -714,13 +693,6 @@ export async function evaluateBox(
     mergedConfig = {
       ...mergedConfig,
       display: inheritedScopedConfig.display
-    };
-  }
-
-  if (resolvedWithClauseFyi !== undefined) {
-    mergedConfig = {
-      ...mergedConfig,
-      fyi: resolvedWithClauseFyi
     };
   }
 

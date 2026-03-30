@@ -17,10 +17,8 @@ import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor
 } from '@core/types/security';
-import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
-import { collectAttestationLabels, isFactProofLabel } from '@interpreter/security/proof-claims';
+import { isFactProofLabel } from '@interpreter/security/proof-claims';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
-import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
@@ -37,8 +35,6 @@ interface ExecResult {
   value: unknown;
 }
 
-type CanonicalValueKey = string;
-
 type SyntheticCommandReference = Omit<CommandReference, 'identifier' | 'args'> & {
   identifier: VariableReferenceNode[];
   args?: DataValue[];
@@ -49,17 +45,6 @@ function isPositiveProofLabel(label: string): boolean {
   return isFactProofLabel(label) || isAttestationLabel(label);
 }
 
-function unwrapAttestedValue(value: unknown): unknown {
-  if (isStructuredValue(value)) {
-    return asData(value);
-  }
-  if (isVariable(value)) {
-    const rawValue = value.value;
-    return isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
-  }
-  return value;
-}
-
 export class FunctionRouter {
   private readonly environment: Environment;
   private readonly toolCollection?: ToolCollection;
@@ -68,7 +53,6 @@ export class FunctionRouter {
   private readonly toolKeyByMcpName?: Map<string, string>;
   private readonly toolNamesAreMcp: boolean;
   private conversationTaint?: SecurityDescriptor;
-  private readonly attestationIndex = new Map<CanonicalValueKey, readonly string[]>();
 
   constructor(options: FunctionRouterOptions) {
     this.environment = options.environment;
@@ -135,8 +119,7 @@ export class FunctionRouter {
         this.environment.recordToolCall({
           ...callRecord,
           ok: true,
-          result: this.toTrackedToolResult(result.value),
-          fyiFactRoot: result.value
+          result: this.toTrackedToolResult(result.value)
         });
         return await this.serializeResult(result.value);
       }
@@ -166,8 +149,7 @@ export class FunctionRouter {
       this.environment.recordToolCall({
         ...callRecord,
         ok: true,
-        result: this.toTrackedToolResult(result.value),
-        fyiFactRoot: result.value
+        result: this.toTrackedToolResult(result.value)
       });
       return await this.serializeResult(result.value);
     } catch (error) {
@@ -362,7 +344,6 @@ export class FunctionRouter {
         ? this.environment.mergeSecurityDescriptors(this.conversationTaint, normalizedTaintDescriptor)
         : normalizedTaintDescriptor;
     }
-    this.registerAttestedValues(value);
   }
 
   private buildInvocationSecurity(
@@ -428,79 +409,18 @@ export class FunctionRouter {
     if (baseDescriptor) {
       parts.push(baseDescriptor);
     }
-    const llmToolSessionId = this.environment.getLlmToolConfig()?.sessionId;
-    if (typeof llmToolSessionId !== 'string' || llmToolSessionId.trim().length === 0) {
-      const attestationLabels = this.lookupAttestations(value);
-      if (attestationLabels.length > 0) {
-        parts.push(
-          makeSecurityDescriptor({
-            labels: attestationLabels,
-            attestations: attestationLabels
-          })
-        );
-      }
-
-      const matchedValue = materializeSessionProofMatches(value, this.environment);
-      const matchedDescriptor = extractSecurityDescriptor(matchedValue, {
-        recursive: true,
-        mergeArrayElements: true
-      });
-      if (matchedDescriptor) {
-        parts.push(matchedDescriptor);
-      }
+    const descriptor = extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    if (descriptor) {
+      parts.push(descriptor);
     }
 
     if (parts.length === 0) {
       return undefined;
     }
     return parts.length === 1 ? parts[0] : this.environment.mergeSecurityDescriptors(...parts);
-  }
-
-  private lookupAttestations(value: unknown): string[] {
-    const key = encodeCanonicalValue(unwrapAttestedValue(value));
-    if (!key) {
-      return [];
-    }
-    const labels = this.attestationIndex.get(key);
-    return Array.isArray(labels) ? [...labels] : [];
-  }
-
-  private registerAttestedValues(value: unknown): void {
-    const seen = new WeakSet<object>();
-    const visit = (entry: unknown): void => {
-      const descriptor = extractSecurityDescriptor(entry, { recursive: false });
-      const attestationLabels = collectAttestationLabels(normalizeSecurityDescriptor(descriptor));
-      const canonicalKey = encodeCanonicalValue(unwrapAttestedValue(entry));
-      if (attestationLabels.length > 0 && canonicalKey) {
-        const existing = this.attestationIndex.get(canonicalKey) ?? [];
-        this.attestationIndex.set(
-          canonicalKey,
-          Object.freeze(Array.from(new Set([...existing, ...attestationLabels])))
-        );
-      }
-
-      const rawValue = unwrapAttestedValue(entry);
-      if (!rawValue || typeof rawValue !== 'object') {
-        return;
-      }
-      if (seen.has(rawValue as object)) {
-        return;
-      }
-      seen.add(rawValue as object);
-
-      if (Array.isArray(rawValue)) {
-        for (const item of rawValue) {
-          visit(item);
-        }
-        return;
-      }
-
-      for (const child of Object.values(rawValue as Record<string, unknown>)) {
-        visit(child);
-      }
-    };
-
-    visit(value);
   }
 
   private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {

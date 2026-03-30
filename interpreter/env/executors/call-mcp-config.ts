@@ -10,6 +10,7 @@ import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
+import { resolveEffectiveToolMetadata } from '@interpreter/eval/exec/tool-metadata';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -280,7 +281,7 @@ function resolveToolInput(tools: unknown[]): { builtinTools: string[]; functionT
       continue;
     }
 
-    if (isExecutableVariable(tool)) {
+    if (tool && isExecutableVariable(tool)) {
       functionTools.push(tool);
       continue;
     }
@@ -550,8 +551,39 @@ async function createFilteredVfsBridge(options: {
   };
 }
 
+function isWriteToolWithControlArgs(
+  env: Environment,
+  executable: ExecutableVariable
+): boolean {
+  const metadata = resolveEffectiveToolMetadata({
+    env,
+    executable,
+    operationName: executable.name
+  });
+  return (
+    (metadata.controlArgs?.length ?? 0) > 0
+    && metadata.labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'))
+  );
+}
+
+function resolveImplicitFyiKnownTool(env: Environment): ExecutableVariable | undefined {
+  const fyi = env.getVariable('fyi');
+  const known = fyi?.value && typeof fyi.value === 'object'
+    ? (fyi.value as Record<string, unknown>).known
+    : undefined;
+  return isExecutableVariable(known) ? known : undefined;
+}
+
 export async function createCallMcpConfig(options: CallMcpConfigOptions): Promise<CallMcpConfig> {
   const { builtinTools, functionTools } = resolveToolInput(options.tools);
+  const implicitKnownTool = resolveImplicitFyiKnownTool(options.env);
+  if (
+    implicitKnownTool
+    && !functionTools.some(tool => tool.name === implicitKnownTool.name)
+    && functionTools.some(tool => isWriteToolWithControlArgs(options.env, tool))
+  ) {
+    functionTools.push(implicitKnownTool);
+  }
   const inBox = Boolean(options.env.getActiveBridge());
   const workingDirectory = options.workingDirectory ?? options.env.getExecutionDirectory();
 

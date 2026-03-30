@@ -7,7 +7,6 @@ import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
-import { materializeSessionProofMatches } from '@interpreter/utils/session-proof-matching';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -410,10 +409,6 @@ export async function evaluateExecInvocationArgs(options: {
       argValueAny = arg;
     }
 
-    const llmToolSessionId = env.getLlmToolConfig()?.sessionId;
-    if (typeof llmToolSessionId !== 'string' || llmToolSessionId.trim().length === 0) {
-      argValueAny = materializeSessionProofMatches(argValueAny, env);
-    }
     if (isStructuredValue(argValueAny)) {
       argValue = asText(argValueAny);
     }

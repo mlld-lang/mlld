@@ -1,3 +1,5 @@
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+
 export interface ValueHandleEntry {
   handle: string;
   value: unknown;
@@ -31,6 +33,25 @@ export class ValueHandleRegistry {
 
   resolve(handle: string): ValueHandleEntry | undefined {
     return this.entries.get(handle.trim());
+  }
+
+  getEntries(): readonly ValueHandleEntry[] {
+    return Array.from(this.entries.values());
+  }
+
+  findByCanonicalValue(value: unknown): readonly ValueHandleEntry[] {
+    const targetKey = encodeCanonicalValue(value);
+    if (!targetKey) {
+      return [];
+    }
+
+    const matches: ValueHandleEntry[] = [];
+    for (const entry of this.entries.values()) {
+      if (encodeCanonicalValue(entry.value) === targetKey) {
+        matches.push(entry);
+      }
+    }
+    return matches;
   }
 
   size(): number {

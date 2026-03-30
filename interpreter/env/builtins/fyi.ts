@@ -5,7 +5,7 @@ import {
   createObjectVariable,
   type VariableSource
 } from '@core/types/variable';
-import { evaluateFyiFacts } from '@interpreter/fyi/facts-runtime';
+import { evaluateFyiKnown } from '@interpreter/fyi/facts-runtime';
 
 const FYI_SOURCE: VariableSource = {
   directive: 'var',
@@ -25,9 +25,9 @@ function looksLikeEnvironment(value: unknown): value is Environment {
 }
 
 export function createFyiVariable(env: Environment) {
-  const factsDefinition: NodeFunctionExecutable = {
+  const knownDefinition: NodeFunctionExecutable = {
     type: 'nodeFunction',
-    name: 'facts',
+    name: 'known',
     fn: async (queryOrEnv?: unknown, argOrEnv?: unknown, boundEnv?: Environment) => {
       const executionEnv = boundEnv
         ?? (looksLikeEnvironment(argOrEnv) ? argOrEnv : undefined)
@@ -35,18 +35,18 @@ export function createFyiVariable(env: Environment) {
         ?? env;
       const query = boundEnv || !looksLikeEnvironment(queryOrEnv) ? queryOrEnv : undefined;
       const arg = boundEnv || !looksLikeEnvironment(argOrEnv) ? argOrEnv : undefined;
-      return evaluateFyiFacts(query, executionEnv, arg);
+      return evaluateFyiKnown(query, executionEnv, arg);
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['query'],
     optionalParams: ['query'],
-    description: 'List fact-bearing candidates from configured FYI roots'
+    description: 'List handle-backed known and fact-bearing candidates from the root handle registry'
   };
 
-  const factsExecutable = createExecutableVariable('facts', 'command', '', ['query'], undefined, FYI_SOURCE, {
+  const knownExecutable = createExecutableVariable('known', 'command', '', ['query'], undefined, FYI_SOURCE, {
     internal: {
-      executableDef: factsDefinition,
+      executableDef: knownDefinition,
       isReserved: true,
       isSystem: true
     }
@@ -55,7 +55,7 @@ export function createFyiVariable(env: Environment) {
   return createObjectVariable(
     'fyi',
     {
-      facts: factsExecutable
+      known: knownExecutable
     },
     false,
     FYI_SOURCE,

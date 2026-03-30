@@ -9,7 +9,6 @@ import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { resolveFactRequirementsForOperation, type FactRequirement } from '@core/policy/fact-requirements';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import type { Environment } from '@interpreter/env/Environment';
-import type { ProjectionExposureKind } from '@interpreter/env/ProjectionExposureRegistry';
 import {
   resolveEffectiveToolMetadata,
   resolveNamedOperationMetadata
@@ -49,6 +48,7 @@ type ProjectionContext = {
   strictMode: boolean;
   modeName?: string;
   activeRequirements: ActiveRequirementGroup[];
+  parentRecord?: StructuredValue;
 };
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
@@ -61,6 +61,45 @@ function toDisplayPrimitive(value: StructuredValue): unknown {
 
 function toStructuredProjectionElement(value: unknown): StructuredValue {
   return isStructuredValue(value) ? value : wrapStructured(value as any);
+}
+
+function readDisplayText(value: unknown): string | undefined {
+  const resolved = isVariable(value) ? value.value : value;
+  if (isStructuredValue(resolved)) {
+    const text = asText(resolved).trim();
+    return text.length > 0 ? text : undefined;
+  }
+  if (
+    typeof resolved === 'string'
+    || typeof resolved === 'number'
+    || typeof resolved === 'boolean'
+  ) {
+    const text = String(resolved).trim();
+    return text.length > 0 ? text : undefined;
+  }
+  return undefined;
+}
+
+function deriveSafeCandidatePreview(
+  value: StructuredValue,
+  fieldName: string,
+  parent?: StructuredValue
+): string | undefined {
+  if (parent?.type === 'object' && parent.data && typeof parent.data === 'object' && !Array.isArray(parent.data)) {
+    const objectData = parent.data as Record<string, unknown>;
+    for (const preferredField of ['name', 'title', 'display', 'display_name', 'label']) {
+      if (preferredField === fieldName || !Object.prototype.hasOwnProperty.call(objectData, preferredField)) {
+        continue;
+      }
+      const displayText = readDisplayText(objectData[preferredField]);
+      if (displayText) {
+        return displayText;
+      }
+    }
+  }
+
+  const rawText = asText(value).trim();
+  return rawText.length > 0 ? maskFactFieldValue(fieldName, rawText) : undefined;
 }
 
 function isToolCollection(value: unknown): value is ToolCollection {
@@ -195,46 +234,12 @@ function issueProjectionHandle(
   return issued.handle;
 }
 
-function currentProjectionSessionId(env: Environment): string | undefined {
-  const config = env.getLlmToolConfig();
-  const sessionId = typeof config?.sessionId === 'string' ? config.sessionId.trim() : '';
-  return sessionId.length > 0 ? sessionId : undefined;
-}
-
-function recordProjectionExposure(
-  env: Environment,
-  fieldProjection: RecordFieldProjectionMetadata,
-  value: StructuredValue,
-  options: {
-    kind: ProjectionExposureKind;
-    handle?: string;
-    emittedPreview?: string;
-    emittedLiteral?: string;
-  }
-): void {
-  const sessionId = currentProjectionSessionId(env);
-  if (!sessionId) {
-    return;
-  }
-
-  env.recordProjectionExposure({
-    sessionId,
-    value,
-    kind: options.kind,
-    handle: options.handle,
-    field: fieldProjection.fieldName,
-    record: fieldProjection.recordName,
-    emittedPreview: options.emittedPreview,
-    emittedLiteral: options.emittedLiteral,
-    issuedAt: Date.now()
-  });
-}
-
 async function projectFieldValue(
   value: StructuredValue,
   fieldProjection: RecordFieldProjectionMetadata,
   env: Environment,
-  context: ProjectionContext
+  context: ProjectionContext,
+  parent?: StructuredValue
 ): Promise<unknown | typeof OMITTED_FIELD> {
   const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
   if (resolution.omitted) {
@@ -251,16 +256,7 @@ async function projectFieldValue(
     );
 
     if (effectiveDisplay === 'bare') {
-      return elements.map(element => {
-        const primitive = toDisplayPrimitive(element);
-        recordProjectionExposure(env, fieldProjection, element, {
-          kind: 'bare',
-          emittedLiteral: primitive === null || primitive === undefined
-            ? undefined
-            : String(primitive)
-        });
-        return primitive;
-      });
+      return elements.map(element => toDisplayPrimitive(element));
     }
 
     const qualifies = fieldSatisfiesActiveRequirements(value, context.activeRequirements);
@@ -271,14 +267,12 @@ async function projectFieldValue(
           return { value: primitive } satisfies ValueOnlyProjection;
         }
 
-        const handle = issueProjectionHandle(env, element, fieldProjection);
-        recordProjectionExposure(env, fieldProjection, element, {
-          kind: 'ref',
-          handle,
-          emittedLiteral: primitive === null || primitive === undefined
-            ? undefined
-            : String(primitive)
-        });
+        const handle = issueProjectionHandle(
+          env,
+          element,
+          fieldProjection,
+          deriveSafeCandidatePreview(element, fieldProjection.fieldName, value)
+        );
         return { value: primitive, handle } satisfies RefProjection;
       });
     }
@@ -296,32 +290,22 @@ async function projectFieldValue(
       return elements.map(element => {
         const preview = maskFactFieldValue(fieldProjection.fieldName, asText(element).trim());
         const handle = issueProjectionHandle(env, element, fieldProjection, preview);
-        recordProjectionExposure(env, fieldProjection, element, {
-          kind: 'mask',
-          handle,
-          emittedPreview: preview
-        });
         return { preview, handle } satisfies MaskedProjection;
       });
     }
 
     return elements.map(element => {
-      const handle = issueProjectionHandle(env, element, fieldProjection);
-      recordProjectionExposure(env, fieldProjection, element, {
-        kind: 'handle',
-        handle
-      });
+      const handle = issueProjectionHandle(
+        env,
+        element,
+        fieldProjection,
+        deriveSafeCandidatePreview(element, fieldProjection.fieldName, value)
+      );
       return { handle } satisfies HandleOnlyProjection;
     });
   }
 
   if (effectiveDisplay === 'bare') {
-    recordProjectionExposure(env, fieldProjection, value, {
-      kind: 'bare',
-      emittedLiteral: toDisplayPrimitive(value) === null || toDisplayPrimitive(value) === undefined
-        ? undefined
-        : String(toDisplayPrimitive(value))
-    });
     return toDisplayPrimitive(value);
   }
 
@@ -336,14 +320,12 @@ async function projectFieldValue(
       } satisfies ValueOnlyProjection;
     }
 
-    const handle = issueProjectionHandle(env, value, fieldProjection);
-    recordProjectionExposure(env, fieldProjection, value, {
-      kind: 'ref',
-      handle,
-      emittedLiteral: primitive === null || primitive === undefined
-        ? undefined
-        : String(primitive)
-    });
+    const handle = issueProjectionHandle(
+      env,
+      value,
+      fieldProjection,
+      deriveSafeCandidatePreview(value, fieldProjection.fieldName, parent)
+    );
     return {
       value: primitive,
       handle
@@ -365,20 +347,16 @@ async function projectFieldValue(
   if (effectiveDisplay === 'mask') {
     const preview = maskFactFieldValue(fieldProjection.fieldName, rawText);
     const handle = issueProjectionHandle(env, value, fieldProjection, preview);
-    recordProjectionExposure(env, fieldProjection, value, {
-      kind: 'mask',
-      handle,
-      emittedPreview: preview
-    });
     const projected: MaskedProjection = { preview, handle };
     return projected;
   }
 
-  const handle = issueProjectionHandle(env, value, fieldProjection);
-  recordProjectionExposure(env, fieldProjection, value, {
-    kind: 'handle',
-    handle
-  });
+  const handle = issueProjectionHandle(
+    env,
+    value,
+    fieldProjection,
+    deriveSafeCandidatePreview(value, fieldProjection.fieldName, parent)
+  );
   const projected: HandleOnlyProjection = { handle };
   return projected;
 }
@@ -396,7 +374,10 @@ async function projectStructuredRecord(
   const projected: Record<string, unknown> = {};
   for (const key of Object.keys(projection.fields)) {
     const child = await accessField(value, { type: 'field', value: key } as any, { env });
-    const rendered = await renderDisplayProjection(child, env, context);
+    const rendered = await renderDisplayProjection(child, env, {
+      ...context,
+      parentRecord: value
+    });
     if (rendered === OMITTED_FIELD) {
       continue;
     }
@@ -418,7 +399,13 @@ export async function renderDisplayProjection(
   if (isStructuredValue(resolved)) {
     const projection = getRecordProjectionMetadata(resolved);
     if (projection?.kind === 'field') {
-      return projectFieldValue(resolved, projection, env, context);
+      return projectFieldValue(
+        resolved,
+        projection,
+        env,
+        context,
+        context.parentRecord
+      );
     }
     if (projection?.kind === 'record' && resolved.type === 'object') {
       return projectStructuredRecord(
@@ -466,13 +453,10 @@ function resolveEffectiveDisplayMode(
   }
 
   if (display.kind === 'legacy') {
-    if (fieldProjection.classification === 'data') {
-      return { omitted: false, mode: 'bare' };
-    }
     const explicit = findDisplayEntry(display.entries, fieldProjection.fieldName);
     return explicit
       ? { omitted: false, mode: displayEntryToMode(explicit) }
-      : { omitted: false, mode: 'handle' };
+      : { omitted: true, mode: 'bare' };
   }
 
   const selectedMode = context.modeName ?? (Object.prototype.hasOwnProperty.call(display.modes, 'default')

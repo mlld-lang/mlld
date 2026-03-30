@@ -124,19 +124,13 @@ The runtime resolves `h_a7x9k2` back to the original live value with `fact:exter
 
 Handles are root-scoped — a handle minted in one `@claude()` session resolves in any other session in the same execution. This is how values survive across planner/worker phase boundaries. See `pattern-planner` for the cross-phase pattern.
 
-For security-relevant args, mlld also accepts exact projected forms it emitted in the same tool session:
-
-- the inner handle wrapper
-- the masked preview string
-- a bare visible fact literal
-
-If the match is unique, the runtime canonicalizes that emitted form back to the live value before authorization and policy checks. If the projected value is ambiguous, the call fails closed and tells the model to use the handle wrapper. Values the runtime never emitted remain fresh literals with no proof.
+For security-relevant args, mlld resolves handles at dispatch time. Bare handle strings and `{ handle: "h_xxx" }` wrappers both resolve back to the original live value with its proof intact. Fresh literals stay fresh literals and do not inherit proof.
 
 ### Discovery is operation-aware
 
-Display projections and boundary canonicalization are both powered by the fact requirement resolver. It derives requirements from built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. Discovery and enforcement use the same model -- they can't drift.
+Display projections, `@fyi.known()`, and positive checks all share the fact requirement resolver. It derives requirements from built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. Discovery and enforcement use the same model -- they can't drift.
 
-For explicit cross-root discovery, `@fyi.facts()` remains available as a secondary tool. See `fyi-facts`.
+For explicit handle discovery beyond the current tool result, use `@fyi.known()`. See `fyi-known`.
 
 ## Policy rules
 

@@ -65,32 +65,6 @@ export async function resolveExeDescription(raw: unknown, env: Environment): Pro
   return undefined;
 }
 
-export async function resolveExeTaintFacts(
-  raw: unknown,
-  env: Environment
-): Promise<boolean | undefined> {
-  if (raw === undefined) {
-    return undefined;
-  }
-
-  let value = raw;
-  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    value = result.value;
-  }
-
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
-
-  if (typeof value !== 'boolean') {
-    throw new Error('Executable taintFacts must be a boolean');
-  }
-
-  return value;
-}
-
 export async function resolveExeControlArgs(
   raw: unknown,
   env: Environment,

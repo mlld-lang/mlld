@@ -85,14 +85,14 @@ describe('exe evaluator characterization', () => {
     expect(getExecutableDef(env, 'createFile').controlArgs).toEqual([]);
   });
 
-  it('materializes exe-level taintFacts from with-clause metadata', async () => {
+  it('ignores exe-level taintFacts metadata now that the override has been removed', async () => {
     const env = createEnvironment();
     const directive = parseSync(
       '/exe tool:w @transfer(recipient, amount, memo) = run { echo ok } with { controlArgs: ["recipient"], taintFacts: true }'
     )[0] as DirectiveNode;
 
     await evaluateExe(directive, env);
-    expect(getExecutableDef(env, 'transfer').taintFacts).toBe(true);
+    expect(getExecutableDef(env, 'transfer').taintFacts).toBeUndefined();
   });
 
   it('stores trailing output record annotations on executable definitions', async () => {
