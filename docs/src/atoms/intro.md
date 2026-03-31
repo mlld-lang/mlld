@@ -139,6 +139,16 @@ mlld has familiar built-in JS methods. See `mlld howto builtins` for the full li
 
 Loaded files are rich objects, not strings. Frontmatter is already parsed (@file.mx.fm.title), metadata is available (@file.mx.tokens, @file.mx.filename). Check `mlld howto file-loading-metadata` before writing js/node blocks for file processing.
 
+### JS/Python data boundary
+
+mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` (metadata). When values cross into `js {}` or `py {}` blocks, the runtime auto-unwraps them to `.data`:
+
+- **JS/Node/Python receives raw data, not StructuredValues.** A JSON object becomes a plain JS object. A string becomes a string. `.mx` metadata (labels, taint, factsources) is NOT available inside the block.
+- **Return native objects, not JSON strings.** `return { foo: bar }` — not `return JSON.stringify({ foo: bar })`. mlld handles the conversion. Callers should NOT need `| @parse` on JS exe output.
+- **`JSON.stringify` inside JS erases mlld metadata.** If you serialize and parse within JS, label metadata and proof are lost. Work with values as-is.
+- **Handle wrappers pass through as plain objects.** `{ handle: "h_xxx" }` enters JS as a normal object with one key. Don't special-case it. Don't resolve it. If you need handle-aware logic, do it in mlld, not JS.
+- **Need `.mx` in JS?** Use `.keep` or `.keepStructured` on the value before passing it as a parameter. This preserves the wrapper so JS can access metadata.
+
 **Use `>>` for comments, not `//`**
 
 Labels are comma-separated: `var secret,pii @data = "x"`
