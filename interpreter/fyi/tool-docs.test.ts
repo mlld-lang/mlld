@@ -123,12 +123,13 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('Handle discovery available:');
-      expect(docs.text).toContain('outreach(recipient, subject, body) [WRITE]');
-      expect(docs.text).toContain('CONTROL args (target selection): recipient');
-      expect(docs.text).toContain('DATA args (payload): subject, body');
-      expect(docs.text).toContain('@fyi.known("outreach")');
+      expect(docs.text).toContain('Write tools and control args:');
+      expect(docs.text).toContain('| Tool | Control Args | Discover Targets |');
+      expect(docs.text).toContain('| outreach | recipient | @fyi.known("outreach") |');
+      expect(docs.text).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
+      expect(docs.text).toContain('Denied: (none)');
       expect(docs.text).not.toContain('owner');
+      expect(docs.text).not.toContain('subject, body');
     } finally {
       env.cleanup();
     }
@@ -158,10 +159,28 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('update_scheduled_transaction(id, recipient, amount) [WRITE]');
-      expect(docs.text).toContain('These control args must come from the same source record.');
-      expect(docs.text).toContain('send_email(recipients, cc, bcc, subject) [WRITE]');
-      expect(docs.text).not.toContain('send_email(recipients, cc, bcc, subject) [WRITE]\n  These control args must come from the same source record.');
+      expect(docs.text).toContain('| update_scheduled_transaction | id, recipient (same source) | @fyi.known("update_scheduled_transaction") |');
+      expect(docs.text).toContain('| send_email | recipients, cc, bcc | @fyi.known("send_email") |');
+      expect(docs.text).not.toContain('recipients, cc, bcc (same source)');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('omits read tools from the text table', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @sendEmail(recipient, subject) = "sent" with {
+        controlArgs: ["recipient"]
+      }
+      /exe tool:r @lookupContact(query) = "Ada"
+
+      /var @tools = [@sendEmail, @lookupContact]
+    `);
+
+    try {
+      const docs = await evaluateFyiTools(env.getVariable('tools'), env);
+      expect(docs.text).toContain('| send_email | recipient | @fyi.known("send_email") |');
+      expect(docs.text).not.toContain('lookup_contact');
     } finally {
       env.cleanup();
     }
@@ -262,10 +281,10 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('create_file(filename, content) [WRITE]');
-      expect(docs.text).toContain('No control args - authorize with allow.');
-      expect(docs.text).not.toContain('Handle discovery available:');
+      expect(docs.text).toContain('| create_file | (none) |  |');
+      expect(docs.text).toContain('Denied: (none)');
       expect(docs.text).not.toContain('@fyi.known("create_file")');
+      expect(docs.text).not.toContain('Use @fyi.known("toolName")');
     } finally {
       env.cleanup();
     }

@@ -239,11 +239,9 @@ describe('createFunctionMcpBridge', () => {
       expect(outbound).toBeDefined();
       expect(Object.keys(outbound?.inputSchema?.properties ?? {})).toEqual(['recipient', 'subject', 'body']);
       expect(outbound?.inputSchema?.required ?? []).toEqual(['recipient', 'subject']);
-      expect(outbound?.description).toContain('Send an outbound email');
-      expect(outbound?.description).toContain('CONTROL args (target selection): recipient');
-      expect(outbound?.description).toContain('Discover targets: @fyi.known("outbound_email")');
-      expect(outbound?.description).toContain('DATA args (payload): subject, body');
-      expect(outbound?.description).not.toContain('Handle discovery available:');
+      expect(outbound?.description).toContain('Send an outbound email [CONTROL: recipient]');
+      expect(outbound?.description).not.toContain('@fyi.known("outbound_email")');
+      expect(outbound?.description).not.toContain('DATA args (payload)');
     } finally {
       await bridge.cleanup();
       env.cleanup();

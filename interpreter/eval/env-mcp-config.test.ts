@@ -1246,9 +1246,10 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('Handle discovery available:');
-      expect(output).toContain('@fyi.known() returns proof-bearing candidates for control args.');
-      expect(output).toContain('Call @fyi.known("toolName") for candidates specific to a write tool.');
+      expect(output).toContain('| Tool | Control Args | Discover Targets |');
+      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
+      expect(output).toContain('Denied: (none)');
     } finally {
       environment?.cleanup();
     }
@@ -1276,7 +1277,7 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('User system prompt\n\n<tool_notes>');
-      expect(output).toContain('Handle discovery available:');
+      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
     } finally {
       environment?.cleanup();
     }
@@ -1305,17 +1306,18 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('DENIED BY POLICY (cannot be authorized):');
-      expect(output).toContain('update_password');
-      expect(output).toContain('Authorization intent shape:');
-      expect(output).toContain('resolved: { tool: { arg: "handle_value" } }');
-      expect(output).not.toContain('Handle discovery available:');
+      expect(output).toContain('| Tool | Control Args |');
+      expect(output).toContain('| update_password | recipient |');
+      expect(output).toContain('Denied: update_password');
+      expect(output).toContain('Authorization intent:');
+      expect(output).toContain('resolved: { tool: { arg: "handle" } }');
+      expect(output).not.toContain('Use @fyi.known("toolName")');
     } finally {
       environment?.cleanup();
     }
   });
 
-  it('leaves config.system absent when no security-relevant tool notes are needed', async () => {
+  it('creates config.system with a write-tool table even when tools have no control args', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @createDraft(subject, body) = "draft" with { controlArgs: [] }',
@@ -1336,7 +1338,11 @@ describe('box MCP config integration', () => {
         }
       });
 
-      expect(output.trim()).toBe('null');
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('| Tool | Control Args | Discover Targets |');
+      expect(output).toContain('| create_draft | (none) |  |');
+      expect(output).toContain('Denied: (none)');
+      expect(output).not.toContain('Use @fyi.known("toolName")');
     } finally {
       environment?.cleanup();
     }

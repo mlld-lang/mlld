@@ -148,7 +148,7 @@ class FunctionMcpBridgeServer {
       if (notes) {
         const baseDescription = typeof schema.description === 'string' ? schema.description.trimEnd() : '';
         schema.description = baseDescription.length > 0
-          ? `${baseDescription}\n\n${notes}`
+          ? `${baseDescription} ${notes}`
           : notes;
       }
       this.toolSchemas.push(schema);

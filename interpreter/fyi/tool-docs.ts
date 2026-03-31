@@ -221,6 +221,7 @@ function resolveDeniedToolNames(
 ): string[] {
   const visibleToolNames = new Set(
     entries
+      .filter(entry => isWriteToolMetadata(env, entry))
       .map(entry => entry.name.trim().toLowerCase())
       .filter(name => name.length > 0 && name !== 'known')
   );
@@ -331,48 +332,137 @@ function formatArgList(args: readonly string[]): string {
   return args.length > 0 ? args.join(', ') : '(none)';
 }
 
-function formatSignature(name: string, params: readonly string[]): string {
-  return `${name}(${params.join(', ')})`;
+function formatTableCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
-function buildPlannerPreamble(denied: readonly string[]): string[] {
-  const lines: string[] = [];
-  if (denied.length > 0) {
-    lines.push('DENIED BY POLICY (cannot be authorized):');
-    for (const toolName of denied) {
-      lines.push(`  ${toolName}`);
-    }
-    lines.push('');
+function formatControlArgsCell(entry: EffectiveToolMetadata): string {
+  const controlArgs = entry.controlArgs ?? [];
+  const base = formatArgList(controlArgs);
+  if (controlArgs.length > 1 && entry.correlateControlArgs) {
+    return `${base} (same source)`;
   }
-
-  lines.push('Authorization intent shape:');
-  lines.push('  resolved: { tool: { arg: "handle_value" } }');
-  lines.push('  known: { tool: { arg: { value: "literal", source: "reason" } } }');
-  lines.push('  allow: ["tool_name"]');
-  return lines;
+  return base;
 }
 
-function buildWorkerHelperPreamble(
+function buildDeniedLine(denied: readonly string[]): string {
+  return `Denied: ${denied.length > 0 ? denied.join(', ') : '(none)'}`;
+}
+
+function buildPlannerIntentLines(): string[] {
+  return [
+    'Authorization intent:',
+    '  resolved: { tool: { arg: "handle" } } - from your lookups',
+    '  known: { tool: { arg: { value: "literal", source: "reason" } } } - from user task',
+    '  allow: ["tool"] - no control args'
+  ];
+}
+
+function buildWorkerHelperLine(
   includeHelpers: FyiToolsIncludeHelpers,
   helperStatus: FyiKnownHelperStatus
-): string[] {
+): string | undefined {
   if (includeHelpers === 'none') {
-    return [];
+    return undefined;
   }
 
   if (helperStatus.available) {
-    return [
-      'Handle discovery available:',
-      '  @fyi.known() returns proof-bearing candidates for control args.',
-      '  Call @fyi.known("toolName") for candidates specific to a write tool.'
-    ];
+    return 'Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.';
   }
 
   if (includeHelpers === 'all') {
-    return ['Handle discovery not available for this phase.'];
+    return '@fyi.known() is not available for this phase.';
   }
 
-  return [];
+  return undefined;
+}
+
+function resolveWriteEntries(
+  env: Environment,
+  entries: readonly EffectiveToolMetadata[]
+): EffectiveToolMetadata[] {
+  return entries.filter(
+    entry => entry.name !== 'known' && isWriteToolMetadata(env, entry)
+  );
+}
+
+function buildToolTableLines(options: {
+  audience: FyiToolsAudience;
+  writeEntries: readonly EffectiveToolMetadata[];
+  helperStatus: FyiKnownHelperStatus;
+  includeHelpers: FyiToolsIncludeHelpers;
+}): string[] {
+  const { audience, writeEntries, helperStatus, includeHelpers } = options;
+  const includeDiscoveryColumn = audience === 'worker';
+  const lines = [
+    includeDiscoveryColumn
+      ? '| Tool | Control Args | Discover Targets |'
+      : '| Tool | Control Args |',
+    includeDiscoveryColumn
+      ? '|------|-------------|------------------|'
+      : '|------|-------------|'
+  ];
+
+  for (const entry of writeEntries) {
+    const cells = [
+      formatTableCell(entry.name),
+      formatTableCell(formatControlArgsCell(entry))
+    ];
+
+    if (includeDiscoveryColumn) {
+      const controlArgs = entry.controlArgs ?? [];
+      const discoveryCall =
+        helperStatus.available
+        && includeHelpers !== 'none'
+        && controlArgs.length > 0
+          ? `@fyi.known("${entry.name}")`
+          : '';
+      cells.push(formatTableCell(discoveryCall));
+    }
+
+    lines.push(`| ${cells.join(' | ')} |`);
+  }
+
+  return lines;
+}
+
+function buildTextLines(options: {
+  env: Environment;
+  audience: FyiToolsAudience;
+  includeHelpers: FyiToolsIncludeHelpers;
+  denied: readonly string[];
+  helperStatus: FyiKnownHelperStatus;
+  entries: readonly EffectiveToolMetadata[];
+}): string[] {
+  const { env, audience, includeHelpers, denied, helperStatus, entries } = options;
+  const writeEntries = resolveWriteEntries(env, entries);
+  if (writeEntries.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = [
+    'Write tools and control args:',
+    '',
+    ...buildToolTableLines({
+      audience,
+      writeEntries,
+      helperStatus,
+      includeHelpers
+    })
+  ];
+
+  if (audience === 'worker') {
+    const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
+    lines.push('', ...(helperLine ? [helperLine] : []), buildDeniedLine(denied));
+    return lines;
+  }
+
+  if (audience === 'planner') {
+    lines.push('', buildDeniedLine(denied), '', ...buildPlannerIntentLines());
+    return lines;
+  }
+
+  return lines;
 }
 
 function wrapToolNotesBlock(lines: readonly string[]): string | undefined {
@@ -407,115 +497,20 @@ function joinAnnotationLines(lines: readonly string[]): string | undefined {
   return normalized.join('\n');
 }
 
-function buildToolDescriptionAnnotationLines(options: {
-  env: Environment;
-  audience: FyiToolsAudience;
-  entry: EffectiveToolMetadata;
-  helperStatus: FyiKnownHelperStatus;
-  includeHelpers: FyiToolsIncludeHelpers;
-}): string[] {
-  const { env, audience, entry, helperStatus, includeHelpers } = options;
-  if (audience === 'generic' || entry.name === 'known') {
+function buildToolDescriptionAnnotationLines(entry: EffectiveToolMetadata): string[] {
+  if (entry.name === 'known') {
     return [];
   }
 
-  const isWrite = isWriteToolMetadata(env, entry);
   const controlArgs = entry.controlArgs ?? [];
-  const dataArgs = entry.params.filter(param => !controlArgs.includes(param));
-  const lines: string[] = [];
-
-  if (isWrite) {
-    if (controlArgs.length > 0) {
-      lines.push(
-        audience === 'planner'
-          ? `CONTROL args (authorization targets): ${formatArgList(controlArgs)}`
-          : `CONTROL args (target selection): ${formatArgList(controlArgs)}`
-      );
-
-      if (entry.correlateControlArgs && controlArgs.length > 1) {
-        lines.push(
-          audience === 'planner'
-            ? 'If you authorize this tool, include all required control args from the same trusted result.'
-            : 'These control args must come from the same source record.'
-        );
-      }
-
-      if (
-        audience !== 'planner'
-        && includeHelpers !== 'none'
-        && helperStatus.available
-      ) {
-        lines.push(`Discover targets: @fyi.known("${entry.name}")`);
-      }
-    } else {
-      lines.push('No control args - authorize with allow.');
-    }
-
-    lines.push(`DATA args (payload): ${formatArgList(dataArgs)}`);
-    return lines;
+  if (controlArgs.length === 0) {
+    return [];
   }
 
-  if (controlArgs.length > 0) {
-    lines.push(`CONTROL args: ${formatArgList(controlArgs)}`);
-  }
-
-  return lines;
-}
-
-function buildToolTextBlock(options: {
-  env: Environment;
-  audience: FyiToolsAudience;
-  entry: EffectiveToolMetadata;
-  helperStatus: FyiKnownHelperStatus;
-  includeHelpers: FyiToolsIncludeHelpers;
-}): string[] {
-  const { env, audience, entry, helperStatus, includeHelpers } = options;
-  const lines: string[] = [];
-  const isWrite = isWriteToolMetadata(env, entry);
-  const controlArgs = entry.controlArgs ?? [];
-  const dataArgs = entry.params.filter(param => !controlArgs.includes(param));
-
-  lines.push(`${formatSignature(entry.name, entry.params)} [${isWrite ? 'WRITE' : 'READ'}]`);
-  if (entry.description) {
-    lines.push(`  ${entry.description}`);
-  }
-
-  if (isWrite) {
-    if (controlArgs.length > 0) {
-      lines.push(
-        audience === 'planner'
-          ? `  CONTROL args (authorization targets): ${formatArgList(controlArgs)}`
-          : `  CONTROL args (target selection): ${formatArgList(controlArgs)}`
-      );
-
-      if (entry.correlateControlArgs && controlArgs.length > 1) {
-        lines.push(
-          audience === 'planner'
-            ? '  If you authorize this tool, include all required control args from the same trusted result.'
-            : '  These control args must come from the same source record.'
-        );
-      }
-
-      if (
-        audience !== 'planner'
-        && includeHelpers !== 'none'
-        && helperStatus.available
-      ) {
-        lines.push(`  Discover approved targets: @fyi.known("${entry.name}")`);
-      }
-    } else {
-      lines.push('  No control args - authorize with allow.');
-    }
-
-    lines.push(`  DATA args (payload): ${formatArgList(dataArgs)}`);
-    return lines;
-  }
-
-  if (controlArgs.length > 0) {
-    lines.push(`  CONTROL args: ${formatArgList(controlArgs)}`);
-  }
-
-  return lines;
+  const suffix = entry.correlateControlArgs && controlArgs.length > 1
+    ? `${formatArgList(controlArgs)} (same source)`
+    : formatArgList(controlArgs);
+  return [`[CONTROL: ${suffix}]`];
 }
 
 function renderText(options: {
@@ -526,36 +521,7 @@ function renderText(options: {
   helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
 }): string {
-  const { env, audience, includeHelpers, denied, helperStatus, entries } = options;
-  const lines: string[] = [];
-
-  if (audience === 'planner') {
-    lines.push(...buildPlannerPreamble(denied));
-    if (lines.length > 0) {
-      lines.push('');
-    }
-  } else if (audience === 'worker') {
-    const helperLines = buildWorkerHelperPreamble(includeHelpers, helperStatus);
-    if (helperLines.length > 0) {
-      lines.push(...helperLines, '');
-    }
-  }
-
-  const visibleEntries = entries.filter(entry => entry.name !== 'known');
-  for (const entry of visibleEntries) {
-    lines.push(
-      ...buildToolTextBlock({
-        env,
-        audience,
-        entry,
-        helperStatus,
-        includeHelpers
-      }),
-      ''
-    );
-  }
-
-  return lines.join('\n').trim();
+  return buildTextLines(options).join('\n').trim();
 }
 
 function buildJsonToolEntry(
@@ -651,25 +617,15 @@ export function renderInjectedToolNotes(options: {
   const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
   const helperStatus = resolveKnownHelperStatus(options.env, entries);
   const denied = resolveDeniedToolNames(options.env, entries);
-
-  if (audience === 'worker') {
-    if (helperStatus.reason !== 'write_tools_with_control_args_present') {
-      return undefined;
-    }
-    return wrapToolNotesBlock(buildWorkerHelperPreamble(includeHelpers, helperStatus));
-  }
-
-  if (audience === 'planner') {
-    const hasWriteTool = entries.some(
-      entry => entry.name !== 'known' && isWriteToolMetadata(options.env, entry)
-    );
-    if (!hasWriteTool && denied.length === 0) {
-      return undefined;
-    }
-    return wrapToolNotesBlock(buildPlannerPreamble(denied));
-  }
-
-  return undefined;
+  const lines = buildTextLines({
+    env: options.env,
+    audience,
+    includeHelpers,
+    denied,
+    helperStatus,
+    entries
+  });
+  return wrapToolNotesBlock(lines);
 }
 
 export function renderToolDescriptionNotes(options: {
@@ -678,18 +634,10 @@ export function renderToolDescriptionNotes(options: {
   audience?: FyiToolsAudience;
   includeHelpers?: FyiToolsIncludeHelpers;
 }): string | undefined {
-  const audience = normalizeAudience(options.audience, options.env);
-  const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
-  const helperStatus = resolveKnownHelperStatus(options.env, [options.entry]);
-  return joinAnnotationLines(
-    buildToolDescriptionAnnotationLines({
-      env: options.env,
-      audience,
-      entry: options.entry,
-      helperStatus,
-      includeHelpers
-    })
-  );
+  void options.env;
+  void options.audience;
+  void options.includeHelpers;
+  return joinAnnotationLines(buildToolDescriptionAnnotationLines(options.entry));
 }
 
 export function appendToolNotesToSystemPrompt(

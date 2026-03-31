@@ -229,8 +229,10 @@ describe('createCallMcpConfig', () => {
         { name: 'known' }
       ]);
       expect(result.toolNotes).toContain('<tool_notes>');
-      expect(result.toolNotes).toContain('Handle discovery available:');
-      expect(result.toolNotes).toContain('@fyi.known("toolName")');
+      expect(result.toolNotes).toContain('| Tool | Control Args | Discover Targets |');
+      expect(result.toolNotes).toContain('| outbound_email | recipient | @fyi.known("outbound_email") |');
+      expect(result.toolNotes).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
+      expect(result.toolNotes).toContain('Denied: (none)');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
       const listed = await sendJsonRpc(socketPath, {
@@ -251,11 +253,9 @@ describe('createCallMcpConfig', () => {
       expect(outbound).toBeDefined();
       expect(Object.keys(outbound?.inputSchema?.properties ?? {})).toEqual(['recipient', 'subject', 'body']);
       expect(outbound?.inputSchema?.required ?? []).toEqual(['recipient', 'subject']);
-      expect(outbound?.description).toContain('Send an outbound email');
-      expect(outbound?.description).toContain('CONTROL args (target selection): recipient');
-      expect(outbound?.description).toContain('Discover targets: @fyi.known("outbound_email")');
-      expect(outbound?.description).toContain('DATA args (payload): subject, body');
-      expect(outbound?.description).not.toContain('Handle discovery available:');
+      expect(outbound?.description).toContain('Send an outbound email [CONTROL: recipient]');
+      expect(outbound?.description).not.toContain('@fyi.known("outbound_email")');
+      expect(outbound?.description).not.toContain('DATA args (payload)');
     } finally {
       await result.cleanup();
       env.cleanup();
