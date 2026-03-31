@@ -553,6 +553,59 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported MCP-backed wrappers through benchmark-shaped tool-map selection before the llm tool bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/tools.mld', [
+      '/import tools from mcp "tools" as @mcp',
+      '/exe tool:r @myTool(arg) = @mcp.echo(@arg)',
+      '/var @toolList = [@myTool]',
+      '/var @toolMap = { "my_tool": @myTool }',
+      '/export { @toolList, @toolMap }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @toolList as @workspaceToolList, @toolMap as @workspaceToolMap } from "/tools.mld"',
+      '/var @suiteToolMap = when "workspace" [',
+      '  * => @workspaceToolMap',
+      ']',
+      '/var @config = {',
+      '  tools: @workspaceToolList,',
+      '  toolMap: @suiteToolMap,',
+      '  toolNames: ["my_tool"]',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" my_tool '{"arg":"policygen-shape"}' }`,
+      '/exe @policygen() = [',
+      '  let @cfg = @config ?? {}',
+      '  let @toolMap = @cfg.toolMap ?? {}',
+      '  let @toolNames = @cfg.toolNames ?? []',
+      '  let @toolDocsJson = @fyi.tools(for @name in @toolNames => @toolMap[@name], { format: "json" })',
+      '  let @selected = for @name in @toolNames => @toolMap[@name]',
+      '  => @agent("Call imported tool", { tools: @selected })',
+      ']',
+      '/show @policygen()'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        mcpServers: {
+          tools: `${process.execPath} ${fakeServerPath}`
+        },
+        captureEnvironment: env => {
+          environment = env;
+        }
+      } as any);
+
+      expect(output.trim()).toBe('policygen-shape');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves record coercion for MCP-imported executables from the same module', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/contacts_tools.mld', [

@@ -80,7 +80,10 @@ import {
 import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import { executeCommandExecutable } from './exec/command-handler';
 import { executeCodeExecutable } from './exec/code-handler';
-import { getCapturedModuleEnv } from './import/variable-importer/executable/CapturedModuleEnvKeychain';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from './import/variable-importer/executable/CapturedModuleEnvKeychain';
 import {
   applyExecOutputPolicyLabels,
   cloneExecVariableWithNewValue,
@@ -137,6 +140,45 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   }
   // Plain objects
   return record[name];
+}
+
+async function ensureCapturedModuleEnvMap(
+  variableLike:
+    | ({ internal?: Record<string, unknown> } & Record<string, unknown>)
+    | undefined
+): Promise<Map<string, Variable> | undefined> {
+  const rawCaptured =
+    getCapturedModuleEnv(variableLike?.internal)
+    ?? getCapturedModuleEnv(variableLike);
+  if (!rawCaptured) {
+    return undefined;
+  }
+  if (rawCaptured instanceof Map) {
+    return rawCaptured as Map<string, Variable>;
+  }
+  if (typeof rawCaptured !== 'object') {
+    return undefined;
+  }
+
+  const { VariableImporter } = await import('./import/VariableImporter');
+  const { ObjectReferenceResolver } = await import('./import/ObjectReferenceResolver');
+  const importer = new VariableImporter(new ObjectReferenceResolver());
+  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured);
+
+  for (const [, capturedVar] of moduleEnvMap) {
+    if (capturedVar.type === 'executable') {
+      capturedVar.internal = {
+        ...(capturedVar.internal ?? {}),
+        capturedModuleEnv: moduleEnvMap
+      };
+    }
+  }
+
+  if (variableLike?.internal) {
+    sealCapturedModuleEnv(variableLike.internal, moduleEnvMap);
+  }
+
+  return moduleEnvMap;
 }
 
 function isPassthroughVariableReferenceArg(
@@ -1973,8 +2015,11 @@ async function evaluateExecInvocationInternal(
   let execEnv = runtimeEnv.createChild();
 
   // Set captured module environment for variable lookup fallback
-  if (variable?.internal?.capturedModuleEnv instanceof Map) {
-    execEnv.setCapturedModuleEnv(variable.internal.capturedModuleEnv);
+  const capturedModuleEnv = await ensureCapturedModuleEnvMap(
+    variable as { internal?: Record<string, unknown> } | undefined
+  );
+  if (capturedModuleEnv instanceof Map) {
+    execEnv.setCapturedModuleEnv(capturedModuleEnv);
   }
 
   // Circular reference / recursion depth guard — runs AFTER argument evaluation.

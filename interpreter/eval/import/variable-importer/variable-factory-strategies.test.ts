@@ -6,7 +6,11 @@ import { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import { VariableImporter } from '../VariableImporter';
 import { ensureStructuredValue } from '@interpreter/utils/structured-value';
 import { makeSecurityDescriptor } from '@core/types/security';
-import { VariableMetadataUtils } from '@core/types/variable';
+import {
+  VariableMetadataUtils,
+  createExecutableVariable,
+  createSimpleTextVariable
+} from '@core/types/variable';
 
 function createEnv(): Environment {
   const env = new Environment(new MemoryFileSystem(), new PathService(), '/project');
@@ -143,6 +147,60 @@ describe('VariableImporter factory strategies', () => {
 
     expect(variable.type).toBe('object');
     expect(variable.mx?.labels).toEqual(expect.arrayContaining(['runtime']));
+  });
+
+  it('preserves captured module env on nested executable variables when rewrapping plain objects', () => {
+    const importer = createImporter();
+    const env = createEnv();
+    const helper = createSimpleTextVariable(
+      'mcp',
+      'namespace',
+      {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
+    );
+    const capturedModuleEnv = new Map<string, any>([['mcp', helper]]);
+    const executable = createExecutableVariable(
+      'tool',
+      'command',
+      '',
+      ['arg'],
+      'sh',
+      {
+        directive: 'exe',
+        syntax: 'braces',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        internal: {
+          executableDef: {
+            type: 'command',
+            template: '',
+            language: 'sh',
+            paramNames: ['arg']
+          } as any,
+          capturedModuleEnv
+        }
+      }
+    );
+
+    const variable = importer.createVariableFromValue(
+      'record',
+      { nested: executable },
+      '/project/module.mld',
+      undefined,
+      { env }
+    );
+
+    expect(variable.type).toBe('object');
+    const nested = (variable.value as any).nested;
+    expect(nested).toBe(executable);
+    expect(nested.internal?.capturedModuleEnv).toBe(capturedModuleEnv);
+    expect(Array.from((nested.internal?.capturedModuleEnv as Map<string, any>).keys())).toEqual(['mcp']);
   });
 
   it('keeps primitive fallback behavior stable with serialized descriptor propagation', () => {

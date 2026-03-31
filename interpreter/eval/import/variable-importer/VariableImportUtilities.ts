@@ -39,6 +39,12 @@ export class VariableImportUtilities {
     }
 
     if (value && typeof value === 'object') {
+      // Preserve live Variable instances, especially executable wrappers with
+      // captured module environments. Recursing into them treats their internal
+      // Maps like plain objects and collapses captured scope to {}.
+      if (this.isVariableLike(value)) {
+        return value;
+      }
       if (isNodeProxy(value)) {
         return value;
       }
