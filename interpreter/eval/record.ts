@@ -3,11 +3,13 @@ import type { Environment } from '@interpreter/env/Environment';
 import type {
   RecordDirectiveNode,
   RecordDefinition,
+  RecordDataTrustLevel,
   RecordFieldDefinition,
   RecordDisplayConfig,
   RecordDisplayDeclaration,
   RecordDisplayEntry,
   RecordWhenCondition,
+  RecordWhenResult,
   RecordRootMode
 } from '@core/types/record';
 import { MlldInterpreterError } from '@core/errors';
@@ -62,6 +64,7 @@ export async function evaluateRecord(
   }
 
   const seen = new Set<string>();
+  const fieldByName = new Map<string, RecordFieldDefinition>();
   for (const field of fields) {
     if (seen.has(field.name)) {
       throw new MlldInterpreterError(
@@ -74,6 +77,7 @@ export async function evaluateRecord(
       );
     }
     seen.add(field.name);
+    fieldByName.set(field.name, field);
     assertRecordFieldIsPure(field, name);
   }
 
@@ -83,6 +87,7 @@ export async function evaluateRecord(
   if (Array.isArray(when)) {
     for (const rule of when) {
       assertRecordConditionIsSupported(rule.condition, name);
+      assertRecordWhenOverridesAreSupported(rule.result, fieldByName, name);
     }
   }
 
@@ -107,10 +112,27 @@ function normalizeFields(
   fields: RecordFieldDefinition[],
   classification: 'fact' | 'data'
 ): RecordFieldDefinition[] {
-  return fields.map(field => ({
-    ...field,
-    classification
-  }));
+  return fields.map(field => {
+    if (classification === 'fact') {
+      return {
+        ...field,
+        classification,
+        dataTrust: undefined
+      };
+    }
+
+    return {
+      ...field,
+      classification,
+      dataTrust: normalizeRecordDataTrustLevel(field.dataTrust)
+    };
+  });
+}
+
+function normalizeRecordDataTrustLevel(
+  value: unknown
+): RecordDataTrustLevel {
+  return value === 'trusted' ? 'trusted' : 'untrusted';
 }
 
 function normalizeDisplay(
@@ -251,6 +273,84 @@ function assertRecordConditionIsSupported(condition: RecordWhenCondition, record
       undefined,
       { code: 'INVALID_RECORD_WHEN' }
     );
+  }
+  if (
+    condition.sourceRoot &&
+    condition.path &&
+    (!Array.isArray(condition.path) || condition.path.some(segment => typeof segment !== 'string' || segment.length === 0))
+  ) {
+    throw new MlldInterpreterError(
+      `Record '@${recordName}' has an invalid when condition`,
+      'record',
+      undefined,
+      { code: 'INVALID_RECORD_WHEN' }
+    );
+  }
+}
+
+function assertRecordWhenOverridesAreSupported(
+  result: RecordWhenResult,
+  fieldByName: ReadonlyMap<string, RecordFieldDefinition>,
+  recordName: string
+): void {
+  if (result.type !== 'tiers' || !result.overrides?.data) {
+    return;
+  }
+
+  const seen = new Set<string>();
+  for (const [trust, fields] of Object.entries(result.overrides.data)) {
+    if (trust !== 'trusted' && trust !== 'untrusted') {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}' has an invalid when override`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_WHEN' }
+      );
+    }
+    if (!Array.isArray(fields)) {
+      throw new MlldInterpreterError(
+        `Record '@${recordName}' has an invalid when override`,
+        'record',
+        undefined,
+        { code: 'INVALID_RECORD_WHEN' }
+      );
+    }
+    for (const fieldName of fields) {
+      if (typeof fieldName !== 'string' || fieldName.length === 0) {
+        throw new MlldInterpreterError(
+          `Record '@${recordName}' has an invalid when override`,
+          'record',
+          undefined,
+          { code: 'INVALID_RECORD_WHEN' }
+        );
+      }
+      if (seen.has(fieldName)) {
+        throw new MlldInterpreterError(
+          `Record '@${recordName}' reclassifies field '${fieldName}' more than once in a when branch`,
+          'record',
+          undefined,
+          { code: 'INVALID_RECORD_WHEN' }
+        );
+      }
+      const field = fieldByName.get(fieldName);
+      if (!field) {
+        throw new MlldInterpreterError(
+          `Record '@${recordName}' when override references unknown field '${fieldName}'`,
+          'record',
+          undefined,
+          { code: 'INVALID_RECORD_WHEN' }
+        );
+      }
+      if (field.classification !== 'data') {
+        throw new MlldInterpreterError(
+          `Record '@${recordName}' when override can only reclassify data field '${fieldName}'`,
+          'record',
+          undefined,
+          { code: 'INVALID_RECORD_WHEN' }
+        );
+      }
+      seen.add(fieldName);
+    }
   }
 }
 

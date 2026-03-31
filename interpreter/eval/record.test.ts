@@ -108,6 +108,76 @@ describe('evaluateRecord', () => {
     expect(child.getRecordDefinition('contact')).toBe(env.getRecordDefinition('contact'));
   });
 
+  it('normalizes trusted data fields and when branch reclassification', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @issue = {
+  facts: [id: string],
+  data: {
+    trusted: [title: string],
+    untrusted: [body: string]
+  },
+  when [
+    @input.author_association == "MEMBER" => :maintainer {
+      data: { trusted: [body] }
+    }
+    * => :external
+  ]
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('issue')).toMatchObject({
+      fields: [
+        {
+          name: 'id',
+          classification: 'fact'
+        },
+        {
+          name: 'title',
+          classification: 'data',
+          dataTrust: 'trusted'
+        },
+        {
+          name: 'body',
+          classification: 'data',
+          dataTrust: 'untrusted'
+        }
+      ],
+      when: [
+        {
+          condition: {
+            type: 'comparison',
+            field: 'author_association',
+            sourceRoot: 'input',
+            path: ['author_association'],
+            operator: '==',
+            value: 'MEMBER'
+          },
+          result: {
+            type: 'tiers',
+            tiers: ['maintainer'],
+            overrides: {
+              data: {
+                trusted: ['body']
+              }
+            }
+          }
+        },
+        {
+          condition: {
+            type: 'wildcard'
+          },
+          result: {
+            type: 'tiers',
+            tiers: ['external']
+          }
+        }
+      ]
+    });
+  });
+
   it('rejects deferred key declarations', async () => {
     const env = createEnv();
     const directive = parseRecord(`
@@ -132,6 +202,25 @@ describe('evaluateRecord', () => {
 
     await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
       code: 'INVALID_RECORD_FIELD'
+    });
+  });
+
+  it('rejects when overrides that target fact fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @issue = {
+  facts: [id: string],
+  data: [title: string],
+  when [
+    @input.author_association == "MEMBER" => :maintainer {
+      data: { trusted: [id] }
+    }
+  ]
+}
+`);
+
+    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
+      code: 'INVALID_RECORD_WHEN'
     });
   });
 

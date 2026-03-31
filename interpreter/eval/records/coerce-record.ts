@@ -7,6 +7,7 @@ import {
 } from '@core/types/variable';
 import { MlldInterpreterError } from '@core/errors';
 import type {
+  RecordDataTrustLevel,
   RecordDefinition,
   RecordFieldDefinition,
   RecordFieldProjectionMetadata,
@@ -52,6 +53,18 @@ type RecordObjectResult = {
 };
 
 type RecordRootContext = {
+  input: unknown;
+  key?: unknown;
+  value?: unknown;
+};
+
+type ResolvedRecordWhen = {
+  tiers: string[];
+  demote: boolean;
+  dataTrustOverrides: Record<string, RecordDataTrustLevel>;
+};
+
+type RecordWhenBindings = {
   input: unknown;
   key?: unknown;
   value?: unknown;
@@ -527,12 +540,43 @@ async function evaluateFieldValue(
   }
 }
 
-function evaluateWhenCondition(input: Record<string, unknown>, condition: RecordWhenCondition): boolean {
+function resolveRecordWhenConditionValue(
+  bindings: RecordWhenBindings,
+  condition: Exclude<RecordWhenCondition, { type: 'wildcard' }>
+): unknown {
+  if (condition.sourceRoot) {
+    const base =
+      condition.sourceRoot === 'key'
+        ? bindings.key
+        : condition.sourceRoot === 'value'
+          ? bindings.value
+          : bindings.input;
+    if (!condition.path || condition.path.length === 0) {
+      return base;
+    }
+
+    let current = base;
+    for (const segment of condition.path) {
+      if (!current || typeof current !== 'object') {
+        return undefined;
+      }
+      current = (current as Record<string, unknown>)[segment];
+    }
+    return current;
+  }
+
+  if (!isPlainObject(bindings.input)) {
+    return undefined;
+  }
+  return bindings.input[condition.field];
+}
+
+function evaluateWhenCondition(bindings: RecordWhenBindings, condition: RecordWhenCondition): boolean {
   if (condition.type === 'wildcard') {
     return true;
   }
 
-  const value = input[condition.field];
+  const value = resolveRecordWhenConditionValue(bindings, condition);
   if (condition.type === 'truthy') {
     return Boolean(value);
   }
@@ -544,24 +588,28 @@ function evaluateWhenCondition(input: Record<string, unknown>, condition: Record
 }
 
 function resolveRecordWhen(
-  input: Record<string, unknown>,
+  bindings: RecordWhenBindings,
   when: readonly RecordWhenRule[] | undefined
-): { tiers: string[]; demote: boolean } {
+): ResolvedRecordWhen {
   if (!when || when.length === 0) {
-    return { tiers: [], demote: false };
+    return { tiers: [], demote: false, dataTrustOverrides: {} };
   }
 
   for (const rule of when) {
-    if (!evaluateWhenCondition(input, rule.condition)) {
+    if (!evaluateWhenCondition(bindings, rule.condition)) {
       continue;
     }
     if (rule.result.type === 'data') {
-      return { tiers: [], demote: true };
+      return { tiers: [], demote: true, dataTrustOverrides: {} };
     }
-    return { tiers: [...rule.result.tiers], demote: false };
+    return {
+      tiers: [...rule.result.tiers],
+      demote: false,
+      dataTrustOverrides: buildRecordWhenDataTrustOverrides(rule.result.overrides?.data)
+    };
   }
 
-  return { tiers: [], demote: false };
+  return { tiers: [], demote: false, dataTrustOverrides: {} };
 }
 
 function buildFactLabels(
@@ -577,16 +625,10 @@ function buildFactLabels(
 }
 
 function buildRecordWhenInput(
-  definition: RecordDefinition,
   context: RecordRootContext
-): Record<string, unknown> {
-  const inputValue = extractRecordInputValue(context.input);
-  if (definition.rootMode === 'object' && isPlainObject(inputValue)) {
-    return inputValue;
-  }
-
+): RecordWhenBindings {
   return {
-    input: inputValue,
+    input: extractRecordInputValue(context.input),
     ...(hasRecordRootBinding(context, 'key')
       ? { key: extractRecordInputValue(context.key) }
       : {}),
@@ -594,6 +636,51 @@ function buildRecordWhenInput(
       ? { value: extractRecordInputValue(context.value) }
       : {})
   };
+}
+
+function buildRecordWhenDataTrustOverrides(
+  overrides: Record<string, string[]> | undefined
+): Record<string, RecordDataTrustLevel> {
+  if (!overrides) {
+    return {};
+  }
+
+  const resolved: Record<string, RecordDataTrustLevel> = {};
+  for (const [trust, fields] of Object.entries(overrides)) {
+    if ((trust !== 'trusted' && trust !== 'untrusted') || !Array.isArray(fields)) {
+      continue;
+    }
+    for (const fieldName of fields) {
+      if (typeof fieldName === 'string' && fieldName.length > 0) {
+        resolved[fieldName] = trust;
+      }
+    }
+  }
+  return resolved;
+}
+
+function resolveFieldDataTrust(
+  field: RecordFieldDefinition,
+  whenResult: ResolvedRecordWhen
+): RecordDataTrustLevel | undefined {
+  if (field.classification !== 'data') {
+    return undefined;
+  }
+  return whenResult.dataTrustOverrides[field.name] ?? field.dataTrust ?? 'untrusted';
+}
+
+function shouldKeepRecordFieldUntrusted(options: {
+  field: RecordFieldDefinition;
+  allData: boolean;
+  dataTrust?: RecordDataTrustLevel;
+}): boolean {
+  if (options.allData) {
+    return true;
+  }
+  if (options.field.classification === 'fact') {
+    return false;
+  }
+  return options.dataTrust !== 'trusted';
 }
 
 async function coerceRecordEntry(
@@ -663,7 +750,7 @@ async function coerceRecordEntry(
   }
 
   const validationDemoted = definition.validate === 'demote' && errors.length > 0;
-  const whenResult = resolveRecordWhen(buildRecordWhenInput(definition, context), definition.when);
+  const whenResult = resolveRecordWhen(buildRecordWhenInput(context), definition.when);
   const allData = validationDemoted || whenResult.demote;
   const factsources: FactSourceHandle[] = [];
   const wrapperSecurity = sanitizeRecordWrapperDescriptor(inheritedDescriptor);
@@ -686,11 +773,16 @@ async function coerceRecordEntry(
       !allData && field.classification === 'fact'
         ? buildFactLabels(definition, field.name, whenResult.tiers)
         : [];
+    const dataTrust = resolveFieldDataTrust(field, whenResult);
     const fieldProjection = buildRecordFieldProjectionMetadata(definition, field);
     const fieldSecurity = buildRecordFieldDescriptor({
       inheritedDescriptor,
       factLabels: labels,
-      shouldKeepUntrusted: allData || field.classification === 'data'
+      shouldKeepUntrusted: shouldKeepRecordFieldUntrusted({
+        field,
+        allData,
+        dataTrust
+      })
     });
     const namespaceSecurity = mergeFieldDescriptorWithValue(
       rawFieldValues[field.name],

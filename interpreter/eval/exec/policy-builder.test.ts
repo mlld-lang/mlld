@@ -778,6 +778,67 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('treats trusted-data record fields as proofless in build and validate', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [id: string],
+        data: {
+          trusted: [email: string]
+        }
+      }
+      /exe untrusted, src:mcp @getContact() = js {
+        return {
+          id: "contact-1",
+          email: "ada@example.com"
+        };
+      } => contact
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+
+      /var @contact = @getContact()
+      /var @contactEmail = @contact.email
+    `);
+
+    const contactEmail = await extractVariableValue(env.getVariable('contactEmail') as any, env) as any;
+    expect(contactEmail.mx.labels).toContain('src:mcp');
+    expect(contactEmail.mx.labels).not.toContain('untrusted');
+    expect(contactEmail.mx.labels.some((label: string) => label.startsWith('fact:'))).toBe(false);
+
+    const issued = env.issueHandle(contactEmail, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
+    });
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+    const plannerIntent = {
+      resolved: {
+        sendEmail: {
+          recipient: issued.handle,
+          subject: 'hello'
+        }
+      }
+    };
+
+    for (const method of ['build', 'validate'] as const) {
+      const result = await invokePolicyBuiltin(env, method, plannerIntent, writeTools) as any;
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'proofless_control_arg',
+            tool: 'sendEmail',
+            arg: 'recipient'
+          })
+        ])
+      );
+      expect(result.report.compiledProofs).toEqual([]);
+      expect(result.policy.authorizations.allow).toEqual({});
+    }
+  });
+
   it('accepts StructuredValue handle wrappers in resolved planner intent', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }

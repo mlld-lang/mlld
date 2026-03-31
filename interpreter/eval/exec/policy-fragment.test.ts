@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { evaluateDirective } from '@interpreter/eval/directive';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import {
   getInvocationPolicyFragmentCompileReport,
   resolveInvocationPolicyFragment
@@ -346,6 +347,58 @@ describe('resolveInvocationPolicyFragment', () => {
 
     expect(recipientConstraint.eq).toBe('ada@example.com');
     expect(recipientConstraint.attestations).toEqual(['known']);
+  });
+
+  it('rejects handle-backed trusted-data record fields for control args at runtime', async () => {
+    const env = createEnv();
+    for (const directive of parseSync(`
+/record @contact = {
+  facts: [id: string],
+  data: {
+    trusted: [email: string]
+  }
+}
+/exe untrusted, src:mcp @getContact() = js {
+  return {
+    id: "contact-1",
+    email: "ada@example.com"
+  };
+} => contact
+/var @contact = @getContact()
+/var @contactEmail = @contact.email
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = \`sent\` with { controlArgs: ["recipient"] }
+`) as any[]) {
+      if (directive?.type === 'Directive') {
+        await evaluateDirective(directive, env);
+      }
+    }
+
+    const contactEmail = await extractVariableValue(env.getVariable('contactEmail') as any, env) as any;
+    expect(contactEmail.mx.labels).toContain('src:mcp');
+    expect(contactEmail.mx.labels).not.toContain('untrusted');
+    expect(contactEmail.mx.labels.some((label: string) => label.startsWith('fact:'))).toBe(false);
+
+    const issued = env.issueHandle(contactEmail, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
+    });
+
+    await expect(
+      resolveInvocationPolicyFragment(
+        {
+          authorizations: {
+            allow: {
+              sendEmail: {
+                args: {
+                  recipient: createHandleWrapper(issued.handle)
+                }
+              }
+            }
+          }
+        },
+        env
+      )
+    ).rejects.toThrow(/lacks required proof/i);
   });
 
   it('accepts bucketed known intent and strips audit-only source metadata', async () => {

@@ -341,6 +341,62 @@ describe('evaluateFyiKnown', () => {
     ]);
   });
 
+  it('does not surface trusted-data handles as fact-backed known candidates', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @contact = {
+  facts: [id: string],
+  data: {
+    trusted: [email: string]
+  }
+}
+/exe exfil:send, tool:w @send_email(recipient, subject, body) = "sent" with {
+  controlArgs: ["recipient"]
+}
+/exe @emitContact() = js {
+  return {
+    id: "contact-1",
+    email: "ada@example.com"
+  };
+} => contact
+/var @contact = @emitContact()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+
+    const contact = env.getVariable('contact');
+    if (!contact) {
+      throw new Error('Expected @contact to be defined');
+    }
+
+    const email = await accessField(contact.value, { type: 'field', value: 'email' } as any, { env });
+    const id = await accessField(contact.value, { type: 'field', value: 'id' } as any, { env });
+    env.issueHandle(email, {
+      preview: 'Ada Lovelace',
+      metadata: { field: 'email' }
+    });
+    env.issueHandle(id, {
+      preview: 'Ada Lovelace',
+      metadata: { field: 'id' }
+    });
+
+    const recipientCandidates = await evaluateFyiKnown(
+      { op: 'op:named:email.send', arg: 'recipient' },
+      env
+    );
+    expect(recipientCandidates.data).toEqual([]);
+
+    const allCandidates = await evaluateFyiKnown(undefined, env);
+    expect(allCandidates.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'Ada Lovelace',
+        field: 'id',
+        fact: 'fact:@contact.id'
+      }
+    ]);
+  });
+
   it('discovers each separately registered element of an array fact field', async () => {
     const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
     const source = `

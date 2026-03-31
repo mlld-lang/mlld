@@ -117,6 +117,76 @@ describe('record grammar', () => {
     });
   });
 
+  it('parses trusted and untrusted data groups plus when branch reclassification', () => {
+    const directive = getFirstDirective(`
+/record @issue = {
+  facts: [id: string],
+  data: {
+    trusted: [title: string],
+    untrusted: [body: string]
+  },
+  when [
+    @input.author_association == "MEMBER" => :maintainer {
+      data: { trusted: [title] }
+    }
+    * => data
+  ]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.meta).toMatchObject({
+      fieldCount: 3,
+      factCount: 1,
+      dataCount: 2,
+      hasWhen: true
+    });
+
+    expect(directive.values.data).toEqual([
+      expect.objectContaining({
+        name: 'title',
+        valueType: 'string',
+        optional: false,
+        dataTrust: 'trusted'
+      }),
+      expect.objectContaining({
+        name: 'body',
+        valueType: 'string',
+        optional: false,
+        dataTrust: 'untrusted'
+      })
+    ]);
+
+    expect(directive.values.when).toEqual([
+      {
+        condition: {
+          type: 'comparison',
+          field: 'author_association',
+          sourceRoot: 'input',
+          path: ['author_association'],
+          operator: '==',
+          value: 'MEMBER'
+        },
+        result: {
+          type: 'tiers',
+          tiers: ['maintainer'],
+          overrides: {
+            data: {
+              trusted: ['title']
+            }
+          }
+        }
+      },
+      {
+        condition: {
+          type: 'wildcard'
+        },
+        result: {
+          type: 'data'
+        }
+      }
+    ]);
+  });
+
   it('preserves an explicit empty display list', () => {
     const directive = getFirstDirective(`
 /record @contact = {

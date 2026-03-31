@@ -77,8 +77,36 @@ RecordFactsEntry
     }
 
 RecordDataEntry
-  = "data" _ ":" _ fields:RecordFieldList {
+  = "data" _ ":" _ fields:(RecordDataFieldGroups / RecordFieldList) {
       return { kind: 'data', fields };
+    }
+
+RecordDataFieldGroups
+  = "{" _ entries:RecordDataFieldGroupEntries? _ "}" {
+      const groups = entries || [];
+      const seen = new Set();
+      for (const entry of groups) {
+        if (seen.has(entry.trust)) {
+          error(`Duplicate data trust group '${entry.trust}'`);
+        }
+        seen.add(entry.trust);
+      }
+      return groups.flatMap(entry =>
+        entry.fields.map(field => ({
+          ...field,
+          dataTrust: entry.trust
+        }))
+      );
+    }
+
+RecordDataFieldGroupEntries
+  = first:RecordDataFieldGroup rest:(_ ","? _ entry:RecordDataFieldGroup { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordDataFieldGroup
+  = trust:RecordDataTrustLevel _ ":" _ fields:RecordFieldList {
+      return { trust, fields };
     }
 
 RecordDisplayEntry
@@ -307,19 +335,42 @@ RecordWhenCondition
   = "*" {
       return { type: 'wildcard' };
     }
-  / field:BaseIdentifier _ operator:("==" / "!=") _ value:RecordWhenLiteral {
+  / source:RecordWhenConditionSource _ operator:("==" / "!=") _ value:RecordWhenLiteral {
       return {
         type: 'comparison',
-        field,
+        ...source,
         operator,
         value
       };
     }
-  / field:BaseIdentifier {
+  / source:RecordWhenConditionSource {
       return {
         type: 'truthy',
-        field
+        ...source
       };
+    }
+
+RecordWhenConditionSource
+  = root:RecordWhenConditionSourceRoot path:RecordWhenConditionPath? {
+      const fields = path || [];
+      return {
+        field: fields.length > 0 ? fields[fields.length - 1] : root,
+        sourceRoot: root,
+        ...(fields.length > 0 ? { path: fields } : {})
+      };
+    }
+  / field:BaseIdentifier {
+      return { field };
+    }
+
+RecordWhenConditionSourceRoot
+  = "@input" { return 'input'; }
+  / "@key" { return 'key'; }
+  / "@value" { return 'value'; }
+
+RecordWhenConditionPath
+  = fields:("." name:BaseIdentifier { return name; })+ {
+      return fields;
     }
 
 RecordWhenLiteral
@@ -334,12 +385,77 @@ RecordWhenResult
   = "data" ![a-zA-Z0-9_] {
       return { type: 'data' };
     }
-  / first:RecordTier rest:RecordTier* {
+  / first:RecordTier rest:RecordTier* overrides:RecordWhenOverrideBlock? {
       return {
         type: 'tiers',
-        tiers: [first, ...rest]
+        tiers: [first, ...rest],
+        ...(overrides ? { overrides } : {})
       };
     }
 
 RecordTier
   = ":" name:BaseIdentifier { return name; }
+
+RecordWhenOverrideBlock
+  = _ "{" _ entries:RecordWhenOverrideEntries? _ "}" {
+      const overrides = entries || [];
+      const seen = new Set();
+      for (const entry of overrides) {
+        if (seen.has(entry.kind)) {
+          error(`Duplicate record when override '${entry.kind}'`);
+        }
+        seen.add(entry.kind);
+      }
+      return Object.fromEntries(
+        overrides.map(entry => [entry.kind, entry.value])
+      );
+    }
+
+RecordWhenOverrideEntries
+  = first:RecordWhenOverrideEntry rest:(_ ","? _ entry:RecordWhenOverrideEntry { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordWhenOverrideEntry
+  = "data" _ ":" _ value:RecordWhenDataOverrideValue {
+      return { kind: 'data', value };
+    }
+
+RecordWhenDataOverrideValue
+  = "{" _ entries:RecordWhenDataOverrideGroups? _ "}" {
+      const groups = entries || [];
+      const seen = new Set();
+      for (const entry of groups) {
+        if (seen.has(entry.trust)) {
+          error(`Duplicate data trust override '${entry.trust}'`);
+        }
+        seen.add(entry.trust);
+      }
+      return Object.fromEntries(
+        groups.map(entry => [entry.trust, entry.fields])
+      );
+    }
+
+RecordWhenDataOverrideGroups
+  = first:RecordWhenDataOverrideGroup rest:(_ ","? _ entry:RecordWhenDataOverrideGroup { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordWhenDataOverrideGroup
+  = trust:RecordDataTrustLevel _ ":" _ fields:RecordWhenFieldNameList {
+      return { trust, fields };
+    }
+
+RecordWhenFieldNameList
+  = "[" _ fields:RecordWhenFieldNames? _ "]" {
+      return fields || [];
+    }
+
+RecordWhenFieldNames
+  = first:BaseIdentifier rest:(_ ","? _ field:BaseIdentifier { return field; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordDataTrustLevel
+  = "trusted" ![a-zA-Z0-9_] { return 'trusted'; }
+  / "untrusted" ![a-zA-Z0-9_] { return 'untrusted'; }

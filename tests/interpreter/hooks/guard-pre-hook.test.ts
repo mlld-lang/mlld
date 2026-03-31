@@ -1427,6 +1427,30 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
   });
 
+  it('treats trusted-data record fields as proofless for inherited no-send-to-unknown checks', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @contact = { facts: [id: string], data: { trusted: [email: string] } }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe untrusted, src:mcp @getContact() = { id: "contact-1", email: "ada@example.com" } => contact')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @contact = @getContact()')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @sendMoney(recipient, amount) = `sent:@amount` with { controlArgs: ["recipient"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-send-to-unknown", "no-untrusted-destructive"] }, operations: { "exfil:send": ["tool:w"], destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @sendMoney(@contact.email, 5) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
+  });
+
   it('activates no-untrusted-destructive for with { policy } without authorizations', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var untrusted @payload = "doc-1"')[0] as DirectiveNode, env);
@@ -1441,6 +1465,32 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
 
     const directive = parseSync('/show @deleteDoc(@payload) with { policy: @taskPolicy }')[0] as DirectiveNode;
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/cannot flow to 'destructive'/i);
+  });
+
+  it('does not trigger no-untrusted-destructive for trusted-data record fields', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @payload = { facts: [id: string], data: { trusted: [target: string] } }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe untrusted, src:mcp @getPayload() = { id: "payload-1", target: "doc-1" } => payload')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @payload = @getPayload()')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:w @deleteDoc(id) = `deleted:@id` with { controlArgs: ["id"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-untrusted-destructive"] }, operations: { destructive: ["tool:w"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @deleteDoc(@payload.target) with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('deleted:doc-1');
   });
 
   it('scopes no-untrusted-destructive to non-empty controlArgs by default', async () => {

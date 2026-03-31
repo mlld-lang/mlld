@@ -3,6 +3,7 @@ import type { SourceLocation, VariableReferenceNode, BaseMlldNode } from './prim
 import type { DataValue } from './var';
 
 export type RecordFieldClassification = 'fact' | 'data';
+export type RecordDataTrustLevel = 'trusted' | 'untrusted';
 export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'handle';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
 export type RecordDisplayMode = 'bare' | 'ref' | 'mask' | 'handle';
@@ -27,6 +28,7 @@ export interface RecordFieldProjectionMetadata {
   recordName: string;
   fieldName: string;
   classification: RecordFieldClassification;
+  dataTrust?: RecordDataTrustLevel;
   display: RecordDisplayConfig;
 }
 
@@ -38,6 +40,7 @@ export interface RecordObjectProjectionMetadata {
     string,
     {
       classification: RecordFieldClassification;
+      dataTrust?: RecordDataTrustLevel;
     }
   >;
 }
@@ -50,6 +53,7 @@ export interface RecordInputFieldDefinition {
   kind: 'input';
   name: string;
   classification: RecordFieldClassification;
+  dataTrust?: RecordDataTrustLevel;
   sourceRoot: RecordInputSourceRoot;
   source: VariableReferenceNode;
   valueType?: RecordFieldValueType;
@@ -60,6 +64,7 @@ export interface RecordComputedFieldDefinition {
   kind: 'computed';
   name: string;
   classification: RecordFieldClassification;
+  dataTrust?: RecordDataTrustLevel;
   expression: DataValue;
   valueType?: RecordFieldValueType;
   optional: boolean;
@@ -71,16 +76,32 @@ export type RecordFieldDefinition =
 
 export type RecordWhenCondition =
   | { type: 'wildcard' }
-  | { type: 'truthy'; field: string }
+  | {
+      type: 'truthy';
+      field: string;
+      sourceRoot?: RecordInputSourceRoot;
+      path?: string[];
+    }
   | {
       type: 'comparison';
       field: string;
+      sourceRoot?: RecordInputSourceRoot;
+      path?: string[];
       operator: '==' | '!=';
       value: string | number | boolean | null;
     };
 
+export interface RecordWhenDataOverrides {
+  trusted?: string[];
+  untrusted?: string[];
+}
+
+export interface RecordWhenOverrides {
+  data?: RecordWhenDataOverrides;
+}
+
 export type RecordWhenResult =
-  | { type: 'tiers'; tiers: string[] }
+  | { type: 'tiers'; tiers: string[]; overrides?: RecordWhenOverrides }
   | { type: 'data' };
 
 export interface RecordWhenRule {
