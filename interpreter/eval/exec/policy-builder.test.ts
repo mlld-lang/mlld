@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseSync } from '@grammar/parser';
+import type { ExecInvocation } from '@core/types';
 import { createHandleWrapper } from '@core/types/handle';
 import { interpret } from '@interpreter/index';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
+import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { compilePolicyAuthorizations } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
@@ -948,6 +950,111 @@ describe('@policy builtin', () => {
         ]
       }
     });
+  });
+
+  it('preserves bare handle wrappers through js state merges before policy build', async () => {
+    const env = await interpretWithEnv(`
+      /exe @mergeState(state, patch) = js {
+        function deepMerge(base, next) {
+          if (
+            !base ||
+            typeof base !== 'object' ||
+            Array.isArray(base) ||
+            !next ||
+            typeof next !== 'object' ||
+            Array.isArray(next)
+          ) {
+            return next;
+          }
+
+          const merged = { ...base };
+          for (const [key, value] of Object.entries(next)) {
+            merged[key] = key in merged ? deepMerge(merged[key], value) : value;
+          }
+          return merged;
+        }
+
+        return deepMerge(state, patch);
+      }
+
+      /exe finance:w, tool:w @updateScheduledTransaction(recipient, id, amount) = js { return amount; } with { controlArgs: ["recipient", "id"] }
+
+      /var tools @writeTools = {
+        updateScheduledTransaction: {
+          mlld: @updateScheduledTransaction,
+          expose: ["recipient", "id", "amount"],
+          controlArgs: ["recipient", "id"]
+        }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('US122000000121212121212');
+    const approvedId = createKnownStructuredText('scheduled-rent-7');
+    const issuedRecipient = env.issueHandle(approvedRecipient);
+    const issuedId = env.issueHandle(approvedId);
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+
+    const mergeInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'merge-state',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'merge-state-ref',
+        identifier: 'mergeState',
+        args: [
+          { trusted: {} } as any,
+          {
+            trusted: {
+              updateScheduledTransaction: {
+                id: createHandleWrapper(issuedId.handle),
+                recipient: {
+                  preview: 'U***1212',
+                  handle: issuedRecipient.handle
+                },
+                amount: 1200
+              }
+            }
+          } as any
+        ]
+      }
+    };
+
+    const mergedStateResult = await evaluateExecInvocation(mergeInvocation, env);
+    const mergedState = (mergedStateResult.value as any).data as {
+      trusted: {
+        updateScheduledTransaction: {
+          id: unknown;
+          recipient: unknown;
+          amount: number;
+        };
+      };
+    };
+
+    expect(mergedState.trusted.updateScheduledTransaction.id).toEqual(
+      createHandleWrapper(issuedId.handle)
+    );
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        resolved: {
+          updateScheduledTransaction: mergedState.trusted.updateScheduledTransaction
+        }
+      },
+      writeTools
+    ) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_resolved_value',
+          tool: 'updateScheduledTransaction',
+          arg: 'id'
+        })
+      ])
+    );
   });
 
   it('accepts planner-style ref handle-bearing objects in resolved intent', async () => {

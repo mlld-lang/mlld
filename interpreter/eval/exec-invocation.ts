@@ -639,6 +639,41 @@ function isToolWriteLabelSet(labels: readonly string[]): boolean {
   return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
 }
 
+function isStructuredInteropCodeExecutable(definition: ExecutableDefinition): boolean {
+  if (!isCodeExecutable(definition)) {
+    return false;
+  }
+
+  return (
+    definition.language === 'js'
+    || definition.language === 'javascript'
+    || definition.language === 'node'
+    || definition.language === 'nodejs'
+    || definition.language === 'py'
+    || definition.language === 'python'
+  );
+}
+
+function shouldResolveHandlesBeforeExecutableDispatch(options: {
+  definition: ExecutableDefinition;
+  toolLabels: readonly string[];
+  preservePolicyIntentHandles: boolean;
+  argIndex: number;
+}): boolean {
+  if (options.preservePolicyIntentHandles && options.argIndex === 0) {
+    return false;
+  }
+
+  // Plain structured code interop helpers should receive handle wrappers as ordinary data.
+  // Write-tool dispatch remains an explicit security boundary and still
+  // resolves handles before entering the tool body.
+  if (isStructuredInteropCodeExecutable(options.definition) && !isToolWriteLabelSet(options.toolLabels)) {
+    return false;
+  }
+
+  return true;
+}
+
 function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any> | undefined {
   const withClause = node.withClause as any;
   if (!withClause) {
@@ -2073,12 +2108,32 @@ async function evaluateExecInvocationInternal(
   const preservePolicyIntentHandles =
     preserveDirectPolicyIntentHandles ||
     preservesFirstArgForPolicyBuilderChain(variable, definition, env);
+  const mcpToolLabels = (node as any).meta?.mcpToolLabels;
+  const toolOperationName =
+    typeof (node as any).meta?.toolOperationName === 'string' &&
+    (node as any).meta.toolOperationName.trim().length > 0
+      ? (node as any).meta.toolOperationName.trim()
+      : undefined;
+  const effectiveToolMetadata = resolveEffectiveToolMetadata({
+    env: runtimeEnv,
+    executable: variable,
+    operationName: toolOperationName ?? variable.name ?? commandName,
+    additionalLabels: Array.isArray(mcpToolLabels)
+      ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
+      : undefined
+  });
+  const toolLabels = effectiveToolMetadata.labels;
 
   evaluatedArgs = await Promise.all(
     evaluatedArgs.map((arg, index) =>
-      preservePolicyIntentHandles && index === 0
-        ? arg
-        : resolveValueHandles(arg, runtimeEnv)
+      shouldResolveHandlesBeforeExecutableDispatch({
+        definition,
+        toolLabels,
+        preservePolicyIntentHandles,
+        argIndex: index
+      })
+        ? resolveValueHandles(arg, runtimeEnv)
+        : arg
     )
   );
   evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
@@ -2160,22 +2215,7 @@ async function evaluateExecInvocationInternal(
     ? ((node as any).meta.argSecurityDescriptors as Array<SecurityDescriptor | undefined>)
         .map(descriptor => normalizeSecurityDescriptor(descriptor))
     : undefined;
-  const mcpToolLabels = (node as any).meta?.mcpToolLabels;
-  const toolOperationName =
-    typeof (node as any).meta?.toolOperationName === 'string' &&
-    (node as any).meta.toolOperationName.trim().length > 0
-      ? (node as any).meta.toolOperationName.trim()
-      : undefined;
-  const effectiveToolMetadata = resolveEffectiveToolMetadata({
-    env: runtimeEnv,
-    executable: variable,
-    operationName: toolOperationName ?? variable.name ?? commandName,
-    additionalLabels: Array.isArray(mcpToolLabels)
-      ? mcpToolLabels.filter(label => typeof label === 'string' && label.length > 0)
-      : undefined
-  });
   const effectiveOperationTaintFacts = false;
-  const toolLabels = effectiveToolMetadata.labels;
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,
     operationName: toolOperationName ?? variable.name ?? commandName,

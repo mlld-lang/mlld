@@ -8,6 +8,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
+import { createHandleWrapper } from '@core/types/handle';
 import { evaluateExecInvocation } from './exec-invocation';
 import {
   asText,
@@ -22,6 +23,48 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import { accessField } from '../utils/field-access';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
+
+function extractExecutableParamValue(param: unknown): unknown {
+  if (param && typeof param === 'object' && 'value' in (param as Record<string, unknown>)) {
+    return (param as { value: unknown }).value;
+  }
+  return param;
+}
+
+async function capturePythonInteropValue<T>(run: () => Promise<T>): Promise<{
+  capturedValue: unknown;
+  result: T;
+}> {
+  const originalExecuteCode = Environment.prototype.executeCode;
+  let capturedValue: unknown;
+
+  Environment.prototype.executeCode = async function(
+    code: string,
+    language: string,
+    params?: Record<string, any>,
+    metadata?: Record<string, any>,
+    options?: any,
+    context?: any
+  ): Promise<string> {
+    if (language === 'python' || language === 'py') {
+      void code;
+      capturedValue = extractExecutableParamValue(params?.value);
+      return JSON.stringify(capturedValue);
+    }
+
+    return originalExecuteCode.call(this, code, language, params, metadata, options, context);
+  };
+
+  try {
+    const result = await run();
+    return {
+      capturedValue,
+      result
+    };
+  } finally {
+    Environment.prototype.executeCode = originalExecuteCode;
+  }
+}
 
 describe('evaluateExecInvocation (structured)', () => {
   let env: Environment;
@@ -413,6 +456,268 @@ describe('evaluateExecInvocation (structured)', () => {
 
     expect(isStructuredValue(result.value)).toBe(true);
     expect(result.value.data).toEqual({ handle: 'h_fake12', label: 'not-a-wrapper' });
+  });
+
+  it('preserves nested bare handle wrappers through plain js exec arguments', async () => {
+    const src = '/exe @echo(value) = js { return value; }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const issued = env.issueHandle('7');
+    const input = {
+      trusted: {
+        update_scheduled_transaction: {
+          id: createHandleWrapper(issued.handle)
+        }
+      }
+    };
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'echo-nested-bare-handle',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'echo-nested-bare-handle-ref',
+          identifier: 'echo',
+          args: [input as any]
+        }
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual(input);
+  });
+
+  it('preserves bare handle wrappers during js deep merges', async () => {
+    const src = `
+/exe @merge(left, right) = js {
+  function deepMerge(base, patch) {
+    if (
+      !base ||
+      typeof base !== 'object' ||
+      Array.isArray(base) ||
+      !patch ||
+      typeof patch !== 'object' ||
+      Array.isArray(patch)
+    ) {
+      return patch;
+    }
+
+    const merged = { ...base };
+    for (const [key, value] of Object.entries(patch)) {
+      merged[key] = key in merged ? deepMerge(merged[key], value) : value;
+    }
+    return merged;
+  }
+
+  return deepMerge(left, right);
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const issuedId = env.issueHandle('7');
+    const issuedRecipient = env.issueHandle('acct_123');
+    const left = {
+      trusted: {
+        update_scheduled_transaction: {
+          id: createHandleWrapper(issuedId.handle)
+        }
+      }
+    };
+    const right = {
+      trusted: {
+        update_scheduled_transaction: {
+          recipient: createHandleWrapper(issuedRecipient.handle)
+        }
+      }
+    };
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'merge-bare-handle',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'merge-bare-handle-ref',
+          identifier: 'merge',
+          args: [left as any, right as any]
+        }
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual({
+      trusted: {
+        update_scheduled_transaction: {
+          id: createHandleWrapper(issuedId.handle),
+          recipient: createHandleWrapper(issuedRecipient.handle)
+        }
+      }
+    });
+  });
+
+  it('preserves mixed bare and preview handle-bearing objects through plain js exec arguments', async () => {
+    const src = '/exe @echo(value) = js { return value; }';
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const issuedId = env.issueHandle('7');
+    const issuedRecipient = env.issueHandle('acct_123', {
+      preview: 'US1***21212'
+    });
+    const input = {
+      id: createHandleWrapper(issuedId.handle),
+      recipient: {
+        preview: 'US1***21212',
+        handle: issuedRecipient.handle
+      }
+    };
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'echo-mixed-handle-wrappers',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'echo-mixed-handle-wrappers-ref',
+          identifier: 'echo',
+          args: [input as any]
+        }
+      },
+      env
+    );
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual(input);
+  });
+
+  it('preserves nested bare handle wrappers through plain python exec arguments', async () => {
+    const src = `
+/exe @echoPy(value) = python {
+import json
+print(json.dumps(value))
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const issued = env.issueHandle('7');
+    const input = {
+      trusted: {
+        update_scheduled_transaction: {
+          id: createHandleWrapper(issued.handle)
+        }
+      }
+    };
+
+    const { capturedValue, result } = await capturePythonInteropValue(() =>
+      evaluateExecInvocation(
+        {
+          type: 'ExecInvocation',
+          nodeId: 'echo-python-nested-bare-handle',
+          commandRef: {
+            type: 'CommandReference',
+            nodeId: 'echo-python-nested-bare-handle-ref',
+            identifier: 'echoPy',
+            args: [input as any]
+          }
+        },
+        env
+      )
+    );
+
+    expect(capturedValue).toEqual(input);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual(input);
+  });
+
+  it('preserves mixed bare and preview handle-bearing objects through plain python exec arguments', async () => {
+    const src = `
+/exe @echoPy(value) = python {
+import json
+print(json.dumps(value))
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const issuedId = env.issueHandle('7');
+    const issuedRecipient = env.issueHandle('acct_123', {
+      preview: 'US1***21212'
+    });
+    const input = {
+      id: createHandleWrapper(issuedId.handle),
+      recipient: {
+        preview: 'US1***21212',
+        handle: issuedRecipient.handle
+      }
+    };
+
+    const { capturedValue, result } = await capturePythonInteropValue(() =>
+      evaluateExecInvocation(
+        {
+          type: 'ExecInvocation',
+          nodeId: 'echo-python-mixed-handle-wrappers',
+          commandRef: {
+            type: 'CommandReference',
+            nodeId: 'echo-python-mixed-handle-wrappers-ref',
+            identifier: 'echoPy',
+            args: [input as any]
+          }
+        },
+        env
+      )
+    );
+
+    expect(capturedValue).toEqual(input);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual(input);
+  });
+
+  it('still resolves handle wrappers before js write-tool execution', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string]
+}
+/exe @emitContact() = js {
+  return { email: 'ada@example.com' };
+} => contact
+/var @contact = @emitContact()
+/exe exfil:send, tool:w @sendEmail(recipient, subject) = js {
+  return recipient + ":" + subject;
+} with { controlArgs: ["recipient"] }
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const contact = env.getVariable('contact');
+    expect(contact).toBeDefined();
+    const email = await accessField(contact!.value, { type: 'field', value: 'email' } as any, { env });
+    const issued = env.issueHandle(email, {
+      preview: 'a***@example.com',
+      metadata: { field: 'email' }
+    });
+
+    const result = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'send-email-js-handle-wrapper',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'send-email-js-handle-wrapper-ref',
+          identifier: 'sendEmail',
+          args: [createHandleWrapper(issued.handle) as any, 'hi' as any]
+        }
+      },
+      env
+    );
+
+    expect(asText(result.value)).toBe('ada@example.com:hi');
+    expect(isStructuredValue(result.value)).toBe(true);
   });
 
   it('uses registry-backed @fyi.known inside exec invocations', async () => {
