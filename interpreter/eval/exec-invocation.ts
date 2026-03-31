@@ -255,7 +255,7 @@ function preservesFirstArgForPolicyBuilderChain(
   }
 
   const nextVariable = env.getVariable(target.targetName);
-  if (!isExecutableVariable(nextVariable)) {
+  if (!nextVariable || !isExecutableVariable(nextVariable)) {
     return false;
   }
 
