@@ -62,3 +62,16 @@ describe('CommandUtils guidance messages', () => {
     ).toEqual([]);
   });
 });
+
+describe('CommandUtils.parseDirectCommand', () => {
+  it('preserves explicit empty quoted argv tokens', () => {
+    expect(
+      CommandUtils.parseDirectCommand(
+        'claude --allowedTools "" --disallowedTools "Bash,Edit"'
+      )
+    ).toEqual({
+      command: 'claude',
+      args: ['--allowedTools', '', '--disallowedTools', 'Bash,Edit']
+    });
+  });
+});

@@ -273,9 +273,9 @@ export class CommandUtils {
 
     for (const token of parsed) {
       if (typeof token === 'string') {
-        if (token.length > 0) {
-          tokens.push(token);
-        }
+        // Preserve explicit empty-string argv entries from quoted interpolation:
+        // `--flag "" --next value` must keep the empty slot.
+        tokens.push(token);
         continue;
       }
 
@@ -288,6 +288,10 @@ export class CommandUtils {
     }
 
     if (tokens.length === 0) {
+      return null;
+    }
+
+    if (tokens[0].length === 0) {
       return null;
     }
 

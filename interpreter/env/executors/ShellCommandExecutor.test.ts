@@ -67,6 +67,16 @@ describe('ShellCommandExecutor – E2BIG safeguards', () => {
     expect(output).toBe('hello world');
   });
 
+  it('preserves empty quoted args via direct argv spawn', async () => {
+    const output = await executor.execute(
+      `node -e "process.stdout.write(JSON.stringify(process.argv.slice(1)))" -- --allowedTools "" --disallowedTools "Bash,Edit"`,
+      undefined,
+      { exeLabels: ['llm'] }
+    );
+
+    expect(output).toBe('["--allowedTools","","--disallowedTools","Bash,Edit"]');
+  });
+
   it('writes stdin directly when using argv spawn', async () => {
     const output = await executor.execute(
       `node -e "process.stdin.setEncoding('utf8'); let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => process.stdout.write(data));"`,
