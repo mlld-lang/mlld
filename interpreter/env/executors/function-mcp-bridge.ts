@@ -16,6 +16,10 @@ import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { generateToolSchema } from '@cli/mcp/SchemaGenerator';
 import { deriveMcpParamInfo, coerceMcpArgs, type McpParamInfo } from '@core/mcp/coerce';
 import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -36,6 +40,42 @@ interface JsonRpcResponse {
     code: number;
     message: string;
   };
+}
+
+function cloneExecutableForToolBridge(
+  executable: ExecutableVariable,
+  tempName: string
+): ExecutableVariable {
+  const executableDef = (executable.internal?.executableDef ?? executable.value) as any;
+  const capturedModuleEnv =
+    getCapturedModuleEnv(executable.internal) ?? getCapturedModuleEnv(executable);
+  const clonedInternal: Record<string, unknown> = {
+    ...(executable.internal ?? {}),
+    executableDef,
+    importPath: 'let',
+    isSystem: true
+  };
+
+  if (capturedModuleEnv !== undefined) {
+    sealCapturedModuleEnv(clonedInternal, capturedModuleEnv);
+  }
+
+  const cloned: ExecutableVariable = {
+    ...executable,
+    name: tempName,
+    mx: {
+      ...(executable.mx ?? {}),
+      name: tempName,
+      importPath: 'let'
+    },
+    internal: clonedInternal as ExecutableVariable['internal']
+  };
+
+  if (capturedModuleEnv !== undefined) {
+    sealCapturedModuleEnv(cloned, capturedModuleEnv);
+  }
+
+  return cloned;
 }
 
 export interface FunctionMcpBridgeOptions {
@@ -94,22 +134,7 @@ class FunctionMcpBridgeServer {
     for (const [mcpName, executable] of this.functions.entries()) {
       index += 1;
       const tempName = `__toolbridge_fn_${sanitizeIdentifier(mcpName)}_${index}`;
-      const executableDef = (executable.internal?.executableDef ?? executable.value) as any;
-      const cloned: ExecutableVariable = {
-        ...executable,
-        name: tempName,
-        mx: {
-          ...(executable.mx ?? {}),
-          name: tempName,
-          importPath: 'let'
-        },
-        internal: {
-          ...(executable.internal ?? {}),
-          executableDef,
-          importPath: 'let',
-          isSystem: true
-        }
-      };
+      const cloned = cloneExecutableForToolBridge(executable, tempName);
       this.toolEnv.setVariable(tempName, cloned as any);
       const clonedExecutableDef = (cloned.internal?.executableDef ?? cloned.value) as any;
       const providedDefinition = this.toolDefinitions?.get(mcpName);

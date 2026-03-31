@@ -449,6 +449,110 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported MCP-backed wrapper exes when invoked through the llm tool bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/calendar_tools.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe tool:r @lookup_message(text) = @mcp.echo(@text)',
+      '/export { @lookup_message }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @lookup_message } from "/calendar_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" lookup_message '{"text":"from-import"}' }`,
+      '/show @agent("Find the imported wrapper", { tools: [@lookup_message] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('from-import');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves record coercion for imported MCP-backed wrapper exes on the llm tool bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/contacts_tools.mld', [
+      '/record @contact = { facts: [email: string, name: string] }',
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe tool:r @lookup_contact(query) = @mcp.echo("{\\"email\\":\\"ada@example.com\\",\\"name\\":\\"Ada Lovelace\\"}") => contact',
+      '/export { @lookup_contact }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @lookup_contact } from "/contacts_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" lookup_contact '{"query":"Ada"}' }`,
+      '/show @agent("Find Ada", { tools: [@lookup_contact] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: 'ada@example.com',
+        name: 'Ada Lovelace'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves shared imported MCP namespace bindings across multiple wrapper exes on the llm tool bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/multi_tools.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/exe tool:r @first_lookup() = @mcp.echo("first-import")',
+      '/exe tool:r @second_lookup() = @mcp.echo("second-import")',
+      '/export { @first_lookup, @second_lookup }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @first_lookup, @second_lookup } from "/multi_tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"first_lookup","arguments":{}},{"name":"second_lookup","arguments":{}}]' }`,
+      '/show @agent("Call both imported wrappers", { tools: [@first_lookup, @second_lookup] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('second-import');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves record coercion for MCP-imported executables from the same module', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/contacts_tools.mld', [

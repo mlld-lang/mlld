@@ -22,6 +22,10 @@ import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@i
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -251,14 +255,28 @@ export class FunctionRouter {
       return execVar;
     }
 
-    return {
+    const capturedModuleEnv =
+      getCapturedModuleEnv(execVar.internal) ?? getCapturedModuleEnv(execVar);
+    const internal: Record<string, unknown> = {
+      ...(execVar.internal ?? {}),
+      executableDef: execDef
+    };
+
+    if (capturedModuleEnv !== undefined) {
+      sealCapturedModuleEnv(internal, capturedModuleEnv);
+    }
+
+    const normalized: ExecutableVariable = {
       ...execVar,
       value: execDef,
-      internal: {
-        ...(execVar.internal ?? {}),
-        executableDef: execDef
-      }
+      internal: internal as ExecutableVariable['internal']
     };
+
+    if (capturedModuleEnv !== undefined) {
+      sealCapturedModuleEnv(normalized, capturedModuleEnv);
+    }
+
+    return normalized;
   }
 
   private buildInvocation(
