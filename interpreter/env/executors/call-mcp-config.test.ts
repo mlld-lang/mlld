@@ -237,6 +237,7 @@ describe('createCallMcpConfig', () => {
       '/exe tool:w @sendEmail(owner, recipient, subject, body) = "sent" with {',
       '  controlArgs: ["owner", "recipient"]',
       '}',
+      '/exe tool:r @searchContactsByName(query) = "Ada"',
       '',
       '/var tools @writeTools = {',
       '  outboundEmail: {',
@@ -246,6 +247,11 @@ describe('createCallMcpConfig', () => {
       '    optional: ["body"],',
       '    controlArgs: ["recipient"],',
       '    description: "Send an outbound email"',
+      '  },',
+      '  searchContactsByName: {',
+      '    mlld: @searchContactsByName,',
+      '    expose: ["query"],',
+      '    description: "Search contacts by name"',
       '  }',
       '}'
     ].join('\n'));
@@ -261,16 +267,21 @@ describe('createCallMcpConfig', () => {
     });
 
     try {
-      expect(result.toolsCsv).toBe('outboundEmail,known');
+      expect(result.toolsCsv).toBe('outboundEmail,searchContactsByName,known');
       expect(result.availableTools).toEqual([
         { name: 'outbound_email' },
+        { name: 'search_contacts_by_name' },
         { name: 'known' }
       ]);
       expect(result.toolNotes).toContain('<tool_notes>');
       expect(result.toolNotes).toContain('| Tool | Control Args | Discover Targets |');
       expect(result.toolNotes).toContain('| outbound_email | recipient | @fyi.known("outbound_email") |');
       expect(result.toolNotes).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
+      expect(result.toolNotes).toContain('Read tools: search_contacts_by_name');
       expect(result.toolNotes).toContain('Denied: (none)');
+      expect(result.toolNotes).not.toContain('Send an outbound email');
+      expect(result.toolNotes).not.toContain('| Tool | Description |');
+      expect(result.toolNotes).not.toContain('Search contacts by name');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
       const listed = await sendJsonRpc(socketPath, {

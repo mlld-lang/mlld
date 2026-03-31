@@ -2162,7 +2162,8 @@ async function evaluateExecInvocationInternal(
         tools: toolsValue,
         env: execEnv,
         workingDirectory,
-        conversationDescriptor: resultSecurityDescriptor
+        conversationDescriptor: resultSecurityDescriptor,
+        isMcpContext: true
       });
       const nextConfig = { ...(rawConfig as Record<string, unknown>) };
       const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);

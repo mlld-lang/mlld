@@ -124,8 +124,8 @@ describe('@fyi.tools', () => {
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
       expect(docs.text).toContain('Write tools and control args:');
-      expect(docs.text).toContain('| Tool | Control Args | Discover Targets |');
-      expect(docs.text).toContain('| outreach | recipient | @fyi.known("outreach") |');
+      expect(docs.text).toContain('| Tool | Description | Control Args | Discover Targets |');
+      expect(docs.text).toContain('| outreach |  | recipient | @fyi.known("outreach") |');
       expect(docs.text).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
       expect(docs.text).toContain('Denied: (none)');
       expect(docs.text).not.toContain('owner');
@@ -159,28 +159,70 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('| update_scheduled_transaction | id, recipient (same source) | @fyi.known("update_scheduled_transaction") |');
-      expect(docs.text).toContain('| send_email | recipients, cc, bcc | @fyi.known("send_email") |');
+      expect(docs.text).toContain('| update_scheduled_transaction |  | id, recipient (same source) | @fyi.known("update_scheduled_transaction") |');
+      expect(docs.text).toContain('| send_email |  | recipients, cc, bcc | @fyi.known("send_email") |');
       expect(docs.text).not.toContain('recipients, cc, bcc (same source)');
     } finally {
       env.cleanup();
     }
   });
 
-  it('omits read tools from the text table', async () => {
+  it('renders descriptions for explicit @toolDocs() calls outside MCP context', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject) = "sent" with {
         controlArgs: ["recipient"]
       }
       /exe tool:r @lookupContact(query) = "Ada"
 
-      /var @tools = [@sendEmail, @lookupContact]
+      /var tools @tools = {
+        send_email: {
+          mlld: @sendEmail,
+          expose: ["recipient", "subject"],
+          description: "Send an outbound email"
+        },
+        search_contacts_by_name: {
+          mlld: @lookupContact,
+          expose: ["query"],
+          description: "Search contacts by name"
+        }
+      }
+
+      /var @docs = @toolDocs(@tools)
     `);
 
     try {
-      const docs = await evaluateFyiTools(env.getVariable('tools'), env);
-      expect(docs.text).toContain('| send_email | recipient | @fyi.known("send_email") |');
-      expect(docs.text).not.toContain('lookup_contact');
+      const docs = await readVarData(env, 'docs') as string;
+      expect(docs).toContain('| Tool | Description | Control Args | Discover Targets |');
+      expect(docs).toContain('| send_email | Send an outbound email | recipient | @fyi.known("send_email") |');
+      expect(docs).toContain('Read tools:');
+      expect(docs).toContain('| Tool | Description |');
+      expect(docs).toContain('| search_contacts_by_name | Search contacts by name |');
+      expect(docs).toContain('Denied: (none)');
+      expect(docs).not.toContain('[CONTROL:');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('renders read-only tool sets instead of collapsing to empty output', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:r @lookupContact(query) = "Ada"
+
+      /var tools @tools = {
+        search_contacts_by_name: {
+          mlld: @lookupContact,
+          expose: ["query"],
+          description: "Search contacts by name"
+        }
+      }
+    `);
+
+    try {
+      const docs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(docs.text).not.toContain('Write tools and control args:');
+      expect(docs.text).toContain('Read tools:');
+      expect(docs.text).toContain('| search_contacts_by_name | Search contacts by name |');
+      expect(docs.text).toContain('Denied: (none)');
     } finally {
       env.cleanup();
     }
@@ -281,7 +323,7 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('| create_file | (none) |  |');
+      expect(docs.text).toContain('| create_file |  | (none) |  |');
       expect(docs.text).toContain('Denied: (none)');
       expect(docs.text).not.toContain('@fyi.known("create_file")');
       expect(docs.text).not.toContain('Use @fyi.known("toolName")');

@@ -28,6 +28,29 @@ const FUNCTION_MCP_SERVER_NAME = 'mlld_tools';
 
 type WorkspaceBridgeToolName = typeof VFS_TOOL_NAMES[number];
 
+const BUILTIN_TOOL_METADATA: Record<string, Pick<EffectiveToolMetadata, 'description' | 'labels'>> = {
+  Read: {
+    description: 'Read a file from the active mlld workspace',
+    labels: []
+  },
+  Write: {
+    description: 'Write a file in the active mlld workspace',
+    labels: ['tool:w']
+  },
+  Bash: {
+    description: 'Execute bash command in active mlld workspace shell session',
+    labels: ['tool:w']
+  },
+  Glob: {
+    description: 'Glob files from active mlld workspace',
+    labels: []
+  },
+  Grep: {
+    description: 'Search file contents in active mlld workspace',
+    labels: []
+  }
+};
+
 type McpConfigShape = {
   mcpServers?: Record<string, unknown>;
 };
@@ -54,6 +77,7 @@ export interface CallMcpConfigOptions {
   env: Environment;
   workingDirectory?: string;
   conversationDescriptor?: SecurityDescriptor;
+  isMcpContext?: boolean;
 }
 
 export interface AvailableToolDescriptor {
@@ -689,14 +713,18 @@ function buildBuiltinToolMetadata(
       .filter((name): name is string => typeof name === 'string')
       .map(name => name.trim())
       .filter(Boolean)
-  ).map(name => ({
-    name,
-    params: [],
-    labels: [],
-    hasControlArgsMetadata: false,
-    correlateControlArgs: false,
-    taintFacts: false
-  }));
+  ).map(name => {
+    const metadata = BUILTIN_TOOL_METADATA[name];
+    return {
+      name,
+      params: [],
+      labels: [...(metadata?.labels ?? [])],
+      ...(metadata?.description ? { description: metadata.description } : {}),
+      hasControlArgsMetadata: false,
+      correlateControlArgs: false,
+      taintFacts: false
+    };
+  });
 }
 
 export async function createCallMcpConfig(options: CallMcpConfigOptions): Promise<CallMcpConfig> {
@@ -751,7 +779,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ]);
   const toolNotes = renderInjectedToolNotes({
     env: options.env,
-    entries: functionToolMetadata
+    entries: toolMetadata,
+    isMcpContext: options.isMcpContext !== false
   });
 
   if (inBox && vfsTools.length > 0) {

@@ -63,7 +63,7 @@ export function createFyiVariable(env: Environment) {
         ?? env;
       const tools = boundEnv || !looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined;
       const options = boundEnv || !looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined;
-      return evaluateFyiTools(tools, executionEnv, options);
+      return evaluateFyiTools(tools, executionEnv, options, { isMcpContext: false });
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
@@ -108,7 +108,7 @@ export function createToolDocsExecutable(env: Environment) {
         ?? env;
       const tools = boundEnv || !looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined;
       const options = boundEnv || !looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined;
-      return evaluateFyiTools(tools, executionEnv, options);
+      return evaluateFyiTools(tools, executionEnv, options, { isMcpContext: false });
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',

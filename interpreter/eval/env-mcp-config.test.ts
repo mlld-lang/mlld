@@ -1266,7 +1266,19 @@ describe('box MCP config integration', () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
-      '/var @toolList = [@sendEmail]',
+      '/exe tool:r @searchContactsByName(query) = "Ada"',
+      '/var tools @toolList = {',
+      '  send_email: {',
+      '    mlld: @sendEmail,',
+      '    expose: ["recipient", "subject", "body"],',
+      '    description: "Send an outbound email"',
+      '  },',
+      '  search_contacts_by_name: {',
+      '    mlld: @searchContactsByName,',
+      '    expose: ["query"],',
+      '    description: "Search contacts by name"',
+      '  }',
+      '}',
       '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
       '/show @agent("Send the message", { tools: @toolList })'
     ].join('\n');
@@ -1287,7 +1299,11 @@ describe('box MCP config integration', () => {
       expect(output).toContain('| Tool | Control Args | Discover Targets |');
       expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
       expect(output).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
+      expect(output).toContain('Read tools: search_contacts_by_name');
       expect(output).toContain('Denied: (none)');
+      expect(output).not.toContain('Send an outbound email');
+      expect(output).not.toContain('| Tool | Description |');
+      expect(output).not.toContain('Search contacts by name');
     } finally {
       environment?.cleanup();
     }
@@ -1297,7 +1313,19 @@ describe('box MCP config integration', () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
-      '/var @toolList = [@sendEmail]',
+      '/exe tool:r @searchContactsByName(query) = "Ada"',
+      '/var tools @toolList = {',
+      '  send_email: {',
+      '    mlld: @sendEmail,',
+      '    expose: ["recipient", "subject", "body"],',
+      '    description: "Send an outbound email"',
+      '  },',
+      '  search_contacts_by_name: {',
+      '    mlld: @searchContactsByName,',
+      '    expose: ["query"],',
+      '    description: "Search contacts by name"',
+      '  }',
+      '}',
       '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
       '/show @agent("Send the message", { tools: @toolList, system: "User system prompt" })'
     ].join('\n');
@@ -1316,6 +1344,9 @@ describe('box MCP config integration', () => {
 
       expect(output).toContain('User system prompt\n\n<tool_notes>');
       expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('Read tools: search_contacts_by_name');
+      expect(output).not.toContain('Send an outbound email');
+      expect(output).not.toContain('Search contacts by name');
     } finally {
       environment?.cleanup();
     }
@@ -1325,7 +1356,19 @@ describe('box MCP config integration', () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @updatePassword(recipient, password) = "ok" with { controlArgs: ["recipient"] }',
-      '/var @toolList = [@updatePassword]',
+      '/exe tool:r @searchContactsByName(query) = "Ada"',
+      '/var tools @toolList = {',
+      '  update_password: {',
+      '    mlld: @updatePassword,',
+      '    expose: ["recipient", "password"],',
+      '    description: "Update account password"',
+      '  },',
+      '  search_contacts_by_name: {',
+      '    mlld: @searchContactsByName,',
+      '    expose: ["query"],',
+      '    description: "Search contacts by name"',
+      '  }',
+      '}',
       '/var @taskPolicy = { authorizations: { deny: ["update_password"] } }',
       '/exe llm @planner(prompt, config) = js { return config.system ?? ""; } with { display: "planner" }',
       '/show @planner("Make a plan", { tools: @toolList }) with { policy: @taskPolicy }'
@@ -1346,10 +1389,13 @@ describe('box MCP config integration', () => {
       expect(output).toContain('<tool_notes>');
       expect(output).toContain('| Tool | Control Args |');
       expect(output).toContain('| update_password | recipient |');
+      expect(output).toContain('Read tools: search_contacts_by_name');
       expect(output).toContain('Denied: update_password');
       expect(output).toContain('Authorization intent:');
       expect(output).toContain('resolved: { tool: { arg: "handle" } }');
       expect(output).not.toContain('Use @fyi.known("toolName")');
+      expect(output).not.toContain('Update account password');
+      expect(output).not.toContain('Search contacts by name');
     } finally {
       environment?.cleanup();
     }

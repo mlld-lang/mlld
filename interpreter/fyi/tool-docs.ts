@@ -24,6 +24,10 @@ type FyiToolsOptions = {
   includeOperationLabels?: boolean;
 };
 
+type FyiToolsRenderContext = {
+  isMcpContext?: boolean;
+};
+
 type FyiKnownHelperStatus = {
   available: boolean;
   reason: string;
@@ -120,6 +124,12 @@ function normalizeOptions(raw: FyiToolsOptions, env: Environment) {
     format: normalizeFormat(raw.format),
     includeHelpers: normalizeIncludeHelpers(raw.includeHelpers),
     includeOperationLabels: raw.includeOperationLabels === true
+  };
+}
+
+function normalizeRenderContext(raw?: FyiToolsRenderContext) {
+  return {
+    isMcpContext: raw?.isMcpContext === true
   };
 }
 
@@ -386,28 +396,49 @@ function resolveWriteEntries(
   );
 }
 
+function resolveReadEntries(
+  env: Environment,
+  entries: readonly EffectiveToolMetadata[]
+): EffectiveToolMetadata[] {
+  return entries.filter(
+    entry => entry.name !== 'known' && !isWriteToolMetadata(env, entry)
+  );
+}
+
 function buildToolTableLines(options: {
   audience: FyiToolsAudience;
+  isMcpContext: boolean;
   writeEntries: readonly EffectiveToolMetadata[];
   helperStatus: FyiKnownHelperStatus;
   includeHelpers: FyiToolsIncludeHelpers;
 }): string[] {
-  const { audience, writeEntries, helperStatus, includeHelpers } = options;
+  const { audience, isMcpContext, writeEntries, helperStatus, includeHelpers } = options;
   const includeDiscoveryColumn = audience === 'worker';
   const lines = [
-    includeDiscoveryColumn
-      ? '| Tool | Control Args | Discover Targets |'
-      : '| Tool | Control Args |',
-    includeDiscoveryColumn
-      ? '|------|-------------|------------------|'
-      : '|------|-------------|'
+    isMcpContext
+      ? (includeDiscoveryColumn
+          ? '| Tool | Control Args | Discover Targets |'
+          : '| Tool | Control Args |')
+      : (includeDiscoveryColumn
+          ? '| Tool | Description | Control Args | Discover Targets |'
+          : '| Tool | Description | Control Args |'),
+    isMcpContext
+      ? (includeDiscoveryColumn
+          ? '|------|-------------|------------------|'
+          : '|------|-------------|')
+      : (includeDiscoveryColumn
+          ? '|------|-------------|-------------|------------------|'
+          : '|------|-------------|-------------|')
   ];
 
   for (const entry of writeEntries) {
-    const cells = [
-      formatTableCell(entry.name),
-      formatTableCell(formatControlArgsCell(entry))
-    ];
+    const cells = [formatTableCell(entry.name)];
+
+    if (!isMcpContext) {
+      cells.push(formatTableCell(entry.description ?? ''));
+    }
+
+    cells.push(formatTableCell(formatControlArgsCell(entry)));
 
     if (includeDiscoveryColumn) {
       const controlArgs = entry.controlArgs ?? [];
@@ -426,39 +457,84 @@ function buildToolTableLines(options: {
   return lines;
 }
 
+function buildReadToolNameList(readEntries: readonly EffectiveToolMetadata[]): string {
+  return `Read tools: ${readEntries.map(entry => entry.name).join(', ')}`;
+}
+
+function buildReadToolTableLines(readEntries: readonly EffectiveToolMetadata[]): string[] {
+  const lines = [
+    '| Tool | Description |',
+    '|------|-------------|'
+  ];
+
+  for (const entry of readEntries) {
+    lines.push(`| ${formatTableCell(entry.name)} | ${formatTableCell(entry.description ?? '')} |`);
+  }
+
+  return lines;
+}
+
 function buildTextLines(options: {
   env: Environment;
   audience: FyiToolsAudience;
   includeHelpers: FyiToolsIncludeHelpers;
+  isMcpContext: boolean;
   denied: readonly string[];
   helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
 }): string[] {
-  const { env, audience, includeHelpers, denied, helperStatus, entries } = options;
+  const { env, audience, includeHelpers, isMcpContext, denied, helperStatus, entries } = options;
   const writeEntries = resolveWriteEntries(env, entries);
-  if (writeEntries.length === 0) {
+  const readEntries = resolveReadEntries(env, entries);
+  if (writeEntries.length === 0 && readEntries.length === 0) {
     return [];
   }
 
-  const lines: string[] = [
-    'Write tools and control args:',
-    '',
-    ...buildToolTableLines({
-      audience,
-      writeEntries,
-      helperStatus,
-      includeHelpers
-    })
-  ];
+  const lines: string[] = [];
 
-  if (audience === 'worker') {
-    const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
-    lines.push('', ...(helperLine ? [helperLine] : []), buildDeniedLine(denied));
-    return lines;
+  if (writeEntries.length > 0) {
+    lines.push(
+      'Write tools and control args:',
+      '',
+      ...buildToolTableLines({
+        audience,
+        isMcpContext,
+        writeEntries,
+        helperStatus,
+        includeHelpers
+      })
+    );
+
+    if (audience === 'worker') {
+      const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
+      if (helperLine) {
+        lines.push('', helperLine);
+      }
+    }
+  }
+
+  if (readEntries.length > 0) {
+    if (lines.length > 0) {
+      lines.push('');
+    }
+    if (isMcpContext) {
+      lines.push(buildReadToolNameList(readEntries));
+    } else {
+      lines.push(
+        'Read tools:',
+        '',
+        ...buildReadToolTableLines(readEntries)
+      );
+    }
   }
 
   if (audience === 'planner') {
     lines.push('', buildDeniedLine(denied), '', ...buildPlannerIntentLines());
+    return lines;
+  }
+
+  if (audience === 'worker') {
+    lines.push('', buildDeniedLine(denied));
     return lines;
   }
 
@@ -517,6 +593,7 @@ function renderText(options: {
   env: Environment;
   audience: FyiToolsAudience;
   includeHelpers: FyiToolsIncludeHelpers;
+  isMcpContext: boolean;
   denied: readonly string[];
   helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
@@ -572,10 +649,12 @@ function renderJson(options: {
 export async function evaluateFyiTools(
   rawToolsOrOptions: unknown,
   env: Environment,
-  rawOptions?: unknown
+  rawOptions?: unknown,
+  renderContext?: FyiToolsRenderContext
 ): Promise<StructuredValue<string | ReturnType<typeof renderJson>>> {
   const { toolsArg, options: rawResolvedOptions } = await normalizeArgs(rawToolsOrOptions, rawOptions, env);
   const options = normalizeOptions(rawResolvedOptions, env);
+  const context = normalizeRenderContext(renderContext);
   const entries = dedupeToolMetadata(await resolveToolMetadataInput(toolsArg, env));
   const helperStatus = resolveKnownHelperStatus(env, entries);
   const denied = resolveDeniedToolNames(env, entries);
@@ -598,6 +677,7 @@ export async function evaluateFyiTools(
       env,
       audience: options.audience,
       includeHelpers: options.includeHelpers,
+      isMcpContext: context.isMcpContext,
       denied,
       helperStatus,
       entries
@@ -611,16 +691,19 @@ export function renderInjectedToolNotes(options: {
   entries: readonly EffectiveToolMetadata[];
   audience?: FyiToolsAudience;
   includeHelpers?: FyiToolsIncludeHelpers;
+  isMcpContext?: boolean;
 }): string | undefined {
   const entries = dedupeToolMetadata(options.entries);
   const audience = normalizeAudience(options.audience, options.env);
   const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
+  const context = normalizeRenderContext({ isMcpContext: options.isMcpContext });
   const helperStatus = resolveKnownHelperStatus(options.env, entries);
   const denied = resolveDeniedToolNames(options.env, entries);
   const lines = buildTextLines({
     env: options.env,
     audience,
     includeHelpers,
+    isMcpContext: context.isMcpContext,
     denied,
     helperStatus,
     entries
