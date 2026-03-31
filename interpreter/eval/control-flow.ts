@@ -51,6 +51,9 @@ export async function resolveControlValue(
   if (unwrapped && typeof unwrapped === 'object' && 'valueType' in (unwrapped as Record<string, unknown>)) {
     if (isDoneLiteral(unwrapped as any)) {
       const val = (unwrapped as any).value;
+      if ((unwrapped as any)._resolved) {
+        return { kind: 'done', value: val ?? doneDefaultValue };
+      }
       if (Array.isArray(val)) {
         const target = val.length === 1 ? val[0] : val;
         if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
@@ -66,6 +69,9 @@ export async function resolveControlValue(
     }
     if (isContinueLiteral(unwrapped as any)) {
       const val = (unwrapped as any).value;
+      if ((unwrapped as any)._resolved) {
+        return { kind: 'continue', value: val ?? currentState };
+      }
       if (Array.isArray(val)) {
         const target = val.length === 1 ? val[0] : val;
         if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {

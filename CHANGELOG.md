@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0]
 
 ### Added
 - `@policy.build(...)` and `@policy.validate(...)` now return additive compiler diagnostics in `report`, exposing stripped args, repair steps, dropped entries/elements, ambiguous values, and compiled proofs without changing existing `policy` / `valid` / `issues` consumers.
@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Python package resolver no longer eagerly detects pip/uv during environment bootstrap. Detection is deferred until a `@py/` or `@python/` import is actually resolved, so scripts that don't use Python imports work without Python installed.
 - `py { }`, `bash { }`, and `node { }` blocks now show actionable error messages when the required binary is missing (e.g. "Python 3 is not installed. Install it to use py { } blocks") instead of the raw `spawn ENOENT` error.
 - Logical `||` now preserves normal boolean semantics for ordinary exec/method-call expressions such as `@model.includes(...) || ...` instead of misrouting them through parallel exec handling. Explicit streamed chains (`stream @a() || stream @b()`) still run in parallel, and longer streamed chains now include every operand.
+- `continue { ... }` and `done { ... }` inside `when` branches now resolve branch-local `let` bindings correctly. Previously, inline object arguments were returned as unevaluated AST and resolved later in the loop scope where `let` bindings from the `when` branch were no longer visible.
 - Truthiness evaluation now fails closed when it receives error-like payloads from runtime evaluation or parallel-loop error markers, preventing `when`, `&&`, `||`, `!`, and ternary conditions from accidentally treating errors as truthy values.
 - Standalone executable invocation (`@fn(...)` / `/run @fn(...)`) now preserves per-argument security descriptors through the `runExec` dispatcher, so callee parameters keep labels for both bare variable arguments and inline object/array literals instead of dropping `mx.labels` at the exe boundary.
 - Control-flow label propagation now covers conditional `when [...]` expressions and `/if` branches. Selected `when` results inherit labels from evaluated conditions, including fallback arms, and `/if` branch results plus branch-local updates now retain the condition's security context.

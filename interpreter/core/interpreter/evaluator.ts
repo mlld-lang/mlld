@@ -362,6 +362,13 @@ export async function evaluateCore({
     }
 
     if (node.valueType === 'done' || node.valueType === 'continue') {
+      if (Array.isArray(node.value)) {
+        const target = node.value.length === 1 ? node.value[0] : node.value;
+        if (target && typeof target === 'object' && 'type' in (target as Record<string, unknown>)) {
+          const evaluated = await evaluateNode(target as any, env, { isExpression: true });
+          return { value: { ...node, value: evaluated.value, _resolved: true }, env };
+        }
+      }
       return { value: node, env };
     }
 
