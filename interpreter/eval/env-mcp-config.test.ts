@@ -349,6 +349,44 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves an explicit empty tool policy as a strict llm config', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe llm @agent(prompt, config) = [',
+      '  => {',
+      '    config: @mx.llm.config,',
+      '    allowed: @mx.llm.allowed,',
+      '    native: @mx.llm.native,',
+      '    hasTools: @mx.llm.hasTools',
+      '  }',
+      ']',
+      '/show @agent("Pure text generation", { tools: [] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        config: expect.any(String),
+        allowed: '',
+        native: '',
+        hasTools: true
+      });
+      expect(JSON.parse(output.trim()).config).not.toBe('');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves when-selected executable refs when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [

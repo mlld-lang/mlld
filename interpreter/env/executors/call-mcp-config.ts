@@ -800,9 +800,15 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const nativeAllowedTools = inBox ? '' : builtinTools.join(',');
 
   if (Object.keys(mcpServers).length === 0) {
+    const configPath = path.join(
+      os.tmpdir(),
+      `mlld-toolbridge-call-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
+    );
+    await fs.writeFile(configPath, JSON.stringify({ mcpServers: {} }, null, 2), 'utf8');
+
     return {
       sessionId,
-      mcpConfigPath: '',
+      mcpConfigPath: configPath,
       toolsCsv,
       mcpAllowedTools: '',
       nativeAllowedTools,
@@ -812,7 +818,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       toolNotes,
       inBox,
       async cleanup(): Promise<void> {
-        // No-op
+        await removeFileIfExists(configPath);
       }
     };
   }

@@ -2164,26 +2164,21 @@ async function evaluateExecInvocationInternal(
         workingDirectory,
         conversationDescriptor: resultSecurityDescriptor
       });
-      if (callConfig.availableTools.length === 0) {
-        await callConfig.cleanup();
-        execEnv.setLlmToolConfig(null);
-      } else {
-        const nextConfig = { ...(rawConfig as Record<string, unknown>) };
-        const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
-        if (nextSystem !== undefined) {
-          nextConfig.system = nextSystem;
-        }
-        evaluatedArgs[1] = nextConfig;
-        evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
-        synchronizeGuardVariableCandidates({
-          guardVariableCandidates,
-          env: runtimeEnv,
-          evaluatedArgs,
-          evaluatedArgStrings
-        });
-        execEnv.registerScopeCleanup(callConfig.cleanup);
-        execEnv.setLlmToolConfig(callConfig);
+      const nextConfig = { ...(rawConfig as Record<string, unknown>) };
+      const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+      if (nextSystem !== undefined) {
+        nextConfig.system = nextSystem;
       }
+      evaluatedArgs[1] = nextConfig;
+      evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+      synchronizeGuardVariableCandidates({
+        guardVariableCandidates,
+        env: runtimeEnv,
+        evaluatedArgs,
+        evaluatedArgStrings
+      });
+      execEnv.registerScopeCleanup(callConfig.cleanup);
+      execEnv.setLlmToolConfig(callConfig);
     }
   }
   

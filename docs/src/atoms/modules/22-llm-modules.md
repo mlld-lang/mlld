@@ -55,7 +55,7 @@ When an `exe llm` function is invoked with a config object containing a `tools` 
 ```mlld
 exe llm @agent(prompt, config) = [
   >> These are set automatically by the runtime:
-  >> @mx.llm.config   — path to generated MCP config file (empty string if no bridges)
+  >> @mx.llm.config   — path to generated MCP config file used for explicit tool isolation
   >> @mx.llm.allowed  — unified tool name list for --allowedTools
   >> @mx.llm.native   — native tool names CSV (empty when no native tools requested)
   >> @mx.llm.inBox    — true when inside a box with active VFS bridge
@@ -86,7 +86,7 @@ var @r = @claude("Analyze this codebase", {
 
 ### Empty tools
 
-Passing an empty array signals "no tools" — the runtime sets `@mx.llm.hasTools = true` but provides no bridges. The module can use this to pass `--tools ""` to disable all default tools:
+Passing an empty array signals "no tools" — the runtime sets `@mx.llm.hasTools = true`, keeps `@mx.llm.allowed` empty, and still provides an empty strict MCP config so modules can disable built-ins and block ambient MCP connectors:
 
 ```mlld
 var @r = @claude("Pure text generation", { tools: [] })
@@ -112,7 +112,7 @@ var @ws = box [
 ]
 ```
 
-The `@mx.llm.native` field tells module implementations which native tools are active. When `native` is empty — either because the call is inside a box (all tools route through VFS bridges) or because the tools array contains only exe refs — the module should pass `--tools ""` to suppress the CLI's default built-in tools. The `@mlld/claude` module does this automatically.
+The `@mx.llm.native` field tells module implementations which native tools are active. When `config.tools` is explicit, modules should also use `@mx.llm.config` as a strict MCP config even if it only contains an empty server set. This prevents the child LLM from inheriting ambient MCP connectors while still allowing modules to pass `--tools ""` or an equivalent empty native allowlist when `native` is empty.
 
 ## Streaming
 

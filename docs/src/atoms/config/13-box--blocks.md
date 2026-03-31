@@ -152,7 +152,7 @@ When an `exe llm` is invoked with a `config.tools` array, the runtime automatica
 ```mlld
 exe llm @agent(prompt, config) = [
   let @cfg = @config ? @config : {}
-  >> @mx.llm.config   — MCP config file path (empty string if no bridges)
+  >> @mx.llm.config   — MCP config file path for the explicit tool policy
   >> @mx.llm.allowed  — unified tool names for --allowedTools or equivalent
   >> @mx.llm.native   — native tool names CSV (empty when no native tools requested)
   >> @mx.llm.inBox    — true when an active VFS bridge exists

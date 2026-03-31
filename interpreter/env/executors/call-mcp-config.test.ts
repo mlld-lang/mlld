@@ -146,7 +146,7 @@ function getToolResultText(response: Record<string, unknown>): string {
 }
 
 describe('createCallMcpConfig', () => {
-  it('returns no config for string tools outside a box', async () => {
+  it('creates an empty strict MCP config for string tools outside a box', async () => {
     const env = createEnv();
     const result = await createCallMcpConfig({
       tools: ['Read', 'Write'],
@@ -155,11 +155,49 @@ describe('createCallMcpConfig', () => {
 
     try {
       expect(result.inBox).toBe(false);
-      expect(result.mcpConfigPath).toBe('');
+      expect(result.mcpConfigPath).not.toBe('');
       expect(result.toolsCsv).toBe('Read,Write');
       expect(result.availableTools).toEqual([{ name: 'Read' }, { name: 'Write' }]);
+      expect(await fileExists(result.mcpConfigPath)).toBe(true);
+
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers?: Record<string, unknown>;
+      };
+      expect(config.mcpServers).toEqual({});
     } finally {
+      const configPath = result.mcpConfigPath;
       await result.cleanup();
+      expect(await fileExists(configPath)).toBe(false);
+      env.cleanup();
+    }
+  });
+
+  it('creates an empty strict MCP config for explicit empty tool lists', async () => {
+    const env = createEnv();
+    const result = await createCallMcpConfig({
+      tools: [],
+      env
+    });
+
+    try {
+      expect(result.inBox).toBe(false);
+      expect(result.mcpConfigPath).not.toBe('');
+      expect(result.toolsCsv).toBe('');
+      expect(result.availableTools).toEqual([]);
+      expect(result.nativeAllowedTools).toBe('');
+      expect(result.unifiedAllowedTools).toBe('');
+      expect(await fileExists(result.mcpConfigPath)).toBe(true);
+
+      const configRaw = await fs.readFile(result.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers?: Record<string, unknown>;
+      };
+      expect(config.mcpServers).toEqual({});
+    } finally {
+      const configPath = result.mcpConfigPath;
+      await result.cleanup();
+      expect(await fileExists(configPath)).toBe(false);
       env.cleanup();
     }
   });
