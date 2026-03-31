@@ -147,7 +147,7 @@ mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` 
 - **Return native objects, not JSON strings.** `return { foo: bar }` — not `return JSON.stringify({ foo: bar })`. mlld handles the conversion. Callers should NOT need `| @parse` on JS exe output.
 - **`JSON.stringify` inside JS erases mlld metadata.** If you serialize and parse within JS, label metadata and proof are lost. Work with values as-is.
 - **Handle wrappers pass through as plain objects.** `{ handle: "h_xxx" }` enters JS as a normal object with one key. Don't special-case it. Don't resolve it. If you need handle-aware logic, do it in mlld, not JS.
-- **Need `.mx` in JS?** Use `.keep` or `.keepStructured` on the value before passing it as a parameter. This preserves the wrapper so JS can access metadata.
+- **Need `.mx` in JS?** Use `.keep` or `.keepStructured` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly.
 
 **Use `>>` for comments, not `//`**
 
