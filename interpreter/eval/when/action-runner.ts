@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { evaluate } from '@interpreter/core/interpreter';
 import { isLetAssignment, isAugmentedAssignment } from '@core/types/when';
 import { isExeReturnControl } from '@interpreter/eval/exe-return';
+import { isLoopControlValue } from '@interpreter/eval/exe/definition-helpers';
 import { evaluateLetAssignment, evaluateAugmentedAssignment } from '@interpreter/eval/when/assignment-support';
 
 interface AssignmentStep {
@@ -20,6 +21,14 @@ interface EvaluatedStep {
 
 function createInitialResult(env: Environment): EvalResult {
   return { value: '', env };
+}
+
+function hasLoopControlContext(env: Environment): boolean {
+  return Boolean(
+    env.getExecutionContext('loop') ||
+    env.getExecutionContext('while') ||
+    env.getExecutionContext('for')
+  );
 }
 
 async function runAssignmentStep(actionNode: BaseMlldNode, env: Environment): Promise<AssignmentStep> {
@@ -50,15 +59,18 @@ async function runAssignmentStep(actionNode: BaseMlldNode, env: Environment): Pr
 
 async function runEvaluatedStep(actionNode: BaseMlldNode, env: Environment): Promise<EvaluatedStep> {
   const result = await evaluate(actionNode, env);
-  if (isExeReturnControl(result.value)) {
+  const nextEnv = result.env || env;
+  if (
+    isExeReturnControl(result.value) ||
+    (hasLoopControlContext(nextEnv) && isLoopControlValue(result.value))
+  ) {
     return {
       controlBreak: true,
-      env: result.env || env,
-      result: { value: result.value, env: result.env || env }
+      env: nextEnv,
+      result: { value: result.value, env: nextEnv }
     };
   }
 
-  const nextEnv = result.env || env;
   return {
     controlBreak: false,
     env: nextEnv,

@@ -21,6 +21,7 @@ import { VariableImporter } from './import/VariableImporter';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
 import { isContinueLiteral, isDoneLiteral, type ContinueLiteralNode, type DoneLiteralNode } from '@core/types/control';
 import { isExeReturnControl } from './exe-return';
+import { isLoopControlValue } from './exe/definition-helpers';
 import type { SecurityDescriptor } from '@core/types/security';
 import {
   applySecurityDescriptorToCurrentVariables,
@@ -184,12 +185,23 @@ async function evaluateActionNodes(
     currentEnv = result.env || currentEnv;
     lastResult = result;
 
-    if (isExeReturnControl(result.value)) {
+    if (
+      isExeReturnControl(result.value) ||
+      (hasLoopControlContext(currentEnv) && isLoopControlValue(result.value))
+    ) {
       return { value: result.value, env: currentEnv };
     }
   }
 
   return { value: lastResult.value, env: currentEnv };
+}
+
+function hasLoopControlContext(env: Environment): boolean {
+  return Boolean(
+    env.getExecutionContext('loop') ||
+    env.getExecutionContext('while') ||
+    env.getExecutionContext('for')
+  );
 }
 
 /**
@@ -731,9 +743,9 @@ async function evaluateWhenExpressionInternal(
 	                        : String(value);
 	                // Tag as side-effect so callers can suppress or echo as needed.
 	                value = { __whenEffect: 'show', text: textValue } as any;
-	              } else if (directiveKind === 'output') {
-	                // Output actions should return empty string (file write is the side effect)
-	                value = '';
+	              } else if (directiveKind === 'output' || directiveKind === 'append') {
+	                // File output/append actions are side effects, not value-producing matches.
+	                value = { __whenEffect: directiveKind } as any;
 	              } else if (directiveKind === 'var') {
 	                // Variable assignments in when expressions are side effects
                 // They should not count as value-producing matches for 'none' evaluation

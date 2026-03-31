@@ -421,6 +421,109 @@ describe('when evaluator characterization', () => {
     expect(log).toBe('start-a-b');
   });
 
+  it('propagates loop continue through nested when append side effects', async () => {
+    const { ast } = await parse([
+      '/var @logFile = "tmp/repro-when-append-var-sentinel.jsonl"',
+      '/output "" to "@logFile"',
+      '/var @result = loop(2) [',
+      '  let @state = @input ?? { ok: false }',
+      '  let @entry = { phase: "resolve", iteration: @mx.loop.iteration }',
+      '  when @mx.loop.iteration [',
+      '    1 => [',
+      '      when [',
+      '        @logFile => append @entry to "@logFile"',
+      '        * => null',
+      '      ]',
+      '      continue { ok: true }',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('propagates loop continue through nested when output side effects', async () => {
+    const { ast } = await parse([
+      '/var @stateFile = "tmp/repro-when-output-sentinel.json"',
+      '/output "" to "@stateFile"',
+      '/var @result = loop(2) [',
+      '  let @state = @input ?? { ok: false }',
+      '  when @mx.loop.iteration [',
+      '    1 => [',
+      '      when [',
+      '        @stateFile => output { phase: "resolve", iteration: @mx.loop.iteration } to "@stateFile"',
+      '        * => null',
+      '      ]',
+      '      continue { ok: true }',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('propagates loop continue through nested when log side effects', async () => {
+    env.setEffectHandler(new TestEffectHandler());
+
+    const { ast } = await parse([
+      '/var @result = loop(2) [',
+      '  let @state = @input ?? { ok: false }',
+      '  let @entry = { phase: "resolve", iteration: @mx.loop.iteration }',
+      '  when @mx.loop.iteration [',
+      '    1 => [',
+      '      when [',
+      '        @entry => log @entry',
+      '        * => null',
+      '      ]',
+      '      continue { ok: true }',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('propagates loop done through nested when side effects', async () => {
+    const { ast } = await parse([
+      '/var @logFile = "tmp/repro-when-append-done.jsonl"',
+      '/output "" to "@logFile"',
+      '/var @result = loop(2) [',
+      '  let @state = @input ?? { ok: false }',
+      '  let @entry = { phase: "resolve", iteration: @mx.loop.iteration }',
+      '  when @mx.loop.iteration [',
+      '    1 => [',
+      '      when [',
+      '        @logFile => append @entry to "@logFile"',
+      '        * => null',
+      '      ]',
+      '      done { ok: true }',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ ok: true });
+  });
+
   it('keeps let redefinition guard behavior stable for non-block-scoped variables', async () => {
     env.setVariable(
       'existing',

@@ -1006,6 +1006,10 @@ export function normalizeWhenShowEffect(value: unknown): WhenShowEffectResult {
     return { normalized: text, hadShowEffect: true, text };
   }
 
+  if (value && typeof value === 'object' && '__whenEffect' in (value as Record<string, unknown>)) {
+    return { normalized: '', hadShowEffect: false };
+  }
+
   if (isStructuredValue(value)) {
     const data = asData(value);
     if (data && typeof data === 'object' && (data as Record<string, unknown>).__whenEffect === 'show') {
@@ -1014,6 +1018,9 @@ export function normalizeWhenShowEffect(value: unknown): WhenShowEffectResult {
           ? (data as { text?: string }).text
           : asText(value);
       return { normalized: text, hadShowEffect: true, text };
+    }
+    if (data && typeof data === 'object' && '__whenEffect' in (data as Record<string, unknown>)) {
+      return { normalized: '', hadShowEffect: false };
     }
   }
 

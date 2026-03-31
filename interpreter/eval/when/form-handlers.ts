@@ -4,6 +4,7 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import type { WhenSimpleNode, WhenMatchNode, WhenBlockNode } from '@core/types/when';
 import { isLetAssignment, isAugmentedAssignment, isConditionPair, normalizeWhenCondition } from '@core/types/when';
 import { MlldConditionError } from '@core/errors';
+import { isLoopControlValue } from '@interpreter/eval/exe/definition-helpers';
 import {
   evaluateFirstMatch,
   validateNonePlacement,
@@ -15,6 +16,14 @@ export interface WhenFormHandlerRuntime {
   matcherRuntime: WhenMatcherRuntime;
   evaluateLetAssignment(entry: any, env: Environment): Promise<Environment>;
   evaluateAugmentedAssignment(entry: any, env: Environment): Promise<Environment>;
+}
+
+function hasLoopControlContext(env: Environment): boolean {
+  return Boolean(
+    env.getExecutionContext('loop') ||
+    env.getExecutionContext('while') ||
+    env.getExecutionContext('for')
+  );
 }
 
 export async function evaluateWhenSimpleForm(
@@ -137,6 +146,10 @@ export async function evaluateWhenMatchForm(
       return { value: actionResult.value, env };
     }
 
+    if (hasLoopControlContext(childEnv) && isLoopControlValue(actionResult.value)) {
+      return { value: actionResult.value, env };
+    }
+
     return { value: '', env };
   }
 
@@ -156,6 +169,10 @@ export async function evaluateWhenMatchForm(
       env.mergeChild(childEnv);
 
       if (runtime.matcherRuntime.isExeReturnControl(actionResult.value)) {
+        return { value: actionResult.value, env };
+      }
+
+      if (hasLoopControlContext(childEnv) && isLoopControlValue(actionResult.value)) {
         return { value: actionResult.value, env };
       }
 
