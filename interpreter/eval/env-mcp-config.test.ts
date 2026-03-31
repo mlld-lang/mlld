@@ -1224,4 +1224,122 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('creates config.system with worker tool notes when the user did not provide one', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@sendEmail]',
+      '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
+      '/show @agent("Send the message", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('Handle discovery available:');
+      expect(output).toContain('@fyi.known() returns proof-bearing candidates for control args.');
+      expect(output).toContain('Call @fyi.known("toolName") for candidates specific to a write tool.');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('appends worker tool notes after user-authored config.system content', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@sendEmail]',
+      '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
+      '/show @agent("Send the message", { tools: @toolList, system: "User system prompt" })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('User system prompt\n\n<tool_notes>');
+      expect(output).toContain('Handle discovery available:');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('injects planner tool notes with deny-list and authorization shape guidance', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @updatePassword(recipient, password) = "ok" with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@updatePassword]',
+      '/var @taskPolicy = { authorizations: { deny: ["update_password"] } }',
+      '/exe llm @planner(prompt, config) = js { return config.system ?? ""; } with { display: "planner" }',
+      '/show @planner("Make a plan", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('DENIED BY POLICY (cannot be authorized):');
+      expect(output).toContain('update_password');
+      expect(output).toContain('Authorization intent shape:');
+      expect(output).toContain('resolved: { tool: { arg: "handle_value" } }');
+      expect(output).not.toContain('Handle discovery available:');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('leaves config.system absent when no security-relevant tool notes are needed', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @createDraft(subject, body) = "draft" with { controlArgs: [] }',
+      '/var @toolList = [@createDraft]',
+      '/exe llm @agent(prompt, config) = js { return JSON.stringify(config.system ?? null); }',
+      '/show @agent("Draft a note", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('null');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
 });

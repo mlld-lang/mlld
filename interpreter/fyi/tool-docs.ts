@@ -215,6 +215,28 @@ function resolveExecutableArrayMetadata(
   return dedupeToolMetadata(resolved);
 }
 
+function resolveDeniedToolNames(
+  env: Environment,
+  entries: readonly EffectiveToolMetadata[]
+): string[] {
+  const visibleToolNames = new Set(
+    entries
+      .map(entry => entry.name.trim().toLowerCase())
+      .filter(name => name.length > 0 && name !== 'known')
+  );
+
+  if (visibleToolNames.size === 0) {
+    return [];
+  }
+
+  return Array.isArray(env.getPolicySummary()?.authorizations?.deny)
+    ? env.getPolicySummary()!.authorizations!.deny!
+        .filter((toolName): toolName is string => typeof toolName === 'string' && toolName.trim().length > 0)
+        .map(toolName => toolName.trim())
+        .filter(toolName => visibleToolNames.has(toolName.toLowerCase()))
+    : [];
+}
+
 function resolveNoArgMetadata(env: Environment): EffectiveToolMetadata[] {
   const scopedTools = env.getScopedEnvironmentConfig()?.tools;
   if (scopedTools && typeof scopedTools === 'object') {
@@ -351,6 +373,93 @@ function buildWorkerHelperPreamble(
   }
 
   return [];
+}
+
+function wrapToolNotesBlock(lines: readonly string[]): string | undefined {
+  const normalized = lines.map(line => line.trimEnd());
+  while (normalized.length > 0 && normalized[0].trim().length === 0) {
+    normalized.shift();
+  }
+  while (normalized.length > 0 && normalized[normalized.length - 1].trim().length === 0) {
+    normalized.pop();
+  }
+
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  return `<tool_notes>\n${normalized.join('\n')}\n</tool_notes>`;
+}
+
+function joinAnnotationLines(lines: readonly string[]): string | undefined {
+  const normalized = lines.map(line => line.trimEnd());
+  while (normalized.length > 0 && normalized[0].trim().length === 0) {
+    normalized.shift();
+  }
+  while (normalized.length > 0 && normalized[normalized.length - 1].trim().length === 0) {
+    normalized.pop();
+  }
+
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  return normalized.join('\n');
+}
+
+function buildToolDescriptionAnnotationLines(options: {
+  env: Environment;
+  audience: FyiToolsAudience;
+  entry: EffectiveToolMetadata;
+  helperStatus: FyiKnownHelperStatus;
+  includeHelpers: FyiToolsIncludeHelpers;
+}): string[] {
+  const { env, audience, entry, helperStatus, includeHelpers } = options;
+  if (audience === 'generic' || entry.name === 'known') {
+    return [];
+  }
+
+  const isWrite = isWriteToolMetadata(env, entry);
+  const controlArgs = entry.controlArgs ?? [];
+  const dataArgs = entry.params.filter(param => !controlArgs.includes(param));
+  const lines: string[] = [];
+
+  if (isWrite) {
+    if (controlArgs.length > 0) {
+      lines.push(
+        audience === 'planner'
+          ? `CONTROL args (authorization targets): ${formatArgList(controlArgs)}`
+          : `CONTROL args (target selection): ${formatArgList(controlArgs)}`
+      );
+
+      if (entry.correlateControlArgs && controlArgs.length > 1) {
+        lines.push(
+          audience === 'planner'
+            ? 'If you authorize this tool, include all required control args from the same trusted result.'
+            : 'These control args must come from the same source record.'
+        );
+      }
+
+      if (
+        audience !== 'planner'
+        && includeHelpers !== 'none'
+        && helperStatus.available
+      ) {
+        lines.push(`Discover targets: @fyi.known("${entry.name}")`);
+      }
+    } else {
+      lines.push('No control args - authorize with allow.');
+    }
+
+    lines.push(`DATA args (payload): ${formatArgList(dataArgs)}`);
+    return lines;
+  }
+
+  if (controlArgs.length > 0) {
+    lines.push(`CONTROL args: ${formatArgList(controlArgs)}`);
+  }
+
+  return lines;
 }
 
 function buildToolTextBlock(options: {
@@ -503,11 +612,7 @@ export async function evaluateFyiTools(
   const options = normalizeOptions(rawResolvedOptions, env);
   const entries = dedupeToolMetadata(await resolveToolMetadataInput(toolsArg, env));
   const helperStatus = resolveKnownHelperStatus(env, entries);
-  const denied = Array.isArray(env.getPolicySummary()?.authorizations?.deny)
-    ? env.getPolicySummary()!.authorizations!.deny!
-        .filter((toolName): toolName is string => typeof toolName === 'string' && toolName.trim().length > 0)
-        .map(toolName => toolName.trim())
-    : [];
+  const denied = resolveDeniedToolNames(env, entries);
 
   if (options.format === 'json') {
     return wrapStructured(
@@ -533,4 +638,72 @@ export async function evaluateFyiTools(
     }),
     'text'
   );
+}
+
+export function renderInjectedToolNotes(options: {
+  env: Environment;
+  entries: readonly EffectiveToolMetadata[];
+  audience?: FyiToolsAudience;
+  includeHelpers?: FyiToolsIncludeHelpers;
+}): string | undefined {
+  const entries = dedupeToolMetadata(options.entries);
+  const audience = normalizeAudience(options.audience, options.env);
+  const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
+  const helperStatus = resolveKnownHelperStatus(options.env, entries);
+  const denied = resolveDeniedToolNames(options.env, entries);
+
+  if (audience === 'worker') {
+    if (helperStatus.reason !== 'write_tools_with_control_args_present') {
+      return undefined;
+    }
+    return wrapToolNotesBlock(buildWorkerHelperPreamble(includeHelpers, helperStatus));
+  }
+
+  if (audience === 'planner') {
+    const hasWriteTool = entries.some(
+      entry => entry.name !== 'known' && isWriteToolMetadata(options.env, entry)
+    );
+    if (!hasWriteTool && denied.length === 0) {
+      return undefined;
+    }
+    return wrapToolNotesBlock(buildPlannerPreamble(denied));
+  }
+
+  return undefined;
+}
+
+export function renderToolDescriptionNotes(options: {
+  env: Environment;
+  entry: EffectiveToolMetadata;
+  audience?: FyiToolsAudience;
+  includeHelpers?: FyiToolsIncludeHelpers;
+}): string | undefined {
+  const audience = normalizeAudience(options.audience, options.env);
+  const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
+  const helperStatus = resolveKnownHelperStatus(options.env, [options.entry]);
+  return joinAnnotationLines(
+    buildToolDescriptionAnnotationLines({
+      env: options.env,
+      audience,
+      entry: options.entry,
+      helperStatus,
+      includeHelpers
+    })
+  );
+}
+
+export function appendToolNotesToSystemPrompt(
+  systemPrompt: unknown,
+  toolNotes: string | undefined
+): string | undefined {
+  if (!toolNotes) {
+    return typeof systemPrompt === 'string' ? systemPrompt : undefined;
+  }
+
+  const base = typeof systemPrompt === 'string' ? systemPrompt.trimEnd() : '';
+  if (base.length === 0) {
+    return toolNotes;
+  }
+
+  return `${base}\n\n${toolNotes}`;
 }

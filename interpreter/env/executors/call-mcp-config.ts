@@ -5,16 +5,20 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
+import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { ExecutableVariable } from '@core/types/variable';
 import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
+import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import {
   resolveEffectiveToolMetadata,
+  resolveToolCollectionEntryMetadata,
   shouldAutoExposeFyiKnown,
   type EffectiveToolMetadata
 } from '@interpreter/eval/exec/tool-metadata';
+import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -46,7 +50,7 @@ interface JsonRpcResponse {
 }
 
 export interface CallMcpConfigOptions {
-  tools: unknown[];
+  tools: unknown;
   env: Environment;
   workingDirectory?: string;
   conversationDescriptor?: SecurityDescriptor;
@@ -65,8 +69,18 @@ export interface CallMcpConfig {
   readonly unifiedAllowedTools: string;
   readonly availableTools: readonly AvailableToolDescriptor[];
   readonly toolMetadata?: readonly EffectiveToolMetadata[];
+  readonly toolNotes?: string;
   readonly inBox: boolean;
   cleanup(): Promise<void>;
+}
+
+interface ResolvedFunctionToolSpec {
+  readonly mcpName: string;
+  readonly csvName: string;
+  readonly executable: ExecutableVariable;
+  readonly definition?: ToolDefinition;
+  readonly metadata: EffectiveToolMetadata;
+  readonly source: string;
 }
 
 export function normalizeToolsArg(value: unknown): unknown[] {
@@ -273,33 +287,6 @@ function parseJsonRpcRequest(line: string): { request: JsonRpcRequest } | { erro
   }
 }
 
-function resolveToolInput(tools: unknown[]): { builtinTools: string[]; functionTools: ExecutableVariable[] } {
-  const builtinTools: string[] = [];
-  const functionTools: ExecutableVariable[] = [];
-
-  for (const tool of tools) {
-    if (typeof tool === 'string') {
-      const trimmed = tool.trim();
-      if (trimmed.length > 0) {
-        builtinTools.push(trimmed);
-      }
-      continue;
-    }
-
-    if (tool && isExecutableVariable(tool)) {
-      functionTools.push(tool);
-      continue;
-    }
-
-    throw new Error(`Unsupported tool entry: ${String(tool)}`);
-  }
-
-  return {
-    builtinTools: uniquePreservingOrder(builtinTools),
-    functionTools
-  };
-}
-
 function uniquePreservingOrder(values: string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];
@@ -313,6 +300,141 @@ function uniquePreservingOrder(values: string[]): string[] {
   return unique;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function looksLikeToolCollection(value: unknown): value is ToolCollection {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  const entries = Object.values(value);
+  if (entries.length === 0) {
+    return true;
+  }
+
+  return entries.every(entry => isPlainObject(entry) && 'mlld' in entry);
+}
+
+function buildDirectFunctionToolSpec(
+  env: Environment,
+  executable: ExecutableVariable
+): ResolvedFunctionToolSpec {
+  const rawName = typeof executable.name === 'string' ? executable.name : '';
+  if (!rawName) {
+    throw new Error('Function tool is missing a name');
+  }
+
+  const mcpName = mlldNameToMCPName(rawName);
+  return {
+    mcpName,
+    csvName: rawName,
+    executable,
+    metadata: resolveEffectiveToolMetadata({
+      env,
+      executable,
+      operationName: mcpName
+    }),
+    source: `exe:@${rawName} -> ${mcpName}`
+  };
+}
+
+function buildCollectionFunctionToolSpec(
+  env: Environment,
+  collection: ToolCollection,
+  toolName: string
+): ResolvedFunctionToolSpec {
+  const definition = collection[toolName];
+  if (!definition) {
+    throw new Error(`Tool '${toolName}' is missing its definition`);
+  }
+
+  const execName = typeof definition.mlld === 'string' ? definition.mlld : '';
+  if (!execName) {
+    throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
+  }
+
+  const executable = env.getVariable(execName);
+  if (!executable || !isExecutableVariable(executable)) {
+    throw new Error(`Tool '${toolName}' references non-executable '@${execName}'`);
+  }
+
+  const metadata = resolveToolCollectionEntryMetadata(env, collection, toolName);
+  if (!metadata) {
+    throw new Error(`Failed to resolve tool metadata for '${toolName}'`);
+  }
+  const mcpName = mlldNameToMCPName(toolName);
+
+  return {
+    mcpName,
+    csvName: toolName,
+    executable,
+    definition,
+    metadata: {
+      ...metadata,
+      name: mcpName
+    },
+    source: `tool:@${execName} as ${mcpName}`
+  };
+}
+
+function resolveToolInput(
+  tools: unknown,
+  env: Environment
+): { builtinTools: string[]; functionTools: ResolvedFunctionToolSpec[] } {
+  const builtinTools: string[] = [];
+  const functionTools: ResolvedFunctionToolSpec[] = [];
+
+  const visit = (tool: unknown): void => {
+    if (tool === undefined || tool === null) {
+      return;
+    }
+
+    let resolved = tool;
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+
+    if (Array.isArray(resolved)) {
+      for (const entry of resolved) {
+        visit(entry);
+      }
+      return;
+    }
+
+    if (typeof resolved === 'string') {
+      const trimmed = resolved.trim();
+      if (trimmed.length > 0) {
+        builtinTools.push(trimmed);
+      }
+      return;
+    }
+
+    if (resolved && isExecutableVariable(resolved)) {
+      functionTools.push(buildDirectFunctionToolSpec(env, resolved));
+      return;
+    }
+
+    if (looksLikeToolCollection(resolved)) {
+      const collection = normalizeToolCollection(resolved, env);
+      for (const toolName of Object.keys(collection)) {
+        functionTools.push(buildCollectionFunctionToolSpec(env, collection, toolName));
+      }
+      return;
+    }
+
+    throw new Error(`Unsupported tool entry: ${String(tool)}`);
+  };
+
+  visit(tools);
+
+  return {
+    builtinTools: uniquePreservingOrder(builtinTools),
+    functionTools
+  };
+}
+
 function buildAvailableTools(names: readonly string[]): AvailableToolDescriptor[] {
   return uniquePreservingOrder(
     names
@@ -324,7 +446,7 @@ function buildAvailableTools(names: readonly string[]): AvailableToolDescriptor[
 
 function ensureNoMcpCollisions(
   builtinTools: string[],
-  functionTools: ExecutableVariable[]
+  functionTools: readonly ResolvedFunctionToolSpec[]
 ): void {
   const owners = new Map<string, string[]>();
 
@@ -335,14 +457,9 @@ function ensureNoMcpCollisions(
   }
 
   for (const fn of functionTools) {
-    const rawName = typeof fn.name === 'string' ? fn.name : '';
-    if (!rawName) {
-      throw new Error('Function tool is missing a name');
-    }
-    const mcpName = mlldNameToMCPName(rawName);
-    const existing = owners.get(mcpName) ?? [];
-    existing.push(`exe:@${rawName} -> ${mcpName}`);
-    owners.set(mcpName, existing);
+    const existing = owners.get(fn.mcpName) ?? [];
+    existing.push(fn.source);
+    owners.set(fn.mcpName, existing);
   }
 
   const conflicts = Array.from(owners.entries()).filter(([, sources]) => sources.length > 1);
@@ -564,19 +681,6 @@ function resolveImplicitFyiKnownTool(env: Environment): ExecutableVariable | und
   return isExecutableVariable(known) ? known : undefined;
 }
 
-function buildFunctionToolMetadata(
-  env: Environment,
-  functionTools: readonly ExecutableVariable[]
-): EffectiveToolMetadata[] {
-  return functionTools.map(tool =>
-    resolveEffectiveToolMetadata({
-      env,
-      executable: tool,
-      operationName: mlldNameToMCPName(tool.name)
-    })
-  );
-}
-
 function buildBuiltinToolMetadata(
   builtinTools: readonly string[]
 ): EffectiveToolMetadata[] {
@@ -596,22 +700,27 @@ function buildBuiltinToolMetadata(
 }
 
 export async function createCallMcpConfig(options: CallMcpConfigOptions): Promise<CallMcpConfig> {
-  const { builtinTools, functionTools } = resolveToolInput(options.tools);
+  const { builtinTools, functionTools } = resolveToolInput(options.tools, options.env);
   const implicitKnownTool = resolveImplicitFyiKnownTool(options.env);
-  const functionToolMetadata = buildFunctionToolMetadata(options.env, functionTools);
+  const functionToolMetadata = functionTools.map(tool => tool.metadata);
   if (
     implicitKnownTool
-    && !functionTools.some(tool => tool.name === implicitKnownTool.name)
+    && !functionTools.some(tool => tool.mcpName === 'known' || tool.executable.name === implicitKnownTool.name)
     && shouldAutoExposeFyiKnown(options.env, functionToolMetadata)
   ) {
-    functionTools.push(implicitKnownTool);
-    functionToolMetadata.push(
-      resolveEffectiveToolMetadata({
-        env: options.env,
-        executable: implicitKnownTool,
-        operationName: mlldNameToMCPName(implicitKnownTool.name)
-      })
-    );
+    const metadata = resolveEffectiveToolMetadata({
+      env: options.env,
+      executable: implicitKnownTool,
+      operationName: 'known'
+    });
+    functionTools.push({
+      mcpName: 'known',
+      csvName: implicitKnownTool.name,
+      executable: implicitKnownTool,
+      metadata,
+      source: `exe:@${implicitKnownTool.name} -> known`
+    });
+    functionToolMetadata.push(metadata);
   }
   const inBox = Boolean(options.env.getActiveBridge());
   const workingDirectory = options.workingDirectory ?? options.env.getExecutionDirectory();
@@ -625,7 +734,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   const toolsCsv = uniquePreservingOrder([
     ...(inBox ? vfsTools : builtinTools),
-    ...functionTools.map(tool => tool.name).filter((name): name is string => typeof name === 'string' && name.length > 0)
+    ...functionTools.map(tool => tool.csvName).filter((name): name is string => typeof name === 'string' && name.length > 0)
   ]).join(',');
 
   const cleanupFns: Array<() => Promise<void>> = [];
@@ -638,10 +747,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ];
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
-    ...functionTools
-      .map(tool => (typeof tool.name === 'string' ? mlldNameToMCPName(tool.name) : ''))
-      .filter(Boolean)
+    ...functionTools.map(tool => tool.mcpName).filter(Boolean)
   ]);
+  const toolNotes = renderInjectedToolNotes({
+    env: options.env,
+    entries: functionToolMetadata
+  });
 
   if (inBox && vfsTools.length > 0) {
     const activeBridge = options.env.getActiveBridge();
@@ -662,18 +773,18 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   if (functionTools.length > 0) {
     const functionMap = new Map<string, ExecutableVariable>();
+    const toolDefinitions = new Map<string, ToolDefinition>();
     for (const tool of functionTools) {
-      const rawName = typeof tool.name === 'string' ? tool.name : '';
-      if (!rawName) {
-        throw new Error('Function tool is missing a name');
+      functionMap.set(tool.mcpName, tool.executable);
+      if (tool.definition) {
+        toolDefinitions.set(tool.mcpName, tool.definition);
       }
-      const mcpName = mlldNameToMCPName(rawName);
-      functionMap.set(mcpName, tool);
     }
 
     const functionBridge = await createFunctionMcpBridge({
       env: options.env,
       functions: functionMap,
+      toolDefinitions,
       sessionId,
       availableTools,
       toolMetadata,
@@ -698,6 +809,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       unifiedAllowedTools: nativeAllowedTools,
       availableTools,
       toolMetadata,
+      toolNotes,
       inBox,
       async cleanup(): Promise<void> {
         // No-op
@@ -739,6 +851,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     unifiedAllowedTools,
     availableTools,
     toolMetadata,
+    toolNotes,
     inBox,
     cleanup
   };

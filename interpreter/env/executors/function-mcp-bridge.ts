@@ -8,12 +8,15 @@ import type {
   AvailableToolDescriptor,
   CallMcpConfig
 } from '@interpreter/env/executors/call-mcp-config';
+import type { ToolDefinition } from '@core/types/tools';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { generateToolSchema } from '@cli/mcp/SchemaGenerator';
 import { deriveMcpParamInfo, coerceMcpArgs, type McpParamInfo } from '@core/mcp/coerce';
+import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
+import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FUNCTION_SOCKET_ENV = 'MLLD_FUNCTION_MCP_SOCKET';
@@ -38,6 +41,7 @@ interface JsonRpcResponse {
 export interface FunctionMcpBridgeOptions {
   env: Environment;
   functions: Map<string, ExecutableVariable>; // key is exposed MCP tool name
+  toolDefinitions?: ReadonlyMap<string, ToolDefinition>;
   sessionId: string;
   availableTools?: readonly AvailableToolDescriptor[];
   toolMetadata?: CallMcpConfig['toolMetadata'];
@@ -61,6 +65,7 @@ class FunctionMcpBridgeServer {
   constructor(
     private readonly env: Environment,
     private readonly functions: Map<string, ExecutableVariable>,
+    private readonly toolDefinitions: ReadonlyMap<string, ToolDefinition> | undefined,
     private readonly socketPath: string,
     sessionId: string,
     availableTools: readonly AvailableToolDescriptor[] | undefined,
@@ -83,6 +88,7 @@ class FunctionMcpBridgeServer {
     this.toolCollection = {};
     this.toolSchemas = [];
     this.toolParamInfo = new Map();
+    const clonedExecutables = new Map<string, ExecutableVariable>();
 
     let index = 0;
     for (const [mcpName, executable] of this.functions.entries()) {
@@ -106,21 +112,22 @@ class FunctionMcpBridgeServer {
       };
       this.toolEnv.setVariable(tempName, cloned as any);
       const clonedExecutableDef = (cloned.internal?.executableDef ?? cloned.value) as any;
-      this.toolCollection[mcpName] = {
-        mlld: tempName,
-        ...(Array.isArray(executable.mx?.labels) ? { labels: executable.mx.labels } : {}),
-        ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
-        ...(clonedExecutableDef?.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
-        ...(Array.isArray(clonedExecutableDef?.optionalParams) ? { optional: clonedExecutableDef.optionalParams } : {}),
-        ...(typeof executable.description === 'string'
-          ? { description: executable.description }
-          : typeof clonedExecutableDef?.description === 'string'
-            ? { description: clonedExecutableDef.description }
-            : {})
-      };
-      const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
-      this.toolSchemas.push(schema);
-      this.toolParamInfo.set(mcpName, deriveMcpParamInfo(schema.inputSchema));
+      const providedDefinition = this.toolDefinitions?.get(mcpName);
+      this.toolCollection[mcpName] = providedDefinition
+        ? cloneToolDefinitionForBridge(providedDefinition, tempName)
+        : {
+            mlld: tempName,
+            ...(Array.isArray(executable.mx?.labels) ? { labels: executable.mx.labels } : {}),
+            ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
+            ...(clonedExecutableDef?.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
+            ...(Array.isArray(clonedExecutableDef?.optionalParams) ? { optional: clonedExecutableDef.optionalParams } : {}),
+            ...(typeof executable.description === 'string'
+              ? { description: executable.description }
+              : typeof clonedExecutableDef?.description === 'string'
+                ? { description: clonedExecutableDef.description }
+                : {})
+          };
+      clonedExecutables.set(mcpName, cloned);
     }
 
     const inheritedScopedConfig = this.toolEnv.getScopedEnvironmentConfig();
@@ -128,6 +135,25 @@ class FunctionMcpBridgeServer {
       ...(inheritedScopedConfig ?? {}),
       tools: this.toolCollection
     });
+
+    for (const [mcpName, cloned] of clonedExecutables.entries()) {
+      const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
+      const metadata = resolveToolCollectionEntryMetadata(this.toolEnv, this.toolCollection, mcpName);
+      const notes = metadata
+        ? renderToolDescriptionNotes({
+            env: this.toolEnv,
+            entry: metadata
+          })
+        : undefined;
+      if (notes) {
+        const baseDescription = typeof schema.description === 'string' ? schema.description.trimEnd() : '';
+        schema.description = baseDescription.length > 0
+          ? `${baseDescription}\n\n${notes}`
+          : notes;
+      }
+      this.toolSchemas.push(schema);
+      this.toolParamInfo.set(mcpName, deriveMcpParamInfo(schema.inputSchema));
+    }
 
     this.router = new FunctionRouter({
       environment: this.toolEnv,
@@ -329,6 +355,18 @@ function sanitizeIdentifier(input: string): string {
   return normalized;
 }
 
+function cloneToolDefinitionForBridge(definition: ToolDefinition, mlldName: string): ToolDefinition {
+  return {
+    ...definition,
+    mlld: mlldName,
+    ...(Array.isArray(definition.labels) ? { labels: [...definition.labels] } : {}),
+    ...(definition.bind && typeof definition.bind === 'object' ? { bind: { ...definition.bind } } : {}),
+    ...(Array.isArray(definition.expose) ? { expose: [...definition.expose] } : {}),
+    ...(Array.isArray(definition.optional) ? { optional: [...definition.optional] } : {}),
+    ...(Array.isArray(definition.controlArgs) ? { controlArgs: [...definition.controlArgs] } : {})
+  };
+}
+
 function buildSocketPath(): string {
   if (process.platform === 'win32') {
     const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -399,6 +437,7 @@ export async function createFunctionMcpBridge(
   const server = new FunctionMcpBridgeServer(
     options.env,
     options.functions,
+    options.toolDefinitions,
     socketPath,
     options.sessionId,
     options.availableTools,

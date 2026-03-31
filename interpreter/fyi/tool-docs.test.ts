@@ -73,6 +73,38 @@ async function readVarData(env: Environment, name: string): Promise<unknown> {
 }
 
 describe('@fyi.tools', () => {
+  it('exposes @toolDocs as a top-level alias for @fyi.tools', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
+        controlArgs: ["recipient"]
+      }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          expose: ["recipient", "subject", "body"]
+        }
+      }
+
+      /var @docs = @toolDocs(@writeTools, { format: "json" })
+    `);
+
+    try {
+      const docs = await readVarData(env, 'docs') as {
+        tools: Array<Record<string, unknown>>;
+      };
+      expect(docs.tools).toEqual([
+        expect.objectContaining({
+          name: 'sendEmail',
+          controlArgs: ['recipient'],
+          discoveryCall: '@fyi.known("sendEmail")'
+        })
+      ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('renders shaped tool collections with exposed names, visible params, and discovery calls', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(owner, recipient, subject, body) = js { return subject; } with {

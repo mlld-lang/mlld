@@ -196,6 +196,60 @@ describe('createFunctionMcpBridge', () => {
     }
   });
 
+  it('preserves provided tool definitions in schemas and appends per-tool notes', async () => {
+    const env = await createInterpretedEnv(`
+      /exe tool:w @sendEmail(owner, recipient, subject, body) = \`sent:@subject\` with {
+        controlArgs: ["owner", "recipient"]
+      }
+    `);
+    const functionTool = env.getVariable('sendEmail') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['outbound_email', functionTool]]),
+      toolDefinitions: new Map([[
+        'outbound_email',
+        {
+          mlld: 'sendEmail',
+          bind: { owner: 'mlld' },
+          expose: ['recipient', 'subject', 'body'],
+          optional: ['body'],
+          controlArgs: ['recipient'],
+          description: 'Send an outbound email'
+        }
+      ]]),
+      sessionId: 'test-session'
+    });
+
+    try {
+      const listed = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 99,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{
+        name?: string;
+        description?: string;
+        inputSchema?: {
+          properties?: Record<string, unknown>;
+          required?: string[];
+        };
+      }>;
+      const outbound = tools.find(tool => tool.name === 'outbound_email');
+      expect(outbound).toBeDefined();
+      expect(Object.keys(outbound?.inputSchema?.properties ?? {})).toEqual(['recipient', 'subject', 'body']);
+      expect(outbound?.inputSchema?.required ?? []).toEqual(['recipient', 'subject']);
+      expect(outbound?.description).toContain('Send an outbound email');
+      expect(outbound?.description).toContain('CONTROL args (target selection): recipient');
+      expect(outbound?.description).toContain('Discover targets: @fyi.known("outbound_email")');
+      expect(outbound?.description).toContain('DATA args (payload): subject, body');
+      expect(outbound?.description).not.toContain('Handle discovery available:');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('does not respond to notifications', async () => {
     const env = createEnv();
     const functionTool = createFunctionTool('sayHi');

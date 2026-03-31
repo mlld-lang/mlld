@@ -28,6 +28,7 @@ export function generateToolSchema(
   const visibleParams = paramNames.filter(param => exposedSet.has(param));
   const properties: Record<string, JSONSchemaProperty> = {};
   const description =
+    toolDef?.description ??
     execVar.description ??
     execVar.internal?.executableDef?.description ??
     execVar.mx?.description ??

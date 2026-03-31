@@ -99,7 +99,8 @@ import {
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
 import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
-import { createCallMcpConfig, normalizeToolsArg } from '../env/executors/call-mcp-config';
+import { createCallMcpConfig } from '../env/executors/call-mcp-config';
+import { appendToolNotesToSystemPrompt } from '@interpreter/fyi/tool-docs';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
@@ -2098,19 +2099,32 @@ async function evaluateExecInvocationInternal(
       // must not seed the conversation descriptor used for policy/attestation checks.
       resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
       const toolsValue = (rawConfig as Record<string, unknown>).tools;
-      const normalized = normalizeToolsArg(toolsValue);
-      if (normalized.length === 0) {
+      const dirValue = (rawConfig as Record<string, unknown>).dir;
+      const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
+        ? dirValue.trim()
+        : execEnv.getProjectRoot();
+      const callConfig = await createCallMcpConfig({
+        tools: toolsValue,
+        env: execEnv,
+        workingDirectory,
+        conversationDescriptor: resultSecurityDescriptor
+      });
+      if (callConfig.availableTools.length === 0) {
+        await callConfig.cleanup();
         execEnv.setLlmToolConfig(null);
       } else {
-        const dirValue = (rawConfig as Record<string, unknown>).dir;
-        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
-          ? dirValue.trim()
-          : execEnv.getProjectRoot();
-        const callConfig = await createCallMcpConfig({
-          tools: normalized,
-          env: execEnv,
-          workingDirectory,
-          conversationDescriptor: resultSecurityDescriptor
+        const nextConfig = { ...(rawConfig as Record<string, unknown>) };
+        const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+        if (nextSystem !== undefined) {
+          nextConfig.system = nextSystem;
+        }
+        evaluatedArgs[1] = nextConfig;
+        evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+        synchronizeGuardVariableCandidates({
+          guardVariableCandidates,
+          env: runtimeEnv,
+          evaluatedArgs,
+          evaluatedArgStrings
         });
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);

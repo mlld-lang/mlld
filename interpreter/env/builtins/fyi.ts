@@ -96,3 +96,32 @@ export function createFyiVariable(env: Environment) {
     }
   );
 }
+
+export function createToolDocsExecutable(env: Environment) {
+  const toolDocsDefinition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'toolDocs',
+    fn: async (toolsOrEnv?: unknown, optionsOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined)
+        ?? (looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined)
+        ?? env;
+      const tools = boundEnv || !looksLikeEnvironment(toolsOrEnv) ? toolsOrEnv : undefined;
+      const options = boundEnv || !looksLikeEnvironment(optionsOrEnv) ? optionsOrEnv : undefined;
+      return evaluateFyiTools(tools, executionEnv, options);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['tools', 'options'],
+    optionalParams: ['tools', 'options'],
+    description: 'Render LLM-oriented tool docs from live tool metadata'
+  };
+
+  return createExecutableVariable('toolDocs', 'command', '', ['tools', 'options'], undefined, FYI_SOURCE, {
+    internal: {
+      executableDef: toolDocsDefinition,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+}
