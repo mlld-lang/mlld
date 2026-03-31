@@ -29,6 +29,37 @@ record @contact = {
 
 `facts` fields get `fact:` labels -- the source is authoritative for these values. `data` fields don't -- they're content that could contain anything. `?` marks optional fields.
 
+Data fields can be classified as trusted or untrusted:
+
+```mlld
+record @issue = {
+  facts: [id: string, number: number, author: string],
+  data: {
+    trusted: [title: string],
+    untrusted: [body: string]
+  }
+}
+```
+
+`data.trusted` fields get taint cleared during trust refinement (like facts) but carry no `fact:` labels -- they're safe to read but not authorization-grade. `data.untrusted` fields stay tainted. `data: [fields]` is sugar for `data: { untrusted: [fields] }` -- safe by default.
+
+The `when` clause can conditionally promote data fields to trusted:
+
+```mlld
+record @issue = {
+  facts: [id: string, author: string],
+  data: [title: string, body: string],
+  when [
+    @input.author_association == "MEMBER" => :maintainer {
+      data: { trusted: [title] }
+    }
+    * => data
+  ]
+}
+```
+
+Maintainer issues: `title` is trusted content (taint cleared). External issues: `=> data` demotes everything to untrusted.
+
 Supported field types: `string`, `number`, `boolean`, `array`, `handle`. Array fact fields carry per-element proof. The `handle` type requires a resolvable handle -- plain strings fail validation. Use `handle` for worker return fields that carry cross-phase identity.
 
 **Connect to an exe with `=> record`:**

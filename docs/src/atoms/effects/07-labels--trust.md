@@ -112,7 +112,24 @@ The `facts` declaration is already a trust assertion -- the developer is saying 
 
 Trust refinement only applies to fields that survive as facts after `when` evaluation. If a `when` clause demotes the record to data, no fact labels are minted and `untrusted` is preserved on all fields. Records that fail schema validation are also not refined.
 
-This is the one built-in field-level trust refinement at the exe boundary.
+Trust refinement also applies to `data.trusted` fields. These get taint cleared (like facts) but carry no `fact:` labels -- they're safe to read but not authorization-grade:
+
+```mlld
+record @issue = {
+  facts: [id: string, author: string],
+  data: {
+    trusted: [title: string],
+    untrusted: [body: string]
+  }
+}
+```
+
+After coercion on an `untrusted` exe result:
+- `id` and `author`: `untrusted` cleared, `fact:` labels minted (fact fields)
+- `title`: `untrusted` cleared, no `fact:` labels (trusted data)
+- `body`: `untrusted` preserved (untrusted data)
+
+`data: [fields]` is sugar for `data: { untrusted: [fields] }`. The `when` clause can conditionally promote data fields to trusted — see `records-basics`.
 
 When the operation has explicit `controlArgs`, `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to those control args only. Fact-bearing control args pass (trust refinement cleared `untrusted`). Tainted data args (body, title, description) are not checked — they're expected payload in the planner-worker model.
 
