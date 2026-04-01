@@ -24,6 +24,7 @@ import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FUNCTION_SOCKET_ENV = 'MLLD_FUNCTION_MCP_SOCKET';
+const DEFAULT_CLEANUP_GRACE_MS = 30_000;
 
 interface JsonRpcRequest {
   jsonrpc?: string;
@@ -86,6 +87,7 @@ export interface FunctionMcpBridgeOptions {
   availableTools?: readonly AvailableToolDescriptor[];
   toolMetadata?: CallMcpConfig['toolMetadata'];
   conversationDescriptor?: SecurityDescriptor;
+  cleanupGraceMs?: number;
 }
 
 export interface FunctionMcpBridge {
@@ -96,6 +98,9 @@ export interface FunctionMcpBridge {
 
 class FunctionMcpBridgeServer {
   private server?: net.Server;
+  private readonly activeSockets = new Set<net.Socket>();
+  private deferredStopTimer?: NodeJS.Timeout;
+  private stopPromise?: Promise<void>;
   private readonly toolEnv: Environment;
   private readonly toolCollection: ToolCollection;
   private readonly toolSchemas: Array<Record<string, unknown>>;
@@ -197,17 +202,52 @@ class FunctionMcpBridgeServer {
   }
 
   async stop(): Promise<void> {
-    if (this.server) {
-      await new Promise<void>(resolve => {
-        this.server!.close(() => resolve());
-      });
-      this.server = undefined;
+    if (this.deferredStopTimer) {
+      clearTimeout(this.deferredStopTimer);
+      this.deferredStopTimer = undefined;
     }
-    await removeFileIfExists(this.socketPath);
-    this.toolEnv.cleanup();
+
+    if (this.stopPromise) {
+      await this.stopPromise;
+      return;
+    }
+
+    this.stopPromise = this.stopInternal();
+    await this.stopPromise;
+  }
+
+  scheduleDeferredStop(graceMs: number): void {
+    if (this.deferredStopTimer || this.stopPromise) {
+      return;
+    }
+
+    if (!this.server) {
+      void this.stop();
+      return;
+    }
+
+    this.server.unref();
+    if (graceMs <= 0) {
+      void this.stop();
+      return;
+    }
+
+    this.deferredStopTimer = setTimeout(() => {
+      this.deferredStopTimer = undefined;
+      void this.stop();
+    }, graceMs);
+    this.deferredStopTimer.unref?.();
   }
 
   private handleConnection(socket: net.Socket): void {
+    this.activeSockets.add(socket);
+    socket.once('close', () => {
+      this.activeSockets.delete(socket);
+    });
+    socket.on('error', () => {
+      // Claude may drop and respawn the stdio proxy; do not treat socket churn as a bridge failure.
+    });
+
     let buffer = '';
 
     socket.on('data', chunk => {
@@ -348,6 +388,21 @@ class FunctionMcpBridgeServer {
       }
     }
   }
+
+  private async stopInternal(): Promise<void> {
+    if (this.server) {
+      const server = this.server;
+      this.server = undefined;
+      await new Promise<void>(resolve => {
+        server.close(() => resolve());
+        for (const socket of this.activeSockets) {
+          socket.destroy();
+        }
+      });
+    }
+    await removeFileIfExists(this.socketPath);
+    this.toolEnv.cleanup();
+  }
 }
 
 function parseJsonRpcRequest(line: string): { request: JsonRpcRequest } | { error: JsonRpcResponse } {
@@ -486,15 +541,26 @@ export async function createFunctionMcpBridge(
   };
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
 
+  const cleanupGraceMs = Math.max(
+    0,
+    typeof options.cleanupGraceMs === 'number'
+      ? options.cleanupGraceMs
+      : DEFAULT_CLEANUP_GRACE_MS
+  );
   let cleaned = false;
   const cleanup = async (): Promise<void> => {
     if (cleaned) {
       return;
     }
     cleaned = true;
-    await server.stop();
-    await removeFileIfExists(proxyPath);
     await removeFileIfExists(configPath);
+    // Keep the transport restartable briefly after config teardown so Claude can
+    // respawn the stdio proxy if the MCP child churns during shutdown.
+    server.scheduleDeferredStop(cleanupGraceMs);
+    const removeProxy = setTimeout(() => {
+      void removeFileIfExists(proxyPath);
+    }, cleanupGraceMs);
+    removeProxy.unref?.();
   };
 
   return {

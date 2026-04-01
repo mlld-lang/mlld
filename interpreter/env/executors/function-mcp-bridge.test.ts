@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as child_process from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import { fileURLToPath } from 'url';
@@ -128,6 +129,109 @@ async function sendJsonRpcMaybeResponse(
       socket.write(`${JSON.stringify(payload)}\n`);
     });
   });
+}
+
+async function sendJsonRpcViaProxy(
+  proxyPath: string,
+  socketPath: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 300
+): Promise<Record<string, unknown>> {
+  return await new Promise((resolve, reject) => {
+    const child = child_process.spawn(process.execPath, [proxyPath], {
+      env: {
+        ...process.env,
+        MLLD_FUNCTION_MCP_SOCKET: socketPath
+      },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timeout = setTimeout(() => {
+      child.kill();
+      if (!settled) {
+        settled = true;
+        reject(new Error('Timed out waiting for proxy response'));
+      }
+    }, timeoutMs);
+
+    const finish = (error?: Error, response?: Record<string, unknown>) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(response ?? {});
+    };
+
+    const parseBufferedResponse = (): Record<string, unknown> | null => {
+      const newlineIndex = stdout.indexOf('\n');
+      const line = (newlineIndex === -1 ? stdout : stdout.slice(0, newlineIndex)).trim();
+      if (!line) {
+        return null;
+      }
+      return JSON.parse(line) as Record<string, unknown>;
+    };
+
+    child.once('error', error => {
+      finish(error);
+    });
+    child.stderr.on('data', chunk => {
+      stderr += chunk.toString('utf8');
+    });
+    child.stdout.on('data', chunk => {
+      stdout += chunk.toString('utf8');
+      try {
+        const response = parseBufferedResponse();
+        if (!response) {
+          return;
+        }
+        child.stdin.end();
+        finish(undefined, response);
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    child.once('close', code => {
+      if (settled) {
+        return;
+      }
+      try {
+        const response = parseBufferedResponse();
+        if (response) {
+          finish(undefined, response);
+          return;
+        }
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      const detail = stderr.trim() || `Proxy exited with code ${code ?? 'unknown'}`;
+      finish(new Error(detail));
+    });
+
+    child.stdin.write(`${JSON.stringify(payload)}\n`);
+  });
+}
+
+async function waitFor(
+  predicate: () => Promise<boolean>,
+  timeoutMs = 400,
+  intervalMs = 10
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error('Timed out waiting for condition');
 }
 
 describe('createFunctionMcpBridge', () => {
@@ -397,6 +501,76 @@ describe('createFunctionMcpBridge', () => {
     } finally {
       await bridge.cleanup();
       scopedEnv.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('keeps the proxy restartable during the cleanup grace window', async () => {
+    const env = createEnv();
+    const functionTool = createFunctionTool('sayHi');
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]]),
+      cleanupGraceMs: 200
+    });
+
+    try {
+      const configRaw = await fs.readFile(bridge.mcpConfigPath, 'utf8');
+      const config = JSON.parse(configRaw) as {
+        mcpServers: {
+          mlld_tools: {
+            args: string[];
+            env: { MLLD_FUNCTION_MCP_SOCKET: string };
+          };
+        };
+      };
+      const proxyPath = config.mcpServers.mlld_tools.args[0];
+
+      const beforeCleanup = await sendJsonRpcViaProxy(proxyPath, bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: {
+          name: mcpName,
+          arguments: {}
+        }
+      });
+      expect((beforeCleanup.result as any)?.isError).not.toBe(true);
+
+      const configPath = bridge.mcpConfigPath;
+      await bridge.cleanup();
+
+      expect(await fileExists(configPath)).toBe(false);
+      expect(await fileExists(proxyPath)).toBe(true);
+
+      const restarted = await sendJsonRpcViaProxy(proxyPath, bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: {
+          name: mcpName,
+          arguments: {}
+        }
+      });
+      expect((restarted.result as any)?.isError).not.toBe(true);
+
+      await waitFor(async () => !(await fileExists(proxyPath)), 1000);
+      await waitFor(async () => {
+        try {
+          await sendJsonRpc(bridge.socketPath, {
+            jsonrpc: '2.0',
+            id: 8,
+            method: 'tools/list',
+            params: {}
+          });
+          return false;
+        } catch {
+          return true;
+        }
+      }, 1000);
+    } finally {
+      await bridge.cleanup();
       env.cleanup();
     }
   });

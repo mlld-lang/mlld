@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Imported `var tools` collections now have explicit acceptance coverage as first-class inputs to `@policy.build(...)` and `@policy.validate(...)`, including preserved shaped auth metadata from `bind` / `expose` and explicit empty `controlArgs: []` across module export/import.
+- Function-tool MCP bridges now stay restartable briefly during per-invocation cleanup, preventing intermittent `mlld_tools` disconnects when Claude respawns the bridge proxy after an initial successful tool call.
 
 ## [2.0.6]
 
