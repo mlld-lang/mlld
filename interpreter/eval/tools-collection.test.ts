@@ -478,6 +478,103 @@ describe('tool collections', () => {
     expect(output.trim()).toBe('sent:hello:world');
   });
 
+  it('spreads a single named object into a single visible param for direct dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @delete_item(id) = { ok: true, id: @id } with { controlArgs: ["id"] }
+
+      /var tools @writeTools = {
+        delete_item: {
+          mlld: @delete_item,
+          expose: ["id"],
+          controlArgs: ["id"]
+        }
+      }
+
+      /show @writeTools["delete_item"]({ id: "11" })
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      ok: true,
+      id: '11'
+    });
+  });
+
+  it('spreads structured top-level arg objects from JS into direct collection dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @delete_item(id) = { ok: true, id: @id } with { controlArgs: ["id"] }
+
+      /var tools @writeTools = {
+        delete_item: {
+          mlld: @delete_item,
+          expose: ["id"],
+          controlArgs: ["id"]
+        }
+      }
+
+      /exe @makeArgs() = js {
+        return { id: '11' };
+      }
+
+      /var @args = @makeArgs()
+      /show @writeTools["delete_item"](@args)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      ok: true,
+      id: '11'
+    });
+  });
+
+  it('spreads nested dynamic arg objects for dynamic collection-key dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @delete_item(id) = { ok: true, id: @id } with { controlArgs: ["id"] }
+
+      /var tools @writeTools = {
+        delete_item: {
+          mlld: @delete_item,
+          expose: ["id"],
+          controlArgs: ["id"]
+        }
+      }
+
+      /exe @makeCandidate() = js {
+        return {
+          tool: 'delete_item',
+          args: { id: '11' }
+        };
+      }
+
+      /var @candidate = @makeCandidate()
+      /show @writeTools[@candidate.tool](@candidate.args)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      ok: true,
+      id: '11'
+    });
+  });
+
   it('keeps positional direct collection dispatch behavior unchanged', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`
@@ -610,6 +707,138 @@ describe('tool collections', () => {
     const resolved = await extractVariableValue(resultVar as any, env);
 
     expect((resolved as any)?.text ?? resolved).toBe('sent:hello:world');
+  });
+
+  it('preserves imported collection dispatch when threaded through an object field', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @config = { writeTools: @writeTools }
+        /var @taskPolicy = {
+          authorizations: {
+            allow: {
+              update_item: true
+            }
+          }
+        }
+
+        /var @result = @config.writeTools["update_item"]({
+          id: "7",
+          amount: 1200,
+          subject: "Rent"
+        }) with { policy: @taskPolicy }
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @update_item(id, amount, subject) = \`id=@id amount=@amount subject=@subject\`
+            with { controlArgs: [] }
+
+          /var tools @writeTools = {
+            update_item: { mlld: @update_item }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env);
+    expect((resolved as any)?.text ?? resolved).toBe('id=7 amount=1200 subject=Rent');
+  });
+
+  it('preserves imported collection dispatch after nested policy validation inside an executable body', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @config = { writeTools: @writeTools }
+        /var @taskPolicy = {
+          defaults: { rules: [] },
+          operations: {},
+          authorizations: {
+            allow: {
+              update_item: true
+            }
+          }
+        }
+
+        /exe @run() = [
+          let @validated = @policy.validate({ allow: ["update_item"] }, @config.writeTools)
+            with { policy: @taskPolicy }
+          let @out = @config.writeTools["update_item"]({
+            id: "7",
+            amount: 1200,
+            subject: "Rent"
+          }) with { policy: @taskPolicy }
+          => { validated: @validated, out: @out }
+        ]
+
+        /var @result = @run()
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @update_item(id, amount, subject) = \`id=@id amount=@amount subject=@subject\`
+            with { controlArgs: [] }
+
+          /var tools @writeTools = {
+            update_item: { mlld: @update_item }
+          }
+
+          /export { @writeTools, @update_item }
+        `
+      }
+    );
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env) as any;
+    const output = resolved?.data ?? resolved;
+    expect(output.out?.text ?? output.out).toBe('id=7 amount=1200 subject=Rent');
+  });
+
+  it('supports show of imported collection dispatch after nested policy validation inside an executable body', async () => {
+    await expect(
+      interpretWithEnvAndFiles(
+        `
+          /import { @writeTools } from "/tool-module.mld"
+
+          /var @config = { writeTools: @writeTools }
+          /var @taskPolicy = {
+            defaults: { rules: [] },
+            operations: {},
+            authorizations: {
+              allow: {
+                update_item: true
+              }
+            }
+          }
+
+          /exe @run() = [
+            let @validated = @policy.validate({ allow: ["update_item"] }, @config.writeTools)
+              with { policy: @taskPolicy }
+            let @out = @config.writeTools["update_item"]({
+              id: "7",
+              amount: 1200,
+              subject: "Rent"
+            }) with { policy: @taskPolicy }
+            => { validated: @validated, out: @out }
+          ]
+
+          /show @run()
+        `,
+        {
+          '/tool-module.mld': `
+            /exe tool:w @update_item(id, amount, subject) = \`id=@id amount=@amount subject=@subject\`
+              with { controlArgs: [] }
+
+            /var tools @writeTools = {
+              update_item: { mlld: @update_item }
+            }
+
+            /export { @writeTools, @update_item }
+          `
+        }
+      )
+    ).resolves.toBeDefined();
   });
 
   it('creates tool collections directly from runtime MCP specs', async () => {

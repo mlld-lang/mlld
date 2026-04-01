@@ -393,6 +393,44 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('accepts imported tool collections threaded through object fields for build and validate', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @config = { writeTools: @writeTools }
+        /var @intent = {
+          update_item: true
+        }
+
+        /var @built = @policy.build(@intent, @config.writeTools)
+        /var @validated = @policy.validate(@intent, @config.writeTools)
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @update_item(id, amount, subject) = js { return id; } with { controlArgs: [] }
+
+          /var tools @writeTools = {
+            update_item: { mlld: @update_item }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.policy.authorizations.allow.update_item).toEqual({
+        kind: 'unconstrained'
+      });
+    }
+  });
+
   it('preserves shaped auth params for imported tool collections', async () => {
     const env = await interpretWithEnvAndFiles(
       `

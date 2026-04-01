@@ -85,6 +85,34 @@ function resolveToolCollection(
     return undefined;
   }
 
+  if (isVariable(rawTools)) {
+    const variableTools = rawTools;
+    const directCollection =
+      variableTools.internal?.isToolsCollection === true &&
+      variableTools.internal.toolCollection &&
+      typeof variableTools.internal.toolCollection === 'object' &&
+      !Array.isArray(variableTools.internal.toolCollection)
+        ? variableTools.internal.toolCollection as ToolCollection
+        : undefined;
+    if (directCollection) {
+      return directCollection;
+    }
+
+    const rawValue = variableTools.value;
+    if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+      if (getToolCollectionAuthorizationContext(rawValue)) {
+        return rawValue as ToolCollection;
+      }
+      try {
+        return normalizeToolCollection(rawValue, executionEnv);
+      } catch {
+        return undefined;
+      }
+    }
+
+    return undefined;
+  }
+
   if (getToolCollectionAuthorizationContext(rawTools)) {
     return rawTools as ToolCollection;
   }

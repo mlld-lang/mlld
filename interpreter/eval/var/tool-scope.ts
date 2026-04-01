@@ -3,12 +3,40 @@ import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 
 export type ToolScopeValue = {
   tools: string[];
   hasTools: boolean;
   isWildcard: boolean;
 };
+
+function unwrapToolScopeValue(value: unknown): unknown {
+  let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (isVariable(resolved)) {
+    const directCollection =
+      resolved.internal?.isToolsCollection === true &&
+      resolved.internal.toolCollection &&
+      typeof resolved.internal.toolCollection === 'object' &&
+      !Array.isArray(resolved.internal.toolCollection)
+        ? resolved.internal.toolCollection as ToolCollection
+        : undefined;
+    if (directCollection) {
+      return directCollection;
+    }
+
+    resolved = resolved.value;
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+  }
+
+  return resolved;
+}
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -39,6 +67,8 @@ export async function resolveWithClauseToolsValue(
 }
 
 export function normalizeToolScopeValue(value: unknown): ToolScopeValue {
+  value = unwrapToolScopeValue(value);
+
   if (value === undefined) {
     return { tools: [], hasTools: false, isWildcard: false };
   }

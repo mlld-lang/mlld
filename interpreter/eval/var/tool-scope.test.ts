@@ -43,6 +43,28 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('normalizes wrapped tool collections from preserved variable references', () => {
+    const wrappedTools = {
+      type: 'object',
+      name: 'allTools',
+      value: {},
+      source: executableSource,
+      internal: {
+        isToolsCollection: true,
+        toolCollection: {
+          read: { mlld: 'readData' },
+          write: { mlld: 'writeData' }
+        }
+      }
+    };
+
+    expect(normalizeToolScopeValue(wrappedTools)).toEqual({
+      tools: ['read', 'write'],
+      hasTools: true,
+      isWildcard: false
+    });
+  });
+
   it('rejects invalid tool scope entries', () => {
     expect(() => normalizeToolScopeValue(['read', 42])).toThrow(/tools entries must be strings/i);
   });

@@ -152,6 +152,25 @@ export class CollectionEvaluator {
     throw new Error(`CollectionEvaluator cannot handle value type: ${typeof value}`);
   }
 
+  private async evaluateObjectPropertyValue(valueNode: unknown, env: Environment): Promise<any> {
+    if (
+      valueNode &&
+      typeof valueNode === 'object' &&
+      (valueNode as { type?: string }).type === 'VariableReference' &&
+      typeof (valueNode as { identifier?: unknown }).identifier === 'string' &&
+      (!Array.isArray((valueNode as { fields?: unknown[] }).fields)
+        || ((valueNode as { fields?: unknown[] }).fields?.length ?? 0) === 0)
+    ) {
+      const variable = env.getVariable((valueNode as { identifier: string }).identifier);
+      if (variable?.internal?.isToolsCollection === true) {
+        const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+        return resolveVariable(variable, env, ResolutionContext.ObjectProperty);
+      }
+    }
+
+    return this.evaluateDataValue(valueNode as DataValue, env, { suppressErrors: true });
+  }
+
   /**
    * Evaluates an object with recursive property evaluation and error isolation
    * Supports both pair entries and spread entries for object composition
@@ -166,7 +185,7 @@ export class CollectionEvaluator {
         if (entry.type === 'pair') {
           // Regular key-value pair
           const resolvedKey = await this.resolveObjectKey(entry.key, env);
-          let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
+          let evaluated = await this.evaluateObjectPropertyValue(entry.value, env);
           collectDescriptorFromValue(evaluated, descriptors);
           // For primitive results, extract security from the source AST node
           if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
@@ -179,7 +198,7 @@ export class CollectionEvaluator {
         } else if (entry.type === 'conditionalPair') {
           const resolvedKey = await this.resolveObjectKey(entry.key, env);
           try {
-            let evaluated = await this.evaluateDataValue(entry.value, env, { suppressErrors: true });
+            let evaluated = await this.evaluateObjectPropertyValue(entry.value, env);
             if (isStructuredValue(evaluated)) {
               evaluated = unwrapStructuredPrimitive(evaluated);
             }
@@ -249,7 +268,7 @@ export class CollectionEvaluator {
 
     if ((value as any).properties && typeof (value as any).properties === 'object') {
       for (const [key, propValue] of Object.entries((value as any).properties)) {
-        let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+        let evaluated = await this.evaluateObjectPropertyValue(propValue, env);
         collectDescriptorFromValue(evaluated, descriptors);
         if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
           collectDescriptorFromSource(propValue, env, descriptors);
@@ -398,7 +417,7 @@ export class CollectionEvaluator {
         continue;
       }
 
-      let evaluated = await this.evaluateDataValue(propValue, env, { suppressErrors: true });
+      let evaluated = await this.evaluateObjectPropertyValue(propValue, env);
       collectDescriptorFromValue(evaluated, descriptors);
       if (evaluated === null || evaluated === undefined || typeof evaluated !== 'object') {
         collectDescriptorFromSource(propValue, env, descriptors);

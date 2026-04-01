@@ -231,6 +231,29 @@ async function resolveCollectionBoundValue(
   return value;
 }
 
+async function materializeCollectionDispatchArg(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  let resolved = value;
+
+  if (
+    isPlainObject(resolved)
+    && resolved.type === 'object'
+    && (Array.isArray((resolved as { entries?: unknown[] }).entries)
+      || isPlainObject((resolved as { properties?: unknown }).properties))
+  ) {
+    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+    resolved = await evaluateDataValue(resolved as any, env);
+  }
+
+  if (isStructuredValue(resolved)) {
+    return asData(resolved);
+  }
+
+  return resolved;
+}
+
 async function normalizeCollectionDispatchArguments(options: {
   env: Environment;
   executableParamNames: readonly string[];
@@ -275,23 +298,11 @@ async function normalizeCollectionDispatchArguments(options: {
   const visibleSet = new Set(visibleParams);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
   const materializedArgs = await Promise.all(
-    evaluatedArgs.map(async arg => {
-      if (
-        isPlainObject(arg)
-        && arg.type === 'object'
-        && (Array.isArray((arg as { entries?: unknown[] }).entries)
-          || isPlainObject((arg as { properties?: unknown }).properties))
-      ) {
-        const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
-        return await evaluateDataValue(arg as any, env);
-      }
-      return arg;
-    })
+    evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env))
   );
 
   const shouldSpreadNamedObject =
     materializedArgs.length === 1
-    && visibleParams.length > 1
     && isPlainObject(materializedArgs[0])
     && Object.keys(materializedArgs[0]).every(key => visibleSet.has(key))
     && visibleParams
@@ -1454,24 +1465,77 @@ async function evaluateExecInvocationInternal(
       let objectValue: unknown;
       
       if (objectRef.fields && objectRef.fields.length > 0) {
-        objectValue = await extractVariableValue(objectVar, env);
+        const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+        objectValue = await resolveVariable(objectVar, env, ResolutionContext.FieldAccess);
         const { accessFields } = await import('../utils/field-access');
         const accessedObject = await accessFields(objectValue, normalizeFields(objectRef.fields), {
           env,
-          preserveContext: false,
+          preserveContext: true,
           returnUndefinedForMissing: true,
           sourceLocation: objectRef.location
         });
 
-        objectValue = accessedObject;
+        const accessedFieldVariable =
+          accessedObject &&
+          typeof accessedObject === 'object' &&
+          'value' in (accessedObject as Record<string, unknown>)
+          ? (accessedObject as { value?: unknown }).value
+          : undefined;
+        objectValue = accessedFieldVariable;
         if (isVariable(objectValue)) {
+          const fieldVariable = objectValue;
           objectValue = await extractVariableValue(objectValue, env);
-        }
-        if (isStructuredValue(objectValue)) {
+          if (isStructuredValue(objectValue)) {
+            objectValue = objectValue.data;
+          }
+
+          if (typeof objectValue === 'object' && objectValue !== null) {
+            const toolCollection =
+              (fieldVariable.internal?.isToolsCollection === true
+                ? fieldVariable.internal.toolCollection as ToolCollection | undefined
+                : undefined)
+              ?? getToolCollectionFromValue(objectValue);
+            if (toolCollection) {
+              const definition = toolCollection[commandName];
+              if (!definition) {
+                throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
+              }
+
+              const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+              if (!execName) {
+                throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
+              }
+
+              let resolvedExecutable =
+                env.getVariable(execName)
+                ?? (await ensureCapturedModuleEnvMap(fieldVariable as { internal?: Record<string, unknown> } | undefined))
+                  ?.get(execName);
+              const isSerializedExecutable =
+                typeof resolvedExecutable === 'object'
+                && resolvedExecutable !== null
+                && '__executable' in resolvedExecutable
+                && Boolean((resolvedExecutable as { __executable?: unknown }).__executable);
+              if (!resolvedExecutable || (!isExecutableVariable(resolvedExecutable) && !isSerializedExecutable)) {
+                throw new MlldInterpreterError(
+                  `Tool '${commandName}' in collection '@${objectRef.identifier}' references non-executable '@${execName}'`
+                );
+              }
+
+              variable = resolvedExecutable;
+              collectionDispatchContext = {
+                collection: toolCollection,
+                definition,
+                toolKey: commandName
+              };
+            } else {
+              variable = resolveObjectMethod(objectValue, commandName);
+            }
+          }
+        } else if (isStructuredValue(objectValue)) {
           objectValue = objectValue.data;
         }
 
-        if (typeof objectValue === 'object' && objectValue !== null) {
+        if (!isVariable(accessedFieldVariable) && typeof objectValue === 'object' && objectValue !== null) {
           const toolCollection = getToolCollectionFromValue(objectValue);
           if (toolCollection) {
             const definition = toolCollection[commandName];
