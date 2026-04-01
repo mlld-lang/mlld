@@ -18,6 +18,11 @@ import {
   createSimpleTextVariable
 } from '@core/types/variable';
 import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
+import {
+  getToolCollectionMetadata,
+  type ToolCollection,
+  type ToolDefinition
+} from '@core/types/tools';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { logger } from '@core/utils/logger';
@@ -140,6 +145,239 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   }
   // Plain objects
   return record[name];
+}
+
+type CollectionDispatchContext = {
+  collection: ToolCollection;
+  definition: ToolDefinition;
+  toolKey: string;
+};
+
+type CollectionDispatchArgEntry = {
+  value: unknown;
+  stringValue: string;
+  originalVariable?: Variable;
+  guardVariableCandidate?: Variable;
+  expressionSourceVariable?: Variable;
+  sourceName?: string;
+};
+
+type CollectionDispatchArgNormalization = {
+  evaluatedArgs: unknown[];
+  evaluatedArgStrings: string[];
+  originalVariables: (Variable | undefined)[];
+  guardVariableCandidates: (Variable | undefined)[];
+  expressionSourceVariables: (Variable | undefined)[];
+  argSourceNames: (string | undefined)[];
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function getToolCollectionFromValue(value: unknown): ToolCollection | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const metadata = getToolCollectionMetadata(value);
+  return metadata?.auth ? (value as ToolCollection) : undefined;
+}
+
+function getToolDefinitionBind(definition: ToolDefinition): Record<string, unknown> | undefined {
+  return isPlainObject(definition.bind) ? definition.bind : undefined;
+}
+
+function getCollectionVisibleParams(
+  executableParamNames: readonly string[],
+  definition: ToolDefinition
+): string[] {
+  if (Array.isArray(definition.expose)) {
+    return definition.expose.filter(
+      (param): param is string => typeof param === 'string' && param.trim().length > 0
+    );
+  }
+
+  const boundKeys = new Set(Object.keys(getToolDefinitionBind(definition) ?? {}));
+  return executableParamNames.filter(param => !boundKeys.has(param));
+}
+
+async function resolveCollectionBoundValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+
+  if (isVariable(value)) {
+    return await extractVariableValue(value, env);
+  }
+  if (isStructuredValue(value)) {
+    return asData(value);
+  }
+  if (Array.isArray(value)) {
+    return Promise.all(value.map(item => resolveCollectionBoundValue(item, env)));
+  }
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await resolveCollectionBoundValue(entry, env);
+    }
+    return result;
+  }
+  return value;
+}
+
+async function normalizeCollectionDispatchArguments(options: {
+  env: Environment;
+  executableParamNames: readonly string[];
+  definition: ToolDefinition;
+  evaluatedArgs: readonly unknown[];
+  originalVariables: readonly (Variable | undefined)[];
+  guardVariableCandidates: readonly (Variable | undefined)[];
+  expressionSourceVariables: readonly (Variable | undefined)[];
+  argSourceNames: readonly (string | undefined)[];
+}): Promise<CollectionDispatchArgNormalization> {
+  const {
+    env,
+    executableParamNames,
+    definition,
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSourceNames
+  } = options;
+
+  if (executableParamNames.length === 0) {
+    return {
+      evaluatedArgs: [],
+      evaluatedArgStrings: [],
+      originalVariables: [],
+      guardVariableCandidates: [],
+      expressionSourceVariables: [],
+      argSourceNames: []
+    };
+  }
+
+  const bind = getToolDefinitionBind(definition);
+  const visibleParams = getCollectionVisibleParams(executableParamNames, definition);
+  const optionalSet = new Set(
+    Array.isArray(definition.optional)
+      ? definition.optional.filter(
+          (param): param is string => typeof param === 'string' && param.trim().length > 0
+        )
+      : []
+  );
+  const visibleSet = new Set(visibleParams);
+  const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
+  const materializedArgs = await Promise.all(
+    evaluatedArgs.map(async arg => {
+      if (
+        isPlainObject(arg)
+        && arg.type === 'object'
+        && (Array.isArray((arg as { entries?: unknown[] }).entries)
+          || isPlainObject((arg as { properties?: unknown }).properties))
+      ) {
+        const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+        return await evaluateDataValue(arg as any, env);
+      }
+      return arg;
+    })
+  );
+
+  const shouldSpreadNamedObject =
+    materializedArgs.length === 1
+    && visibleParams.length > 1
+    && isPlainObject(materializedArgs[0])
+    && Object.keys(materializedArgs[0]).every(key => visibleSet.has(key))
+    && visibleParams
+      .filter(param => !optionalSet.has(param))
+      .every(param => Object.prototype.hasOwnProperty.call(materializedArgs[0], param));
+
+  if (shouldSpreadNamedObject) {
+    const objectArg = materializedArgs[0] as Record<string, unknown>;
+    for (const paramName of visibleParams) {
+      if (!Object.prototype.hasOwnProperty.call(objectArg, paramName)) {
+        continue;
+      }
+      const value = objectArg[paramName];
+      normalizedEntries.set(paramName, {
+        value,
+        stringValue: stringifyExecGuardArg(value),
+        sourceName: paramName
+      });
+    }
+  } else {
+    const providedCount = Math.min(materializedArgs.length, visibleParams.length);
+    for (let index = 0; index < providedCount; index += 1) {
+      const paramName = visibleParams[index];
+      normalizedEntries.set(paramName, {
+        value: materializedArgs[index],
+        stringValue: stringifyExecGuardArg(materializedArgs[index]),
+        originalVariable: originalVariables[index],
+        guardVariableCandidate: guardVariableCandidates[index],
+        expressionSourceVariable: expressionSourceVariables[index],
+        sourceName: argSourceNames[index] ?? paramName
+      });
+    }
+  }
+
+  const nextArgs: unknown[] = [];
+  const nextArgStrings: string[] = [];
+  const nextOriginalVariables: (Variable | undefined)[] = [];
+  const nextGuardVariableCandidates: (Variable | undefined)[] = [];
+  const nextExpressionSourceVariables: (Variable | undefined)[] = [];
+  const nextArgSourceNames: (string | undefined)[] = [];
+
+  let lastRelevantIndex = -1;
+  for (let index = 0; index < executableParamNames.length; index += 1) {
+    const paramName = executableParamNames[index];
+    let entry = normalizedEntries.get(paramName);
+
+    if (!entry && bind && Object.prototype.hasOwnProperty.call(bind, paramName)) {
+      const value = await resolveCollectionBoundValue(bind[paramName], env);
+      entry = {
+        value,
+        stringValue: stringifyExecGuardArg(value),
+        sourceName: paramName
+      };
+    }
+
+    nextArgs[index] = entry?.value;
+    nextArgStrings[index] = entry?.stringValue ?? 'undefined';
+    nextOriginalVariables[index] = entry?.originalVariable;
+    nextGuardVariableCandidates[index] = entry?.guardVariableCandidate;
+    nextExpressionSourceVariables[index] = entry?.expressionSourceVariable;
+    nextArgSourceNames[index] = entry?.sourceName;
+
+    if (entry) {
+      lastRelevantIndex = index;
+    }
+  }
+
+  if (lastRelevantIndex === -1) {
+    return {
+      evaluatedArgs: [],
+      evaluatedArgStrings: [],
+      originalVariables: [],
+      guardVariableCandidates: [],
+      expressionSourceVariables: [],
+      argSourceNames: []
+    };
+  }
+
+  return {
+    evaluatedArgs: nextArgs.slice(0, lastRelevantIndex + 1),
+    evaluatedArgStrings: nextArgStrings.slice(0, lastRelevantIndex + 1),
+    originalVariables: nextOriginalVariables.slice(0, lastRelevantIndex + 1),
+    guardVariableCandidates: nextGuardVariableCandidates.slice(0, lastRelevantIndex + 1),
+    expressionSourceVariables: nextExpressionSourceVariables.slice(0, lastRelevantIndex + 1),
+    argSourceNames: nextArgSourceNames.slice(0, lastRelevantIndex + 1)
+  };
 }
 
 async function ensureCapturedModuleEnvMap(
@@ -1079,15 +1317,16 @@ async function evaluateExecInvocationInternal(
   const existingVar = env.hasVariable(commandName)
     ? (env.getVariable(commandName) as any)
     : null;
-  const isReservedName = existingVar?.internal?.isReserved;
+  let isReservedName = existingVar?.internal?.isReserved;
   // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
-  const isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
+  let isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
     && existingVar.mx.labels.includes('recursive');
   let shouldTrackResolution = !isBuiltinCommand && !isReservedName;
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
   let variable;
+  let collectionDispatchContext: CollectionDispatchContext | undefined;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     let namespaceMethodPreferred = false;
@@ -1233,18 +1472,99 @@ async function evaluateExecInvocationInternal(
         }
 
         if (typeof objectValue === 'object' && objectValue !== null) {
-          variable = resolveObjectMethod(objectValue, commandName);
+          const toolCollection = getToolCollectionFromValue(objectValue);
+          if (toolCollection) {
+            const definition = toolCollection[commandName];
+            if (!definition) {
+              throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
+            }
+
+            const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+            if (!execName) {
+              throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
+            }
+
+            let resolvedExecutable =
+              env.getVariable(execName)
+              ?? (await ensureCapturedModuleEnvMap(objectVar as { internal?: Record<string, unknown> } | undefined))
+                ?.get(execName);
+            const isSerializedExecutable =
+              typeof resolvedExecutable === 'object'
+              && resolvedExecutable !== null
+              && '__executable' in resolvedExecutable
+              && Boolean((resolvedExecutable as { __executable?: unknown }).__executable);
+            if (!resolvedExecutable || (!isExecutableVariable(resolvedExecutable) && !isSerializedExecutable)) {
+              throw new MlldInterpreterError(
+                `Tool '${commandName}' in collection '@${objectRef.identifier}' references non-executable '@${execName}'`
+              );
+            }
+
+            variable = resolvedExecutable;
+            collectionDispatchContext = {
+              collection: toolCollection,
+              definition,
+              toolKey: commandName
+            };
+          } else {
+            variable = resolveObjectMethod(objectValue, commandName);
+          }
         }
       } else {
         objectValue = await extractVariableValue(objectVar, env);
 
         if (typeof objectValue === 'object' && objectValue !== null) {
-          variable = resolveObjectMethod(objectValue, commandName);
+          const toolCollection =
+            (objectVar.internal?.isToolsCollection === true
+              ? objectVar.internal.toolCollection as ToolCollection | undefined
+              : undefined)
+            ?? getToolCollectionFromValue(objectValue);
+          if (toolCollection) {
+            const definition = toolCollection[commandName];
+            if (!definition) {
+              throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
+            }
+
+            const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+            if (!execName) {
+              throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
+            }
+
+            let resolvedExecutable =
+              env.getVariable(execName)
+              ?? (await ensureCapturedModuleEnvMap(objectVar as { internal?: Record<string, unknown> } | undefined))
+                ?.get(execName);
+            const isSerializedExecutable =
+              typeof resolvedExecutable === 'object'
+              && resolvedExecutable !== null
+              && '__executable' in resolvedExecutable
+              && Boolean((resolvedExecutable as { __executable?: unknown }).__executable);
+            if (!resolvedExecutable || (!isExecutableVariable(resolvedExecutable) && !isSerializedExecutable)) {
+              throw new MlldInterpreterError(
+                `Tool '${commandName}' in collection '@${objectRef.identifier}' references non-executable '@${execName}'`
+              );
+            }
+
+            variable = resolvedExecutable;
+            collectionDispatchContext = {
+              collection: toolCollection,
+              definition,
+              toolKey: commandName
+            };
+          } else {
+            variable = resolveObjectMethod(objectValue, commandName);
+          }
         }
       }
       
       if (!variable) {
         throw new MlldInterpreterError(`Method not found: ${commandName} on ${objectRef.identifier}`);
+      }
+
+      if (collectionDispatchContext && isExecutableVariable(variable)) {
+        commandName = variable.name ?? commandName;
+        isReservedName = variable.internal?.isReserved;
+        isRecursiveExe = Array.isArray(variable.mx?.labels) && variable.mx.labels.includes('recursive');
+        shouldTrackResolution = !isBuiltinMethod(commandName) && !isReservedName;
       }
     }
     
@@ -1973,12 +2293,21 @@ async function evaluateExecInvocationInternal(
   });
 
   let runtimeEnv = env;
+  if (collectionDispatchContext) {
+    const scopedConfig = env.getScopedEnvironmentConfig();
+    const scopedEnv = env.createChild();
+    scopedEnv.setScopedEnvironmentConfig({
+      ...(scopedConfig ?? {}),
+      tools: collectionDispatchContext.collection
+    });
+    runtimeEnv = scopedEnv;
+  }
   const resolvedPolicyFragment =
     invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy')
-      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, env)
+      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv)
       : undefined;
   if (resolvedPolicyFragment) {
-    const policyScope = createInvocationPolicyScope(env, resolvedPolicyFragment);
+    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment);
     runtimeEnv = policyScope.env;
   }
 
@@ -2133,6 +2462,38 @@ async function evaluateExecInvocationInternal(
     }
   }
 
+  if (collectionDispatchContext) {
+    const normalizedArgs = await normalizeCollectionDispatchArguments({
+      env,
+      executableParamNames: Array.isArray(variable.paramNames)
+        ? variable.paramNames.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
+      definition: collectionDispatchContext.definition,
+      evaluatedArgs,
+      originalVariables,
+      guardVariableCandidates,
+      expressionSourceVariables,
+      argSourceNames
+    });
+    evaluatedArgs = normalizedArgs.evaluatedArgs;
+    evaluatedArgStrings = normalizedArgs.evaluatedArgStrings;
+    originalVariables.splice(0, originalVariables.length, ...normalizedArgs.originalVariables);
+    guardVariableCandidates.splice(
+      0,
+      guardVariableCandidates.length,
+      ...normalizedArgs.guardVariableCandidates
+    );
+    expressionSourceVariables.splice(
+      0,
+      expressionSourceVariables.length,
+      ...normalizedArgs.expressionSourceVariables
+    );
+    argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
+  }
+
   if (boundArgs.length > 0) {
     const boundArgStrings = boundArgs.map(arg => stringifyExecGuardArg(arg));
     evaluatedArgs.unshift(...boundArgs);
@@ -2158,7 +2519,7 @@ async function evaluateExecInvocationInternal(
     typeof (node as any).meta?.toolOperationName === 'string' &&
     (node as any).meta.toolOperationName.trim().length > 0
       ? (node as any).meta.toolOperationName.trim()
-      : undefined;
+      : collectionDispatchContext?.toolKey;
   const effectiveToolMetadata = resolveEffectiveToolMetadata({
     env: runtimeEnv,
     executable: variable,
@@ -2336,7 +2697,7 @@ async function evaluateExecInvocationInternal(
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
       ? (mcpTool as any).name.trim()
       : '';
-  const trackedToolName = trackedMcpName || (variable.name ?? commandName ?? '');
+  const trackedToolName = trackedMcpName || (toolOperationName ?? variable.name ?? commandName ?? '');
   const toolCallArguments =
     trackedToolName.length > 0
       ? buildToolCallArguments(params, evaluatedArgs)

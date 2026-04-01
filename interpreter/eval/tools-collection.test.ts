@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { interpret } from '@interpreter/index';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { Environment } from '@interpreter/env/Environment';
@@ -23,6 +24,36 @@ const pathContext = {
 async function interpretWithEnv(source: string): Promise<Environment> {
   const fileSystem = new MemoryFileSystem();
   let environment: Environment | null = null;
+
+  await interpret(source, {
+    fileSystem,
+    pathService,
+    pathContext,
+    filePath: pathContext.filePath,
+    format: 'markdown',
+    normalizeBlankLines: true,
+    captureEnvironment: env => {
+      environment = env;
+    }
+  });
+
+  if (!environment) {
+    throw new Error('Failed to capture environment');
+  }
+
+  return environment;
+}
+
+async function interpretWithEnvAndFiles(
+  source: string,
+  files: Record<string, string>
+): Promise<Environment> {
+  const fileSystem = new MemoryFileSystem();
+  let environment: Environment | null = null;
+
+  for (const [filePath, content] of Object.entries(files)) {
+    await fileSystem.writeFile(filePath, content);
+  }
 
   await interpret(source, {
     fileSystem,
@@ -381,6 +412,204 @@ describe('tool collections', () => {
         /var @result = @agent(@agentTools) with { policy: @taskPolicy }
       `)
     ).rejects.toThrow(/cannot use true in policy\.authorizations/i);
+  });
+
+  it('matches policy.authorizations against the collection key for direct collection dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @dispatch_create_draft(subject) = \`draft:@subject\` with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        create_draft: {
+          mlld: @dispatch_create_draft,
+          expose: ["subject"],
+          controlArgs: []
+        }
+      }
+
+      /var @taskPolicy = {
+        authorizations: {
+          allow: {
+            create_draft: true
+          }
+        }
+      }
+
+      /show @writeTools["create_draft"]("hello") with { policy: @taskPolicy }
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(output.trim()).toBe('draft:hello');
+  });
+
+  it('spreads a single arg object across the collection surface for direct dispatch', async () => {
+    const output = await interpret(`
+      /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @send_email,
+          expose: ["recipients", "subject", "body"],
+          controlArgs: ["recipients"]
+        }
+      }
+
+      /var @args = {
+        recipients: ["ada@example.com"],
+        subject: "hello",
+        body: "world"
+      }
+
+      /show @writeTools["send_email"](@args)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(output.trim()).toBe('sent:hello:world');
+  });
+
+  it('keeps positional direct collection dispatch behavior unchanged', async () => {
+    const output = await interpret(`
+      /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @send_email,
+          expose: ["recipients", "subject", "body"],
+          controlArgs: ["recipients"]
+        }
+      }
+
+      /show @writeTools["send_email"](["ada@example.com"], "hello", "world")
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(output.trim()).toBe('sent:hello:world');
+  });
+
+  it('applies policy matching after object-arg spreading for direct collection dispatch', async () => {
+    const output = await interpret(`
+      /record @contact = { facts: [email: string], data: [name: string] }
+      /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
+
+      /exe tool:w @dispatch_send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @dispatch_send_email,
+          labels: ["tool:w:send_email"],
+          expose: ["recipients", "cc", "bcc", "subject"],
+          controlArgs: ["recipients", "cc", "bcc"]
+        }
+      }
+
+      /var @contact = @get_contact()
+      /var @args = {
+        recipients: [@contact.email],
+        cc: [],
+        bcc: [],
+        subject: "hello"
+      }
+      /var @taskPolicy = {
+        authorizations: {
+          allow: {
+            send_email: {
+              args: {
+                recipients: [@contact.email]
+              }
+            }
+          }
+        }
+      }
+
+      /show @writeTools["send_email"](@args) with { policy: @taskPolicy }
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(output.trim()).toBe('sent:hello');
+  });
+
+  it('fails closed on unknown direct collection keys', async () => {
+    await expect(
+      interpretWithEnv(`
+        /exe @create_draft(subject) = \`draft:@subject\`
+
+        /var tools @writeTools = {
+          create_draft: {
+            mlld: @create_draft,
+            expose: ["subject"]
+          }
+        }
+
+        /show @writeTools["missing"]("hello")
+      `)
+    ).rejects.toThrow(/unknown tool 'missing'/i);
+  });
+
+  it('preserves direct collection dispatch behavior for imported collections', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tool-module.mld"
+
+        /var @taskPolicy = {
+          authorizations: {
+            allow: {
+              send_email: true
+            }
+          }
+        }
+
+        /var @args = {
+          recipients: ["ada@example.com"],
+          subject: "hello",
+          body: "world"
+        }
+
+        /var @result = @writeTools["send_email"](@args) with { policy: @taskPolicy }
+      `,
+      {
+        '/tool-module.mld': `
+          /exe tool:w @send_email(recipients, subject, body) = \`sent:@subject:@body\` with { controlArgs: [] }
+
+          /var tools @writeTools = {
+            send_email: {
+              mlld: @send_email,
+              expose: ["recipients", "subject", "body"],
+              controlArgs: []
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const resultVar = env.getVariable('result');
+    const resolved = await extractVariableValue(resultVar as any, env);
+
+    expect((resolved as any)?.text ?? resolved).toBe('sent:hello:world');
   });
 
   it('creates tool collections directly from runtime MCP specs', async () => {

@@ -33,6 +33,7 @@ export interface ToolCollectionMetadata {
 const TOOL_COLLECTION_METADATA = Symbol.for('mlld.toolCollectionMetadata');
 
 export const TOOL_COLLECTION_METADATA_EXPORT_KEY = '__mlld_tool_collection_metadata__';
+export const TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY = '__mlld_tool_collection_captured_module_env__';
 
 function cloneStringList(values: readonly string[]): string[] {
   return values
@@ -161,6 +162,19 @@ export function takeSerializedToolCollectionMetadata(
   }
 
   return cloneToolCollectionMetadata(candidate);
+}
+
+export function takeSerializedToolCollectionCapturedModuleEnv(
+  value: unknown
+): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const container = value as Record<string, unknown>;
+  const candidate = container[TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY];
+  delete container[TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY];
+  return candidate;
 }
 
 export function attachToolCollectionAuthorizationContext<T extends Record<string, unknown>>(

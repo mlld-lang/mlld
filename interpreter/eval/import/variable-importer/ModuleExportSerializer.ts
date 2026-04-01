@@ -2,6 +2,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import {
   getToolCollectionMetadata,
+  TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY,
   TOOL_COLLECTION_METADATA_EXPORT_KEY
 } from '@core/types/tools';
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
@@ -158,6 +159,14 @@ export class ModuleExportSerializer {
       const toolCollectionMetadata = getToolCollectionMetadata(variable.value);
       if (toolCollectionMetadata && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
         (resolved as Record<string, unknown>)[TOOL_COLLECTION_METADATA_EXPORT_KEY] = toolCollectionMetadata;
+        const toolCollectionCapturedModuleEnv = this.serializeToolCollectionCapturedModuleEnv(
+          variable,
+          context
+        );
+        if (toolCollectionCapturedModuleEnv !== undefined) {
+          (resolved as Record<string, unknown>)[TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY] =
+            toolCollectionCapturedModuleEnv;
+        }
       }
       return resolved;
     }
@@ -199,6 +208,56 @@ export class ModuleExportSerializer {
     }
 
     return variable.value;
+  }
+
+  private serializeToolCollectionCapturedModuleEnv(
+    variable: Variable,
+    context: ModuleExportSerializationContext
+  ): unknown {
+    const existingCaptured =
+      getCapturedModuleEnv(variable.internal)
+      ?? getCapturedModuleEnv(variable);
+    if (existingCaptured instanceof Map) {
+      return context.serializeModuleEnv(existingCaptured, context.serializingEnvs);
+    }
+    if (existingCaptured && typeof existingCaptured === 'object') {
+      return existingCaptured;
+    }
+    if (!variable.value || typeof variable.value !== 'object' || Array.isArray(variable.value)) {
+      return undefined;
+    }
+
+    const serializedExecutables: Record<string, unknown> = {};
+    for (const definition of Object.values(variable.value as Record<string, unknown>)) {
+      if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+        continue;
+      }
+      const execName = typeof (definition as { mlld?: unknown }).mlld === 'string'
+        ? (definition as { mlld: string }).mlld.trim()
+        : '';
+      if (!execName || Object.prototype.hasOwnProperty.call(serializedExecutables, execName)) {
+        continue;
+      }
+      const resolvedExecutable = this.objectResolver.resolveObjectReferences(
+        `@${execName}`,
+        context.childVars,
+        {
+          resolveStrings: true,
+          resolveVariable: name => context.childEnv?.getVariable(name)
+        }
+      );
+      if (
+        resolvedExecutable
+        && typeof resolvedExecutable === 'object'
+        && (resolvedExecutable as { __executable?: unknown }).__executable
+      ) {
+        serializedExecutables[execName] = resolvedExecutable;
+      }
+    }
+
+    return Object.keys(serializedExecutables).length > 0
+      ? serializedExecutables
+      : undefined;
   }
 
   private serializeExecutableVariable(

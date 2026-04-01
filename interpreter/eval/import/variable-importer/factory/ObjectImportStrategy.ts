@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import {
   attachToolCollectionMetadata,
+  takeSerializedToolCollectionCapturedModuleEnv,
   takeSerializedToolCollectionMetadata
 } from '@core/types/tools';
 import { createObjectVariable, type VariableTypeDiscriminator } from '@core/types/variable';
@@ -18,6 +19,9 @@ export class ObjectImportStrategy {
     }
 
     const normalizedObject = this.complexityHelpers.unwrapArraySnapshots(request.value, request.importPath);
+    const toolCollectionCapturedModuleEnv = this.normalizeToolCollectionCapturedModuleEnv(
+      takeSerializedToolCollectionCapturedModuleEnv(normalizedObject)
+    );
     const toolCollectionMetadata = takeSerializedToolCollectionMetadata(normalizedObject);
     if (toolCollectionMetadata) {
       attachToolCollectionMetadata(normalizedObject, toolCollectionMetadata);
@@ -68,7 +72,10 @@ export class ObjectImportStrategy {
           ? {
               internal: {
                 toolCollection: normalizedObject,
-                isToolsCollection: true
+                isToolsCollection: true,
+                ...(toolCollectionCapturedModuleEnv !== undefined
+                  ? { capturedModuleEnv: toolCollectionCapturedModuleEnv }
+                  : {})
               }
             }
           : {})
@@ -91,5 +98,15 @@ export class ObjectImportStrategy {
       'source' in value &&
       'createdAt' in value &&
       'modifiedAt' in value;
+  }
+
+  private normalizeToolCollectionCapturedModuleEnv(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || value instanceof Map) {
+      return value;
+    }
+
+    return new Map(
+      Object.entries(value as Record<string, unknown>).filter(([name]) => name !== '__metadata__')
+    );
   }
 }
