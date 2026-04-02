@@ -22,6 +22,18 @@ Splitting creates a security boundary:
 
 The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can't actually do it because the planner never authorized that recipient.
 
+## Phase-shaped tools
+
+The planner-worker split works best when tools are designed for specific security phases:
+
+- **Resolve tools** find and ground targets — search, list, metadata lookup. Use with `display: "planner"`. Return facts + handles, not raw content.
+- **Extract tools** read grounded content by ID — `get_email_by_id`, not `search_emails`. Use with `display: "worker"`. Content is visible, facts are masked.
+- **Execute tools** do one concrete write — single tool, handle-backed control args, step-scoped policy.
+
+When tools mix phases (search + read content in one call), the planner sees untrusted content it shouldn't, and the orchestrator needs repair logic. Phase-shaped tools make the security boundaries clean: resolve discovers, extract reads, execute writes.
+
+Multi-write tasks become multiple execute steps, each with its own `@policy.build` authorization. One write per step keeps authorization, state, and failure recovery simple.
+
 ## Structure
 
 ```mlld
@@ -227,14 +239,17 @@ var @base = {
 }
 
 >> Step 1: Planner calls @searchContacts, gets ref handle on email
->> Step 2: Planner produces bucketed intent
+>> Step 2: Planner produces bucketed intent with tool name and args
 var @plannerResult = @plan(@task) | @parse
 
 >> Step 3: Builder validates intent against tools and policy
 var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
 
->> Step 4: Worker runs under validated policy
-show @sendEmail(@contacts.email, "Following up", "Hi Mark...") with { policy: @auth.policy }
+>> Step 4: Dynamic dispatch — invoke the tool by collection key under built policy
+>> Policy matches against the collection key, args spread from the object
+show @writeTools[@plannerResult.write_tool](@plannerResult.args) with { policy: @auth.policy }
 ```
+
+Collection-key invocation (`@writeTools["send_email"](@args)`) matches policy against the collection key, not the underlying exe name. Arg objects are spread to named params using the tool's metadata. No generated dispatch shims needed.
 
 See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.

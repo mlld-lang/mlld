@@ -29,6 +29,8 @@ record @contact = {
 
 `facts` fields get `fact:` labels -- the source is authoritative for these values. `data` fields don't -- they're content that could contain anything. `?` marks optional fields.
 
+**Important:** if a field contains values that a downstream write tool needs as a control arg (recipients, participants, file IDs, etc.), it must be a fact, not data. Data fields don't get handles or fact proof — they can't satisfy positive checks or flow into authorized tool calls. Array fields like `shared_with`, `recipients`, `participants` should be `facts: [...: array]` so each element gets its own handle.
+
 Data fields can be classified as trusted or untrusted:
 
 ```mlld
