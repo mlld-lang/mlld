@@ -575,6 +575,110 @@ describe('tool collections', () => {
     });
   });
 
+  it('preserves tool collection dispatch through a local let alias', async () => {
+    const env = await interpretWithEnv(`
+      /exe @send_email(recipients: array, subject, body, attachments: array, cc: array, bcc: array) = {
+        recipients: @recipients,
+        subject: @subject,
+        body: @body,
+        attachments: @attachments,
+        cc: @cc,
+        bcc: @bcc
+      }
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @send_email,
+          expose: ["recipients", "subject", "body", "attachments", "cc", "bcc"],
+          controlArgs: ["recipients"]
+        }
+      }
+
+      /exe @runner(args) = [
+        let @activeWriteToolCollection = @writeTools ?? {}
+        => @activeWriteToolCollection["send_email"](@args)
+      ]
+
+      /var @args = {
+        recipients: [{ demo: "x" }],
+        subject: "hello",
+        body: "world",
+        attachments: [],
+        cc: [],
+        bcc: []
+      }
+
+      /var @result = @runner(@args)
+    `);
+
+    const result = await extractVariableValue(env.getVariable('result') as any, env) as any;
+    expect(result.data ?? result).toEqual({
+      recipients: [{ demo: 'x' }],
+      subject: 'hello',
+      body: 'world',
+      attachments: [],
+      cc: [],
+      bcc: []
+    });
+  });
+
+  it('preserves imported tool collections through exe params and local let aliases', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @writeTools } from "/tools.mld"
+
+        /exe @runner(tools, args) = [
+          let @activeWriteToolCollection = @tools ?? {}
+          => @activeWriteToolCollection["send_email"](@args)
+        ]
+
+        /var @args = {
+          recipients: [{ demo: "x" }],
+          subject: "hello",
+          body: "world",
+          attachments: [],
+          cc: [],
+          bcc: []
+        }
+
+        /var @result = @runner(@writeTools, @args)
+      `,
+      {
+        '/tools.mld': `
+          /exe @send_email(recipients: array, subject, body, attachments: array, cc: array, bcc: array) = {
+            recipients: @recipients,
+            subject: @subject,
+            body: @body,
+            attachments: @attachments,
+            cc: @cc,
+            bcc: @bcc
+          }
+
+          /var tools @writeTools = {
+            send_email: {
+              mlld: @send_email,
+              expose: ["recipients", "subject", "body", "attachments", "cc", "bcc"],
+              controlArgs: ["recipients"]
+            }
+          }
+
+          /export { @writeTools }
+        `
+      }
+    );
+
+    const resultVar = env.getVariable('result');
+    const result = await extractVariableValue(resultVar as any, env) as any;
+    expect(result.data ?? result).toEqual({
+      recipients: [{ demo: 'x' }],
+      subject: 'hello',
+      body: 'world',
+      attachments: [],
+      cc: [],
+      bcc: []
+    });
+  });
+
   it('keeps positional direct collection dispatch behavior unchanged', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`

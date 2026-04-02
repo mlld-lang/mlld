@@ -1,10 +1,14 @@
-import * as fs from 'fs';
 import {
   attachToolCollectionMetadata,
+  getToolCollectionMetadata,
   takeSerializedToolCollectionCapturedModuleEnv,
   takeSerializedToolCollectionMetadata
 } from '@core/types/tools';
 import { createObjectVariable, type VariableTypeDiscriminator } from '@core/types/variable';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import type { ImportValueComplexityHelpers, ImportVariableFactoryRequest } from './types';
 
 export class ObjectImportStrategy {
@@ -21,36 +25,18 @@ export class ObjectImportStrategy {
     const normalizedObject = this.complexityHelpers.unwrapArraySnapshots(request.value, request.importPath);
     const toolCollectionCapturedModuleEnv = this.normalizeToolCollectionCapturedModuleEnv(
       takeSerializedToolCollectionCapturedModuleEnv(normalizedObject)
+        ?? getCapturedModuleEnv(request.value)
     );
-    const toolCollectionMetadata = takeSerializedToolCollectionMetadata(normalizedObject);
+    const toolCollectionMetadata =
+      takeSerializedToolCollectionMetadata(normalizedObject)
+      ?? getToolCollectionMetadata(request.value);
     if (toolCollectionMetadata) {
       attachToolCollectionMetadata(normalizedObject, toolCollectionMetadata);
+      if (toolCollectionCapturedModuleEnv !== undefined) {
+        sealCapturedModuleEnv(normalizedObject, toolCollectionCapturedModuleEnv);
+      }
     }
     const isComplex = this.complexityHelpers.hasComplexContent(normalizedObject);
-    if (process.env.MLLD_DEBUG_FIX === 'true') {
-      console.error('[VariableImporter] create object variable', {
-        name: request.name,
-        importPath: request.importPath,
-        isComplex,
-        keys: Object.keys(normalizedObject || {}).slice(0, 5),
-        agentRosterPreview: normalizedObject && (normalizedObject as any).agent_roster
-      });
-      try {
-        fs.appendFileSync(
-          '/tmp/mlld-debug.log',
-          JSON.stringify({
-            source: 'VariableImporter',
-            name: request.name,
-            importPath: request.importPath,
-            isComplex,
-            keys: Object.keys(normalizedObject || {}).slice(0, 5),
-            agentRosterType: normalizedObject && typeof (normalizedObject as any).agent_roster,
-            agentRosterIsVariable: this.isVariableLike((normalizedObject as any).agent_roster),
-            agentRosterIsArray: Array.isArray((normalizedObject as any).agent_roster)
-          }) + '\n'
-        );
-      } catch {}
-    }
 
     const isNamespace = normalizedObject && (normalizedObject as any).__namespace === true;
     if (isNamespace) {
@@ -87,17 +73,6 @@ export class ObjectImportStrategy {
     }
 
     return variable;
-  }
-
-  private isVariableLike(value: any): boolean {
-    return value &&
-      typeof value === 'object' &&
-      typeof value.type === 'string' &&
-      'name' in value &&
-      'value' in value &&
-      'source' in value &&
-      'createdAt' in value &&
-      'modifiedAt' in value;
   }
 
   private normalizeToolCollectionCapturedModuleEnv(value: unknown): unknown {

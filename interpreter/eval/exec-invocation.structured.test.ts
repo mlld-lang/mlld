@@ -31,6 +31,35 @@ function extractExecutableParamValue(param: unknown): unknown {
   return param;
 }
 
+function buildObjectMethodInvocation(
+  objectIdentifier: string,
+  methodName: string,
+  argIdentifier: string,
+  fields: Array<{ type: 'Field'; nodeId: string; value: string }> = []
+): ExecInvocation {
+  return {
+    type: 'ExecInvocation',
+    nodeId: `${objectIdentifier}-${methodName}-invocation`,
+    commandRef: {
+      name: methodName,
+      objectReference: {
+        type: 'VariableReference',
+        nodeId: `${objectIdentifier}-ref`,
+        identifier: objectIdentifier,
+        fields
+      },
+      args: [
+        {
+          type: 'VariableReference',
+          nodeId: `${argIdentifier}-ref`,
+          identifier: argIdentifier,
+          fields: []
+        } as any
+      ]
+    } as any
+  };
+}
+
 async function capturePythonInteropValue<T>(run: () => Promise<T>): Promise<{
   capturedValue: unknown;
   result: T;
@@ -858,6 +887,83 @@ print(json.dumps(value))
 
     const result = await evaluateExecInvocation(invocation, env);
     expect(asText(result.value)).toBe('nested-ok');
+  });
+
+  it('spreads matching object args for executable refs resolved from plain object lookup', async () => {
+    const src = `
+/exe @send_email(recipients: array, subject, body, attachments: array, cc: array, bcc: array) = {
+  recipients: @recipients,
+  subject: @subject,
+  body: @body,
+  attachments: @attachments,
+  cc: @cc,
+  bcc: @bcc
+}
+/var @writeTools = { send_email: @send_email }
+/var @args1 = {
+  recipients: [{ demo: "x" }],
+  subject: "hello",
+  body: "world",
+  attachments: [],
+  cc: [],
+  bcc: []
+}
+/var @args2 = {
+  recipients: { value: "demo@example.com", demo: "x" },
+  subject: "hello",
+  body: "world",
+  attachments: [],
+  cc: [],
+  bcc: []
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const first = await evaluateExecInvocation(
+      buildObjectMethodInvocation('writeTools', 'send_email', 'args1'),
+      env
+    );
+    const second = await evaluateExecInvocation(
+      buildObjectMethodInvocation('writeTools', 'send_email', 'args2'),
+      env
+    );
+
+    expect((isStructuredValue(first.value) ? first.value.data : first.value)).toEqual({
+      recipients: [{ demo: 'x' }],
+      subject: 'hello',
+      body: 'world',
+      attachments: [],
+      cc: [],
+      bcc: []
+    });
+    expect((isStructuredValue(second.value) ? second.value.data : second.value)).toEqual({
+      recipients: { value: 'demo@example.com', demo: 'x' },
+      subject: 'hello',
+      body: 'world',
+      attachments: [],
+      cc: [],
+      bcc: []
+    });
+  });
+
+  it('keeps positional object args for plain object executable dispatch when keys do not match params', async () => {
+    const src = `
+/exe @wrap(config) = { config: @config }
+/var @toolMap = { wrap: @wrap }
+/var @input = { value: "x" }
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const result = await evaluateExecInvocation(
+      buildObjectMethodInvocation('toolMap', 'wrap', 'input'),
+      env
+    );
+
+    expect((isStructuredValue(result.value) ? result.value.data : result.value)).toEqual({
+      config: { value: 'x' }
+    });
   });
 
   it('pipes RHS variable through inline command pipeline', async () => {

@@ -171,6 +171,19 @@ type CollectionDispatchArgNormalization = {
   argSourceNames: (string | undefined)[];
 };
 
+type ExecutableDispatchArgNormalizationOptions = {
+  env: Environment;
+  executableParamNames: readonly string[];
+  visibleParamNames: readonly string[];
+  optionalParamNames: readonly string[];
+  bind?: Record<string, unknown>;
+  evaluatedArgs: readonly unknown[];
+  originalVariables: readonly (Variable | undefined)[];
+  guardVariableCandidates: readonly (Variable | undefined)[];
+  expressionSourceVariables: readonly (Variable | undefined)[];
+  argSourceNames: readonly (string | undefined)[];
+};
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -265,9 +278,57 @@ async function normalizeCollectionDispatchArguments(options: {
   argSourceNames: readonly (string | undefined)[];
 }): Promise<CollectionDispatchArgNormalization> {
   const {
+    definition,
+    executableParamNames,
+    ...rest
+  } = options;
+
+  return normalizeExecutableDispatchArguments({
+    ...rest,
+    executableParamNames,
+    visibleParamNames: getCollectionVisibleParams(executableParamNames, definition),
+    optionalParamNames: Array.isArray(definition.optional)
+      ? definition.optional.filter(
+          (param): param is string => typeof param === 'string' && param.trim().length > 0
+        )
+      : [],
+    bind: getToolDefinitionBind(definition)
+  });
+}
+
+async function normalizePlainObjectExecutableDispatchArguments(options: {
+  env: Environment;
+  executableParamNames: readonly string[];
+  optionalParamNames: readonly string[];
+  evaluatedArgs: readonly unknown[];
+  originalVariables: readonly (Variable | undefined)[];
+  guardVariableCandidates: readonly (Variable | undefined)[];
+  expressionSourceVariables: readonly (Variable | undefined)[];
+  argSourceNames: readonly (string | undefined)[];
+}): Promise<CollectionDispatchArgNormalization> {
+  const {
+    executableParamNames,
+    optionalParamNames,
+    ...rest
+  } = options;
+
+  return normalizeExecutableDispatchArguments({
+    ...rest,
+    executableParamNames,
+    visibleParamNames: executableParamNames,
+    optionalParamNames
+  });
+}
+
+async function normalizeExecutableDispatchArguments(
+  options: ExecutableDispatchArgNormalizationOptions
+): Promise<CollectionDispatchArgNormalization> {
+  const {
     env,
     executableParamNames,
-    definition,
+    visibleParamNames,
+    optionalParamNames,
+    bind,
     evaluatedArgs,
     originalVariables,
     guardVariableCandidates,
@@ -286,16 +347,12 @@ async function normalizeCollectionDispatchArguments(options: {
     };
   }
 
-  const bind = getToolDefinitionBind(definition);
-  const visibleParams = getCollectionVisibleParams(executableParamNames, definition);
   const optionalSet = new Set(
-    Array.isArray(definition.optional)
-      ? definition.optional.filter(
-          (param): param is string => typeof param === 'string' && param.trim().length > 0
-        )
-      : []
+    optionalParamNames.filter(
+      (param): param is string => typeof param === 'string' && param.trim().length > 0
+    )
   );
-  const visibleSet = new Set(visibleParams);
+  const visibleSet = new Set(visibleParamNames);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
   const materializedArgs = await Promise.all(
     evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env))
@@ -305,13 +362,13 @@ async function normalizeCollectionDispatchArguments(options: {
     materializedArgs.length === 1
     && isPlainObject(materializedArgs[0])
     && Object.keys(materializedArgs[0]).every(key => visibleSet.has(key))
-    && visibleParams
+    && visibleParamNames
       .filter(param => !optionalSet.has(param))
       .every(param => Object.prototype.hasOwnProperty.call(materializedArgs[0], param));
 
   if (shouldSpreadNamedObject) {
     const objectArg = materializedArgs[0] as Record<string, unknown>;
-    for (const paramName of visibleParams) {
+    for (const paramName of visibleParamNames) {
       if (!Object.prototype.hasOwnProperty.call(objectArg, paramName)) {
         continue;
       }
@@ -323,9 +380,9 @@ async function normalizeCollectionDispatchArguments(options: {
       });
     }
   } else {
-    const providedCount = Math.min(materializedArgs.length, visibleParams.length);
+    const providedCount = Math.min(materializedArgs.length, visibleParamNames.length);
     for (let index = 0; index < providedCount; index += 1) {
-      const paramName = visibleParams[index];
+      const paramName = visibleParamNames[index];
       normalizedEntries.set(paramName, {
         value: materializedArgs[index],
         stringValue: stringifyExecGuardArg(materializedArgs[index]),
@@ -1338,6 +1395,7 @@ async function evaluateExecInvocationInternal(
   // or a method call on an exec result (e.g., @func(args).method())
   let variable;
   let collectionDispatchContext: CollectionDispatchContext | undefined;
+  let objectMethodExecutableDispatch = false;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     let namespaceMethodPreferred = false;
@@ -1529,6 +1587,7 @@ async function evaluateExecInvocationInternal(
               };
             } else {
               variable = resolveObjectMethod(objectValue, commandName);
+              objectMethodExecutableDispatch = true;
             }
           }
         } else if (isStructuredValue(objectValue)) {
@@ -1571,6 +1630,7 @@ async function evaluateExecInvocationInternal(
             };
           } else {
             variable = resolveObjectMethod(objectValue, commandName);
+            objectMethodExecutableDispatch = true;
           }
         }
       } else {
@@ -1616,6 +1676,7 @@ async function evaluateExecInvocationInternal(
             };
           } else {
             variable = resolveObjectMethod(objectValue, commandName);
+            objectMethodExecutableDispatch = true;
           }
         }
       }
@@ -2536,6 +2597,41 @@ async function evaluateExecInvocationInternal(
           )
         : [],
       definition: collectionDispatchContext.definition,
+      evaluatedArgs,
+      originalVariables,
+      guardVariableCandidates,
+      expressionSourceVariables,
+      argSourceNames
+    });
+    evaluatedArgs = normalizedArgs.evaluatedArgs;
+    evaluatedArgStrings = normalizedArgs.evaluatedArgStrings;
+    originalVariables.splice(0, originalVariables.length, ...normalizedArgs.originalVariables);
+    guardVariableCandidates.splice(
+      0,
+      guardVariableCandidates.length,
+      ...normalizedArgs.guardVariableCandidates
+    );
+    expressionSourceVariables.splice(
+      0,
+      expressionSourceVariables.length,
+      ...normalizedArgs.expressionSourceVariables
+    );
+    argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
+  } else if (objectMethodExecutableDispatch && isExecutableVariable(variable)) {
+    const normalizedArgs = await normalizePlainObjectExecutableDispatchArguments({
+      env,
+      executableParamNames: Array.isArray(variable.paramNames)
+        ? variable.paramNames.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
+      optionalParamNames: Array.isArray(definition.optionalParams)
+        ? definition.optionalParams.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
