@@ -232,6 +232,23 @@ policy @base = {
 
 Denied tools are rejected in both `@policy.build` and `with { policy }` compilation. Authorizations open narrow windows in policy — `deny` prevents certain windows from ever opening.
 
+## Dynamic dispatch from tool collections
+
+Tool collections support dynamic invocation by key with policy enforcement:
+
+```mlld
+@writeTools["send_email"](@args) with { policy: @taskPolicy }
+```
+
+Policy matches against the **collection key** (`send_email`), not the underlying exe name. Arg objects are spread to named params using the tool's metadata. This is the recommended pattern for policygen-style loops where the planner selects a tool by name:
+
+```mlld
+var @auth = @policy.build(@step.authorizations, @writeTools)
+show @writeTools[@step.write_tool](@step.args) with { policy: @auth.policy }
+```
+
+No generated dispatch shims or routing exes needed. The tool collection metadata (params, controlArgs, expose/bind shaping) is the source of truth for both policy matching and arg spreading.
+
 ## Policy builder
 
 `@policy.build(@intent, @tools)` validates planner intent against tool metadata and active policy:

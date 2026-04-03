@@ -55,6 +55,7 @@ Sections marked **Future** preserve the broader direction from v2, but they are 
 | 34 | Imported `var tools` collections as first-class inputs for `@policy.build`/`@policy.validate` | **Shipped** |
 | 35 | Builder/validator compile diagnostics (`report` field with strips, repairs, drops, proofs) | **Shipped** |
 | 36 | Trusted data fields (`data: { trusted, untrusted }` with conditional `when` promotion) | **Shipped** — see `spec-trusted-data-fields.md` |
+| 37 | Collection-key policy matching and arg-object spreading for dynamic tool dispatch | **Shipped** — see `req-runtime-tool-collection-policy-dispatch.md` |
 
 ### Phase 2 — Stronger Source And Namespace Semantics
 
