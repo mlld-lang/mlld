@@ -309,6 +309,15 @@ export async function evaluateExecInvocationArgs(options: {
             }
 
             let value = variable.value;
+            if (
+              isWholeVariableReference &&
+              variable.internal?.isToolsCollection === true &&
+              variable.internal.toolCollection &&
+              typeof variable.internal.toolCollection === 'object' &&
+              !Array.isArray(variable.internal.toolCollection)
+            ) {
+              value = variable.internal.toolCollection;
+            }
             const { isTemplate } = await import('@core/types/variable');
             if (varRef.fields && varRef.fields.length > 0) {
               const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');

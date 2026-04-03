@@ -9,6 +9,7 @@ import {
   createObjectVariable,
   type VariableSource
 } from '@core/types/variable';
+import { mergePolicyConfigs, type PolicyConfig } from '@core/policy/union';
 import {
   clonePolicyAuthorizationCompileReport,
   compilePolicyAuthorizations,
@@ -53,16 +54,105 @@ function createEmptyPolicyResult(message: string) {
   };
 }
 
-function createPolicyBuilderResult(compilation: Awaited<ReturnType<typeof compilePolicyAuthorizations>>) {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function normalizeToolCollectionStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+}
+
+function buildToolCollectionMatchSignature(value: unknown): string | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value)
+    .filter(([toolName]) => toolName.trim().length > 0)
+    .map(([toolName, entry]) => {
+      if (!isPlainObject(entry)) {
+        return undefined;
+      }
+
+      const bind =
+        isPlainObject(entry.bind)
+          ? Object.fromEntries(
+              Object.entries(entry.bind).sort(([left], [right]) => left.localeCompare(right))
+            )
+          : undefined;
+
+      return [
+        toolName,
+        {
+          ...(typeof entry.mlld === 'string' ? { mlld: entry.mlld.trim() } : {}),
+          expose: normalizeToolCollectionStringList(entry.expose),
+          optional: normalizeToolCollectionStringList(entry.optional),
+          controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+          labels: normalizeToolCollectionStringList(entry.labels),
+          ...(typeof entry.description === 'string' && entry.description.trim().length > 0
+            ? { description: entry.description.trim() }
+            : {}),
+          ...(bind ? { bind } : {})
+        }
+      ] as const;
+    });
+
+  if (entries.some(entry => entry === undefined)) {
+    return undefined;
+  }
+
+  return JSON.stringify(
+    (entries as Array<readonly [string, Record<string, unknown>]>)
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function findMatchingToolCollectionInEnv(
+  env: Environment,
+  rawTools: unknown
+): ToolCollection | undefined {
+  const signature = buildToolCollectionMatchSignature(rawTools);
+  if (!signature) {
+    return undefined;
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    const candidate =
+      variable.internal?.isToolsCollection === true &&
+      variable.internal.toolCollection &&
+      isPlainObject(variable.internal.toolCollection)
+        ? variable.internal.toolCollection as ToolCollection
+        : undefined;
+    if (!candidate) {
+      continue;
+    }
+    if (buildToolCollectionMatchSignature(candidate) === signature) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function createPolicyBuilderResult(
+  compilation: Awaited<ReturnType<typeof compilePolicyAuthorizations>>,
+  basePolicy: PolicyConfig | undefined
+) {
   const authorizations = compilation.authorizations ?? {};
 
   return {
-    policy: {
+    policy: mergePolicyConfigs(basePolicy, {
       authorizations: {
         allow: authorizations.allow ?? {},
         ...(authorizations.deny ? { deny: authorizations.deny } : {})
       }
-    },
+    }),
     valid: compilation.issues.length === 0,
     issues: compilation.issues,
     report: clonePolicyAuthorizationCompileReport(compilation.report)
@@ -106,7 +196,7 @@ function resolveToolCollection(
       try {
         return normalizeToolCollection(rawValue, executionEnv);
       } catch {
-        return undefined;
+        return findMatchingToolCollectionInEnv(executionEnv, rawValue);
       }
     }
 
@@ -120,7 +210,7 @@ function resolveToolCollection(
   try {
     return normalizeToolCollection(rawTools, executionEnv);
   } catch {
-    return undefined;
+    return findMatchingToolCollectionInEnv(executionEnv, rawTools);
   }
 }
 
@@ -162,17 +252,18 @@ async function buildPolicyAuthorizations(
 
   const rawAuthorizations = await normalizeIntentContainer(intent, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
+  const activePolicy = executionEnv.getPolicySummary();
   const compilation = await compilePolicyAuthorizations({
     rawAuthorizations,
     rawSource: intent,
     env: executionEnv,
     toolContext,
-    policy: executionEnv.getPolicySummary(),
-    ambientDeniedTools: executionEnv.getPolicySummary()?.authorizations?.deny,
+    policy: activePolicy,
+    ambientDeniedTools: activePolicy?.authorizations?.deny,
     mode: 'builder'
   });
 
-  return createPolicyBuilderResult(compilation);
+  return createPolicyBuilderResult(compilation, activePolicy);
 }
 
 function createPolicyMethod(

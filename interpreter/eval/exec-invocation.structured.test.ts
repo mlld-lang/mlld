@@ -60,6 +60,21 @@ function buildObjectMethodInvocation(
   };
 }
 
+async function parseSingleInvocation(source: string): Promise<ExecInvocation> {
+  const { ast } = await parse(source);
+  const directive = ast[0] as {
+    values?: {
+      invocation?: ExecInvocation;
+    };
+  };
+
+  if (!directive?.values?.invocation) {
+    throw new Error('Expected a show directive with an invocation');
+  }
+
+  return directive.values.invocation;
+}
+
 async function capturePythonInteropValue<T>(run: () => Promise<T>): Promise<{
   capturedValue: unknown;
   result: T;
@@ -705,6 +720,75 @@ print(json.dumps(value))
     expect(capturedValue).toEqual(input);
     expect(isStructuredValue(result.value)).toBe(true);
     expect(result.value.data).toEqual(input);
+  });
+
+  it('preserves preview-bearing handle objects through collection-dispatched js executables', async () => {
+    const src = `
+/exe tool:w @echoPayload(value) = js { return value; } with { controlArgs: [] }
+/var tools @writeTools = {
+  echo_payload: {
+    mlld: @echoPayload,
+    expose: ["value"],
+    controlArgs: []
+  }
+}
+/var @args = {
+  value: {
+    preview: "US1***21212",
+    handle: "h_abc123"
+  }
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation = await parseSingleInvocation('/show @writeTools["echo_payload"](@args)');
+    const result = await evaluateExecInvocation(invocation, env);
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual({
+      preview: 'US1***21212',
+      handle: 'h_abc123'
+    });
+  });
+
+  it('preserves preview-bearing handle objects through collection-dispatched python executables', async () => {
+    const src = `
+/exe tool:w @echoPy(value) = python {
+import json
+print(json.dumps(value))
+} with { controlArgs: [] }
+/var tools @writeTools = {
+  echo_payload: {
+    mlld: @echoPy,
+    expose: ["value"],
+    controlArgs: []
+  }
+}
+/var @args = {
+  value: {
+    preview: "US1***21212",
+    handle: "h_abc123"
+  }
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation = await parseSingleInvocation('/show @writeTools["echo_payload"](@args)');
+    const { capturedValue, result } = await capturePythonInteropValue(() =>
+      evaluateExecInvocation(invocation, env)
+    );
+
+    expect(capturedValue).toEqual({
+      preview: 'US1***21212',
+      handle: 'h_abc123'
+    });
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual({
+      preview: 'US1***21212',
+      handle: 'h_abc123'
+    });
   });
 
   it('still resolves handle wrappers before js write-tool execution', async () => {

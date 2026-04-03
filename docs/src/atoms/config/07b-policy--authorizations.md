@@ -6,10 +6,9 @@ brief: Declarative per-tool authorization with argument constraints for task-sco
 category: config
 parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
-related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
-related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner]
-updated: 2026-03-29
+related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
+updated: 2026-04-02
 ---
 
 The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
@@ -249,6 +248,8 @@ show @writeTools[@step.write_tool](@step.args) with { policy: @auth.policy }
 
 No generated dispatch shims or routing exes needed. The tool collection metadata (params, controlArgs, expose/bind shaping) is the source of truth for both policy matching and arg spreading.
 
+Handle-bearing values inside `@step.args` are preserved through collection dispatch and arg spreading. Objects such as `{ handle: "h_abc123" }` or `{ preview: "m***@example.com", handle: "h_abc123" }` stay intact until dispatch-time resolution, so planner-selected collection calls behave the same way as direct tool calls.
+
 ## Policy builder
 
 `@policy.build(@intent, @tools)` validates planner intent against tool metadata and active policy:
@@ -257,6 +258,22 @@ No generated dispatch shims or routing exes needed. The tool collection metadata
 var @plannerResult = @planner(@task) | @parse
 var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
 var @result = @worker(@task) with { policy: @auth.policy }
+```
+
+For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves the active policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
+
+```mlld
+var @base = {
+  defaults: { rules: ["no-untrusted-destructive"] },
+  operations: { destructive: ["tool:w:delete_draft"] },
+  authorizations: { deny: ["delete_draft"] }
+}
+
+var @built = @policy.build({ allow: ["create_draft"] }, @writeTools) with {
+  policy: @base
+}
+
+show @writeTools["create_draft"](@step.args) with { policy: @built.policy }
 ```
 
 Imported `var tools` collections are valid inputs here. The builder uses the collection's stored authorization metadata first, so callers do not need to redundantly import every underlying executable just to build or validate auth.

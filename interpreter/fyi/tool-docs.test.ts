@@ -204,6 +204,41 @@ describe('@fyi.tools', () => {
     }
   });
 
+  it('renders full planner argument contracts for explicit non-MCP @toolDocs() calls', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
+        controlArgs: ["recipient"]
+      }
+
+      /var tools @tools = {
+        send_email: {
+          mlld: @sendEmail,
+          expose: ["recipient", "subject", "body"],
+          optional: ["body"],
+          description: "Send an outbound email"
+        }
+      }
+
+      /var @docs = @toolDocs(@tools, { audience: "planner" })
+    `);
+
+    try {
+      const docs = await readVarData(env, 'docs') as string;
+      expect(docs).toContain('Write tools and argument contracts:');
+      expect(docs).toContain('send_email');
+      expect(docs).toContain('description: Send an outbound email');
+      expect(docs).toContain('args: recipient, subject, body');
+      expect(docs).toContain('control_args: recipient');
+      expect(docs).toContain('payload_args: subject, body');
+      expect(docs).toContain('optional_args: body');
+      expect(docs).toContain('required_args: recipient, subject');
+      expect(docs).toContain('Authorization intent:');
+      expect(docs).not.toContain('| Tool | Description | Control Args |');
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('renders read-only tool sets instead of collapsing to empty output', async () => {
     const env = await interpretWithEnv(`
       /exe tool:r @lookupContact(query) = "Ada"
@@ -301,6 +336,30 @@ describe('@fyi.tools', () => {
           discoveryCall: '@fyi.known("send_email")'
         })
       ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('uses scoped executable arrays for no-argument planner tool docs outside MCP contexts', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
+        controlArgs: ["recipient"]
+      }
+    `);
+
+    try {
+      env.setScopedEnvironmentConfig({
+        display: 'planner',
+        tools: [env.getVariable('sendEmail') as any]
+      } as any);
+
+      const docs = await evaluateFyiTools({ audience: 'planner' }, env);
+      expect(docs.text).toContain('Write tools and argument contracts:');
+      expect(docs.text).toContain('send_email');
+      expect(docs.text).toContain('control_args: recipient');
+      expect(docs.text).toContain('required_args: recipient, subject, body');
+      expect(docs.text).toContain('Authorization intent:');
     } finally {
       env.cleanup();
     }

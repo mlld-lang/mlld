@@ -635,6 +635,42 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('returns a dispatch-ready policy for allow-only writes without manual reconstruction', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        createDraft: {
+          mlld: @createDraft,
+          expose: ["subject", "body"],
+          controlArgs: []
+        }
+      }
+    `);
+
+    env.setPolicySummary({
+      defaults: { rules: ['no-untrusted-destructive'] },
+      operations: { destructive: ['tool:w:deleteDraft'] },
+      authorizations: { deny: ['deleteDraft'] }
+    });
+
+    const writeTools = env.getVariable('writeTools')?.value as ToolCollection;
+    const built = await invokePolicyBuiltin(env, 'build', { allow: ['createDraft'] }, writeTools) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.defaults).toEqual({
+      rules: ['no-untrusted-destructive']
+    });
+    expect(built.policy.operations).toEqual({
+      destructive: ['tool:w:deleteDraft']
+    });
+    expect(built.policy.authorizations.deny).toEqual(['deleteDraft']);
+    expect(built.policy.authorizations.allow.createDraft).toEqual({
+      kind: 'unconstrained'
+    });
+  });
+
   it('builds bucketed intent, prefers resolved entries, and preserves unconstrained allow tools', async () => {
     const env = await interpretWithEnv(`
       /record @contact = { facts: [email: string], data: [name: string] }

@@ -575,6 +575,81 @@ describe('tool collections', () => {
     });
   });
 
+  it('preserves preview-bearing handle objects through direct collection spread dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @create_event(participants, subject) = {
+        participants: @participants,
+        subject: @subject
+      } with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        create_event: {
+          mlld: @create_event,
+          expose: ["participants", "subject"],
+          controlArgs: []
+        }
+      }
+
+      /var @args = {
+        participants: [{ preview: "a***@example.com", handle: "h_abc123" }],
+        subject: "hello"
+      }
+
+      /show @writeTools["create_event"](@args)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      participants: [{ preview: 'a***@example.com', handle: 'h_abc123' }],
+      subject: 'hello'
+    });
+  });
+
+  it('preserves preview-bearing handle objects through dynamic collection-key dispatch', async () => {
+    const output = await interpret(`
+      /exe tool:w @create_event(participants, subject) = {
+        participants: @participants,
+        subject: @subject
+      } with { controlArgs: [] }
+
+      /var tools @writeTools = {
+        create_event: {
+          mlld: @create_event,
+          expose: ["participants", "subject"],
+          controlArgs: []
+        }
+      }
+
+      /var @candidate = {
+        tool: "create_event",
+        args: {
+          participants: [{ preview: "a***@example.com", handle: "h_abc123" }],
+          subject: "hello"
+        }
+      }
+
+      /show @writeTools[@candidate.tool](@candidate.args)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      participants: [{ preview: 'a***@example.com', handle: 'h_abc123' }],
+      subject: 'hello'
+    });
+  });
+
   it('preserves tool collection dispatch through a local let alias', async () => {
     const env = await interpretWithEnv(`
       /exe @send_email(recipients: array, subject, body, attachments: array, cc: array, bcc: array) = {

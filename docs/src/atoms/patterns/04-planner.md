@@ -4,9 +4,9 @@ title: Planner-Worker Authorization
 brief: Split agent execution into a planner that authorizes and a worker that executes
 category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
-related: [facts-and-handles, policy-authorizations, security-getting-started, labels-attestations, security-guards-basics]
+related: [facts-and-handles, policy-authorizations, tool-docs, security-getting-started, labels-attestations, security-guards-basics]
 related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/policy/authorization-compiler.ts, interpreter/env/builtins/policy.ts, interpreter/utils/handle-resolution.ts]
-updated: 2026-03-29
+updated: 2026-04-02
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -97,6 +97,27 @@ var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
 The builder treats each bucket with the right proof level. `known` can only come from uninfluenced sources (the clean planner). If the builder drops tools, a guard on the planner exe can retry with the issues as feedback.
+
+### Planner prompt assembly
+
+Explicit planner prompts should usually include generated tool docs from the same write collection the builder will validate against:
+
+```mlld
+var @plannerToolDocs = @toolDocs(@writeTools, { audience: "planner" })
+
+var @plannerPrompt = "
+You are the planning phase.
+
+@plannerToolDocs
+
+Return JSON with:
+- write_tool
+- args
+- authorizations
+"
+```
+
+`@toolDocs(..., { audience: "planner" })` is the non-MCP path. It renders descriptions, visible args, control args, payload args, and required/optional breakdowns for direct prompt assembly. That explicit output is richer than the compact `<tool_notes>` block injected when mlld bridges MCP tools automatically.
 
 ### Worker phase
 
@@ -251,5 +272,17 @@ show @writeTools[@plannerResult.write_tool](@plannerResult.args) with { policy: 
 ```
 
 Collection-key invocation (`@writeTools["send_email"](@args)`) matches policy against the collection key, not the underlying exe name. Arg objects are spread to named params using the tool's metadata. No generated dispatch shims needed.
+
+Allow-only steps can use `@policy.build(...).policy` directly, even when the base policy contributes defaults, operation groups, or a deny list:
+
+```mlld
+var @stepAuth = @policy.build({ allow: ["create_file"] }, @writeTools) with {
+  policy: @base
+}
+
+show @writeTools["create_file"](@plannerResult.args) with { policy: @stepAuth.policy }
+```
+
+If `@plannerResult.args` contains handle-bearing objects, collection dispatch preserves those wrappers through arg spreading and resolves them only at dispatch. Planner-selected collection calls therefore keep the same proof-carrying behavior as direct executable calls.
 
 See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.

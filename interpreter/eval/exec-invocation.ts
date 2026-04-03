@@ -260,11 +260,7 @@ async function materializeCollectionDispatchArg(
     resolved = await evaluateDataValue(resolved as any, env);
   }
 
-  if (isStructuredValue(resolved)) {
-    return asData(resolved);
-  }
-
-  return resolved;
+  return resolveCollectionBoundValue(resolved, env);
 }
 
 async function normalizeCollectionDispatchArguments(options: {

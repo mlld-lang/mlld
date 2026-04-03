@@ -14,6 +14,7 @@ import type { Environment } from '@interpreter/env/Environment';
 export interface EffectiveToolMetadata {
   name: string;
   params: string[];
+  optionalParams?: string[];
   labels: string[];
   description?: string;
   controlArgs?: string[];
@@ -102,6 +103,12 @@ function getExecutableParamNames(executable: ExecutableVariable): string[] {
     : [];
 }
 
+function getExecutableOptionalParamNames(executable: ExecutableVariable): string[] | undefined {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const optionalParams = (executableDef as { optionalParams?: unknown }).optionalParams;
+  return Array.isArray(optionalParams) ? normalizeStringList(optionalParams) : undefined;
+}
+
 function getExecutableLabels(executable: ExecutableVariable): string[] {
   return normalizeStringList(executable.mx?.labels);
 }
@@ -135,11 +142,13 @@ function buildToolContextFromExecutable(
   executable: ExecutableVariable
 ): EffectiveToolMetadata {
   const params = getExecutableParamNames(executable);
+  const optionalParams = getExecutableOptionalParamNames(executable)?.filter(param => params.includes(param));
   const controlArgs = getExecutableControlArgs(executable);
   const description = getExecutableDescription(executable);
   return {
     name,
     params,
+    ...(optionalParams && optionalParams.length > 0 ? { optionalParams } : {}),
     labels: getExecutableLabels(executable),
     ...(description ? { description } : {}),
     ...(controlArgs ? { controlArgs } : {}),
@@ -173,6 +182,20 @@ function getEffectiveToolParams(
 
   const boundKeys = new Set(getToolDefinitionBindKeys(definition));
   return baseParams.filter(paramName => !boundKeys.has(paramName));
+}
+
+function getEffectiveToolOptionalParams(
+  params: readonly string[],
+  baseOptionalParams?: readonly string[],
+  definition?: ToolDefinition
+): string[] {
+  const visibleParams = new Set(params);
+
+  if (Array.isArray(definition?.optional)) {
+    return normalizeStringList(definition.optional).filter(arg => visibleParams.has(arg));
+  }
+
+  return normalizeStringList(baseOptionalParams).filter(arg => visibleParams.has(arg));
 }
 
 function getEffectiveToolControlArgs(options: {
@@ -224,6 +247,7 @@ function applyToolDefinitionAuthMetadata(
 
   const labels = mergeStringLists(base.labels, definition.labels);
   const params = getEffectiveToolParams(base.params, definition);
+  const optionalParams = getEffectiveToolOptionalParams(params, base.optionalParams, definition);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
     baseControlArgs: base.controlArgs,
@@ -235,6 +259,7 @@ function applyToolDefinitionAuthMetadata(
   return {
     ...base,
     params,
+    ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
@@ -253,12 +278,14 @@ function mergeToolDefinitionMetadata(
 
   const labels = mergeStringLists(base.labels, definition.labels);
   const mergedControlArgs = mergeStringLists(base.controlArgs, definition.controlArgs);
+  const optionalParams = getEffectiveToolOptionalParams(base.params, base.optionalParams, definition);
   const hasControlArgsMetadata =
     base.hasControlArgsMetadata || Array.isArray(definition.controlArgs);
   const description = base.description ?? normalizeTrimmedString(definition.description);
 
   return {
     ...base,
+    ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs: mergedControlArgs } : {}),
@@ -310,6 +337,7 @@ function buildToolContextFromStoredEntry(
   definition?: ToolDefinition
 ): EffectiveToolMetadata {
   const params = normalizeStringList(entry.params);
+  const optionalParams = getEffectiveToolOptionalParams(params, undefined, definition);
   const labels = mergeStringLists(entry.labels, definition?.labels);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
@@ -322,6 +350,7 @@ function buildToolContextFromStoredEntry(
   return {
     name: toolName,
     params,
+    ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
@@ -494,6 +523,7 @@ export function resolveToolCollectionEntryMetadata(
   }
 
   const params = getEffectiveToolParams([], definition);
+  const optionalParams = getEffectiveToolOptionalParams(params, undefined, definition);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
     baseHasControlArgsMetadata: false,
@@ -504,6 +534,7 @@ export function resolveToolCollectionEntryMetadata(
   return {
     name: toolName,
     params,
+    ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels: normalizeStringList(definition.labels),
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),

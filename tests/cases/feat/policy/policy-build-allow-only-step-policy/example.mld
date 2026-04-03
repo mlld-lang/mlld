@@ -1,0 +1,31 @@
+/exe tool:w @createDraft(subject, body) = `draft:@subject` with { controlArgs: [] }
+/exe destructive:targeted, tool:w @deleteDraft(id) = `delete:@id` with { controlArgs: ["id"] }
+
+/var tools @writeTools = {
+  create_draft: {
+    mlld: @createDraft,
+    expose: ["subject", "body"],
+    controlArgs: []
+  },
+  delete_draft: {
+    mlld: @deleteDraft,
+    expose: ["id"],
+    controlArgs: ["id"],
+    labels: ["tool:w:delete_draft"]
+  }
+}
+
+/var @basePolicy = {
+  defaults: { rules: ["no-untrusted-destructive"] },
+  operations: { destructive: ["tool:w:delete_draft"] },
+  authorizations: {
+    deny: ["delete_draft"]
+  }
+}
+
+/var @built = @policy.build({ allow: ["create_draft"] }, @writeTools) with { policy: @basePolicy }
+/show @built.valid
+/show @built.policy.defaults.rules[0]
+/show @built.policy.authorizations.deny[0]
+/show @built.policy.authorizations.allow.create_draft.kind
+/show @writeTools["create_draft"]({ subject: "hello", body: "world" }) with { policy: @built.policy }

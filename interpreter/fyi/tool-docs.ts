@@ -49,6 +49,88 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function normalizeToolCollectionStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+}
+
+function buildToolCollectionMatchSignature(value: unknown): string | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value)
+    .filter(([toolName]) => toolName.trim().length > 0)
+    .map(([toolName, entry]) => {
+      if (!isPlainObject(entry)) {
+        return undefined;
+      }
+
+      const bind =
+        isPlainObject(entry.bind)
+          ? Object.fromEntries(
+              Object.entries(entry.bind).sort(([left], [right]) => left.localeCompare(right))
+            )
+          : undefined;
+
+      return [
+        toolName,
+        {
+          ...(typeof entry.mlld === 'string' ? { mlld: entry.mlld.trim() } : {}),
+          expose: normalizeToolCollectionStringList(entry.expose),
+          optional: normalizeToolCollectionStringList(entry.optional),
+          controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+          labels: normalizeToolCollectionStringList(entry.labels),
+          ...(typeof entry.description === 'string' && entry.description.trim().length > 0
+            ? { description: entry.description.trim() }
+            : {}),
+          ...(bind ? { bind } : {})
+        }
+      ] as const;
+    });
+
+  if (entries.some(entry => entry === undefined)) {
+    return undefined;
+  }
+
+  return JSON.stringify(
+    (entries as Array<readonly [string, Record<string, unknown>]>)
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function findMatchingToolCollectionInEnv(
+  env: Environment,
+  value: unknown
+): ToolCollection | undefined {
+  const signature = buildToolCollectionMatchSignature(value);
+  if (!signature) {
+    return undefined;
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    const candidate =
+      variable.internal?.isToolsCollection === true &&
+      variable.internal.toolCollection &&
+      isPlainObject(variable.internal.toolCollection)
+        ? variable.internal.toolCollection as ToolCollection
+        : undefined;
+    if (!candidate) {
+      continue;
+    }
+    if (buildToolCollectionMatchSignature(candidate) === signature) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 function isOptionsCandidate(value: unknown): value is FyiToolsOptions {
   if (!isPlainObject(value)) {
     return false;
@@ -137,6 +219,7 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
   return {
     ...metadata,
     params: [...metadata.params],
+    ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
     labels: [...metadata.labels],
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {})
@@ -191,7 +274,7 @@ function resolveToolCollectionCandidate(value: unknown, env: Environment): ToolC
   try {
     return normalizeToolCollection(value, env);
   } catch {
-    return value as ToolCollection;
+    return findMatchingToolCollectionInEnv(env, value) ?? value as ToolCollection;
   }
 }
 
@@ -252,11 +335,7 @@ function resolveNoArgMetadata(env: Environment): EffectiveToolMetadata[] {
   const scopedTools = env.getScopedEnvironmentConfig()?.tools;
   if (scopedTools && typeof scopedTools === 'object') {
     if (Array.isArray(scopedTools)) {
-      return dedupeToolMetadata(
-        scopedTools
-          .filter((toolName): toolName is string => typeof toolName === 'string' && toolName.trim().length > 0)
-          .map(toolName => buildNameOnlyMetadata(toolName.trim()))
-      );
+      return dedupeToolMetadata(resolveExecutableArrayMetadata(scopedTools, env));
     }
 
     return dedupeToolMetadata(resolveToolCollectionMetadataEntries(env, scopedTools as ToolCollection));
@@ -353,6 +432,20 @@ function formatControlArgsCell(entry: EffectiveToolMetadata): string {
     return `${base} (same source)`;
   }
   return base;
+}
+
+function formatOptionalArgsCell(entry: EffectiveToolMetadata): string {
+  return formatArgList(entry.optionalParams ?? []);
+}
+
+function formatRequiredArgsCell(entry: EffectiveToolMetadata): string {
+  const optional = new Set(entry.optionalParams ?? []);
+  return formatArgList(entry.params.filter(param => !optional.has(param)));
+}
+
+function formatPayloadArgsCell(entry: EffectiveToolMetadata): string {
+  const controlArgs = new Set(entry.controlArgs ?? []);
+  return formatArgList(entry.params.filter(param => !controlArgs.has(param)));
 }
 
 function buildDeniedLine(denied: readonly string[]): string {
@@ -474,6 +567,30 @@ function buildReadToolTableLines(readEntries: readonly EffectiveToolMetadata[]):
   return lines;
 }
 
+function buildExplicitPlannerWriteToolContractLines(
+  writeEntries: readonly EffectiveToolMetadata[]
+): string[] {
+  const lines: string[] = [];
+
+  for (const entry of writeEntries) {
+    if (lines.length > 0) {
+      lines.push('');
+    }
+
+    lines.push(
+      entry.name,
+      `  description: ${entry.description ?? 'No description provided.'}`,
+      `  args: ${formatArgList(entry.params)}`,
+      `  control_args: ${formatControlArgsCell(entry)}`,
+      `  payload_args: ${formatPayloadArgsCell(entry)}`,
+      `  optional_args: ${formatOptionalArgsCell(entry)}`,
+      `  required_args: ${formatRequiredArgsCell(entry)}`
+    );
+  }
+
+  return lines;
+}
+
 function buildTextLines(options: {
   env: Environment;
   audience: FyiToolsAudience;
@@ -493,17 +610,25 @@ function buildTextLines(options: {
   const lines: string[] = [];
 
   if (writeEntries.length > 0) {
-    lines.push(
-      'Write tools and control args:',
-      '',
-      ...buildToolTableLines({
-        audience,
-        isMcpContext,
-        writeEntries,
-        helperStatus,
-        includeHelpers
-      })
-    );
+    if (audience === 'planner' && !isMcpContext) {
+      lines.push(
+        'Write tools and argument contracts:',
+        '',
+        ...buildExplicitPlannerWriteToolContractLines(writeEntries)
+      );
+    } else {
+      lines.push(
+        'Write tools and control args:',
+        '',
+        ...buildToolTableLines({
+          audience,
+          isMcpContext,
+          writeEntries,
+          helperStatus,
+          includeHelpers
+        })
+      );
+    }
 
     if (audience === 'worker') {
       const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
