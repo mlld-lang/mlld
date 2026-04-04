@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@policy.build(...)` and `@policy.validate(...)` now return additive compiler diagnostics in `report`, exposing stripped args, repair steps, dropped entries/elements, ambiguous values, and compiled proofs without changing existing `policy` / `valid` / `issues` consumers.
 - `@policy.build(..., { task: @query })` and `@policy.validate(..., { task: @query })` now validate `known` bucket string/number literals against the provided task text, rejecting task-mismatched values and `known`-bucket handle wrappers with `known_not_in_task` / `known_contains_handle`.
 - `exe llm` calls running inside shelf-scoped environments now auto-append `<shelf_notes>` to `config.system`, listing writable slots, readable slots, readable aliases like `@fyi.shelf.brief`, merge modes, and `from` constraints. When both are present, `<tool_notes>` is injected before `<shelf_notes>`.
+- `@shelve.read(@slotRef)` now completes the shelf slot-ref API alongside `@shelve(...)`, `@shelve.clear(...)`, and `@shelve.remove(...)`, so wrapper code can explicitly read a slot's current contents back by reference after writes.
 
 ### Fixed
 - Shelf slot refs are now first-class runtime values instead of `StructuredValue` wrappers with an internal marker. They now survive wrapper executables, imported wrappers, `let` rebinding, `??`, `when`, and ordinary exec parameter transport, so calls like `@shelve.clear(@activeExecutionLogSlot)` no longer lose slot identity on the way to the shelf builtins.

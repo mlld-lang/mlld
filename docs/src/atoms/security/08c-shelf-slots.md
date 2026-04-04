@@ -85,7 +85,16 @@ box @decider with {
 } [...]
 ```
 
-Write implies read. `@shelve` is automatically provided to agents with write access. Agents read via `@fyi.shelf.outreach.recipients` with display projections applied.
+Write implies read. `@shelve` is automatically provided where write-capable slot refs are in scope:
+
+```mlld
+@shelve(@pipeline.candidates, @candidate)
+@shelve.read(@pipeline.candidates)
+@shelve.clear(@pipeline.candidates)
+@shelve.remove(@pipeline.candidates, "h_abc")
+```
+
+`@shelve.read(@slotRef)` returns the current stored contents of that slot with full structured values intact. Agents still read via `@fyi.shelf.outreach.recipients`, which applies display projections for the scoped shelf view.
 
 ## Agent system notes
 

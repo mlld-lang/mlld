@@ -300,6 +300,48 @@ describe('shelf runtime', () => {
     expect(asData<any[]>(recipients)).toEqual([]);
   });
 
+  it('reads current slot contents back through @shelve.read using slot-ref params', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/exe @appendViaParam(slot, value) = [
+  @shelve(@slot, @value)
+]
+/exe @readViaParam(slot) = @shelve.read(@slot)
+@appendViaParam(@pipeline.recipients, @emitContact("c_1", "Mark"))
+/var @firstState = @readViaParam(@pipeline.recipients)
+@appendViaParam(@pipeline.recipients, @emitContact("c_2", "Ava"))
+/var @secondState = @readViaParam(@pipeline.recipients)
+/var @directState = @shelve.read(@pipeline.recipients)
+`);
+
+    expect(asData<any[]>(env.getVariable('firstState')?.value)).toHaveLength(1);
+    expect(asData<any[]>(env.getVariable('secondState')?.value)).toHaveLength(2);
+
+    const directState = env.getVariable('directState')?.value;
+    expect(asData<any[]>(directState)).toHaveLength(2);
+
+    const firstEntry = await accessField(directState, { type: 'arrayIndex', value: 0 } as any, { env });
+    const secondEntry = await accessField(directState, { type: 'arrayIndex', value: 1 } as any, { env });
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    const secondId = await accessField(secondEntry, { type: 'field', value: 'id' } as any, { env });
+
+    expect(asData(firstId)).toBe('c_1');
+    expect(asData(secondId)).toBe('c_2');
+  });
+
   it('preserves slot references through nullish-coalescing assignment', async () => {
     const env = await createEnvironment(`
 /record @contact = {
@@ -390,6 +432,60 @@ describe('shelf runtime', () => {
       slotName: 'recipients'
     });
     expect(asData<any[]>(recipients)).toEqual([]);
+  });
+
+  it('reads imported shelf slot refs back through imported wrapper executables', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/state.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/export { @pipeline }
+`);
+    await fs.writeFile('/worker.mld', `
+/exe @appendViaParam(slot, value) = [
+  @shelve(@slot, @value)
+]
+/exe @readViaParam(slot) = @shelve.read(@slot)
+/export { @appendViaParam, @readViaParam }
+`);
+    await fs.writeFile('/app.mld', `
+/import { @pipeline } from "/state.mld"
+/import { @appendViaParam, @readViaParam } from "/worker.mld"
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+@appendViaParam(@pipeline.recipients, @emitContact("c_1", "Mark"))
+/var @firstState = @readViaParam(@pipeline.recipients)
+@appendViaParam(@pipeline.recipients, @emitContact("c_2", "Ava"))
+/var @secondState = @readViaParam(@pipeline.recipients)
+`);
+
+    const { ast } = await parse(await fs.readFile('/app.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/app.mld');
+    await evaluate(ast, env);
+
+    expect(asData<any[]>(env.getVariable('firstState')?.value)).toHaveLength(1);
+
+    const secondState = env.getVariable('secondState')?.value;
+    expect(asData<any[]>(secondState)).toHaveLength(2);
+
+    const firstEntry = await accessField(secondState, { type: 'arrayIndex', value: 0 } as any, { env });
+    const secondEntry = await accessField(secondState, { type: 'arrayIndex', value: 1 } as any, { env });
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    const secondId = await accessField(secondEntry, { type: 'field', value: 'id' } as any, { env });
+
+    expect(asData(firstId)).toBe('c_1');
+    expect(asData(secondId)).toBe('c_2');
   });
 
   it('preserves imported shelf slot references through nested local wrapper executables', async () => {
