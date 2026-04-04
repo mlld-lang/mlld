@@ -10,13 +10,13 @@ Today a shelf slot getter returns a cloned `StructuredValue` plus `internal.shel
 
 - `asData(...)` and equality resolution flatten it to current slot contents
 - executable arg normalization recursively unwraps `StructuredValue`s
-- wrapper executables and imported wrappers can accidentally pass plain data where `@shelve.clear(...)` expects a slot ref
+- wrapper executables and imported wrappers can accidentally pass plain data where `@shelf.clear(...)` expects a slot ref
 - shelf-specific rescue code has started appearing in:
   - [variable-resolution.ts](/Users/adam/mlld/mlld/interpreter/utils/variable-resolution.ts)
   - [assignment-support.ts](/Users/adam/mlld/mlld/interpreter/eval/when/assignment-support.ts)
   - [exec-invocation.ts](/Users/adam/mlld/mlld/interpreter/eval/exec-invocation.ts)
 
-Benchmark GPT's repro confirms this is not benchmark-specific. A top-level file importing a wrapper executable can still flatten a slot ref before `@shelve.clear(...)`.
+Benchmark GPT's repro confirms this is not benchmark-specific. A top-level file importing a wrapper executable can still flatten a slot ref before `@shelf.clear(...)`.
 
 ## Problems
 
@@ -30,7 +30,7 @@ Benchmark GPT's repro confirms this is not benchmark-specific. A top-level file 
 1. Introduce a first-class `ShelfSlotRefValue` runtime value with explicit identity.
 2. Preserve current user-facing shelf behavior:
    - `@shelf.slot` still acts like the slot's current contents for field/index access, truthiness, and string/data coercion
-   - `@shelve`, `@shelve.clear`, and `@shelve.remove` still accept slot refs naturally
+   - `@shelve`, `@shelf.clear`, and `@shelf.remove` still accept slot refs naturally
 3. Remove shelf-specific transport hacks that are only compensating for the old representation.
 4. Convert the benchmark/imported-wrapper failure mode into committed regression coverage.
 5. Update docs to distinguish structured data values from capability/reference values.
@@ -192,11 +192,11 @@ This refactor should remove slot-ref compatibility hacks from the old implementa
 
 Critical scenarios:
 
-- [ ] wrapper executable passes slot ref through `@shelve`, `@shelve.remove`, `@shelve.clear`
+- [ ] wrapper executable passes slot ref through `@shelve`, `@shelf.remove`, `@shelf.clear`
 - [ ] imported wrapper executable preserves slot ref
 - [ ] nested local wrapper preserves slot ref
 - [ ] `let @active = @slot ?? null` preserves slot ref
-- [ ] `when [ @active => @shelve.clear(@active) ]` preserves slot ref
+- [ ] `when [ @active => @shelf.clear(@active) ]` preserves slot ref
 - [ ] direct field/index access on `@pipeline.recipients` still works
 
 ## Documentation Requirements
@@ -209,7 +209,7 @@ Critical scenarios:
 ## Overall Exit Criteria
 
 - [ ] shelf slot refs are first-class runtime values
-- [ ] imported-wrapper repro no longer fails with `The first @shelve.clear argument must be a shelf slot reference`
+- [ ] imported-wrapper repro no longer fails with `The first @shelf.clear argument must be a shelf slot reference`
 - [ ] no shelf-specific equality hack remains in variable resolution
 - [ ] slot refs no longer rely on `StructuredValue` marker transport for correctness
 - [ ] targeted tests pass
