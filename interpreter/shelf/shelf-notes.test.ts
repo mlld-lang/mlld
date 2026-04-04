@@ -82,7 +82,7 @@ describe('shelf notes', () => {
       expect(notes).toContain('| @fyi.shelf.stats | object |');
       expect(notes).toContain('| @fyi.shelf.count | number |');
       expect(notes).toContain('| @fyi.shelf.tags | array |');
-      expect(notes).toContain('Write to slots with @shelve(@fyi.shelf.selection, value).');
+      expect(notes).toContain('Write to slots with @shelf.write(@fyi.shelf.selection, value) or @shelve(@fyi.shelf.selection, value).');
       expect(notes).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
       expect(notes).toContain('Collection slots use [] and follow the listed Merge mode.');
     } finally {

@@ -126,7 +126,7 @@ describe('shelf runtime', () => {
     expect(asData(selectedScore)).toBe(92);
   });
 
-  it('projects readable slot contents through @fyi.shelf and keeps slot refs available for shelf APIs', async () => {
+  it('projects readable slot contents through @fyi.shelf and keeps @shelf/@shelve gated to writable scopes', async () => {
     const env = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -160,6 +160,7 @@ describe('shelf runtime', () => {
       shelf: await normalizeScopedShelfConfig({ read: [recipientsRef] }, env)
     });
 
+    expect(readOnlyEnv.hasVariable('shelf')).toBe(false);
     expect(readOnlyEnv.hasVariable('shelve')).toBe(false);
 
     const fyi = readOnlyEnv.getVariable('fyi');
@@ -189,10 +190,11 @@ describe('shelf runtime', () => {
       shelf: await normalizeScopedShelfConfig({ read: [recipientsRef], write: [selectedRef] }, env)
     });
 
+    expect(writableEnv.hasVariable('shelf')).toBe(true);
     expect(writableEnv.hasVariable('shelve')).toBe(true);
   });
 
-  it('supports aliased slot refs in box shelf config for reads, writes, and @shelve.read', async () => {
+  it('supports aliased slot refs in box shelf config for reads, writes, and @shelf.read', async () => {
     const env = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -213,17 +215,17 @@ describe('shelf runtime', () => {
 /var @logSlot = @ledger.execution_log
 /var @candidateSlot = @ledger.candidates
 /var @selectedSlot = @ledger.selected
-@shelve(@candidateSlot, @emitContact("c_1", "Mark"))
+@shelf.write(@candidateSlot, @emitContact("c_1", "Mark"))
 /box {
   shelf: {
     read: [@candidateSlot as candidates],
     write: [@logSlot as execution_log, @selectedSlot as selected]
   }
 } [
-  let @candidateState = @shelve.read(@fyi.shelf.candidates)
-  @shelve(@fyi.shelf.execution_log, @candidateState[0])
-  let @currentLog = @shelve.read(@fyi.shelf.execution_log)
-  @shelve(@fyi.shelf.selected, @currentLog[0])
+  let @candidateState = @shelf.read(@fyi.shelf.candidates)
+  @shelf.write(@fyi.shelf.execution_log, @candidateState[0])
+  let @currentLog = @shelf.read(@fyi.shelf.execution_log)
+  @shelf.write(@fyi.shelf.selected, @currentLog[0])
 ]
 `);
 
@@ -358,7 +360,7 @@ describe('shelf runtime', () => {
     expect(asData(subject)).toBe('Follow up');
   });
 
-  it('preserves slot references through wrapper executables that call @shelve methods', async () => {
+  it('preserves slot references through wrapper executables that call @shelf methods', async () => {
     const env = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -375,13 +377,13 @@ describe('shelf runtime', () => {
   };
 } => contact
 /exe @appendViaParam(slot, value) = [
-  @shelve(@slot, @value)
+  @shelf.write(@slot, @value)
 ]
 /exe @removeViaParam(slot, value) = [
-  @shelve.remove(@slot, @value)
+  @shelf.remove(@slot, @value)
 ]
 /exe @clearViaParam(slot) = [
-  @shelve.clear(@slot)
+  @shelf.clear(@slot)
 ]
 /var @recipient = @emitContact()
 @appendViaParam(@pipeline.recipients, @recipient)
@@ -403,7 +405,7 @@ describe('shelf runtime', () => {
     expect(asData<any[]>(recipients)).toEqual([]);
   });
 
-  it('reads current slot contents back through @shelve.read using slot-ref params', async () => {
+  it('reads current slot contents back through @shelf.read using slot-ref params', async () => {
     const env = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -420,14 +422,14 @@ describe('shelf runtime', () => {
   };
 } => contact
 /exe @appendViaParam(slot, value) = [
-  @shelve(@slot, @value)
+  @shelf.write(@slot, @value)
 ]
-/exe @readViaParam(slot) = @shelve.read(@slot)
+/exe @readViaParam(slot) = @shelf.read(@slot)
 @appendViaParam(@pipeline.recipients, @emitContact("c_1", "Mark"))
 /var @firstState = @readViaParam(@pipeline.recipients)
 @appendViaParam(@pipeline.recipients, @emitContact("c_2", "Ava"))
 /var @secondState = @readViaParam(@pipeline.recipients)
-/var @directState = @shelve.read(@pipeline.recipients)
+/var @directState = @shelf.read(@pipeline.recipients)
 `);
 
     expect(asData<any[]>(env.getVariable('firstState')?.value)).toHaveLength(1);
@@ -443,6 +445,44 @@ describe('shelf runtime', () => {
 
     expect(asData(firstId)).toBe('c_1');
     expect(asData(secondId)).toBe('c_2');
+  });
+
+  it('keeps @shelve.read/@shelve.clear/@shelve.remove as compatibility aliases', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+@shelve(@pipeline.recipients, @emitContact("c_1", "Mark"))
+@shelve(@pipeline.recipients, @emitContact("c_2", "Ava"))
+@shelve.remove(@pipeline.recipients, @emitContact("c_1", "Mark"))
+/var @remaining = @shelve.read(@pipeline.recipients)
+@shelve.clear(@pipeline.recipients)
+`);
+
+    const remaining = env.getVariable('remaining')?.value;
+    expect(asData<any[]>(remaining)).toHaveLength(1);
+
+    const onlyEntry = await accessField(remaining, { type: 'arrayIndex', value: 0 } as any, { env });
+    const onlyId = await accessField(onlyEntry, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(onlyId)).toBe('c_2');
+
+    const pipeline = env.getVariable('pipeline');
+    if (!pipeline) {
+      throw new Error('Expected @pipeline to be defined');
+    }
+    const recipients = await accessField(pipeline, { type: 'field', value: 'recipients' } as any, { env });
+    expect(asData<any[]>(recipients)).toEqual([]);
   });
 
   it('preserves slot references through nullish-coalescing assignment', async () => {
@@ -476,7 +516,7 @@ describe('shelf runtime', () => {
 }
 /exe @clearViaCoalesce(slot) = [
   let @active = @slot ?? null
-  @shelve.clear(@active)
+  @shelf.clear(@active)
 ]
 @clearViaCoalesce(@pipeline.recipients)
 `);
@@ -509,7 +549,7 @@ describe('shelf runtime', () => {
     await fs.writeFile('/worker.mld', `
 /exe @clearViaCoalesce(slot) = [
   let @active = @slot ?? null
-  @shelve.clear(@active)
+  @shelf.clear(@active)
 ]
 /export { @clearViaCoalesce }
 `);
@@ -551,9 +591,9 @@ describe('shelf runtime', () => {
 `);
     await fs.writeFile('/worker.mld', `
 /exe @appendViaParam(slot, value) = [
-  @shelve(@slot, @value)
+  @shelf.write(@slot, @value)
 ]
-/exe @readViaParam(slot) = @shelve.read(@slot)
+/exe @readViaParam(slot) = @shelf.read(@slot)
 /export { @appendViaParam, @readViaParam }
 `);
     await fs.writeFile('/app.mld', `
@@ -606,7 +646,7 @@ describe('shelf runtime', () => {
     await fs.writeFile('/worker.mld', `
 /exe @clearViaCoalesce(slot) = [
   let @active = @slot ?? null
-  @shelve.clear(@active)
+  @shelf.clear(@active)
 ]
 /export { @clearViaCoalesce }
 `);
@@ -653,7 +693,7 @@ describe('shelf runtime', () => {
 /exe @clearViaWhen(slot) = [
   let @active = @slot ?? null
   when [
-    @active => @shelve.clear(@active)
+    @active => @shelf.clear(@active)
     * => null
   ]
 ]

@@ -218,9 +218,9 @@ Each slot is backed by a record. Fact fields require handle-bearing input from a
 
 `from candidates` means the selected value must reference an entity that exists in the candidates slot, checked by record key at write time. An agent can't select a "winner" that was never a candidate.
 
-Agents with write access automatically receive `@shelve` and `<shelf_notes>` in their system prompt. Agents read via `@fyi.shelf` with display projections applied.
+Agents with write access automatically receive `@shelf`, `@shelve(...)` sugar, and `<shelf_notes>` in their system prompt. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read(@slotRef)` (unprojected, full structured values). For generic wrappers, dynamic aliasing exposes slots under stable role names: `shelf: { read: [@logSlot as execution_log] }`.
 
-See `shelf-slots` for the full model including removal, trust rules, and source tracking.
+See `shelf-slots` for the full model including the slot API, dynamic aliasing, removal, trust rules, and source tracking.
 
 ## Level 4: Full Custom Security with Environments
 

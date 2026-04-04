@@ -84,16 +84,17 @@ box {
 } [...]
 ```
 
-Write implies read. `@shelve` is automatically provided where write-capable slot refs are in scope:
+Write implies read. `@shelf` is automatically provided where write-capable slot refs are in scope, and `@shelve(...)` remains write sugar plus a compatibility alias surface:
 
 ```mlld
+@shelf.write(@pipeline.candidates, @candidate)
 @shelve(@pipeline.candidates, @candidate)
-@shelve.read(@pipeline.candidates)
-@shelve.clear(@pipeline.candidates)
-@shelve.remove(@pipeline.candidates, "h_abc")
+@shelf.read(@pipeline.candidates)
+@shelf.clear(@pipeline.candidates)
+@shelf.remove(@pipeline.candidates, "h_abc")
 ```
 
-`@shelve.read(@slotRef)` returns the current stored contents of that slot with full structured values intact. Agents still read via `@fyi.shelf.outreach.recipients`, which applies display projections for the scoped shelf view.
+`@shelf.read(@slotRef)` returns the current stored contents of that slot with full structured values intact. Agents still read via `@fyi.shelf.outreach.recipients`, which applies display projections for the scoped shelf view.
 
 ## Dynamic aliasing
 
@@ -113,10 +114,11 @@ box {
 - `@fyi.shelf.execution_log` is still a slot ref under the hood, so it works with the full slot API:
 
 ```mlld
+@shelf.write(@fyi.shelf.execution_log, @value)
 @shelve(@fyi.shelf.execution_log, @value)
-@shelve.read(@fyi.shelf.execution_log)
-@shelve.clear(@fyi.shelf.execution_log)
-@shelve.remove(@fyi.shelf.execution_log, @value)
+@shelf.read(@fyi.shelf.execution_log)
+@shelf.clear(@fyi.shelf.execution_log)
+@shelf.remove(@fyi.shelf.execution_log, @value)
 ```
 
 Aliases are agent-facing names. The agent does not need to know the original slot variable. Aliases that target different slots are rejected, and write aliases must resolve to real shelf slot refs.
@@ -144,8 +146,8 @@ This gives workers the exact shelf surface they can read and write without expos
 ## Removal
 
 ```mlld
-@shelve.clear(@pipeline.candidates)
-@shelve.remove(@pipeline.candidates, "h_abc")
+@shelf.clear(@pipeline.candidates)
+@shelf.remove(@pipeline.candidates, "h_abc")
 ```
 
 Removal requires write access. Removing from a source slot does not invalidate downstream `from` references.

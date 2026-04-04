@@ -797,10 +797,15 @@ function describeReadableSlots(env: Environment): string {
     .join(', ');
 }
 
-async function writeToShelfSlot(target: unknown, value: unknown, env: Environment): Promise<StructuredValue> {
+async function writeToShelfSlot(
+  target: unknown,
+  value: unknown,
+  env: Environment,
+  callLabel = '@shelve'
+): Promise<StructuredValue> {
   const ref = extractShelfSlotRef(target);
   if (!ref) {
-    throw new MlldInterpreterError('The first @shelve argument must be a shelf slot reference', 'shelf', undefined, {
+    throw new MlldInterpreterError(`The first ${callLabel} argument must be a shelf slot reference`, 'shelf', undefined, {
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
@@ -865,10 +870,14 @@ async function writeToShelfSlot(target: unknown, value: unknown, env: Environmen
   return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
 }
 
-async function readShelfSlot(target: unknown, env: Environment): Promise<StructuredValue> {
+async function readShelfSlot(
+  target: unknown,
+  env: Environment,
+  callLabel = '@shelf.read'
+): Promise<StructuredValue> {
   const ref = extractShelfSlotRef(target);
   if (!ref) {
-    throw new MlldInterpreterError('The first @shelve.read argument must be a shelf slot reference', 'shelf', undefined, {
+    throw new MlldInterpreterError(`The first ${callLabel} argument must be a shelf slot reference`, 'shelf', undefined, {
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
@@ -876,10 +885,14 @@ async function readShelfSlot(target: unknown, env: Environment): Promise<Structu
   return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName).current;
 }
 
-async function clearShelfSlot(target: unknown, env: Environment): Promise<StructuredValue> {
+async function clearShelfSlot(
+  target: unknown,
+  env: Environment,
+  callLabel = '@shelf.clear'
+): Promise<StructuredValue> {
   const ref = extractShelfSlotRef(target);
   if (!ref) {
-    throw new MlldInterpreterError('The first @shelve.clear argument must be a shelf slot reference', 'shelf', undefined, {
+    throw new MlldInterpreterError(`The first ${callLabel} argument must be a shelf slot reference`, 'shelf', undefined, {
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
@@ -888,10 +901,15 @@ async function clearShelfSlot(target: unknown, env: Environment): Promise<Struct
   return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
 }
 
-async function removeFromShelfSlot(target: unknown, refValue: unknown, env: Environment): Promise<StructuredValue> {
+async function removeFromShelfSlot(
+  target: unknown,
+  refValue: unknown,
+  env: Environment,
+  callLabel = '@shelf.remove'
+): Promise<StructuredValue> {
   const slotRef = extractShelfSlotRef(target);
   if (!slotRef) {
-    throw new MlldInterpreterError('The first @shelve.remove argument must be a shelf slot reference', 'shelf', undefined, {
+    throw new MlldInterpreterError(`The first ${callLabel} argument must be a shelf slot reference`, 'shelf', undefined, {
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
@@ -901,7 +919,7 @@ async function removeFromShelfSlot(target: unknown, refValue: unknown, env: Envi
   const slot = shelf?.slots[slotRef.slotName];
   if (!shelf || !slot || slot.cardinality !== 'collection') {
     throw new MlldInterpreterError(
-      `@shelve.remove only supports collection slots (got '@${slotRef.shelfName}.${slotRef.slotName}')`,
+      `${callLabel} only supports collection slots (got '@${slotRef.shelfName}.${slotRef.slotName}')`,
       'shelf',
       slot?.location,
       { code: 'INVALID_SHELF_REFERENCE' }
@@ -1042,10 +1060,11 @@ function looksLikeEnvironment(value: unknown): value is Environment {
   );
 }
 
-export function createShelveVariable(env: Environment): Variable {
-  const writeDefinition: NodeFunctionExecutable = {
+function createShelfWriteDefinition(env: Environment, name: 'shelve' | 'write'): NodeFunctionExecutable {
+  const callLabel = name === 'shelve' ? '@shelve' : '@shelf.write';
+  return {
     type: 'nodeFunction',
-    name: 'shelve',
+    name,
     fn: async (slotOrEnv?: unknown, valueOrEnv?: unknown, boundEnv?: Environment) => {
       const executionEnv = boundEnv
         ?? (looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined)
@@ -1053,31 +1072,17 @@ export function createShelveVariable(env: Environment): Variable {
         ?? env;
       const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
       const value = boundEnv || !looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined;
-      return writeToShelfSlot(slot, value, executionEnv);
+      return writeToShelfSlot(slot, value, executionEnv, callLabel);
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['slot', 'value'],
     description: `Write typed shelf slots. Writable slots: ${describeWritableSlots(env)}`
   };
+}
 
-  const clearDefinition: NodeFunctionExecutable = {
-    type: 'nodeFunction',
-    name: 'clear',
-    fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
-      const executionEnv = boundEnv
-        ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
-        ?? env;
-      const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
-      return clearShelfSlot(slot, executionEnv);
-    },
-    bindExecutionEnv: true,
-    sourceDirective: 'exec',
-    paramNames: ['slot'],
-    description: `Clear writable shelf slots. Writable slots: ${describeWritableSlots(env)}`
-  };
-
-  const readDefinition: NodeFunctionExecutable = {
+function createShelfReadDefinition(env: Environment, callLabel = '@shelf.read'): NodeFunctionExecutable {
+  return {
     type: 'nodeFunction',
     name: 'read',
     fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1085,15 +1090,35 @@ export function createShelveVariable(env: Environment): Variable {
         ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
         ?? env;
       const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
-      return readShelfSlot(slot, executionEnv);
+      return readShelfSlot(slot, executionEnv, callLabel);
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['slot'],
     description: `Read current shelf slot contents. Readable slots: ${describeReadableSlots(env)}`
   };
+}
 
-  const removeDefinition: NodeFunctionExecutable = {
+function createShelfClearDefinition(env: Environment, callLabel = '@shelf.clear'): NodeFunctionExecutable {
+  return {
+    type: 'nodeFunction',
+    name: 'clear',
+    fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
+        ?? env;
+      const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
+      return clearShelfSlot(slot, executionEnv, callLabel);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot'],
+    description: `Clear writable shelf slots. Writable slots: ${describeWritableSlots(env)}`
+  };
+}
+
+function createShelfRemoveDefinition(env: Environment, callLabel = '@shelf.remove'): NodeFunctionExecutable {
+  return {
     type: 'nodeFunction',
     name: 'remove',
     fn: async (slotOrEnv?: unknown, refOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1103,38 +1128,64 @@ export function createShelveVariable(env: Environment): Variable {
         ?? env;
       const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
       const ref = boundEnv || !looksLikeEnvironment(refOrEnv) ? refOrEnv : undefined;
-      return removeFromShelfSlot(slot, ref, executionEnv);
+      return removeFromShelfSlot(slot, ref, executionEnv, callLabel);
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['slot', 'ref'],
     description: `Remove entities from writable collection slots. Writable slots: ${describeWritableSlots(env)}`
   };
+}
 
-  const clearExecutable = createExecutableVariable('clear', 'command', '', ['slot'], undefined, SHELF_VARIABLE_SOURCE, {
+function createShelfBuiltinExecutable(
+  name: string,
+  paramNames: string[],
+  definition: NodeFunctionExecutable
+): Variable {
+  return createExecutableVariable(name, 'command', '', paramNames, undefined, SHELF_VARIABLE_SOURCE, {
     internal: {
-      executableDef: clearDefinition,
+      executableDef: definition,
       preserveStructuredArgs: true,
       isReserved: true,
       isSystem: true
     }
   });
-  const readExecutable = createExecutableVariable('read', 'command', '', ['slot'], undefined, SHELF_VARIABLE_SOURCE, {
-    internal: {
-      executableDef: readDefinition,
-      preserveStructuredArgs: true,
-      isReserved: true,
-      isSystem: true
+}
+
+export function createShelfBuiltinVariable(env: Environment): Variable {
+  const writeDefinition = createShelfWriteDefinition(env, 'write');
+  const readDefinition = createShelfReadDefinition(env);
+  const clearDefinition = createShelfClearDefinition(env);
+  const removeDefinition = createShelfRemoveDefinition(env);
+
+  return createObjectVariable(
+    'shelf',
+    {
+      write: createShelfBuiltinExecutable('write', ['slot', 'value'], writeDefinition),
+      read: createShelfBuiltinExecutable('read', ['slot'], readDefinition),
+      clear: createShelfBuiltinExecutable('clear', ['slot'], clearDefinition),
+      remove: createShelfBuiltinExecutable('remove', ['slot', 'ref'], removeDefinition)
+    },
+    false,
+    SHELF_VARIABLE_SOURCE,
+    {
+      internal: {
+        isReserved: true,
+        isSystem: true
+      }
     }
-  });
-  const removeExecutable = createExecutableVariable('remove', 'command', '', ['slot', 'ref'], undefined, SHELF_VARIABLE_SOURCE, {
-    internal: {
-      executableDef: removeDefinition,
-      preserveStructuredArgs: true,
-      isReserved: true,
-      isSystem: true
-    }
-  });
+  );
+}
+
+export function createShelveVariable(env: Environment): Variable {
+  const writeDefinition = createShelfWriteDefinition(env, 'shelve');
+  const clearDefinition = createShelfClearDefinition(env, '@shelve.clear');
+  const readDefinition = createShelfReadDefinition(env, '@shelve.read');
+  const removeDefinition = createShelfRemoveDefinition(env, '@shelve.remove');
+
+  const clearExecutable = createShelfBuiltinExecutable('clear', ['slot'], clearDefinition);
+  const readExecutable = createShelfBuiltinExecutable('read', ['slot'], readDefinition);
+  const removeExecutable = createShelfBuiltinExecutable('remove', ['slot', 'ref'], removeDefinition);
 
   const value: Record<string, unknown> = Object.create(null);
   Object.defineProperties(value, {

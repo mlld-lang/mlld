@@ -72,7 +72,7 @@ describe('shelf notes injection', () => {
       expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.outreach.recipients | contact[] |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
-      expect(output).toContain('Write to slots with @shelve(@fyi.shelf.outreach.selected, value).');
+      expect(output).toContain('Write to slots with @shelf.write(@fyi.shelf.outreach.selected, value) or @shelve(@fyi.shelf.outreach.selected, value).');
       expect(output).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
     } finally {
       env.cleanup();

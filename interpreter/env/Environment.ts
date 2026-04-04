@@ -130,7 +130,7 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { createFyiVariable, createToolDocsExecutable } from './builtins/fyi';
 import { createPolicyVariable } from './builtins/policy';
-import { createShelveVariable } from './builtins/shelve';
+import { createShelfBuiltinVariable, createShelveVariable } from './builtins/shelve';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
@@ -460,6 +460,7 @@ export class Environment
       this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
     this.reservedNames.add('fyi');
+    this.reservedNames.add('shelf');
     this.reservedNames.add('shelve');
     this.reservedNames.add('toolDocs');
     
@@ -1708,8 +1709,10 @@ export class Environment
     const variable =
       name === 'fyi'
         ? createFyiVariable(this)
+        : name === 'shelf'
+          ? (this.isShelfBuiltinAvailable() ? createShelfBuiltinVariable(this) : undefined)
         : name === 'shelve'
-          ? (this.isShelveBuiltinAvailable() ? createShelveVariable(this) : undefined)
+          ? (this.isShelfBuiltinAvailable() ? createShelveVariable(this) : undefined)
         : this.variableManager.getVariable(name);
     if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
@@ -1757,8 +1760,12 @@ export class Environment
       return createFyiVariable(this);
     }
 
+    if (name === 'shelf') {
+      return this.isShelfBuiltinAvailable() ? createShelfBuiltinVariable(this) : undefined;
+    }
+
     if (name === 'shelve') {
-      return this.isShelveBuiltinAvailable() ? createShelveVariable(this) : undefined;
+      return this.isShelfBuiltinAvailable() ? createShelveVariable(this) : undefined;
     }
 
     if (name === 'keychain') {
@@ -1798,13 +1805,13 @@ export class Environment
     if (name === 'fyi') {
       return true;
     }
-    if (name === 'shelve') {
-      return this.isShelveBuiltinAvailable();
+    if (name === 'shelf' || name === 'shelve') {
+      return this.isShelfBuiltinAvailable();
     }
     return this.variableManager.hasVariable(name);
   }
 
-  private isShelveBuiltinAvailable(): boolean {
+  private isShelfBuiltinAvailable(): boolean {
     const scopedConfig = this.getScopedEnvironmentConfig() as
       | ({ shelf?: { __mlldShelfScope?: boolean; writeSlots?: unknown[] } } & Record<string, unknown>)
       | undefined;

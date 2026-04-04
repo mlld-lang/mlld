@@ -1,1 +1,1 @@
-export { createShelveVariable } from '@interpreter/shelf/runtime';
+export { createShelfBuiltinVariable, createShelveVariable } from '@interpreter/shelf/runtime';

@@ -224,7 +224,7 @@ function buildUsageLines(
   const lines: string[] = [];
 
   if (writableRows.length > 0) {
-    lines.push(`Write to slots with @shelve(${writableRows[0].slot}, value).`);
+    lines.push(`Write to slots with @shelf.write(${writableRows[0].slot}, value) or @shelve(${writableRows[0].slot}, value).`);
   }
   if (readableRows.length > 0) {
     const examples = Array.from(new Set(readableRows.map(row => row.accessPath))).slice(0, 2);

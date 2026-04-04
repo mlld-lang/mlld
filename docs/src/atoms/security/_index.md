@@ -174,11 +174,21 @@ shelf @pipeline = {
 }
 ```
 
-Agents write to slots via `@shelve`. Fact fields require handle-bearing input — stricter than tool call arguments. The runtime validates schema, checks grounding, applies merge semantics (upsert by key, append, or replace), and enforces `from` constraints at write time. Writes are atomic.
+The full slot API is symmetric — write, read, clear, remove all take slot refs:
+
+```mlld
+@shelf.write(@pipeline.candidates, @value)
+@shelve(@pipeline.candidates, @value)
+@shelf.read(@pipeline.candidates)
+@shelf.clear(@pipeline.candidates)
+@shelf.remove(@pipeline.candidates, "h_abc")
+```
+
+Fact fields require handle-bearing input on writes — stricter than tool call arguments. The runtime validates schema, checks grounding, applies merge semantics (upsert by key, append, or replace), and enforces `from` constraints at write time. Writes are atomic.
 
 Slots do not mint facts. `known` does not persist in slots. Authority flows from records and `=> record` coercion. Stored values get `src:shelf:` provenance labels for tracking.
 
-Box config grants per-slot read and write access. `@shelve` is automatically provided to agents with write access. Agents read via `@fyi.shelf`. When running inside a shelf-scoped box, `exe llm` calls receive automatic `<shelf_notes>` in the system prompt describing the available slots.
+Box config grants per-slot read and write access. `@shelf` is automatically provided to agents with write access, with `@shelve(...)` kept as write sugar and compatibility aliases for `read`, `clear`, and `remove`. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read` (unprojected). Dynamic aliasing lets generic wrappers expose slots under stable role names: `shelf: { read: [@logSlot as execution_log] }`. When running inside a shelf-scoped box, `exe llm` calls receive automatic `<shelf_notes>` in the system prompt describing the available slots by their agent-visible names.
 
 **Atoms:** `shelf-slots`
 
