@@ -186,3 +186,4 @@ j2bd/security/runs/*
 
 # LLM orchestrator output
 llm/output/
+spec-data-layer-v3.md

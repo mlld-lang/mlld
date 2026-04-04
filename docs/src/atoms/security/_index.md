@@ -1,7 +1,7 @@
 ---
 id: security
 title: Security
-brief: Guards, labels, policies, signing, environments, audit logging, and tool provenance
+brief: Guards, labels, policies, records, shelf slots, signing, environments, audit logging, and tool provenance
 category: security
 updated: 2026-03-24
 ---
@@ -21,6 +21,7 @@ Most detailed security atoms now live in:
 - **Inspect, transform, or block data at operation time** → [guards](#guards): imperative per-operation logic with before/after hooks
 - **Track where data came from and what it contains** → [labels](#labels): automatic provenance, explicit sensitivity and trust classification
 - **Authorize specific tools and arguments for a task** → [authorizations](#authorizations): declarative per-tool authorization with control-arg enforcement
+- **Accumulate grounded agent state with typed slots** → [shelf slots](#shelf-slots): record-backed state surfaces with merge semantics, cross-slot constraints, and grounding validation
 - **Create trust boundaries for LLM instructions** → [signing](#signing): integrity for templates and instructions
 - **Isolate execution with credentials and resource limits** → [environments](#environments): scoped contexts with filesystem, network, and tool restrictions
 - **Logs for observability and forensics** → [audit-logging](#audit-logging): JSONL ledgers for label changes, file writes, tool calls, and signing events
@@ -161,6 +162,26 @@ var @result = @agent(@prompt) with { policy: @taskPolicy }
 
 **Atoms:** `policy-authorizations` (full syntax and control-arg enforcement)
 
+## Shelf Slots
+
+Shelf slots are typed state surfaces for agent-accumulated data. Each slot is backed by a record that provides schema, fact/data classification, and display projection. The shelf adds merge semantics, cross-slot constraints, and per-slot access control.
+
+```mlld
+shelf @pipeline = {
+  candidates: contact[],
+  qualified: contact[] from candidates,
+  selected: contact? from qualified
+}
+```
+
+Agents write to slots via `@shelve`. Fact fields require handle-bearing input — stricter than tool call arguments. The runtime validates schema, checks grounding, applies merge semantics (upsert by key, append, or replace), and enforces `from` constraints at write time. Writes are atomic.
+
+Slots do not mint facts. `known` does not persist in slots. Authority flows from records and `=> record` coercion. Stored values get `src:shelf:` provenance labels for tracking.
+
+Box config grants per-slot read and write access. `@shelve` is automatically provided to agents with write access. Agents read via `@fyi.shelf`. When running inside a shelf-scoped box, `exe llm` calls receive automatic `<shelf_notes>` in the system prompt describing the available slots.
+
+**Atoms:** `shelf-slots`
+
 ## Signing
 
 Cryptographic signing defends against prompt injection by letting auditor LLMs verify their instructions are untampered.
@@ -228,7 +249,9 @@ Composite patterns that combine multiple security primitives:
 8. `policy-label-flow` — deny/allow rules for data flow (includes hierarchical op:* matching)
 9. `policy-authorizations` — task-scoped per-tool authorization with control-arg enforcement
 10. `security-guards-basics` — guard syntax, timing, triggers, and security context
-11. `signing-overview` → `sign-verify` → `autosign-autoverify`
-12. `mcp-security` → `mcp-policy` → `mcp-guards`
-13. `box-overview` → `box-config` → `box-blocks`
-14. `pattern-audit-guard` → `pattern-dual-audit`
+11. `facts-and-handles` — records, fact labels, handles, display projections, and positive checks
+12. `shelf-slots` — typed state accumulation with grounding and cross-slot constraints
+13. `signing-overview` → `sign-verify` → `autosign-autoverify`
+14. `mcp-security` → `mcp-policy` → `mcp-guards`
+15. `box-overview` → `box-config` → `box-blocks`
+16. `pattern-audit-guard` → `pattern-dual-audit`

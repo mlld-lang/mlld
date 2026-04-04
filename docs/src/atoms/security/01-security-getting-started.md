@@ -184,6 +184,44 @@ Authorization entries generate privileged guards, but matching entries still inh
 
 See `policy-authorizations` for full syntax and control-arg enforcement.
 
+## Level 3c: Typed State Accumulation
+
+When agents build up state over multiple steps — candidate lists, comparison tables, pipeline stages — shelf slots provide typed, grounded accumulation.
+
+```mlld
+record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string],
+  data: [notes: string?, score: number?],
+  display: [name, { ref: "email" }]
+}
+
+shelf @pipeline = {
+  candidates: contact[],
+  selected: contact? from candidates
+}
+
+box @researcher with {
+  tools: [@searchContacts],
+  shelf: { write: [@pipeline.candidates] }
+} [...]
+
+box @decider with {
+  shelf: {
+    read: [@pipeline.candidates],
+    write: [@pipeline.selected]
+  }
+} [...]
+```
+
+Each slot is backed by a record. Fact fields require handle-bearing input from agents — stricter than tool calls. The runtime validates schema, checks grounding (fact fields must carry `fact:` labels after handle resolution), and applies merge semantics (keyed records upsert, keyless append, singular slots replace). Writes are atomic.
+
+`from candidates` means the selected value must reference an entity that exists in the candidates slot, checked by record key at write time. An agent can't select a "winner" that was never a candidate.
+
+Agents with write access automatically receive `@shelve` and `<shelf_notes>` in their system prompt. Agents read via `@fyi.shelf` with display projections applied.
+
+See `shelf-slots` for the full model including removal, trust rules, and source tracking.
+
 ## Level 4: Full Custom Security with Environments
 
 Combine policies, guards, and environments for complete isolation with credential management.
@@ -247,4 +285,5 @@ See `box-overview` for concepts. See `box-config` for configuration fields. See 
 | 2 | You handle sensitive data and need to control how it flows |
 | 3 | You need runtime inspection, transformation, or graceful denial handling |
 | 3b | You orchestrate agents where a planner authorizes specific tools per task |
+| 3c | Agents accumulate state over multiple steps and need grounded entity tracking |
 | 4 | You run untrusted code, manage credentials, or need process isolation |
