@@ -46,7 +46,9 @@ export async function evaluateExeBlock(
 
   blockEnv.pushExecutionContext('exe', { allowReturn: true, scope, hasFunctionBoundary });
   try {
-    for (const stmt of block.values?.statements ?? []) {
+    const statements = block.values?.statements ?? [];
+    const hasTrailingReturn = Boolean(block.values?.return);
+    for (const [index, stmt] of statements.entries()) {
       if (isLetAssignment(stmt)) {
         blockEnv = await evaluateLetAssignment(stmt, blockEnv);
         continue;
@@ -69,18 +71,34 @@ export async function evaluateExeBlock(
         const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
         const whenResult = await evaluateWhenExpression(stmt as any, blockEnv);
         blockEnv = whenResult.env || blockEnv;
-        if (whenResult.value !== null && whenResult.value !== undefined) {
-          if (typeof whenResult.value === 'object' && (whenResult.value as any).__whenEffect) {
-            continue;
-          }
-          const value = isExeReturnControl(whenResult.value) ? whenResult.value.value : whenResult.value;
+
+        if (whenResult.value === null || whenResult.value === undefined) {
+          continue;
+        }
+
+        if (typeof whenResult.value === 'object' && (whenResult.value as any).__whenEffect) {
+          continue;
+        }
+
+        if (isExeReturnControl(whenResult.value)) {
           env.mergeChild(blockEnv);
           if (shouldBubbleReturn) {
-            return { value: createExeReturnControl(value), env };
+            return { value: whenResult.value, env };
           }
-          return { value, env };
+          return { value: whenResult.value.value, env };
         }
-        continue;
+
+        const preservesMidBlockReturn = stmt.meta?.form === 'inline' || stmt.meta?.form === 'bound-list';
+        const isLastStatement = !hasTrailingReturn && index === statements.length - 1;
+        if (!preservesMidBlockReturn && !isLastStatement) {
+          continue;
+        }
+
+        env.mergeChild(blockEnv);
+        if (shouldBubbleReturn) {
+          return { value: createExeReturnControl(whenResult.value), env };
+        }
+        return { value: whenResult.value, env };
       }
 
       const result = await evaluate(stmt, blockEnv);

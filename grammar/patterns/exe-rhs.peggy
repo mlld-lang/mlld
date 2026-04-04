@@ -702,6 +702,7 @@ ExeBlockBody
     )
     extraReturn:(BlockStatementSeparator ExeReturnStatement { return true; })?
     trailing:(BlockStatementSeparator ExeBlockStatement { return true; })? {
+      helpers.warnOnNonFinalValueReturningWhenStatements(statements, { hasTrailingReturn: true }, location());
       if (extraReturn) {
         helpers.mlldError(
           'Multiple return statements in exe block. Only one return allowed as last statement.',
@@ -722,6 +723,7 @@ ExeBlockBody
       };
     }
   / statements:ExeBlockStatementList {
+      helpers.warnOnNonFinalValueReturningWhenStatements(statements, { hasTrailingReturn: false }, location());
       return {
         statements,
         returnStmt: null
@@ -854,7 +856,14 @@ WhenExpression "when expression"
         hasBoundValue: true
       });
       
-      return helpers.createWhenExpression(conditions, tail, location(), modifier, { boundIdentifier, boundValue });
+      return helpers.createWhenExpression(
+        conditions,
+        tail,
+        location(),
+        modifier,
+        { boundIdentifier, boundValue },
+        { form: 'bound-list' }
+      );
     }
   / "when" _ boundValue:Expression _ modifier:WhenExprModifier? _ "[" _ {
       const blockStart = peg$currPos;
@@ -878,7 +887,7 @@ WhenExpression "when expression"
         modifier: modifier
       });
       
-      return helpers.createWhenExpression(conditions, tail, location(), modifier);
+      return helpers.createWhenExpression(conditions, tail, location(), modifier, null, { form: 'list' });
     }
   / "when" _ modifier:WhenExprModifier? _ "[" _ {
       const blockStart = peg$currPos;
@@ -1040,7 +1049,7 @@ WhenExpressionInline
   = "when" _ condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
       const act = Array.isArray(action) ? action : [action];
       const conditions = [{ condition: [condition], action: act }];
-      return helpers.createWhenExpression(conditions, null, location(), null);
+      return helpers.createWhenExpression(conditions, null, location(), null, null, { form: 'inline' });
     }
 
 // Alias to allow both inline and bracketed when expressions
@@ -1091,7 +1100,9 @@ ForExpressionExe "for expression with actions"
         [{ condition: [condition], action }],
         null,
         location(),
-        null
+        null,
+        null,
+        { form: 'inline' }
       );
 
       const loc = initialWhen.location || location();
@@ -1110,7 +1121,9 @@ ForExpressionExe "for expression with actions"
         conditions,
         initialWhen.withClause || null,
         loc,
-        initialWhen.meta?.modifier || null
+        initialWhen.meta?.modifier || null,
+        null,
+        initialWhen.meta?.form ? { form: initialWhen.meta.form } : null
       );
 
       helpers.debug('ForExpressionExe when-guard block matched', {
@@ -1155,7 +1168,9 @@ ForExpressionExe "for expression with actions"
           conditions,
           whenExpr.withClause || null,
           loc,
-          whenExpr.meta?.modifier || null
+          whenExpr.meta?.modifier || null,
+          null,
+          whenExpr.meta?.form ? { form: whenExpr.meta.form } : null
         );
       }
 

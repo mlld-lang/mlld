@@ -116,6 +116,41 @@ export const helpers = {
     return warning;
   },
 
+  warnOnNonFinalValueReturningWhenStatements(
+    statements: any[],
+    options: { hasTrailingReturn?: boolean } = {},
+    fallbackLoc?: any
+  ) {
+    if (!Array.isArray(statements) || statements.length === 0) {
+      return;
+    }
+
+    const nonFinalCount = options.hasTrailingReturn ? statements.length : statements.length - 1;
+    if (nonFinalCount <= 0) {
+      return;
+    }
+
+    for (let index = 0; index < nonFinalCount; index += 1) {
+      const stmt = statements[index];
+      if (!stmt || stmt.type !== NodeType.WhenExpression) {
+        continue;
+      }
+      if (stmt.meta?.isValueReturning !== true) {
+        continue;
+      }
+      if (stmt.meta?.form && stmt.meta.form !== 'list') {
+        continue;
+      }
+
+      this.warn(
+        'Non-final bracketed when [ ... ] expressions in exe blocks discard their value. Move the when to the end of the block or assign it if you intend to use the result.',
+        'let @ignored = when [...]',
+        stmt.location || fallbackLoc,
+        'exe-nonfinal-when-discarded'
+      );
+    }
+  },
+
   setWarningCollector(collector?: WarningCollector | null) {
     if (!collector) {
       warningCollector = null;

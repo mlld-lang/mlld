@@ -659,7 +659,9 @@ ForExpression "for expression"
         [{ condition: [condition], action }],
         null,
         location(),
-        null
+        null,
+        null,
+        { form: 'inline' }
       );
 
       const loc = initialWhen.location || location();
@@ -678,7 +680,9 @@ ForExpression "for expression"
         conditions,
         initialWhen.withClause || null,
         loc,
-        initialWhen.meta?.modifier || null
+        initialWhen.meta?.modifier || null,
+        null,
+        initialWhen.meta?.form ? { form: initialWhen.meta.form } : null
       );
 
       helpers.debug('ForExpression when-guard block matched', {
@@ -723,7 +727,9 @@ ForExpression "for expression"
           conditions,
           whenExpr.withClause || null,
           loc,
-          whenExpr.meta?.modifier || null
+          whenExpr.meta?.modifier || null,
+          null,
+          whenExpr.meta?.form ? { form: whenExpr.meta.form } : null
         );
       }
 

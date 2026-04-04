@@ -540,7 +540,9 @@ ForActionVariant "for action variant"
         [{ condition: [condition], action }],
         null,
         location(),
-        null
+        null,
+        null,
+        { form: 'inline' }
       );
       return {
         action: [whenExpr],

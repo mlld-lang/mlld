@@ -195,6 +195,7 @@ export interface WhenExpressionNode extends BaseMlldNode {
     isValueReturning: true;
     evaluationType: 'expression';
     hasTailModifiers: boolean;
+    form?: 'inline' | 'list' | 'bound-list';
     modifier?: WhenModifier | null;
     hasBoundValue?: boolean;
     boundIdentifier?: string;

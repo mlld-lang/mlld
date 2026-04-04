@@ -447,6 +447,30 @@ describe('when evaluator characterization', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('propagates loop continue through nested non-final when value expressions', async () => {
+    const { ast } = await parse([
+      '/exe @noop() = "ok"',
+      '/var @result = loop(2) [',
+      '  let @state = @input ?? { ok: false }',
+      '  when @mx.loop.iteration [',
+      '    1 => [',
+      '      when [',
+      '        true => @noop()',
+      '        * => null',
+      '      ]',
+      '      continue { ok: true }',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ ok: true });
+  });
+
   it('propagates loop continue through nested when output side effects', async () => {
     const { ast } = await parse([
       '/var @stateFile = "tmp/repro-when-output-sentinel.json"',

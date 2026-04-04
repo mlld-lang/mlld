@@ -78,6 +78,67 @@ function createWhenExpressionWithNestedCondition(): WhenExpressionNode {
   } as WhenExpressionNode;
 }
 
+function createWhenExpressionWithReturn(): WhenExpressionNode {
+  return {
+    type: 'WhenExpression',
+    nodeId: 'when-return-control',
+    conditions: [
+      {
+        condition: [[{
+          type: 'Literal',
+          nodeId: 'truthy-condition',
+          value: true,
+          valueType: 'boolean'
+        }]],
+        action: [createReturn('returned-from-when')]
+      }
+    ],
+    withClause: null,
+    meta: {
+      conditionCount: 1,
+      isValueReturning: true,
+      evaluationType: 'expression',
+      hasTailModifiers: false,
+      modifier: null,
+      hasBoundValue: false
+    }
+  } as WhenExpressionNode;
+}
+
+function createInlineWhenExpression(value: string): WhenExpressionNode {
+  return {
+    type: 'WhenExpression',
+    nodeId: `inline-when-${value}`,
+    conditions: [
+      {
+        condition: [[{
+          type: 'Literal',
+          nodeId: `inline-condition-${value}`,
+          value: true,
+          valueType: 'boolean'
+        }]],
+        action: [{
+          type: 'Literal',
+          nodeId: `inline-value-${value}`,
+          value,
+          valueType: 'string'
+        } as any]
+      }
+    ],
+    withClause: null,
+    meta: {
+      conditionCount: 1,
+      isValueReturning: true,
+      evaluationType: 'expression',
+      hasTailModifiers: false,
+      form: 'inline',
+      modifier: null,
+      hasBoundValue: false
+    }
+  } as WhenExpressionNode;
+}
+
+
 describe('exe block execution module', () => {
   it('keeps return bubbling stable across function and nested block scopes', async () => {
     const env = createEnvironment();
@@ -155,11 +216,11 @@ describe('exe block execution module', () => {
     }
   });
 
-  it('normalizes nested when-condition arrays inside exe blocks before short-circuiting', async () => {
+  it('discards non-final when expression values and keeps later returns reachable', async () => {
     const env = createEnvironment();
     const blockNode: ExeBlockNode = {
       type: 'ExeBlock',
-      nodeId: 'nested-when-short-circuit',
+      nodeId: 'nested-when-nonfinal-discard',
       values: {
         statements: [createWhenExpressionWithNestedCondition()],
         return: createReturn('ok')
@@ -171,9 +232,67 @@ describe('exe block execution module', () => {
     } as ExeBlockNode;
 
     const missingResult = await evaluateExeBlock(blockNode, env, { x: null });
-    expect(missingResult.value).toBe('missing');
+    expect(missingResult.value).toBe('ok');
 
     const okResult = await evaluateExeBlock(blockNode, env, { x: 'hello' });
     expect(okResult.value).toBe('ok');
+  });
+
+  it('keeps final when expressions as implicit returns', async () => {
+    const env = createEnvironment();
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      nodeId: 'nested-when-final-return',
+      values: {
+        statements: [createWhenExpressionWithNestedCondition()]
+      },
+      meta: {
+        statementCount: 1,
+        hasReturn: false
+      }
+    } as ExeBlockNode;
+
+    const missingResult = await evaluateExeBlock(blockNode, env, { x: null });
+    expect(missingResult.value).toBe('missing');
+
+    const okResult = await evaluateExeBlock(blockNode, env, { x: 'hello' });
+    expect(okResult.value).toBeUndefined();
+  });
+
+  it('preserves explicit returns bubbling out of non-final when expressions', async () => {
+    const env = createEnvironment();
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      nodeId: 'when-explicit-return',
+      values: {
+        statements: [createWhenExpressionWithReturn(), createReturn('unreachable')]
+      },
+      meta: {
+        statementCount: 2,
+        hasReturn: false
+      }
+    } as ExeBlockNode;
+
+    const result = await evaluateExeBlock(blockNode, env);
+    expect(result.value).toBe('returned-from-when');
+  });
+
+  it('keeps inline when guard forms as early returns inside exe blocks', async () => {
+    const env = createEnvironment();
+    const blockNode: ExeBlockNode = {
+      type: 'ExeBlock',
+      nodeId: 'inline-when-guard',
+      values: {
+        statements: [createInlineWhenExpression('guard-hit')],
+        return: createReturn('fallback')
+      },
+      meta: {
+        statementCount: 1,
+        hasReturn: true
+      }
+    } as ExeBlockNode;
+
+    const result = await evaluateExeBlock(blockNode, env);
+    expect(result.value).toBe('guard-hit');
   });
 });
