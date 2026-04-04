@@ -6,6 +6,7 @@ import type {
   SerializedShelfDefinition,
   ShelfDefinition,
   ShelfMergeMode,
+  ShelfScopeSlotBinding,
   ShelfSlotRefValue,
   ShelfScopeSlotRef,
   ShelfSlotCardinality
@@ -19,7 +20,7 @@ import { createExecutableVariable, createObjectVariable, createStructuredValueVa
 import { makeSecurityDescriptor, mergeDescriptors, removeLabelsFromDescriptor, serializeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
-import { renderDisplayProjection } from '@interpreter/eval/records/display-projection';
+import { renderDisplayProjectionSync } from '@interpreter/eval/records/display-projection';
 import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import {
@@ -69,6 +70,16 @@ function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> 
     clone.internal = { ...value.internal };
   }
   return clone;
+}
+
+function createStructuredSnapshot(value: unknown): StructuredValue {
+  if (isStructuredValue(value)) {
+    return cloneStructuredValue(value);
+  }
+  if (Array.isArray(value)) {
+    return wrapStructured([...value], 'array');
+  }
+  return wrapStructured(value as any);
 }
 
 function stripKnownDescriptor(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
@@ -657,21 +668,28 @@ function createShelfSlotReferenceValue(
   const definition = env.getShelfDefinition(shelfName);
   const slot = definition?.slots[slotName];
   const stored = env.readShelfSlot(shelfName, slotName);
-  let wrapped: StructuredValue;
-
-  if (stored === undefined) {
-    wrapped = slot?.cardinality === 'collection'
-      ? wrapStructured([], 'array')
-      : wrapStructured(null);
-  } else if (isStructuredValue(stored)) {
-    wrapped = cloneStructuredValue(stored);
-  } else if (Array.isArray(stored)) {
-    wrapped = wrapStructured([...stored], 'array');
-  } else {
-    wrapped = wrapStructured(stored as any);
-  }
+  const wrapped = stored === undefined
+    ? (
+        slot?.cardinality === 'collection'
+          ? wrapStructured([], 'array')
+          : wrapStructured(null)
+      )
+    : createStructuredSnapshot(stored);
 
   return createShelfSlotRefValue({ shelfName, slotName }, wrapped);
+}
+
+function createReadableShelfSlotReferenceValue(
+  env: Environment,
+  shelfName: string,
+  slotName: string
+): ShelfSlotRefValue {
+  const live = createShelfSlotReferenceValue(env, shelfName, slotName);
+  const projected = renderDisplayProjectionSync(live.current, env);
+  return createShelfSlotRefValue(
+    { shelfName, slotName },
+    createStructuredSnapshot(projected)
+  );
 }
 
 function getAllWritableSlots(env: Environment): ShelfScopeSlotRef[] {
@@ -704,6 +722,28 @@ function getAllReadableSlots(env: Environment): ShelfScopeSlotRef[] {
   return readable;
 }
 
+function getAllReadableSlotBindings(env: Environment): ShelfScopeSlotBinding[] {
+  const scope = getNormalizedShelfScope(env);
+  if (scope) {
+    return [...scope.readSlotBindings];
+  }
+  return getAllReadableSlots(env).map(ref => ({ ref }));
+}
+
+function getAllWritableSlotBindings(env: Environment): ShelfScopeSlotBinding[] {
+  const scope = getNormalizedShelfScope(env);
+  if (scope) {
+    return [...scope.writeSlotBindings];
+  }
+  return getAllWritableSlots(env).map(ref => ({ ref }));
+}
+
+function formatSlotBindingAccessPath(binding: ShelfScopeSlotBinding): string {
+  return binding.alias
+    ? `@fyi.shelf.${binding.alias}`
+    : `@fyi.shelf.${binding.ref.shelfName}.${binding.ref.slotName}`;
+}
+
 function assertShelfWriteAllowed(env: Environment, ref: ShelfScopeSlotRef): void {
   const scope = getNormalizedShelfScope(env);
   if (!scope) {
@@ -724,33 +764,35 @@ function assertShelfWriteAllowed(env: Environment, ref: ShelfScopeSlotRef): void
 }
 
 function describeWritableSlots(env: Environment): string {
-  const slots = getAllWritableSlots(env);
-  if (slots.length === 0) {
+  const bindings = getAllWritableSlotBindings(env);
+  if (bindings.length === 0) {
     return 'No writable shelf slots are available.';
   }
-  return slots
-    .map(ref => {
-      const shelf = env.getShelfDefinition(ref.shelfName);
-      const slot = shelf?.slots[ref.slotName];
+  return bindings
+    .map(binding => {
+      const shelf = env.getShelfDefinition(binding.ref.shelfName);
+      const slot = shelf?.slots[binding.ref.slotName];
+      const accessPath = formatSlotBindingAccessPath(binding);
       return slot
-        ? `@${ref.shelfName}.${ref.slotName} (${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''}, ${slot.merge})`
-        : `@${ref.shelfName}.${ref.slotName}`;
+        ? `${accessPath} (${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''}, ${slot.merge})`
+        : accessPath;
     })
     .join(', ');
 }
 
 function describeReadableSlots(env: Environment): string {
-  const slots = getAllReadableSlots(env);
-  if (slots.length === 0) {
+  const bindings = getAllReadableSlotBindings(env);
+  if (bindings.length === 0) {
     return 'No readable shelf slots are available.';
   }
-  return slots
-    .map(ref => {
-      const shelf = env.getShelfDefinition(ref.shelfName);
-      const slot = shelf?.slots[ref.slotName];
+  return bindings
+    .map(binding => {
+      const shelf = env.getShelfDefinition(binding.ref.shelfName);
+      const slot = shelf?.slots[binding.ref.slotName];
+      const accessPath = formatSlotBindingAccessPath(binding);
       return slot
-        ? `@${ref.shelfName}.${ref.slotName} (${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''})`
-        : `@${ref.shelfName}.${ref.slotName}`;
+        ? `${accessPath} (${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''})`
+        : accessPath;
     })
     .join(', ');
 }
@@ -933,24 +975,21 @@ export function createShelfVariable(env: Environment, definition: ShelfDefinitio
   });
 }
 
-async function projectReadableValue(value: unknown, env: Environment): Promise<unknown> {
-  if (extractShelfSlotRef(value)) {
-    const ref = extractShelfSlotRef(value)!;
-    return renderDisplayProjection(
-      createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName).current,
-      env
-    );
+function projectReadableValue(value: unknown, env: Environment): unknown {
+  const ref = extractShelfSlotRef(value);
+  if (ref) {
+    return createReadableShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
   }
-  return renderDisplayProjection(value, env);
+  return renderDisplayProjectionSync(value, env);
 }
 
 function createFyiShelfNamespaceValue(
   env: Environment,
-  shelfName: string,
-  slotNames: readonly string[]
+  bindings: readonly ShelfScopeSlotBinding[]
 ): Record<string, unknown> {
   const value: Record<string, unknown> = Object.create(null);
-  for (const slotName of slotNames) {
+  for (const binding of bindings) {
+    const { shelfName, slotName } = binding.ref;
     defineEnumerableGetter(value, slotName, () =>
       projectReadableValue(createShelfSlotReferenceValue(env, shelfName, slotName), env)
     );
@@ -960,21 +999,33 @@ function createFyiShelfNamespaceValue(
 
 export function createFyiShelfValue(env: Environment): Record<string, unknown> {
   const value: Record<string, unknown> = Object.create(null);
-  const readableSlots = getAllReadableSlots(env);
-  const grouped = new Map<string, string[]>();
-  for (const entry of readableSlots) {
-    const bucket = grouped.get(entry.shelfName) ?? [];
-    bucket.push(entry.slotName);
-    grouped.set(entry.shelfName, bucket);
+  const scope = getNormalizedShelfScope(env);
+  const readableBindings = scope?.readSlotBindings ?? getAllReadableSlots(env).map(ref => ({ ref }));
+  const grouped = new Map<string, ShelfScopeSlotBinding[]>();
+  for (const binding of readableBindings) {
+    if (binding.alias) {
+      continue;
+    }
+    const bucket = grouped.get(binding.ref.shelfName) ?? [];
+    bucket.push(binding);
+    grouped.set(binding.ref.shelfName, bucket);
   }
 
-  for (const [shelfName, slotNames] of grouped.entries()) {
+  for (const [shelfName, bindings] of grouped.entries()) {
     defineEnumerableGetter(value, shelfName, () =>
-      createFyiShelfNamespaceValue(env, shelfName, slotNames)
+      createFyiShelfNamespaceValue(env, bindings)
     );
   }
 
-  const scope = getNormalizedShelfScope(env);
+  for (const binding of readableBindings) {
+    if (!binding.alias) {
+      continue;
+    }
+    defineEnumerableGetter(value, binding.alias, () =>
+      projectReadableValue(createShelfSlotReferenceValue(env, binding.ref.shelfName, binding.ref.slotName), env)
+    );
+  }
+
   for (const [alias, aliasValue] of Object.entries(scope?.readAliases ?? {})) {
     defineEnumerableGetter(value, alias, () => projectReadableValue(aliasValue, env));
   }
@@ -1147,6 +1198,120 @@ function dedupeScopeRefs(refs: ShelfScopeSlotRef[]): ShelfScopeSlotRef[] {
   return deduped;
 }
 
+function normalizeScopeBindingRef(binding: ShelfScopeSlotBinding): string {
+  return normalizeScopeSlotRef(binding.ref);
+}
+
+function dedupeScopeBindings(bindings: ShelfScopeSlotBinding[]): ShelfScopeSlotBinding[] {
+  const seen = new Set<string>();
+  const deduped: ShelfScopeSlotBinding[] = [];
+  for (const binding of bindings) {
+    const key = `${normalizeScopeBindingRef(binding)}::${binding.alias ?? ''}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(binding);
+  }
+  return deduped;
+}
+
+function validateScopeSlotBindingTargets(
+  bindings: readonly ShelfScopeSlotBinding[],
+  env: Environment
+): void {
+  for (const binding of bindings) {
+    const shelf = env.getShelfDefinition(binding.ref.shelfName);
+    const slot = shelf?.slots[binding.ref.slotName];
+    if (!shelf || !slot) {
+      throw new MlldInterpreterError(
+        `Unknown shelf slot '@${binding.ref.shelfName}.${binding.ref.slotName}'`,
+        'box',
+        undefined,
+        { code: 'INVALID_SHELF_SCOPE' }
+      );
+    }
+  }
+}
+
+function validateScopeSlotBindingConflicts(
+  readBindings: readonly ShelfScopeSlotBinding[],
+  writeBindings: readonly ShelfScopeSlotBinding[],
+  readAliases: Readonly<Record<string, unknown>>
+): void {
+  const bindingByRef = new Map<string, ShelfScopeSlotBinding>();
+  const aliasRefs = new Map<string, string>();
+  const namespaceNames = new Set<string>();
+
+  for (const binding of [...readBindings, ...writeBindings]) {
+    const refKey = normalizeScopeBindingRef(binding);
+    const existing = bindingByRef.get(refKey);
+    if (existing) {
+      if ((existing.alias ?? null) !== (binding.alias ?? null)) {
+        throw new MlldInterpreterError(
+          `Shelf slot '@${binding.ref.shelfName}.${binding.ref.slotName}' cannot be exposed under multiple agent names`,
+          'box',
+          undefined,
+          { code: 'INVALID_SHELF_SCOPE' }
+        );
+      }
+    } else {
+      bindingByRef.set(refKey, binding);
+    }
+
+    if (binding.alias) {
+      const existingAliasRef = aliasRefs.get(binding.alias);
+      if (existingAliasRef && existingAliasRef !== refKey) {
+        throw new MlldInterpreterError(
+          `Shelf alias '${binding.alias}' is already bound to a different slot`,
+          'box',
+          undefined,
+          { code: 'INVALID_SHELF_SCOPE' }
+        );
+      }
+      aliasRefs.set(binding.alias, refKey);
+    } else {
+      namespaceNames.add(binding.ref.shelfName);
+    }
+  }
+
+  for (const alias of Object.keys(readAliases)) {
+    if (aliasRefs.has(alias)) {
+      throw new MlldInterpreterError(
+        `Shelf alias '${alias}' is already bound to a slot`,
+        'box',
+        undefined,
+        { code: 'INVALID_SHELF_SCOPE' }
+      );
+    }
+  }
+
+  for (const alias of [...aliasRefs.keys(), ...Object.keys(readAliases)]) {
+    if (namespaceNames.has(alias)) {
+      throw new MlldInterpreterError(
+        `Shelf alias '${alias}' conflicts with an exposed shelf namespace`,
+        'box',
+        undefined,
+        { code: 'INVALID_SHELF_SCOPE' }
+      );
+    }
+  }
+}
+
+function mergeReadableSlotBindings(
+  readBindings: readonly ShelfScopeSlotBinding[],
+  writeBindings: readonly ShelfScopeSlotBinding[]
+): ShelfScopeSlotBinding[] {
+  const merged = new Map<string, ShelfScopeSlotBinding>();
+  for (const binding of [...readBindings, ...writeBindings]) {
+    const key = normalizeScopeBindingRef(binding);
+    if (!merged.has(key)) {
+      merged.set(key, binding);
+    }
+  }
+  return Array.from(merged.values());
+}
+
 function isAliasedValue(value: unknown): value is DataAliasedValue {
   return Boolean(
     value &&
@@ -1170,9 +1335,9 @@ async function normalizeScopeSlotEntries(
   entries: unknown,
   env: Environment,
   label: 'read' | 'write'
-): Promise<{ refs: ShelfScopeSlotRef[]; aliases: Record<string, unknown> }> {
+): Promise<{ refs: ShelfScopeSlotRef[]; bindings: ShelfScopeSlotBinding[]; aliases: Record<string, unknown> }> {
   if (entries === undefined) {
-    return { refs: [], aliases: {} };
+    return { refs: [], bindings: [], aliases: {} };
   }
   if (!Array.isArray(entries)) {
     throw new MlldInterpreterError(`box.shelf.${label} must be an array`, 'box', undefined, {
@@ -1181,12 +1346,28 @@ async function normalizeScopeSlotEntries(
   }
 
   const refs: ShelfScopeSlotRef[] = [];
+  const bindings: ShelfScopeSlotBinding[] = [];
   const aliases: Record<string, unknown> = {};
 
   for (const entry of entries) {
     const normalized = await normalizeScopeEntryValue(entry, env);
     if (isPlainObject(normalized) && typeof normalized.alias === 'string' && 'value' in normalized) {
-      aliases[normalized.alias] = normalized.value;
+      const alias = normalized.alias.trim();
+      const ref = extractShelfSlotRef(normalized.value);
+      if (ref) {
+        refs.push(ref);
+        bindings.push({ ref, alias });
+        continue;
+      }
+      if (label === 'write') {
+        throw new MlldInterpreterError(
+          'box.shelf.write aliases must resolve to shelf slot references',
+          'box',
+          undefined,
+          { code: 'INVALID_SHELF_SCOPE' }
+        );
+      }
+      aliases[alias] = normalized.value;
       continue;
     }
     const ref = extractShelfSlotRef(normalized);
@@ -1199,9 +1380,10 @@ async function normalizeScopeSlotEntries(
       );
     }
     refs.push(ref);
+    bindings.push({ ref });
   }
 
-  return { refs, aliases };
+  return { refs, bindings, aliases };
 }
 
 export async function normalizeScopedShelfConfig(
@@ -1213,7 +1395,9 @@ export async function normalizeScopedShelfConfig(
       [SHELF_SCOPE_MARKER]: true,
       readSlots: [],
       writeSlots: [],
-      readAliases: {}
+      readAliases: {},
+      readSlotBindings: [],
+      writeSlotBindings: []
     };
   }
   if (!isPlainObject(value)) {
@@ -1224,12 +1408,19 @@ export async function normalizeScopedShelfConfig(
 
   const read = await normalizeScopeSlotEntries(value.read, env, 'read');
   const write = await normalizeScopeSlotEntries(value.write, env, 'write');
+  const dedupedReadBindings = dedupeScopeBindings(read.bindings);
+  const dedupedWriteBindings = dedupeScopeBindings(write.bindings);
+  validateScopeSlotBindingTargets([...dedupedReadBindings, ...dedupedWriteBindings], env);
+  validateScopeSlotBindingConflicts(dedupedReadBindings, dedupedWriteBindings, read.aliases);
+  const mergedReadableBindings = mergeReadableSlotBindings(dedupedReadBindings, dedupedWriteBindings);
 
   return {
     [SHELF_SCOPE_MARKER]: true,
     readSlots: dedupeScopeRefs([...read.refs, ...write.refs]),
     writeSlots: dedupeScopeRefs(write.refs),
-    readAliases: { ...read.aliases }
+    readAliases: { ...read.aliases },
+    readSlotBindings: mergedReadableBindings,
+    writeSlotBindings: dedupedWriteBindings
   };
 }
 

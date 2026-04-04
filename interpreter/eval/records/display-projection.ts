@@ -13,9 +13,9 @@ import {
   resolveEffectiveToolMetadata,
   resolveNamedOperationMetadata
 } from '@interpreter/eval/exec/tool-metadata';
-import { accessField } from '@interpreter/utils/field-access';
 import {
   asText,
+  getStructuredObjectField,
   getRecordProjectionMetadata,
   isStructuredValue,
   wrapStructured,
@@ -234,13 +234,13 @@ function issueProjectionHandle(
   return issued.handle;
 }
 
-async function projectFieldValue(
+function projectFieldValue(
   value: StructuredValue,
   fieldProjection: RecordFieldProjectionMetadata,
   env: Environment,
   context: ProjectionContext,
   parent?: StructuredValue
-): Promise<unknown | typeof OMITTED_FIELD> {
+): unknown | typeof OMITTED_FIELD {
   const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
   if (resolution.omitted) {
     return OMITTED_FIELD;
@@ -248,12 +248,7 @@ async function projectFieldValue(
 
   const effectiveDisplay = resolution.mode;
   if (value.type === 'array' && Array.isArray(value.data)) {
-    const elements = await Promise.all(
-      value.data.map(async (_item, index) => {
-        const resolved = await accessField(value, { type: 'arrayIndex', value: index } as any, { env });
-        return toStructuredProjectionElement(resolved);
-      })
-    );
+    const elements = value.data.map(item => toStructuredProjectionElement(item));
 
     if (effectiveDisplay === 'bare') {
       return elements.map(element => toDisplayPrimitive(element));
@@ -361,11 +356,11 @@ async function projectFieldValue(
   return projected;
 }
 
-async function projectStructuredRecord(
+function projectStructuredRecord(
   value: StructuredValue<Record<string, unknown>>,
   env: Environment,
   context: ProjectionContext
-): Promise<Record<string, unknown>> {
+): Record<string, unknown> {
   const projection = getRecordProjectionMetadata(value);
   if (!projection || projection.kind !== 'record') {
     return isObjectLike(value.data) ? value.data : {};
@@ -373,8 +368,8 @@ async function projectStructuredRecord(
 
   const projected: Record<string, unknown> = {};
   for (const key of Object.keys(projection.fields)) {
-    const child = await accessField(value, { type: 'field', value: key } as any, { env });
-    const rendered = await renderDisplayProjection(child, env, {
+    const child = getStructuredObjectField(value, key);
+    const rendered = renderDisplayProjectionSync(child, env, {
       ...context,
       parentRecord: value
     });
@@ -386,11 +381,11 @@ async function projectStructuredRecord(
   return projected;
 }
 
-export async function renderDisplayProjection(
+export function renderDisplayProjectionSync(
   value: unknown,
   env: Environment,
   options?: DisplayProjectionOptions | ProjectionContext
-): Promise<unknown> {
+): unknown {
   const context = 'activeRequirements' in (options ?? {})
     ? options as ProjectionContext
     : createProjectionContext(env, options as DisplayProjectionOptions | undefined);
@@ -415,26 +410,32 @@ export async function renderDisplayProjection(
       );
     }
     if (resolved.type === 'array' && Array.isArray(resolved.data)) {
-      return Promise.all(resolved.data.map(item => renderDisplayProjection(item, env, context)));
+      return resolved.data.map(item => renderDisplayProjectionSync(item, env, context));
     }
     return resolved.data;
   }
 
   if (Array.isArray(resolved)) {
-    return Promise.all(resolved.map(item => renderDisplayProjection(item, env, context)));
+    return resolved.map(item => renderDisplayProjectionSync(item, env, context));
   }
 
   if (isObjectLike(resolved)) {
-    const projectedEntries = await Promise.all(
-      Object.entries(resolved).map(async ([key, entryValue]) => [
-        key,
-        await renderDisplayProjection(entryValue, env, context)
-      ] as const)
-    );
+    const projectedEntries = Object.entries(resolved).map(([key, entryValue]) => [
+      key,
+      renderDisplayProjectionSync(entryValue, env, context)
+    ] as const);
     return Object.fromEntries(projectedEntries.filter(([, value]) => value !== OMITTED_FIELD));
   }
 
   return resolved;
+}
+
+export async function renderDisplayProjection(
+  value: unknown,
+  env: Environment,
+  options?: DisplayProjectionOptions | ProjectionContext
+): Promise<unknown> {
+  return renderDisplayProjectionSync(value, env, options);
 }
 
 function resolveEffectiveDisplayMode(

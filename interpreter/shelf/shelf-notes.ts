@@ -1,4 +1,4 @@
-import type { ShelfScopeSlotRef, ShelfSlotDefinition } from '@core/types/shelf';
+import type { ShelfScopeSlotBinding, ShelfSlotDefinition } from '@core/types/shelf';
 import type { Environment } from '@interpreter/env/Environment';
 import { getNormalizedShelfScope, extractShelfSlotRef } from '@interpreter/shelf/runtime';
 import { getRecordProjectionMetadata, isStructuredValue } from '@interpreter/utils/structured-value';
@@ -9,6 +9,7 @@ type WritableShelfRow = {
   type: string;
   merge: string;
   constraint: string;
+  accessPath: string;
 };
 
 type ReadableShelfRow = {
@@ -17,16 +18,14 @@ type ReadableShelfRow = {
   accessPath: string;
 };
 
-function formatSlotRef(ref: ShelfScopeSlotRef): string {
-  return `@${ref.shelfName}.${ref.slotName}`;
-}
-
-function formatReadableAccessPath(ref: ShelfScopeSlotRef): string {
-  return `@fyi.shelf.${ref.shelfName}.${ref.slotName}`;
-}
-
 function formatAliasAccessPath(alias: string): string {
   return `@fyi.shelf.${alias}`;
+}
+
+function formatBindingAccessPath(binding: ShelfScopeSlotBinding): string {
+  return binding.alias
+    ? formatAliasAccessPath(binding.alias)
+    : `@fyi.shelf.${binding.ref.shelfName}.${binding.ref.slotName}`;
 }
 
 function formatSlotType(slot: ShelfSlotDefinition): string {
@@ -163,18 +162,20 @@ function resolveSlotDefinition(env: Environment, ref: ShelfScopeSlotRef): ShelfS
   return env.getShelfDefinition(ref.shelfName)?.slots[ref.slotName];
 }
 
-function buildWritableRows(env: Environment, refs: readonly ShelfScopeSlotRef[]): WritableShelfRow[] {
+function buildWritableRows(env: Environment, bindings: readonly ShelfScopeSlotBinding[]): WritableShelfRow[] {
   const rows: WritableShelfRow[] = [];
-  for (const ref of refs) {
-    const slot = resolveSlotDefinition(env, ref);
+  for (const binding of bindings) {
+    const slot = resolveSlotDefinition(env, binding.ref);
     if (!slot) {
       continue;
     }
+    const accessPath = formatBindingAccessPath(binding);
     rows.push({
-      slot: formatSlotRef(ref),
+      slot: accessPath,
       type: formatSlotType(slot),
       merge: formatMergeMode(slot, env),
-      constraint: slot.from ? `from ${slot.from}` : '—'
+      constraint: slot.from ? `from ${slot.from}` : '—',
+      accessPath
     });
   }
   return rows;
@@ -182,23 +183,24 @@ function buildWritableRows(env: Environment, refs: readonly ShelfScopeSlotRef[])
 
 function buildReadableSlotRows(
   env: Environment,
-  refs: readonly ShelfScopeSlotRef[],
+  bindings: readonly ShelfScopeSlotBinding[],
   writableRefs: ReadonlySet<string>
 ): ReadableShelfRow[] {
   const rows: ReadableShelfRow[] = [];
-  for (const ref of refs) {
-    const key = `${ref.shelfName}.${ref.slotName}`;
+  for (const binding of bindings) {
+    const key = `${binding.ref.shelfName}.${binding.ref.slotName}`;
     if (writableRefs.has(key)) {
       continue;
     }
-    const slot = resolveSlotDefinition(env, ref);
+    const slot = resolveSlotDefinition(env, binding.ref);
     if (!slot) {
       continue;
     }
+    const accessPath = formatBindingAccessPath(binding);
     rows.push({
-      slot: formatSlotRef(ref),
+      slot: accessPath,
       type: formatSlotType(slot),
-      accessPath: formatReadableAccessPath(ref)
+      accessPath
     });
   }
   return rows;
@@ -239,10 +241,10 @@ export function renderInjectedShelfNotes(env: Environment): string | undefined {
     return undefined;
   }
 
-  const writableRows = buildWritableRows(env, scope.writeSlots);
+  const writableRows = buildWritableRows(env, scope.writeSlotBindings);
   const writableKeys = new Set(scope.writeSlots.map(ref => `${ref.shelfName}.${ref.slotName}`));
   const readableRows = [
-    ...buildReadableSlotRows(env, scope.readSlots, writableKeys),
+    ...buildReadableSlotRows(env, scope.readSlotBindings, writableKeys),
     ...buildAliasRows(env, scope.readAliases)
   ];
 

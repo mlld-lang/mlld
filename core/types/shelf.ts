@@ -125,6 +125,13 @@ export interface NormalizedShelfScope {
   readSlots: ShelfScopeSlotRef[];
   writeSlots: ShelfScopeSlotRef[];
   readAliases: Record<string, unknown>;
+  readSlotBindings: ShelfScopeSlotBinding[];
+  writeSlotBindings: ShelfScopeSlotBinding[];
+}
+
+export interface ShelfScopeSlotBinding {
+  ref: ShelfScopeSlotRef;
+  alias?: string;
 }
 
 export interface ShelfSlotDefinition {
@@ -186,5 +193,7 @@ export function isNormalizedShelfScope(value: unknown): value is NormalizedShelf
     && Boolean(candidate.readAliases)
     && typeof candidate.readAliases === 'object'
     && !Array.isArray(candidate.readAliases)
+    && Array.isArray(candidate.readSlotBindings)
+    && Array.isArray(candidate.writeSlotBindings)
   );
 }

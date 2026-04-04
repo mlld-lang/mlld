@@ -69,10 +69,10 @@ describe('shelf notes injection', () => {
 
       expect(output).toContain('<shelf_notes>');
       expect(output).not.toContain('<tool_notes>');
-      expect(output).toContain('| @outreach.selected | contact? | replace | from recipients |');
-      expect(output).toContain('| @outreach.recipients | contact[] |');
+      expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
+      expect(output).toContain('| @fyi.shelf.outreach.recipients | contact[] |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
-      expect(output).toContain('Write to slots with @shelve(@outreach.selected, value).');
+      expect(output).toContain('Write to slots with @shelve(@fyi.shelf.outreach.selected, value).');
       expect(output).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
     } finally {
       env.cleanup();
@@ -125,7 +125,7 @@ describe('shelf notes injection', () => {
       expect(output.indexOf('<tool_notes>')).toBeGreaterThan(output.indexOf('User system prompt'));
       expect(output.indexOf('<shelf_notes>')).toBeGreaterThan(output.indexOf('<tool_notes>'));
       expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('| @outreach.selected | contact? | replace | from recipients |');
+      expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
     } finally {
       env.cleanup();

@@ -72,12 +72,11 @@ An agent can't select a winner that was never a candidate. Identity uses the rec
 Box config grants per-slot access:
 
 ```mlld
-box @researcher with {
-  tools: [@searchContacts],
+box {
   shelf: { write: [@outreach.recipients] }
 } [...]
 
-box @decider with {
+box {
   shelf: {
     read: [@outreach.recipients],
     write: [@outreach.selected]
@@ -96,13 +95,39 @@ Write implies read. `@shelve` is automatically provided where write-capable slot
 
 `@shelve.read(@slotRef)` returns the current stored contents of that slot with full structured values intact. Agents still read via `@fyi.shelf.outreach.recipients`, which applies display projections for the scoped shelf view.
 
+## Dynamic aliasing
+
+Scoped boxes can alias slot refs to the exact names an agent should use:
+
+```mlld
+box {
+  shelf: {
+    read: [@taskBrief as brief, @outreach.recipients as candidates],
+    write: [@pipeline.execution_log as execution_log]
+  }
+} [...]
+```
+
+- `@fyi.shelf.brief` exposes the aliased readable value
+- `@fyi.shelf.candidates` exposes the aliased slot contents with display projection
+- `@fyi.shelf.execution_log` is still a slot ref under the hood, so it works with the full slot API:
+
+```mlld
+@shelve(@fyi.shelf.execution_log, @value)
+@shelve.read(@fyi.shelf.execution_log)
+@shelve.clear(@fyi.shelf.execution_log)
+@shelve.remove(@fyi.shelf.execution_log, @value)
+```
+
+Aliases are agent-facing names. The agent does not need to know the original slot variable. Aliases that target different slots are rejected, and write aliases must resolve to real shelf slot refs.
+
 ## Agent system notes
 
 When an `exe llm` call runs inside a shelf-scoped box, mlld automatically appends a compact `<shelf_notes>` block to the system prompt.
 
 - Writable slots list record type, merge mode, and any `from` constraint
 - Readable slots list record type
-- Aliased reads are shown with the name the agent actually sees, such as `@fyi.shelf.brief`
+- Aliased reads and writes are shown with the name the agent actually sees, such as `@fyi.shelf.brief` or `@fyi.shelf.execution_log`
 - Injection happens even when the LLM call has no `tools`
 - If both notes are present, `<tool_notes>` comes first and `<shelf_notes>` follows it
 

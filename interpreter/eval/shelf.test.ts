@@ -126,7 +126,7 @@ describe('shelf runtime', () => {
     expect(asData(selectedScore)).toBe(92);
   });
 
-  it('projects readable slot contents through @fyi.shelf and hides @shelve for read-only scopes', async () => {
+  it('projects readable slot contents through @fyi.shelf and keeps slot refs available for shelf APIs', async () => {
     const env = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -170,7 +170,11 @@ describe('shelf runtime', () => {
     const outreachView = await accessField(shelfView, { type: 'field', value: 'outreach' } as any, { env: readOnlyEnv });
     const projectedRecipients = await accessField(outreachView, { type: 'field', value: 'recipients' } as any, { env: readOnlyEnv });
 
-    expect(projectedRecipients).toEqual([
+    expect(extractShelfSlotRef(projectedRecipients)).toEqual({
+      shelfName: 'outreach',
+      slotName: 'recipients'
+    });
+    expect(asData(projectedRecipients)).toEqual([
       {
         name: 'Mark',
         email: {
@@ -186,6 +190,105 @@ describe('shelf runtime', () => {
     });
 
     expect(writableEnv.hasVariable('shelve')).toBe(true);
+  });
+
+  it('supports aliased slot refs in box shelf config for reads, writes, and @shelve.read', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @ledger = {
+  execution_log: contact[],
+  candidates: contact[],
+  selected: contact? from execution_log
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/var @logSlot = @ledger.execution_log
+/var @candidateSlot = @ledger.candidates
+/var @selectedSlot = @ledger.selected
+@shelve(@candidateSlot, @emitContact("c_1", "Mark"))
+/box {
+  shelf: {
+    read: [@candidateSlot as candidates],
+    write: [@logSlot as execution_log, @selectedSlot as selected]
+  }
+} [
+  let @candidateState = @shelve.read(@fyi.shelf.candidates)
+  @shelve(@fyi.shelf.execution_log, @candidateState[0])
+  let @currentLog = @shelve.read(@fyi.shelf.execution_log)
+  @shelve(@fyi.shelf.selected, @currentLog[0])
+]
+`);
+
+    const executionLog = env.readShelfSlot('ledger', 'execution_log') as unknown[];
+    expect(executionLog).toHaveLength(1);
+    const firstEntry = executionLog[0];
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(firstId)).toBe('c_1');
+
+    const selected = env.readShelfSlot('ledger', 'selected');
+    const selectedId = await accessField(selected, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(selectedId)).toBe('c_1');
+  });
+
+  it('supports direct indexed reads from aliased @fyi.shelf entries', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @ledger = {
+  candidates: contact[]
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/var @candidateSlot = @ledger.candidates
+@shelve(@candidateSlot, @emitContact("c_1", "Mark"))
+/var @firstCandidateId = box {
+  shelf: {
+    read: [@candidateSlot as candidates]
+  }
+} [
+  => @fyi.shelf.candidates[0].id
+]
+`);
+
+    const firstCandidateId = env.getVariable('firstCandidateId')?.value;
+    expect(isStructuredValue(firstCandidateId) ? asData(firstCandidateId) : firstCandidateId).toBe('c_1');
+  });
+
+  it('rejects conflicting slot aliases in box shelf config', async () => {
+    await expect(createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @ledger = {
+  execution_log: contact[],
+  candidates: contact[]
+}
+/var @firstSlot = @ledger.execution_log
+/var @secondSlot = @ledger.candidates
+/box {
+  shelf: {
+    read: [@firstSlot as slot, @secondSlot as slot]
+  }
+} [
+  show "noop"
+]
+`)).rejects.toThrow(/Shelf alias 'slot' is already bound to a different slot/);
   });
 
   it('imports exported shelf declarations with multiple slots and dependent records', async () => {

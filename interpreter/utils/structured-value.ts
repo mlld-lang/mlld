@@ -998,6 +998,29 @@ export function getStructuredChildValues(value: StructuredValue): unknown[] {
   return children;
 }
 
+export function getStructuredObjectField(
+  value: StructuredValue,
+  fieldName: string
+): unknown {
+  if (!value.data || typeof value.data !== 'object' || Array.isArray(value.data)) {
+    return undefined;
+  }
+
+  const objectData = value.data as Record<string, unknown>;
+  const fieldValue = objectData[fieldName];
+  const namespaceMetadata = getStructuredNamespaceMetadata(value);
+  if (!namespaceMetadata) {
+    return fieldValue;
+  }
+
+  const rawMetadata = namespaceMetadata[fieldName];
+  if (!rawMetadata || typeof rawMetadata !== 'object') {
+    return fieldValue;
+  }
+
+  return materializeStructuredNamespaceChild(fieldValue, rawMetadata as Record<string, unknown>);
+}
+
 function isSecurityDescriptor(value: SecurityDescriptor | undefined): value is SecurityDescriptor {
   return Boolean(value);
 }

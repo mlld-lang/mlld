@@ -52,6 +52,16 @@ describe('shelf notes', () => {
       const selectedRef = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env });
       const scopedEnv = env.createChild();
       const scope = await normalizeScopedShelfConfig({ read: [recipientsRef], write: [selectedRef] }, env);
+      scope.readSlotBindings = scope.readSlotBindings.map(binding =>
+        binding.ref.shelfName === 'outreach' && binding.ref.slotName === 'selected'
+          ? { ref: binding.ref, alias: 'selection' }
+          : binding
+      );
+      scope.writeSlotBindings = scope.writeSlotBindings.map(binding =>
+        binding.ref.shelfName === 'outreach' && binding.ref.slotName === 'selected'
+          ? { ref: binding.ref, alias: 'selection' }
+          : binding
+      );
       scope.readAliases = {
         brief: wrapStructured('Pick one recipient', 'text', 'Pick one recipient'),
         audience: recipientsRef,
@@ -64,15 +74,15 @@ describe('shelf notes', () => {
 
       const notes = renderInjectedShelfNotes(scopedEnv);
       expect(notes).toContain('<shelf_notes>');
-      expect(notes).toContain('| @outreach.selected | contact? | replace | from recipients |');
-      expect(notes).toContain('| @outreach.recipients | contact[] |');
+      expect(notes).toContain('| @fyi.shelf.selection | contact? | replace | from recipients |');
+      expect(notes).toContain('| @fyi.shelf.outreach.recipients | contact[] |');
       expect(notes).toContain('| @fyi.shelf.brief | text |');
       expect(notes).toContain('| @fyi.shelf.audience | contact[] |');
       expect(notes).toContain('| @fyi.shelf.chosen | contact |');
       expect(notes).toContain('| @fyi.shelf.stats | object |');
       expect(notes).toContain('| @fyi.shelf.count | number |');
       expect(notes).toContain('| @fyi.shelf.tags | array |');
-      expect(notes).toContain('Write to slots with @shelve(@outreach.selected, value).');
+      expect(notes).toContain('Write to slots with @shelve(@fyi.shelf.selection, value).');
       expect(notes).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
       expect(notes).toContain('Collection slots use [] and follow the listed Merge mode.');
     } finally {
@@ -90,7 +100,9 @@ describe('shelf notes', () => {
           __mlldShelfScope: true,
           readSlots: [],
           writeSlots: [],
-          readAliases: {}
+          readAliases: {},
+          readSlotBindings: [],
+          writeSlotBindings: []
         }
       });
 
