@@ -121,6 +121,69 @@ Both forms work in tool calls and authorizations. The runtime resolves handles t
 
 Workers discover available handles via `@fyi.known("sendEmail")`, which returns all proof-bearing candidates for an operation's control args — both fact-bearing (from tool results) and `known`-attested (from the planner). The tool is implicitly available when write tools with `controlArgs` are present.
 
+## Shelf Slots: Typed State Accumulation
+
+Agents accumulate state — building candidate lists, narrowing selections, tracking progress. Shelf slots are the typed state surface for this, backed by records.
+
+```mlld
+shelf @outreach = {
+  recipients: contact[],
+  selected: contact? from recipients,
+  drafts: email_draft[]
+}
+```
+
+Each slot is typed by a record. The record provides schema, fact/data classification, grounding, and display projection. The shelf adds merge semantics, cross-slot constraints, and access control.
+
+### Grounding on writes
+
+Agent writes to slots are **stricter than tool calls**: fact fields require handle-bearing input only. Masked previews and bare literals are rejected, even if unique in the session. Slots are durable state — durable state gets durable references.
+
+```mlld
+>> Agent shelves a contact — email must be a handle, not a bare string
+@shelve(@outreach.recipients, { id: "h_abc", email: "h_def", name: "Mark" })
+```
+
+### Cross-slot constraints
+
+`from` validates that a value exists in a referenced slot:
+
+```mlld
+shelf @pipeline = {
+  candidates: contact[],
+  winner: contact? from candidates
+}
+```
+
+The agent can't select a "winner" that was never a candidate. The constraint is checked at write time. Identity uses the record's `key` field when available.
+
+### Access control via box config
+
+```mlld
+box @researcher with {
+  tools: [@searchContacts],
+  shelf: { write: [@outreach.recipients] }
+} [...]
+
+box @decider with {
+  shelf: {
+    read: [@outreach.recipients],
+    write: [@outreach.selected]
+  }
+} [...]
+```
+
+Agents read slot contents via `@fyi.shelf` with display projections applied.
+
+### Trust model
+
+- Slots **do not mint facts** — they preserve existing proof from records
+- `known` attestation **does not persist** in slots — prevents laundering across contexts
+- Writes are **atomic** — if any element fails validation, the entire write is rejected
+- Stored values get `src:shelf:@shelfName.slotName` source labels for provenance tracking
+
+See `mlld howto shelf-slots` for the full reference.
+
 ## Automatic tool security annotations
 
 The runtime automatically appends `<tool_notes>` to the system message when setting up `@claude()` calls. This includes:
@@ -591,6 +654,7 @@ The agent triages at scale. Humans set the rules. Injection can influence what t
 ### Records and display
 - `mlld howto records` — record DSL: facts, data, display, when, validate, root adapters, handle field type
 - `mlld howto fyi-known` — @fyi.known() handle discovery
+- `mlld howto shelf-slots` — typed state accumulation with grounding, cross-slot constraints, access control
 
 ### Policy and authorization
 - `mlld howto policies` — policy objects, built-in rules, locked policies

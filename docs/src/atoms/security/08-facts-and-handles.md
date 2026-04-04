@@ -225,13 +225,15 @@ If the LLM returns malformed JSON or missing fields, the guard retries with vali
 
 See `pattern-planner` for the full planner-worker architecture.
 
-## The three layers
+## The four layers
 
 **Taint tracking** catches broad influence. Tainted data can't flow into write operations without explicit authorization.
 
 **Proof** catches specific value substitution. A recipient must carry fact proof or `known` attestation. The LLM can't mint proof by copying strings.
 
 **Authorization** constrains scope. The planner authorizes specific tools and argument values. The worker can't exceed this scope.
+
+**Typed state** catches hallucinated accumulation. Shelf slots validate grounding when values enter shared state — not just when they reach a tool call. Cross-slot `from` constraints prevent selecting values that were never candidates. See `shelf-slots`.
 
 - Taint catches "do something the user didn't ask for"
 - Facts catch "do the right thing to the wrong target"
