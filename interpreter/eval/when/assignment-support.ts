@@ -10,6 +10,19 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { isVariable, extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { combineValues } from '@interpreter/utils/value-combine';
 
+function isExpressionNode(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const nodeType = (value as { type?: string }).type;
+  return nodeType === 'BinaryExpression'
+    || nodeType === 'TernaryExpression'
+    || nodeType === 'UnaryExpression'
+    || nodeType === 'ArrayFilterExpression'
+    || nodeType === 'ArraySliceExpression';
+}
+
 function collectCommandParameterEnv(env: Environment): Record<string, string> | undefined {
   const parameterEnv: Record<string, string> = {};
   if (typeof (env as any).getAllVariables !== 'function') {
@@ -116,6 +129,10 @@ export async function evaluateAssignmentValue(
   if (value === undefined) {
     if (isRawPrimitive) {
       value = (entry.value as any[]).length === 1 ? firstValue : entry.value;
+    } else if (isExpressionNode(firstValue)) {
+      const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
+      const valueResult = await evaluateUnifiedExpression(firstValue, env, { isExpression: true });
+      value = valueResult.value;
     } else {
       const valueResult = await evaluate(entry.value, env, { isExpression: true });
       value = valueResult.value;

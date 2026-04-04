@@ -26,6 +26,7 @@ import {
   setRecordProjectionMetadata,
   type StructuredValue
 } from './structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 import { wrapExecResult } from './structured-exec';
 import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
@@ -476,10 +477,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   // Extract the raw value if we have a Variable (do this BEFORE metadata check)
   let rawValue = isVariable(value) ? value.value : value;
 
-  const structuredWrapper = isStructuredValue(rawValue) ? rawValue : undefined;
+  const slotRefValue = isShelfSlotRefValue(rawValue) ? rawValue : undefined;
+  const structuredWrapper = slotRefValue
+    ? (isStructuredValue(slotRefValue.current) ? slotRefValue.current : undefined)
+    : (isStructuredValue(rawValue) ? rawValue : undefined);
   const structuredCtx = (structuredWrapper?.mx ?? undefined) as Record<string, unknown> | undefined;
   if (structuredWrapper) {
     rawValue = structuredWrapper.data;
+  } else if (slotRefValue) {
+    rawValue = slotRefValue.data;
   }
 
   const fieldValue = field.value;
@@ -518,7 +524,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const shouldUseStructuredTopLevelFallback =
       isStructuredVariable &&
       structuredFieldFallbacks.has(fieldName) &&
-      !(rawValue && typeof rawValue === 'object');
+      (slotRefValue !== undefined || !(rawValue && typeof rawValue === 'object'));
 
     // Core metadata properties always come from Variable, never from data
     const CORE_METADATA = [

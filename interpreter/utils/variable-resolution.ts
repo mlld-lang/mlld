@@ -5,7 +5,7 @@
 
 import type { Variable, VariableValue } from '@core/types/variable/VariableTypes';
 import type { Environment } from '@interpreter/env/Environment';
-import { 
+import {
   isTextLike,
   isStructured,
   isPath,
@@ -18,6 +18,7 @@ import {
   isArray
 } from '@core/types/variable';
 import { asData, asText, isStructuredValue } from './structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 // Import removed to avoid circular dependency - will use dynamic import if needed
 
 /**
@@ -169,6 +170,12 @@ export async function resolveVariable(
   
   // Context requires extraction
   const extracted = await extractVariableValue(variable, env);
+  if (isShelfSlotRefValue(extracted)) {
+    if (context === ResolutionContext.CommandExecution) {
+      return asText(extracted);
+    }
+    return extracted;
+  }
   if (!isStructuredValue(extracted)) {
     return extracted;
   }

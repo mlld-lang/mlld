@@ -9,6 +9,7 @@ import {
 } from '@core/types/variable/VariableFactories';
 import { isStructuredValue } from '../utils/structured-value';
 import { materializeExpressionValue } from './expression-provenance';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 
 export interface ParameterFactoryOptions {
   name: string;
@@ -57,6 +58,21 @@ export function createParameterVariable(
     return createStructuredValueVariable(
       name,
       preservedValue,
+      {
+        directive: 'var',
+        syntax: 'reference',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      metadata
+    );
+  }
+
+  if (isShelfSlotRefValue(preservedValue)) {
+    return createObjectVariable(
+      name,
+      preservedValue as unknown as Record<string, unknown>,
+      false,
       {
         directive: 'var',
         syntax: 'reference',

@@ -6,10 +6,15 @@ import type {
   SerializedShelfDefinition,
   ShelfDefinition,
   ShelfMergeMode,
+  ShelfSlotRefValue,
   ShelfScopeSlotRef,
   ShelfSlotCardinality
 } from '@core/types/shelf';
-import { isNormalizedShelfScope } from '@core/types/shelf';
+import {
+  createShelfSlotRefValue,
+  isNormalizedShelfScope,
+  isShelfSlotRefValue
+} from '@core/types/shelf';
 import { createExecutableVariable, createObjectVariable, createStructuredValueVariable, type Variable, type VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor, mergeDescriptors, removeLabelsFromDescriptor, serializeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '@interpreter/env/Environment';
@@ -43,7 +48,6 @@ const SHELF_VARIABLE_SOURCE: VariableSource = {
   isMultiLine: false
 };
 
-const SHELVE_SLOT_REF_KEY = 'shelfSlotRef';
 const SHELF_SCOPE_MARKER = '__mlldShelfScope';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -143,7 +147,10 @@ function createRecordRootVariable(name: 'input' | 'key' | 'value', value: unknow
 
 function extractRecordInputValue(value: unknown): unknown {
   if (isVariable(value)) {
-    return value.value;
+    return isShelfSlotRefValue(value.value) ? value.value.current : value.value;
+  }
+  if (isShelfSlotRefValue(value)) {
+    return value.current;
   }
   if (isStructuredValue(value)) {
     return value.data;
@@ -629,46 +636,24 @@ function mergeCollectionItems(
   return next;
 }
 
-function withShelfSlotRef(
-  value: StructuredValue,
-  shelfName: string,
-  slotName: string
-): StructuredValue {
-  value.internal = {
-    ...(value.internal ?? {}),
-    [SHELVE_SLOT_REF_KEY]: {
-      shelfName,
-      slotName
-    }
-  };
-  return value;
-}
-
 export function extractShelfSlotRef(value: unknown): ShelfScopeSlotRef | undefined {
   if (isVariable(value)) {
     return extractShelfSlotRef(value.value);
   }
-  if (!isStructuredValue(value)) {
+  if (!isShelfSlotRefValue(value)) {
     return undefined;
   }
-  const ref = value.internal && (value.internal as Record<string, unknown>)[SHELVE_SLOT_REF_KEY];
-  if (!ref || typeof ref !== 'object') {
-    return undefined;
-  }
-  const shelfName = typeof (ref as Record<string, unknown>).shelfName === 'string'
-    ? (ref as Record<string, unknown>).shelfName
-    : '';
-  const slotName = typeof (ref as Record<string, unknown>).slotName === 'string'
-    ? (ref as Record<string, unknown>).slotName
-    : '';
-  return shelfName && slotName ? { shelfName, slotName } : undefined;
+  return {
+    shelfName: value.shelfName,
+    slotName: value.slotName
+  };
 }
 
 function createShelfSlotReferenceValue(
   env: Environment,
   shelfName: string,
   slotName: string
-): StructuredValue {
+): ShelfSlotRefValue {
   const definition = env.getShelfDefinition(shelfName);
   const slot = definition?.slots[slotName];
   const stored = env.readShelfSlot(shelfName, slotName);
@@ -686,7 +671,7 @@ function createShelfSlotReferenceValue(
     wrapped = wrapStructured(stored as any);
   }
 
-  return withShelfSlotRef(wrapped, shelfName, slotName);
+  return createShelfSlotRefValue({ shelfName, slotName }, wrapped);
 }
 
 function getAllWritableSlots(env: Environment): ShelfScopeSlotRef[] {
@@ -924,7 +909,10 @@ export function createShelfVariable(env: Environment, definition: ShelfDefinitio
 async function projectReadableValue(value: unknown, env: Environment): Promise<unknown> {
   if (extractShelfSlotRef(value)) {
     const ref = extractShelfSlotRef(value)!;
-    return renderDisplayProjection(createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName), env);
+    return renderDisplayProjection(
+      createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName).current,
+      env
+    );
   }
   return renderDisplayProjection(value, env);
 }

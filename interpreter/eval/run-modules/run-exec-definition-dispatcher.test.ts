@@ -17,6 +17,7 @@ import { executeProseExecutable } from '@interpreter/eval/prose-execution';
 import { parse } from '@grammar/parser';
 import { createSimpleTextVariable } from '@core/types/variable/VariableFactories';
 import { wrapStructured } from '@interpreter/utils/structured-value';
+import { createShelfSlotRefValue } from '@core/types/shelf';
 
 vi.mock('@interpreter/eval/exec-invocation', () => ({
   evaluateExecInvocation: vi.fn()
@@ -577,13 +578,13 @@ describe('run exec definition dispatcher', () => {
 
   it('dispatches node functions and preserves structured args when requested', async () => {
     const env = createEnv();
-    const slotRef = wrapStructured([], 'array');
-    slotRef.internal = {
-      shelfSlotRef: {
+    const slotRef = createShelfSlotRefValue(
+      {
         shelfName: 'outreach',
         slotName: 'recipients'
-      }
-    };
+      },
+      wrapStructured([], 'array')
+    );
     const fn = vi.fn(async () => 'node-output');
     const nodeDefinition = {
       type: 'nodeFunction',

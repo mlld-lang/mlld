@@ -17,11 +17,13 @@ import {
   isPipelineInput
 } from '@core/types/variable';
 import {
+  asData,
   asText,
   assertStructuredValue,
   extractSecurityDescriptor,
   isStructuredValue
 } from '../utils/structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -58,6 +60,10 @@ export function isTruthy(value: any): boolean {
   // Handle direct values
   if (value === null || value === undefined) {
     return false;
+  }
+
+  if (isShelfSlotRefValue(value)) {
+    return isTruthy(value.data);
   }
 
   if (typeof value === 'boolean') {
@@ -131,6 +137,9 @@ function extractValue(value: unknown): unknown {
     return extractValue(variable.value);
   }
   if (isStructuredValue(value)) {
+    return extractValue(value.data ?? value.text);
+  }
+  if (isShelfSlotRefValue(value)) {
     return extractValue(value.data ?? value.text);
   }
   if (Array.isArray(value)) {
@@ -582,7 +591,10 @@ async function evaluateBinaryExpression(
 
   if (operator === '??') {
     // Unwrap StructuredValue to check the inner data for nullish
-    const rawLeft = isStructuredValue(leftValue) ? leftValue.data : leftValue;
+    const rawLeft =
+      isStructuredValue(leftValue) || isShelfSlotRefValue(leftValue)
+        ? asData(leftValue)
+        : leftValue;
     const isNullish = rawLeft === null || rawLeft === undefined;
     if (!isNullish) {
       return leftResult;

@@ -13,6 +13,10 @@ import { getExpressionProvenance } from './expression-provenance';
 import type { RecordProjectionMetadata, RecordSchemaMetadata } from '@core/types/record';
 import type { FactSourceHandle } from '@core/types/handle';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
+import {
+  getShelfSlotRefSnapshot,
+  isShelfSlotRefValue
+} from '@core/types/shelf';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
@@ -200,10 +204,16 @@ function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
   if (isStructuredValue(val)) {
     return val.data;
   }
+  if (isShelfSlotRefValue(val)) {
+    return val.data;
+  }
   return val;
 }
 
 export function asText(value: unknown): string {
+  if (isShelfSlotRefValue(value)) {
+    return value.text;
+  }
   if (isStructuredValue(value)) {
     return value.text;
   }
@@ -228,6 +238,9 @@ export function asText(value: unknown): string {
 }
 
 export function asData<T = unknown>(value: unknown): T {
+  if (isShelfSlotRefValue<T>(value)) {
+    return value.data;
+  }
   if (isStructuredValue<T>(value)) {
     return value.data;
   }
@@ -337,6 +350,17 @@ export function ensureStructuredValue(
   textOverride?: string,
   metadata?: StructuredValueMetadata
 ): StructuredValue {
+  if (isShelfSlotRefValue(value)) {
+    const snapshot = getShelfSlotRefSnapshot(value);
+    if (isStructuredValue(snapshot)) {
+      if (typeHint || textOverride || metadata) {
+        return wrapStructured(snapshot, typeHint, textOverride, metadata);
+      }
+      return ensureStructuredValueState(snapshot);
+    }
+    return ensureStructuredValue(value.data, typeHint, textOverride, metadata);
+  }
+
   if (isStructuredValue(value)) {
     if (typeHint || textOverride || metadata) {
       return wrapStructured(value, typeHint, textOverride, metadata);
@@ -492,6 +516,9 @@ export function applySecurityDescriptorToStructuredValue(
 export function getRecordProjectionMetadata(
   value: unknown
 ): RecordProjectionMetadata | undefined {
+  if (isShelfSlotRefValue(value)) {
+    return getRecordProjectionMetadata(value.current);
+  }
   if (!isStructuredValue(value)) {
     return undefined;
   }
@@ -777,6 +804,11 @@ function extractDescriptorInternal(
     getExpressionProvenance(value),
     options.normalize
   );
+
+  if (isShelfSlotRefValue(value)) {
+    const currentDescriptor = extractDescriptorInternal(value.current, options, seen);
+    return mergeDescriptorSources(provenanceDescriptor, currentDescriptor);
+  }
 
   if (isStructuredValue(value)) {
     const metadataDescriptor = mergeDescriptorSources(

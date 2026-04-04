@@ -9,6 +9,7 @@ import {
   isPipelineInput
 } from '@core/types/variable';
 import { isStructuredValue, asData, asText, assertStructuredValue } from '@interpreter/utils/structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 
 const DENIED_KEYWORD = 'denied';
 
@@ -140,6 +141,10 @@ export function isTruthy(value: unknown): boolean {
     } catch {
       return isTruthy(asText(value));
     }
+  }
+
+  if (isShelfSlotRefValue(value)) {
+    return isTruthy(value.data);
   }
 
   if (value === null || value === undefined) {

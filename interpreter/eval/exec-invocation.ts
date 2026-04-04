@@ -180,6 +180,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   executableParamNames: readonly string[];
   visibleParamNames: readonly string[];
   optionalParamNames: readonly string[];
+  preserveStructuredArgs?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
@@ -225,23 +226,27 @@ function getCollectionVisibleParams(
 
 async function resolveCollectionBoundValue(
   value: unknown,
-  env: Environment
+  env: Environment,
+  options?: {
+    preserveStructuredArgs?: boolean;
+  }
 ): Promise<unknown> {
   const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
 
   if (isVariable(value)) {
-    return await extractVariableValue(value, env);
+    const extracted = await extractVariableValue(value, env);
+    return resolveCollectionBoundValue(extracted, env, options);
   }
   if (isStructuredValue(value)) {
-    return asData(value);
+    return options?.preserveStructuredArgs ? value : asData(value);
   }
   if (Array.isArray(value)) {
-    return Promise.all(value.map(item => resolveCollectionBoundValue(item, env)));
+    return Promise.all(value.map(item => resolveCollectionBoundValue(item, env, options)));
   }
   if (isPlainObject(value)) {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      result[key] = await resolveCollectionBoundValue(entry, env);
+      result[key] = await resolveCollectionBoundValue(entry, env, options);
     }
     return result;
   }
@@ -250,7 +255,10 @@ async function resolveCollectionBoundValue(
 
 async function materializeCollectionDispatchArg(
   value: unknown,
-  env: Environment
+  env: Environment,
+  options?: {
+    preserveStructuredArgs?: boolean;
+  }
 ): Promise<unknown> {
   let resolved = value;
 
@@ -264,13 +272,14 @@ async function materializeCollectionDispatchArg(
     resolved = await evaluateDataValue(resolved as any, env);
   }
 
-  return resolveCollectionBoundValue(resolved, env);
+  return resolveCollectionBoundValue(resolved, env, options);
 }
 
 async function normalizeCollectionDispatchArguments(options: {
   env: Environment;
   executableParamNames: readonly string[];
   definition: ToolDefinition;
+  preserveStructuredArgs?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
@@ -300,6 +309,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   env: Environment;
   executableParamNames: readonly string[];
   optionalParamNames: readonly string[];
+  preserveStructuredArgs?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
@@ -333,7 +343,8 @@ async function normalizeExecutableDispatchArguments(
     originalVariables,
     guardVariableCandidates,
     expressionSourceVariables,
-    argSourceNames
+    argSourceNames,
+    preserveStructuredArgs
   } = options;
 
   if (executableParamNames.length === 0) {
@@ -355,7 +366,7 @@ async function normalizeExecutableDispatchArguments(
   const visibleSet = new Set(visibleParamNames);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
   const materializedArgs = await Promise.all(
-    evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env))
+    evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
   );
 
   const shouldSpreadNamedObject =
@@ -407,7 +418,7 @@ async function normalizeExecutableDispatchArguments(
     let entry = normalizedEntries.get(paramName);
 
     if (!entry && bind && Object.prototype.hasOwnProperty.call(bind, paramName)) {
-      const value = await resolveCollectionBoundValue(bind[paramName], env);
+      const value = await resolveCollectionBoundValue(bind[paramName], env, { preserveStructuredArgs });
       entry = {
         value,
         stringValue: stringifyExecGuardArg(value),
@@ -2681,6 +2692,7 @@ async function evaluateExecInvocationInternal(
           )
         : [],
       definition: collectionDispatchContext.definition,
+      preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -2716,6 +2728,7 @@ async function evaluateExecInvocationInternal(
               typeof paramName === 'string' && paramName.trim().length > 0
           )
         : [],
+      preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,

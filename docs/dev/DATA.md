@@ -1,23 +1,24 @@
 ---
-updated: 2026-02-18
+updated: 2026-04-04
 tags: #arch, #data, #pipeline
 related-docs: docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
 related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/eval/pipeline/*.ts
-related-types: core/types { StructuredValue, PipelineInput }
+related-types: core/types { StructuredValue, PipelineInput, ShelfSlotRefValue }
 ---
 
 # Data Handling
 
 ## tldr
 
-mlld treats structured data (arrays, objects, JSON) as first-class values via `StructuredValue` wrappers. All pipeline stages, variables, and content loaders preserve both `.text` (string view) and `.data` (parsed structure). Templates and display automatically stringify; computations access native values.
+mlld treats structured data (arrays, objects, JSON) as first-class values via `StructuredValue` wrappers. Most pipeline stages, variables, and content loaders preserve both `.text` (string view) and `.data` (parsed structure). Templates and display automatically stringify; computations access native values. Some runtime values are capabilities or references rather than pure data, such as shelf slot refs, but they still project through the same `asText()` / `asData()` helpers.
 Angle-bracket content loading (`<...>`, alligator syntax) is part of this same data model.
 
 ## Principles
 
-- **Everything at runtime is StructuredValue**: All evaluated values (primitives, strings, arrays, objects, loaded content) flow as StructuredValues with `.text`, `.data`, and `.mx`
+- **Structured data at runtime is StructuredValue**: Primitives, strings, arrays, objects, and loaded content flow as StructuredValues with `.text`, `.data`, and `.mx`
+- **Capability/reference values also exist**: Runtime may also carry first-class non-StructuredValue references such as `ShelfSlotRefValue`; these preserve identity/capability semantics while projecting through `asText()` / `asData()`
 - **Grammar returns AST nodes**: Parser always produces AST Literal nodes for primitives: `{type: 'Literal', value: 42}`. The interpreter wraps in StructuredValue during evaluation.
-- **Variables wrap StructuredValues**: Variables provide an additional metadata/context layer on top of StructuredValues
+- **Variables wrap runtime values**: Variables provide an additional metadata/context layer on top of StructuredValues and capability/reference values
 - **Dual representation is universal**: Even primitives benefit from `.text` (for display) and `.data` (for computation)
 - Display boundaries (templates, CLI, `/show`) use `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
@@ -81,7 +82,7 @@ interface StructuredValue<T = unknown> {
 
 ### Universal StructuredValue Model
 
-**Everything at runtime is StructuredValue** - primitives, strings, arrays, objects, loaded content:
+**Structured data at runtime is StructuredValue** - primitives, strings, arrays, objects, loaded content:
 
 ```typescript
 // Number from when-expression
@@ -101,7 +102,7 @@ interface StructuredValue<T = unknown> {
 1. **Dual representation is useful**: `.text = "42"` for templates, `.data = 42` for comparisons
 2. **Metadata consistency**: All values carry `.mx` for security labels, provenance, tokens
 3. **Simpler model**: No special cases - `asData()`/`asText()` work uniformly on everything
-4. **Variables wrap StructuredValues**: Consistent layering (AST → StructuredValue → Variable)
+4. **Variables wrap StructuredValues**: Consistent layering for ordinary data (AST → StructuredValue → Variable)
 
 **Grammar → Interpreter → Variable flow:**
 ```typescript
@@ -118,6 +119,25 @@ StructuredValueVariable {
   mx: {...}  // Additional variable-level metadata
 }
 ```
+
+### Capability / Reference Values
+
+Some runtime values are not plain data wrappers. The main current example is `ShelfSlotRefValue`, which represents access to a shelf slot while still exposing the slot's current contents for normal reads:
+
+```typescript
+ShelfSlotRefValue {
+  shelfName: 'outreach',
+  slotName: 'recipients',
+  current: StructuredValue,
+  text: current.text,
+  data: current.data
+}
+```
+
+Why this exists:
+1. **Identity matters**: `@shelve.clear(@slot)` needs the slot reference itself, not just the slot's current array/object contents.
+2. **Ordinary reads still work**: field access, truthiness, string coercion, and `asData()` / `asText()` should behave like the slot's current contents.
+3. **Generic flattening boundaries stay honest**: Structured data can still unwrap normally without accidentally erasing capability identity.
 
 ### Helper Functions
 

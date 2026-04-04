@@ -14,6 +14,7 @@ import {
 import type { Environment } from '@interpreter/env/Environment';
 import { isNodeProxy } from '@interpreter/utils/node-interop';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 
 type SerializedSecurityMetadata =
   | ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>
@@ -93,6 +94,10 @@ export class VariableImportUtilities {
       }
 
       if (isStructuredValue(value)) {
+        return value;
+      }
+
+      if (isShelfSlotRefValue(value)) {
         return value;
       }
 

@@ -2,6 +2,7 @@ import type { ExecInvocation } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { StructuredValue as LegacyStructuredValue } from '@core/types/structured-value';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 import { MlldInterpreterError } from '@core/errors';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -118,6 +119,16 @@ function shouldUseStringViewForStructuredArray(methodName?: string): boolean {
 }
 
 export function normalizeBuiltinTargetValue(value: unknown, methodName?: string): unknown {
+  if (isShelfSlotRefValue(value)) {
+    const currentType =
+      value.current && typeof value.current === 'object' && typeof (value.current as { type?: unknown }).type === 'string'
+        ? (value.current as { type: string }).type
+        : undefined;
+    if (currentType === 'array') {
+      return shouldUseStringViewForStructuredArray(methodName) ? asText(value) : asData(value);
+    }
+    return asText(value);
+  }
   if (isStructuredValue(value)) {
     if (value.type === 'array') {
       return shouldUseStringViewForStructuredArray(methodName) ? asText(value) : value.data;
@@ -135,6 +146,9 @@ export function normalizeBuiltinTargetValue(value: unknown, methodName?: string)
 }
 
 function normalizeBuiltinArgumentValue(value: unknown): unknown {
+  if (isShelfSlotRefValue(value)) {
+    return asData(value);
+  }
   if (isStructuredValue(value)) {
     return asData(value);
   }

@@ -5,9 +5,119 @@ import type { RecordDefinition } from './record';
 export type ShelfSlotCardinality = 'singular' | 'collection';
 export type ShelfMergeMode = 'replace' | 'append' | 'upsert';
 
+const SHELF_SLOT_REF_VALUE_SYMBOL = Symbol.for('mlld.ShelfSlotRefValue');
+const SHELF_SLOT_REF_METADATA = Symbol('mlld.ShelfSlotRefMetadata');
+const SHELF_SLOT_REF_CURRENT = Symbol('mlld.ShelfSlotRefCurrent');
+
 export interface ShelfScopeSlotRef {
   shelfName: string;
   slotName: string;
+}
+
+export interface ShelfSlotRefSnapshot<T = unknown> {
+  text: string;
+  data: T;
+  mx?: unknown;
+  metadata?: Record<string, unknown>;
+  internal?: Record<string, unknown>;
+  type?: string;
+}
+
+export class ShelfSlotRefValue<T = unknown> {
+  constructor(ref: ShelfScopeSlotRef, current: ShelfSlotRefSnapshot<T>) {
+    Object.defineProperty(this, SHELF_SLOT_REF_VALUE_SYMBOL, {
+      value: true,
+      enumerable: false,
+      configurable: false
+    });
+    Object.defineProperty(this, SHELF_SLOT_REF_METADATA, {
+      value: {
+        shelfName: ref.shelfName,
+        slotName: ref.slotName
+      } satisfies ShelfScopeSlotRef,
+      enumerable: false,
+      configurable: false
+    });
+    Object.defineProperty(this, SHELF_SLOT_REF_CURRENT, {
+      value: current,
+      enumerable: false,
+      configurable: true,
+      writable: false
+    });
+  }
+
+  get kind(): 'shelf-slot-ref' {
+    return 'shelf-slot-ref';
+  }
+
+  get shelfName(): string {
+    return (this as unknown as Record<symbol, ShelfScopeSlotRef>)[SHELF_SLOT_REF_METADATA].shelfName;
+  }
+
+  get slotName(): string {
+    return (this as unknown as Record<symbol, ShelfScopeSlotRef>)[SHELF_SLOT_REF_METADATA].slotName;
+  }
+
+  get current(): ShelfSlotRefSnapshot<T> {
+    return (this as unknown as Record<symbol, ShelfSlotRefSnapshot<T>>)[SHELF_SLOT_REF_CURRENT];
+  }
+
+  get text(): string {
+    return this.current.text;
+  }
+
+  get data(): T {
+    return this.current.data;
+  }
+
+  get mx(): unknown {
+    return this.current.mx;
+  }
+
+  get metadata(): Record<string, unknown> | undefined {
+    return this.current.metadata;
+  }
+
+  get internal(): Record<string, unknown> | undefined {
+    return this.current.internal;
+  }
+
+  toString(): string {
+    return this.text;
+  }
+
+  valueOf(): string {
+    return this.text;
+  }
+
+  [Symbol.toPrimitive](): string {
+    return this.text;
+  }
+
+  toJSON(): T {
+    return this.data;
+  }
+}
+
+export function createShelfSlotRefValue<T = unknown>(
+  ref: ShelfScopeSlotRef,
+  current: ShelfSlotRefSnapshot<T>
+): ShelfSlotRefValue<T> {
+  return new ShelfSlotRefValue(ref, current);
+}
+
+export function isShelfSlotRefValue<T = unknown>(value: unknown): value is ShelfSlotRefValue<T> {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as Record<symbol, unknown>)[SHELF_SLOT_REF_VALUE_SYMBOL] === true
+  );
+}
+
+export function getShelfSlotRefSnapshot<T = unknown>(
+  value: unknown
+): ShelfSlotRefSnapshot<T> | undefined {
+  return isShelfSlotRefValue<T>(value) ? value.current : undefined;
 }
 
 export interface NormalizedShelfScope {
