@@ -96,13 +96,17 @@ async function invokePolicyBuiltin(
   env: Environment,
   method: 'build' | 'validate',
   intent: unknown,
-  tools: unknown
+  tools: unknown,
+  options?: unknown
 ) {
   const policyVar = env.getVariable('policy') as any;
   const executable = policyVar?.value?.[method];
   const fn = executable?.internal?.executableDef?.fn;
   if (typeof fn !== 'function') {
     throw new Error(`Expected @policy.${method} builtin`);
+  }
+  if (arguments.length >= 5) {
+    return fn(intent, tools, options, env);
   }
   return fn(intent, tools, env);
 }
@@ -758,6 +762,65 @@ describe('@policy builtin', () => {
     expect((recipientConstraint.eq as any)?.data ?? recipientConstraint.eq).toBe('ada@example.com');
     expect(recipientConstraint.attestations).toEqual(['fact:@contact.email']);
     expect(Object.prototype.hasOwnProperty.call(recipientConstraint, 'source')).toBe(false);
+  });
+
+  it('accepts task option on build and validate for matching known literals', async () => {
+    const env = await interpretWithEnv(`
+      /exe finance:w, tool:w @transferFunds(recipient, amount, memo) = js { return recipient; } with { controlArgs: ["recipient", "amount"] }
+
+      /var tools @writeTools = {
+        transferFunds: {
+          mlld: @transferFunds,
+          expose: ["recipient", "amount", "memo"],
+          controlArgs: ["recipient", "amount"]
+        }
+      }
+
+      /var @query = "Transfer 100 dollars to John@Example.com"
+      /var @intent = {
+        known: {
+          transferFunds: {
+            recipient: {
+              value: "john@example.com",
+              source: "user explicitly provided the recipient"
+            },
+            amount: 100,
+            memo: "internal note"
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+      /var @validated = @policy.validate(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.policy.authorizations.allow.transferFunds).toEqual({
+        kind: 'constrained',
+        args: {
+          recipient: [
+            {
+              eq: 'john@example.com',
+              attestations: ['known']
+            }
+          ],
+          amount: [
+            {
+              eq: 100,
+              attestations: ['known']
+            }
+          ]
+        }
+      });
+      expect(result.report).toMatchObject({
+        strippedArgs: [{ tool: 'transferFunds', arg: 'memo' }]
+      });
+    }
   });
 
   it('accepts handle wrapper values in the resolved bucket', async () => {
@@ -1448,6 +1511,82 @@ describe('@policy builtin', () => {
     expect(compilation.authorizations?.allow).toEqual({});
   });
 
+  it('rejects known literals that do not appear in the provided task text', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+      
+      /var @query = "Please send an update to ada@example.com"
+      /var @intent = {
+        known: {
+          sendEmail: {
+            recipient: "evil@attacker.com"
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+      /var @validated = @policy.validate(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'known_not_in_task',
+            tool: 'sendEmail',
+            arg: 'recipient',
+            message: "Known literal 'evil@attacker.com' not found in task text"
+          })
+        ])
+      );
+      expect(result.policy.authorizations.allow).toEqual({});
+    }
+  });
+
+  it('checks known array elements individually against the provided task text', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipients, subject, body) = js { return recipients; } with { controlArgs: ["recipients"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipients", "subject", "body"], controlArgs: ["recipients"] }
+      }
+
+      /var @query = "Please email john@example.com with the status update"
+      /var @intent = {
+        known: {
+          sendEmail: {
+            recipients: ["John@example.com", "evil@attacker.com"]
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(false);
+    expect(built.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'known_not_in_task',
+          tool: 'sendEmail',
+          arg: 'recipients',
+          message: "Known literal 'evil@attacker.com' not found in task text"
+        })
+      ])
+    );
+    expect(built.policy.authorizations.allow).toEqual({});
+  });
+
   it('drops proofless resolved array elements individually and preserves handle-backed elements', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipients, subject, body) = js { return recipients; } with { controlArgs: ["recipients"] }
@@ -1510,6 +1649,53 @@ describe('@policy builtin', () => {
     expect(recipientsConstraint.attestations).toEqual(['known']);
   });
 
+  it('rejects handle wrappers in the known bucket when task validation is enabled', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+    `);
+
+    const approvedRecipient = createKnownStructuredText('ada@example.com');
+    const issued = env.issueHandle(approvedRecipient);
+
+    await evaluateSourceInEnv(env, `
+      /var @query = "Please email ada@example.com"
+      /var @intent = {
+        known: {
+          sendEmail: {
+            recipient: {
+              handle: "${issued.handle}"
+            }
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+      /var @validated = @policy.validate(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'known_contains_handle',
+            tool: 'sendEmail',
+            arg: 'recipient',
+            message: 'Handle wrappers belong in resolved, not known'
+          })
+        ])
+      );
+      expect(result.policy.authorizations.allow).toEqual({});
+    }
+  });
+
   it('accepts explicit empty arrays in the resolved bucket', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @createCalendarEvent(participants, title, start_time) = js { return title; } with { controlArgs: ["participants"] }
@@ -1558,6 +1744,45 @@ describe('@policy builtin', () => {
         ]
       }
     });
+  });
+
+  it('treats empty or null task as no task validation', async () => {
+    const env = await interpretWithEnv(`
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+      
+      /var @intent = {
+        known: {
+          sendEmail: {
+            recipient: "ada@example.com"
+          }
+        }
+      }
+
+      /var @emptyTaskBuilt = @policy.build(@intent, @writeTools, { task: "" })
+      /var @nullTaskBuilt = @policy.build(@intent, @writeTools, { task: null })
+    `);
+
+    for (const name of ['emptyTaskBuilt', 'nullTaskBuilt']) {
+      const built = await extractBuiltinResult(env, name);
+
+      expect(built.valid).toBe(true);
+      expect(built.issues).toEqual([]);
+      expect(built.policy.authorizations.allow.sendEmail).toEqual({
+        kind: 'constrained',
+        args: {
+          recipient: [
+            {
+              eq: 'ada@example.com',
+              attestations: ['known']
+            }
+          ]
+        }
+      });
+    }
   });
 
   it('rejects bucketed intent from influenced sources even when resolved handles and allow tools are otherwise valid', async () => {

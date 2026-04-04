@@ -252,11 +252,11 @@ Handle-bearing values inside `@step.args` are preserved through collection dispa
 
 ## Policy builder
 
-`@policy.build(@intent, @tools)` validates planner intent against tool metadata and active policy:
+`@policy.build(@intent, @tools, @options?)` validates planner intent against tool metadata and active policy:
 
 ```mlld
 var @plannerResult = @planner(@task) | @parse
-var @auth = @policy.build(@plannerResult.authorizations, @writeTools)
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools, { task: @task })
 var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
@@ -285,6 +285,8 @@ The builder reads the active policy from the environment (deny list, rules, oper
 - `issues` — array of `{ tool, reason, arg?, element? }` describing what was dropped
 - `report` — compiler diagnostics describing strips, repairs, dropped entries/elements, ambiguity, and compiled proofs
 
+`options.task` is optional. When present and non-empty on either `@policy.build(...)` or `@policy.validate(...)`, `known` bucket string/number literals must appear in the task text (case-insensitive substring match). Handle wrappers in `known` are rejected under task validation and must move to `resolved`.
+
 What the builder checks:
 
 - Denied tools → dropped (`denied_by_policy`)
@@ -293,6 +295,8 @@ What the builder checks:
 - `true` for tools with `controlArgs` → dropped (`requires_control_args`)
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
+- `known` literals missing from the provided task text → dropped (`known_not_in_task`)
+- Handle wrappers in `known` while task validation is enabled → dropped (`known_contains_handle`)
 - `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
 - Non-control args → silently stripped
 

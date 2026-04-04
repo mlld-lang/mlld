@@ -56,6 +56,8 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'bucketed_intent_from_influenced_source'
     | 'superseded_by_resolved'
     | 'known_from_influenced_source'
+    | 'known_not_in_task'
+    | 'known_contains_handle'
     | 'ambiguous_projected_value';
   message: string;
   tool?: string;
@@ -70,6 +72,7 @@ export interface CompilePolicyAuthorizationsOptions {
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   policy?: PolicyConfig;
   ambientDeniedTools?: readonly string[];
+  taskText?: string;
   mode: 'builder' | 'runtime';
 }
 
@@ -257,6 +260,123 @@ function hasBucketedAuthorizationIntent(raw: unknown): boolean {
 
 const HANDLE_TOKEN_RE = /^h_[a-z0-9]+$/;
 
+function extractHandleTokenCandidate(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const handle = value.trim();
+    return HANDLE_TOKEN_RE.test(handle) ? handle : undefined;
+  }
+
+  if (isStructuredValue(value)) {
+    const data = value.data;
+    if (typeof data === 'string') {
+      const handle = data.trim();
+      if (HANDLE_TOKEN_RE.test(handle)) {
+        return handle;
+      }
+    }
+
+    const text = asText(value).trim();
+    return HANDLE_TOKEN_RE.test(text) ? text : undefined;
+  }
+
+  return undefined;
+}
+
+function getKnownTaskValidationArgs(
+  tool: AuthorizationToolContext | undefined
+): Set<string> | undefined {
+  if (!tool) {
+    return undefined;
+  }
+  return tool.hasControlArgsMetadata ? tool.controlArgs : tool.params;
+}
+
+function buildKnownNotInTaskMessage(literal: string): string {
+  return `Known literal '${literal}' not found in task text`;
+}
+
+function validateKnownValueAgainstTask(options: {
+  toolName: string;
+  argName: string;
+  value: unknown;
+  normalizedTaskText: string;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): boolean {
+  const visit = (candidate: unknown): boolean => {
+    if (candidate === null || candidate === undefined) {
+      return true;
+    }
+
+    if (Array.isArray(candidate)) {
+      let valid = true;
+      for (const entry of candidate) {
+        valid = visit(entry) && valid;
+      }
+      return valid;
+    }
+
+    if (isStructuredValue(candidate)) {
+      if (candidate.type === 'array' && Array.isArray(candidate.data)) {
+        return visit(candidate.data);
+      }
+      if (candidate.type === 'object' && isPlainObject(candidate.data)) {
+        return visit(candidate.data);
+      }
+      return visit(candidate.data);
+    }
+
+    if (isPlainObject(candidate)) {
+      let valid = true;
+      if (
+        hasOwnProperty(candidate, 'handle')
+        && extractHandleTokenCandidate((candidate as Record<string, unknown>).handle) !== undefined
+      ) {
+        pushCompilerIssue(options.issues, {
+          reason: 'known_contains_handle',
+          message: 'Handle wrappers belong in resolved, not known',
+          tool: options.toolName,
+          arg: options.argName
+        });
+        valid = false;
+      }
+
+      if (hasOwnProperty(candidate, 'value') || hasOwnProperty(candidate, 'source')) {
+        if (hasOwnProperty(candidate, 'value')) {
+          valid = visit((candidate as Record<string, unknown>).value) && valid;
+        }
+        return valid;
+      }
+
+      for (const nested of Object.values(candidate)) {
+        valid = visit(nested) && valid;
+      }
+      return valid;
+    }
+
+    if (typeof candidate !== 'string' && typeof candidate !== 'number') {
+      return true;
+    }
+
+    const literal = String(candidate).trim();
+    if (literal.length === 0) {
+      return true;
+    }
+    if (options.normalizedTaskText.includes(literal.toLowerCase())) {
+      return true;
+    }
+
+    pushCompilerIssue(options.issues, {
+      reason: 'known_not_in_task',
+      message: buildKnownNotInTaskMessage(literal),
+      tool: options.toolName,
+      arg: options.argName
+    });
+    return false;
+  };
+
+  return visit(options.value);
+}
+
 function cloneRawAuthorizationEntry(entry: unknown): unknown {
   if (entry === true || !isPlainObject(entry)) {
     return entry;
@@ -440,29 +560,7 @@ async function normalizeResolvedHandleCandidate(
   value: unknown,
   env: Environment
 ): Promise<unknown | undefined> {
-  const extractHandleToken = (candidate: unknown): string | undefined => {
-    if (typeof candidate === 'string') {
-      const handle = candidate.trim();
-      return HANDLE_TOKEN_RE.test(handle) ? handle : undefined;
-    }
-
-    if (isStructuredValue(candidate)) {
-      const data = candidate.data;
-      if (typeof data === 'string') {
-        const handle = data.trim();
-        if (HANDLE_TOKEN_RE.test(handle)) {
-          return handle;
-        }
-      }
-
-      const text = asText(candidate).trim();
-      return HANDLE_TOKEN_RE.test(text) ? text : undefined;
-    }
-
-    return undefined;
-  };
-
-  const directHandle = extractHandleToken(value);
+  const directHandle = extractHandleTokenCandidate(value);
   if (directHandle) {
     env.resolveHandle(directHandle);
     return directHandle;
@@ -483,7 +581,7 @@ async function normalizeResolvedHandleCandidate(
     return undefined;
   }
 
-  const wrappedHandle = extractHandleToken((value as Record<string, unknown>).handle);
+  const wrappedHandle = extractHandleTokenCandidate((value as Record<string, unknown>).handle);
   if (!wrappedHandle) {
     return undefined;
   }
@@ -624,6 +722,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
   rawSource: unknown;
   env: Environment;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
   const container = unwrapAuthorizationIntentContainer(options.raw);
@@ -648,6 +747,10 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
 
   const nextAllow: Record<string, unknown> = {};
   const resolvedArgKeys = new Set<string>();
+  const normalizedTaskText =
+    typeof options.taskText === 'string' && options.taskText.trim().length > 0
+      ? options.taskText.trim().toLowerCase()
+      : undefined;
 
   if (isPlainObject(container.allow)) {
     const explicitAllow = cloneRawAllowEntries(container.allow);
@@ -729,6 +832,9 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
           continue;
         }
 
+        const knownTaskValidationArgs = getKnownTaskValidationArgs(
+          options.toolContext?.get(toolName)
+        );
         for (const [argName, rawArgEntry] of Object.entries(rawToolEntry)) {
           if (resolvedArgKeys.has(`${toolName}.${argName}`)) {
             pushCompilerIssue(options.issues, {
@@ -763,6 +869,20 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
           }
 
           const materializedValue = await materializePolicySourceValue(value, options.env);
+          if (
+            normalizedTaskText
+            && knownTaskValidationArgs?.has(argName)
+            && !validateKnownValueAgainstTask({
+              toolName,
+              argName,
+              value: materializedValue,
+              normalizedTaskText,
+              issues: options.issues
+            })
+          ) {
+            continue;
+          }
+
           const upgradedHandle = findUniqueFactBackedHandleMatch(options.env, materializedValue);
           if (upgradedHandle) {
             const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
@@ -819,6 +939,7 @@ async function normalizeAuthorizationIntentSource(options: {
   rawSource: unknown;
   env: Environment;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
   if (hasBucketedAuthorizationIntent(options.raw) || hasBucketedAuthorizationIntent(options.rawSource)) {
@@ -1813,6 +1934,7 @@ export async function compilePolicyAuthorizations(
     rawSource: options.rawSource ?? options.rawAuthorizations,
     env: options.env,
     toolContext: options.toolContext,
+    taskText: options.taskText,
     issues
   });
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
