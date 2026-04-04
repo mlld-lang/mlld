@@ -19,6 +19,7 @@ import {
   VariableMetadataUtils
 } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { serializeShelfDefinition } from '@interpreter/shelf/runtime';
 
 type SerializedMetadata = ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
 
@@ -121,10 +122,17 @@ export class ModuleExportSerializer {
   }
 
   private serializeVariable(
-    _name: string,
+    name: string,
     variable: Variable,
     context: ModuleExportSerializationContext
   ): any {
+    if (variable.internal?.isShelf === true && context.childEnv) {
+      const definition = context.childEnv.getShelfDefinition(name);
+      if (definition) {
+        return serializeShelfDefinition(context.childEnv, definition);
+      }
+    }
+
     if (variable.type === 'executable') {
       return this.serializeExecutableVariable(variable as ExecutableVariable, context);
     }

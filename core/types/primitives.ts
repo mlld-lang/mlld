@@ -248,6 +248,7 @@ export interface FormattingMetadata {
 export type DirectiveKind =
   | 'run'
   | 'record'
+  | 'shelf'
   | 'import'
   | 'export'
   | 'var'
@@ -326,6 +327,8 @@ export type DirectiveSubtype =
   | 'policy'
   // Record subtype
   | 'record'
+  // Shelf subtype
+  | 'shelf'
   // Signing subtypes
   | 'sign'
   | 'verify'

@@ -74,9 +74,19 @@ DataPropertyValue "data context property value"
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks (not quotes)
   / DataStringValue              // Plain strings (unwrapped) - before expressions to avoid ! matching
+  / DataAliasedValue             // @var as alias - preserve for config normalization
   / ExpressionWithOperator       // Expressions with operators (ternary, comparison, etc.)
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
+
+DataAliasedValue
+  = value:VariableWithTail _ "as" _ alias:BaseIdentifier {
+      return {
+        type: 'aliasedValue',
+        value,
+        alias
+      };
+    }
 
 // DATA TEMPLATE VALUE - Only real templates (brackets and backticks)
 // Excludes quoted strings which should be unwrapped in data context
@@ -122,6 +132,7 @@ DataArrayValue
   / ExecResultMethodCall         // @func(args).method(args) - chained method calls
   / FieldAccessExecPattern       // @obj.method(args) - method calls on variables
   / ExecInvocationPattern        // @func() - preserve as-is
+  / DataAliasedValue             // @var as alias - preserve for config normalization
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks

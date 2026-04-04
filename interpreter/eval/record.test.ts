@@ -178,7 +178,7 @@ describe('evaluateRecord', () => {
     });
   });
 
-  it('rejects deferred key declarations', async () => {
+  it('registers key declarations on record definitions', async () => {
     const env = createEnv();
     const directive = parseRecord(`
 /record @deal = {
@@ -187,8 +187,13 @@ describe('evaluateRecord', () => {
 }
 `);
 
-    await expect(evaluateRecord(directive, env)).rejects.toMatchObject({
-      code: 'RECORD_KEY_UNSUPPORTED'
+    await expect(evaluateRecord(directive, env)).resolves.toMatchObject({
+      value: expect.objectContaining({
+        key: 'id'
+      })
+    });
+    expect(env.getRecordDefinition('deal')).toMatchObject({
+      key: 'id'
     });
   });
 

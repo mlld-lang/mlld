@@ -1,0 +1,1226 @@
+import type { NodeFunctionExecutable } from '@core/types/executable';
+import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
+import type { RecordDefinition, RecordFieldDefinition, RecordFieldProjectionMetadata, RecordObjectProjectionMetadata } from '@core/types/record';
+import type {
+  NormalizedShelfScope,
+  SerializedShelfDefinition,
+  ShelfDefinition,
+  ShelfMergeMode,
+  ShelfScopeSlotRef,
+  ShelfSlotCardinality
+} from '@core/types/shelf';
+import { isNormalizedShelfScope } from '@core/types/shelf';
+import { createExecutableVariable, createObjectVariable, createStructuredValueVariable, type Variable, type VariableSource } from '@core/types/variable';
+import { makeSecurityDescriptor, mergeDescriptors, removeLabelsFromDescriptor, serializeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
+import type { Environment } from '@interpreter/env/Environment';
+import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
+import { renderDisplayProjection } from '@interpreter/eval/records/display-projection';
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
+import {
+  applySecurityDescriptorToStructuredValue,
+  asData,
+  extractSecurityDescriptor,
+  isStructuredValue,
+  setRecordProjectionMetadata,
+  wrapStructured,
+  type StructuredValue
+} from '@interpreter/utils/structured-value';
+import { isVariable } from '@interpreter/utils/variable-resolution';
+import type { DataAliasedValue, DataValue } from '@core/types/var';
+import { isHandleWrapper } from '@core/types/handle';
+
+type ShelfNamespaceMetadata = {
+  security?: ReturnType<typeof serializeSecurityDescriptor>;
+  factsources?: readonly unknown[];
+  projection?: RecordFieldProjectionMetadata;
+};
+
+const SHELF_VARIABLE_SOURCE: VariableSource = {
+  directive: 'var',
+  syntax: 'object',
+  hasInterpolation: false,
+  isMultiLine: false
+};
+
+const SHELVE_SLOT_REF_KEY = 'shelfSlotRef';
+const SHELF_SCOPE_MARKER = '__mlldShelfScope';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function cloneStructuredValue<T>(value: StructuredValue<T>): StructuredValue<T> {
+  const clone = wrapStructured(
+    value.data,
+    value.type,
+    value.text,
+    value.metadata ? { ...value.metadata } : undefined
+  );
+  if (value.internal) {
+    clone.internal = { ...value.internal };
+  }
+  return clone;
+}
+
+function stripKnownDescriptor(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
+  return removeLabelsFromDescriptor(descriptor, ['known']);
+}
+
+function buildSlotSourceLabel(shelfName: string, slotName: string): string {
+  return `src:shelf:@${shelfName}.${slotName}`;
+}
+
+function buildSlotSourceDescriptor(shelfName: string, slotName: string): SecurityDescriptor {
+  return makeSecurityDescriptor({
+    taint: [buildSlotSourceLabel(shelfName, slotName)]
+  });
+}
+
+function buildRecordObjectProjectionMetadata(definition: RecordDefinition): RecordObjectProjectionMetadata {
+  return {
+    kind: 'record',
+    recordName: definition.name,
+    display: definition.display,
+    fields: Object.fromEntries(
+      definition.fields.map(field => [
+        field.name,
+        {
+          classification: field.classification,
+          ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+        }
+      ])
+    )
+  };
+}
+
+function buildRecordFieldProjectionMetadata(
+  definition: RecordDefinition,
+  field: RecordFieldDefinition
+): RecordFieldProjectionMetadata {
+  return {
+    kind: 'field',
+    recordName: definition.name,
+    fieldName: field.name,
+    classification: field.classification,
+    ...(field.dataTrust ? { dataTrust: field.dataTrust } : {}),
+    display: definition.display
+  };
+}
+
+function setNamespaceMetadata(
+  value: StructuredValue,
+  metadata: Record<string, ShelfNamespaceMetadata>
+): void {
+  if (!value.internal) {
+    value.internal = {};
+  }
+  (value.internal as Record<string, unknown>).namespaceMetadata = metadata;
+}
+
+function createRecordRootVariable(name: 'input' | 'key' | 'value', value: unknown): Variable {
+  return createStructuredValueVariable(
+    name,
+    isStructuredValue(value) ? value : wrapStructured(value as any),
+    {
+      directive: 'var',
+      syntax: 'reference',
+      hasInterpolation: false,
+      isMultiLine: false
+    },
+    {
+      internal: {
+        isReserved: true,
+        isSystem: true
+      }
+    }
+  );
+}
+
+function extractRecordInputValue(value: unknown): unknown {
+  if (isVariable(value)) {
+    return value.value;
+  }
+  if (isStructuredValue(value)) {
+    return value.data;
+  }
+  return value;
+}
+
+async function evaluateFieldValue(
+  field: RecordFieldDefinition,
+  context: { input: unknown; key?: unknown; value?: unknown },
+  env: Environment
+): Promise<unknown> {
+  const child = env.createChild();
+  child.setVariable('input', createRecordRootVariable('input', context.input));
+  if (Object.prototype.hasOwnProperty.call(context, 'key')) {
+    child.setVariable('key', createRecordRootVariable('key', context.key));
+  }
+  if (Object.prototype.hasOwnProperty.call(context, 'value')) {
+    child.setVariable('value', createRecordRootVariable('value', context.value));
+  }
+
+  try {
+    if (field.kind === 'input') {
+      return await evaluateDataValue(field.source as any, child, { suppressErrors: false });
+    }
+    return await evaluateDataValue(field.expression as any, child, { suppressErrors: false });
+  } finally {
+    await child.runScopeCleanups();
+  }
+}
+
+function describeRecordValueType(value: unknown): string {
+  const extracted = extractRecordInputValue(value);
+  if (extracted === null) {
+    return 'null';
+  }
+  if (Array.isArray(extracted)) {
+    return 'array';
+  }
+  return typeof extracted;
+}
+
+function isHandleToken(value: unknown): value is string {
+  return typeof value === 'string' && /^h_[a-z0-9]+$/.test(value.trim());
+}
+
+function resolveHandleTypedFieldValue(
+  value: unknown,
+  env: Environment
+): { ok: true; value: unknown } | { ok: false; actual: string } {
+  const extracted = extractRecordInputValue(value);
+  let handle: string | undefined;
+
+  if (isHandleToken(extracted)) {
+    handle = extracted.trim();
+  } else if (isHandleWrapper(extracted)) {
+    handle = extracted.handle.trim();
+  }
+
+  if (!handle) {
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  try {
+    return { ok: true, value: env.resolveHandle(handle) };
+  } catch {
+    return { ok: false, actual: 'unknown-handle' };
+  }
+}
+
+function coerceFieldValue(
+  field: RecordFieldDefinition,
+  value: unknown,
+  env: Environment
+): { ok: true; value: unknown } | { ok: false; actual: string } {
+  const extracted = extractRecordInputValue(value);
+  if (!field.valueType) {
+    if (
+      typeof extracted === 'string'
+      || typeof extracted === 'number'
+      || typeof extracted === 'boolean'
+    ) {
+      return { ok: true, value: extracted };
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  if (field.valueType === 'string') {
+    if (extracted === null || extracted === undefined) {
+      return { ok: false, actual: String(extracted) };
+    }
+    return {
+      ok: true,
+      value: typeof extracted === 'string' ? extracted.trim() : String(extracted)
+    };
+  }
+
+  if (field.valueType === 'number') {
+    if (typeof extracted === 'number' && Number.isFinite(extracted)) {
+      return { ok: true, value: extracted };
+    }
+    if (typeof extracted === 'string' && extracted.trim().length > 0) {
+      const parsed = Number(extracted.trim());
+      if (Number.isFinite(parsed)) {
+        return { ok: true, value: parsed };
+      }
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  if (field.valueType === 'boolean') {
+    if (typeof extracted === 'boolean') {
+      return { ok: true, value: extracted };
+    }
+    if (typeof extracted === 'string') {
+      const normalized = extracted.trim().toLowerCase();
+      if (normalized === 'true') {
+        return { ok: true, value: true };
+      }
+      if (normalized === 'false') {
+        return { ok: true, value: false };
+      }
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  if (field.valueType === 'array') {
+    if (Array.isArray(extracted)) {
+      return { ok: true, value };
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
+  if (field.valueType === 'handle') {
+    return resolveHandleTypedFieldValue(value, env);
+  }
+
+  return { ok: false, actual: describeRecordValueType(value) };
+}
+
+function fieldCarriesFactProof(value: unknown): boolean {
+  const descriptor = stripKnownDescriptor(
+    extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    })
+  );
+  return Boolean(descriptor?.labels.some(label => label.startsWith('fact:')));
+}
+
+function allArrayElementsCarryFactProof(value: unknown): boolean {
+  const extracted = extractRecordInputValue(value);
+  if (!Array.isArray(extracted)) {
+    return false;
+  }
+  return extracted.every(item => fieldCarriesFactProof(item));
+}
+
+function isAcceptedAgentFactInput(value: unknown): boolean {
+  if (isVariable(value)) {
+    return isAcceptedAgentFactInput(value.value);
+  }
+  if (isStructuredValue(value)) {
+    return fieldCarriesFactProof(value);
+  }
+  if (isHandleWrapper(value) || isHandleToken(value)) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(item => isAcceptedAgentFactInput(item));
+  }
+  return false;
+}
+
+function buildRecordRootContext(
+  input: unknown,
+  definition: RecordDefinition
+): { input: unknown; key?: unknown; value?: unknown } {
+  if (definition.rootMode !== 'map-entry') {
+    return { input };
+  }
+
+  const raw = extractRecordInputValue(input);
+  if (Array.isArray(raw) && raw.length === 2) {
+    return { input, key: raw[0], value: raw[1] };
+  }
+  if (isPlainObject(raw) && 'key' in raw && 'value' in raw) {
+    return { input, key: raw.key, value: raw.value };
+  }
+  if (isPlainObject(raw)) {
+    const entries = Object.entries(raw);
+    if (entries.length === 1) {
+      return { input, key: entries[0][0], value: entries[0][1] };
+    }
+  }
+
+  throw new MlldInterpreterError(
+    `Shelf slots do not support ${definition.rootMode} record inputs without explicit key/value payloads`,
+    'shelf',
+    undefined,
+    { code: 'INVALID_SHELF_VALUE' }
+  );
+}
+
+function normalizeStructuredFieldValue(
+  value: unknown,
+  descriptor: SecurityDescriptor | undefined,
+  projection: RecordFieldProjectionMetadata
+): StructuredValue {
+  const structured = isStructuredValue(value)
+    ? cloneStructuredValue(value)
+    : wrapStructured(extractRecordInputValue(value) as any);
+  if (descriptor) {
+    applySecurityDescriptorToStructuredValue(structured, descriptor);
+  }
+  setRecordProjectionMetadata(structured, projection);
+  const factsources = isStructuredValue(value) && Array.isArray(value.metadata?.factsources)
+    ? [...value.metadata.factsources]
+    : [];
+  if (factsources.length > 0) {
+    structured.metadata = {
+      ...(structured.metadata ?? {}),
+      factsources
+    };
+    structured.mx.factsources = factsources;
+  }
+  return structured;
+}
+
+function normalizeStructuredArrayFieldValue(
+  value: unknown,
+  descriptor: SecurityDescriptor | undefined,
+  projection: RecordFieldProjectionMetadata
+): StructuredValue<unknown[]> {
+  const extracted = extractRecordInputValue(value);
+  const items = Array.isArray(extracted)
+    ? extracted.map(item => normalizeStructuredFieldValue(item, descriptor, projection))
+    : [];
+  const structured = wrapStructured(items, 'array', undefined, {
+    projection
+  });
+  if (descriptor) {
+    applySecurityDescriptorToStructuredValue(structured, descriptor);
+  }
+  setRecordProjectionMetadata(structured, projection);
+  return structured as StructuredValue<unknown[]>;
+}
+
+async function validateShelfRecordValue(options: {
+  value: unknown;
+  definition: RecordDefinition;
+  env: Environment;
+  shelfName: string;
+  slotName: string;
+  strictFactInputs: boolean;
+}): Promise<StructuredValue<Record<string, unknown>>> {
+  const context = buildRecordRootContext(options.value, options.definition);
+  const rootInput = extractRecordInputValue(context.input);
+  if (options.definition.rootMode === 'object' && !isPlainObject(rootInput)) {
+    throw new MlldInterpreterError(
+      `Slot '@${options.shelfName}.${options.slotName}' expects an object for record '@${options.definition.name}'`,
+      'shelf',
+      undefined,
+      { code: 'INVALID_SHELF_VALUE' }
+    );
+  }
+
+  const slotDescriptor = buildSlotSourceDescriptor(options.shelfName, options.slotName);
+  const shaped: Record<string, unknown> = {};
+  const namespaceMetadata: Record<string, ShelfNamespaceMetadata> = {};
+
+  for (const field of options.definition.fields) {
+    let rawFieldValue = await evaluateFieldValue(field, context, options.env);
+    if (rawFieldValue === undefined || rawFieldValue === null) {
+      if (!field.optional) {
+        throw new MlldInterpreterError(
+          `Missing required field '${field.name}' for slot '@${options.shelfName}.${options.slotName}'`,
+          'shelf',
+          undefined,
+          { code: 'INVALID_SHELF_VALUE' }
+        );
+      }
+      continue;
+    }
+
+    if (options.strictFactInputs && field.classification === 'fact' && !isAcceptedAgentFactInput(rawFieldValue)) {
+      throw new MlldSecurityError(
+        `Fact field '${field.name}' in slot '@${options.shelfName}.${options.slotName}' requires handle-bearing input`,
+        {
+          code: 'SHELF_FACT_INPUT_REQUIRED',
+          details: {
+            field: field.name,
+            slot: `@${options.shelfName}.${options.slotName}`
+          }
+        }
+      );
+    }
+
+    if (field.classification === 'fact' || field.valueType === 'handle') {
+      rawFieldValue = await resolveValueHandles(rawFieldValue, options.env);
+    }
+
+    const coerced = coerceFieldValue(field, rawFieldValue, options.env);
+    if (!coerced.ok) {
+      throw new MlldInterpreterError(
+        `Field '${field.name}' in slot '@${options.shelfName}.${options.slotName}' expected ${field.valueType ?? 'scalar'} but received ${coerced.actual}`,
+        'shelf',
+        undefined,
+        { code: 'INVALID_SHELF_VALUE' }
+      );
+    }
+
+    const projection = buildRecordFieldProjectionMetadata(options.definition, field);
+    const fieldDescriptor = stripKnownDescriptor(
+      mergeDescriptors(
+        extractSecurityDescriptor(rawFieldValue, {
+          recursive: true,
+          mergeArrayElements: true
+        }),
+        slotDescriptor
+      )
+    );
+    const normalizedFieldValue =
+      field.valueType === 'array'
+        ? normalizeStructuredArrayFieldValue(coerced.value, fieldDescriptor, projection)
+        : normalizeStructuredFieldValue(coerced.value, fieldDescriptor, projection);
+
+    if (field.classification === 'fact') {
+      const grounded = field.valueType === 'array'
+        ? allArrayElementsCarryFactProof(normalizedFieldValue)
+        : fieldCarriesFactProof(normalizedFieldValue);
+      if (!grounded) {
+        throw new MlldSecurityError(
+          `Fact field '${field.name}' in slot '@${options.shelfName}.${options.slotName}' is missing fact proof`,
+          {
+            code: 'SHELF_FACT_PROOF_REQUIRED',
+            details: {
+              field: field.name,
+              slot: `@${options.shelfName}.${options.slotName}`
+            }
+          }
+        );
+      }
+    }
+
+    shaped[field.name] = normalizedFieldValue;
+    namespaceMetadata[field.name] = {
+      ...(fieldDescriptor ? { security: serializeSecurityDescriptor(fieldDescriptor) } : {}),
+      ...(Array.isArray(normalizedFieldValue.metadata?.factsources)
+        ? { factsources: [...normalizedFieldValue.metadata.factsources] }
+        : {}),
+      projection
+    };
+  }
+
+  const root = wrapStructured(shaped, 'object', undefined, {
+    projection: buildRecordObjectProjectionMetadata(options.definition)
+  });
+  const rootDescriptor = stripKnownDescriptor(
+    mergeDescriptors(
+      extractSecurityDescriptor(options.value, {
+        recursive: true,
+        mergeArrayElements: true
+      }),
+      slotDescriptor
+    )
+  );
+  if (rootDescriptor) {
+    applySecurityDescriptorToStructuredValue(root, rootDescriptor);
+  }
+  setNamespaceMetadata(root, namespaceMetadata);
+  return root;
+}
+
+function normalizeStoredCollection(state: unknown): StructuredValue<Record<string, unknown>>[] {
+  if (!state) {
+    return [];
+  }
+  if (Array.isArray(state)) {
+    return state.filter(isStructuredValue) as StructuredValue<Record<string, unknown>>[];
+  }
+  if (isStructuredValue(state) && Array.isArray(state.data)) {
+    return state.data.filter(isStructuredValue) as StructuredValue<Record<string, unknown>>[];
+  }
+  return isStructuredValue(state)
+    ? [state as StructuredValue<Record<string, unknown>>]
+    : [];
+}
+
+function readStructuredFieldValue(recordValue: StructuredValue<Record<string, unknown>>, fieldName: string): unknown {
+  const data = asData<Record<string, unknown>>(recordValue);
+  return data?.[fieldName];
+}
+
+function readIdentityKey(
+  recordValue: StructuredValue<Record<string, unknown>>,
+  keyField: string
+): string | undefined {
+  return encodeCanonicalValue(readStructuredFieldValue(recordValue, keyField));
+}
+
+function matchesCollectionIdentity(
+  existing: StructuredValue<Record<string, unknown>>,
+  incoming: StructuredValue<Record<string, unknown>>,
+  definition: RecordDefinition
+): boolean {
+  if (definition.key) {
+    const existingKey = readIdentityKey(existing, definition.key);
+    const incomingKey = readIdentityKey(incoming, definition.key);
+    return Boolean(existingKey && incomingKey && existingKey === incomingKey);
+  }
+  const existingCanonical = encodeCanonicalValue(existing);
+  const incomingCanonical = encodeCanonicalValue(incoming);
+  return Boolean(existingCanonical && incomingCanonical && existingCanonical === incomingCanonical);
+}
+
+function assertFromConstraint(
+  env: Environment,
+  shelf: ShelfDefinition,
+  slotName: string,
+  item: StructuredValue<Record<string, unknown>>
+): void {
+  const slot = shelf.slots[slotName];
+  if (!slot.from) {
+    return;
+  }
+  const sourceSlot = shelf.slots[slot.from];
+  if (!sourceSlot) {
+    throw new MlldInterpreterError(
+      `Slot '@${shelf.name}.${slotName}' references unknown source slot '${slot.from}'`,
+      'shelf',
+      slot.location,
+      { code: 'INVALID_SHELF_SLOT' }
+    );
+  }
+  const recordDefinition = env.getRecordDefinition(slot.record);
+  if (!recordDefinition) {
+    throw new MlldInterpreterError(
+      `Record '@${slot.record}' is not defined`,
+      'shelf',
+      slot.location,
+      { code: 'UNKNOWN_SHELF_RECORD' }
+    );
+  }
+  const sourceItems = normalizeStoredCollection(env.readShelfSlot(shelf.name, slot.from));
+  const found = sourceItems.some(candidate => matchesCollectionIdentity(candidate, item, recordDefinition));
+  if (!found) {
+    throw new MlldSecurityError(
+      `Value for slot '@${shelf.name}.${slotName}' must already exist in '@${shelf.name}.${slot.from}'`,
+      {
+        code: 'SHELF_FROM_NOT_FOUND',
+        details: {
+          slot: `@${shelf.name}.${slotName}`,
+          from: `@${shelf.name}.${slot.from}`
+        }
+      }
+    );
+  }
+}
+
+function mergeCollectionItems(
+  existing: StructuredValue<Record<string, unknown>>[],
+  incoming: StructuredValue<Record<string, unknown>>[],
+  definition: RecordDefinition,
+  merge: ShelfMergeMode
+): StructuredValue<Record<string, unknown>>[] {
+  if (merge === 'append') {
+    return [...existing, ...incoming];
+  }
+  if (merge === 'replace') {
+    return [...incoming];
+  }
+
+  const next = [...existing];
+  for (const item of incoming) {
+    const index = next.findIndex(candidate => matchesCollectionIdentity(candidate, item, definition));
+    if (index >= 0) {
+      next[index] = item;
+    } else {
+      next.push(item);
+    }
+  }
+  return next;
+}
+
+function withShelfSlotRef(
+  value: StructuredValue,
+  shelfName: string,
+  slotName: string
+): StructuredValue {
+  value.internal = {
+    ...(value.internal ?? {}),
+    [SHELVE_SLOT_REF_KEY]: {
+      shelfName,
+      slotName
+    }
+  };
+  return value;
+}
+
+export function extractShelfSlotRef(value: unknown): ShelfScopeSlotRef | undefined {
+  if (isVariable(value)) {
+    return extractShelfSlotRef(value.value);
+  }
+  if (!isStructuredValue(value)) {
+    return undefined;
+  }
+  const ref = value.internal && (value.internal as Record<string, unknown>)[SHELVE_SLOT_REF_KEY];
+  if (!ref || typeof ref !== 'object') {
+    return undefined;
+  }
+  const shelfName = typeof (ref as Record<string, unknown>).shelfName === 'string'
+    ? (ref as Record<string, unknown>).shelfName
+    : '';
+  const slotName = typeof (ref as Record<string, unknown>).slotName === 'string'
+    ? (ref as Record<string, unknown>).slotName
+    : '';
+  return shelfName && slotName ? { shelfName, slotName } : undefined;
+}
+
+function createShelfSlotReferenceValue(
+  env: Environment,
+  shelfName: string,
+  slotName: string
+): StructuredValue {
+  const definition = env.getShelfDefinition(shelfName);
+  const slot = definition?.slots[slotName];
+  const stored = env.readShelfSlot(shelfName, slotName);
+  let wrapped: StructuredValue;
+
+  if (stored === undefined) {
+    wrapped = slot?.cardinality === 'collection'
+      ? wrapStructured([], 'array')
+      : wrapStructured(null);
+  } else if (isStructuredValue(stored)) {
+    wrapped = cloneStructuredValue(stored);
+  } else if (Array.isArray(stored)) {
+    wrapped = wrapStructured([...stored], 'array');
+  } else {
+    wrapped = wrapStructured(stored as any);
+  }
+
+  return withShelfSlotRef(wrapped, shelfName, slotName);
+}
+
+function getAllWritableSlots(env: Environment): ShelfScopeSlotRef[] {
+  const scope = getNormalizedShelfScope(env);
+  if (scope) {
+    return [...scope.writeSlots];
+  }
+
+  const writable: ShelfScopeSlotRef[] = [];
+  for (const [shelfName, definition] of env.getAllShelfDefinitions()) {
+    for (const slotName of Object.keys(definition.slots)) {
+      writable.push({ shelfName, slotName });
+    }
+  }
+  return writable;
+}
+
+function getAllReadableSlots(env: Environment): ShelfScopeSlotRef[] {
+  const scope = getNormalizedShelfScope(env);
+  if (scope) {
+    return [...scope.readSlots];
+  }
+
+  const readable: ShelfScopeSlotRef[] = [];
+  for (const [shelfName, definition] of env.getAllShelfDefinitions()) {
+    for (const slotName of Object.keys(definition.slots)) {
+      readable.push({ shelfName, slotName });
+    }
+  }
+  return readable;
+}
+
+function assertShelfWriteAllowed(env: Environment, ref: ShelfScopeSlotRef): void {
+  const scope = getNormalizedShelfScope(env);
+  if (!scope) {
+    return;
+  }
+  const allowed = scope.writeSlots.some(
+    candidate => candidate.shelfName === ref.shelfName && candidate.slotName === ref.slotName
+  );
+  if (!allowed) {
+    throw new MlldSecurityError(
+      `Write access denied for shelf slot '@${ref.shelfName}.${ref.slotName}'`,
+      {
+        code: 'SHELF_WRITE_DENIED',
+        details: { slot: `@${ref.shelfName}.${ref.slotName}` }
+      }
+    );
+  }
+}
+
+function describeWritableSlots(env: Environment): string {
+  const slots = getAllWritableSlots(env);
+  if (slots.length === 0) {
+    return 'No writable shelf slots are available.';
+  }
+  return slots
+    .map(ref => {
+      const shelf = env.getShelfDefinition(ref.shelfName);
+      const slot = shelf?.slots[ref.slotName];
+      return slot
+        ? `@${ref.shelfName}.${ref.slotName} (${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''}, ${slot.merge})`
+        : `@${ref.shelfName}.${ref.slotName}`;
+    })
+    .join(', ');
+}
+
+async function writeToShelfSlot(target: unknown, value: unknown, env: Environment): Promise<StructuredValue> {
+  const ref = extractShelfSlotRef(target);
+  if (!ref) {
+    throw new MlldInterpreterError('The first @shelve argument must be a shelf slot reference', 'shelf', undefined, {
+      code: 'INVALID_SHELF_REFERENCE'
+    });
+  }
+
+  assertShelfWriteAllowed(env, ref);
+
+  const shelf = env.getShelfDefinition(ref.shelfName);
+  const slot = shelf?.slots[ref.slotName];
+  if (!shelf || !slot) {
+    throw new MlldInterpreterError(`Unknown shelf slot '@${ref.shelfName}.${ref.slotName}'`, 'shelf', undefined, {
+      code: 'INVALID_SHELF_REFERENCE'
+    });
+  }
+
+  const recordDefinition = env.getRecordDefinition(slot.record);
+  if (!recordDefinition) {
+    throw new MlldInterpreterError(`Record '@${slot.record}' is not defined`, 'shelf', slot.location, {
+      code: 'UNKNOWN_SHELF_RECORD'
+    });
+  }
+
+  const strictFactInputs = Boolean(getNormalizedShelfScope(env));
+  const extracted = extractRecordInputValue(value);
+  const incomingItems = slot.cardinality === 'collection' && Array.isArray(extracted)
+    ? extracted
+    : [value];
+
+  if (slot.cardinality === 'singular' && incomingItems.length !== 1) {
+    throw new MlldInterpreterError(
+      `Slot '@${ref.shelfName}.${ref.slotName}' accepts exactly one value`,
+      'shelf',
+      slot.location,
+      { code: 'INVALID_SHELF_VALUE' }
+    );
+  }
+
+  const validatedItems = await Promise.all(
+    incomingItems.map(item =>
+      validateShelfRecordValue({
+        value: item,
+        definition: recordDefinition,
+        env,
+        shelfName: ref.shelfName,
+        slotName: ref.slotName,
+        strictFactInputs
+      })
+    )
+  );
+
+  for (const item of validatedItems) {
+    assertFromConstraint(env, shelf, ref.slotName, item);
+  }
+
+  if (slot.cardinality === 'collection') {
+    const current = normalizeStoredCollection(env.readShelfSlot(ref.shelfName, ref.slotName));
+    const next = mergeCollectionItems(current, validatedItems, recordDefinition, slot.merge);
+    env.writeShelfSlot(ref.shelfName, ref.slotName, next);
+  } else {
+    env.writeShelfSlot(ref.shelfName, ref.slotName, validatedItems[0]);
+  }
+
+  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
+}
+
+async function clearShelfSlot(target: unknown, env: Environment): Promise<StructuredValue> {
+  const ref = extractShelfSlotRef(target);
+  if (!ref) {
+    throw new MlldInterpreterError('The first @shelve.clear argument must be a shelf slot reference', 'shelf', undefined, {
+      code: 'INVALID_SHELF_REFERENCE'
+    });
+  }
+  assertShelfWriteAllowed(env, ref);
+  env.clearShelfSlot(ref.shelfName, ref.slotName);
+  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
+}
+
+async function removeFromShelfSlot(target: unknown, refValue: unknown, env: Environment): Promise<StructuredValue> {
+  const slotRef = extractShelfSlotRef(target);
+  if (!slotRef) {
+    throw new MlldInterpreterError('The first @shelve.remove argument must be a shelf slot reference', 'shelf', undefined, {
+      code: 'INVALID_SHELF_REFERENCE'
+    });
+  }
+  assertShelfWriteAllowed(env, slotRef);
+
+  const shelf = env.getShelfDefinition(slotRef.shelfName);
+  const slot = shelf?.slots[slotRef.slotName];
+  if (!shelf || !slot || slot.cardinality !== 'collection') {
+    throw new MlldInterpreterError(
+      `@shelve.remove only supports collection slots (got '@${slotRef.shelfName}.${slotRef.slotName}')`,
+      'shelf',
+      slot?.location,
+      { code: 'INVALID_SHELF_REFERENCE' }
+    );
+  }
+
+  const recordDefinition = env.getRecordDefinition(slot.record);
+  if (!recordDefinition) {
+    throw new MlldInterpreterError(`Record '@${slot.record}' is not defined`, 'shelf', slot.location, {
+      code: 'UNKNOWN_SHELF_RECORD'
+    });
+  }
+
+  const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName));
+  const resolvedRef = await resolveValueHandles(refValue, env);
+  let next = current;
+
+  if (recordDefinition.key) {
+    let keyCandidate: string | undefined;
+    const extracted = extractRecordInputValue(resolvedRef);
+    if (
+      isPlainObject(extracted)
+      && Object.prototype.hasOwnProperty.call(extracted, recordDefinition.key)
+    ) {
+      keyCandidate = encodeCanonicalValue((extracted as Record<string, unknown>)[recordDefinition.key]);
+    } else if (isStructuredValue(extracted)) {
+      keyCandidate = encodeCanonicalValue(readStructuredFieldValue(extracted as any, recordDefinition.key));
+    } else {
+      keyCandidate = encodeCanonicalValue(extracted);
+    }
+
+    next = keyCandidate
+      ? current.filter(item => readIdentityKey(item, recordDefinition.key!) !== keyCandidate)
+      : current;
+  } else {
+    const candidate = encodeCanonicalValue(resolvedRef);
+    next = candidate
+      ? current.filter(item => encodeCanonicalValue(item) !== candidate)
+      : current;
+  }
+
+  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next);
+  return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName);
+}
+
+function defineEnumerableGetter(
+  target: Record<string, unknown>,
+  key: string,
+  getter: () => unknown
+): void {
+  Object.defineProperty(target, key, {
+    enumerable: true,
+    configurable: true,
+    get: getter
+  });
+}
+
+export function createShelfVariable(env: Environment, definition: ShelfDefinition): Variable {
+  const value: Record<string, unknown> = Object.create(null);
+  for (const slotName of Object.keys(definition.slots)) {
+    defineEnumerableGetter(value, slotName, () =>
+      createShelfSlotReferenceValue(env, definition.name, slotName)
+    );
+  }
+
+  return createObjectVariable(definition.name, value, false, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      isShelf: true,
+      shelfName: definition.name
+    }
+  });
+}
+
+async function projectReadableValue(value: unknown, env: Environment): Promise<unknown> {
+  if (extractShelfSlotRef(value)) {
+    const ref = extractShelfSlotRef(value)!;
+    return renderDisplayProjection(createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName), env);
+  }
+  return renderDisplayProjection(value, env);
+}
+
+function createFyiShelfNamespaceValue(
+  env: Environment,
+  shelfName: string,
+  slotNames: readonly string[]
+): Record<string, unknown> {
+  const value: Record<string, unknown> = Object.create(null);
+  for (const slotName of slotNames) {
+    defineEnumerableGetter(value, slotName, () =>
+      projectReadableValue(createShelfSlotReferenceValue(env, shelfName, slotName), env)
+    );
+  }
+  return value;
+}
+
+export function createFyiShelfValue(env: Environment): Record<string, unknown> {
+  const value: Record<string, unknown> = Object.create(null);
+  const readableSlots = getAllReadableSlots(env);
+  const grouped = new Map<string, string[]>();
+  for (const entry of readableSlots) {
+    const bucket = grouped.get(entry.shelfName) ?? [];
+    bucket.push(entry.slotName);
+    grouped.set(entry.shelfName, bucket);
+  }
+
+  for (const [shelfName, slotNames] of grouped.entries()) {
+    defineEnumerableGetter(value, shelfName, () =>
+      createFyiShelfNamespaceValue(env, shelfName, slotNames)
+    );
+  }
+
+  const scope = getNormalizedShelfScope(env);
+  for (const [alias, aliasValue] of Object.entries(scope?.readAliases ?? {})) {
+    defineEnumerableGetter(value, alias, () => projectReadableValue(aliasValue, env));
+  }
+
+  return value;
+}
+
+function looksLikeEnvironment(value: unknown): value is Environment {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as Environment).getScopedEnvironmentConfig === 'function' &&
+    typeof (value as Environment).getShelfDefinition === 'function'
+  );
+}
+
+export function createShelveVariable(env: Environment): Variable {
+  const writeDefinition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'shelve',
+    fn: async (slotOrEnv?: unknown, valueOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined)
+        ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
+        ?? env;
+      const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
+      const value = boundEnv || !looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined;
+      return writeToShelfSlot(slot, value, executionEnv);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot', 'value'],
+    description: `Write typed shelf slots. Writable slots: ${describeWritableSlots(env)}`
+  };
+
+  const clearDefinition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'clear',
+    fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
+        ?? env;
+      const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
+      return clearShelfSlot(slot, executionEnv);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot'],
+    description: `Clear writable shelf slots. Writable slots: ${describeWritableSlots(env)}`
+  };
+
+  const removeDefinition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'remove',
+    fn: async (slotOrEnv?: unknown, refOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(refOrEnv) ? refOrEnv : undefined)
+        ?? (looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined)
+        ?? env;
+      const slot = boundEnv || !looksLikeEnvironment(slotOrEnv) ? slotOrEnv : undefined;
+      const ref = boundEnv || !looksLikeEnvironment(refOrEnv) ? refOrEnv : undefined;
+      return removeFromShelfSlot(slot, ref, executionEnv);
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot', 'ref'],
+    description: `Remove entities from writable collection slots. Writable slots: ${describeWritableSlots(env)}`
+  };
+
+  const clearExecutable = createExecutableVariable('clear', 'command', '', ['slot'], undefined, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      executableDef: clearDefinition,
+      preserveStructuredArgs: true,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+  const removeExecutable = createExecutableVariable('remove', 'command', '', ['slot', 'ref'], undefined, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      executableDef: removeDefinition,
+      preserveStructuredArgs: true,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+
+  const value: Record<string, unknown> = Object.create(null);
+  Object.defineProperties(value, {
+    __executable: {
+      value: true,
+      enumerable: false,
+      configurable: true
+    },
+    name: {
+      value: 'shelve',
+      enumerable: false,
+      configurable: true
+    },
+    paramNames: {
+      value: ['slot', 'value'],
+      enumerable: false,
+      configurable: true
+    },
+    executableDef: {
+      value: writeDefinition,
+      enumerable: false,
+      configurable: true
+    },
+    internal: {
+      value: {
+        preserveStructuredArgs: true,
+        isReserved: true,
+        isSystem: true
+      },
+      enumerable: false,
+      configurable: true
+    }
+  });
+  value.clear = clearExecutable;
+  value.remove = removeExecutable;
+
+  return createObjectVariable('shelve', value, false, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      isReserved: true,
+      isSystem: true
+    }
+  });
+}
+
+function normalizeScopeSlotRef(ref: ShelfScopeSlotRef): string {
+  return `${ref.shelfName}.${ref.slotName}`;
+}
+
+function dedupeScopeRefs(refs: ShelfScopeSlotRef[]): ShelfScopeSlotRef[] {
+  const seen = new Set<string>();
+  const deduped: ShelfScopeSlotRef[] = [];
+  for (const ref of refs) {
+    const key = normalizeScopeSlotRef(ref);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(ref);
+  }
+  return deduped;
+}
+
+function isAliasedValue(value: unknown): value is DataAliasedValue {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as DataAliasedValue).type === 'aliasedValue' &&
+    typeof (value as DataAliasedValue).alias === 'string'
+  );
+}
+
+async function normalizeScopeEntryValue(value: unknown, env: Environment): Promise<unknown> {
+  if (isAliasedValue(value)) {
+    return {
+      alias: value.alias,
+      value: await evaluateDataValue(value.value as DataValue, env, { suppressErrors: false })
+    };
+  }
+  return value;
+}
+
+async function normalizeScopeSlotEntries(
+  entries: unknown,
+  env: Environment,
+  label: 'read' | 'write'
+): Promise<{ refs: ShelfScopeSlotRef[]; aliases: Record<string, unknown> }> {
+  if (entries === undefined) {
+    return { refs: [], aliases: {} };
+  }
+  if (!Array.isArray(entries)) {
+    throw new MlldInterpreterError(`box.shelf.${label} must be an array`, 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  const refs: ShelfScopeSlotRef[] = [];
+  const aliases: Record<string, unknown> = {};
+
+  for (const entry of entries) {
+    const normalized = await normalizeScopeEntryValue(entry, env);
+    if (isPlainObject(normalized) && typeof normalized.alias === 'string' && 'value' in normalized) {
+      aliases[normalized.alias] = normalized.value;
+      continue;
+    }
+    const ref = extractShelfSlotRef(normalized);
+    if (!ref) {
+      throw new MlldInterpreterError(
+        `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ' or aliased values' : ''}`,
+        'box',
+        undefined,
+        { code: 'INVALID_SHELF_SCOPE' }
+      );
+    }
+    refs.push(ref);
+  }
+
+  return { refs, aliases };
+}
+
+export async function normalizeScopedShelfConfig(
+  value: unknown,
+  env: Environment
+): Promise<NormalizedShelfScope> {
+  if (value === undefined) {
+    return {
+      [SHELF_SCOPE_MARKER]: true,
+      readSlots: [],
+      writeSlots: [],
+      readAliases: {}
+    };
+  }
+  if (!isPlainObject(value)) {
+    throw new MlldInterpreterError('box.shelf must be an object', 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  const read = await normalizeScopeSlotEntries(value.read, env, 'read');
+  const write = await normalizeScopeSlotEntries(value.write, env, 'write');
+
+  return {
+    [SHELF_SCOPE_MARKER]: true,
+    readSlots: dedupeScopeRefs([...read.refs, ...write.refs]),
+    writeSlots: dedupeScopeRefs(write.refs),
+    readAliases: { ...read.aliases }
+  };
+}
+
+export function getNormalizedShelfScope(env: Environment): NormalizedShelfScope | undefined {
+  const scopedConfig = env.getScopedEnvironmentConfig();
+  const shelf = scopedConfig?.shelf;
+  return isNormalizedShelfScope(shelf) ? shelf : undefined;
+}
+
+export function serializeShelfDefinition(
+  env: Environment,
+  definition: ShelfDefinition
+): SerializedShelfDefinition {
+  const records = Object.fromEntries(
+    Array.from(new Set(Object.values(definition.slots).map(slot => slot.record)))
+      .map(recordName => [recordName, env.getRecordDefinition(recordName)])
+      .filter((entry): entry is [string, RecordDefinition] => Boolean(entry[1]))
+  );
+
+  return {
+    __shelf: true,
+    definition,
+    ...(Object.keys(records).length > 0 ? { records } : {})
+  };
+}
+
+export function isSerializedShelfDefinition(value: unknown): value is SerializedShelfDefinition {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as SerializedShelfDefinition).__shelf === true &&
+    (value as SerializedShelfDefinition).definition
+  );
+}

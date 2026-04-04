@@ -1,4 +1,5 @@
 import type { DataLabel } from './security';
+import type { NormalizedShelfScope, ShelfDefinition } from './shelf';
 import type { ToolCollection } from './tools';
 import type { PolicyConfig } from '../policy/union';
 
@@ -18,6 +19,7 @@ export type EnvironmentConfig = {
   profile?: string;
   profiles?: Record<string, unknown>;
   mcpConfig?: unknown;
+  shelf?: NormalizedShelfScope | ShelfDefinition;
   tools?: ToolCollection | string[];
   _policyDerivedConstraints?: PolicyDerivedConstraints;
   [key: string]: unknown;

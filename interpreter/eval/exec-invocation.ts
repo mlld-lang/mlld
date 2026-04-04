@@ -1806,6 +1806,90 @@ async function evaluateExecInvocationInternal(
     }
   }
 
+  if (
+    variable &&
+    !isExecutableVariable(variable as any) &&
+    typeof variable === 'object' &&
+    (variable as { type?: unknown }).type === 'object' &&
+    (variable as { value?: unknown }).value &&
+    typeof (variable as { value?: unknown }).value === 'object' &&
+    '__executable' in ((variable as { value: Record<string, unknown> }).value) &&
+    Boolean(((variable as { value: Record<string, unknown> }).value as { __executable?: unknown }).__executable)
+  ) {
+    variable = (variable as { value: unknown }).value as any;
+  }
+
+  if (typeof variable === 'object' && variable !== null && '__executable' in variable && (variable as any).__executable) {
+    const rawInternal =
+      ((variable as any).internal as Record<string, unknown> | undefined) ??
+      {};
+    let serializedInternal: Record<string, unknown> = { ...rawInternal };
+    let capturedModuleEnv = getCapturedModuleEnv(rawInternal);
+    if (capturedModuleEnv === undefined) {
+      capturedModuleEnv = getCapturedModuleEnv(variable as any);
+    }
+    if (capturedModuleEnv !== undefined) {
+      serializedInternal.capturedModuleEnv = capturedModuleEnv;
+    }
+    if (serializedInternal.capturedShadowEnvs && typeof serializedInternal.capturedShadowEnvs === 'object') {
+      const needsDeserialization = Object.entries(serializedInternal.capturedShadowEnvs).some(
+        ([, shadowEnv]) => shadowEnv && !(shadowEnv instanceof Map)
+      );
+
+      if (needsDeserialization) {
+        serializedInternal = {
+          ...serializedInternal,
+          capturedShadowEnvs: deserializeShadowEnvs(serializedInternal.capturedShadowEnvs)
+        };
+      }
+    }
+
+    if (capturedModuleEnv && !(capturedModuleEnv instanceof Map)) {
+      const { VariableImporter } = await import('./import/VariableImporter');
+      const importer = new VariableImporter(null);
+      const moduleEnvMap = importer.deserializeModuleEnv(capturedModuleEnv);
+
+      for (const [_, envVariable] of moduleEnvMap) {
+        if (envVariable.type === 'executable') {
+          envVariable.internal = {
+            ...(envVariable.internal ?? {}),
+            capturedModuleEnv: moduleEnvMap
+          };
+        }
+      }
+
+      capturedModuleEnv = moduleEnvMap;
+      serializedInternal.capturedModuleEnv = moduleEnvMap;
+    }
+
+    const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
+    const executableInternal: Record<string, unknown> = {
+      executableDef: (variable as any).executableDef,
+      ...serializedInternal
+    };
+    if (capturedModuleEnv !== undefined) {
+      executableInternal.capturedModuleEnv = capturedModuleEnv;
+    }
+    variable = createExecutableVariable(
+      commandName,
+      'command',
+      '',
+      ((variable as any).paramNames as string[] | undefined) || [],
+      undefined,
+      {
+        directive: 'exe',
+        syntax: 'braces',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        internal: {
+          ...executableInternal
+        }
+      }
+    );
+  }
+
   // Ensure it's an executable variable
   if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);

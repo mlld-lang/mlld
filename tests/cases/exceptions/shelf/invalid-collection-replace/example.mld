@@ -1,0 +1,8 @@
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+
+/shelf @pipeline = {
+  recipients: { type: contact[], merge: "replace" }
+}

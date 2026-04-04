@@ -32,6 +32,7 @@ export type NodeTypeKey = keyof typeof NodeType;
 export const DirectiveKind = {
   run: 'run',
   record: 'record',
+  shelf: 'shelf',
   var: 'var',     // NEW: Replaces text/data
   show: 'show',   // NEW: Replaces add
   file: 'file',
@@ -201,14 +202,18 @@ export const helpers = {
     // Bare exec invocation statements (strict mode: @fn(), markdown mode: /@fn()).
     // This only recognizes statement starts with explicit invocation syntax so
     // plain @var references are never treated as directives.
-    if (input[cursor] === '@') {
-      const remainder = input.substring(cursor);
-      if (/^@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\s*\(/.test(remainder)) {
-        return true;
-      }
-    }
+    if (this.isBareExecInvocationContext(input, pos)) return true;
 
     return false;
+  },
+
+  isBareExecInvocationContext(input: string, pos: number): boolean {
+    if (!this.isLogicalLineStart(input, pos)) return false;
+    let cursor = pos;
+    if (input[cursor] === '/') cursor++;
+    if (input[cursor] !== '@') return false;
+    const remainder = input.substring(cursor);
+    return /^@[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\s*\(/.test(remainder);
   },
 
   /**

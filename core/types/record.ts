@@ -111,6 +111,7 @@ export interface RecordWhenRule {
 
 export interface RecordDefinition {
   name: string;
+  key?: string;
   fields: RecordFieldDefinition[];
   rootMode: RecordRootMode;
   display: RecordDisplayConfig;
@@ -136,6 +137,7 @@ export interface RecordSchemaMetadata {
 export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'record'> {
   values: {
     identifier: VariableReferenceNode[];
+    key?: string;
     facts?: RecordFieldDefinition[];
     data?: RecordFieldDefinition[];
     display?: RecordDisplayDeclaration;
@@ -147,6 +149,7 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     identifier: string;
   };
   meta: {
+    hasKey?: boolean;
     fieldCount: number;
     factCount: number;
     dataCount: number;

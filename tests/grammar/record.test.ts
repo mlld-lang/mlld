@@ -294,7 +294,7 @@ describe('record grammar', () => {
     });
   });
 
-  it('captures deferred key declarations as unsupported record entries', () => {
+  it('parses record key declarations', () => {
     const directive = getFirstDirective(`
 /record @deal = {
   key: id,
@@ -302,7 +302,7 @@ describe('record grammar', () => {
 }
 `) as RecordDirectiveNode;
 
-    expect(directive.values.unsupported).toHaveLength(1);
-    expect(directive.values.unsupported?.[0]?.key).toBe('key');
+    expect(directive.values.key).toBe('id');
+    expect(directive.meta.hasKey).toBe(true);
   });
 });

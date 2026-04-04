@@ -20,6 +20,7 @@ import {
   createPolicyAuthorizationValidationError,
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
+import { normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -736,6 +737,12 @@ export async function evaluateBox(
 
   mergedConfig = applyEnvironmentDefaults(mergedConfig, env.getPolicySummary()) ?? mergedConfig;
   resolvedTools = mergedConfig.tools;
+
+  const normalizedShelfScope = await normalizeScopedShelfConfig(mergedConfig.shelf, env);
+  mergedConfig = {
+    ...mergedConfig,
+    shelf: normalizedShelfScope
+  };
 
   const scopedEnv = env.createChild();
   scopedEnv.setScopedEnvironmentConfig(mergedConfig);

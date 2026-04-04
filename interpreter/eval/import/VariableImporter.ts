@@ -19,6 +19,7 @@ import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
 import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
 import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
+import { createShelfVariable, isSerializedShelfDefinition } from '@interpreter/shelf/runtime';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -229,6 +230,21 @@ export class VariableImporter {
       env?: Environment;
     }
   ): Variable {
+    if (options?.env && isSerializedShelfDefinition(value)) {
+      for (const [recordName, definition] of Object.entries(value.records ?? {})) {
+        if (!options.env.getRecordDefinition(recordName)) {
+          options.env.registerRecordDefinition(recordName, definition);
+        }
+      }
+
+      const definition = {
+        ...value.definition,
+        name
+      };
+      options.env.registerShelfDefinition(name, definition);
+      return createShelfVariable(options.env, definition);
+    }
+
     return this.variableFactoryOrchestrator.createVariableFromValue(
       name,
       value,

@@ -102,7 +102,8 @@ InterDirectiveNewline
       const isStrictMode = options?.mode === 'strict';
       const isDirectiveLine = i < input.length && helpers.isDirectiveContext(input, i);
       const hasSlash = i < input.length && input[i] === '/';
-      return isDirectiveLine && (isStrictMode || hasSlash);
+      const isBareInvocation = i < input.length && helpers.isBareExecInvocationContext(input, i);
+      return isDirectiveLine && (isStrictMode || hasSlash || isBareInvocation);
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -195,7 +196,8 @@ TextPart
       if (isAtLineStart && helpers.isDirectiveContext(input, pos)) {
         const hasSlash = input[pos] === '/';
         const isStrictMode = options?.mode === 'strict';
-        if (isStrictMode || hasSlash) {
+        const isBareInvocation = helpers.isBareExecInvocationContext(input, pos);
+        if (isStrictMode || hasSlash || isBareInvocation) {
           return true; // Stop parsing text - directive ahead
         }
       }
@@ -228,12 +230,14 @@ Directive
       if (!helpers.isDirectiveContext(input, pos)) return false;
       const hasSlash = input[pos] === '/';
       const isStrictMode = options?.mode === 'strict';
-      return isStrictMode || hasSlash;
+      const isBareInvocation = helpers.isBareExecInvocationContext(input, pos);
+      return isStrictMode || hasSlash || isBareInvocation;
     }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
       SlashExeReturn
     / SlashRecord   // Record directives (schema/classification definitions)
+    / SlashShelf    // Shelf directives (typed runtime state)
     / SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)

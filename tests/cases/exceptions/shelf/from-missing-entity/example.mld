@@ -1,0 +1,20 @@
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+
+/shelf @pipeline = {
+  recipients: contact[],
+  selected: contact? from recipients
+}
+
+/exe @emitContact() = js {
+  return {
+    id: "c_1",
+    email: "mark@example.com",
+    name: "Mark"
+  };
+} => contact
+
+/var @recipient = @emitContact()
+@shelve(@pipeline.selected, @recipient)

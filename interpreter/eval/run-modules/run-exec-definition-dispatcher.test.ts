@@ -16,6 +16,7 @@ import { evaluateExecInvocation } from '@interpreter/eval/exec-invocation';
 import { executeProseExecutable } from '@interpreter/eval/prose-execution';
 import { parse } from '@grammar/parser';
 import { createSimpleTextVariable } from '@core/types/variable/VariableFactories';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 
 vi.mock('@interpreter/eval/exec-invocation', () => ({
   evaluateExecInvocation: vi.fn()
@@ -572,6 +573,45 @@ describe('run exec definition dispatcher', () => {
     );
     expect(mockedExecuteProseExecutable).toHaveBeenCalled();
     expect(proseResult.value).toBe('prose-output');
+  });
+
+  it('dispatches node functions and preserves structured args when requested', async () => {
+    const env = createEnv();
+    const slotRef = wrapStructured([], 'array');
+    slotRef.internal = {
+      shelfSlotRef: {
+        shelfName: 'outreach',
+        slotName: 'recipients'
+      }
+    };
+    const fn = vi.fn(async () => 'node-output');
+    const nodeDefinition = {
+      type: 'nodeFunction',
+      name: 'shelve',
+      fn,
+      bindExecutionEnv: true,
+      paramNames: ['slot', 'value'],
+      sourceDirective: 'exec'
+    } as unknown as ExecutableDefinition;
+
+    const result = await dispatchRunExecutableDefinition(
+      buildParams({
+        env,
+        definition: nodeDefinition,
+        execVar: createExecutable('shelve', nodeDefinition, { preserveStructuredArgs: true }),
+        argValues: {
+          slot: '[]',
+          value: '42'
+        },
+        argRuntimeValues: {
+          slot: slotRef,
+          value: 42
+        }
+      })
+    );
+
+    expect(fn).toHaveBeenCalledWith(slotRef, 42, env);
+    expect(result.value).toBe('node-output');
   });
 
   it('preserves null runtime params for template interpolation and keeps literal "null" truthy', async () => {

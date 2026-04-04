@@ -64,6 +64,16 @@ describe('box grammar', () => {
     expect(node.values.block?.type).toBe('ExeBlock');
   });
 
+  it('parses shelf config reads with aliased values', async () => {
+    const source = '/box { shelf: { read: [@taskBrief as brief, @outreach.recipients] } } [\n  show "x"\n]';
+    const result = await parse(source, { mode: 'markdown' });
+
+    expect(result.success).toBe(true);
+    const node = firstNode(result);
+    expect(node.kind).toBe('box');
+    expect(node.values.config).toBeDefined();
+  });
+
   it('parses box as exe RHS with configless with-clause form', async () => {
     const source = 'exe @fn(tools, prompt) = box with { tools: @tools } [ run cmd { echo @prompt } ]';
     const result = await parse(source, { mode: 'strict' });

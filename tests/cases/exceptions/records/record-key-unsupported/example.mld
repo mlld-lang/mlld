@@ -1,4 +1,4 @@
 /record @deal = {
   key: id,
-  facts: [id: string]
+  facts: [id: string?]
 }

@@ -90,6 +90,12 @@ export interface McpToolSourceValue {
   source: Expression;
 }
 
+export interface DataAliasedValue {
+  type: 'aliasedValue';
+  value: DataValue;
+  alias: string;
+}
+
 /**
  * Recursive type for data values
  */
@@ -97,6 +103,7 @@ export type DataValue =
   | ContentNodeArray // String literals, numbers, booleans
   | DataObjectValue
   | DataArrayValue
+  | DataAliasedValue
   | Expression
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation

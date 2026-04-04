@@ -7,6 +7,7 @@ import {
 } from '@core/types/variable';
 import { evaluateFyiKnown } from '@interpreter/fyi/facts-runtime';
 import { evaluateFyiTools } from '@interpreter/fyi/tool-docs';
+import { createFyiShelfValue } from '@interpreter/shelf/runtime';
 
 const FYI_SOURCE: VariableSource = {
   directive: 'var',
@@ -80,21 +81,22 @@ export function createFyiVariable(env: Environment) {
     }
   });
 
-  return createObjectVariable(
-    'fyi',
-    {
-      known: knownExecutable,
-      tools: toolsExecutable
-    },
-    false,
-    FYI_SOURCE,
-    {
-      internal: {
-        isReserved: true,
-        isSystem: true
-      }
+  const value: Record<string, unknown> = {
+    known: knownExecutable,
+    tools: toolsExecutable
+  };
+  Object.defineProperty(value, 'shelf', {
+    enumerable: true,
+    configurable: true,
+    get: () => createFyiShelfValue(env)
+  });
+
+  return createObjectVariable('fyi', value, false, FYI_SOURCE, {
+    internal: {
+      isReserved: true,
+      isSystem: true
     }
-  );
+  });
 }
 
 export function createToolDocsExecutable(env: Environment) {

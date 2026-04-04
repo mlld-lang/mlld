@@ -65,7 +65,8 @@ export async function executeNodeHandler(
     callArgs.push(...args.map(arg => normalizePipelineParameterValue(arg)));
   }
 
-  const jsArgs = callArgs.map(arg => toJsValue(arg));
+  const preserveStructuredArgs = commandVar?.internal?.preserveStructuredArgs === true;
+  const jsArgs = preserveStructuredArgs ? [...callArgs] : callArgs.map(arg => toJsValue(arg));
   let output = execDef.fn.apply(execDef.thisArg ?? undefined, jsArgs);
   if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
     output = await output;

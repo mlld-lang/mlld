@@ -59,11 +59,12 @@ function rehydrateSerializedExecutable(
 ): ExecutableVariable {
   const fullName = buildFieldPath(varRef);
   const capturedShadowEnvs = deserializeCapturedShadowEnvs(value.internal?.capturedShadowEnvs);
+  const executableDef = value.executableDef ?? value.value;
 
   return {
     type: 'executable',
     name: fullName,
-    value: value.value || { type: 'code', template: '', language: 'js' },
+    value: executableDef || { type: 'code', template: '', language: 'js' },
     paramNames: value.paramNames || [],
     source: {
       directive: 'import',
@@ -78,10 +79,25 @@ function rehydrateSerializedExecutable(
     },
     internal: {
       ...(value.internal || {}),
-      executableDef: value.executableDef,
+      executableDef,
       capturedShadowEnvs
     }
   } as ExecutableVariable;
+}
+
+function isObjectVariableWithExecutableRoot(value: unknown): value is {
+  type: 'object';
+  value: Record<string, unknown>;
+} {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'object' &&
+    (value as { value?: unknown }).value &&
+    typeof (value as { value?: unknown }).value === 'object' &&
+    '__executable' in ((value as { value: Record<string, unknown> }).value) &&
+    Boolean(((value as { value: Record<string, unknown> }).value as { __executable?: unknown }).__executable)
+  );
 }
 
 function resolveExecutableFromFieldValue(
@@ -184,6 +200,13 @@ async function resolveExecutableVariable(params: {
   }
 
   const variable = getPreExtractedExec(context, commandName) ?? env.getVariable(commandName);
+  if (isObjectVariableWithExecutableRoot(variable)) {
+    return rehydrateSerializedExecutable(variable.value as Record<string, any>, {
+      type: 'VariableReference',
+      valueType: 'varIdentifier',
+      identifier: commandName
+    } as VariableReference);
+  }
   if (!variable || !isExecutableVariable(variable)) {
     throw new Error(`Executable variable not found: ${commandName}`);
   }

@@ -46,6 +46,7 @@ import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/type
 import { evaluatePolicy } from './policy';
 import { evaluateAuth } from './auth';
 import { evaluateRecord } from './record';
+import { evaluateShelf } from './shelf';
 import {
   getOperationLabels,
   getOperationSources,
@@ -146,6 +147,7 @@ function extractTraceInfo(directive: DirectiveNode): {
       }
       break;
     case 'record':
+    case 'shelf':
       const recordNameNode = directive.values?.identifier?.[0];
       if (recordNameNode?.type === 'VariableReference' && 'identifier' in recordNameNode) {
         info.varName = `@${recordNameNode.identifier}`;
@@ -877,6 +879,9 @@ async function dispatchDirective(
 
     case 'record':
       return await evaluateRecord(directive as any, env);
+
+    case 'shelf':
+      return await evaluateShelf(directive as any, env);
 
     case 'policy':
       return await evaluatePolicy(directive as PolicyDirectiveNode, env);

@@ -98,6 +98,7 @@ ArrayValue "array value"
   / ConditionalArrayElement // @var? conditional element
   / ExpressionWithOperator  // Operator expressions (ternary, comparison, etc.)
   / ExecInvocationPattern   // @func() execution
+  / DataAliasedValue        // @var as alias
   / VariableWithTail        // @var with modifiers
   / AtVar                   // @var references
   / UnifiedQuoteOrTemplate      // `template`, [[template]], "string" (replaces TemplateStyleInterpolation)

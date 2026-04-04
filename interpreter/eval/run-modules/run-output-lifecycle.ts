@@ -128,7 +128,12 @@ export function finalizeRunOutputLifecycle(
     displayText += '\n';
   }
 
-  if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
+  const shouldRenderOutput =
+    (!directive.meta?.isBareInvocation || directive.meta?.hasLeadingSlash === true) &&
+    !directive.meta?.isDataValue &&
+    !directive.meta?.isEmbedded;
+
+  if (shouldRenderOutput) {
     const replacementNode: TextNode = {
       type: 'Text',
       nodeId: `${directive.nodeId}-output`,
@@ -143,8 +148,7 @@ export function finalizeRunOutputLifecycle(
   const hasActualOutput = displayText.trim().length > 0;
   if (
     hasActualOutput &&
-    !directive.meta?.isDataValue &&
-    !directive.meta?.isEmbedded &&
+    shouldRenderOutput &&
     !directive.meta?.isRHSRef &&
     shouldEmitFinalOutput
   ) {

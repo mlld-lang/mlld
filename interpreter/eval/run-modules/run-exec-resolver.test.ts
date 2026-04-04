@@ -178,6 +178,32 @@ describe('run exec resolver', () => {
     expect(resolution.fullPath).toBe('holder.nested');
   });
 
+  it('rehydrates callable object roots for run exec resolution', async () => {
+    const env = createEnv();
+    const definition = createCodeDefinition('return "ok";');
+    env.setVariable(
+      'writer',
+      createObjectVariable('writer', {
+        __executable: true,
+        paramNames: ['slot', 'value'],
+        internal: {
+          preserveStructuredArgs: true
+        },
+        executableDef: definition
+      }) as any
+    );
+
+    const resolution = await resolveRunExecutableReference({
+      directive: createRunExecDirective('writer'),
+      env,
+      callStack: []
+    });
+
+    expect(resolution.definition).toBe(definition);
+    expect(resolution.execVar.internal?.preserveStructuredArgs).toBe(true);
+    expect(resolution.fullPath).toBe('writer');
+  });
+
   it('resolves string references from field-access lookups and preserves resolution errors', async () => {
     const env = createEnv();
     const targetExec = createExecutable('target');

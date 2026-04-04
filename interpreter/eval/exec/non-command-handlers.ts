@@ -157,6 +157,7 @@ async function handleNodeFunctionOrClassExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
   const { definition, commandName, evaluatedArgs, resultSecurityDescriptor, nodeSourceLocation } = options;
+  const preserveStructuredArgs = options.variable?.internal?.preserveStructuredArgs === true;
 
   if (isNodeClassExecutable(definition)) {
     throw new MlldInterpreterError(
@@ -184,15 +185,15 @@ async function handleNodeFunctionOrClassExecutable(
         const argName = argSourceNames[i];
         const key = argName && mcpParamSet.has(argName) ? argName : params[i];
         if (key) {
-          named[key] = toJsValue(evaluatedArgs[i]);
+          named[key] = preserveStructuredArgs ? evaluatedArgs[i] : toJsValue(evaluatedArgs[i]);
         }
       }
       jsArgs = [named];
     } else {
-      jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+      jsArgs = preserveStructuredArgs ? [...evaluatedArgs] : evaluatedArgs.map(arg => toJsValue(arg));
     }
   } else {
-    jsArgs = evaluatedArgs.map(arg => toJsValue(arg));
+    jsArgs = preserveStructuredArgs ? [...evaluatedArgs] : evaluatedArgs.map(arg => toJsValue(arg));
   }
   if (definition.bindExecutionEnv) {
     jsArgs.push(options.execEnv);

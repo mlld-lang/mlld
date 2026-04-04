@@ -3,6 +3,34 @@ import { parse } from '@grammar/parser';
 import { isRunCommandDirective, isRunCodeDirective, isRunExecDirective } from '@core/types/run';
 
 describe('Run directive', () => {
+  test('parses bare exec invocation statements in markdown mode', async () => {
+    const content = '@fn(@value)';
+    const parseResult = await parse(content, { mode: 'markdown' });
+
+    expect(parseResult.ast).toHaveLength(1);
+
+    const directiveNode = parseResult.ast[0];
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('run');
+    expect(directiveNode.subtype).toBe('runExec');
+    expect(directiveNode.meta.isBareInvocation).toBe(true);
+    expect(directiveNode.meta.hasLeadingSlash).toBe(false);
+  });
+
+  test('parses slash-prefixed bare exec invocation statements in markdown mode', async () => {
+    const content = '/@fn(@value)';
+    const parseResult = await parse(content, { mode: 'markdown' });
+
+    expect(parseResult.ast).toHaveLength(1);
+
+    const directiveNode = parseResult.ast[0];
+    expect(directiveNode.type).toBe('Directive');
+    expect(directiveNode.kind).toBe('run');
+    expect(directiveNode.subtype).toBe('runExec');
+    expect(directiveNode.meta.isBareInvocation).toBe(true);
+    expect(directiveNode.meta.hasLeadingSlash).toBe(true);
+  });
+
   describe('runCommand subtype', () => {
     test('Basic shell command', async () => {
       const content = '/run {ls -la}';

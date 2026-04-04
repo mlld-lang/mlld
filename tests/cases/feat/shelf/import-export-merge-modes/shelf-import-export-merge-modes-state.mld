@@ -1,0 +1,19 @@
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string],
+  data: [score: number?]
+}
+
+/record @email_draft = {
+  facts: [recipient: string],
+  data: [subject: string, body: string]
+}
+
+/shelf @pipeline = {
+  recipients: contact[],
+  audit_log: { type: contact[], merge: "append" },
+  selected: contact? from recipients,
+  drafts: email_draft[]
+}
+
+/export { @pipeline }

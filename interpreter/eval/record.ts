@@ -15,7 +15,7 @@ import type {
 import { MlldInterpreterError } from '@core/errors';
 import { astLocationToSourceLocation } from '@core/types';
 
-const DEFAULT_VALIDATE_MODE = 'demote';
+  const DEFAULT_VALIDATE_MODE = 'demote';
 
 export async function evaluateRecord(
   directive: RecordDirectiveNode,
@@ -35,17 +35,6 @@ export async function evaluateRecord(
       {
         code: 'INVALID_RECORD_NAME'
       }
-    );
-  }
-
-  const unsupported = directive.values?.unsupported ?? [];
-  const unsupportedKey = unsupported.find(entry => entry.key === 'key');
-  if (unsupportedKey) {
-    throw new MlldInterpreterError(
-      "Record 'key' is deferred. Phase 1 records support facts, data, when, and validate only.",
-      'record',
-      astLocationToSourceLocation(directive.location, env.getCurrentFilePath()),
-      { code: 'RECORD_KEY_UNSUPPORTED' }
     );
   }
 
@@ -81,6 +70,27 @@ export async function evaluateRecord(
     assertRecordFieldIsPure(field, name);
   }
 
+  const key = typeof directive.values?.key === 'string' ? directive.values.key.trim() : '';
+  if (key) {
+    const keyField = fieldByName.get(key);
+    if (!keyField) {
+      throw new MlldInterpreterError(
+        `Record '@${name}' key field '${key}' is not defined`,
+        'record',
+        astLocationToSourceLocation(directive.location, env.getCurrentFilePath()),
+        { code: 'INVALID_RECORD_KEY' }
+      );
+    }
+    if (keyField.optional) {
+      throw new MlldInterpreterError(
+        `Record '@${name}' key field '${key}' cannot be optional`,
+        'record',
+        astLocationToSourceLocation(directive.location, env.getCurrentFilePath()),
+        { code: 'INVALID_RECORD_KEY' }
+      );
+    }
+  }
+
   const display = normalizeDisplay(directive.values?.display, fields, name);
 
   const when = directive.values?.when;
@@ -93,6 +103,7 @@ export async function evaluateRecord(
 
   const definition: RecordDefinition = {
     name,
+    ...(key ? { key } : {}),
     fields,
     rootMode: inferRecordRootMode(fields),
     display,

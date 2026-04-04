@@ -9,26 +9,25 @@ SlashRecord
       const identifierNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       const facts = body.entries.filter(entry => entry.kind === 'facts').flatMap(entry => entry.fields);
       const data = body.entries.filter(entry => entry.kind === 'data').flatMap(entry => entry.fields);
+      const keyEntry = body.entries.find(entry => entry.kind === 'key');
       const whenEntry = body.entries.find(entry => entry.kind === 'when');
       const validateEntry = body.entries.find(entry => entry.kind === 'validate');
       const displayEntry = body.entries.find(entry => entry.kind === 'display');
-      const unsupported = body.entries
-        .filter(entry => entry.kind === 'unsupported')
-        .map(entry => ({ key: entry.key, value: entry.value }));
 
       const values = {
         identifier: [identifierNode],
+        ...(keyEntry ? { key: keyEntry.value } : {}),
         ...(facts.length > 0 ? { facts } : {}),
         ...(data.length > 0 ? { data } : {}),
         ...(displayEntry
           ? { display: displayEntry.value }
           : {}),
         ...(whenEntry ? { when: whenEntry.rules } : {}),
-        ...(validateEntry ? { validate: validateEntry.mode } : {}),
-        ...(unsupported.length > 0 ? { unsupported } : {})
+        ...(validateEntry ? { validate: validateEntry.mode } : {})
       };
 
       const meta = {
+        hasKey: Boolean(keyEntry),
         fieldCount: facts.length + data.length,
         factCount: facts.length,
         dataCount: data.length,
@@ -64,12 +63,17 @@ RecordEntries
     }
 
 RecordEntry
-  = RecordFactsEntry
+  = RecordKeyEntry
+  / RecordFactsEntry
   / RecordDataEntry
   / RecordDisplayEntry
   / RecordWhenEntry
   / RecordValidateEntry
-  / RecordUnsupportedEntry
+
+RecordKeyEntry
+  = "key" _ ":" _ value:BaseIdentifier {
+      return { kind: 'key', value };
+    }
 
 RecordFactsEntry
   = "facts" _ ":" _ fields:RecordFieldList {
@@ -123,24 +127,6 @@ RecordWhenEntry
   = "when" _ "[" _ rules:RecordWhenRules? _ "]" {
       return { kind: 'when', rules: rules || [] };
     }
-
-RecordUnsupportedEntry
-  = "key" _ ":" _ value:RecordUnsupportedValue {
-      return {
-        kind: 'unsupported',
-        key: 'key',
-        value
-      };
-    }
-
-RecordUnsupportedValue
-  = key:BaseIdentifier {
-      return helpers.createNode(NodeType.Text, {
-        content: key,
-        location: location()
-      });
-    }
-  / DataPropertyValue
 
 RecordValidateMode
   = "\"" mode:("demote" / "strict" / "drop") "\"" { return mode; }

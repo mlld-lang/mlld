@@ -120,6 +120,7 @@ import {
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
 import type { RecordDefinition } from '@core/types/record';
+import type { ShelfDefinition } from '@core/types/shelf';
 import type { CheckpointManager } from '../checkpoint/CheckpointManager';
 import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
 import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
@@ -129,6 +130,7 @@ import { taintPostHook } from '../hooks/taint-post-hook';
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { createFyiVariable, createToolDocsExecutable } from './builtins/fyi';
 import { createPolicyVariable } from './builtins/policy';
+import { createShelveVariable } from './builtins/shelve';
 import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
@@ -263,6 +265,8 @@ export class Environment
   private mcpImportManager?: McpImportManager;
   private mcpServerMap?: Record<string, string>;
   private recordDefinitions?: Map<string, RecordDefinition>;
+  private shelfDefinitions?: Map<string, ShelfDefinition>;
+  private shelfState?: Map<string, Map<string, unknown>>;
   private valueHandleRegistry?: ValueHandleRegistry;
 
   // Shadow environments for language-specific function injection
@@ -456,6 +460,7 @@ export class Environment
       this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
     this.reservedNames.add('fyi');
+    this.reservedNames.add('shelve');
     this.reservedNames.add('toolDocs');
     
     // Initialize security/registry/resolver bootstrap for root environments only
@@ -1173,6 +1178,83 @@ export class Environment
     return this.recordDefinitions?.get(recordName) ?? this.parent?.getRecordDefinition(recordName);
   }
 
+  registerShelfDefinition(name: string, definition: ShelfDefinition): void {
+    const shelfName = typeof name === 'string' ? name.trim() : '';
+    if (!shelfName) {
+      return;
+    }
+    if (!this.shelfDefinitions) {
+      this.shelfDefinitions = new Map();
+    }
+    this.shelfDefinitions.set(shelfName, definition);
+  }
+
+  getShelfDefinition(name: string): ShelfDefinition | undefined {
+    const shelfName = typeof name === 'string' ? name.trim() : '';
+    if (!shelfName) {
+      return undefined;
+    }
+    return this.shelfDefinitions?.get(shelfName) ?? this.parent?.getShelfDefinition(shelfName);
+  }
+
+  getAllShelfDefinitions(): Map<string, ShelfDefinition> {
+    const merged = this.parent?.getAllShelfDefinitions() ?? new Map<string, ShelfDefinition>();
+    if (this.shelfDefinitions) {
+      for (const [name, definition] of this.shelfDefinitions.entries()) {
+        merged.set(name, definition);
+      }
+    }
+    return merged;
+  }
+
+  private getShelfOwner(name: string): Environment | undefined {
+    const shelfName = typeof name === 'string' ? name.trim() : '';
+    if (!shelfName) {
+      return undefined;
+    }
+    if (this.shelfDefinitions?.has(shelfName)) {
+      return this;
+    }
+    return this.parent?.getShelfOwner(shelfName);
+  }
+
+  private ensureShelfStateBucket(shelfName: string): Map<string, unknown> {
+    if (!this.shelfState) {
+      this.shelfState = new Map();
+    }
+    const existing = this.shelfState.get(shelfName);
+    if (existing) {
+      return existing;
+    }
+    const bucket = new Map<string, unknown>();
+    this.shelfState.set(shelfName, bucket);
+    return bucket;
+  }
+
+  readShelfSlot(shelfName: string, slotName: string): unknown {
+    const owner = this.getShelfOwner(shelfName);
+    if (!owner) {
+      return undefined;
+    }
+    return owner.shelfState?.get(shelfName)?.get(slotName);
+  }
+
+  writeShelfSlot(shelfName: string, slotName: string, value: unknown): void {
+    const owner = this.getShelfOwner(shelfName);
+    if (!owner) {
+      throw new Error(`Shelf '@${shelfName}' is not defined`);
+    }
+    owner.ensureShelfStateBucket(shelfName).set(slotName, value);
+  }
+
+  clearShelfSlot(shelfName: string, slotName: string): void {
+    const owner = this.getShelfOwner(shelfName);
+    if (!owner) {
+      return;
+    }
+    owner.shelfState?.get(shelfName)?.delete(slotName);
+  }
+
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {
     if (this.securityRuntime) {
       const top = this.securityRuntime.stack[this.securityRuntime.stack.length - 1];
@@ -1626,6 +1708,8 @@ export class Environment
     const variable =
       name === 'fyi'
         ? createFyiVariable(this)
+        : name === 'shelve'
+          ? (this.isShelveBuiltinAvailable() ? createShelveVariable(this) : undefined)
         : this.variableManager.getVariable(name);
     if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
@@ -1673,6 +1757,10 @@ export class Environment
       return createFyiVariable(this);
     }
 
+    if (name === 'shelve') {
+      return this.isShelveBuiltinAvailable() ? createShelveVariable(this) : undefined;
+    }
+
     if (name === 'keychain') {
       throw new MlldInterpreterError(
         'Direct keychain access is not available. Use policy.auth with using auth:*.',
@@ -1710,7 +1798,21 @@ export class Environment
     if (name === 'fyi') {
       return true;
     }
+    if (name === 'shelve') {
+      return this.isShelveBuiltinAvailable();
+    }
     return this.variableManager.hasVariable(name);
+  }
+
+  private isShelveBuiltinAvailable(): boolean {
+    const scopedConfig = this.getScopedEnvironmentConfig() as
+      | ({ shelf?: { __mlldShelfScope?: boolean; writeSlots?: unknown[] } } & Record<string, unknown>)
+      | undefined;
+    const scopedShelf = scopedConfig?.shelf;
+    if (scopedShelf && typeof scopedShelf === 'object' && scopedShelf.__mlldShelfScope === true) {
+      return Array.isArray(scopedShelf.writeSlots) && scopedShelf.writeSlots.length > 0;
+    }
+    return true;
   }
   
   /**

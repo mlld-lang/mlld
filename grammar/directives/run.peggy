@@ -417,9 +417,7 @@ SlashRun
 SlashBareRunInvocation
   = DirectiveContext slash:"/"? &"@" invocation:UnifiedReferenceWithTail
     &{
-      const isStrictMode = options?.mode === 'strict';
-      const hasSlash = slash === '/';
-      return invocation?.type === 'ExecInvocation' && (isStrictMode || hasSlash);
+      return invocation?.type === 'ExecInvocation';
     }
     comment:InlineComment? {
       const commandRef = invocation;
@@ -461,6 +459,7 @@ SlashBareRunInvocation
       const meta = {
         argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
         isBareInvocation: true,
+        hasLeadingSlash: Boolean(slash),
         ...(comment ? { comment } : {})
       };
 

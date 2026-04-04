@@ -26,6 +26,12 @@ import {
   buildAuthDescriptor,
   resolveUsingEnvPartsWithOptions
 } from '@interpreter/utils/auth-injection';
+import {
+  isEventEmitter,
+  isLegacyStream,
+  toJsValue,
+  wrapNodeValue
+} from '@interpreter/utils/node-interop';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { createTemplateInterpolationEnv } from '@interpreter/eval/exec/template-interpolation-env';
 import {
@@ -970,6 +976,58 @@ async function handleTemplateDefinition(
   };
 }
 
+async function handleNodeFunctionDefinition(
+  ctx: RunExecDispatchContext
+): Promise<RunExecDefinitionDispatchResult> {
+  const { definition, execVar, argValues, argRuntimeValues, env, callStack } = ctx;
+
+  if (definition.type === 'nodeClass') {
+    throw new MlldInterpreterError(
+      `Node class '${execVar.name ?? 'anonymous'}' requires new`,
+      'run',
+      ctx.directive.location ?? undefined
+    );
+  }
+
+  const orderedArgs = (definition.paramNames ?? []).map(paramName =>
+    Object.prototype.hasOwnProperty.call(argRuntimeValues, paramName)
+      ? argRuntimeValues[paramName]
+      : argValues[paramName]
+  );
+  const preserveStructuredArgs = execVar.internal?.preserveStructuredArgs === true;
+  const jsArgs = preserveStructuredArgs ? orderedArgs : orderedArgs.map(arg => toJsValue(arg));
+
+  if (definition.bindExecutionEnv) {
+    jsArgs.push(env);
+  }
+
+  let output = definition.fn.apply(definition.thisArg ?? undefined, jsArgs);
+  if (output && typeof output === 'object' && typeof (output as any).then === 'function') {
+    output = await output;
+  }
+
+  if (isEventEmitter(output) && !(output && typeof (output as any).then === 'function')) {
+    throw new MlldInterpreterError(
+      `Node function '${execVar.name ?? 'anonymous'}' returns an EventEmitter and requires subscriptions`,
+      'run',
+      ctx.directive.location ?? undefined
+    );
+  }
+  if (isLegacyStream(output)) {
+    throw new MlldInterpreterError(
+      `Node function '${execVar.name ?? 'anonymous'}' returns a legacy stream without async iterator support`,
+      'run',
+      ctx.directive.location ?? undefined
+    );
+  }
+
+  return {
+    value: wrapNodeValue(output, { moduleName: definition.moduleName }),
+    outputDescriptors: [],
+    callStack
+  };
+}
+
 async function handleProseDefinition(
   ctx: RunExecDispatchContext
 ): Promise<RunExecDefinitionDispatchResult> {
@@ -1006,6 +1064,10 @@ export async function dispatchRunExecutableDefinition(
 
   if (definition.type === 'template') {
     return handleTemplateDefinition(params);
+  }
+
+  if (definition.type === 'nodeFunction' || definition.type === 'nodeClass') {
+    return handleNodeFunctionDefinition(params);
   }
 
   if (definition.type === 'prose') {

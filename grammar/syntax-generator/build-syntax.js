@@ -98,7 +98,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'record', 'sign', 'verify', 'box', 'bail', 'needs', 'profiles'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'record', 'shelf', 'sign', 'verify', 'box', 'bail', 'needs', 'profiles'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -108,7 +108,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'sign', 'verify', 'box', 'needs', 'profiles'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'record', 'shelf', 'sign', 'verify', 'box', 'needs', 'profiles'];
   }
 
   generatePrism() {
