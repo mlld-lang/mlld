@@ -109,6 +109,10 @@ import {
 import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
 import { appendToolNotesToSystemPrompt } from '@interpreter/fyi/tool-docs';
+import {
+  appendShelfNotesToSystemPrompt,
+  renderInjectedShelfNotes
+} from '@interpreter/shelf/shelf-notes';
 import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
@@ -2790,42 +2794,62 @@ async function evaluateExecInvocationInternal(
   });
 
   // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
-  // and expose the result on @mx.llm for the exe body to consume.
+  // and expose the result on @mx.llm for the exe body to consume. Shelf-scoped
+  // llm calls also receive agent-visible shelf notes in config.system.
   const variableLabels = variable.mx?.labels;
   const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
-  if (hasLlmLabel && evaluatedArgs.length >= 2) {
-    const rawConfig = evaluatedArgs[1];
-    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig) && 'tools' in rawConfig) {
+  const llmParamNames = Array.isArray(definition.paramNames) ? definition.paramNames : [];
+  if (hasLlmLabel && llmParamNames.length >= 2) {
+    const originalConfigArg = evaluatedArgs[1];
+    const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
+    if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
+      const nextConfig = { ...(rawConfig as Record<string, unknown>) };
+      let didUpdateConfigArg = false;
+
+      if ('tools' in nextConfig) {
       // config.tools selects capabilities for the bridge; it is not model-visible input and
       // must not seed the conversation descriptor used for policy/attestation checks.
-      resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
-      const toolsValue = (rawConfig as Record<string, unknown>).tools;
-      const dirValue = (rawConfig as Record<string, unknown>).dir;
-      const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
-        ? dirValue.trim()
-        : execEnv.getProjectRoot();
-      const callConfig = await createCallMcpConfig({
-        tools: toolsValue,
-        env: execEnv,
-        workingDirectory,
-        conversationDescriptor: resultSecurityDescriptor,
-        isMcpContext: true
-      });
-      const nextConfig = { ...(rawConfig as Record<string, unknown>) };
-      const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+        resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
+        const toolsValue = nextConfig.tools;
+        const dirValue = nextConfig.dir;
+        const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
+          ? dirValue.trim()
+          : execEnv.getProjectRoot();
+        const callConfig = await createCallMcpConfig({
+          tools: toolsValue,
+          env: execEnv,
+          workingDirectory,
+          conversationDescriptor: resultSecurityDescriptor,
+          isMcpContext: true
+        });
+        const previousSystem = nextConfig.system;
+        const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+        if (nextSystem !== undefined) {
+          nextConfig.system = nextSystem;
+          didUpdateConfigArg ||= nextSystem !== previousSystem;
+        }
+        execEnv.registerScopeCleanup(callConfig.cleanup);
+        execEnv.setLlmToolConfig(callConfig);
+      }
+
+      const previousSystem = nextConfig.system;
+      const shelfNotes = renderInjectedShelfNotes(execEnv);
+      const nextSystem = appendShelfNotesToSystemPrompt(nextConfig.system, shelfNotes);
       if (nextSystem !== undefined) {
         nextConfig.system = nextSystem;
+        didUpdateConfigArg ||= nextSystem !== previousSystem;
       }
-      evaluatedArgs[1] = nextConfig;
-      evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
-      synchronizeGuardVariableCandidates({
-        guardVariableCandidates,
-        env: runtimeEnv,
-        evaluatedArgs,
-        evaluatedArgStrings
-      });
-      execEnv.registerScopeCleanup(callConfig.cleanup);
-      execEnv.setLlmToolConfig(callConfig);
+
+      if (didUpdateConfigArg) {
+        evaluatedArgs[1] = nextConfig;
+        evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+        synchronizeGuardVariableCandidates({
+          guardVariableCandidates,
+          env: runtimeEnv,
+          evaluatedArgs,
+          evaluatedArgStrings
+        });
+      }
     }
   }
   

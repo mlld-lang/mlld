@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `@policy.build(...)` and `@policy.validate(...)` now return additive compiler diagnostics in `report`, exposing stripped args, repair steps, dropped entries/elements, ambiguous values, and compiled proofs without changing existing `policy` / `valid` / `issues` consumers.
 - `@policy.build(..., { task: @query })` and `@policy.validate(..., { task: @query })` now validate `known` bucket string/number literals against the provided task text, rejecting task-mismatched values and `known`-bucket handle wrappers with `known_not_in_task` / `known_contains_handle`.
+- `exe llm` calls running inside shelf-scoped environments now auto-append `<shelf_notes>` to `config.system`, listing writable slots, readable slots, readable aliases like `@fyi.shelf.brief`, merge modes, and `from` constraints. When both are present, `<tool_notes>` is injected before `<shelf_notes>`.
 
 ### Fixed
 - Imported and rebound `var tools` collections now preserve shaped auth metadata and executable bindings across export/import, `let` aliases, and `exe` params, so `@policy.build(...)`, `@policy.validate(...)`, and direct `@tools[@name](@args)` dispatch keep working. Plain object executable maps now also spread matching single-object args by parameter name during dynamic keyed calls, including nested object and array values.

@@ -6,7 +6,7 @@ category: security
 tags: [shelf, slots, state, records, handles, grounding, security, agents]
 related: [facts-and-handles, records-basics, policy-authorizations, pattern-planner, fyi-known]
 related-code: [spec-shelf-slots.md]
-updated: 2026-04-02
+updated: 2026-04-04
 ---
 
 Shelf slots are the typed state accumulation surface for agents. Each slot is backed by a record that provides schema, fact/data classification, grounding, and display projection. The shelf adds merge semantics, cross-slot constraints, and access control.
@@ -86,6 +86,18 @@ box @decider with {
 ```
 
 Write implies read. `@shelve` is automatically provided to agents with write access. Agents read via `@fyi.shelf.outreach.recipients` with display projections applied.
+
+## Agent system notes
+
+When an `exe llm` call runs inside a shelf-scoped box, mlld automatically appends a compact `<shelf_notes>` block to the system prompt.
+
+- Writable slots list record type, merge mode, and any `from` constraint
+- Readable slots list record type
+- Aliased reads are shown with the name the agent actually sees, such as `@fyi.shelf.brief`
+- Injection happens even when the LLM call has no `tools`
+- If both notes are present, `<tool_notes>` comes first and `<shelf_notes>` follows it
+
+This gives workers the exact shelf surface they can read and write without exposing slots outside the scoped box config.
 
 ## Trust model
 
