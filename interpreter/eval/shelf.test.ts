@@ -485,6 +485,100 @@ describe('shelf runtime', () => {
     expect(asData<any[]>(recipients)).toEqual([]);
   });
 
+  it('derives slot refs from transported shelf surfaces in local wrapper executables', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/exe @appendViaShelfSurface(stateShelf, value) = [
+  let @slot = @stateShelf.recipients
+  @shelf.write(@slot, @value)
+]
+/exe @readViaShelfSurface(stateShelf) = [
+  let @slot = @stateShelf.recipients
+  => @shelf.read(@slot)
+]
+@appendViaShelfSurface(@pipeline, @emitContact("c_1", "Mark"))
+@appendViaShelfSurface(@pipeline, @emitContact("c_2", "Ava"))
+/var @surfaceState = @readViaShelfSurface(@pipeline)
+`);
+
+    const surfaceState = env.getVariable('surfaceState')?.value;
+    expect(asData<any[]>(surfaceState)).toHaveLength(2);
+
+    const firstEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 0 } as any, { env });
+    const secondEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 1 } as any, { env });
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    const secondId = await accessField(secondEntry, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(firstId)).toBe('c_1');
+    expect(asData(secondId)).toBe('c_2');
+  });
+
+  it('derives slot refs from transported shelf surfaces in imported wrapper executables', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/state.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/export { @pipeline }
+`);
+    await fs.writeFile('/worker.mld', `
+/exe @appendViaShelfSurface(stateShelf, value) = [
+  let @slot = @stateShelf.recipients
+  @shelf.write(@slot, @value)
+]
+/exe @readViaShelfSurface(stateShelf) = [
+  let @slot = @stateShelf.recipients
+  => @shelf.read(@slot)
+]
+/export { @appendViaShelfSurface, @readViaShelfSurface }
+`);
+    await fs.writeFile('/app.mld', `
+/import { @pipeline } from "/state.mld"
+/import { @appendViaShelfSurface, @readViaShelfSurface } from "/worker.mld"
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+@appendViaShelfSurface(@pipeline, @emitContact("c_1", "Mark"))
+@appendViaShelfSurface(@pipeline, @emitContact("c_2", "Ava"))
+/var @surfaceState = @readViaShelfSurface(@pipeline)
+`);
+
+    const { ast } = await parse(await fs.readFile('/app.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/app.mld');
+    await evaluate(ast, env);
+
+    const surfaceState = env.getVariable('surfaceState')?.value;
+    expect(asData<any[]>(surfaceState)).toHaveLength(2);
+
+    const firstEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 0 } as any, { env });
+    const secondEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 1 } as any, { env });
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    const secondId = await accessField(secondEntry, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(firstId)).toBe('c_1');
+    expect(asData(secondId)).toBe('c_2');
+  });
+
   it('preserves slot references through nullish-coalescing assignment', async () => {
     const env = await createEnvironment(`
 /record @contact = {

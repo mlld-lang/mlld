@@ -5,7 +5,10 @@ import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-function findEnvWithScopedTools(root: Environment): Environment | undefined {
+function findChildEnv(
+  root: Environment,
+  predicate: (env: Environment) => boolean
+): Environment | undefined {
   const stack: Environment[] = [root];
   const visited = new Set<Environment>();
 
@@ -16,8 +19,7 @@ function findEnvWithScopedTools(root: Environment): Environment | undefined {
     }
     visited.add(current);
 
-    const allowed = (current as any).allowedTools;
-    if (allowed instanceof Set) {
+    if (predicate(current)) {
       return current;
     }
 
@@ -28,6 +30,13 @@ function findEnvWithScopedTools(root: Environment): Environment | undefined {
   }
 
   return undefined;
+}
+
+function findEnvWithScopedTools(root: Environment): Environment | undefined {
+  return findChildEnv(root, current => {
+    const allowed = (current as any).allowedTools;
+    return allowed instanceof Set;
+  });
 }
 
 describe('box directive', () => {
@@ -225,5 +234,45 @@ describe('box directive', () => {
     expect(scopedEnv).toBeDefined();
     expect(scopedEnv?.getScopedEnvironmentConfig()?.net).toBeUndefined();
     expect(scopedEnv?.getScopedEnvironmentConfig()?.mcps).toBeUndefined();
+  });
+
+  it('inherits parent scoped config when a nested box adds only shelf scope', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  execution_log: contact[]
+}
+/exe @readData() = js { return "ok" }
+/var tools @agentTools = {
+  read: { mlld: @readData }
+}
+/var @baseEnv = { provider: '@local' }
+/box @baseEnv with { tools: @agentTools } [
+  /box { shelf: { read: [@pipeline.execution_log] } } [
+    show "ok"
+  ]
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const scopedEnv = findChildEnv(env, current => {
+      const scoped = (current as any).scopedEnvironmentConfig;
+      return Boolean(scoped?.shelf?.__mlldShelfScope);
+    });
+    expect(scopedEnv).toBeDefined();
+
+    const allowedTools = Array.from(scopedEnv?.getAllowedTools() ?? []).sort();
+    expect(allowedTools).toEqual(['read']);
+    expect(scopedEnv?.getScopedEnvironmentConfig()?.provider).toBe('@local');
+    expect((scopedEnv?.getScopedEnvironmentConfig() as any)?.shelf?.__mlldShelfScope).toBe(true);
   });
 });

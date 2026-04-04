@@ -664,7 +664,7 @@ export async function evaluateBox(
   let resolvedTools =
     withClauseTools !== undefined
       ? await resolveToolsValue(withClauseTools, env, context)
-      : config.tools;
+      : (config.tools ?? inheritedScopedConfig?.tools);
   const resolvedProfileOverride =
     withClauseProfile !== undefined
       ? await resolveToolsValue(withClauseProfile, env, context)
@@ -673,11 +673,15 @@ export async function evaluateBox(
   let mergedConfig =
     withClauseTools !== undefined || withClauseProfile !== undefined
       ? {
+          ...(inheritedScopedConfig ?? {}),
           ...config,
           ...(withClauseTools !== undefined ? { tools: resolvedTools } : {}),
           ...(withClauseProfile !== undefined ? { profile: resolvedProfileOverride } : {})
         }
-      : config;
+      : {
+          ...(inheritedScopedConfig ?? {}),
+          ...config
+        };
 
   if (resolvedConfigDisplay !== undefined) {
     mergedConfig = {
@@ -704,7 +708,7 @@ export async function evaluateBox(
     };
   }
 
-  let workspace = resolvedConfig.workspace;
+  let workspace = resolvedConfig.workspace ?? mergedConfig.workspace;
   if (!workspace) {
     workspace = createScopedWorkspace();
   }
