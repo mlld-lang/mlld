@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Imported and rebound `var tools` collections now preserve shaped auth metadata and executable bindings across export/import, `let` aliases, and `exe` params, so `@policy.build(...)`, `@policy.validate(...)`, and direct `@tools[@name](@args)` dispatch keep working. Plain object executable maps now also spread matching single-object args by parameter name during dynamic keyed calls, including nested object and array values.
 - Function-tool MCP bridges now stay restartable briefly during per-invocation cleanup, preventing intermittent `mlld_tools` disconnects when Claude respawns the bridge proxy after an initial successful tool call.
+- Exported guards now import as normal symbols in selected and namespace imports, so aliases, namespace field access, and guard override references work without separate helper bindings.
 
 ## [2.0.6]
 

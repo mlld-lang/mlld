@@ -66,6 +66,7 @@ export class NamespaceSelectedImportHandler {
 
   async handleNamespaceImport(request: NamespaceImportRequest): Promise<void> {
     const { directive, moduleObject, targetEnv, childEnv, metadataMap, guardDefinitions } = request;
+    const materializedModuleObject = this.materializeGuardBindings(moduleObject, guardDefinitions);
 
     const namespaceNodes = directive.values?.namespace;
     const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
@@ -104,7 +105,7 @@ export class NamespaceSelectedImportHandler {
 
     const namespaceVar = this.dependencies.createNamespaceVariable(
       alias,
-      moduleObject,
+      materializedModuleObject,
       importPath,
       securityLabels,
       metadataMap,
@@ -114,7 +115,12 @@ export class NamespaceSelectedImportHandler {
 
     this.dependencies.bindingGuards.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
     this.registerSerializedGuards(targetEnv, guardDefinitions);
-    this.dependencies.policyImportHandler.applyNamespacePolicyImport(directive, moduleObject, alias, targetEnv);
+    this.dependencies.policyImportHandler.applyNamespacePolicyImport(
+      directive,
+      materializedModuleObject,
+      alias,
+      targetEnv
+    );
   }
 
   async handleSelectedImport(request: SelectedImportRequest): Promise<void> {
@@ -124,20 +130,30 @@ export class NamespaceSelectedImportHandler {
     const importDisplay = this.dependencies.getImportDisplayPath(directive, importPath);
     const importerFilePath = targetEnv.getCurrentFilePath();
     const securityLabels = (directive.meta?.securityLabels || directive.values?.securityLabels) as DataLabel[] | undefined;
-    const importedGuards = new Set(
-      (guardDefinitions ?? [])
-        .map(definition => definition?.name)
-        .filter((name): name is string => typeof name === 'string' && name.length > 0)
-    );
+    const importedGuards = this.buildGuardReferenceBindings(guardDefinitions);
 
     const allowMissingImports = importDisplay === '@payload' || importDisplay === '@state';
 
     for (const importItem of imports) {
       const importName = importItem.identifier;
       const alias = importItem.alias || importName;
+      const guardReference = importedGuards.get(importName);
 
       if (!(importName in moduleObject)) {
-        if (importedGuards.has(importName)) {
+        if (guardReference !== undefined) {
+          const bindingLocation = importItem?.location
+            ? astLocationToSourceLocation(importItem.location, importerFilePath)
+            : astLocationToSourceLocation(directive.location, importerFilePath);
+          const bindingInfo = { source: importDisplay, location: bindingLocation };
+
+          this.dependencies.bindingGuards.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
+
+          const variable = this.dependencies.createVariableFromValue(alias, guardReference, importPath, importName, {
+            securityLabels,
+            env: targetEnv
+          });
+
+          this.dependencies.bindingGuards.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
           continue;
         }
         if (allowMissingImports) {
@@ -185,5 +201,42 @@ export class NamespaceSelectedImportHandler {
     if (guardDefinitions && guardDefinitions.length > 0) {
       targetEnv.registerSerializedGuards([...guardDefinitions]);
     }
+  }
+
+  private materializeGuardBindings(
+    moduleObject: Record<string, any>,
+    guardDefinitions?: readonly SerializedGuardDefinition[]
+  ): Record<string, any> {
+    const guardBindings = this.buildGuardReferenceBindings(guardDefinitions);
+    if (guardBindings.size === 0) {
+      return moduleObject;
+    }
+
+    const merged = { ...moduleObject };
+    for (const [name, reference] of guardBindings) {
+      if (!Object.prototype.hasOwnProperty.call(merged, name)) {
+        merged[name] = reference;
+      }
+    }
+
+    return merged;
+  }
+
+  private buildGuardReferenceBindings(
+    guardDefinitions?: readonly SerializedGuardDefinition[]
+  ): Map<string, string> {
+    const bindings = new Map<string, string>();
+    for (const definition of guardDefinitions ?? []) {
+      const name = definition?.name?.trim();
+      if (!name) {
+        continue;
+      }
+      bindings.set(name, this.toGuardReference(name));
+    }
+    return bindings;
+  }
+
+  private toGuardReference(name: string): string {
+    return name.startsWith('@') ? name : `@${name}`;
   }
 }

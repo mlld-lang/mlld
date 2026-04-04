@@ -244,17 +244,79 @@ describe('VariableImporter final composition parity', () => {
     expect(importedToken?.mx?.sources).toEqual(expect.arrayContaining(['source:module']));
   });
 
-  it('keeps collision and policy-needs edge-case precedence stable in mixed batches', async () => {
+  it('binds guard-only selected imports as normal imported symbols', async () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const targetEnv = createEnv();
+    const childEnv = targetEnv.createChild('/project/module.mld');
+    childEnv.setCurrentFilePath('/project/module.mld');
+    const guardOnlyDefinition: SerializedGuardDefinition = {
+      name: 'policyNeed',
+      filterKind: 'operation',
+      filterValue: 'run',
+      scope: 'perOperation',
+      modifier: 'default',
+      block: {} as any,
+      location: null
+    };
+
+    await importer.importVariables(
+      {
+        moduleObject: {},
+        frontmatter: null,
+        childEnvironment: childEnv,
+        guardDefinitions: [guardOnlyDefinition]
+      },
+      createDirective('importSelected', {
+        imports: [{ identifier: 'policyNeed', alias: 'security', location: LOCATION }]
+      }),
+      targetEnv
+    );
+
+    expect(targetEnv.getVariable('security')?.value).toBe('@policyNeed');
+    expect(targetEnv.getImportBinding('security')?.source).toBe('./module.mld');
+    expect(targetEnv.getGuardRegistry().getByName('policyNeed')).toBeDefined();
+  });
+
+  it('materializes exported guards into namespace imports', async () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const targetEnv = createEnv();
+    const childEnv = targetEnv.createChild('/project/module.mld');
+    childEnv.setCurrentFilePath('/project/module.mld');
+    const guardOnlyDefinition: SerializedGuardDefinition = {
+      name: 'policyNeed',
+      filterKind: 'operation',
+      filterValue: 'run',
+      scope: 'perOperation',
+      modifier: 'default',
+      block: {} as any,
+      location: null
+    };
+
+    await importer.importVariables(
+      {
+        moduleObject: { value: 'hello' },
+        frontmatter: null,
+        childEnvironment: childEnv,
+        guardDefinitions: [guardOnlyDefinition]
+      },
+      createDirective('importNamespace', {
+        namespace: [{ identifier: 'mod', location: LOCATION }]
+      }),
+      targetEnv
+    );
+
+    expect((targetEnv.getVariable('mod')?.value as any).value).toBe('hello');
+    expect((targetEnv.getVariable('mod')?.value as any).policyNeed).toBe('@policyNeed');
+    expect(targetEnv.getGuardRegistry().getByName('policyNeed')).toBeDefined();
+  });
+
+  it('keeps collision precedence stable once guard imports participate in normal bindings', async () => {
     const importer = new VariableImporter(new ObjectReferenceResolver());
     const targetEnv = createEnv();
     targetEnv.setImportBinding('security', {
       source: './existing.mld',
       location: { filePath: '/project/main.mld', line: 1, column: 1 }
     });
-
-    const recordPolicyConfigSpy = vi.spyOn(targetEnv, 'recordPolicyConfig');
-    const registerPolicyGuardSpy = vi.spyOn(targetEnv.getGuardRegistry(), 'registerPolicyGuard');
-
     const childEnv = targetEnv.createChild('/project/module.mld');
     childEnv.setCurrentFilePath('/project/module.mld');
     const guardOnlyDefinition: SerializedGuardDefinition = {
@@ -280,23 +342,6 @@ describe('VariableImporter final composition parity', () => {
         }),
         targetEnv
       )
-    ).resolves.toBeUndefined();
-
-    await expect(
-      importer.importVariables(
-        {
-          moduleObject: {
-            security: { allow: { network: true } }
-          },
-          frontmatter: null,
-          childEnvironment: childEnv,
-          guardDefinitions: []
-        },
-        createDirective('importPolicy', {
-          namespace: [{ identifier: 'security', location: LOCATION }]
-        }),
-        targetEnv
-      )
     ).rejects.toMatchObject({
       code: 'IMPORT_NAME_CONFLICT',
       details: {
@@ -304,8 +349,6 @@ describe('VariableImporter final composition parity', () => {
       }
     });
 
-    expect(recordPolicyConfigSpy).not.toHaveBeenCalled();
-    expect(registerPolicyGuardSpy).not.toHaveBeenCalled();
     expect(targetEnv.getImportBinding('security')?.source).toBe('./existing.mld');
   });
 });
