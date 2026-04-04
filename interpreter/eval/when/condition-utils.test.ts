@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createShelfSlotRefValue } from '@core/types/shelf';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { Environment } from '@interpreter/env/Environment';
@@ -93,5 +95,14 @@ describe('when condition utilities', () => {
     expect(isTruthy('nan')).toBe(false);
     expect(isTruthy([])).toBe(false);
     expect(isTruthy([1])).toBe(true);
+  });
+
+  it('treats shelf slot refs as present even when the current slot contents are empty', () => {
+    const emptySlotRef = createShelfSlotRefValue(
+      { shelfName: 'pipeline', slotName: 'execution_log' },
+      wrapStructured([], 'array', '[]')
+    );
+
+    expect(isTruthy(emptySlotRef)).toBe(true);
   });
 });

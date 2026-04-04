@@ -34,6 +34,13 @@ export interface VariableImportUtilitiesDependencies {
 export class VariableImportUtilities {
   constructor(private readonly dependencies: VariableImportUtilitiesDependencies) {}
 
+  private hasOwnAccessors(value: object): boolean {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    return Object.values(descriptors).some(
+      descriptor => typeof descriptor.get === 'function' || typeof descriptor.set === 'function'
+    );
+  }
+
   unwrapArraySnapshots(value: any, importPath: string, seen = new WeakSet<object>()): any {
     if (Array.isArray(value)) {
       return value.map(item => this.unwrapArraySnapshots(item, importPath, seen));
@@ -98,6 +105,10 @@ export class VariableImportUtilities {
       }
 
       if (isShelfSlotRefValue(value)) {
+        return value;
+      }
+
+      if (this.hasOwnAccessors(value as object)) {
         return value;
       }
 
@@ -171,6 +182,10 @@ export class VariableImportUtilities {
     }
 
     if (isNodeProxy(value)) {
+      return false;
+    }
+
+    if (this.hasOwnAccessors(value as object)) {
       return false;
     }
 

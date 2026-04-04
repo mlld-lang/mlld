@@ -240,6 +240,153 @@ describe('shelf runtime', () => {
     expect(asData(selectedId)).toBe('c_1');
   });
 
+  it('preserves box return values through shelf-scoped boxes inside exe blocks', async () => {
+    const env = await createEnvironment(`
+/record @note = {
+  facts: [text: string]
+}
+/shelf @state = {
+  log: note[]
+}
+/exe @test() = [
+  let @result = box {
+    shelf: {
+      read: [@state.log]
+    }
+  } [
+    => "hello from inside the box"
+  ]
+  => @result
+]
+/var @final = @test()
+`);
+
+    const final = env.getVariable('final')?.value;
+    expect(asData(final)).toBe('hello from inside the box');
+  });
+
+  it('preserves structured box return values through shelf-scoped exe and loop chains', async () => {
+    const env = await createEnvironment(`
+/record @note = {
+  facts: [text: string]
+}
+/shelf @s = {
+  log: note[]
+}
+/exe @planStep() = [
+  let @result = box {
+    shelf: {
+      read: [@s.log]
+    }
+  } [
+    => { action: "compose_answer", reasoning: "done" }
+  ]
+  => @result
+]
+/var @loopResult = loop(3) [
+  let @state = @input ?? { iterations: 0, answer: null }
+  let @decision = @planStep()
+
+  when @decision.action [
+    "compose_answer" => done {
+      iterations: @state.iterations + 1,
+      answer: "finished"
+    }
+    * => continue {
+      iterations: @state.iterations + 1,
+      answer: null
+    }
+  ]
+]
+`);
+
+    const loopResult = env.getVariable('loopResult')?.value;
+    expect(isStructuredValue(loopResult) ? asData(loopResult) : loopResult).toEqual({
+      iterations: 1,
+      answer: 'finished'
+    });
+  });
+
+  it('keeps the same exe and loop return chain working without shelf-scoped box config', async () => {
+    const env = await createEnvironment(`
+/exe @planStep() = [
+  let @result = box [
+    => { action: "compose_answer", reasoning: "done" }
+  ]
+  => @result
+]
+/var @loopResult = loop(3) [
+  let @state = @input ?? { iterations: 0, answer: null }
+  let @decision = @planStep()
+
+  when @decision.action [
+    "compose_answer" => done {
+      iterations: @state.iterations + 1,
+      answer: "finished"
+    }
+    * => continue {
+      iterations: @state.iterations + 1,
+      answer: null
+    }
+  ]
+]
+`);
+
+    const loopResult = env.getVariable('loopResult')?.value;
+    expect(isStructuredValue(loopResult) ? asData(loopResult) : loopResult).toEqual({
+      iterations: 1,
+      answer: 'finished'
+    });
+  });
+
+  it('preserves shelf surface slot refs through local binding and wrapper params', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  execution_log: contact[]
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/exe @appendViaShelfSurface(stateShelf, value) = [
+  let @slot = @stateShelf.execution_log
+  @shelf.write(@slot, @value)
+]
+/exe @readViaShelfSurface(stateShelf) = [
+  let @slot = @stateShelf.execution_log
+  => @shelf.read(@slot)
+]
+/var @surfaceState = box {
+  shelf: {
+    read: [@pipeline.execution_log as execution_log],
+    write: [@pipeline.execution_log as execution_log]
+  }
+} [
+  let @workspace_state = @fyi.shelf
+  @appendViaShelfSurface(@workspace_state, @emitContact("c_1", "Mark"))
+  @appendViaShelfSurface(@workspace_state, @emitContact("c_2", "Ava"))
+  => @readViaShelfSurface(@workspace_state)
+]
+`);
+
+    const surfaceState = env.getVariable('surfaceState')?.value;
+    expect(asData<any[]>(surfaceState)).toHaveLength(2);
+
+    const firstEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 0 } as any, { env });
+    const secondEntry = await accessField(surfaceState, { type: 'arrayIndex', value: 1 } as any, { env });
+    const firstId = await accessField(firstEntry, { type: 'field', value: 'id' } as any, { env });
+    const secondId = await accessField(secondEntry, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(firstId)).toBe('c_1');
+    expect(asData(secondId)).toBe('c_2');
+  });
+
   it('supports direct indexed reads from aliased @fyi.shelf entries', async () => {
     const env = await createEnvironment(`
 /record @contact = {
@@ -818,5 +965,45 @@ describe('shelf runtime', () => {
       slotName: 'recipients'
     });
     expect(asData<any[]>(recipients)).toEqual([]);
+  });
+
+  it('treats empty shelf slot refs as present in when guards for writes and scoped boxes', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/exe @emitContact() = js {
+  return {
+    id: "c_1",
+    email: "mark@example.com",
+    name: "Mark"
+  };
+} => contact
+/var @boxRead = when [
+  @pipeline.recipients => box {
+    shelf: {
+      read: [@pipeline.recipients as recipients]
+    }
+  } [
+    => @fyi.shelf.recipients
+  ]
+  * => "missing"
+]
+/exe @appendIfPresent() = [
+  when [
+    @pipeline.recipients => @shelf.write(@pipeline.recipients, @emitContact())
+    * => null
+  ]
+]
+@appendIfPresent()
+/var @final = @shelf.read(@pipeline.recipients)
+`);
+
+    expect(asData(env.getVariable('boxRead')?.value)).toEqual([]);
+    expect(asData<any[]>(env.getVariable('final')?.value)).toHaveLength(1);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '@grammar/parser';
 import { evaluate } from '@interpreter/core/interpreter';
 import { Environment } from '@interpreter/env/Environment';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 
@@ -234,6 +235,46 @@ describe('box directive', () => {
     expect(scopedEnv).toBeDefined();
     expect(scopedEnv?.getScopedEnvironmentConfig()?.net).toBeUndefined();
     expect(scopedEnv?.getScopedEnvironmentConfig()?.mcps).toBeUndefined();
+  });
+
+  it('does not expose box bridge context for shelf-only llm boxes without explicit workspace fs', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  execution_log: contact[]
+}
+/exe tool:r @lookup_message(query) = "ok"
+/exe llm @agent(prompt, config) = js {
+  return JSON.stringify({
+    hasBox: Boolean(mx.box),
+    inBox: Boolean(mx.llm && mx.llm.inBox)
+  });
+}
+/var @boxState = box {
+  shelf: {
+    read: [@pipeline.execution_log as execution_log]
+  }
+} [
+  => @agent("inspect", { tools: [@lookup_message] })
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const boxStateValue = env.getVariable('boxState')?.value;
+    const boxStateRaw = isStructuredValue(boxStateValue) ? asData(boxStateValue) : boxStateValue;
+    expect(boxStateRaw).toEqual({
+      hasBox: false,
+      inBox: false
+    });
   });
 
   it('inherits parent scoped config when a nested box adds only shelf scope', async () => {

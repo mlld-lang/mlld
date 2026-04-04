@@ -17,7 +17,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { ExecuteError } from './types';
 import { MlldParseError } from '@core/errors';
-import { cloneErrorForTransport, truncateText } from '@core/errors/errorSerialization';
+import { cloneErrorForTransport } from '@core/errors/errorSerialization';
 import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
 
@@ -289,29 +289,28 @@ function wrapExecuteError(error: unknown, filePath?: string): ExecuteError {
     maxCauseDepth: 2,
     maxDepth: 6,
     maxObjectKeys: 50,
-    maxArrayLength: 50,
-    maxStringLength: 4000
+    maxArrayLength: 50
   });
 
   if (error instanceof TimeoutError) {
-    return new ExecuteError(truncateText(error.message, 4000), 'TIMEOUT', filePath, { cause: sanitizedCause });
+    return new ExecuteError(error.message, 'TIMEOUT', filePath, { cause: sanitizedCause });
   }
 
   if (error instanceof MlldParseError) {
-    return new ExecuteError(truncateText(error.message, 4000), 'PARSE_ERROR', filePath, { cause: sanitizedCause });
+    return new ExecuteError(error.message, 'PARSE_ERROR', filePath, { cause: sanitizedCause });
   }
 
   if (error instanceof Error) {
     if (error.name === 'AbortError') {
-      return new ExecuteError(truncateText(error.message, 4000), 'ABORTED', filePath, { cause: sanitizedCause });
+      return new ExecuteError(error.message, 'ABORTED', filePath, { cause: sanitizedCause });
     }
 
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === 'ENOENT') {
-      return new ExecuteError(truncateText(error.message, 4000), 'FILE_NOT_FOUND', filePath, { cause: sanitizedCause });
+      return new ExecuteError(error.message, 'FILE_NOT_FOUND', filePath, { cause: sanitizedCause });
     }
 
-    return new ExecuteError(truncateText(error.message, 4000), 'RUNTIME_ERROR', filePath, { cause: sanitizedCause });
+    return new ExecuteError(error.message, 'RUNTIME_ERROR', filePath, { cause: sanitizedCause });
   }
 
   return new ExecuteError('Execution failed', 'RUNTIME_ERROR', filePath, { cause: sanitizedCause });

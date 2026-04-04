@@ -2,7 +2,6 @@ interface ValueSanitizerOptions {
   maxDepth?: number;
   maxObjectKeys?: number;
   maxArrayLength?: number;
-  maxStringLength?: number;
 }
 
 export interface ErrorSerializationOptions extends ValueSanitizerOptions {
@@ -19,8 +18,7 @@ export interface SerializableValueOptions extends ValueSanitizerOptions {
 const DEFAULT_VALUE_OPTIONS: Required<ValueSanitizerOptions> = {
   maxDepth: 6,
   maxObjectKeys: 50,
-  maxArrayLength: 50,
-  maxStringLength: 4000
+  maxArrayLength: 50
 };
 
 const DEFAULT_ERROR_OPTIONS: Required<Omit<ErrorSerializationOptions, 'includeStack' | 'includeDetails'>> & {
@@ -30,7 +28,6 @@ const DEFAULT_ERROR_OPTIONS: Required<Omit<ErrorSerializationOptions, 'includeSt
   maxDepth: 6,
   maxObjectKeys: 50,
   maxArrayLength: 50,
-  maxStringLength: 4000,
   maxCauseDepth: 3,
   maxStackLength: 12000,
   includeStack: true,
@@ -67,7 +64,7 @@ function summarizeObject(value: object): string {
   return name && name !== 'Object' ? `[${name}]` : '[Object]';
 }
 
-export function truncateText(value: string, maxLength = DEFAULT_VALUE_OPTIONS.maxStringLength): string {
+export function truncateText(value: string, maxLength = 0): string {
   if (maxLength <= 0 || value.length <= maxLength) {
     return value;
   }
@@ -104,7 +101,7 @@ function sanitizeValueInternal(
   }
 
   if (typeof value === 'string') {
-    return truncateText(value, resolvedOptions.maxStringLength);
+    return value;
   }
 
   if (typeof value !== 'object') {
@@ -196,7 +193,6 @@ export function sanitizeErrorDetails(
     maxDepth: 6,
     maxObjectKeys: 50,
     maxArrayLength: 50,
-    maxStringLength: 4000,
     ...options
   });
 }
@@ -227,7 +223,7 @@ export function serializeError(
 
   const summary: Record<string, unknown> = {
     name: error.name || 'Error',
-    message: truncateText(error.message || String(error), resolvedOptions.maxStringLength)
+    message: error.message || String(error)
   };
 
   const withMeta = error as Error & {
@@ -299,7 +295,7 @@ export function cloneErrorForTransport(
 
   seen.add(error);
 
-  const cloned = new Error(truncateText(error.message || String(error), resolvedOptions.maxStringLength));
+  const cloned = new Error(error.message || String(error));
   cloned.name = error.name || 'Error';
 
   const withMeta = error as Error & {

@@ -496,6 +496,30 @@ describe('when evaluator characterization', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('propagates loop continue through final nested when expressions inside branch blocks', async () => {
+    const { ast } = await parse([
+      '/var @result = loop(3) [',
+      '  let @state = @input ?? { step: 0 }',
+      '  when @mx.loop.iteration [',
+      '    1 => continue { step: 1 }',
+      '    2 => [',
+      '      let @noop = "ok"',
+      '      when [',
+      '        false => done { step: 99 }',
+      '        * => continue { step: 2 }',
+      '      ]',
+      '    ]',
+      '    * => done @state',
+      '  ]',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toEqual({ step: 2 });
+  });
+
   it('propagates loop continue through nested when log side effects', async () => {
     env.setEffectHandler(new TestEffectHandler());
 

@@ -63,7 +63,7 @@ export function isTruthy(value: any): boolean {
   }
 
   if (isShelfSlotRefValue(value)) {
-    return isTruthy(value.data);
+    return true;
   }
 
   if (typeof value === 'boolean') {

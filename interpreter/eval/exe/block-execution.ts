@@ -88,6 +88,16 @@ export async function evaluateExeBlock(
           return { value: whenResult.value.value, env };
         }
 
+        const hasLoopContext = Boolean(
+          blockEnv.getExecutionContext('loop') ||
+          blockEnv.getExecutionContext('while') ||
+          blockEnv.getExecutionContext('for')
+        );
+        if (hasLoopContext && isLoopControlValue(whenResult.value)) {
+          env.mergeChild(blockEnv);
+          return { value: whenResult.value, env };
+        }
+
         const preservesMidBlockReturn = stmt.meta?.form === 'inline' || stmt.meta?.form === 'bound-list';
         const isLastStatement = !hasTrailingReturn && index === statements.length - 1;
         if (!preservesMidBlockReturn && !isLastStatement) {

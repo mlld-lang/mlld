@@ -273,6 +273,47 @@ describe('LiveStdioServer', () => {
     await harness.close();
   });
 
+  it('preserves large structured output strings without truncating them', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 13, params: { filepath: '/tmp/agent.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const largeOutput = JSON.stringify({
+      content: 'x'.repeat(4200),
+      debug: {
+        planner_steps: [
+          {
+            iteration: 1,
+            action: 'execute_write',
+            request: {
+              write_tool: 'send_direct_message',
+              write_goal: 'y'.repeat(300)
+            }
+          }
+        ]
+      }
+    });
+
+    handle.resolve({ output: largeOutput, effects: [], exports: {}, stateWrites: [] } as any);
+
+    await harness.waitForLineCount(1);
+    const [line] = harness.jsonLines();
+
+    expect(line.result.id).toBe(13);
+    expect(line.result.output).toBe(largeOutput);
+    expect(line.result.output).not.toContain('[truncated');
+    expect(() => JSON.parse(line.result.output)).not.toThrow();
+
+    await harness.close();
+  });
+
   it('sanitizes nested error causes in streamed events', async () => {
     const handle = new FakeStreamExecution();
     const harness = createServerHarness({

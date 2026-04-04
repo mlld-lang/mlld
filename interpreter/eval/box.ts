@@ -622,6 +622,28 @@ function createScopedWorkspace(): WorkspaceValue {
 
 const DEFAULT_VFS_TOOLS = ['Bash', 'Read', 'Write', 'Glob', 'Grep'] as const;
 
+function isShelfOnlyBoxConfig(
+  config: EnvironmentConfig,
+  options: { hasWithClauseTools: boolean }
+): boolean {
+  if (options.hasWithClauseTools) {
+    return false;
+  }
+
+  const explicitKeys = Object.keys(config).filter(key => {
+    if (key === '_policyDerivedConstraints') {
+      return false;
+    }
+    return (config as Record<string, unknown>)[key] !== undefined;
+  });
+
+  if (explicitKeys.length === 0) {
+    return false;
+  }
+
+  return explicitKeys.every(key => key === 'shelf' || key === 'display' || key === 'profile');
+}
+
 function attenuateDefaultToolsToParent(
   tools: string[],
   env: Environment
@@ -708,7 +730,7 @@ export async function evaluateBox(
     };
   }
 
-  let workspace = resolvedConfig.workspace ?? mergedConfig.workspace;
+  let workspace = resolvedConfig.workspace;
   if (!workspace) {
     workspace = createScopedWorkspace();
   }
@@ -799,26 +821,33 @@ export async function evaluateBox(
   try {
     let pushedWorkspace = false;
     let bridgePushed = false;
+    const shouldSkipImplicitBridge =
+      !resolvedConfig.workspace &&
+      resolvedConfig.hasConfigExpression &&
+      isShelfOnlyBoxConfig(config, { hasWithClauseTools: withClauseTools !== undefined });
+
     if (workspace) {
       scopedEnv.pushActiveWorkspace(workspace);
       pushedWorkspace = true;
-      const { createWorkspaceMcpBridge } = await import('@interpreter/env/executors/workspace-mcp-bridge');
-      const bridge = await createWorkspaceMcpBridge({
-        workspace,
-        getShellSession: async () => {
-          if (!workspace.shellSession) {
-            const { ShellSession } = await import('@services/fs/ShellSession');
-            workspace.shellSession = await ShellSession.create(workspace.fs, {
-              cwd: scopedEnv.getProjectRoot()
-            });
-          }
-          return workspace.shellSession;
-        },
-        isToolAllowed: (toolName) => scopedEnv.isToolAllowed(toolName, toolName),
-        workingDirectory: scopedEnv.getProjectRoot()
-      });
-      scopedEnv.pushBridge(bridge);
-      bridgePushed = true;
+      if (!shouldSkipImplicitBridge) {
+        const { createWorkspaceMcpBridge } = await import('@interpreter/env/executors/workspace-mcp-bridge');
+        const bridge = await createWorkspaceMcpBridge({
+          workspace,
+          getShellSession: async () => {
+            if (!workspace.shellSession) {
+              const { ShellSession } = await import('@services/fs/ShellSession');
+              workspace.shellSession = await ShellSession.create(workspace.fs, {
+                cwd: scopedEnv.getProjectRoot()
+              });
+            }
+            return workspace.shellSession;
+          },
+          isToolAllowed: (toolName) => scopedEnv.isToolAllowed(toolName, toolName),
+          workingDirectory: scopedEnv.getProjectRoot()
+        });
+        scopedEnv.pushBridge(bridge);
+        bridgePushed = true;
+      }
     }
 
     try {

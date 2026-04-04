@@ -136,8 +136,9 @@ ShelfSlotRefValue {
 
 Why this exists:
 1. **Identity matters**: `@shelf.clear(@slot)` needs the slot reference itself, not just the slot's current array/object contents.
-2. **Ordinary reads still work**: field access, truthiness, string coercion, and `asData()` / `asText()` should behave like the slot's current contents.
-3. **Generic flattening boundaries stay honest**: Structured data can still unwrap normally without accidentally erasing capability identity.
+2. **Ordinary reads still work**: field access, string coercion, and `asData()` / `asText()` should behave like the slot's current contents.
+3. **Boolean guards preserve reference presence**: `when [ @slotRef => ... ]` should test whether a slot ref exists, not whether the current slot contents are non-empty. Use `@shelf.read(@slotRef)` when you specifically want content truthiness.
+4. **Generic flattening boundaries stay honest**: Structured data can still unwrap normally without accidentally erasing capability identity.
 
 ### Helper Functions
 

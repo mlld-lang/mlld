@@ -144,7 +144,7 @@ export function isTruthy(value: unknown): boolean {
   }
 
   if (isShelfSlotRefValue(value)) {
-    return isTruthy(value.data);
+    return true;
   }
 
   if (value === null || value === undefined) {

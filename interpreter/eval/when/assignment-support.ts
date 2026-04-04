@@ -9,6 +9,7 @@ import { evaluate, interpolate } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { isVariable, extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { combineValues } from '@interpreter/utils/value-combine';
+import { isExeReturnControl } from '@interpreter/eval/exe-return';
 
 function isExpressionNode(value: unknown): boolean {
   if (!value || typeof value !== 'object') {
@@ -137,6 +138,10 @@ export async function evaluateAssignmentValue(
       const valueResult = await evaluate(entry.value, env, { isExpression: true });
       value = valueResult.value;
     }
+  }
+
+  if (isExeReturnControl(value)) {
+    value = value.value;
   }
 
   if (tail && !handledByRunEvaluator) {

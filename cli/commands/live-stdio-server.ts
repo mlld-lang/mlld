@@ -187,7 +187,6 @@ function safeStringify(value: unknown): string {
       maxDepth: 6,
       maxObjectKeys: 50,
       maxArrayLength: 50,
-      maxStringLength: 4000,
       maxStackLength: 12000
     }
   }));
