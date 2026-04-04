@@ -459,7 +459,6 @@ SlashBareRunInvocation
       const meta = {
         argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
         isBareInvocation: true,
-        hasLeadingSlash: Boolean(slash),
         ...(comment ? { comment } : {})
       };
 

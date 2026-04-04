@@ -129,7 +129,7 @@ export function finalizeRunOutputLifecycle(
   }
 
   const shouldRenderOutput =
-    (!directive.meta?.isBareInvocation || directive.meta?.hasLeadingSlash === true) &&
+    !directive.meta?.isBareInvocation &&
     !directive.meta?.isDataValue &&
     !directive.meta?.isEmbedded;
 

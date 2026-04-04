@@ -265,7 +265,7 @@ These are your main building blocks:
 var         << create values: strings, objects, arrays, loaded files
 exe         << define reusable functions, templates, and LLM calls
 show        << output to terminal and final result
-run         << execute silently; @fn() bare call is shorthand for run @fn()
+run         << execute commands, code, and reusable executables
 import      << bring in modules, packages, or exported values
 for         << iterate over collections (parallel supported)
 when        << first-match conditional branching

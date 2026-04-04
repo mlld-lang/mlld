@@ -254,23 +254,4 @@ describe('run output lifecycle', () => {
     expect(addNodeSpy).not.toHaveBeenCalled();
     expect(emitEffectSpy).not.toHaveBeenCalled();
   });
-
-  it('renders output for slash-prefixed bare invocation statements', () => {
-    const env = createEnv();
-    const emitEffectSpy = vi.spyOn(env, 'emitEffect');
-    const addNodeSpy = vi.spyOn(env, 'addNode');
-
-    const result = finalizeRunOutputLifecycle({
-      directive: createDirective({ isBareInvocation: true, hasLeadingSlash: true }),
-      env,
-      outputValue: 'visible',
-      outputText: 'visible',
-      hasStreamFormat: false,
-      streamingEnabled: false
-    });
-
-    expect(result.displayText).toBe('visible\n');
-    expect(addNodeSpy).toHaveBeenCalledTimes(1);
-    expect(emitEffectSpy).toHaveBeenCalledWith('both', 'visible\n');
-  });
 });

@@ -14,7 +14,6 @@ describe('Run directive', () => {
     expect(directiveNode.kind).toBe('run');
     expect(directiveNode.subtype).toBe('runExec');
     expect(directiveNode.meta.isBareInvocation).toBe(true);
-    expect(directiveNode.meta.hasLeadingSlash).toBe(false);
   });
 
   test('parses slash-prefixed bare exec invocation statements in markdown mode', async () => {
@@ -28,7 +27,6 @@ describe('Run directive', () => {
     expect(directiveNode.kind).toBe('run');
     expect(directiveNode.subtype).toBe('runExec');
     expect(directiveNode.meta.isBareInvocation).toBe(true);
-    expect(directiveNode.meta.hasLeadingSlash).toBe(true);
   });
 
   describe('runCommand subtype', () => {
