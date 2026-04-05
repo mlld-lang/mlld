@@ -332,6 +332,50 @@ describe('execute', () => {
     ).toEqual(['true', 'true', 'tool output']);
   });
 
+  it('supports writeFile during stream execution with execution provenance', async () => {
+    await fileSystem.writeFile('/package.json', '{}');
+    await fileSystem.writeFile(
+      routePath,
+      [
+        'loop(99999, 10ms) until @state.exit [',
+        '  continue',
+        ']',
+        '/show "done"'
+      ].join('\n')
+    );
+
+    const handle = (await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      mode: 'strict',
+      stream: true,
+      state: { exit: false }
+    })) as any;
+
+    const writeResult = await handle.writeFile('out.txt', 'hello from sdk');
+
+    expect(writeResult.path).toBe('/routes/out.txt');
+    expect(writeResult.status).toBe('verified');
+    expect(writeResult.signer).toBe('agent:route');
+    expect(writeResult.metadata).toMatchObject({
+      taint: ['untrusted'],
+      provenance: {
+        sourceType: 'mlld_execution',
+        scriptPath: routePath
+      }
+    });
+    expect((writeResult.metadata as any)?.provenance?.sourceId).toEqual(expect.any(String));
+    expect(await fileSystem.readFile('/routes/out.txt')).toBe('hello from sdk');
+
+    await handle.updateState('exit', true);
+    const result = await handle.result();
+    expect(result.output.trim()).toBe('done');
+
+    await expect(handle.writeFile('late.txt', 'too late')).rejects.toThrow(
+      'StreamExecution already completed'
+    );
+  });
+
   it('applies checkpoint options through SDK execute into interpreter runtime', async () => {
     const checkpointRoot = await mkdtemp(path.join(os.tmpdir(), 'sdk-execute-checkpoint-'));
     cleanupDirs.push(checkpointRoot);

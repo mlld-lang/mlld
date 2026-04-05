@@ -1,0 +1,19 @@
+>> Classify an incoming document.
+>> Input: @payload.content (file text), @payload.filename
+>> Output: state://result (JSON classification)
+
+import { @claude } from @mlld/claude
+
+var @result = @claude(`Classify this document. Return ONLY a JSON object, no other text.
+
+<document filename="@payload.filename">
+@payload.content
+</document>
+
+{
+  "priority": "high" | "medium" | "low",
+  "category": "bug" | "feature" | "question" | "other",
+  "summary": "one-sentence summary"
+}`, { model: "haiku" }) | @parse.llm
+
+output @result to "state://result"

@@ -26,8 +26,9 @@ Start a long-running NDJSON RPC server over stdio.
 
 Protocol:
   Request:  {"method":"process|execute|analyze|state:update|cancel","id":1,"params":{...}}
-  Event:    {"event":{"id":1,"type":"stream:chunk|guard_denial",...}}
-  Result:   {"result":{"id":1,...}}
+  Event:    {"event":{"requestId":1,"type":"state:write|guard_denial",...}}
+  Result:   {"id":1,"result":{...}}
+  Error:    {"id":1,"error":{"code":"TIMEOUT","message":"..."}}
 
 Notes:
   - process: Execute script text via params.script

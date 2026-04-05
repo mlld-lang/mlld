@@ -332,12 +332,13 @@ export class LiveStdioServer {
     try {
       request = JSON.parse(line) as LiveRequest;
     } catch (error) {
-      await this.writeResult(null, {
-        error: this.buildError(
+      await this.writeError(
+        null,
+        this.buildError(
           'INVALID_JSON',
           error instanceof Error ? error.message : 'Invalid JSON request'
         )
-      });
+      );
       return;
     }
 
@@ -349,9 +350,7 @@ export class LiveStdioServer {
     const requestId = this.normalizeId(request.id);
 
     if (!method) {
-      await this.writeResult(requestId, {
-        error: this.buildError('INVALID_REQUEST', 'Request method is required')
-      });
+      await this.writeError(requestId, this.buildError('INVALID_REQUEST', 'Request method is required'));
       return;
     }
 
@@ -361,9 +360,7 @@ export class LiveStdioServer {
     }
 
     if (requestId === null) {
-      await this.writeResult(null, {
-        error: this.buildError('INVALID_REQUEST', 'Request id is required')
-      });
+      await this.writeError(null, this.buildError('INVALID_REQUEST', 'Request id is required'));
       return;
     }
 
@@ -378,9 +375,10 @@ export class LiveStdioServer {
     }
 
     if (this.active.has(requestId)) {
-      await this.writeResult(requestId, {
-        error: this.buildError('REQUEST_IN_PROGRESS', `Request ${String(requestId)} is already active`)
-      });
+      await this.writeError(
+        requestId,
+        this.buildError('REQUEST_IN_PROGRESS', `Request ${String(requestId)} is already active`)
+      );
       return;
     }
 
@@ -389,17 +387,16 @@ export class LiveStdioServer {
 
   private async handleCancel(requestId: RequestId | null): Promise<void> {
     if (requestId === null) {
-      await this.writeResult(null, {
-        error: this.buildError('INVALID_REQUEST', 'Cancel id is required')
-      });
+      await this.writeError(null, this.buildError('INVALID_REQUEST', 'Cancel id is required'));
       return;
     }
 
     const active = this.active.get(requestId);
     if (!active) {
-      await this.writeResult(requestId, {
-        error: this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(requestId)}`)
-      });
+      await this.writeError(
+        requestId,
+        this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(requestId)}`)
+      );
       return;
     }
 
@@ -411,30 +408,33 @@ export class LiveStdioServer {
     try {
       parsed = this.parseStateUpdateParams(params);
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.buildError(
+      await this.writeError(
+        requestId,
+        this.buildError(
           'INVALID_REQUEST',
           error instanceof Error ? error.message : 'state:update params must be an object'
         )
-      });
+      );
       return;
     }
 
     const active = this.active.get(parsed.requestId);
     if (!active) {
-      await this.writeResult(requestId, {
-        error: this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
-      });
+      await this.writeError(
+        requestId,
+        this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
+      );
       return;
     }
 
     if (!active.updateState) {
-      await this.writeResult(requestId, {
-        error: this.buildError(
+      await this.writeError(
+        requestId,
+        this.buildError(
           'STATE_UNAVAILABLE',
           `Request ${String(parsed.requestId)} has no dynamic @state to update`
         )
-      });
+      );
       return;
     }
 
@@ -445,9 +445,7 @@ export class LiveStdioServer {
         path: parsed.path
       });
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.normalizeError(error)
-      });
+      await this.writeError(requestId, this.normalizeError(error));
     }
   }
 
@@ -456,40 +454,41 @@ export class LiveStdioServer {
     try {
       parsed = this.parseFileWriteParams(params);
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.buildError(
+      await this.writeError(
+        requestId,
+        this.buildError(
           'INVALID_REQUEST',
           error instanceof Error ? error.message : 'file:write params must be an object'
         )
-      });
+      );
       return;
     }
 
     const active = this.active.get(parsed.requestId);
     if (!active) {
-      await this.writeResult(requestId, {
-        error: this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
-      });
+      await this.writeError(
+        requestId,
+        this.buildError('REQUEST_NOT_FOUND', `No active request for id ${String(parsed.requestId)}`)
+      );
       return;
     }
 
     if (!active.writeFile) {
-      await this.writeResult(requestId, {
-        error: this.buildError(
+      await this.writeError(
+        requestId,
+        this.buildError(
           'FILE_WRITE_UNAVAILABLE',
           `Request ${String(parsed.requestId)} does not support file writes`
         )
-      });
+      );
       return;
     }
 
     try {
       const result = await active.writeFile(parsed.path, parsed.content);
-      await this.writeResult(requestId, this.toResultPayload(result));
+      await this.writeResult(requestId, result);
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.normalizeError(error)
-      });
+      await this.writeError(requestId, this.normalizeError(error));
     }
   }
 
@@ -518,15 +517,14 @@ export class LiveStdioServer {
           await this.runSigSignContent(requestId, params);
           break;
         default:
-          await this.writeResult(requestId, {
-            error: this.buildError('METHOD_NOT_FOUND', `Method '${method}' is not supported`)
-          });
+          await this.writeError(
+            requestId,
+            this.buildError('METHOD_NOT_FOUND', `Method '${method}' is not supported`)
+          );
           break;
       }
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.normalizeError(error)
-      });
+      await this.writeError(requestId, this.normalizeError(error));
     }
   }
 
@@ -595,7 +593,7 @@ export class LiveStdioServer {
   private async runAnalyze(requestId: RequestId, params: unknown): Promise<void> {
     const parsed = this.parseAnalyzeParams(params);
     const result = await this.deps.analyze(parsed.filepath);
-    await this.writeResult(requestId, this.toResultPayload(result));
+    await this.writeResult(requestId, result);
   }
 
   private async runFsStatus(requestId: RequestId, params: unknown): Promise<void> {
@@ -604,7 +602,7 @@ export class LiveStdioServer {
       basePath: parsed.basePath,
       glob: parsed.glob
     });
-    await this.writeResult(requestId, this.toResultPayload(result));
+    await this.writeResult(requestId, result);
   }
 
   private async runSigSign(requestId: RequestId, params: unknown): Promise<void> {
@@ -616,7 +614,7 @@ export class LiveStdioServer {
       metadata: parsed.metadata,
       fileSystem: this.deps.makeFileSystem()
     });
-    await this.writeResult(requestId, this.toResultPayload(result));
+    await this.writeResult(requestId, result);
   }
 
   private async runSigVerify(requestId: RequestId, params: unknown): Promise<void> {
@@ -626,7 +624,7 @@ export class LiveStdioServer {
       basePath: parsed.basePath,
       fileSystem: this.deps.makeFileSystem()
     });
-    await this.writeResult(requestId, this.toResultPayload(result));
+    await this.writeResult(requestId, result);
   }
 
   private async runSigSignContent(requestId: RequestId, params: unknown): Promise<void> {
@@ -639,7 +637,7 @@ export class LiveStdioServer {
       metadata: parsed.metadata,
       fileSystem: this.deps.makeFileSystem()
     });
-    await this.writeResult(requestId, this.toResultPayload(result));
+    await this.writeResult(requestId, result);
   }
 
   private async streamExecution(
@@ -673,11 +671,9 @@ export class LiveStdioServer {
 
     try {
       const result = await execution.result();
-      await this.writeResult(requestId, this.toResultPayload(this.normalizeStructuredResult(result)));
+      await this.writeResult(requestId, this.normalizeStructuredResult(result));
     } catch (error) {
-      await this.writeResult(requestId, {
-        error: this.normalizeError(error)
-      });
+      await this.writeError(requestId, this.normalizeError(error));
     } finally {
       for (const [type, handler] of listeners) {
         execution.off(type, handler);
@@ -1050,36 +1046,26 @@ export class LiveStdioServer {
     }
   }
 
-  private toResultPayload(value: unknown): Record<string, unknown> {
-    const serializable = this.toSerializable(value);
-    if (isRecord(serializable)) {
-      return serializable;
-    }
-    return { value: serializable };
-  }
-
   private async writeEvent(requestId: RequestId, event: unknown): Promise<void> {
     await this.writeLine({
       event: {
-        id: requestId,
+        requestId,
         ...(isRecord(event) ? event : { payload: event })
       }
     });
   }
 
-  private async writeResult(requestId: RequestId | null, payload: Record<string, unknown>): Promise<void> {
-    const resultPayload = Object.prototype.hasOwnProperty.call(payload, 'id')
-      ? {
-          id: requestId,
-          value: payload
-        }
-      : {
-          id: requestId,
-          ...payload
-        };
-
+  private async writeResult(requestId: RequestId | null, payload: unknown): Promise<void> {
     await this.writeLine({
-      result: resultPayload
+      id: requestId,
+      result: this.toSerializable(payload)
+    });
+  }
+
+  private async writeError(requestId: RequestId | null, error: LiveErrorPayload): Promise<void> {
+    await this.writeLine({
+      id: requestId,
+      error: this.toSerializable(error)
     });
   }
 

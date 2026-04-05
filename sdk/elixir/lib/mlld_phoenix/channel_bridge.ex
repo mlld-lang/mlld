@@ -23,7 +23,11 @@ defmodule MlldPhoenix.ChannelBridge do
 
       with {:ok, handle} <- Client.execute_async(client, filepath, payload, execute_opts) do
         request_id = Handle.request_id(handle)
-        {:ok, relay_pid} = Task.start(fn -> relay_loop(socket, request_id, event_topic, result_topic, idle_timeout) end)
+
+        {:ok, relay_pid} =
+          Task.start(fn ->
+            relay_loop(socket, request_id, event_topic, result_topic, idle_timeout)
+          end)
 
         case Client.subscribe(client, request_id, relay_pid) do
           :ok ->

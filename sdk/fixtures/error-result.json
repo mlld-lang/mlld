@@ -1,0 +1,7 @@
+{
+  "id": 1,
+  "error": {
+    "code": "TIMEOUT",
+    "message": "request timeout after 5s"
+  }
+}

@@ -2,6 +2,8 @@
 
 Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir.
 
+See [SPEC.md](SPEC.md) for the canonical interface specification.
+
 ## Philosophy
 
 These SDKs wrap the mlld CLI rather than reimplementing it. This gives you:
@@ -52,22 +54,24 @@ mix deps.get
 
 All SDKs provide these blocking operations:
 
-- `process(script, options)`
-- `execute(filepath, payload, options)`
-- `analyze(filepath)`
+- `process(script, options)` — execute a script string, return text
+- `execute(filepath, payload, options)` — run a file with payload, return structured result
+- `analyze(filepath)` — static analysis without execution
 
-All SDKs also keep a persistent `mlld live --stdio` subprocess per client.
+All SDKs keep a persistent `mlld live --stdio` subprocess per client.
 
 ## In-Flight Control API
 
 Each SDK exposes handle APIs for long-running process/execute calls:
 
 - Start request: `process_async(...)` / `execute_async(...)`
-- Handle operations: `wait`/`result`, `cancel`, `update_state(path, value)`
+- Handle operations: `wait`/`result`, `cancel`, `update_state(path, value, labels?)`
+- Event consumption: `next_event(timeout?)` — returns `state_write`, `guard_denial`, or `complete` events in order
+- File operations: `write_file(path, content)` on `ExecuteHandle` — writes a file within the execution context and auto-signs it
 
-Live transports can also emit structured `guard_denial` events before a request finishes. The Python SDK exposes these directly via `handle.next_event()`.
+JS/TS exposes equivalent semantics through `StreamExecution` async event iteration.
 
-`update_state` sends live `state:update` requests to mutate in-flight `@state` for that request.
+Handles follow a three-state lifecycle (PENDING → STREAMING → COMPLETE). State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called — ignoring events does not lose data.
 
 ## State Writes
 
@@ -76,11 +80,35 @@ Live transports can also emit structured `guard_denial` events before a request 
 - final `stateWrites` from the completion payload
 - streamed `state:write` events emitted during execution
 
-Structured execute results also expose `denials`, a list of structured guard/policy label-flow denials observed during the run.
+Structured execute results also expose `denials` (guard/policy label-flow denials), `effects` (output effects), and `metrics` (execution timing).
 
 ## MCP Server Injection
 
 `execute` and `process` accept an `mcp_servers` map (logical name → shell command). When a script uses `import tools from mcp "name"`, the runtime checks this map before treating the spec as a command. Each execution gets its own server lifecycle, enabling parallel calls with independent MCP server state.
+
+## Security Labels
+
+Payload fields can carry security labels for mlld's taint tracking:
+
+```python
+# Python
+from mlld import execute, trusted, untrusted
+result = execute("script.mld", {
+    "config": trusted({"mode": "safe"}),
+    "user_input": untrusted(raw_input),
+})
+```
+
+All wrapper SDKs provide `labeled(value, *labels)`, `trusted(value)`, and `untrusted(value)` helpers. These wrap values so the SDK can extract and send per-field labels via the `payload_labels` parameter.
+
+## Filesystem Integrity
+
+All SDKs expose cryptographic signing and verification for files in an mlld project:
+
+- `fs_status(glob?)` — query signature/integrity status for tracked files
+- `sign(path, identity?, metadata?)` — sign a file
+- `verify(path)` — verify a file's signature
+- `sign_content(content, identity)` — sign runtime content and persist in `.sig/content/`
 
 ## Requirements
 

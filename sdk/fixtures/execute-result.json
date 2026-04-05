@@ -1,0 +1,69 @@
+{
+  "id": 1,
+  "result": {
+    "output": "fixture-output",
+    "stateWrites": [
+      {
+        "path": "payload",
+        "value": {
+          "enabled": true,
+          "nested": {
+            "count": 2
+          }
+        },
+        "timestamp": "2026-04-04T00:00:00.000Z",
+        "security": {
+          "labels": [
+            "trusted"
+          ],
+          "taint": [
+            "untrusted"
+          ]
+        }
+      }
+    ],
+    "exports": {
+      "@answer": {
+        "name": "@answer",
+        "value": 42,
+        "metadata": {
+          "security": {
+            "labels": [
+              "trusted"
+            ]
+          }
+        }
+      }
+    },
+    "effects": [
+      {
+        "type": "doc",
+        "content": "fixture-output",
+        "security": {
+          "labels": [
+            "trusted"
+          ]
+        }
+      }
+    ],
+    "denials": [
+      {
+        "guard": "@blocker",
+        "operation": "send",
+        "reason": "recipient not authorized",
+        "rule": "*",
+        "labels": [
+          "secret"
+        ],
+        "args": {
+          "value": "hello"
+        }
+      }
+    ],
+    "metrics": {
+      "totalMs": 5.5,
+      "parseMs": 1.25,
+      "evaluateMs": 4.25
+    }
+  }
+}

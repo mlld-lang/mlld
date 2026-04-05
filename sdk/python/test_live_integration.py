@@ -122,10 +122,12 @@ class LiveIntegrationTest(unittest.TestCase):
         event = handle.next_event(timeout=5)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "complete")
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
         # result() should work after complete
         output = handle.result()
         self.assertIn("pong", output)
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
     def test_next_event_returns_complete_on_simple_script(self) -> None:
         """Test next_event() returns complete for scripts without state writes."""
@@ -138,9 +140,11 @@ class LiveIntegrationTest(unittest.TestCase):
         event = handle.next_event(timeout=5)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "complete")
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
         output = handle.result()
         self.assertIn("hello", output)
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
     def test_next_event_returns_guard_denial_before_completion(self) -> None:
         """Test next_event() yields structured guard denials before script completion."""
@@ -171,9 +175,11 @@ class LiveIntegrationTest(unittest.TestCase):
         event = handle.next_event(timeout=5)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "complete")
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
         output = handle.result()
         self.assertIn("blocked", output)
+        self.assertIsNone(handle.next_event(timeout=0.1))
 
     def test_execute_preserves_structured_state_write_values(self) -> None:
         script = (

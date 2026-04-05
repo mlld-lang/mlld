@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { processMlld, MlldError, VirtualFS } from './index';
+import { processMlld, MlldError, VirtualFS, fsStatus, sign, verify, signContent } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { readFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile as writeNodeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 describe('Mlld API', () => {
@@ -136,6 +137,54 @@ describe('Mlld API', () => {
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toBe('Test error');
       expect(error.code).toBe('TEST_ERROR');
+    });
+
+    it('exports signing and filesystem status helpers', async () => {
+      const root = await mkdtemp(path.join(tmpdir(), 'mlld-sdk-sig-'));
+
+      try {
+        await writeNodeFile(path.join(root, 'package.json'), '{}');
+        await mkdir(path.join(root, 'docs'), { recursive: true });
+        await writeNodeFile(path.join(root, 'docs', 'note.txt'), 'hello from ts sdk');
+
+        const signed = await sign('docs/note.txt', {
+          identity: 'user:alice',
+          metadata: { purpose: 'sdk' },
+          basePath: root
+        });
+        const verified = await verify('docs/note.txt', {
+          basePath: root
+        });
+        const contentSignature = await signContent('signed body', 'user:alice', {
+          metadata: { channel: 'sdk' },
+          signatureId: 'content-1',
+          basePath: root
+        });
+        const statuses = await fsStatus('docs/*.txt', { basePath: root });
+
+        expect(signed.status).toBe('verified');
+        expect(signed.verified).toBe(true);
+        expect(signed.signer).toBe('user:alice');
+        expect(signed.metadata).toEqual({ purpose: 'sdk' });
+
+        expect(verified.status).toBe('verified');
+        expect(verified.verified).toBe(true);
+        expect(verified.signer).toBe('user:alice');
+        expect(verified.metadata).toEqual({ purpose: 'sdk' });
+
+        expect(contentSignature.id).toBe('content-1');
+        expect(contentSignature.signedBy).toBe('user:alice');
+        expect(contentSignature.metadata).toEqual({ channel: 'sdk' });
+        await access(path.join(root, '.sig', 'content', 'content-1.sig.json'));
+        await access(path.join(root, '.sig', 'content', 'content-1.sig.content'));
+
+        expect(statuses).toHaveLength(1);
+        expect(statuses[0].relativePath).toBe('docs/note.txt');
+        expect(statuses[0].status).toBe('verified');
+        expect(statuses[0].signer).toBe('user:alice');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
     });
 
     it('should handle exe directive', async () => {

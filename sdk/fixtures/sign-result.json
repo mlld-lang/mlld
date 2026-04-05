@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "result": {
+    "path": "/repo/docs/a.txt",
+    "relativePath": "docs/a.txt",
+    "status": "verified",
+    "verified": true,
+    "signer": "user:alice",
+    "signedAt": "2026-04-04T00:00:00.000Z",
+    "hash": "sha256:abc",
+    "expectedHash": "sha256:abc",
+    "metadata": {
+      "purpose": "sdk"
+    },
+    "error": null
+  }
+}

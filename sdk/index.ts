@@ -14,6 +14,15 @@ import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
+import {
+  liveSignFile,
+  liveSignContent,
+  liveVerifyFile
+} from '@cli/commands/live-stdio-security';
+import { collectFilesystemStatus } from '@cli/commands/status';
+import type { FileVerifyResult } from '@core/security';
+import type { SigStatusEntry } from '@core/security/file-status';
+import type { ContentSignature } from '@disreguard/sig';
 
 // Export core types/errors
 export { MlldError };
@@ -58,6 +67,9 @@ export type { ProfilesDeclaration } from '@core/policy/needs';
 export type { Location, Position } from '@core/types/index';
 export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
 export type { MlldMode } from '@core/types/mode';
+export type { FileVerifyResult } from '@core/security';
+export type { SigStatusEntry as FilesystemStatus } from '@core/security/file-status';
+export type { ContentSignature } from '@disreguard/sig';
 
 // Export SDK streaming types
 export type {
@@ -182,6 +194,40 @@ export interface ProcessOptions {
   dynamicModuleMode?: MlldMode;
 }
 
+export interface FSStatusOptions {
+  /** Optional project-relative resolution base. */
+  basePath?: string;
+}
+
+export interface SignOptions {
+  /** Optional signer identity override. */
+  identity?: string;
+  /** Optional signature metadata. */
+  metadata?: Record<string, unknown>;
+  /** Optional project-relative resolution base. */
+  basePath?: string;
+  /** Custom file system implementation. */
+  fileSystem?: IFileSystemService;
+}
+
+export interface VerifyOptions {
+  /** Optional project-relative resolution base. */
+  basePath?: string;
+  /** Custom file system implementation. */
+  fileSystem?: IFileSystemService;
+}
+
+export interface SignContentOptions {
+  /** Optional metadata persisted with the content signature. */
+  metadata?: Record<string, string>;
+  /** Optional stable signature identifier. */
+  signatureId?: string;
+  /** Optional project-relative resolution base. */
+  basePath?: string;
+  /** Custom file system implementation. */
+  fileSystem?: IFileSystemService;
+}
+
 /**
  * Process a Mlld document and return the output
  */
@@ -217,6 +263,67 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
 
   // Interpret returns string output in document mode; other modes carry output on the object
   return typeof result === 'string' ? result : result.output;
+}
+
+/**
+ * Return filesystem signature/integrity status for tracked files.
+ */
+export async function fsStatus(
+  glob?: string,
+  options: FSStatusOptions = {}
+): Promise<SigStatusEntry[]> {
+  return await collectFilesystemStatus({
+    glob,
+    basePath: options.basePath
+  });
+}
+
+/**
+ * Sign a file and return its verification status.
+ */
+export async function sign(
+  path: string,
+  options: SignOptions = {}
+): Promise<FileVerifyResult> {
+  return await liveSignFile({
+    path,
+    identity: options.identity,
+    metadata: options.metadata,
+    basePath: options.basePath,
+    fileSystem: options.fileSystem ?? new NodeFileSystem()
+  });
+}
+
+/**
+ * Verify a file and return its signature status.
+ */
+export async function verify(
+  path: string,
+  options: VerifyOptions = {}
+): Promise<FileVerifyResult> {
+  return await liveVerifyFile({
+    path,
+    basePath: options.basePath,
+    fileSystem: options.fileSystem ?? new NodeFileSystem()
+  });
+}
+
+/**
+ * Sign runtime content and persist it in the project's content store.
+ */
+export async function signContent(
+  content: string,
+  identity: string,
+  options: SignContentOptions = {}
+): Promise<ContentSignature> {
+  return await liveSignContent({
+    content,
+    identity,
+    metadata: options.metadata,
+    id: options.signatureId,
+    basePath: options.basePath,
+    fileSystem: options.fileSystem ?? new NodeFileSystem()
+  });
 }
 
 /**

@@ -1,0 +1,16 @@
+>> Generate a project digest from recent git activity.
+>> Input: @payload.commits (git log text), @payload.date (today's date)
+>> Output: state://digest (markdown digest)
+
+import { @claude } from @mlld/claude
+
+var @digest = @claude(`Write a brief project digest for @payload.date.
+
+<commits>
+@payload.commits
+</commits>
+
+Format as scannable bullet points grouped by theme (features, fixes, docs, etc.).
+Skip any theme with no commits. Keep it concise.`, { model: "haiku" })
+
+output @digest to "state://digest"

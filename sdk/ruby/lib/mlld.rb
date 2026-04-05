@@ -16,15 +16,52 @@ module Mlld
     end
   end
 
-  StateWrite = Struct.new(:path, :value, :timestamp, keyword_init: true)
+  StateWrite = Struct.new(:path, :value, :timestamp, :security, keyword_init: true)
   Metrics = Struct.new(:total_ms, :parse_ms, :evaluate_ms, keyword_init: true)
   Effect = Struct.new(:type, :content, :security, keyword_init: true)
   GuardDenial = Struct.new(:guard, :operation, :reason, :rule, :labels, :args, keyword_init: true)
   ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :denials, :metrics, keyword_init: true)
+  HandleEvent = Struct.new(:type, :state_write, :guard_denial, keyword_init: true)
+  FilesystemStatus = Struct.new(
+    :path,
+    :relative_path,
+    :status,
+    :verified,
+    :signer,
+    :labels,
+    :taint,
+    :signed_at,
+    :error,
+    keyword_init: true
+  )
+  FileVerifyResult = Struct.new(
+    :path,
+    :relative_path,
+    :status,
+    :verified,
+    :signer,
+    :signed_at,
+    :hash,
+    :expected_hash,
+    :metadata,
+    :error,
+    keyword_init: true
+  )
+  ContentSignature = Struct.new(
+    :id,
+    :hash,
+    :algorithm,
+    :signed_by,
+    :signed_at,
+    :content_length,
+    :metadata,
+    keyword_init: true
+  )
+  LabeledValue = Struct.new(:value, :labels, keyword_init: true)
 
   Executable = Struct.new(:name, :params, :labels, keyword_init: true)
   Import = Struct.new(:from, :names, keyword_init: true)
-  Guard = Struct.new(:name, :timing, :label, keyword_init: true)
+  Guard = Struct.new(:name, :timing, :trigger, keyword_init: true)
   Needs = Struct.new(:cmd, :node, :py, keyword_init: true)
   AnalysisError = Struct.new(:message, :line, :column, keyword_init: true)
   AnalyzeResult = Struct.new(
@@ -49,17 +86,77 @@ module Mlld
       @timeout = timeout
       @mutex = Mutex.new
       @complete = false
+      @complete_event_emitted = false
       @raw_result = nil
       @state_write_events = []
+      @guard_denial_events = []
       @error = nil
     end
 
     def cancel
+      return nil if @complete
+
       @client.send_cancel(@request_id)
     end
 
     def update_state(path, value, labels: nil, timeout: nil)
+      raise Error.new('request already completed', code: 'REQUEST_COMPLETE') if @complete
+
       @client.send_state_update(@request_id, path, value, timeout || @timeout, labels: labels)
+    end
+
+    def next_event(timeout: nil)
+      @mutex.synchronize do
+        if @complete
+          return nil if @complete_event_emitted || @error
+
+          @complete_event_emitted = true
+          return HandleEvent.new(type: 'complete')
+        end
+
+        effective_timeout = timeout.nil? ? @timeout : timeout
+        deadline = effective_timeout ? Process.clock_gettime(Process::CLOCK_MONOTONIC) + effective_timeout : nil
+
+        loop do
+          entry = pop_response(deadline)
+          return nil if entry.nil?
+
+          kind, payload = entry
+
+          case kind
+          when :event
+            state_write = @client.send(:state_write_from_event, payload)
+            if state_write
+              @state_write_events << state_write
+              return HandleEvent.new(type: 'state_write', state_write: state_write)
+            end
+
+            guard_denial = @client.send(:guard_denial_from_event, payload)
+            if guard_denial
+              @guard_denial_events << guard_denial
+              return HandleEvent.new(type: 'guard_denial', guard_denial: guard_denial)
+            end
+          when :transport_error
+            @error = payload
+            @complete = true
+            @complete_event_emitted = true
+            raise payload
+          when :result
+            error_payload = payload['error']
+            if error_payload.is_a?(Hash)
+              @error = @client.send(:error_from_payload, error_payload)
+              @complete = true
+              @complete_event_emitted = true
+              raise @error
+            end
+
+            @raw_result = payload['result']
+            @complete = true
+            @complete_event_emitted = true
+            return HandleEvent.new(type: 'complete')
+          end
+        end
+      end
     end
 
     protected
@@ -67,23 +164,67 @@ module Mlld
     def await_raw
       @mutex.synchronize do
         unless @complete
-          begin
-            @raw_result, @state_write_events = @client.await_request(
-              @request_id,
-              @response_queue,
-              @timeout
-            )
-          rescue Error => e
-            @error = e
+          deadline = @timeout ? Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout : nil
+
+          loop do
+            entry = pop_response(deadline)
+
+            if entry.nil?
+              @client.send_cancel(@request_id)
+              @client.send(:remove_pending, @request_id)
+              @error = Error.new("request timeout after #{@timeout}s", code: 'TIMEOUT')
+              @complete = true
+              @complete_event_emitted = true
+              break
+            end
+
+            kind, payload = entry
+
+            case kind
+            when :event
+              state_write = @client.send(:state_write_from_event, payload)
+              @state_write_events << state_write if state_write
+
+              guard_denial = @client.send(:guard_denial_from_event, payload)
+              @guard_denial_events << guard_denial if guard_denial
+            when :transport_error
+              @error = payload
+              @complete = true
+              @complete_event_emitted = true
+              break
+            when :result
+              error_payload = payload['error']
+              if error_payload.is_a?(Hash)
+                @error = @client.send(:error_from_payload, error_payload)
+              else
+                @raw_result = payload['result']
+              end
+
+              @complete = true
+              @complete_event_emitted = true
+              break
+            end
           end
-          @complete = true
         end
 
         raise @error if @error
         raise Error.new('missing live result payload', code: 'TRANSPORT_ERROR') unless @raw_result
 
-        [@raw_result, @state_write_events]
+        [@raw_result, @state_write_events, @guard_denial_events]
       end
+    end
+
+    def pop_response(deadline)
+      remaining = deadline ? deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC) : nil
+      return nil if remaining && remaining <= 0
+
+      if remaining
+        Timeout.timeout(remaining) { @response_queue.pop }
+      else
+        @response_queue.pop
+      end
+    rescue Timeout::Error
+      nil
     end
   end
 
@@ -93,10 +234,13 @@ module Mlld
     end
 
     def result
-      response, = await_raw
-      output = response['output']
-      output = response.fetch('value', '') if output.nil?
-      output.is_a?(String) ? output : output.to_s
+      response, _, = await_raw
+      if response.is_a?(Hash)
+        output = response['output']
+        return output.is_a?(String) ? output : output.to_s if response.key?('output')
+      end
+
+      response.nil? ? '' : response.to_s
     end
   end
 
@@ -106,8 +250,14 @@ module Mlld
     end
 
     def result
-      response, state_write_events = await_raw
-      @client.decode_execute_result(response, state_write_events)
+      response, state_write_events, guard_denial_events = await_raw
+      @client.decode_execute_result(response, state_write_events, guard_denial_events)
+    end
+
+    def write_file(path, content, timeout: nil)
+      raise Error.new('request already completed', code: 'REQUEST_COMPLETE') if @complete
+
+      @client.send_file_write(@request_id, path, content, timeout || @timeout)
     end
   end
 
@@ -202,6 +352,7 @@ module Mlld
       file_path: nil,
       payload: nil,
       payload_labels: nil,
+      mcp_servers: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -214,6 +365,7 @@ module Mlld
         file_path: file_path,
         payload: payload,
         payload_labels: payload_labels,
+        mcp_servers: mcp_servers,
         state: state,
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
@@ -228,6 +380,7 @@ module Mlld
       file_path: nil,
       payload: nil,
       payload_labels: nil,
+      mcp_servers: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -235,17 +388,18 @@ module Mlld
       allow_absolute_paths: nil,
       timeout: nil
     )
-      params = { 'script' => script }
-      params['filePath'] = file_path if file_path
-      params['payload'] = payload unless payload.nil?
-      normalized_payload_labels = normalize_payload_labels(payload_labels)
-      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
-      params['state'] = state if state
-      params['dynamicModules'] = dynamic_modules if dynamic_modules
-      params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
-      params['mode'] = mode if mode
-      params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
-
+      params = build_process_request(
+        script,
+        file_path: file_path,
+        payload: payload,
+        payload_labels: payload_labels,
+        mcp_servers: mcp_servers,
+        state: state,
+        dynamic_modules: dynamic_modules,
+        dynamic_module_source: dynamic_module_source,
+        mode: mode,
+        allow_absolute_paths: allow_absolute_paths
+      )
       request_id, response_queue = send_request('process', params)
       ProcessHandle.new(
         client: self,
@@ -259,6 +413,7 @@ module Mlld
       filepath,
       payload = nil,
       payload_labels: nil,
+      mcp_servers: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -270,6 +425,7 @@ module Mlld
         filepath,
         payload,
         payload_labels: payload_labels,
+        mcp_servers: mcp_servers,
         state: state,
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
@@ -283,6 +439,7 @@ module Mlld
       filepath,
       payload = nil,
       payload_labels: nil,
+      mcp_servers: nil,
       state: nil,
       dynamic_modules: nil,
       dynamic_module_source: nil,
@@ -290,16 +447,17 @@ module Mlld
       mode: nil,
       timeout: nil
     )
-      params = { 'filepath' => filepath }
-      params['payload'] = payload unless payload.nil?
-      normalized_payload_labels = normalize_payload_labels(payload_labels)
-      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
-      params['state'] = state if state
-      params['dynamicModules'] = dynamic_modules if dynamic_modules
-      params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
-      params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
-      params['mode'] = mode if mode
-
+      params = build_execute_request(
+        filepath,
+        payload,
+        payload_labels: payload_labels,
+        mcp_servers: mcp_servers,
+        state: state,
+        dynamic_modules: dynamic_modules,
+        dynamic_module_source: dynamic_module_source,
+        allow_absolute_paths: allow_absolute_paths,
+        mode: mode
+      )
       request_id, response_queue = send_request('execute', params)
       ExecuteHandle.new(
         client: self,
@@ -312,6 +470,106 @@ module Mlld
     def analyze(filepath)
       result, = request('analyze', { 'filepath' => filepath }, nil)
       build_analyze_result(result, filepath)
+    end
+
+    def build_process_request(
+      script,
+      file_path: nil,
+      payload: nil,
+      payload_labels: nil,
+      mcp_servers: nil,
+      state: nil,
+      dynamic_modules: nil,
+      dynamic_module_source: nil,
+      mode: nil,
+      allow_absolute_paths: nil
+    )
+      normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
+      normalized_mcp_servers = normalize_string_map(mcp_servers)
+
+      params = { 'script' => script }
+      params['filePath'] = file_path if file_path
+      params['payload'] = normalized_payload unless normalized_payload.nil?
+      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
+      params['state'] = state if state
+      params['dynamicModules'] = dynamic_modules if dynamic_modules
+      params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
+      params['mcpServers'] = normalized_mcp_servers if normalized_mcp_servers
+      params['mode'] = mode if mode
+      params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
+      params
+    end
+
+    def build_execute_request(
+      filepath,
+      payload = nil,
+      payload_labels: nil,
+      mcp_servers: nil,
+      state: nil,
+      dynamic_modules: nil,
+      dynamic_module_source: nil,
+      allow_absolute_paths: nil,
+      mode: nil
+    )
+      normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
+      normalized_mcp_servers = normalize_string_map(mcp_servers)
+
+      params = { 'filepath' => filepath }
+      params['payload'] = normalized_payload unless normalized_payload.nil?
+      params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
+      params['state'] = state if state
+      params['dynamicModules'] = dynamic_modules if dynamic_modules
+      params['dynamicModuleSource'] = dynamic_module_source if dynamic_module_source
+      params['mcpServers'] = normalized_mcp_servers if normalized_mcp_servers
+      params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
+      params['mode'] = mode if mode
+      params
+    end
+
+    def fs_status(glob = nil, base_path: nil, timeout: nil)
+      params = {}
+      params['glob'] = glob if glob.is_a?(String) && !glob.strip.empty?
+      params['basePath'] = base_path if base_path
+
+      result, = request('fs:status', params, resolve_timeout(timeout))
+      raise Error.new('invalid fs:status payload', code: 'TRANSPORT_ERROR') unless result.is_a?(Array)
+
+      result.map do |entry|
+        next unless entry.is_a?(Hash)
+
+        filesystem_status_from_payload(entry)
+      end.compact
+    end
+
+    def sign(path, identity: nil, metadata: nil, base_path: nil, timeout: nil)
+      params = { 'path' => path }
+      params['identity'] = identity if identity
+      params['metadata'] = metadata if metadata
+      params['basePath'] = base_path if base_path
+
+      result, = request('sig:sign', params, resolve_timeout(timeout))
+      file_verify_result_from_payload(result)
+    end
+
+    def verify(path, base_path: nil, timeout: nil)
+      params = { 'path' => path }
+      params['basePath'] = base_path if base_path
+
+      result, = request('sig:verify', params, resolve_timeout(timeout))
+      file_verify_result_from_payload(result)
+    end
+
+    def sign_content(content, identity, metadata: nil, signature_id: nil, base_path: nil, timeout: nil)
+      params = {
+        'content' => content,
+        'identity' => identity
+      }
+      params['metadata'] = metadata if metadata
+      params['id'] = signature_id if signature_id
+      params['basePath'] = base_path if base_path
+
+      result, = request('sig:sign-content', params, resolve_timeout(timeout))
+      content_signature_from_payload(result)
     end
 
     def send_cancel(request_id)
@@ -349,6 +607,36 @@ module Mlld
       end
     end
 
+    def send_file_write(request_id, path, content, timeout)
+      unless path.is_a?(String) && !path.strip.empty?
+        raise Error.new('file write path is required', code: 'INVALID_REQUEST')
+      end
+      unless content.is_a?(String)
+        raise Error.new('file write content must be a string', code: 'INVALID_REQUEST')
+      end
+
+      resolved_timeout = resolve_timeout(timeout)
+      max_wait = resolved_timeout || 2.0
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + max_wait
+
+      loop do
+        begin
+          params = {
+            'requestId' => request_id,
+            'path' => path,
+            'content' => content
+          }
+          result, = request('file:write', params, resolved_timeout)
+          return file_verify_result_from_payload(result)
+        rescue Error => error
+          raise unless error.code == 'REQUEST_NOT_FOUND'
+          raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep(0.025)
+        end
+      end
+    end
+
     def normalize_payload_labels(payload_labels)
       return nil if payload_labels.nil?
       return nil unless payload_labels.is_a?(Hash)
@@ -356,8 +644,70 @@ module Mlld
       normalized = {}
       payload_labels.each do |key, labels|
         deduped = normalize_label_list(labels)
-        normalized[key] = deduped if deduped
+        normalized[key.to_s] = deduped if deduped
       end
+      normalized.empty? ? nil : normalized
+    end
+
+    def normalize_payload_and_labels(payload, payload_labels)
+      merged_labels = {}
+      normalized_payload = payload
+
+      if payload.is_a?(Hash)
+        normalized_payload = {}
+        payload.each do |key, value|
+          field = key.to_s
+          if value.is_a?(LabeledValue)
+            normalized_payload[field] = value.value
+            labels = normalize_label_list(value.labels)
+            merged_labels[field] = labels if labels
+          else
+            normalized_payload[field] = value
+          end
+        end
+      elsif !payload_labels.nil?
+        raise Error.new('payload_labels requires payload to be a hash', code: 'INVALID_REQUEST')
+      end
+
+      explicit_labels = normalize_payload_labels(payload_labels)
+      if explicit_labels
+        raise Error.new('payload_labels requires payload to be a hash', code: 'INVALID_REQUEST') unless normalized_payload.is_a?(Hash)
+
+        explicit_labels.each do |field, labels|
+          unless normalized_payload.key?(field)
+            raise Error.new("payload_labels contains unknown field: #{field}", code: 'INVALID_REQUEST')
+          end
+
+          merged_labels[field] = merge_label_lists(merged_labels[field], labels)
+        end
+      end
+
+      [normalized_payload, merged_labels.empty? ? nil : merged_labels]
+    end
+
+    def merge_label_lists(existing, incoming)
+      merged = Array(existing)
+      incoming.each do |label|
+        merged << label unless merged.include?(label)
+      end
+      merged
+    end
+
+    def normalize_string_map(value)
+      return nil unless value.is_a?(Hash)
+
+      normalized = {}
+      value.each do |key, item|
+        next unless key.is_a?(String) || key.is_a?(Symbol)
+        next unless item.is_a?(String)
+
+        normalized_key = key.to_s.strip
+        normalized_value = item.strip
+        next if normalized_key.empty? || normalized_value.empty?
+
+        normalized[normalized_key] = normalized_value
+      end
+
       normalized.empty? ? nil : normalized
     end
 
@@ -413,19 +763,30 @@ module Mlld
         error_payload = payload['error']
         raise error_from_payload(error_payload) if error_payload.is_a?(Hash)
 
-        payload.delete('id')
-        return [payload, state_write_events]
+        return [payload['result'], state_write_events]
       end
     end
 
-    def decode_execute_result(result, state_write_events)
+    def decode_execute_result(result, state_write_events, guard_denial_events = [])
+      unless result.is_a?(Hash)
+        return ExecuteResult.new(
+          output: result.nil? ? '' : result.to_s,
+          state_writes: state_write_events,
+          exports: [],
+          effects: [],
+          denials: guard_denial_events,
+          metrics: nil
+        )
+      end
+
       state_writes = Array(result['stateWrites']).map do |write|
         next unless write.is_a?(Hash)
 
         StateWrite.new(
           path: write['path'].to_s,
-          value: write['value'],
-          timestamp: write['timestamp']
+          value: decode_state_write_value(write['value']),
+          timestamp: write['timestamp'],
+          security: write['security'].is_a?(Hash) ? write['security'] : nil
         )
       end.compact
 
@@ -452,17 +813,9 @@ module Mlld
       end.compact
 
       denials = Array(result['denials']).map do |entry|
-        next unless entry.is_a?(Hash)
-
-        GuardDenial.new(
-          guard: entry['guard'],
-          operation: entry['operation'].to_s,
-          reason: entry['reason'].to_s,
-          rule: entry['rule'],
-          labels: Array(entry['labels']).select { |label| label.is_a?(String) },
-          args: entry['args'].is_a?(Hash) ? entry['args'] : nil
-        )
+        guard_denial_from_payload(entry)
       end.compact
+      denials = merge_guard_denials(denials, guard_denial_events)
 
       ExecuteResult.new(
         output: result['output'].to_s,
@@ -471,6 +824,61 @@ module Mlld
         effects: effects,
         denials: denials,
         metrics: metrics
+      )
+    end
+
+    def file_verify_result_from_payload(payload)
+      raise Error.new('invalid file verification payload', code: 'TRANSPORT_ERROR') unless payload.is_a?(Hash)
+
+      FileVerifyResult.new(
+        path: payload.fetch('path', '').to_s,
+        relative_path: payload.fetch('relativePath', payload.fetch('relative_path', '')).to_s,
+        status: payload.fetch('status', '').to_s,
+        verified: payload['verified'] ? true : false,
+        signer: payload['signer'].is_a?(String) ? payload['signer'] : nil,
+        signed_at: payload['signedAt'].is_a?(String) ? payload['signedAt'] : nil,
+        hash: payload['hash'].is_a?(String) ? payload['hash'] : nil,
+        expected_hash: payload['expectedHash'].is_a?(String) ? payload['expectedHash'] : nil,
+        metadata: payload['metadata'].is_a?(Hash) ? payload['metadata'] : nil,
+        error: payload['error'].is_a?(String) ? payload['error'] : nil
+      )
+    end
+
+    def filesystem_status_from_payload(payload)
+      raise Error.new('invalid fs:status payload', code: 'TRANSPORT_ERROR') unless payload.is_a?(Hash)
+
+      FilesystemStatus.new(
+        path: payload.fetch('path', '').to_s,
+        relative_path: payload.fetch('relativePath', payload.fetch('relative_path', '')).to_s,
+        status: payload.fetch('status', '').to_s,
+        verified: payload['verified'] ? true : false,
+        signer: payload['signer'].is_a?(String) ? payload['signer'] : nil,
+        labels: Array(payload['labels']).select { |label| label.is_a?(String) },
+        taint: Array(payload['taint']).select { |label| label.is_a?(String) },
+        signed_at: payload['signedAt'].is_a?(String) ? payload['signedAt'] : nil,
+        error: payload['error'].is_a?(String) ? payload['error'] : nil
+      )
+    end
+
+    def content_signature_from_payload(payload)
+      raise Error.new('invalid sign_content payload', code: 'TRANSPORT_ERROR') unless payload.is_a?(Hash)
+
+      metadata =
+        if payload['metadata'].is_a?(Hash)
+          payload['metadata']
+            .each_with_object({}) do |(key, value), normalized|
+              normalized[key.to_s] = value.to_s if key.is_a?(String) && value.is_a?(String)
+            end
+        end
+
+      ContentSignature.new(
+        id: payload.fetch('id', '').to_s,
+        hash: payload.fetch('hash', '').to_s,
+        algorithm: payload.fetch('algorithm', '').to_s,
+        signed_by: payload.fetch('signedBy', payload.fetch('signed_by', '')).to_s,
+        signed_at: payload.fetch('signedAt', payload.fetch('signed_at', '')).to_s,
+        content_length: payload.fetch('contentLength', payload.fetch('content_length', 0)).to_i,
+        metadata: metadata
       )
     end
 
@@ -571,19 +979,18 @@ module Mlld
 
         event = envelope['event']
         if event.is_a?(Hash)
-          event_request_id = request_id_from_payload(event['id'])
+          event_request_id = request_id_from_payload(event['requestId'] || event['id'])
           if event_request_id
             queue = @lock.synchronize { @pending[event_request_id] }
             queue << [:event, event] if queue
           end
         end
 
-        result = envelope['result']
-        if result.is_a?(Hash)
-          result_request_id = request_id_from_payload(result['id'])
+        if envelope.key?('result') || envelope.key?('error')
+          result_request_id = request_id_from_payload(envelope['id'])
           if result_request_id
             queue = @lock.synchronize { @pending.delete(result_request_id) }
-            queue << [:result, result] if queue
+            queue << [:result, envelope] if queue
           end
         end
       end
@@ -648,7 +1055,46 @@ module Mlld
       path = write['path']
       return nil unless path.is_a?(String) && !path.empty?
 
-      StateWrite.new(path: path, value: write['value'], timestamp: write['timestamp'])
+      StateWrite.new(
+        path: path,
+        value: decode_state_write_value(write['value']),
+        timestamp: write['timestamp'],
+        security: write['security'].is_a?(Hash) ? write['security'] : nil
+      )
+    end
+
+    def guard_denial_from_event(event)
+      return nil unless event['type'] == 'guard_denial'
+
+      guard_denial_from_payload(event['guard_denial'])
+    end
+
+    def guard_denial_from_payload(entry)
+      return nil unless entry.is_a?(Hash)
+      return nil unless entry['operation'].is_a?(String) && !entry['operation'].empty?
+      return nil unless entry['reason'].is_a?(String) && !entry['reason'].empty?
+
+      GuardDenial.new(
+        guard: entry['guard'].is_a?(String) ? entry['guard'] : nil,
+        operation: entry['operation'],
+        reason: entry['reason'],
+        rule: entry['rule'].is_a?(String) ? entry['rule'] : nil,
+        labels: Array(entry['labels']).select { |label| label.is_a?(String) },
+        args: entry['args'].is_a?(Hash) ? entry['args'] : nil
+      )
+    end
+
+    def decode_state_write_value(value)
+      return value unless value.is_a?(String)
+
+      trimmed = value.strip
+      return value if trimmed.length < 2
+      return value unless (trimmed.start_with?('{') && trimmed.end_with?('}')) ||
+                          (trimmed.start_with?('[') && trimmed.end_with?(']'))
+
+      JSON.parse(value)
+    rescue JSON::ParserError
+      value
     end
 
     def merge_state_writes(primary, secondary)
@@ -674,6 +1120,39 @@ module Mlld
       "#{state_write.path}|#{encoded_value}"
     rescue StandardError
       "#{state_write.path}|#{state_write.value.inspect}"
+    end
+
+    def merge_guard_denials(primary, secondary)
+      return primary if secondary.empty?
+      return secondary if primary.empty?
+
+      merged = []
+      seen = {}
+
+      (primary + secondary).each do |guard_denial|
+        key = guard_denial_key(guard_denial)
+        next if seen[key]
+
+        seen[key] = true
+        merged << guard_denial
+      end
+
+      merged
+    end
+
+    def guard_denial_key(guard_denial)
+      JSON.generate(
+        {
+          guard: guard_denial.guard,
+          operation: guard_denial.operation,
+          reason: guard_denial.reason,
+          rule: guard_denial.rule,
+          labels: Array(guard_denial.labels).sort,
+          args: guard_denial.args
+        }
+      )
+    rescue StandardError
+      "#{guard_denial.guard}|#{guard_denial.operation}|#{guard_denial.reason}|#{guard_denial.rule}"
     end
 
     def build_analyze_result(result, fallback_filepath)
@@ -712,7 +1191,7 @@ module Mlld
         Guard.new(
           name: entry.fetch('name', '').to_s,
           timing: entry.fetch('timing', '').to_s,
-          label: entry['label']
+          trigger: entry['trigger'] || entry['label']
         )
       end.compact
 
@@ -768,6 +1247,39 @@ module Mlld
 
     def analyze(filepath)
       default_client.analyze(filepath)
+    end
+
+    def fs_status(glob = nil, **kwargs)
+      default_client.fs_status(glob, **kwargs)
+    end
+
+    def sign(path, **kwargs)
+      default_client.sign(path, **kwargs)
+    end
+
+    def verify(path, **kwargs)
+      default_client.verify(path, **kwargs)
+    end
+
+    def sign_content(content, identity, **kwargs)
+      default_client.sign_content(content, identity, **kwargs)
+    end
+
+    def labeled(value, *labels)
+      normalized = labels
+        .select { |label| label.is_a?(String) }
+        .map(&:strip)
+        .reject(&:empty?)
+        .uniq
+      LabeledValue.new(value: value, labels: normalized)
+    end
+
+    def trusted(value)
+      labeled(value, 'trusted')
+    end
+
+    def untrusted(value)
+      labeled(value, 'untrusted')
     end
   end
 end

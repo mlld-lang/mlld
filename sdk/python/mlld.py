@@ -96,7 +96,7 @@ class Guard:
 
     name: str
     timing: str
-    label: str | None = None
+    trigger: str = ""
 
 
 @dataclass
@@ -221,7 +221,8 @@ class _BaseHandle:
         self._timeout = timeout
         self._lock = threading.Lock()
         self._is_complete = False
-        self._raw_result: dict[str, Any] | None = None
+        self._complete_event_emitted = False
+        self._raw_result: Any = None
         self._state_write_events: list[StateWrite] = []
         self._guard_denial_events: list[GuardDenial] = []
         self._error: MlldError | None = None
@@ -229,6 +230,8 @@ class _BaseHandle:
     def cancel(self) -> None:
         """Request graceful cancellation for this in-flight execution."""
 
+        if self._is_complete:
+            return
         self._client._send_cancel(self.request_id)
 
     def update_state(
@@ -264,6 +267,9 @@ class _BaseHandle:
         Returns None on timeout."""
 
         if self._is_complete:
+            if self._complete_event_emitted or self._error is not None:
+                return None
+            self._complete_event_emitted = True
             return HandleEvent(type="complete")
 
         effective_timeout = timeout if timeout is not None else self._timeout
@@ -293,6 +299,7 @@ class _BaseHandle:
             if kind == "transport_error":
                 self._error = payload
                 self._is_complete = True
+                self._complete_event_emitted = True
                 raise payload
 
             if kind == "result" and isinstance(payload, dict):
@@ -300,13 +307,14 @@ class _BaseHandle:
                 if isinstance(error_payload, dict):
                     self._error = _error_from_payload(error_payload)
                     self._is_complete = True
+                    self._complete_event_emitted = True
                     raise self._error
-                payload.pop("id", None)
-                self._raw_result = payload
+                self._raw_result = payload.get("result")
                 self._is_complete = True
+                self._complete_event_emitted = True
                 return HandleEvent(type="complete")
 
-    def _await_raw(self) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
+    def _await_raw(self) -> tuple[Any, list[StateWrite], list[GuardDenial]]:
         with self._lock:
             if not self._is_complete:
                 try:
@@ -318,6 +326,7 @@ class _BaseHandle:
                 except MlldError as error:
                     self._error = error
                 self._is_complete = True
+                self._complete_event_emitted = True
 
             if self._error is not None:
                 raise self._error
@@ -344,9 +353,9 @@ class ProcessHandle(_BaseHandle):
         """Wait for completion and return output."""
 
         result, _, _ = self._await_raw()
-        output = result.get("output")
-        if output is None:
-            output = result.get("value", "")
+        output = result
+        if isinstance(result, dict):
+            output = result.get("output", result)
         return output if isinstance(output, str) else str(output)
 
 
@@ -362,7 +371,11 @@ class ExecuteHandle(_BaseHandle):
         """Wait for completion and return structured output."""
 
         result, state_write_events, guard_denial_events = self._await_raw()
-        return _execute_result_from_payload(result, state_write_events, guard_denial_events)
+        return _execute_result_from_payload(
+            _require_mapping_payload(result, "invalid execute payload"),
+            state_write_events,
+            guard_denial_events,
+        )
 
     def write_file(
         self,
@@ -670,6 +683,7 @@ class Client:
         """
 
         result, _, _ = self._request("analyze", {"filepath": filepath}, None)
+        result = _require_mapping_payload(result, "invalid analyze payload")
 
         errors = [
             AnalysisError(
@@ -702,9 +716,15 @@ class Client:
 
         guards = [
             Guard(
-                name=g.get("name", ""),
-                timing=g.get("timing", ""),
-                label=g.get("label"),
+                name=g.get("name") if isinstance(g.get("name"), str) else "",
+                timing=g.get("timing") if isinstance(g.get("timing"), str) else "",
+                trigger=(
+                    g.get("trigger")
+                    if isinstance(g.get("trigger"), str)
+                    else g.get("label")
+                    if isinstance(g.get("label"), str)
+                    else ""
+                ),
             )
             for g in result.get("guards", [])
             if isinstance(g, dict)
@@ -753,7 +773,7 @@ class Client:
             params["basePath"] = base_path
 
         result, _, _ = self._request("fs:status", params, timeout if timeout is not None else self.timeout)
-        raw_items = result.get("value", result.get("result", []))
+        raw_items = result
         if not isinstance(raw_items, list):
             raise MlldError("invalid fs:status payload", code="TRANSPORT_ERROR")
         return [
@@ -791,7 +811,7 @@ class Client:
             params["basePath"] = base_path
 
         result, _, _ = self._request("sig:sign", params, timeout if timeout is not None else self.timeout)
-        return _file_verify_result_from_payload(_unwrap_live_result(result))
+        return _file_verify_result_from_payload(_require_mapping_payload(result, "invalid sig:sign payload"))
 
     def verify(
         self,
@@ -814,7 +834,7 @@ class Client:
             params["basePath"] = base_path
 
         result, _, _ = self._request("sig:verify", params, timeout if timeout is not None else self.timeout)
-        return _file_verify_result_from_payload(_unwrap_live_result(result))
+        return _file_verify_result_from_payload(_require_mapping_payload(result, "invalid sig:verify payload"))
 
     def sign_content(
         self,
@@ -854,14 +874,16 @@ class Client:
             params,
             timeout if timeout is not None else self.timeout,
         )
-        return _content_signature_from_payload(_unwrap_live_result(result))
+        return _content_signature_from_payload(
+            _require_mapping_payload(result, "invalid sig:sign-content payload")
+        )
 
     def _request(
         self,
         method: str,
         params: dict[str, Any],
         timeout: float | None,
-    ) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
+    ) -> tuple[Any, list[StateWrite], list[GuardDenial]]:
         request_id, response_queue = self._send_request(method, params)
         return self._await_request(request_id, response_queue, timeout)
 
@@ -870,7 +892,7 @@ class Client:
         request_id: int,
         response_queue: PendingQueue,
         timeout: float | None,
-    ) -> tuple[dict[str, Any], list[StateWrite], list[GuardDenial]]:
+    ) -> tuple[Any, list[StateWrite], list[GuardDenial]]:
         state_write_events: list[StateWrite] = []
         guard_denial_events: list[GuardDenial] = []
 
@@ -909,8 +931,10 @@ class Client:
             if isinstance(error_payload, dict):
                 raise _error_from_payload(error_payload)
 
-            payload.pop("id", None)
-            return payload, state_write_events, guard_denial_events
+            if "result" not in payload:
+                raise MlldError("missing live result payload", code="TRANSPORT_ERROR")
+
+            return payload.get("result"), state_write_events, guard_denial_events
 
     def _send_request(self, method: str, params: dict[str, Any]) -> tuple[int, PendingQueue]:
         with self._lock:
@@ -1006,7 +1030,9 @@ class Client:
         while True:
             try:
                 result, _, _ = self._request("file:write", params, timeout)
-                return _file_verify_result_from_payload(_unwrap_live_result(result))
+                return _file_verify_result_from_payload(
+                    _require_mapping_payload(result, "invalid file:write payload")
+                )
             except MlldError as error:
                 if error.code != "REQUEST_NOT_FOUND":
                     raise
@@ -1095,21 +1121,19 @@ class Client:
 
                 event = envelope.get("event")
                 if isinstance(event, dict):
-                    req_id = event.get("id")
-                    if isinstance(req_id, int):
+                    req_id = _request_id_from_transport(event.get("requestId", event.get("id")))
+                    if req_id is not None:
                         with self._lock:
                             pending = self._pending.get(req_id)
                         if pending is not None:
                             pending.put(("event", event))
 
-                result = envelope.get("result")
-                if isinstance(result, dict):
-                    req_id = result.get("id")
-                    if isinstance(req_id, int):
-                        with self._lock:
-                            pending = self._pending.pop(req_id, None)
-                        if pending is not None:
-                            pending.put(("result", result))
+                req_id = _request_id_from_transport(envelope.get("id"))
+                if req_id is not None and ("result" in envelope or "error" in envelope):
+                    with self._lock:
+                        pending = self._pending.pop(req_id, None)
+                    if pending is not None:
+                        pending.put(("result", envelope))
         finally:
             stderr_output = "".join(self._stderr_lines).strip()
             message = stderr_output or "live transport closed"
@@ -1140,6 +1164,23 @@ def _error_from_payload(error_payload: dict[str, Any]) -> MlldError:
     message = str(error_payload.get("message", "mlld request failed"))
     code = error_payload.get("code")
     return MlldError(message=message, code=code if isinstance(code, str) else None)
+
+
+def _request_id_from_transport(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _require_mapping_payload(payload: Any, message: str) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return payload
+    raise MlldError(message, code="TRANSPORT_ERROR")
 
 
 def _looks_like_json_composite(value: str) -> bool:
@@ -1323,14 +1364,6 @@ def _execute_result_from_payload(
         denials=denials,
         metrics=metrics,
     )
-
-
-def _unwrap_live_result(result: dict[str, Any]) -> dict[str, Any]:
-    value = result.get("value", result)
-    if not isinstance(value, dict):
-        raise MlldError("invalid live result payload", code="TRANSPORT_ERROR")
-    return value
-
 
 def _file_verify_result_from_payload(payload: dict[str, Any]) -> FileVerifyResult:
     return FileVerifyResult(

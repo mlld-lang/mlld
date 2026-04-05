@@ -29,9 +29,10 @@ Features:
 - In-memory AST caching (mtime-based invalidation)
 - State hydration via `@state` module
 - Payload injection via `@payload`, including per-field labels via `payloadLabels`
-- State writes via `state://` protocol
-- Stream handles can apply labeled in-flight state updates with `updateState(path, value, labels?)`
+- State writes via `state://` protocol (merged from streamed events + final result)
+- Stream handles support `updateState(path, value, labels?)`, `writeFile(path, content)`, and event consumption via async iteration or `next_event`
 - `mcpServers` maps logical names to MCP server commands per-execution
+- Results include `stateWrites`, `effects` (with security metadata), `denials` (guard/policy), and `metrics` (timing)
 
 **MCP server injection** lets parallel `execute()` calls each get independent MCP server instances:
 

@@ -47,7 +47,9 @@ defmodule Mlld.LiveIntegrationTest do
     /show `text=@text mode=@mode count=@next`
     """
 
-    temp_dir = Path.join(System.tmp_dir!(), "mlld-elixir-sdk-#{System.unique_integer([:positive])}")
+    temp_dir =
+      Path.join(System.tmp_dir!(), "mlld-elixir-sdk-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(temp_dir)
     script_path = Path.join(temp_dir, "integration.mld")
     File.write!(script_path, script)
@@ -105,6 +107,75 @@ defmodule Mlld.LiveIntegrationTest do
     assert output =~ "loop-stopped"
   end
 
+  test "next_event yields state writes and complete", %{client: client} do
+    script = """
+    output "ping" to "state://pending"
+    loop(99999, 50ms) until @state.exit [
+      continue
+    ]
+    show @state.result
+    """
+
+    assert {:ok, handle} =
+             Client.process_async(
+               client,
+               script,
+               state: %{"pending" => nil, "result" => nil, "exit" => false},
+               mode: :strict,
+               timeout: 10_000
+             )
+
+    event = Handle.next_event(handle, 5_000)
+    assert event.type == "state_write"
+    assert event.state_write.path == "pending"
+    assert event.state_write.value == "ping"
+
+    assert :ok = Handle.update_state(handle, "result", "pong")
+    assert :ok = Handle.update_state(handle, "exit", true)
+
+    event = Handle.next_event(handle, 5_000)
+    assert event.type == "complete"
+    assert is_nil(Handle.next_event(handle, 100))
+
+    assert {:ok, output} = Handle.result(handle)
+    assert output =~ "pong"
+    assert is_nil(Handle.next_event(handle, 100))
+  end
+
+  test "next_event yields guard denials before completion", %{client: client} do
+    script = """
+    /guard @blocker before op:exe = when [
+      @mx.op.name == "send" => deny "recipient not authorized"
+      * => allow
+    ]
+    /exe @send(value) = when [
+      denied => "blocked"
+      * => @value
+    ]
+    /show @send("hello")
+    """
+
+    assert {:ok, handle} =
+             Client.process_async(
+               client,
+               script,
+               mode: :markdown,
+               timeout: 5_000
+             )
+
+    event = Handle.next_event(handle, 5_000)
+    assert event.type == "guard_denial"
+    assert event.guard_denial.operation == "send"
+    assert event.guard_denial.reason == "recipient not authorized"
+    assert event.guard_denial.args == %{"value" => "hello"}
+
+    event = Handle.next_event(handle, 5_000)
+    assert event.type == "complete"
+
+    assert {:ok, output} = Handle.result(handle)
+    assert output =~ "blocked"
+  end
+
   test "sdk labels flow through payload and state updates", %{client: client} do
     script = """
     loop(99999, 50ms) until @state.exit [
@@ -135,6 +206,122 @@ defmodule Mlld.LiveIntegrationTest do
     assert output
            |> String.split("\n", trim: true)
            |> Enum.map(&String.trim/1) == ["true", "true", "tool output"]
+  end
+
+  test "execute handle write_file creates signed output with provenance", %{client: client} do
+    root = Path.join(System.tmp_dir!(), "mlld-elixir-write-#{System.unique_integer([:positive])}")
+    routes_dir = Path.join(root, "routes")
+    File.mkdir_p!(routes_dir)
+    File.write!(Path.join(root, "package.json"), "{}")
+
+    script_path = Path.join(routes_dir, "route.mld")
+
+    File.write!(
+      script_path,
+      """
+      loop(99999, 50ms) until @state.exit [
+        continue
+      ]
+      show "done"
+      """
+    )
+
+    assert {:ok, handle} =
+             Client.execute_async(
+               client,
+               script_path,
+               nil,
+               state: %{"exit" => false},
+               timeout: 10_000
+             )
+
+    assert {:ok, write_result} = Handle.write_file(handle, "out.txt", "hello from sdk", timeout: 5_000)
+
+    assert write_result.path == Path.join(routes_dir, "out.txt")
+    assert write_result.status == "verified"
+    assert write_result.verified
+    assert write_result.signer == "agent:route"
+    assert File.read!(Path.join(routes_dir, "out.txt")) == "hello from sdk"
+    assert write_result.metadata["taint"] == ["untrusted"]
+
+    assert write_result.metadata["provenance"] == %{
+             "sourceType" => "mlld_execution",
+             "sourceId" => Integer.to_string(Handle.request_id(handle)),
+             "scriptPath" => script_path
+           }
+
+    assert :ok = Handle.update_state(handle, "exit", true)
+    assert {:ok, final} = Handle.result(handle)
+    assert final.output =~ "done"
+
+    assert {:error, %Mlld.Error{code: "REQUEST_NOT_FOUND"}} =
+             Handle.write_file(handle, "late.txt", "too late")
+  end
+
+  test "sign verify sign_content and fs_status roundtrip", %{client: client} do
+    root = Path.join(System.tmp_dir!(), "mlld-elixir-sig-#{System.unique_integer([:positive])}")
+    docs_dir = Path.join(root, "docs")
+    File.mkdir_p!(docs_dir)
+    File.write!(Path.join(root, "package.json"), "{}")
+    File.write!(Path.join(docs_dir, "note.txt"), "hello from elixir sdk")
+
+    assert {:ok, signed} =
+             Client.sign(
+               client,
+               "docs/note.txt",
+               identity: "user:alice",
+               metadata: %{"purpose" => "sdk"},
+               base_path: root,
+               timeout: 10_000
+             )
+
+    assert {:ok, verified} =
+             Client.verify(
+               client,
+               "docs/note.txt",
+               base_path: root,
+               timeout: 10_000
+             )
+
+    assert {:ok, content_signature} =
+             Client.sign_content(
+               client,
+               "signed body",
+               "user:alice",
+               metadata: %{"channel" => "sdk"},
+               signature_id: "content-1",
+               base_path: root,
+               timeout: 10_000
+             )
+
+    assert {:ok, statuses} =
+             Client.fs_status(
+               client,
+               "docs/*.txt",
+               base_path: root,
+               timeout: 10_000
+             )
+
+    assert signed.status == "verified"
+    assert signed.verified
+    assert signed.signer == "user:alice"
+    assert signed.metadata == %{"purpose" => "sdk"}
+
+    assert verified.status == "verified"
+    assert verified.verified
+    assert verified.signer == "user:alice"
+    assert verified.metadata == %{"purpose" => "sdk"}
+
+    assert content_signature.id == "content-1"
+    assert content_signature.signed_by == "user:alice"
+    assert content_signature.metadata == %{"channel" => "sdk"}
+    assert File.exists?(Path.join(root, ".sig/content/content-1.sig.json"))
+    assert File.exists?(Path.join(root, ".sig/content/content-1.sig.content"))
+
+    assert length(statuses) == 1
+    assert hd(statuses).relative_path == "docs/note.txt"
+    assert hd(statuses).status == "verified"
+    assert hd(statuses).signer == "user:alice"
   end
 
   test "update_state fails after completion", %{client: client} do

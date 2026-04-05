@@ -101,3 +101,28 @@ Labels applied through SDK state updates:
 - are visible on `@state.some_path.mx.labels`
 - propagate through normal mlld label flow
 - are optional; omitting labels preserves unlabeled behavior for that updated path
+
+## Event Streaming
+
+Handles emit events during execution. Use `next_event` to consume them:
+
+```python
+handle = client.execute_async("./agent.mld", payload)
+
+while True:
+    event = handle.next_event(timeout=5)
+    if event is None or event.type == "complete":
+        break
+    if event.type == "state_write":
+        print(f"State: {event.state_write.path} = {event.state_write.value}")
+    elif event.type == "guard_denial":
+        print(f"Denied: {event.guard_denial.operation}")
+
+result = handle.result()
+```
+
+State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. `result()` can be called at any time — it blocks until execution completes.
+
+## Handle Lifecycle
+
+Handles follow a three-state lifecycle: PENDING → STREAMING → COMPLETE. After COMPLETE, `next_event` returns null, `result()` returns the cached result (idempotent), and `update_state` errors. See `sdk/SPEC.md` for full terminal semantics.

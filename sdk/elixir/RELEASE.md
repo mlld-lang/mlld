@@ -65,6 +65,13 @@ mix test
 
 Expected result: no format drift, all tests passing.
 
+Fallback for environments where Mix cannot resolve optional deps:
+
+```bash
+cd sdk/elixir
+elixir test_runner.exs
+```
+
 ## 4. Build package locally
 
 ```bash

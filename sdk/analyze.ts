@@ -73,7 +73,7 @@
  *
  * - name?: string - Guard name if named (e.g., '@secretGuard')
  * - timing: 'before' | 'after' | 'always' - When guard runs
- * - filter: string - What it guards (e.g., 'secret', 'op:run', 'net:w')
+ * - trigger: string - What it guards (e.g., 'secret', 'op:run', 'net:w')
  *
  * ### ImportInfo
  * Information about a /import directive.
@@ -214,7 +214,7 @@ export interface GuardInfo {
   timing: 'before' | 'after' | 'always';
 
   /** What it guards (label or operation) */
-  filter: string;
+  trigger: string;
 }
 
 export interface ImportInfo {
@@ -588,13 +588,13 @@ function extractGuards(ast: MlldNode[]): GuardInfo[] {
     // Timing from raw.timing or meta.timing
     const timing = (raw.timing ?? meta.timing ?? 'before') as GuardInfo['timing'];
 
-    // Filter from meta.filterValue or raw.filter
-    const filter = (meta.filterValue ?? raw.filter ?? '') as string;
+    // Trigger from meta.filterValue or raw.filter
+    const trigger = (meta.filterValue ?? raw.filter ?? '') as string;
 
     guards.push({
       name: name || undefined,
       timing,
-      filter
+      trigger
     });
   }
 

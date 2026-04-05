@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +49,11 @@ type Client struct {
 	nextID      uint64
 }
 
+var (
+	defaultClientMu sync.Mutex
+	defaultClient   *Client
+)
+
 type liveMessageKind string
 
 const (
@@ -57,7 +64,7 @@ const (
 
 type liveMessage struct {
 	kind    liveMessageKind
-	payload map[string]any
+	payload any
 	err     error
 }
 
@@ -82,6 +89,77 @@ func (c *Client) Close() error {
 	return c.resetLiveLocked()
 }
 
+// DefaultClient returns the lazily initialized package-level client.
+func DefaultClient() *Client {
+	defaultClientMu.Lock()
+	defer defaultClientMu.Unlock()
+
+	if defaultClient == nil {
+		defaultClient = New()
+	}
+
+	return defaultClient
+}
+
+// CloseDefaultClient closes and clears the lazily initialized package-level client.
+func CloseDefaultClient() error {
+	defaultClientMu.Lock()
+	client := defaultClient
+	defaultClient = nil
+	defaultClientMu.Unlock()
+
+	if client == nil {
+		return nil
+	}
+
+	return client.Close()
+}
+
+// Process executes a script using the package-level default client.
+func Process(script string, opts *ProcessOptions) (string, error) {
+	return DefaultClient().Process(script, opts)
+}
+
+// ProcessAsync executes a script using the package-level default client.
+func ProcessAsync(script string, opts *ProcessOptions) (*ProcessHandle, error) {
+	return DefaultClient().ProcessAsync(script, opts)
+}
+
+// Execute runs a file using the package-level default client.
+func Execute(filepath string, payload any, opts *ExecuteOptions) (*ExecuteResult, error) {
+	return DefaultClient().Execute(filepath, payload, opts)
+}
+
+// ExecuteAsync runs a file using the package-level default client.
+func ExecuteAsync(filepath string, payload any, opts *ExecuteOptions) (*ExecuteHandle, error) {
+	return DefaultClient().ExecuteAsync(filepath, payload, opts)
+}
+
+// Analyze performs static analysis using the package-level default client.
+func Analyze(filepath string) (*AnalyzeResult, error) {
+	return DefaultClient().Analyze(filepath)
+}
+
+// FSStatus returns filesystem signature status using the package-level default client.
+func FSStatus(glob string, opts *FSStatusOptions) ([]FilesystemStatus, error) {
+	return DefaultClient().FSStatus(glob, opts)
+}
+
+// Sign signs a file using the package-level default client.
+func Sign(path string, opts *SignOptions) (*FileVerifyResult, error) {
+	return DefaultClient().Sign(path, opts)
+}
+
+// Verify verifies a file using the package-level default client.
+func Verify(path string, opts *VerifyOptions) (*FileVerifyResult, error) {
+	return DefaultClient().Verify(path, opts)
+}
+
+// SignContent signs runtime content using the package-level default client.
+func SignContent(content string, identity string, opts *SignContentOptions) (*ContentSignature, error) {
+	return DefaultClient().SignContent(content, identity, opts)
+}
+
 // ProcessOptions configures a Process call.
 type ProcessOptions struct {
 	// FilePath provides context for relative imports.
@@ -101,6 +179,9 @@ type ProcessOptions struct {
 
 	// DynamicModuleSource adds src:{source} labels to injected modules.
 	DynamicModuleSource string
+
+	// McpServers maps logical server names to MCP server commands.
+	McpServers map[string]string
 
 	// Mode sets strict|markdown parsing mode.
 	Mode string
@@ -126,11 +207,62 @@ type ExecuteOptions struct {
 	// DynamicModuleSource adds src:{source} labels to injected modules.
 	DynamicModuleSource string
 
+	// McpServers maps logical server names to MCP server commands.
+	McpServers map[string]string
+
 	// AllowAbsolutePaths enables absolute path access when true.
 	AllowAbsolutePaths *bool
 
 	// Mode sets strict|markdown parsing mode.
 	Mode string
+
+	// Timeout overrides the client default.
+	Timeout time.Duration
+}
+
+// FSStatusOptions configures an FSStatus call.
+type FSStatusOptions struct {
+	// BasePath overrides the project-relative resolution base.
+	BasePath string
+
+	// Timeout overrides the client default.
+	Timeout time.Duration
+}
+
+// SignOptions configures a Sign call.
+type SignOptions struct {
+	// Identity overrides the signer identity.
+	Identity string
+
+	// Metadata persists alongside the file signature.
+	Metadata map[string]any
+
+	// BasePath overrides the project-relative resolution base.
+	BasePath string
+
+	// Timeout overrides the client default.
+	Timeout time.Duration
+}
+
+// VerifyOptions configures a Verify call.
+type VerifyOptions struct {
+	// BasePath overrides the project-relative resolution base.
+	BasePath string
+
+	// Timeout overrides the client default.
+	Timeout time.Duration
+}
+
+// SignContentOptions configures a SignContent call.
+type SignContentOptions struct {
+	// Metadata persists alongside the content signature.
+	Metadata map[string]string
+
+	// SignatureID sets the stable persisted signature identifier.
+	SignatureID string
+
+	// BasePath overrides the project-relative resolution base.
+	BasePath string
 
 	// Timeout overrides the client default.
 	Timeout time.Duration
@@ -163,11 +295,19 @@ type GuardDenial struct {
 	Args      map[string]any `json:"args,omitempty"`
 }
 
+// HandleEvent represents an event from an in-flight execution.
+type HandleEvent struct {
+	Type        string       `json:"type"`
+	StateWrite  *StateWrite  `json:"stateWrite,omitempty"`
+	GuardDenial *GuardDenial `json:"guardDenial,omitempty"`
+}
+
 // StateWrite represents a write to the state:// protocol.
 type StateWrite struct {
-	Path      string    `json:"path"`
-	Value     any       `json:"value"`
-	Timestamp time.Time `json:"timestamp"`
+	Path      string         `json:"path"`
+	Value     any            `json:"value"`
+	Timestamp time.Time      `json:"timestamp"`
+	Security  map[string]any `json:"security,omitempty"`
 }
 
 // Metrics contains execution statistics.
@@ -175,6 +315,50 @@ type Metrics struct {
 	TotalMs    float64 `json:"totalMs"`
 	ParseMs    float64 `json:"parseMs"`
 	EvaluateMs float64 `json:"evaluateMs"`
+}
+
+// FilesystemStatus contains signature status for a file.
+type FilesystemStatus struct {
+	Path         string   `json:"path"`
+	RelativePath string   `json:"relativePath,omitempty"`
+	Status       string   `json:"status"`
+	Verified     bool     `json:"verified"`
+	Signer       *string  `json:"signer,omitempty"`
+	Labels       []string `json:"labels,omitempty"`
+	Taint        []string `json:"taint,omitempty"`
+	SignedAt     *string  `json:"signedAt,omitempty"`
+	Error        *string  `json:"error,omitempty"`
+}
+
+// FileVerifyResult contains signature verification metadata for a file.
+type FileVerifyResult struct {
+	Path         string         `json:"path"`
+	RelativePath string         `json:"relativePath,omitempty"`
+	Status       string         `json:"status"`
+	Verified     bool           `json:"verified"`
+	Signer       *string        `json:"signer,omitempty"`
+	SignedAt     *string        `json:"signedAt,omitempty"`
+	Hash         *string        `json:"hash,omitempty"`
+	ExpectedHash *string        `json:"expectedHash,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	Error        *string        `json:"error,omitempty"`
+}
+
+// ContentSignature contains persistent signature metadata for signed content.
+type ContentSignature struct {
+	ID            string            `json:"id"`
+	Hash          string            `json:"hash"`
+	Algorithm     string            `json:"algorithm"`
+	SignedBy      string            `json:"signedBy"`
+	SignedAt      string            `json:"signedAt"`
+	ContentLength int               `json:"contentLength"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+}
+
+// LabeledValue wraps a payload field with security labels.
+type LabeledValue struct {
+	Value  any
+	Labels []string
 }
 
 // AnalyzeResult contains static analysis of an mlld module.
@@ -207,9 +391,9 @@ type Import struct {
 }
 
 type Guard struct {
-	Name   string `json:"name"`
-	Timing string `json:"timing"`
-	Label  string `json:"label,omitempty"`
+	Name    string `json:"name"`
+	Timing  string `json:"timing"`
+	Trigger string `json:"trigger,omitempty"`
 }
 
 type Needs struct {
@@ -224,25 +408,195 @@ type requestHandle struct {
 	responseCh <-chan liveMessage
 	timeout    time.Duration
 
-	once        sync.Once
-	result      map[string]any
-	stateWrites []StateWrite
-	err         error
+	mu                   sync.Mutex
+	complete             bool
+	completeEventEmitted bool
+	result               any
+	stateWrites          []StateWrite
+	guardDenials         []GuardDenial
+	err                  error
 }
 
-func (h *requestHandle) wait() (map[string]any, []StateWrite, error) {
-	h.once.Do(func() {
-		h.result, h.stateWrites, h.err = h.client.awaitRequest(h.requestID, h.responseCh, h.timeout)
-	})
-	return h.result, h.stateWrites, h.err
+func (h *requestHandle) wait() (any, []StateWrite, []GuardDenial, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.complete {
+		if h.err != nil {
+			return nil, nil, nil, h.err
+		}
+		if h.result == nil {
+			return nil, nil, nil, &Error{Code: "TRANSPORT_ERROR", Message: "missing live result payload"}
+		}
+		h.completeEventEmitted = true
+		return h.result, append([]StateWrite(nil), h.stateWrites...), append([]GuardDenial(nil), h.guardDenials...), nil
+	}
+
+	deadline := time.Time{}
+	if h.timeout > 0 {
+		deadline = time.Now().Add(h.timeout)
+	}
+
+	for {
+		message, timedOut := receiveLiveMessage(h.responseCh, remainingDuration(deadline))
+		if timedOut {
+			h.client.sendCancel(h.requestID)
+			h.client.removePendingRequest(h.requestID)
+			h.complete = true
+			h.completeEventEmitted = true
+			h.err = &Error{
+				Code:    "TIMEOUT",
+				Message: fmt.Sprintf("request timeout after %s", h.timeout),
+				Err:     context.DeadlineExceeded,
+			}
+			return nil, nil, nil, h.err
+		}
+
+		if event, ok := h.handleMessageLocked(message); ok {
+			if event.Type == "complete" {
+				h.completeEventEmitted = true
+				return h.result, append([]StateWrite(nil), h.stateWrites...), append([]GuardDenial(nil), h.guardDenials...), nil
+			}
+			continue
+		}
+
+		if h.complete {
+			if h.err != nil {
+				return nil, nil, nil, h.err
+			}
+			if h.result == nil {
+				return nil, nil, nil, &Error{Code: "TRANSPORT_ERROR", Message: "missing live result payload"}
+			}
+			h.completeEventEmitted = true
+			return h.result, append([]StateWrite(nil), h.stateWrites...), append([]GuardDenial(nil), h.guardDenials...), nil
+		}
+	}
 }
 
 func (h *requestHandle) cancel() {
+	h.mu.Lock()
+	complete := h.complete
+	h.mu.Unlock()
+	if complete {
+		return
+	}
 	h.client.sendCancel(h.requestID)
 }
 
 func (h *requestHandle) updateState(path string, value any, labels ...string) error {
+	h.mu.Lock()
+	complete := h.complete
+	h.mu.Unlock()
+	if complete {
+		return &Error{Code: "REQUEST_COMPLETE", Message: "request already completed"}
+	}
 	return h.client.updateState(h.requestID, path, value, h.timeout, labels)
+}
+
+func (h *requestHandle) writeFile(path string, content string, timeout time.Duration) (*FileVerifyResult, error) {
+	h.mu.Lock()
+	complete := h.complete
+	h.mu.Unlock()
+	if complete {
+		return nil, &Error{Code: "REQUEST_COMPLETE", Message: "request already completed"}
+	}
+	return h.client.writeFile(h.requestID, path, content, timeout)
+}
+
+func (h *requestHandle) nextEvent(timeout time.Duration) (*HandleEvent, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.complete {
+		if h.err != nil || h.completeEventEmitted {
+			return nil, nil
+		}
+		h.completeEventEmitted = true
+		return &HandleEvent{Type: "complete"}, nil
+	}
+
+	deadline := time.Time{}
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
+
+	for {
+		message, timedOut := receiveLiveMessage(h.responseCh, remainingDuration(deadline))
+		if timedOut {
+			return nil, nil
+		}
+
+		if event, ok := h.handleMessageLocked(message); ok {
+			if event.Type == "complete" {
+				h.completeEventEmitted = true
+			}
+			if h.err != nil {
+				return nil, h.err
+			}
+			return event, nil
+		}
+
+		if h.complete {
+			if h.err != nil {
+				return nil, h.err
+			}
+			return nil, nil
+		}
+	}
+}
+
+func (h *requestHandle) handleMessageLocked(message liveMessage) (*HandleEvent, bool) {
+	switch message.kind {
+	case liveMessageEvent:
+		if write, ok := parseStateWriteEvent(message.payload); ok {
+			h.stateWrites = append(h.stateWrites, write)
+			return &HandleEvent{Type: "state_write", StateWrite: &write}, true
+		}
+		if denial, ok := parseGuardDenialEvent(message.payload); ok {
+			h.guardDenials = append(h.guardDenials, denial)
+			return &HandleEvent{Type: "guard_denial", GuardDenial: &denial}, true
+		}
+		return nil, false
+	case liveMessageResult:
+		envelope, ok := asMap(message.payload)
+		if !ok {
+			h.complete = true
+			h.completeEventEmitted = true
+			h.err = &Error{Code: "TRANSPORT_ERROR", Message: "live response envelope must be an object"}
+			return nil, false
+		}
+		if payload, ok := asMap(envelope["error"]); ok {
+			h.complete = true
+			h.completeEventEmitted = true
+			h.err = h.client.errorFromPayload(payload)
+			return nil, true
+		}
+		if result, ok := envelope["result"]; ok {
+			h.result = result
+			h.complete = true
+			return &HandleEvent{Type: "complete"}, true
+		}
+		h.complete = true
+		h.completeEventEmitted = true
+		h.err = &Error{Code: "TRANSPORT_ERROR", Message: "live response envelope missing result"}
+		return nil, false
+	case liveMessageClosed:
+		stderr := strings.TrimSpace(h.client.liveStderr.String())
+		err := message.err
+		if err == nil {
+			err = io.EOF
+		}
+		h.complete = true
+		h.completeEventEmitted = true
+		h.err = &Error{
+			Code:    "TRANSPORT_ERROR",
+			Message: chooseMessage(stderr, fmt.Sprintf("live transport closed: %v", err)),
+			Err:     err,
+		}
+		return nil, false
+	default:
+		return nil, false
+	}
 }
 
 // ProcessHandle represents an in-flight process request.
@@ -272,11 +626,16 @@ func (h *ProcessHandle) Wait() (string, error) {
 
 // Result blocks until completion and returns the process output.
 func (h *ProcessHandle) Result() (string, error) {
-	result, _, err := h.request.wait()
+	result, _, _, err := h.request.wait()
 	if err != nil {
 		return "", err
 	}
 	return extractOutput(result), nil
+}
+
+// NextEvent blocks until the next in-flight event. Returns nil on timeout.
+func (h *ProcessHandle) NextEvent(timeout ...time.Duration) (*HandleEvent, error) {
+	return h.request.nextEvent(resolveHandleTimeout(h.request.timeout, timeout))
 }
 
 // ExecuteHandle represents an in-flight execute request.
@@ -306,11 +665,21 @@ func (h *ExecuteHandle) Wait() (*ExecuteResult, error) {
 
 // Result blocks until completion and returns the execute result.
 func (h *ExecuteHandle) Result() (*ExecuteResult, error) {
-	result, stateWriteEvents, err := h.request.wait()
+	result, stateWriteEvents, guardDenialEvents, err := h.request.wait()
 	if err != nil {
 		return nil, err
 	}
-	return decodeExecuteResult(result, stateWriteEvents)
+	return decodeExecuteResult(result, stateWriteEvents, guardDenialEvents)
+}
+
+// NextEvent blocks until the next in-flight event. Returns nil on timeout.
+func (h *ExecuteHandle) NextEvent(timeout ...time.Duration) (*HandleEvent, error) {
+	return h.request.nextEvent(resolveHandleTimeout(h.request.timeout, timeout))
+}
+
+// WriteFile writes a file within the active execution context and returns its signature status.
+func (h *ExecuteHandle) WriteFile(path string, content string, timeout ...time.Duration) (*FileVerifyResult, error) {
+	return h.request.writeFile(path, content, resolveHandleTimeout(h.request.timeout, timeout))
 }
 
 // Process executes an mlld script string and returns the output.
@@ -324,36 +693,9 @@ func (c *Client) Process(script string, opts *ProcessOptions) (string, error) {
 
 // ProcessAsync executes an mlld script string and returns an in-flight handle.
 func (c *Client) ProcessAsync(script string, opts *ProcessOptions) (*ProcessHandle, error) {
-	if opts == nil {
-		opts = &ProcessOptions{}
-	}
-
-	params := map[string]any{
-		"script": script,
-	}
-	if opts.FilePath != "" {
-		params["filePath"] = opts.FilePath
-	}
-	if opts.Payload != nil {
-		params["payload"] = opts.Payload
-	}
-	if payloadLabels := normalizeLabelMap(opts.PayloadLabels); len(payloadLabels) > 0 {
-		params["payloadLabels"] = payloadLabels
-	}
-	if opts.State != nil {
-		params["state"] = opts.State
-	}
-	if opts.DynamicModules != nil {
-		params["dynamicModules"] = opts.DynamicModules
-	}
-	if opts.DynamicModuleSource != "" {
-		params["dynamicModuleSource"] = opts.DynamicModuleSource
-	}
-	if opts.Mode != "" {
-		params["mode"] = opts.Mode
-	}
-	if opts.AllowAbsolutePaths != nil {
-		params["allowAbsolutePaths"] = *opts.AllowAbsolutePaths
+	params, timeout, err := c.buildProcessRequest(script, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	requestID, responseCh, err := c.startRequest("process", params)
@@ -366,7 +708,7 @@ func (c *Client) ProcessAsync(script string, opts *ProcessOptions) (*ProcessHand
 			client:     c,
 			requestID:  requestID,
 			responseCh: responseCh,
-			timeout:    c.resolveTimeout(opts.Timeout),
+			timeout:    timeout,
 		},
 	}, nil
 }
@@ -382,33 +724,9 @@ func (c *Client) Execute(filepath string, payload any, opts *ExecuteOptions) (*E
 
 // ExecuteAsync runs an mlld file with a payload and optional state and returns an in-flight handle.
 func (c *Client) ExecuteAsync(filepath string, payload any, opts *ExecuteOptions) (*ExecuteHandle, error) {
-	if opts == nil {
-		opts = &ExecuteOptions{}
-	}
-
-	params := map[string]any{
-		"filepath": filepath,
-	}
-	if payload != nil {
-		params["payload"] = payload
-	}
-	if payloadLabels := normalizeLabelMap(opts.PayloadLabels); len(payloadLabels) > 0 {
-		params["payloadLabels"] = payloadLabels
-	}
-	if opts.State != nil {
-		params["state"] = opts.State
-	}
-	if opts.DynamicModules != nil {
-		params["dynamicModules"] = opts.DynamicModules
-	}
-	if opts.DynamicModuleSource != "" {
-		params["dynamicModuleSource"] = opts.DynamicModuleSource
-	}
-	if opts.AllowAbsolutePaths != nil {
-		params["allowAbsolutePaths"] = *opts.AllowAbsolutePaths
-	}
-	if opts.Mode != "" {
-		params["mode"] = opts.Mode
+	params, timeout, err := c.buildExecuteRequest(filepath, payload, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	requestID, responseCh, err := c.startRequest("execute", params)
@@ -421,9 +739,94 @@ func (c *Client) ExecuteAsync(filepath string, payload any, opts *ExecuteOptions
 			client:     c,
 			requestID:  requestID,
 			responseCh: responseCh,
-			timeout:    c.resolveTimeout(opts.Timeout),
+			timeout:    timeout,
 		},
 	}, nil
+}
+
+func (c *Client) buildProcessRequest(script string, opts *ProcessOptions) (map[string]any, time.Duration, error) {
+	if opts == nil {
+		opts = &ProcessOptions{}
+	}
+
+	normalizedPayload, payloadLabels, err := normalizePayloadAndLabels(opts.Payload, opts.PayloadLabels)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	params := map[string]any{
+		"script": script,
+	}
+	if opts.FilePath != "" {
+		params["filePath"] = opts.FilePath
+	}
+	if normalizedPayload != nil {
+		params["payload"] = normalizedPayload
+	}
+	if len(payloadLabels) > 0 {
+		params["payloadLabels"] = payloadLabels
+	}
+	if opts.State != nil {
+		params["state"] = opts.State
+	}
+	if opts.DynamicModules != nil {
+		params["dynamicModules"] = opts.DynamicModules
+	}
+	if opts.DynamicModuleSource != "" {
+		params["dynamicModuleSource"] = opts.DynamicModuleSource
+	}
+	if len(opts.McpServers) > 0 {
+		params["mcpServers"] = opts.McpServers
+	}
+	if opts.Mode != "" {
+		params["mode"] = opts.Mode
+	}
+	if opts.AllowAbsolutePaths != nil {
+		params["allowAbsolutePaths"] = *opts.AllowAbsolutePaths
+	}
+
+	return params, c.resolveTimeout(opts.Timeout), nil
+}
+
+func (c *Client) buildExecuteRequest(filepath string, payload any, opts *ExecuteOptions) (map[string]any, time.Duration, error) {
+	if opts == nil {
+		opts = &ExecuteOptions{}
+	}
+
+	normalizedPayload, payloadLabels, err := normalizePayloadAndLabels(payload, opts.PayloadLabels)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	params := map[string]any{
+		"filepath": filepath,
+	}
+	if normalizedPayload != nil {
+		params["payload"] = normalizedPayload
+	}
+	if len(payloadLabels) > 0 {
+		params["payloadLabels"] = payloadLabels
+	}
+	if opts.State != nil {
+		params["state"] = opts.State
+	}
+	if opts.DynamicModules != nil {
+		params["dynamicModules"] = opts.DynamicModules
+	}
+	if opts.DynamicModuleSource != "" {
+		params["dynamicModuleSource"] = opts.DynamicModuleSource
+	}
+	if len(opts.McpServers) > 0 {
+		params["mcpServers"] = opts.McpServers
+	}
+	if opts.AllowAbsolutePaths != nil {
+		params["allowAbsolutePaths"] = *opts.AllowAbsolutePaths
+	}
+	if opts.Mode != "" {
+		params["mode"] = opts.Mode
+	}
+
+	return params, c.resolveTimeout(opts.Timeout), nil
 }
 
 // Analyze performs static analysis on an mlld module without executing it.
@@ -433,7 +836,14 @@ func (c *Client) Analyze(filepath string) (*AnalyzeResult, error) {
 		return nil, err
 	}
 
-	payloadResult := stripResultID(result)
+	payloadResult, ok := asMap(result)
+	if !ok {
+		return nil, &Error{
+			Code:    "TRANSPORT_ERROR",
+			Message: "analyze response payload must be an object",
+		}
+	}
+
 	serialized, err := json.Marshal(payloadResult)
 	if err != nil {
 		return nil, fmt.Errorf("marshal analyze result: %w", err)
@@ -447,6 +857,124 @@ func (c *Client) Analyze(filepath string) (*AnalyzeResult, error) {
 	return &parsed, nil
 }
 
+// FSStatus returns filesystem signature/integrity status for tracked files.
+func (c *Client) FSStatus(glob string, opts *FSStatusOptions) ([]FilesystemStatus, error) {
+	method, params, timeout := c.buildFSStatusRequest(glob, opts)
+	result, _, err := c.call(method, params, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeFilesystemStatuses(result)
+}
+
+// Sign signs a file and returns its verification status.
+func (c *Client) Sign(path string, opts *SignOptions) (*FileVerifyResult, error) {
+	method, params, timeout := c.buildSignRequest(path, opts)
+	result, _, err := c.call(method, params, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeFileVerifyResult(result)
+}
+
+// Verify verifies a file and returns its signature status.
+func (c *Client) Verify(path string, opts *VerifyOptions) (*FileVerifyResult, error) {
+	method, params, timeout := c.buildVerifyRequest(path, opts)
+	result, _, err := c.call(method, params, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeFileVerifyResult(result)
+}
+
+// SignContent signs runtime content and persists it in the project's content store.
+func (c *Client) SignContent(content string, identity string, opts *SignContentOptions) (*ContentSignature, error) {
+	method, params, timeout := c.buildSignContentRequest(content, identity, opts)
+	result, _, err := c.call(method, params, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeContentSignature(result)
+}
+
+func (c *Client) buildFSStatusRequest(glob string, opts *FSStatusOptions) (string, map[string]any, time.Duration) {
+	if opts == nil {
+		opts = &FSStatusOptions{}
+	}
+
+	params := map[string]any{}
+	if strings.TrimSpace(glob) != "" {
+		params["glob"] = glob
+	}
+	if opts.BasePath != "" {
+		params["basePath"] = opts.BasePath
+	}
+
+	return "fs:status", params, c.resolveTimeout(opts.Timeout)
+}
+
+func (c *Client) buildSignRequest(path string, opts *SignOptions) (string, map[string]any, time.Duration) {
+	if opts == nil {
+		opts = &SignOptions{}
+	}
+
+	params := map[string]any{
+		"path": path,
+	}
+	if opts.Identity != "" {
+		params["identity"] = opts.Identity
+	}
+	if len(opts.Metadata) > 0 {
+		params["metadata"] = opts.Metadata
+	}
+	if opts.BasePath != "" {
+		params["basePath"] = opts.BasePath
+	}
+
+	return "sig:sign", params, c.resolveTimeout(opts.Timeout)
+}
+
+func (c *Client) buildVerifyRequest(path string, opts *VerifyOptions) (string, map[string]any, time.Duration) {
+	if opts == nil {
+		opts = &VerifyOptions{}
+	}
+
+	params := map[string]any{
+		"path": path,
+	}
+	if opts.BasePath != "" {
+		params["basePath"] = opts.BasePath
+	}
+
+	return "sig:verify", params, c.resolveTimeout(opts.Timeout)
+}
+
+func (c *Client) buildSignContentRequest(content string, identity string, opts *SignContentOptions) (string, map[string]any, time.Duration) {
+	if opts == nil {
+		opts = &SignContentOptions{}
+	}
+
+	params := map[string]any{
+		"content":  content,
+		"identity": identity,
+	}
+	if len(opts.Metadata) > 0 {
+		params["metadata"] = opts.Metadata
+	}
+	if opts.SignatureID != "" {
+		params["id"] = opts.SignatureID
+	}
+	if opts.BasePath != "" {
+		params["basePath"] = opts.BasePath
+	}
+
+	return "sig:sign-content", params, c.resolveTimeout(opts.Timeout)
+}
+
 func (c *Client) resolveTimeout(timeout time.Duration) time.Duration {
 	if timeout > 0 {
 		return timeout
@@ -454,7 +982,7 @@ func (c *Client) resolveTimeout(timeout time.Duration) time.Duration {
 	return c.Timeout
 }
 
-func (c *Client) call(method string, params any, timeout time.Duration) (map[string]any, []StateWrite, error) {
+func (c *Client) call(method string, params any, timeout time.Duration) (any, []StateWrite, error) {
 	requestID, responseCh, err := c.startRequest(method, params)
 	if err != nil {
 		return nil, nil, err
@@ -488,7 +1016,7 @@ func (c *Client) startRequest(method string, params any) (uint64, <-chan liveMes
 	return requestID, responseCh, nil
 }
 
-func (c *Client) awaitRequest(requestID uint64, responseCh <-chan liveMessage, timeout time.Duration) (map[string]any, []StateWrite, error) {
+func (c *Client) awaitRequest(requestID uint64, responseCh <-chan liveMessage, timeout time.Duration) (any, []StateWrite, error) {
 	stateWriteEvents := make([]StateWrite, 0)
 	var timer *time.Timer
 	if timeout > 0 {
@@ -506,10 +1034,23 @@ func (c *Client) awaitRequest(requestID uint64, responseCh <-chan liveMessage, t
 				}
 				continue
 			case liveMessageResult:
-				if payload, ok := asMap(message.payload["error"]); ok {
+				envelope, ok := asMap(message.payload)
+				if !ok {
+					return nil, stateWriteEvents, &Error{
+						Code:    "TRANSPORT_ERROR",
+						Message: "live response envelope must be an object",
+					}
+				}
+				if payload, ok := asMap(envelope["error"]); ok {
 					return nil, stateWriteEvents, c.errorFromPayload(payload)
 				}
-				return message.payload, stateWriteEvents, nil
+				if result, ok := envelope["result"]; ok {
+					return result, stateWriteEvents, nil
+				}
+				return nil, stateWriteEvents, &Error{
+					Code:    "TRANSPORT_ERROR",
+					Message: "live response envelope missing result",
+				}
 			case liveMessageClosed:
 				stderr := strings.TrimSpace(c.liveStderr.String())
 				err := message.err
@@ -576,6 +1117,42 @@ func (c *Client) updateState(requestID uint64, path string, value any, timeout t
 	}
 }
 
+func (c *Client) writeFile(requestID uint64, path string, content string, timeout time.Duration) (*FileVerifyResult, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, &Error{Code: "INVALID_REQUEST", Message: "file write path is required"}
+	}
+
+	resolvedTimeout := c.resolveTimeout(timeout)
+	maxWait := resolvedTimeout
+	if maxWait <= 0 {
+		maxWait = 2 * time.Second
+	}
+	deadline := time.Now().Add(maxWait)
+	params := map[string]any{
+		"requestId": requestID,
+		"path":      path,
+		"content":   content,
+	}
+
+	for {
+		result, _, err := c.call("file:write", params, resolvedTimeout)
+		if err == nil {
+			return decodeFileVerifyResult(result)
+		}
+
+		var requestErr *Error
+		if !errors.As(err, &requestErr) || requestErr.Code != "REQUEST_NOT_FOUND" {
+			return nil, err
+		}
+
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+
+		time.Sleep(25 * time.Millisecond)
+	}
+}
+
 func normalizeLabelMap(input map[string][]string) map[string][]string {
 	if len(input) == 0 {
 		return nil
@@ -594,6 +1171,130 @@ func normalizeLabelMap(input map[string][]string) map[string][]string {
 	}
 
 	return normalized
+}
+
+func normalizePayloadAndLabels(payload any, payloadLabels map[string][]string) (any, map[string][]string, error) {
+	mergedLabels := make(map[string][]string)
+	normalizedPayload := payload
+
+	if payloadMap, ok := payloadAsStringMap(payload); ok {
+		normalizedPayload = make(map[string]any, len(payloadMap))
+		for key, value := range payloadMap {
+			if labeled, ok := asLabeledValue(value); ok {
+				normalizedPayload.(map[string]any)[key] = labeled.Value
+				if labels := normalizeLabels(labeled.Labels); len(labels) > 0 {
+					mergedLabels[key] = labels
+				}
+				continue
+			}
+			normalizedPayload.(map[string]any)[key] = value
+		}
+	} else if len(payloadLabels) > 0 {
+		return nil, nil, &Error{
+			Code:    "INVALID_REQUEST",
+			Message: "payload_labels requires payload to be a map",
+		}
+	}
+
+	normalizedExplicit := normalizeLabelMap(payloadLabels)
+	if len(normalizedExplicit) > 0 {
+		payloadMap, ok := normalizedPayload.(map[string]any)
+		if !ok {
+			return nil, nil, &Error{
+				Code:    "INVALID_REQUEST",
+				Message: "payload_labels requires payload to be a map",
+			}
+		}
+		for key, labels := range normalizedExplicit {
+			if _, exists := payloadMap[key]; !exists {
+				return nil, nil, &Error{
+					Code:    "INVALID_REQUEST",
+					Message: fmt.Sprintf("payload_labels contains unknown field: %s", key),
+				}
+			}
+			mergedLabels[key] = mergeLabels(mergedLabels[key], labels)
+		}
+	}
+
+	if len(mergedLabels) == 0 {
+		mergedLabels = nil
+	}
+
+	return normalizedPayload, mergedLabels, nil
+}
+
+func payloadAsStringMap(payload any) (map[string]any, bool) {
+	if payload == nil {
+		return nil, false
+	}
+
+	if typed, ok := payload.(map[string]any); ok {
+		return typed, true
+	}
+
+	value := reflect.ValueOf(payload)
+	if value.Kind() != reflect.Map || value.Type().Key().Kind() != reflect.String {
+		return nil, false
+	}
+
+	converted := make(map[string]any, value.Len())
+	iter := value.MapRange()
+	for iter.Next() {
+		converted[iter.Key().String()] = iter.Value().Interface()
+	}
+	return converted, true
+}
+
+func asLabeledValue(value any) (LabeledValue, bool) {
+	switch typed := value.(type) {
+	case LabeledValue:
+		return typed, true
+	case *LabeledValue:
+		if typed == nil {
+			return LabeledValue{}, false
+		}
+		return *typed, true
+	default:
+		return LabeledValue{}, false
+	}
+}
+
+func mergeLabels(existing []string, incoming []string) []string {
+	if len(existing) == 0 {
+		return append([]string(nil), incoming...)
+	}
+
+	merged := append([]string(nil), existing...)
+	seen := make(map[string]struct{}, len(merged))
+	for _, label := range merged {
+		seen[label] = struct{}{}
+	}
+	for _, label := range incoming {
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		merged = append(merged, label)
+	}
+	return merged
+}
+
+// Labeled attaches one or more labels to a payload field value.
+func Labeled(value any, labels ...string) LabeledValue {
+	return LabeledValue{
+		Value:  value,
+		Labels: normalizeLabels(labels),
+	}
+}
+
+// Trusted marks a payload field as trusted.
+func Trusted(value any) LabeledValue {
+	return Labeled(value, "trusted")
+}
+
+// Untrusted marks a payload field as untrusted.
+func Untrusted(value any) LabeledValue {
+	return Labeled(value, "untrusted")
 }
 
 func normalizeLabels(labels []string) []string {
@@ -701,14 +1402,14 @@ func (c *Client) readLoop(stdout io.Reader) {
 			}
 
 			if event, ok := asMap(payload["event"]); ok {
-				if requestID, ok := valueToRequestID(event["id"]); ok {
+				if requestID, ok := requestIDFromEvent(event); ok {
 					c.dispatchPending(requestID, liveMessage{kind: liveMessageEvent, payload: event}, false)
 				}
 			}
 
-			if result, ok := asMap(payload["result"]); ok {
-				if requestID, ok := valueToRequestID(result["id"]); ok {
-					c.dispatchPending(requestID, liveMessage{kind: liveMessageResult, payload: result}, true)
+			if hasResponsePayload(payload) {
+				if requestID, ok := valueToRequestID(payload["id"]); ok {
+					c.dispatchPending(requestID, liveMessage{kind: liveMessageResult, payload: payload}, true)
 				}
 			}
 		}
@@ -837,8 +1538,16 @@ func (c *Client) errorFromPayload(payload map[string]any) error {
 	}
 }
 
-func decodeExecuteResult(result map[string]any, stateWriteEvents []StateWrite) (*ExecuteResult, error) {
-	payloadResult := stripResultID(result)
+func decodeExecuteResult(result any, stateWriteEvents []StateWrite, guardDenialEvents []GuardDenial) (*ExecuteResult, error) {
+	payloadResult, ok := asMap(result)
+	if !ok {
+		return &ExecuteResult{
+			Output:      extractOutput(result),
+			StateWrites: stateWriteEvents,
+			Denials:     guardDenialEvents,
+		}, nil
+	}
+
 	serialized, err := json.Marshal(payloadResult)
 	if err != nil {
 		return nil, fmt.Errorf("marshal execute result: %w", err)
@@ -851,29 +1560,79 @@ func decodeExecuteResult(result map[string]any, stateWriteEvents []StateWrite) (
 	}
 
 	executeResult.StateWrites = mergeStateWrites(executeResult.StateWrites, stateWriteEvents)
+	executeResult.Denials = mergeGuardDenials(executeResult.Denials, guardDenialEvents)
 	return &executeResult, nil
 }
 
-func stripResultID(result map[string]any) map[string]any {
-	payloadResult := make(map[string]any, len(result))
-	for key, value := range result {
-		if key == "id" {
-			continue
+func decodeFileVerifyResult(result any) (*FileVerifyResult, error) {
+	payloadResult, ok := asMap(result)
+	if !ok {
+		return nil, &Error{
+			Code:    "TRANSPORT_ERROR",
+			Message: "file verification payload must be an object",
 		}
-		payloadResult[key] = value
 	}
-	return payloadResult
+
+	serialized, err := json.Marshal(payloadResult)
+	if err != nil {
+		return nil, fmt.Errorf("marshal file verification result: %w", err)
+	}
+
+	var verifyResult FileVerifyResult
+	if err := json.Unmarshal(serialized, &verifyResult); err != nil {
+		return nil, fmt.Errorf("parse file verification result: %w", err)
+	}
+
+	return &verifyResult, nil
 }
 
-func extractOutput(result map[string]any) string {
-	if output, ok := result["output"].(string); ok {
-		return output
+func decodeFilesystemStatuses(result any) ([]FilesystemStatus, error) {
+	serialized, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal filesystem statuses: %w", err)
 	}
-	if value, exists := result["output"]; exists {
-		return fmt.Sprintf("%v", value)
+
+	var statuses []FilesystemStatus
+	if err := json.Unmarshal(serialized, &statuses); err != nil {
+		return nil, fmt.Errorf("parse filesystem statuses: %w", err)
 	}
-	if value, exists := result["value"]; exists {
-		return fmt.Sprintf("%v", value)
+
+	return statuses, nil
+}
+
+func decodeContentSignature(result any) (*ContentSignature, error) {
+	payloadResult, ok := asMap(result)
+	if !ok {
+		return nil, &Error{
+			Code:    "TRANSPORT_ERROR",
+			Message: "content signature payload must be an object",
+		}
+	}
+
+	serialized, err := json.Marshal(payloadResult)
+	if err != nil {
+		return nil, fmt.Errorf("marshal content signature: %w", err)
+	}
+
+	var signature ContentSignature
+	if err := json.Unmarshal(serialized, &signature); err != nil {
+		return nil, fmt.Errorf("parse content signature: %w", err)
+	}
+
+	return &signature, nil
+}
+
+func extractOutput(result any) string {
+	if payloadResult, ok := asMap(result); ok {
+		if output, ok := payloadResult["output"].(string); ok {
+			return output
+		}
+		if value, exists := payloadResult["output"]; exists {
+			return fmt.Sprintf("%v", value)
+		}
+	}
+	if result != nil {
+		return fmt.Sprintf("%v", result)
 	}
 	return ""
 }
@@ -910,7 +1669,88 @@ func valueToRequestID(raw any) (uint64, bool) {
 	}
 }
 
-func parseStateWriteEvent(event map[string]any) (StateWrite, bool) {
+func requestIDFromEvent(event map[string]any) (uint64, bool) {
+	if requestID, ok := valueToRequestID(event["requestId"]); ok {
+		return requestID, true
+	}
+	return valueToRequestID(event["id"])
+}
+
+func hasResponsePayload(payload map[string]any) bool {
+	_, hasResult := payload["result"]
+	_, hasError := payload["error"]
+	return hasResult || hasError
+}
+
+func looksLikeJSONComposite(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) < 2 {
+		return false
+	}
+	return (strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")) ||
+		(strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]"))
+}
+
+func receiveLiveMessage(responseCh <-chan liveMessage, timeout time.Duration) (liveMessage, bool) {
+	if timeout <= 0 {
+		message, ok := <-responseCh
+		if !ok {
+			return liveMessage{kind: liveMessageClosed, err: io.EOF}, false
+		}
+		return message, false
+	}
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case message, ok := <-responseCh:
+		if !ok {
+			return liveMessage{kind: liveMessageClosed, err: io.EOF}, false
+		}
+		return message, false
+	case <-timer.C:
+		return liveMessage{}, true
+	}
+}
+
+func resolveHandleTimeout(defaultTimeout time.Duration, overrides []time.Duration) time.Duration {
+	if len(overrides) == 0 {
+		return defaultTimeout
+	}
+	return overrides[0]
+}
+
+func remainingDuration(deadline time.Time) time.Duration {
+	if deadline.IsZero() {
+		return 0
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return time.Nanosecond
+	}
+	return remaining
+}
+
+func decodeStateWriteValue(value any) any {
+	text, ok := value.(string)
+	if !ok || !looksLikeJSONComposite(text) {
+		return value
+	}
+
+	var decoded any
+	if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+		return value
+	}
+	return decoded
+}
+
+func parseStateWriteEvent(eventPayload any) (StateWrite, bool) {
+	event, ok := asMap(eventPayload)
+	if !ok {
+		return StateWrite{}, false
+	}
+
 	eventType, _ := event["type"].(string)
 	if eventType != "state:write" {
 		return StateWrite{}, false
@@ -928,7 +1768,7 @@ func parseStateWriteEvent(event map[string]any) (StateWrite, bool) {
 
 	stateWrite := StateWrite{
 		Path:  path,
-		Value: writePayload["value"],
+		Value: decodeStateWriteValue(writePayload["value"]),
 	}
 
 	if timestamp, ok := writePayload["timestamp"].(string); ok {
@@ -936,8 +1776,60 @@ func parseStateWriteEvent(event map[string]any) (StateWrite, bool) {
 			stateWrite.Timestamp = parsed
 		}
 	}
+	if security, ok := asMap(writePayload["security"]); ok {
+		stateWrite.Security = security
+	}
 
 	return stateWrite, true
+}
+
+func guardDenialFromPayload(payload any) (GuardDenial, bool) {
+	entry, ok := asMap(payload)
+	if !ok {
+		return GuardDenial{}, false
+	}
+
+	operation, _ := entry["operation"].(string)
+	reason, _ := entry["reason"].(string)
+	if operation == "" || reason == "" {
+		return GuardDenial{}, false
+	}
+
+	denial := GuardDenial{
+		Operation: operation,
+		Reason:    reason,
+	}
+	if guard, ok := entry["guard"].(string); ok && guard != "" {
+		denial.Guard = &guard
+	}
+	if rule, ok := entry["rule"].(string); ok && rule != "" {
+		denial.Rule = &rule
+	}
+	if labels, ok := entry["labels"].([]any); ok {
+		denial.Labels = make([]string, 0, len(labels))
+		for _, label := range labels {
+			if text, ok := label.(string); ok {
+				denial.Labels = append(denial.Labels, text)
+			}
+		}
+	}
+	if args, ok := asMap(entry["args"]); ok {
+		denial.Args = args
+	}
+
+	return denial, true
+}
+
+func parseGuardDenialEvent(eventPayload any) (GuardDenial, bool) {
+	event, ok := asMap(eventPayload)
+	if !ok {
+		return GuardDenial{}, false
+	}
+	eventType, _ := event["type"].(string)
+	if eventType != "guard_denial" {
+		return GuardDenial{}, false
+	}
+	return guardDenialFromPayload(event["guard_denial"])
 }
 
 func mergeStateWrites(resultWrites []StateWrite, eventWrites []StateWrite) []StateWrite {
@@ -976,6 +1868,56 @@ func stateWriteKey(write StateWrite) string {
 		valueJSON = []byte(fmt.Sprintf("%v", write.Value))
 	}
 	return fmt.Sprintf("%s|%s", write.Path, string(valueJSON))
+}
+
+func mergeGuardDenials(primary []GuardDenial, secondary []GuardDenial) []GuardDenial {
+	if len(secondary) == 0 {
+		return primary
+	}
+	if len(primary) == 0 {
+		return secondary
+	}
+
+	merged := make([]GuardDenial, 0, len(primary)+len(secondary))
+	seen := make(map[string]struct{}, len(primary)+len(secondary))
+
+	appendUnique := func(denial GuardDenial) {
+		key := guardDenialKey(denial)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, denial)
+	}
+
+	for _, denial := range primary {
+		appendUnique(denial)
+	}
+	for _, denial := range secondary {
+		appendUnique(denial)
+	}
+
+	return merged
+}
+
+func guardDenialKey(denial GuardDenial) string {
+	labels := append([]string(nil), denial.Labels...)
+	sort.Strings(labels)
+	argsJSON, err := json.Marshal(denial.Args)
+	if err != nil {
+		argsJSON = []byte(fmt.Sprintf("%v", denial.Args))
+	}
+
+	guard := ""
+	if denial.Guard != nil {
+		guard = *denial.Guard
+	}
+	rule := ""
+	if denial.Rule != nil {
+		rule = *denial.Rule
+	}
+
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", guard, denial.Operation, denial.Reason, rule, strings.Join(labels, ","), string(argsJSON))
 }
 
 func timerChan(timer *time.Timer) <-chan time.Time {
