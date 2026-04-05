@@ -127,7 +127,7 @@ describe('guard post decision engine', () => {
     });
 
     expect(result.decision).toBe('deny');
-    expect(result.reasons).toEqual(['deny-after-allow']);
+    expect(result.reasons).toEqual(['deny-after-allow', 'retry-after-allow']);
     expect(result.hints.map(hint => hint.hint)).toEqual(['deny-hint', 'retry-hint']);
     expect(result.transformsApplied).toBe(true);
   });
@@ -169,6 +169,89 @@ describe('guard post decision engine', () => {
     expect(result.decision).toBe('retry');
     expect(result.reasons).toEqual(['retry-after-allow']);
     expect(result.hints.map(hint => hint.hint)).toEqual(['retry-hint']);
+    expect(result.transformsApplied).toBe(true);
+  });
+
+  it('prefers resume over retry when both after-guard decisions match', async () => {
+    const output = createVariable('output', 'seed-value', ['seed']);
+    const perInputGuards = [createGuard('resume-after'), createGuard('retry-after')];
+
+    const result = await runPostGuardDecisionEngine({
+      perInputCandidates: [createCandidate('input', perInputGuards)],
+      operationGuards: [],
+      outputVariables: [output],
+      activeOutputs: [output],
+      currentDescriptor: makeSecurityDescriptor({
+        labels: ['base'],
+        sources: ['source:base']
+      }),
+      baseOutputValue: 'seed-value',
+      retryContext: { attempt: 1, tries: [], hintHistory: [], max: 3 },
+      evaluateGuard: async ({ guard }) => {
+        if (guard.id === 'resume-after') {
+          return {
+            guardName: guard.name ?? null,
+            decision: 'resume',
+            reason: 'resume-after-output',
+            hint: createHint('resume-after', 'resume-hint')
+          };
+        }
+        return {
+          guardName: guard.name ?? null,
+          decision: 'retry',
+          reason: 'retry-after-output',
+          hint: createHint('retry-after', 'retry-hint')
+        };
+      },
+      buildInputHelper: () => undefined,
+      buildOperationSnapshot,
+      resolveGuardValue: variable => variable?.value,
+      buildVariablePreview: variable => String(variable.value),
+      logLabelModifications: async () => {}
+    });
+
+    expect(result.decision).toBe('resume');
+    expect(result.reasons).toEqual(['resume-after-output', 'retry-after-output']);
+    expect(result.hints.map(hint => hint.hint)).toEqual(['resume-hint', 'retry-hint']);
+  });
+
+  it('rejects resume after an earlier after-guard has transformed the output', async () => {
+    const output = createVariable('output', 'seed-value', ['seed']);
+    const transformed = createVariable('transformed', 'masked-value', ['masked']);
+    const perInputGuards = [createGuard('allow-transform'), createGuard('resume-after')];
+
+    const result = await runPostGuardDecisionEngine({
+      perInputCandidates: [createCandidate('input', perInputGuards)],
+      operationGuards: [],
+      outputVariables: [output],
+      activeOutputs: [output],
+      currentDescriptor: makeSecurityDescriptor({
+        labels: ['base'],
+        sources: ['source:base']
+      }),
+      baseOutputValue: 'seed-value',
+      retryContext: { attempt: 1, tries: [], hintHistory: [], max: 3 },
+      evaluateGuard: async ({ guard }) => {
+        if (guard.id === 'allow-transform') {
+          return { guardName: guard.name ?? null, decision: 'allow', replacement: transformed };
+        }
+        return {
+          guardName: guard.name ?? null,
+          decision: 'resume',
+          reason: 'resume-after-transform',
+          hint: createHint('resume-after', 'resume-hint')
+        };
+      },
+      buildInputHelper: () => undefined,
+      buildOperationSnapshot,
+      resolveGuardValue: variable => variable?.value,
+      buildVariablePreview: variable => String(variable.value),
+      logLabelModifications: async () => {}
+    });
+
+    expect(result.decision).toBe('deny');
+    expect(result.reasons[0]).toMatch(/resume is only available before output transforms/i);
+    expect(result.hints.map(hint => hint.hint)).toContain('resume-hint');
     expect(result.transformsApplied).toBe(true);
   });
 

@@ -362,6 +362,17 @@ GuardAction
         location: location()
       });
     }
+  / "resume" message:GuardActionMessage? {
+      if (!message) {
+        helpers.mlldError('Guard resume actions require a hint: resume "hint"', '"hint"', location());
+      }
+      return helpers.createNode('GuardAction', {
+        decision: 'resume',
+        message: message.value,
+        rawMessage: message.raw,
+        location: location()
+      });
+    }
 
 GuardPrivilegedLabelAction
   = mods:GuardPrivilegedLabelModifierList value:GuardActionValue {

@@ -53,6 +53,7 @@ export type NonCommandExecutableHandlerOptions = {
   argSourceNames?: (string | undefined)[];
   resultSecurityDescriptor?: SecurityDescriptor;
   exeLabels?: readonly string[];
+  skipResultWithClause?: boolean;
   services: NonCommandExecutableHandlerServices;
 };
 
@@ -235,6 +236,7 @@ async function handleTemplateExecutable(
     execEnv,
     resultSecurityDescriptor,
     exeLabels,
+    skipResultWithClause,
     services
   } = options;
   const templateInterpolationEnv = createTemplateInterpolationEnv(execEnv, definition);
@@ -262,7 +264,7 @@ async function handleTemplateExecutable(
   }
 
   const templateWithClause = (definition as any).withClause;
-  if (!templateWithClause) {
+  if (!templateWithClause || skipResultWithClause) {
     return result;
   }
 

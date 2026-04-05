@@ -20,6 +20,7 @@ import type { OperationSnapshot } from './guard-operation-keys';
 import type { GuardAttemptEntry, GuardAttemptState } from './guard-retry-state';
 import type { PolicyArgDescriptor } from '../guards';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
+import { MlldWhenExpressionError } from '@core/errors';
 import {
   buildInputPreview,
   buildVariablePreview,
@@ -508,6 +509,14 @@ export async function evaluateGuardRuntime(
         : undefined,
       metadata: retryMetadata
     };
+  }
+  if (action.decision === 'resume') {
+    throw new MlldWhenExpressionError(
+      'Guard resume actions apply only after execution',
+      options.node.location ?? undefined,
+      { phase: 'action', type: 'resume' },
+      { env: options.env }
+    );
   }
   return {
     guardName: guard.name ?? null,

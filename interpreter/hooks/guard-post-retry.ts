@@ -8,6 +8,11 @@ interface GuardRetryRuntimeContext {
   tries?: Array<{ attempt?: number; decision?: string; hint?: string | null }>;
   hintHistory?: Array<string | null>;
   max?: number;
+  nextAction?: {
+    decision?: string;
+    hint?: string | null;
+    details?: Record<string, unknown>;
+  };
 }
 
 export interface GuardRetryContextSnapshot {
@@ -15,6 +20,12 @@ export interface GuardRetryContextSnapshot {
   tries: Array<{ attempt: number; decision: string; hint?: string | null }>;
   hintHistory: Array<string | null>;
   max: number;
+}
+
+export interface GuardNextActionSnapshot {
+  decision: 'retry' | 'resume';
+  hint: string | null;
+  details?: Record<string, unknown>;
 }
 
 export function getGuardRetryContext(env: Environment): GuardRetryContextSnapshot {
@@ -41,9 +52,35 @@ export function getGuardRetryContext(env: Environment): GuardRetryContextSnapsho
   return { attempt, tries, hintHistory, max };
 }
 
+export function getGuardNextAction(env: Environment): GuardNextActionSnapshot | null {
+  const context = env
+    .getContextManager()
+    .peekGenericContext('guardRetry') as GuardRetryRuntimeContext | undefined;
+  const decision = context?.nextAction?.decision;
+  if (decision !== 'retry' && decision !== 'resume') {
+    return null;
+  }
+
+  return {
+    decision,
+    hint:
+      typeof context?.nextAction?.hint === 'string' || context?.nextAction?.hint === null
+        ? context.nextAction.hint
+        : null,
+    details:
+      context?.nextAction?.details && typeof context.nextAction.details === 'object'
+        ? { ...(context.nextAction.details as Record<string, unknown>) }
+        : undefined
+  };
+}
+
 export interface RetryEnforcementResult {
   sourceRetryable: boolean;
   denyRetry: boolean;
+}
+
+export interface ResumeEnforcementResult {
+  allowResume: boolean;
 }
 
 export function evaluateRetryEnforcement(
@@ -58,4 +95,31 @@ export function evaluateRetryEnforcement(
     sourceRetryable,
     denyRetry: Boolean(pipelineContext && !sourceRetryable)
   };
+}
+
+export function evaluateResumeEnforcement(
+  operation: OperationContext,
+  pipelineContext: PipelineContextSnapshot | null
+): ResumeEnforcementResult {
+  if (pipelineContext) {
+    return { allowResume: false };
+  }
+
+  const metadata =
+    operation?.metadata && typeof operation.metadata === 'object'
+      ? (operation.metadata as Record<string, unknown>)
+      : null;
+  const resumeState =
+    metadata?.llmResumeState && typeof metadata.llmResumeState === 'object'
+      ? (metadata.llmResumeState as Record<string, unknown>)
+      : null;
+
+  const allowResume =
+    metadata?.llmResumeEligible === true &&
+    typeof resumeState?.sessionId === 'string' &&
+    resumeState.sessionId.trim().length > 0 &&
+    typeof resumeState?.provider === 'string' &&
+    resumeState.provider.trim().length > 0;
+
+  return { allowResume };
 }

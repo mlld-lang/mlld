@@ -55,6 +55,7 @@ import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
 import { enforceKeychainAccess } from '@interpreter/policy/keychain-policy';
 import { runWithGuardRetry } from '../hooks/guard-retry-runner';
+import { getGuardNextAction } from '../hooks/guard-post-retry';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import {
   buildExecOperationPreview,
@@ -188,6 +189,20 @@ type ExecutableDispatchArgNormalizationOptions = {
   expressionSourceVariables: readonly (Variable | undefined)[];
   argSourceNames: readonly (string | undefined)[];
 };
+
+interface LlmResumeState {
+  sessionId: string;
+  provider: string;
+}
+
+interface LlmRuntimeResumeConfig extends LlmResumeState {
+  continue: boolean;
+}
+
+interface LlmResumeEnvelope {
+  value: unknown;
+  resumeState?: LlmResumeState;
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -799,13 +814,223 @@ function sanitizeLlmConfigSecurityInput(config: unknown): unknown {
   }
 
   const record = candidate as Record<string, unknown>;
-  if (!Object.prototype.hasOwnProperty.call(record, 'tools')) {
+  if (
+    !Object.prototype.hasOwnProperty.call(record, 'tools') &&
+    !Object.prototype.hasOwnProperty.call(record, '_mlld')
+  ) {
     return candidate;
   }
 
   const sanitized = { ...record };
   delete sanitized.tools;
+  delete sanitized._mlld;
   return sanitized;
+}
+
+function readLlmRuntimeResumeConfig(config: unknown): LlmRuntimeResumeConfig | null {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return null;
+  }
+
+  const runtimeConfig = (config as Record<string, unknown>)._mlld;
+  if (!runtimeConfig || typeof runtimeConfig !== 'object' || Array.isArray(runtimeConfig)) {
+    return null;
+  }
+
+  const resumeConfig = (runtimeConfig as Record<string, unknown>).resume;
+  if (!resumeConfig || typeof resumeConfig !== 'object' || Array.isArray(resumeConfig)) {
+    return null;
+  }
+
+  const sessionId = (resumeConfig as Record<string, unknown>).sessionId;
+  const provider = (resumeConfig as Record<string, unknown>).provider;
+  const continueFlag = (resumeConfig as Record<string, unknown>).continue;
+  if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+    return null;
+  }
+  if (typeof continueFlag !== 'boolean') {
+    return null;
+  }
+
+  return {
+    sessionId: sessionId.trim(),
+    provider: typeof provider === 'string' && provider.trim().length > 0 ? provider.trim() : 'unknown',
+    continue: continueFlag
+  };
+}
+
+function injectLlmRuntimeResumeConfig(
+  config: Record<string, unknown>,
+  resumeConfig: LlmRuntimeResumeConfig
+): Record<string, unknown> {
+  const runtimeConfig =
+    config._mlld && typeof config._mlld === 'object' && !Array.isArray(config._mlld)
+      ? { ...(config._mlld as Record<string, unknown>) }
+      : {};
+  runtimeConfig.resume = {
+    sessionId: resumeConfig.sessionId,
+    provider: resumeConfig.provider,
+    continue: resumeConfig.continue
+  };
+  return {
+    ...config,
+    _mlld: runtimeConfig
+  };
+}
+
+function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
+  const candidate = isStructuredValue(value) ? asData(value) : value;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null;
+  }
+
+  const record = candidate as Record<string, unknown>;
+  const runtimeRecord =
+    record._mlld && typeof record._mlld === 'object' && !Array.isArray(record._mlld)
+      ? (record._mlld as Record<string, unknown>)
+      : null;
+  if (!runtimeRecord) {
+    return null;
+  }
+
+  const sessionId = runtimeRecord.sessionId;
+  const provider = runtimeRecord.provider;
+  const valueField =
+    Object.prototype.hasOwnProperty.call(record, 'value')
+      ? record.value
+      : Object.prototype.hasOwnProperty.call(record, 'result')
+        ? record.result
+        : Object.prototype.hasOwnProperty.call(record, 'output')
+          ? record.output
+          : undefined;
+  if (valueField === undefined) {
+    return null;
+  }
+
+  const resumeState =
+    typeof sessionId === 'string' &&
+    sessionId.trim().length > 0 &&
+    typeof provider === 'string' &&
+    provider.trim().length > 0
+      ? {
+          sessionId: sessionId.trim(),
+          provider: provider.trim()
+        }
+      : undefined;
+
+  return {
+    value: valueField,
+    resumeState
+  };
+}
+
+function readLlmResumeStateFromGuardDetails(details: unknown): LlmResumeState | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return null;
+  }
+
+  const operation = (details as Record<string, unknown>).operation;
+  if (!operation || typeof operation !== 'object' || Array.isArray(operation)) {
+    return null;
+  }
+
+  const metadata = (operation as Record<string, unknown>).metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const resumeState = (metadata as Record<string, unknown>).llmResumeState;
+  if (!resumeState || typeof resumeState !== 'object' || Array.isArray(resumeState)) {
+    return null;
+  }
+
+  const sessionId = (resumeState as Record<string, unknown>).sessionId;
+  const provider = (resumeState as Record<string, unknown>).provider;
+  if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+    return null;
+  }
+  if (typeof provider !== 'string' || provider.trim().length === 0) {
+    return null;
+  }
+
+  return {
+    sessionId: sessionId.trim(),
+    provider: provider.trim()
+  };
+}
+
+function readLlmResumePromptFromGuardAction(
+  action: ReturnType<typeof getGuardNextAction>
+): string | null {
+  if (action?.decision !== 'resume') {
+    return null;
+  }
+
+  if (typeof action.hint === 'string' && action.hint.trim().length > 0) {
+    return action.hint.trim();
+  }
+
+  const details =
+    action.details && typeof action.details === 'object' && !Array.isArray(action.details)
+      ? (action.details as Record<string, unknown>)
+      : null;
+  const hints = Array.isArray(details?.hints) ? details.hints : [];
+  for (const entry of hints) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const hint = (entry as Record<string, unknown>).hint;
+    if (typeof hint === 'string' && hint.trim().length > 0) {
+      return hint.trim();
+    }
+  }
+
+  const reasons = Array.isArray(details?.reasons) ? details.reasons : [];
+  for (const reason of reasons) {
+    if (typeof reason === 'string' && reason.trim().length > 0) {
+      return reason.trim();
+    }
+  }
+
+  const guardResults = Array.isArray(details?.guardResults) ? details.guardResults : [];
+  for (const entry of guardResults) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const hint =
+      (entry as Record<string, unknown>).hint &&
+      typeof (entry as Record<string, unknown>).hint === 'object' &&
+      !Array.isArray((entry as Record<string, unknown>).hint)
+        ? ((entry as Record<string, unknown>).hint as Record<string, unknown>).hint
+        : undefined;
+    if (typeof hint === 'string' && hint.trim().length > 0) {
+      return hint.trim();
+    }
+    const reason = (entry as Record<string, unknown>).reason;
+    if (typeof reason === 'string' && reason.trim().length > 0) {
+      return reason.trim();
+    }
+  }
+
+  const guardContext =
+    details?.guardContext && typeof details.guardContext === 'object' && !Array.isArray(details.guardContext)
+      ? (details.guardContext as Record<string, unknown>)
+      : null;
+  const guardContextHints = Array.isArray(guardContext?.hints) ? guardContext.hints : [];
+  for (const entry of guardContextHints) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const hint = (entry as Record<string, unknown>).hint;
+    if (typeof hint === 'string' && hint.trim().length > 0) {
+      return hint.trim();
+    }
+  }
+  if (typeof guardContext?.reason === 'string' && guardContext.reason.trim().length > 0) {
+    return guardContext.reason.trim();
+  }
+
+  return null;
 }
 
 function buildLlmConversationDescriptor(
@@ -2806,6 +3031,25 @@ async function evaluateExecInvocationInternal(
     evaluatedArgStrings
   });
 
+  const pendingGuardAction = getGuardNextAction(runtimeEnv);
+  const resumePrompt = readLlmResumePromptFromGuardAction(pendingGuardAction);
+  let isLlmResumeContinuation = false;
+  let llmResumeEligible = false;
+  let currentLlmResumeState =
+    pendingGuardAction?.decision === 'resume'
+      ? (readLlmResumeStateFromGuardDetails(pendingGuardAction.details) ?? undefined)
+      : undefined;
+
+  if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
+    evaluatedArgs[0] = resumePrompt ?? '';
+    evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+    synchronizeGuardVariableCandidates({
+      guardVariableCandidates,
+      evaluatedArgs,
+      evaluatedArgStrings
+    });
+  }
+
   // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
   // and expose the result on @mx.llm for the exe body to consume. Shelf-scoped
   // llm calls also receive agent-visible shelf notes in config.system.
@@ -2816,12 +3060,28 @@ async function evaluateExecInvocationInternal(
     const originalConfigArg = evaluatedArgs[1];
     const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
-      const nextConfig = { ...(rawConfig as Record<string, unknown>) };
+      let nextConfig = { ...(rawConfig as Record<string, unknown>) };
       let didUpdateConfigArg = false;
+      const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
+
+      if (pendingGuardAction?.decision === 'resume') {
+        llmResumeEligible = true;
+        nextConfig.tools = [];
+        didUpdateConfigArg = true;
+        if (currentLlmResumeState) {
+          nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
+            sessionId: currentLlmResumeState.sessionId,
+            provider: currentLlmResumeState.provider,
+            continue: true
+          });
+          isLlmResumeContinuation = true;
+        }
+      }
 
       if ('tools' in nextConfig) {
-      // config.tools selects capabilities for the bridge; it is not model-visible input and
-      // must not seed the conversation descriptor used for policy/attestation checks.
+        llmResumeEligible = true;
+        // config.tools selects capabilities for the bridge; it is not model-visible input and
+        // must not seed the conversation descriptor used for policy/attestation checks.
         resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
         const toolsValue = nextConfig.tools;
         const dirValue = nextConfig.dir;
@@ -2843,6 +3103,20 @@ async function evaluateExecInvocationInternal(
         }
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
+
+        if (!isLlmResumeContinuation) {
+          const nextResumeConfig: LlmRuntimeResumeConfig = {
+            sessionId: existingRuntimeResumeConfig?.sessionId ?? callConfig.sessionId,
+            provider: existingRuntimeResumeConfig?.provider ?? 'unknown',
+            continue: false
+          };
+          const previousResumeConfig = readLlmRuntimeResumeConfig(nextConfig);
+          nextConfig = injectLlmRuntimeResumeConfig(nextConfig, nextResumeConfig);
+          didUpdateConfigArg ||=
+            previousResumeConfig?.sessionId !== nextResumeConfig.sessionId ||
+            previousResumeConfig?.provider !== nextResumeConfig.provider ||
+            previousResumeConfig?.continue !== nextResumeConfig.continue;
+        }
       }
 
       const previousSystem = nextConfig.system;
@@ -3101,6 +3375,19 @@ async function evaluateExecInvocationInternal(
       }
     });
 
+    if (llmResumeEligible || currentLlmResumeState) {
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>)
+      };
+      if (llmResumeEligible) {
+        nextMetadata.llmResumeEligible = true;
+      }
+      if (currentLlmResumeState) {
+        nextMetadata.llmResumeState = { ...currentLlmResumeState };
+      }
+      operationContext.metadata = nextMetadata;
+    }
+
     const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
       runExecPostGuards({
         env: runtimeEnv,
@@ -3245,6 +3532,7 @@ async function evaluateExecInvocationInternal(
         argSourceNames,
         resultSecurityDescriptor,
         exeLabels,
+        skipResultWithClause: isLlmResumeContinuation,
         services: {
           interpolateWithResultDescriptor,
           toPipelineInput,
@@ -3281,6 +3569,7 @@ async function evaluateExecInvocationInternal(
         pipelineId,
         hasStreamFormat,
         suppressTerminal: streamingOptions.suppressTerminal === true,
+        skipResultWithClause: isLlmResumeContinuation,
         chunkEffect,
         services: {
           interpolateWithResultDescriptor,
@@ -3310,6 +3599,7 @@ async function evaluateExecInvocationInternal(
         mergePolicyInputDescriptor,
         workingDirectory,
         whenExprNode,
+        skipResultWithClause: isLlmResumeContinuation,
         services: {
           interpolateWithResultDescriptor,
           toPipelineInput,
@@ -3326,6 +3616,21 @@ async function evaluateExecInvocationInternal(
     execEnv = codeResult.execEnv;
   } else {
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
+  }
+
+  const resumeEnvelope = tryExtractLlmResumeEnvelope(result);
+  if (resumeEnvelope) {
+    result = resumeEnvelope.value;
+    if (resumeEnvelope.resumeState) {
+      currentLlmResumeState = resumeEnvelope.resumeState;
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+        ...(llmResumeEligible ? { llmResumeEligible: true } : {}),
+        llmResumeState: { ...currentLlmResumeState }
+      };
+      operationContext.metadata = nextMetadata;
+      runtimeEnv.updateOpContext({ metadata: nextMetadata });
+    }
   }
   
   if (definition.outputRecord) {
@@ -3436,7 +3741,7 @@ async function evaluateExecInvocationInternal(
   endResolutionTrackingIfNeeded();
 
   // Apply withClause transformations if present
-  if (invocationWithClause) {
+  if (invocationWithClause && !isLlmResumeContinuation) {
     if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable

@@ -116,6 +116,7 @@ export type CommandExecutableHandlerOptions = {
   pipelineId: string;
   hasStreamFormat: boolean;
   suppressTerminal: boolean;
+  skipResultWithClause?: boolean;
   chunkEffect: (chunk: string, source: 'stdout' | 'stderr') => void;
   services: CommandExecutableHandlerServices;
 };
@@ -144,6 +145,7 @@ export async function executeCommandExecutable(
     pipelineId,
     hasStreamFormat,
     suppressTerminal,
+    skipResultWithClause,
     chunkEffect,
     services
   } = options;
@@ -297,7 +299,11 @@ export async function executeCommandExecutable(
     });
   }
 
-  if (definition.withClause?.pipeline && definition.withClause.pipeline.length > 0) {
+  if (
+    definition.withClause?.pipeline &&
+    definition.withClause.pipeline.length > 0 &&
+    !skipResultWithClause
+  ) {
     const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
     const pipelineInput = toPipelineInput(result);
     const pipelineResult = await processPipeline({

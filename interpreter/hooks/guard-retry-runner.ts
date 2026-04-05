@@ -1,5 +1,6 @@
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal, isGuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { isGuardResumeSignal } from '@core/errors/GuardResumeSignal';
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { GuardContextSnapshot, OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
@@ -10,8 +11,14 @@ const GUARD_WARNING_PREFIX = '[Guard Warning]';
 
 interface GuardRetryAttempt {
   attempt: number;
-  decision: 'retry';
+  decision: 'retry' | 'resume';
   hint?: string | null;
+}
+
+interface GuardNextAction {
+  decision: 'retry' | 'resume';
+  hint?: string | null;
+  details?: GuardRetryErrorDetails;
 }
 
 interface GuardRetryState {
@@ -19,6 +26,7 @@ interface GuardRetryState {
   max: number;
   history: GuardRetryAttempt[];
   hintHistory: Array<string | null>;
+  nextAction: GuardNextAction | null;
 }
 
 interface GuardRetryErrorDetails {
@@ -94,7 +102,8 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
     attempt: 1,
     max: DEFAULT_GUARD_MAX,
     history: [],
-    hintHistory: []
+    hintHistory: [],
+    nextAction: null
   };
 
   // Re-evaluate until success or a non-retry error
@@ -104,7 +113,14 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       try: state.attempt,
       tries: state.history.map(entry => ({ ...entry })),
       max: state.max,
-      hintHistory: state.hintHistory.slice()
+      hintHistory: state.hintHistory.slice(),
+      nextAction: state.nextAction
+        ? {
+            decision: state.nextAction.decision,
+            hint: state.nextAction.hint ?? null,
+            ...(state.nextAction.details ? { details: { ...state.nextAction.details } } : {})
+          }
+        : undefined
     };
 
     const bufferEffects = shouldBufferEffects(options.env, options.operationContext);
@@ -126,7 +142,10 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       return result;
     } catch (error) {
       const isRetrySignal =
-        (error instanceof GuardError && error.decision === 'retry') || isGuardRetrySignal(error);
+        (error instanceof GuardError &&
+          (error.decision === 'retry' || error.decision === 'resume')) ||
+        isGuardRetrySignal(error) ||
+        isGuardResumeSignal(error);
       if (bufferHandler && originalHandler) {
         options.env.setEffectHandler(originalHandler);
         if (!isRetrySignal) {
@@ -148,13 +167,24 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
       if (typeof guardContext?.max === 'number') {
         state.max = guardContext.max;
       }
+      const decision =
+        error instanceof GuardError && error.decision === 'resume'
+          ? 'resume'
+          : isGuardResumeSignal(error)
+            ? 'resume'
+            : 'retry';
       const hint =
         (error as GuardError).retryHint ??
         (typeof details.hints?.[0]?.hint === 'string' ? details.hints![0]!.hint : null) ??
         (error as GuardError).reason ??
         null;
-      state.history.push({ attempt: state.attempt, decision: 'retry', hint });
+      state.history.push({ attempt: state.attempt, decision, hint });
       state.hintHistory.push(hint ?? null);
+      state.nextAction = {
+        decision,
+        hint,
+        details
+      };
       state.attempt += 1;
 
       if (!options.sourceRetryable) {

@@ -49,6 +49,7 @@ export type CodeExecutableHandlerOptions = {
   mergePolicyInputDescriptor: (descriptor?: SecurityDescriptor) => SecurityDescriptor | undefined;
   workingDirectory?: string;
   whenExprNode?: WhenExpressionNode | null;
+  skipResultWithClause?: boolean;
   services: CodeExecutableHandlerServices;
 };
 
@@ -81,6 +82,7 @@ export async function executeCodeExecutable(
     mergePolicyInputDescriptor,
     workingDirectory,
     whenExprNode,
+    skipResultWithClause,
     services
   } = options;
 
@@ -434,7 +436,7 @@ export async function executeCodeExecutable(
       result = wrapStructured(payload, (result as any).type, (result as any).text, (result as any).metadata);
     }
 
-    if (definition.withClause) {
+    if (definition.withClause && !skipResultWithClause) {
       if (definition.withClause.pipeline && definition.withClause.pipeline.length > 0) {
         const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
         const pipelineInput = services.toPipelineInput(result);

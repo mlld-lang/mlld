@@ -387,6 +387,112 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('resumes tool-bridge llm calls without re-executing tools and preserves resume decision history', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const counterKey = '__mlldGuardResumeToolCount';
+    const promptKey = '__mlldGuardResumePrompt';
+    const agentCallKey = '__mlldGuardResumeAgentCalls';
+    (globalThis as Record<string, unknown>)[counterKey] = 0;
+    (globalThis as Record<string, unknown>)[promptKey] = null;
+    (globalThis as Record<string, unknown>)[agentCallKey] = 0;
+
+    const source = [
+      '/record @agent_result = {',
+      '  data: [ok: boolean],',
+      '  validate: "demote"',
+      '}',
+      '/exe @check_result(value) = @value => agent_result',
+      `/exe tool:w @write_once() = js { return "write-ready"; }`,
+      `/exe @read_calls() = js { return globalThis.${counterKey} || 0; }`,
+      `/exe @read_prompt() = js { return globalThis.${promptKey} ?? null; }`,
+      `/exe @read_agent_calls() = js { return globalThis.${agentCallKey} || 0; }`,
+      `/exe llm @agent(prompt, config) = js {
+  globalThis.${agentCallKey} = (globalThis.${agentCallKey} || 0) + 1;
+  const resume = config?._mlld?.resume;
+  if (resume?.continue) {
+    globalThis.${promptKey} = prompt;
+    return {
+      value: { ok: true },
+      _mlld: { sessionId: resume.sessionId, provider: 'fake' }
+    };
+  }
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  return {
+    value: { ok: 'bad' },
+    _mlld: { sessionId: resume?.sessionId, provider: 'fake' }
+  };
+}`,
+      '/guard after for op:named:agent = when [',
+      '  @check_result(@output).mx.schema.valid == false && @mx.guard.try < 2 => resume "Return valid JSON only"',
+      '  @check_result(@output).mx.schema.valid == false => deny "still invalid"',
+      '  * => allow',
+      ']',
+      '/var @result = @agent("start", { tools: [@write_once] })',
+      '/var @checked = @check_result(@result)',
+      '/var @summary = { ok: @checked.ok, schemaValid: @checked.mx.schema.valid, calls: @read_calls(), prompt: @read_prompt(), agentCalls: @read_agent_calls() }',
+      '/show @summary'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        ok: true,
+        schemaValid: true,
+        calls: 1,
+        prompt: 'Return valid JSON only',
+        agentCalls: 2
+      });
+    } finally {
+      delete (globalThis as Record<string, unknown>)[counterKey];
+      delete (globalThis as Record<string, unknown>)[promptKey];
+      delete (globalThis as Record<string, unknown>)[agentCallKey];
+      environment?.cleanup();
+    }
+  });
+
+  it('errors clearly when resume is requested without llm resume state', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @agent_result = {',
+      '  data: [ok: boolean],',
+      '  validate: "demote"',
+      '}',
+      '/exe llm @agent(prompt, config) = { ok: "bad" } => agent_result',
+      '/guard after for op:named:agent = when [',
+      '  @output.mx.schema.valid == false => resume "Return valid JSON only"',
+      '  * => allow',
+      ']',
+      '/show @agent("start", {})'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      await expect(
+        interpret(source, {
+          fileSystem,
+          pathService,
+          pathContext,
+          format: 'markdown',
+          captureEnvironment: env => {
+            environment = env;
+          }
+        })
+      ).rejects.toThrow(/resume not available for this exe/i);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves when-selected executable refs when passed to config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [

@@ -71,7 +71,7 @@ export interface GuardContextSnapshot {
   trace?: ReadonlyArray<GuardResult>;
   hints?: ReadonlyArray<GuardHint>;
   reasons?: ReadonlyArray<string>;
-  decision?: 'allow' | 'deny' | 'retry';
+  decision?: 'allow' | 'deny' | 'retry' | 'resume';
   args?: GuardArgsSnapshot;
 }
 
@@ -96,7 +96,7 @@ export interface SecuritySnapshotLike {
 export interface GuardHistoryEntry {
   stage: number;
   operation: OperationContext | null;
-  decision: 'allow' | 'deny' | 'retry';
+  decision: 'allow' | 'deny' | 'retry' | 'resume';
   trace: ReadonlyArray<GuardResult>;
   hints: ReadonlyArray<GuardHint>;
   reasons: ReadonlyArray<string>;

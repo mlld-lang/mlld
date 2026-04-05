@@ -31,11 +31,17 @@ import {
   runPostGuardDecisionEngine,
   type GuardOperationSnapshot
 } from './guard-post-decision-engine';
-import { evaluateRetryEnforcement, getGuardRetryContext } from './guard-post-retry';
+import {
+  evaluateResumeEnforcement,
+  evaluateRetryEnforcement,
+  getGuardRetryContext
+} from './guard-post-retry';
 import {
   buildPostGuardError,
   buildPostRetryDeniedError,
-  buildPostGuardRetrySignal
+  buildPostGuardResumeSignal,
+  buildPostGuardRetrySignal,
+  buildPostResumeUnavailableError
 } from './guard-post-signals';
 import { evaluatePostGuardRuntime } from './guard-post-runtime-evaluator';
 import {
@@ -289,6 +295,36 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
       timing: 'after'
     });
     throw error;
+  }
+
+  if (currentDecision === 'resume') {
+    const resumeReasons = reasons.length > 0 ? reasons : ['Guard requested resume'];
+    const resumeHint =
+      hints.length > 0 && hints[0] && typeof hints[0].hint === 'string'
+        ? hints[0].hint
+        : resumeReasons[0];
+    const pipelineContext = env.getPipelineContext();
+    const { allowResume } = evaluateResumeEnforcement(operation, pipelineContext);
+
+    if (!allowResume) {
+      throw buildPostResumeUnavailableError({
+        guardResults: guardTrace,
+        reasons: resumeReasons,
+        hints,
+        operation,
+        outputPreview: buildGuardOutputPreview(activeOutputs[0], outputVariables[0]),
+        resumeHint
+      });
+    }
+
+    throw buildPostGuardResumeSignal({
+      guardResults: guardTrace,
+      reasons: resumeReasons,
+      hints,
+      operation,
+      outputPreview: buildGuardOutputPreview(activeOutputs[0], outputVariables[0]),
+      retryHint: resumeHint
+    });
   }
 
   if (currentDecision === 'retry') {

@@ -147,7 +147,7 @@ describe('guard post runtime evaluator', () => {
     const matrix: Array<{
       label: string;
       action: GuardActionNode;
-      expectedDecision: 'allow' | 'deny' | 'retry';
+      expectedDecision: 'allow' | 'deny' | 'retry' | 'resume';
       expectedReason?: string;
       expectedHint?: string;
       expectReplacement?: boolean;
@@ -174,6 +174,13 @@ describe('guard post runtime evaluator', () => {
         expectedDecision: 'retry',
         expectedReason: 'try-again',
         expectedHint: 'try-again'
+      },
+      {
+        label: 'resume',
+        action: createAction('resume', 'fix-format'),
+        expectedDecision: 'resume',
+        expectedReason: 'fix-format',
+        expectedHint: 'fix-format'
       }
     ];
 

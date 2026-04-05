@@ -5,7 +5,7 @@ import type { Environment } from '../env/Environment';
 export function appendGuardHistory(
   env: Environment,
   operation: OperationContext,
-  decision: 'allow' | 'deny' | 'retry',
+  decision: 'allow' | 'deny' | 'retry' | 'resume',
   guardResults: GuardResult[],
   hints: GuardHint[],
   reasons: string[]

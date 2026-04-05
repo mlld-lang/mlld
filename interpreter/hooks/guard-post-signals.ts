@@ -1,6 +1,7 @@
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { GuardResumeSignal } from '@core/errors/GuardResumeSignal';
 import type { OperationContext, GuardContextSnapshot } from '../env/ContextManager';
 
 interface GuardSignalContext {
@@ -79,6 +80,35 @@ export function buildPostRetryDeniedError(options: NonRetryableRetryErrorOptions
   });
 }
 
+interface ResumeUnavailableErrorOptions {
+  guardResults: GuardResult[];
+  reasons: string[];
+  hints: GuardHint[];
+  operation: OperationContext;
+  outputPreview?: string | null;
+  resumeHint?: string | null;
+}
+
+export function buildPostResumeUnavailableError(options: ResumeUnavailableErrorOptions): GuardError {
+  const context = buildSignalContext(options.guardResults);
+  const reason = 'resume not available for this exe — use retry instead.';
+  return new GuardError({
+    decision: 'deny',
+    guardName: context.guardName,
+    guardFilter: context.guardFilter,
+    scope: context.scope,
+    operation: options.operation,
+    inputPreview: context.inputPreview,
+    outputPreview: options.outputPreview ?? null,
+    reasons: options.reasons,
+    guardResults: options.guardResults,
+    hints: options.hints,
+    retryHint: options.resumeHint ?? null,
+    reason,
+    timing: 'after'
+  });
+}
+
 interface RetrySignalOptions {
   guardResults: GuardResult[];
   reasons: string[];
@@ -92,6 +122,26 @@ export function buildPostGuardRetrySignal(options: RetrySignalOptions): GuardRet
   const primaryReason = options.reasons[0] ?? 'Guard requested retry';
   const context = buildSignalContext(options.guardResults);
   return new GuardRetrySignal({
+    guardName: context.guardName,
+    guardFilter: context.guardFilter,
+    scope: context.scope,
+    operation: options.operation,
+    inputPreview: context.inputPreview,
+    outputPreview: options.outputPreview ?? null,
+    reasons: options.reasons,
+    guardResults: options.guardResults,
+    hints: options.hints ?? options.guardResults.flatMap(entry => (entry.hint ? [entry.hint] : [])),
+    timing: 'after',
+    retryHint: options.retryHint ?? null,
+    reason: primaryReason,
+    guardContext: context.guardContext
+  });
+}
+
+export function buildPostGuardResumeSignal(options: RetrySignalOptions): GuardResumeSignal {
+  const primaryReason = options.reasons[0] ?? 'Guard requested resume';
+  const context = buildSignalContext(options.guardResults);
+  return new GuardResumeSignal({
     guardName: context.guardName,
     guardFilter: context.guardFilter,
     scope: context.scope,

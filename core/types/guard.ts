@@ -6,7 +6,7 @@ import type { PolicyConfig } from '../policy/union';
 
 export type GuardScope = 'perInput' | 'perOperation';
 export type GuardFilterKind = 'data' | 'operation';
-export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'prompt' | 'env';
+export type GuardDecisionType = 'allow' | 'deny' | 'retry' | 'resume' | 'prompt' | 'env';
 export type GuardTiming = 'before' | 'after' | 'always';
 
 export interface GuardFilterNode extends BaseMlldNode {
@@ -109,7 +109,7 @@ export interface GuardResult {
 }
 
 export interface GuardAggregateDecision {
-  decision: 'allow' | 'deny' | 'retry';
+  decision: 'allow' | 'deny' | 'retry' | 'resume';
   reasons?: string[];
   hints?: GuardHint[];
   transformedInputs?: unknown[];

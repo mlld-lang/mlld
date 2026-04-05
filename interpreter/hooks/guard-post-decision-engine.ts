@@ -62,7 +62,7 @@ export interface PostGuardDecisionEngineOptions {
 }
 
 export interface PostGuardDecisionEngineResult {
-  decision: 'allow' | 'deny' | 'retry';
+  decision: 'allow' | 'deny' | 'retry' | 'resume';
   reasons: string[];
   hints: GuardHint[];
   guardTrace: GuardResult[];
@@ -77,7 +77,7 @@ export async function runPostGuardDecisionEngine(
   const guardTrace: GuardResult[] = [];
   const reasons: string[] = [];
   const hints: GuardHint[] = [];
-  let currentDecision: 'allow' | 'deny' | 'retry' = 'allow';
+  let currentDecision: 'allow' | 'deny' | 'retry' | 'resume' = 'allow';
   let transformsApplied = false;
   let activeOutputs = options.activeOutputs.slice();
   let currentDescriptor = options.currentDescriptor;
@@ -105,11 +105,10 @@ export async function runPostGuardDecisionEngine(
       });
 
       guardTrace.push(resultEntry);
-      if (resultEntry.hint) {
-        hints.push(resultEntry.hint);
-      }
-
       if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         if (resultEntry.replacement) {
           const replacements = normalizeReplacementVariables(resultEntry.replacement);
           if (replacements.length > 0) {
@@ -142,12 +141,40 @@ export async function runPostGuardDecisionEngine(
           transformsApplied = true;
         }
       } else if (resultEntry.decision === 'deny') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         currentDecision = 'deny';
         if (resultEntry.reason) {
           reasons.push(resultEntry.reason);
         }
-      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
+      } else if (resultEntry.decision === 'resume' && currentDecision !== 'deny') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
+        if (transformsApplied) {
+          currentDecision = 'deny';
+          reasons.push(
+            'Guard resume is only available before output transforms; a previous after-guard already transformed the value'
+          );
+          continue;
+        }
+        currentDecision = 'resume';
+        if (resultEntry.reason) {
+          reasons.push(resultEntry.reason);
+        }
+      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny' && currentDecision !== 'resume') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         currentDecision = 'retry';
+        if (resultEntry.reason) {
+          reasons.push(resultEntry.reason);
+        }
+      } else if (resultEntry.decision === 'retry' || resultEntry.decision === 'resume') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         if (resultEntry.reason) {
           reasons.push(resultEntry.reason);
         }
@@ -188,11 +215,10 @@ export async function runPostGuardDecisionEngine(
       });
 
       guardTrace.push(resultEntry);
-      if (resultEntry.hint) {
-        hints.push(resultEntry.hint);
-      }
-
       if (resultEntry.decision === 'allow' && currentDecision === 'allow') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         if (resultEntry.replacement) {
           const replacements = normalizeReplacementVariables(resultEntry.replacement);
           if (replacements.length > 0) {
@@ -225,12 +251,40 @@ export async function runPostGuardDecisionEngine(
           transformsApplied = true;
         }
       } else if (resultEntry.decision === 'deny') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         currentDecision = 'deny';
         if (resultEntry.reason) {
           reasons.push(resultEntry.reason);
         }
-      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny') {
+      } else if (resultEntry.decision === 'resume' && currentDecision !== 'deny') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
+        if (transformsApplied) {
+          currentDecision = 'deny';
+          reasons.push(
+            'Guard resume is only available before output transforms; a previous after-guard already transformed the value'
+          );
+          continue;
+        }
+        currentDecision = 'resume';
+        if (resultEntry.reason) {
+          reasons.push(resultEntry.reason);
+        }
+      } else if (resultEntry.decision === 'retry' && currentDecision !== 'deny' && currentDecision !== 'resume') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         currentDecision = 'retry';
+        if (resultEntry.reason) {
+          reasons.push(resultEntry.reason);
+        }
+      } else if (resultEntry.decision === 'retry' || resultEntry.decision === 'resume') {
+        if (resultEntry.hint) {
+          hints.push(resultEntry.hint);
+        }
         if (resultEntry.reason) {
           reasons.push(resultEntry.reason);
         }

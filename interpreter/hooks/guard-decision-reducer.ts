@@ -1,7 +1,7 @@
 import type { GuardHint, GuardResult } from '@core/types/guard';
 import type { PolicyConfig } from '@core/policy/union';
 
-export type GuardAggregateDecision = 'allow' | 'deny' | 'retry';
+export type GuardAggregateDecision = 'allow' | 'deny' | 'retry' | 'resume';
 
 export interface GuardDecisionState {
   decision: GuardAggregateDecision;
@@ -153,17 +153,33 @@ export function applyGuardDecisionResult(
     state.activePolicyDenyLocked = false;
     return;
   }
+
+  if (result.decision === 'resume') {
+    if (state.decision === 'deny' && !options.retryOverridesDeny) {
+      return;
+    }
+    state.decision = 'resume';
+    if (result.reason) {
+      state.reasons.push(result.reason);
+    }
+    if (!state.primaryMetadata && result.metadata) {
+      state.primaryMetadata = result.metadata;
+    }
+    state.activePolicyDenyScope = null;
+    state.activePolicyDenyLocked = false;
+    return;
+  }
 }
 
 export function shouldClearAttemptState(decision: GuardAggregateDecision): boolean {
-  return decision !== 'retry';
+  return decision !== 'retry' && decision !== 'resume';
 }
 
 export function toHookAction(decision: GuardAggregateDecision): 'continue' | 'retry' | 'abort' {
   if (decision === 'allow') {
     return 'continue';
   }
-  if (decision === 'retry') {
+  if (decision === 'retry' || decision === 'resume') {
     return 'retry';
   }
   return 'abort';

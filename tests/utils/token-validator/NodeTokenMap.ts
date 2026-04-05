@@ -145,7 +145,12 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
   'Literal': {
     expectedTokenTypes: (node: any) => {
       // Special keyword-like literals
-      if (node.valueType === 'wildcard' || node.valueType === 'none' || node.valueType === 'retry') return ['keyword'];
+      if (
+        node.valueType === 'wildcard' ||
+        node.valueType === 'none' ||
+        node.valueType === 'retry' ||
+        node.valueType === 'resume'
+      ) return ['keyword'];
       if (node.valueType === 'denied') return ['keyword'];
       if (node.valueType === 'done' || node.valueType === 'continue') return ['keyword'];
       if (node.valueType === 'number') return ['number'];

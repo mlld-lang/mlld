@@ -323,5 +323,16 @@ export async function evaluatePostGuardRuntime(
     };
   }
 
+  if (action.decision === 'resume') {
+    return {
+      guardName: guard.name ?? null,
+      decision: 'resume',
+      timing: 'after',
+      reason: metadata.reason as string | undefined,
+      hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
+      metadata
+    };
+  }
+
   return { guardName: guard.name ?? null, decision: 'allow', timing: 'after', metadata };
 }

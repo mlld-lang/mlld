@@ -14,7 +14,7 @@ export interface GuardErrorDetails extends BaseErrorDetails {
   inputPreview?: string | null;
   outputPreview?: string | null;
   timing?: 'before' | 'after';
-  decision: 'deny' | 'retry';
+  decision: 'deny' | 'retry' | 'resume';
   retryHint?: string | null;
   reason?: string | null;
   guardContext?: GuardContextSnapshot;
@@ -25,7 +25,7 @@ export interface GuardErrorDetails extends BaseErrorDetails {
 }
 
 export interface GuardErrorOptions {
-  decision: 'deny' | 'retry';
+  decision: 'deny' | 'retry' | 'resume';
   guardName?: string | null;
   guardFilter?: string;
   scope?: GuardScope;
@@ -49,7 +49,7 @@ export interface GuardErrorOptions {
 }
 
 export class GuardError extends MlldDenialError {
-  public readonly decision: 'deny' | 'retry';
+  public readonly decision: 'deny' | 'retry' | 'resume';
   public readonly retryHint?: string | null;
   public readonly reason?: string | null;
 
@@ -107,8 +107,14 @@ function normalizeGuardDisplayName(name?: string | null): string | null {
   return name.startsWith('@') ? name : `@${name}`;
 }
 
-function defaultReasonForDecision(decision: 'deny' | 'retry'): string {
-  return decision === 'retry' ? 'Guard requested retry' : 'Guard denied operation';
+function defaultReasonForDecision(decision: 'deny' | 'retry' | 'resume'): string {
+  if (decision === 'retry') {
+    return 'Guard requested retry';
+  }
+  if (decision === 'resume') {
+    return 'Guard requested resume';
+  }
+  return 'Guard denied operation';
 }
 
 function formatGuardMessage(options: GuardErrorOptions & { reason?: string | null }): string {
@@ -120,6 +126,8 @@ function formatGuardMessage(options: GuardErrorOptions & { reason?: string | nul
 
   if (options.decision === 'retry') {
     lines.push(`Guard retry requested: ${hint ?? reason}`);
+  } else if (options.decision === 'resume') {
+    lines.push(`Guard resume requested: ${hint ?? reason}`);
   } else if (hint) {
     lines.push(`Guard retry failed: ${reason}`);
   } else {
@@ -132,7 +140,7 @@ function formatGuardMessage(options: GuardErrorOptions & { reason?: string | nul
   if (operationLabel) {
     lines.push(`  Operation: ${operationLabel}`);
   }
-  if (options.decision === 'retry' && hint) {
+  if ((options.decision === 'retry' || options.decision === 'resume') && hint) {
     lines.push(`  Hint: ${hint}`);
   } else if (options.decision === 'deny' && hint) {
     lines.push(`  Hint: ${hint}`);
