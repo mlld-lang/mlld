@@ -1,3 +1,4 @@
+import type { Environment } from '@interpreter/env/Environment';
 import { MlldImportError } from '@core/errors';
 import type { Variable } from '@core/types/variable';
 import type { ExportManifest } from '../ExportManifest';
@@ -10,7 +11,8 @@ export interface ModuleExportPlan {
 export class ModuleExportManifestValidator {
   resolveExportPlan(
     childVars: Map<string, Variable>,
-    manifest?: ExportManifest | null
+    manifest?: ExportManifest | null,
+    childEnv?: Environment
   ): ModuleExportPlan {
     const manifestEntries = manifest?.hasEntries() ? manifest.getEntries() : [];
     const variableEntries = manifestEntries.filter(entry => entry.kind !== 'guard');
@@ -19,7 +21,8 @@ export class ModuleExportManifestValidator {
 
     if (explicitNames && explicitNames.length > 0) {
       for (const name of explicitNames) {
-        if (!childVars.has(name)) {
+        const hasExportedRecord = Boolean(childEnv?.getRecordDefinition(name));
+        if (!childVars.has(name) && !hasExportedRecord) {
           const location = manifest?.getLocation(name);
           throw new MlldImportError(
             `Exported name '${name}' is not defined in this module`,

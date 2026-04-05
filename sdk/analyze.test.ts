@@ -181,6 +181,22 @@ needs: [js, sh]
         e.code === 'EXPORT_NOT_FOUND' && e.message.includes('@missing')
       )).toBe(true);
     });
+
+    it('treats exported record definitions as valid exports', async () => {
+      const filepath = await writeTestModule('record-export.mld', `
+/record @thing = {
+  data: [name: string]
+}
+/export { @thing }
+`);
+
+      const analysis = await analyzeModule(filepath);
+
+      expect(analysis.valid).toBe(true);
+      expect(analysis.exports).toContain('@thing');
+      expect(analysis.errors).toHaveLength(0);
+      expect(analysis.warnings.some(w => w.message.includes('undefined variable @thing'))).toBe(false);
+    });
   });
 
   describe('import extraction', () => {

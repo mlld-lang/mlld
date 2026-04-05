@@ -126,6 +126,53 @@ describe('shelf runtime', () => {
     expect(asData(selectedScore)).toBe(92);
   });
 
+  it('keeps plain object record writes into singular shelf slots canonicalized', async () => {
+    const env = await createEnvironment(`
+/record @last_write_entry = {
+  data: [
+    tool: string,
+    subtask_index: number?,
+    target_key: string?,
+    input_keys: array?,
+    blocked_if_missing: array?,
+    resolved_controls: array?,
+    known_controls: array?
+  ]
+}
+/shelf @s = {
+  last_write: last_write_entry?
+}
+/var @value = {
+  tool: "send_direct_message",
+  subtask_index: 2,
+  target_key: "all_users",
+  input_keys: ["rankings"],
+  blocked_if_missing: [],
+  resolved_controls: [{ arg: "recipient", value: "Alice" }],
+  known_controls: []
+}
+/var @written = @shelf.write(@s.last_write, @value)
+`);
+
+    const written = env.getVariable('written')?.value;
+    const tool = await accessField(written, { type: 'field', value: 'tool' } as any, { env });
+    const subtaskIndex = await accessField(written, { type: 'field', value: 'subtask_index' } as any, { env });
+    const targetKey = await accessField(written, { type: 'field', value: 'target_key' } as any, { env });
+    const inputKeys = await accessField(written, { type: 'field', value: 'input_keys' } as any, { env });
+    const firstInputKey = await accessField(inputKeys, { type: 'arrayIndex', value: 0 } as any, { env });
+    const resolvedControls = await accessField(written, { type: 'field', value: 'resolved_controls' } as any, { env });
+    const firstResolved = await accessField(resolvedControls, { type: 'arrayIndex', value: 0 } as any, { env });
+    const resolvedArg = await accessField(firstResolved, { type: 'field', value: 'arg' } as any, { env });
+    const resolvedValue = await accessField(firstResolved, { type: 'field', value: 'value' } as any, { env });
+
+    expect(asData(tool)).toBe('send_direct_message');
+    expect(asData(subtaskIndex)).toBe(2);
+    expect(asData(targetKey)).toBe('all_users');
+    expect(asData(firstInputKey)).toBe('rankings');
+    expect(asData(resolvedArg)).toBe('recipient');
+    expect(asData(resolvedValue)).toBe('Alice');
+  });
+
   it('projects readable slot contents through @fyi.shelf and keeps @shelf/@shelve gated to writable scopes', async () => {
     const env = await createEnvironment(`
 /record @contact = {
@@ -505,6 +552,35 @@ describe('shelf runtime', () => {
     const firstDraft = await accessField(drafts, { type: 'arrayIndex', value: 0 } as any, { env: freshEnv });
     const subject = await accessField(firstDraft, { type: 'field', value: 'subject' } as any, { env: freshEnv });
     expect(asData(subject)).toBe('Follow up');
+  });
+
+  it('imports exported record definitions across module boundaries before dependent shelf evaluation', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/provider.mld', `
+/record @thing = {
+  data: [name: string]
+}
+/export { @thing }
+`);
+    await fs.writeFile('/consumer.mld', `
+/import { @thing } from "/provider.mld"
+/shelf @state = {
+  selected: thing?
+}
+/export { @state }
+`);
+    await fs.writeFile('/top.mld', `
+/import { @state } from "/consumer.mld"
+/var @ok = "ok"
+`);
+
+    const { ast } = await parse(await fs.readFile('/top.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/top.mld');
+    await evaluate(ast, env);
+
+    expect(env.getRecordDefinition('thing')).toBeDefined();
+    expect(env.getShelfDefinition('state')?.slots.selected.record).toBe('thing');
   });
 
   it('preserves slot references through wrapper executables that call @shelf methods', async () => {

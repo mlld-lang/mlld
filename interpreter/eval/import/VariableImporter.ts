@@ -19,6 +19,7 @@ import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
 import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
 import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
+import { isSerializedRecordDefinition } from '@core/types/record';
 import { createShelfVariable, isSerializedShelfDefinition } from '@interpreter/shelf/runtime';
 
 export interface ModuleProcessingResult {
@@ -167,7 +168,11 @@ export class VariableImporter {
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
-    const { explicitExports, guardNames } = this.exportManifestValidator.resolveExportPlan(childVars, manifest);
+    const { explicitExports, guardNames } = this.exportManifestValidator.resolveExportPlan(
+      childVars,
+      manifest,
+      childEnv
+    );
     this.guardExportChecker.validateGuardExports(guardNames, childEnv, manifest);
     
     const { moduleObject } = this.moduleExportSerializer.serialize({
@@ -243,6 +248,21 @@ export class VariableImporter {
       };
       options.env.registerShelfDefinition(name, definition);
       return createShelfVariable(options.env, definition);
+    }
+
+    if (options?.env && isSerializedRecordDefinition(value)) {
+      const definition = {
+        ...value.definition,
+        name
+      };
+      options.env.registerRecordDefinition(name, definition);
+      return this.variableFactoryOrchestrator.createVariableFromValue(
+        name,
+        definition,
+        importPath,
+        originalName,
+        options
+      );
     }
 
     return this.variableFactoryOrchestrator.createVariableFromValue(

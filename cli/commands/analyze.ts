@@ -548,6 +548,22 @@ function detectUndefinedVariables(
       }
     }
 
+    // record @name = ...
+    if (node.type === 'Directive' && node.kind === 'record') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+      }
+    }
+
+    // shelf @name = ...
+    if (node.type === 'Directive' && node.kind === 'shelf') {
+      const identNode = node.values?.identifier?.[0];
+      if (identNode?.identifier) {
+        declared.add(identNode.identifier);
+      }
+    }
+
     // import { @name } from ...
     if (node.type === 'Directive' && node.kind === 'import') {
       // Handle imports array (import { @a, @b } from ...)

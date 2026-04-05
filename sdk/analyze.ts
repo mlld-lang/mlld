@@ -720,6 +720,24 @@ function extractVariables(
         labels: execInfo?.labels?.length ? execInfo.labels : undefined
       });
     }
+
+    if (directive.kind === 'record' || directive.kind === 'shelf') {
+      let name = '';
+      if (Array.isArray(values.identifier) && values.identifier[0]) {
+        name = values.identifier[0].identifier ?? '';
+      }
+      if (typeof name === 'string' && name && !name.startsWith('@')) {
+        name = `@${name}`;
+      }
+
+      if (!name) continue;
+
+      variables.push({
+        name,
+        exported: exportSet.has(name),
+        type: 'unknown'
+      });
+    }
   }
 
   return variables;

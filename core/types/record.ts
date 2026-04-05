@@ -120,6 +120,29 @@ export interface RecordDefinition {
   location?: SourceLocation;
 }
 
+export interface SerializedRecordDefinition {
+  __record: true;
+  definition: RecordDefinition;
+}
+
+export function serializeRecordDefinition(
+  definition: RecordDefinition
+): SerializedRecordDefinition {
+  return {
+    __record: true,
+    definition
+  };
+}
+
+export function isSerializedRecordDefinition(value: unknown): value is SerializedRecordDefinition {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as SerializedRecordDefinition).__record === true &&
+    (value as SerializedRecordDefinition).definition
+  );
+}
+
 export interface RecordValidationError {
   path: string;
   code: 'required' | 'type' | 'parse';

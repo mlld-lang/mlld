@@ -1,4 +1,5 @@
 import type { Environment } from '@interpreter/env/Environment';
+import { serializeRecordDefinition } from '@core/types/record';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import {
   getToolCollectionMetadata,
@@ -94,6 +95,19 @@ export class ModuleExportSerializer {
       const serializedMetadata = this.serializeVariableMetadata(variable, envDescriptor);
       if (serializedMetadata) {
         serializedMetadataMap[name] = serializedMetadata;
+      }
+    }
+
+    if (request.explicitExports && request.childEnv) {
+      for (const name of request.explicitExports) {
+        if (Object.prototype.hasOwnProperty.call(moduleObject, name)) {
+          continue;
+        }
+
+        const recordDefinition = request.childEnv.getRecordDefinition(name);
+        if (recordDefinition) {
+          moduleObject[name] = serializeRecordDefinition(recordDefinition);
+        }
       }
     }
 

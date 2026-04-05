@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ExportManifest } from '../ExportManifest';
 import { createSimpleTextVariable, type Variable } from '@core/types/variable';
 import { ModuleExportManifestValidator } from './ModuleExportManifestValidator';
+import { Environment } from '@interpreter/env/Environment';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { PathService } from '@services/fs/PathService';
 
 const SOURCE = {
   directive: 'var' as const,
@@ -55,5 +58,27 @@ describe('ModuleExportManifestValidator', () => {
 
     expect(plan.explicitExports).toEqual(new Set(['value']));
     expect(plan.guardNames).toEqual(['moduleGuard']);
+  });
+
+  it('allows explicit record exports that are defined in the child environment', () => {
+    const validator = new ModuleExportManifestValidator();
+    const childVars = new Map<string, Variable>();
+    const manifest = new ExportManifest();
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+
+    env.registerRecordDefinition('thing', {
+      name: 'thing',
+      fields: [],
+      rootMode: 'object',
+      display: { kind: 'open' },
+      validate: 'demote'
+    });
+
+    manifest.add([
+      { name: 'thing', kind: 'variable' }
+    ]);
+
+    const plan = validator.resolveExportPlan(childVars, manifest, env);
+    expect(plan.explicitExports).toEqual(new Set(['thing']));
   });
 });
