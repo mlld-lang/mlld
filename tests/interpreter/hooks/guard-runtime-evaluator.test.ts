@@ -130,7 +130,7 @@ describe('guard runtime evaluator', () => {
     const matrix: Array<{
       label: string;
       action: GuardActionNode | undefined;
-      expectedDecision: 'allow' | 'deny' | 'retry' | 'env';
+      expectedDecision: 'allow' | 'deny' | 'retry' | 'resume' | 'env';
       expectedTopLevelKeys: string[];
       expectedMetadataKeys: string[];
       expectedReason?: string;
@@ -171,6 +171,15 @@ describe('guard runtime evaluator', () => {
         expectedMetadataKeys: ['attempt', 'reason', 'tries'],
         expectedReason: 'retry-me',
         expectedHint: 'retry-me'
+      },
+      {
+        label: 'resume',
+        action: createAction('resume', 'resume-me'),
+        expectedDecision: 'resume',
+        expectedTopLevelKeys: ['decision', 'guardName', 'hint', 'metadata', 'reason', 'timing'],
+        expectedMetadataKeys: ['attempt', 'reason', 'tries'],
+        expectedReason: 'resume-me',
+        expectedHint: 'resume-me'
       },
       {
         label: 'env',

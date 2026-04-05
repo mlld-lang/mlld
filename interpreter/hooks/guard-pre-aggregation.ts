@@ -56,7 +56,7 @@ export function buildAggregateMetadata(options: {
 }
 
 export function buildAggregateGuardContext(options: {
-  decision: 'allow' | 'deny' | 'retry';
+  decision: 'allow' | 'deny' | 'retry' | 'resume';
   guardResults: GuardResult[];
   hints: GuardHint[];
   reasons: string[];

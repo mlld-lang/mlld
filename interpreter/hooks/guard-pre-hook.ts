@@ -55,6 +55,7 @@ import {
   buildAggregateGuardContext,
   buildAggregateMetadata
 } from './guard-pre-aggregation';
+import { getGuardRetryContext } from './guard-post-retry';
 import {
   logGuardDecisionSummary,
   logGuardEmitContextDebug
@@ -560,6 +561,24 @@ export const guardPreHook: PreHook = async (
     }
 
     const attemptStore = getAttemptStore(env);
+    const sharedExecRetryContext =
+      operation.type === 'exe' && !env.getPipelineContext()
+        ? getGuardRetryContext(env)
+        : null;
+    const resolveAttemptContext = (attemptKey: string) => {
+      if (sharedExecRetryContext) {
+        return {
+          attemptNumber: sharedExecRetryContext.attempt,
+          attemptHistory: sharedExecRetryContext.tries.map(entry => ({ ...entry }))
+        };
+      }
+
+      const attemptState = attemptStore.get(attemptKey);
+      return {
+        attemptNumber: attemptState?.nextAttempt ?? 1,
+        attemptHistory: attemptState ? attemptState.history.slice() : []
+      };
+    };
     const guardTrace: GuardResult[] = [];
     const usedAttemptKeys = new Set<string>();
     const decisionState = createGuardDecisionState();
@@ -568,9 +587,7 @@ export const guardPreHook: PreHook = async (
     for (const candidate of perInputCandidates) {
       const attemptKey = buildGuardAttemptKey(operation, 'perInput', candidate.variable);
       usedAttemptKeys.add(attemptKey);
-      const attemptState = attemptStore.get(attemptKey);
-      const attemptNumber = attemptState?.nextAttempt ?? 1;
-      const attemptHistory = attemptState ? attemptState.history.slice() : [];
+      const { attemptNumber, attemptHistory } = resolveAttemptContext(attemptKey);
       let currentInput = candidate.variable;
 
       for (const guard of candidate.guards) {
@@ -656,9 +673,7 @@ export const guardPreHook: PreHook = async (
     if (operationGuards.length > 0) {
       const attemptKey = buildGuardAttemptKey(operation, 'perOperation');
       usedAttemptKeys.add(attemptKey);
-      const attemptState = attemptStore.get(attemptKey);
-      const attemptNumber = attemptState?.nextAttempt ?? 1;
-      const attemptHistory = attemptState ? attemptState.history.slice() : [];
+      const { attemptNumber, attemptHistory } = resolveAttemptContext(attemptKey);
       let opSnapshot = buildOperationSnapshot(transformedInputs);
 
       for (const guard of operationGuards) {

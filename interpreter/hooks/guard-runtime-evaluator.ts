@@ -20,7 +20,6 @@ import type { OperationSnapshot } from './guard-operation-keys';
 import type { GuardAttemptEntry, GuardAttemptState } from './guard-retry-state';
 import type { PolicyArgDescriptor } from '../guards';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
-import { MlldWhenExpressionError } from '@core/errors';
 import {
   buildInputPreview,
   buildVariablePreview,
@@ -465,7 +464,10 @@ export async function evaluateGuardRuntime(
     attempt: options.attemptNumber,
     decision: action.decision,
     reason: action.decision === 'deny' ? action.message ?? null : null,
-    hint: action.decision === 'retry' ? action.message ?? null : null,
+    hint:
+      action.decision === 'retry' || action.decision === 'resume'
+        ? action.message ?? null
+        : null,
     inputPreview
   });
 
@@ -511,12 +513,36 @@ export async function evaluateGuardRuntime(
     };
   }
   if (action.decision === 'resume') {
-    throw new MlldWhenExpressionError(
-      'Guard resume actions apply only after execution',
-      options.node.location ?? undefined,
-      { phase: 'action', type: 'resume' },
-      { env: options.env }
-    );
+    const entry: GuardAttemptEntry = {
+      attempt: options.attemptNumber,
+      decision: 'resume',
+      hint: action.message ?? null
+    };
+    const updatedHistory = [...options.attemptHistory, entry];
+    options.attemptStore.set(options.attemptKey, {
+      nextAttempt: options.attemptNumber + 1,
+      history: updatedHistory
+    });
+    const resumeMetadata = deps.buildDecisionMetadata(action, guard, {
+      hint: action.message ?? null,
+      inputPreview,
+      attempt: options.attemptNumber,
+      tries: updatedHistory,
+      inputVariable,
+      contextSnapshot: contextSnapshotForMetadata,
+      scopeKey,
+      guardActionMatched: true
+    });
+    return {
+      guardName: guard.name ?? null,
+      decision: 'resume',
+      timing: 'before',
+      reason: resumeMetadata.reason as string | undefined,
+      hint: action.message
+        ? { guardName: guard.name ?? null, hint: action.message }
+        : undefined,
+      metadata: resumeMetadata
+    };
   }
   return {
     guardName: guard.name ?? null,

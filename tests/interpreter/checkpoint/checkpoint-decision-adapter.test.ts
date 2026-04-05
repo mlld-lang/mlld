@@ -3,6 +3,7 @@ import { parseSync } from '@grammar/parser';
 import type { HookableNode } from '@core/types/hooks';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { GuardResumeSignal } from '@core/errors/GuardResumeSignal';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { Environment } from '@interpreter/env/Environment';
@@ -119,5 +120,62 @@ describe('guard decision compatibility', () => {
     await expect(
       handleGuardDecision({ action: 'retry', metadata: { hint: 'retry-now' } }, node, env, operation)
     ).rejects.toBeInstanceOf(GuardRetrySignal);
+  });
+
+  it('maps metadata-marked resume decisions to GuardResumeSignal when the exe has a resumable llm session', async () => {
+    const env = createEnv();
+    const node = parseHookNode();
+    const operation: OperationContext = {
+      ...createOperationContext(),
+      metadata: {
+        sourceRetryable: true,
+        llmResumeEligible: true,
+        llmResumeState: {
+          sessionId: 'session-123',
+          provider: 'fake'
+        }
+      }
+    };
+
+    await expect(
+      handleGuardDecision(
+        {
+          action: 'retry',
+          metadata: {
+            decision: 'resume',
+            hint: 'resume-now',
+            reason: 'resume-now'
+          }
+        },
+        node,
+        env,
+        operation
+      )
+    ).rejects.toBeInstanceOf(GuardResumeSignal);
+  });
+
+  it('denies metadata-marked resume decisions when no resumable llm session is available', async () => {
+    const env = createEnv();
+    const node = parseHookNode();
+    const operation = createOperationContext();
+
+    await expect(
+      handleGuardDecision(
+        {
+          action: 'retry',
+          metadata: {
+            decision: 'resume',
+            hint: 'resume-now',
+            reason: 'resume-now'
+          }
+        },
+        node,
+        env,
+        operation
+      )
+    ).rejects.toMatchObject({
+      decision: 'deny',
+      reason: 'resume not available for this exe — use retry instead.'
+    } satisfies Partial<GuardError>);
   });
 });

@@ -178,7 +178,9 @@ export function buildDecisionMetadata(
     action.message ??
     (action.decision === 'deny'
       ? `Guard ${guardId} denied operation`
-      : `Guard ${guardId} requested retry`);
+      : action.decision === 'resume'
+        ? `Guard ${guardId} requested resume`
+        : `Guard ${guardId} requested retry`);
 
   const metadata: Record<string, unknown> = {
     reason,

@@ -3035,10 +3035,7 @@ async function evaluateExecInvocationInternal(
   const resumePrompt = readLlmResumePromptFromGuardAction(pendingGuardAction);
   let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
-  let currentLlmResumeState =
-    pendingGuardAction?.decision === 'resume'
-      ? (readLlmResumeStateFromGuardDetails(pendingGuardAction.details) ?? undefined)
-      : undefined;
+  let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';

@@ -12,6 +12,8 @@ import type {
 import type { Variable } from '@core/types/variable';
 import { isVariable } from '../utils/variable-resolution';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { GuardResumeSignal } from '@core/errors/GuardResumeSignal';
+import { evaluateResumeEnforcement } from './guard-post-retry';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -255,7 +257,9 @@ export async function handleGuardDecision(
         ? primaryReason
         : normalizedDecision.action === 'abort' || normalizedDecision.action === 'deny'
           ? 'Operation aborted by guard'
-          : 'Guard requested retry'
+          : metadata.decision === 'resume'
+            ? 'Guard requested resume'
+            : 'Guard requested retry'
     ,
     guardContext: guardContextSnapshot,
     guardInput: metadata.guardInput as Variable | readonly Variable[] | null | undefined
@@ -291,6 +295,13 @@ export async function handleGuardDecision(
   }
 
   if (normalizedDecision.action === 'retry') {
+    if (metadata.decision === 'resume') {
+      enforceGuardResume(info, env, operationContext, node, {
+        reasons: reasonsArray,
+        guardResults,
+        hints
+      });
+    }
     enforcePipelineGuardRetry(info, env, operationContext, node, {
       reasons: reasonsArray,
       guardResults,
@@ -377,6 +388,58 @@ function enforcePipelineGuardRetry(
 
   throw new GuardRetrySignal({
     decision: 'retry',
+    guardName: info.guardName,
+    guardFilter: info.guardFilter,
+    scope: info.scope,
+    inputPreview: info.inputPreview ?? null,
+    retryHint: info.retryHint,
+    operation: operationContext,
+    guardContext: info.guardContext,
+    guardInput: info.guardInput ?? null,
+    reasons: extras?.reasons,
+    guardResults: extras?.guardResults,
+    hints: extras?.hints,
+    reason: info.baseMessage,
+    sourceLocation: extractNodeLocation(node),
+    env
+  });
+}
+
+function enforceGuardResume(
+  info: GuardDecisionInfo,
+  env: Environment,
+  operationContext: OperationContext,
+  node: HookableNode,
+  extras?: {
+    reasons?: string[];
+    guardResults?: GuardResult[];
+    hints?: GuardHint[];
+  }
+): never {
+  const pipelineContext = env.getPipelineContext();
+  const { allowResume } = evaluateResumeEnforcement(operationContext, pipelineContext ?? null);
+
+  if (!allowResume) {
+    throw new GuardError({
+      decision: 'deny',
+      guardName: info.guardName,
+      guardFilter: info.guardFilter,
+      scope: info.scope,
+      inputPreview: info.inputPreview ?? null,
+      retryHint: info.retryHint,
+      operation: operationContext,
+      guardContext: info.guardContext,
+      guardInput: info.guardInput ?? null,
+      reasons: extras?.reasons,
+      guardResults: extras?.guardResults,
+      hints: extras?.hints,
+      reason: 'resume not available for this exe — use retry instead.',
+      sourceLocation: extractNodeLocation(node),
+      env
+    });
+  }
+
+  throw new GuardResumeSignal({
     guardName: info.guardName,
     guardFilter: info.guardFilter,
     scope: info.scope,

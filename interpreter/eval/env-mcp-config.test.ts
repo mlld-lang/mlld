@@ -537,6 +537,87 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('allows a later pre-guard on the same exe llm to switch from retry to resume', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const promptKey = '__mlldGuardResumePrePrompt';
+    const agentCallKey = '__mlldGuardResumePreAgentCalls';
+    const initialSessionKey = '__mlldGuardResumePreInitialSession';
+    const resumedSessionKey = '__mlldGuardResumePreResumedSession';
+    (globalThis as Record<string, unknown>)[promptKey] = null;
+    (globalThis as Record<string, unknown>)[agentCallKey] = 0;
+    (globalThis as Record<string, unknown>)[initialSessionKey] = null;
+    (globalThis as Record<string, unknown>)[resumedSessionKey] = null;
+
+    const source = [
+      '/record @agent_result = {',
+      '  data: [ok: boolean],',
+      '  validate: "demote"',
+      '}',
+      '/exe @check_result(value) = @value => agent_result',
+      `/exe @read_prompt() = js { return globalThis.${promptKey} ?? null; }`,
+      `/exe @read_agent_calls() = js { return globalThis.${agentCallKey} || 0; }`,
+      `/exe @read_initial_session() = js { return globalThis.${initialSessionKey} ?? null; }`,
+      `/exe @read_resumed_session() = js { return globalThis.${resumedSessionKey} ?? null; }`,
+      `/exe llm @agent(prompt, config) = js {
+  globalThis.${agentCallKey} = (globalThis.${agentCallKey} || 0) + 1;
+  const resume = config?._mlld?.resume;
+  if (resume?.continue) {
+    globalThis.${promptKey} = prompt;
+    globalThis.${resumedSessionKey} = resume.sessionId ?? null;
+    return {
+      value: { ok: true },
+      _mlld: { sessionId: resume.sessionId, provider: 'fake' }
+    };
+  }
+  globalThis.${initialSessionKey} = resume?.sessionId ?? null;
+  return {
+    value: { ok: 'bad' },
+    _mlld: { sessionId: resume?.sessionId, provider: 'fake' }
+  };
+}`,
+      '/guard before for op:named:agent = when [',
+      '  @mx.guard.try == 2 => resume "Return valid JSON only"',
+      '  * => allow',
+      ']',
+      '/guard after for op:named:agent = when [',
+      '  @check_result(@output).mx.schema.valid == false && @mx.guard.try < 2 => retry "retry before resume"',
+      '  @check_result(@output).mx.schema.valid == false => deny "still invalid"',
+      '  * => allow',
+      ']',
+      '/var @result = @agent("start")',
+      '/var @checked = @check_result(@result)',
+      '/var @summary = { ok: @checked.ok, schemaValid: @checked.mx.schema.valid, prompt: @read_prompt(), agentCalls: @read_agent_calls(), initialSession: @read_initial_session(), resumedSession: @read_resumed_session() }',
+      '/show @summary'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      const summary = JSON.parse(output.trim());
+      expect(summary.ok).toBe(true);
+      expect(summary.schemaValid).toBe(true);
+      expect(summary.prompt).toBe('Return valid JSON only');
+      expect(summary.agentCalls).toBe(2);
+      expect(summary.initialSession).toMatch(/^.+$/);
+      expect(summary.resumedSession).toBe(summary.initialSession);
+    } finally {
+      delete (globalThis as Record<string, unknown>)[promptKey];
+      delete (globalThis as Record<string, unknown>)[agentCallKey];
+      delete (globalThis as Record<string, unknown>)[initialSessionKey];
+      delete (globalThis as Record<string, unknown>)[resumedSessionKey];
+      environment?.cleanup();
+    }
+  });
+
   it('errors clearly when resume is requested but the llm module does not return resume state', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [

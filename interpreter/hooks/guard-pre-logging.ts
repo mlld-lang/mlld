@@ -179,7 +179,7 @@ export function logGuardHelperAvailability(
 }
 
 export function logGuardDecisionSummary(options: {
-  decision: 'allow' | 'deny' | 'retry';
+  decision: 'allow' | 'deny' | 'retry' | 'resume';
   operation: OperationContext;
   inputs: readonly unknown[] | unknown;
   reasons: readonly string[];
