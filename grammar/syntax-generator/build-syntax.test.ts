@@ -11,6 +11,7 @@ describe('MlldSyntaxGenerator', () => {
       'file',
       'files',
       'record',
+      'store',
       'needs',
       'profiles',
       'while'
@@ -24,6 +25,10 @@ describe('MlldSyntaxGenerator', () => {
     expect(generator.patterns.operators).toContain('tools');
     expect(generator.patterns.operators).toContain('mcp');
     expect(generator.patterns.operators).toContain('using');
+    expect(generator.patterns.operators).toContain('known');
+    expect(generator.patterns.operators).toContain('trusted');
+    expect(generator.patterns.operators).toContain('resolved');
+    expect(generator.patterns.operators).toContain('privileged');
     expect(generator.patterns.directiveForms).toContain('profiles');
     expect(generator.patterns.directiveForms).toContain('loop');
   });
@@ -45,6 +50,7 @@ describe('MlldSyntaxGenerator', () => {
     expect(patternNames).toContain('keyword.control.directive.inline.mlld');
     expect(patternNames).toContain('keyword.control.block.mlld');
     expect(patternNames).toContain('keyword.control.flow.mlld');
+    expect(patternNames).toContain('support.type.property-name.mlld');
   });
 
   it('matches canonical named operation filters in regex highlighters', () => {

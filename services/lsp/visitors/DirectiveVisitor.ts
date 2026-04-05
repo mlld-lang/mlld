@@ -140,6 +140,12 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
 
+    if (node.kind === 'record') {
+      this.visitRecordDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
     if (node.kind === 'env') {
       this.visitEnvDirective(node, context);
       this.handleDirectiveComment(node);
@@ -167,6 +173,12 @@ export class DirectiveVisitor extends BaseVisitor {
 
     if (node.kind === 'stream') {
       this.visitStreamDirective(node, context);
+      this.handleDirectiveComment(node);
+      return;
+    }
+
+    if (node.kind === 'sign' || node.kind === 'verify') {
+      this.visitSignVerifyDirective(node);
       this.handleDirectiveComment(node);
       return;
     }
@@ -238,7 +250,7 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     }
     
-    if ((node.kind === 'var' || node.kind === 'exe' || node.kind === 'path') &&
+    if ((node.kind === 'var' || node.kind === 'exe' || node.kind === 'path' || node.kind === 'store' || node.kind === 'shelf') &&
         node.values?.identifier) {
       // For /exe with params (even if empty like @func()), handle variable declaration without = first
       if (node.kind === 'exe' && node.values?.params !== undefined) {
@@ -331,6 +343,67 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Handle end-of-line comments
     this.handleDirectiveComment(node);
+  }
+
+  private visitRecordDirective(directive: LspAstNode, context: VisitorContext): void {
+    if (!directive.location || !directive.values) return;
+
+    this.handleVariableDeclaration(directive);
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+
+    for (const match of directiveText.matchAll(/\bwhen\b/g)) {
+      if (match.index === undefined) continue;
+      const whenOffset = directive.location.start.offset + match.index;
+      const whenPos = this.document.positionAt(whenOffset);
+      this.tokenBuilder.addToken({
+        line: whenPos.line,
+        char: whenPos.character,
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    for (const key of ['facts', 'data', 'display', 'validate', 'mask', 'ref', 'handle', 'trusted', 'untrusted']) {
+      const pattern = new RegExp(`\\b${key}\\b(?=\\s*:)`, 'g');
+      for (const match of directiveText.matchAll(pattern)) {
+        if (match.index === undefined) continue;
+        const keyOffset = directive.location.start.offset + match.index;
+        const keyPos = this.document.positionAt(keyOffset);
+        this.tokenBuilder.addToken({
+          line: keyPos.line,
+          char: keyPos.character,
+          length: key.length,
+          tokenType: 'property',
+          modifiers: []
+        });
+      }
+    }
+
+    const visitNestedValue = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          visitNestedValue(item);
+        }
+        return;
+      }
+
+      const maybeNode = value as LspAstNode;
+      if (maybeNode.type) {
+        this.mainVisitor.visitNode(maybeNode, context);
+        return;
+      }
+
+      for (const nested of Object.values(value)) {
+        visitNestedValue(nested);
+      }
+    };
+
+    visitNestedValue(directive.values);
   }
 
   private visitExportDirective(directive: LspAstNode, context: VisitorContext): void {
@@ -1530,13 +1603,58 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitOutputDirective(directive: LspAstNode, context: VisitorContext): void {
     const values = directive.values;
     if (!values) return;
-    
-    // Process source variable
-    if (values.source?.identifier) {
-      for (const identifier of values.source.identifier) {
-        this.mainVisitor.visitNode(identifier, context);
+
+    const visitOutputSource = (value: unknown, sourceContext: VisitorContext): void => {
+      if (!value) return;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          visitOutputSource(item, sourceContext);
+        }
+        return;
       }
-    }
+
+      if (typeof value !== 'object') return;
+
+      const node = value as LspAstNode;
+      if (node.type) {
+        this.mainVisitor.visitNode(node, sourceContext);
+        return;
+      }
+
+      if (Array.isArray(node.identifier)) {
+        for (const identifier of node.identifier) {
+          visitOutputSource(identifier, sourceContext);
+        }
+      }
+
+      if (Array.isArray(node.content)) {
+        for (const contentNode of node.content) {
+          visitOutputSource(contentNode, sourceContext);
+        }
+      }
+
+      if (Array.isArray(node.path)) {
+        for (const pathNode of node.path) {
+          visitOutputSource(pathNode, sourceContext);
+        }
+      }
+
+      if (node.value) {
+        visitOutputSource(node.value, sourceContext);
+      }
+    };
+
+    const sourceContext = Array.isArray(values.source)
+      ? {
+          ...context,
+          templateType: 'backtick',
+          interpolationAllowed: true,
+          variableStyle: '@var' as const
+        }
+      : context;
+
+    visitOutputSource(values.source, sourceContext);
     
     // Token for "to" keyword
     const sourceText = this.document.getText();
@@ -4166,6 +4284,60 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
 
+  private visitSignVerifyDirective(node: LspAstNode): void {
+    if (!node.location || !node.values) return;
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const identifierNode = Array.isArray(node.values.identifier) ? node.values.identifier[0] : node.values.identifier;
+    const identifier = typeof identifierNode?.identifier === 'string' ? identifierNode.identifier : undefined;
+
+    if (identifier) {
+      const refIndex = directiveText.indexOf(`@${identifier}`);
+      if (refIndex !== -1) {
+        const refOffset = node.location.start.offset + refIndex;
+        const refPos = this.document.positionAt(refOffset);
+        this.tokenBuilder.addToken({
+          line: refPos.line,
+          char: refPos.character,
+          length: identifier.length + 1,
+          tokenType: 'variableRef',
+          modifiers: ['reference']
+        });
+      }
+    }
+
+    const withMatch = directiveText.match(/\bwith\b/);
+    if (withMatch && withMatch.index !== undefined) {
+      const withOffset = node.location.start.offset + withMatch.index;
+      const withPos = this.document.positionAt(withOffset);
+      this.tokenBuilder.addToken({
+        line: withPos.line,
+        char: withPos.character,
+        length: 4,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    const methodNode = Array.isArray(node.values.method) ? node.values.method[0] : node.values.method;
+    const methodText = typeof methodNode?.content === 'string' ? methodNode.content : undefined;
+    if (methodText) {
+      const methodIndex = directiveText.lastIndexOf(methodText);
+      if (methodIndex !== -1) {
+        const methodOffset = node.location.start.offset + methodIndex;
+        const methodPos = this.document.positionAt(methodOffset);
+        this.tokenBuilder.addToken({
+          line: methodPos.line,
+          char: methodPos.character,
+          length: methodText.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
+  }
+
   /**
    * Get token type for directive keyword based on kind
    * Different directive groups use different semantic types for color coding
@@ -4181,6 +4353,8 @@ export class DirectiveVisitor extends BaseVisitor {
       case 'policy':
       case 'checkpoint':
       case 'record':
+      case 'shelf':
+      case 'store':
         return 'directiveDefinition';
 
       // Action directives: run, show, output, append, log, stream

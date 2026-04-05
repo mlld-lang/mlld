@@ -317,6 +317,7 @@ export class ASTSemanticVisitor {
           case 'inlineValue':
           case 'pair':
           case 'CondensedPipe':
+          case 'mcpToolSource':
           case 'GuardFilter':
           case 'GuardBlock':
           case 'GuardRule':
@@ -326,7 +327,11 @@ export class ASTSemanticVisitor {
           case 'variableIndex':
           case 'consumed':
           case 'string':
-            this.visitChildren(node, actualContext);
+            if (node.type === 'mcpToolSource' && node.source && typeof node.source === 'object' && (node.source as ASTNode).type) {
+              this.visitNode(node.source as ASTNode, actualContext);
+            } else {
+              this.visitChildren(node, actualContext);
+            }
             break;
           case 'PathSeparator':
             break;
@@ -564,29 +569,34 @@ export class ASTSemanticVisitor {
     // Handle the pipeline in withClause
     if (node.withClause?.pipeline && Array.isArray(node.withClause.pipeline)) {
       const source = this.document.getText();
+      const baseEndOffset = node.variable?.location?.end?.offset || 0;
 
       for (const transform of node.withClause.pipeline) {
-        // Each transform has .identifier array with VariableReference nodes
-        if (transform.identifier && Array.isArray(transform.identifier)) {
-          for (const identNode of transform.identifier) {
-            if (identNode.type === 'VariableReference' && identNode.location) {
-              // Find the | operator before this transform
-              const pipeOffset = source.lastIndexOf('|', identNode.location.start.offset);
-              if (pipeOffset !== -1 && pipeOffset > (node.variable?.location?.end?.offset || 0)) {
-                const pipePos = this.document.positionAt(pipeOffset);
-                this.tokenBuilder.addToken({
-                  line: pipePos.line,
-                  char: pipePos.character,
-                  length: 1,
-                  tokenType: 'operator',
-                  modifiers: []
-                });
-              }
+        const transformNode = transform as ASTNode;
+        const anchorOffset =
+          transformNode.location?.start?.offset ||
+          (Array.isArray(transformNode.identifier) ? transformNode.identifier[0]?.location?.start?.offset : undefined);
 
-              // Visit the variable reference in the pipeline
-              this.visitNode(identNode, context);
-            }
+        if (typeof anchorOffset === 'number') {
+          const pipeOffset = source.lastIndexOf('|', anchorOffset);
+          if (pipeOffset !== -1 && pipeOffset > baseEndOffset) {
+            const isParallel = pipeOffset > 0 && source[pipeOffset - 1] === '|';
+            const tokenOffset = isParallel ? pipeOffset - 1 : pipeOffset;
+            const pipePos = this.document.positionAt(tokenOffset);
+            this.tokenBuilder.addToken({
+              line: pipePos.line,
+              char: pipePos.character,
+              length: isParallel ? 2 : 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
           }
+        }
+
+        if (transformNode?.type) {
+          this.visitNode(transformNode, context);
+        } else if (transformNode && typeof transformNode === 'object') {
+          this.visitChildren(transformNode, context);
         }
       }
     }

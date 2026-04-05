@@ -26,15 +26,17 @@ export class ForeachVisitor extends BaseVisitor {
   
   visitNode(node: unknown, context: VisitorContext): void {
     const astNode = asLspAstNode(node);
+    const foreachNode = astNode.type === 'foreach-command' && asLspAstNode(astNode.value).type === 'foreach'
+      ? asLspAstNode(astNode.value)
+      : astNode;
+    const execInvocation = asLspAstNode(foreachNode.execInvocation);
     // Foreach nodes may not have location info, but their execInvocation does
     // We need to find the 'foreach' keyword in the source text
     
-    let startOffset: number;
-    
-    if (asLspAstNode(astNode.execInvocation).location) {
+    if (execInvocation.location) {
       // The exec invocation starts after 'foreach '
       // So we search backwards from that position
-      startOffset = asLspAstNode(astNode.execInvocation).location!.start.offset;
+      const startOffset = execInvocation.location.start.offset;
       
       // Search for 'foreach' before the exec invocation
       const sourceText = this.document.getText();
@@ -57,16 +59,16 @@ export class ForeachVisitor extends BaseVisitor {
     }
     
     // Handle exec invocation - let CommandVisitor handle the details
-    if (astNode.execInvocation) {
-      this.mainVisitor.visitNode(astNode.execInvocation, context);
+    if (foreachNode.execInvocation) {
+      this.mainVisitor.visitNode(foreachNode.execInvocation, context);
     }
     
     // Handle with clause if present
-    if (astNode.withClause || astNode.with) {
-      const withClause = astNode.withClause || astNode.with;
+    if (foreachNode.withClause || foreachNode.with) {
+      const withClause = foreachNode.withClause || foreachNode.with;
       // Find and tokenize 'with' keyword
       const withOffset = this.operatorHelper.findOperatorNear(
-        asLspAstNode(astNode.execInvocation).location?.end?.offset || (astNode.location?.start.offset ?? 0) + 7,
+        execInvocation.location?.end?.offset || (foreachNode.location?.start.offset ?? 0) + 7,
         'with',
         50,
         'forward'
@@ -88,12 +90,14 @@ export class ForeachVisitor extends BaseVisitor {
         const sourceText = this.document.getText();
         
         // Find opening brace after 'with'
-        const openBraceOffset = this.operatorHelper.findOperatorNear(
-          withOffset + 4, // After 'with'
-          '{',
-          20,
-          'forward'
-        );
+        const openBraceOffset = withOffset === null
+          ? null
+          : this.operatorHelper.findOperatorNear(
+              withOffset + 4, // After 'with'
+              '{',
+              20,
+              'forward'
+            );
         
         if (openBraceOffset !== null) {
           // Add opening brace token
@@ -111,7 +115,7 @@ export class ForeachVisitor extends BaseVisitor {
             // Find the property key in the source
             const keyPattern = new RegExp(`"?${key}"?\\s*:`);
             const searchStart = openBraceOffset + 1;
-            const searchEnd = astNode.location?.end?.offset || searchStart + 100;
+            const searchEnd = foreachNode.location?.end?.offset || searchStart + 100;
             const searchText = sourceText.substring(searchStart, searchEnd);
             const keyMatch = searchText.match(keyPattern);
             

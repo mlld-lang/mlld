@@ -101,6 +101,9 @@ describe('Highlighting Rules', () => {
     it('should have current directives', () => {
       const current = HIGHLIGHTING_RULES.directives.current;
       expect(current).toContain('var');
+      expect(current).toContain('record');
+      expect(current).toContain('shelf');
+      expect(current).toContain('store');
       expect(current).toContain('show');
       expect(current).toContain('exe');
       expect(current).toContain('run');
@@ -145,6 +148,7 @@ describe('Highlighting Rules', () => {
       expect(HIGHLIGHTING_RULES.operators.pipe).toContain('|');
       expect(HIGHLIGHTING_RULES.operators.assignment).toContain('=');
       expect(HIGHLIGHTING_RULES.operators.arrow).toContain('=>');
+      expect(HIGHLIGHTING_RULES.operators.nullish).toContain('??');
     });
   });
   
@@ -173,6 +177,11 @@ describe('Highlighting Rules', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('foreach');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('from');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('as');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('known');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('trusted');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('resolved');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('privileged');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('resume');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('tools');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('mcp');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('git');

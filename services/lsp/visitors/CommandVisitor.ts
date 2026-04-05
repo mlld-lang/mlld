@@ -367,7 +367,9 @@ export class CommandVisitor extends BaseVisitor {
 
   private visitExecInvocation(node: unknown, context: VisitorContext): void {
     if (node.commandRef && node.commandRef.name) {
-      const name = node.commandRef.name;
+      const staticName = typeof node.commandRef.name === 'string'
+        ? node.commandRef.name
+        : undefined;
       
       // Handle case where location is 'none' or undefined - use identifier location
       if (node.location === 'none' || !node.location) {
@@ -376,6 +378,7 @@ export class CommandVisitor extends BaseVisitor {
           return;
         }
         const identifierLoc = node.commandRef.identifier[0].location;
+        let atCharPos = identifierLoc.start.column - 1;
 
         const source = this.document.getText();
         const includesAt = source.charAt(identifierLoc.start.offset) === '@';
@@ -387,17 +390,18 @@ export class CommandVisitor extends BaseVisitor {
           const searchStart = identifierLoc.start.offset;
           const searchEnd = Math.min(searchStart + 100, source.length);
           const searchText = source.substring(searchStart, searchEnd);
-          const atIndex = searchText.indexOf('@' + name);
+          const atIndex = staticName ? searchText.indexOf('@' + staticName) : -1;
 
           if (atIndex !== -1) {
             // Found the actual @ symbol position
             const actualOffset = searchStart + atIndex;
             const actualPos = this.document.positionAt(actualOffset);
+            atCharPos = actualPos.character;
 
             this.tokenBuilder.addToken({
               line: actualPos.line,
               char: actualPos.character,
-              length: name.length + 1, // Include @ in length
+              length: staticName!.length + 1, // Include @ in length
               tokenType: 'function',
               modifiers: ['reference']
             });
@@ -412,14 +416,12 @@ export class CommandVisitor extends BaseVisitor {
           }
         } else {
           // Location is correct - use it directly
-          const atCharPos = identifierLoc.start.column - 1;
-
           // Tokenize @functionName as a single token for consistent coloring
-          if (name && typeof name === 'string' && name.length > 0 && atCharPos >= 0) {
+          if (staticName && atCharPos >= 0) {
             this.tokenBuilder.addToken({
               line: identifierLoc.start.line - 1,
               char: atCharPos,
-              length: name.length + 1, // Include @ in length
+              length: staticName.length + 1, // Include @ in length
               tokenType: 'function',
               modifiers: ['reference']
             });
@@ -427,11 +429,11 @@ export class CommandVisitor extends BaseVisitor {
         }
         
         // If there are args, add parentheses
-        if (node.commandRef.args && node.commandRef.args.length >= 0) {
+        if (staticName && node.commandRef.args && node.commandRef.args.length >= 0) {
           // Add opening parenthesis
           this.tokenBuilder.addToken({
             line: identifierLoc.start.line - 1,
-            char: atCharPos + name.length + 1, // After @ + name
+            char: atCharPos + staticName.length + 1, // After @ + name
             length: 1,
             tokenType: 'operator',
             modifiers: []
@@ -453,8 +455,7 @@ export class CommandVisitor extends BaseVisitor {
             if (typeof arg !== 'object' || arg === null || !arg.type) {
               // This is a primitive value - need to find its position in the source
               const sourceText = this.document.getText();
-              const funcName = node.commandRef.name;
-              const searchStart = identifierLoc.start.offset + funcName.length + 2; // After @name(
+              const searchStart = identifierLoc.start.offset + staticName.length + 2; // After @name(
               
               // For now, just tokenize based on type
               const argStr = String(arg);
@@ -498,7 +499,7 @@ export class CommandVisitor extends BaseVisitor {
                 // For primitive values, estimate based on string length
                 const sourceText = this.document.getText();
                 const argStr = String(currentArg);
-                const searchStart = identifierLoc.start.offset + name.length + 2; // After @name(
+                const searchStart = identifierLoc.start.offset + staticName.length + 2; // After @name(
                 const argIndex = sourceText.indexOf(argStr, searchStart);
                 if (argIndex !== -1) {
                   currentArgEnd = argIndex + argStr.length;
@@ -568,7 +569,7 @@ export class CommandVisitor extends BaseVisitor {
             // Empty args - put paren right after opening paren
             this.tokenBuilder.addToken({
               line: identifierLoc.start.line - 1,
-              char: atCharPos + name.length + 2, // After @ + name + (
+              char: atCharPos + staticName.length + 2, // After @ + name + (
               length: 1,
               tokenType: 'operator',
               modifiers: []
@@ -583,12 +584,12 @@ export class CommandVisitor extends BaseVisitor {
         return;
       }
       const source = this.document.getText();
-      const hasValidName = name && typeof name === 'string' && name.length > 0;
+      const hasValidName = !!staticName;
 
       // Check if this is a method call (has objectReference) vs simple function call
       const isMethodCall = !!node.commandRef.objectReference;
 
-      let methodEndOffset: number;
+      let methodEndOffset = node.location.start.offset;
 
       // Check for chained method calls (objectSource is an ExecInvocation)
       const isChainedMethodCall = !!node.commandRef.objectSource;
@@ -601,7 +602,7 @@ export class CommandVisitor extends BaseVisitor {
         // 2. Find and tokenize this method name (from identifier or just the name)
         // For chained calls, identifier[0] is usually a Text node, not VariableReference
         const identifier = node.commandRef.identifier?.[0];
-        const methodName = node.commandRef.name;
+        const methodName = staticName;
 
         if (methodName && typeof methodName === 'string') {
           // Find the position of the method name in source
@@ -645,16 +646,82 @@ export class CommandVisitor extends BaseVisitor {
 
           if (lastField?.type === 'variableIndex') {
             // COMPUTED PROPERTY CALL: @obj[@key](args)
-            // Visit identifier[0] which contains the variableIndex field with nested VariableReference
-            // Visit with a regular context (not interpolation) so fields get proper tokenization
             const varContext = {
               ...context,
               interpolationAllowed: false,
               inCommand: false
             };
-            this.mainVisitor.visitNode(identifier, varContext);
+            const baseIdentifier = typeof identifier?.identifier === 'string'
+              ? identifier.identifier
+              : typeof node.commandRef.objectReference?.identifier === 'string'
+                ? node.commandRef.objectReference.identifier
+                : undefined;
+            const baseLocation = identifier?.location || node.commandRef.objectReference?.location;
+
+            if (baseIdentifier && baseLocation) {
+              const searchStart = baseLocation.start.offset;
+              const searchEnd = Math.min(searchStart + 100, source.length);
+              const searchText = source.substring(searchStart, searchEnd);
+              const atIndex = searchText.indexOf(`@${baseIdentifier}`);
+
+              if (atIndex !== -1) {
+                const baseOffset = searchStart + atIndex;
+                const basePos = this.document.positionAt(baseOffset);
+                this.tokenBuilder.addToken({
+                  line: basePos.line,
+                  char: basePos.character,
+                  length: baseIdentifier.length + 1,
+                  tokenType: 'function',
+                  modifiers: ['reference']
+                });
+              }
+            }
+
+            if (identifier?.fields?.length > 1 && identifier.location) {
+              this.operatorHelper.tokenizePropertyAccess({
+                ...identifier,
+                fields: identifier.fields.slice(0, -1)
+              });
+            }
 
             if (lastField.location) {
+              const openBracketPos = this.document.positionAt(lastField.location.start.offset);
+              this.tokenBuilder.addToken({
+                line: openBracketPos.line,
+                char: openBracketPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              if (lastField.value && typeof lastField.value === 'object' && lastField.value.type) {
+                this.mainVisitor.visitNode(lastField.value, varContext);
+              }
+
+              const closeBracketOffset = lastField.location.end.offset - (lastField.optional ? 2 : 1);
+              const closeBracketPos = this.document.positionAt(closeBracketOffset);
+              this.tokenBuilder.addToken({
+                line: closeBracketPos.line,
+                char: closeBracketPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+
+              if (lastField.optional) {
+                const optionalOffset = lastField.location.end.offset - 1;
+                if (source[optionalOffset] === '?') {
+                  const optionalPos = this.document.positionAt(optionalOffset);
+                  this.tokenBuilder.addToken({
+                    line: optionalPos.line,
+                    char: optionalPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
+
               methodEndOffset = lastField.location.end.offset;
             }
             
@@ -919,7 +986,7 @@ export class CommandVisitor extends BaseVisitor {
           const searchStart = node.location.start.offset;
           const searchEnd = Math.min(searchStart + 100, source.length);
           const searchText = source.substring(searchStart, searchEnd);
-          const atIndex = searchText.indexOf('@' + name);
+          const atIndex = staticName ? searchText.indexOf('@' + staticName) : -1;
 
           if (atIndex !== -1) {
             // Found the actual @ symbol position
@@ -929,12 +996,12 @@ export class CommandVisitor extends BaseVisitor {
             this.tokenBuilder.addToken({
               line: actualPos.line,
               char: actualPos.character,
-              length: name.length + 1, // Include @ in length
+              length: staticName!.length + 1, // Include @ in length
               tokenType: 'function',
               modifiers: ['reference']
             });
 
-            methodEndOffset = actualOffset + name.length + 1;
+            methodEndOffset = actualOffset + staticName!.length + 1;
           } else {
             // Can't find the @ symbol - skip tokenization to avoid wrong position
             methodEndOffset = node.location.start.offset;
@@ -945,24 +1012,23 @@ export class CommandVisitor extends BaseVisitor {
           const atCharPos = charPos;
 
           // Tokenize @functionName as a single token for consistent coloring
-          if (hasValidName && atCharPos >= 0) {
+          if (staticName && atCharPos >= 0) {
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
               char: atCharPos,
-              length: name.length + 1, // Include @ in length
+              length: staticName.length + 1, // Include @ in length
               tokenType: 'function',
               modifiers: ['reference']
             });
           }
 
-          methodEndOffset = node.location.start.offset + name.length + 1;
+          methodEndOffset = node.location.start.offset + (staticName?.length || 0) + 1;
         }
       }
 
-      // Add opening parenthesis (only if we have valid name for position calculation)
-      if (hasValidName && node.commandRef.args && Array.isArray(node.commandRef.args)) {
+      if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
         // Find the opening paren in the source
-        const openParenOffset = source.indexOf('(', methodEndOffset - 1);
+        const openParenOffset = source.indexOf('(', Math.max(methodEndOffset - 1, node.location.start.offset));
         if (openParenOffset !== -1) {
           const openParenPos = this.document.positionAt(openParenOffset);
           this.tokenBuilder.addToken({
@@ -989,8 +1055,7 @@ export class CommandVisitor extends BaseVisitor {
           if (typeof arg !== 'object' || arg === null || !arg.type) {
             // This is a primitive value - need to find its position in the source
             const sourceText = this.document.getText();
-            const funcName = node.commandRef.name;
-            const searchStart = node.location.start.offset + funcName.length + 2; // After @name(
+            const searchStart = Math.max(methodEndOffset + 1, node.location.start.offset); // After callee(
             
             // For now, just tokenize based on type
             const argStr = String(arg);
@@ -1026,6 +1091,14 @@ export class CommandVisitor extends BaseVisitor {
               line: arg.location.start.line - 1,
               char: tokenStart,
               length: tokenLength,
+              tokenType: 'string',
+              modifiers: []
+            });
+          } else if (arg.type === 'RegexLiteral' && arg.location) {
+            this.tokenBuilder.addToken({
+              line: arg.location.start.line - 1,
+              char: arg.location.start.column - 1,
+              length: Math.max(arg.location.end.offset - arg.location.start.offset, 1),
               tokenType: 'string',
               modifiers: []
             });
@@ -1070,6 +1143,16 @@ export class CommandVisitor extends BaseVisitor {
           });
         }
       } // Close hasValidName && args if
+
+      if (Array.isArray(node.fields) && node.fields.length > 0) {
+        this.operatorHelper.tokenizePropertyAccess(node);
+
+        for (const field of node.fields) {
+          if (field.type === 'variableIndex' && field.value && typeof field.value === 'object' && field.value.type) {
+            this.mainVisitor.visitNode(field.value, context);
+          }
+        }
+      }
 
       // Handle args for cases where hasValidName is false (e.g., computed property calls)
       // where name is an object instead of a string

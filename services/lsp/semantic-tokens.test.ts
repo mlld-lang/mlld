@@ -51,8 +51,29 @@ vi.mock('vscode-languageserver-textdocument', () => ({
           return result;
         }
       },
-      offsetAt: (position: any) => 0,
-      positionAt: (offset: number) => ({ line: 0, character: offset })
+      offsetAt: (position: any) => {
+        const lines = content.split('\n');
+        let result = 0;
+        for (let i = 0; i < position.line; i++) {
+          result += (lines[i]?.length || 0) + 1;
+        }
+        return result + position.character;
+      },
+      positionAt: (offset: number) => {
+        const lines = content.split('\n');
+        let remaining = offset;
+
+        for (let line = 0; line < lines.length; line++) {
+          const lineLength = lines[line].length;
+          if (remaining <= lineLength) {
+            return { line, character: remaining };
+          }
+          remaining -= lineLength + 1;
+        }
+
+        const lastLine = Math.max(lines.length - 1, 0);
+        return { line: lastLine, character: lines[lastLine]?.length || 0 };
+      }
     })
   }
 }));

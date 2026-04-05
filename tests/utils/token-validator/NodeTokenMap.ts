@@ -118,10 +118,11 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
       const isSyntheticWhenBinding = node?.valueType === 'identifier' &&
         typeof node?.identifier === 'string' &&
         node.identifier.startsWith('__when_bound_');
+      const isSyntheticImportAlias = node?.valueType === 'importAlias';
       const isZeroWidth = node?.location &&
         node.location.start?.offset === node.location.end?.offset;
 
-      if (isSyntheticWhenBinding || isZeroWidth) {
+      if (isSyntheticWhenBinding || isSyntheticImportAlias || isZeroWidth) {
         return [];
       }
 
@@ -149,7 +150,8 @@ export const NODE_TOKEN_RULES: Record<string, NodeTokenRule> = {
         node.valueType === 'wildcard' ||
         node.valueType === 'none' ||
         node.valueType === 'retry' ||
-        node.valueType === 'resume'
+        node.valueType === 'resume' ||
+        node.valueType === 'skip'
       ) return ['keyword'];
       if (node.valueType === 'denied') return ['keyword'];
       if (node.valueType === 'done' || node.valueType === 'continue') return ['keyword'];

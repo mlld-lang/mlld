@@ -72,6 +72,8 @@ export class LiteralVisitor extends BaseVisitor {
       tokenType = 'keyword';
     } else if (valueType === 'retry') {
       tokenType = 'keyword';
+    } else if (valueType === 'skip') {
+      tokenType = 'keyword';
     } else if (valueType === 'done' || valueType === 'continue') {
       // For done/continue, tokenize just the keyword, not the entire expression
       // The node location spans the entire expression (e.g., "done @value")

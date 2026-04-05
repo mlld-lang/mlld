@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2026-03-26T11:26:44.686Z
+" Latest Revision: 2026-04-05T06:55:55.088Z
 
 if exists("b:current_syntax")
   finish
@@ -18,7 +18,7 @@ syn sync minlines=10
 syn match mlldComment "\(>>\|<<\).*$"
 
 " Directives - must be at start of line
-syn match mlldDirective "^/\(var\|record\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|file\|files\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|box\|while\|needs\|profiles\)\>"
+syn match mlldDirective "^/\(var\|record\|shelf\|show\|stream\|run\|exe\|import\|when\|if\|output\|append\|file\|files\|for\|loop\|log\|bail\|checkpoint\|guard\|hook\|export\|policy\|auth\|sign\|verify\|box\|while\|store\|needs\|profiles\)\>"
 
 " Directive-like keywords in strict expression/block forms
 syn match mlldInlineDirective "\<\(loop\|while\)\>\ze\s*("
@@ -55,6 +55,7 @@ syn match mlldReservedVar "@\."
 
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@[A-Za-z_][A-Za-z0-9_-]*"
+syn match mlldObjectKey "\<[A-Za-z_][A-Za-z0-9_-]*\>\ze\s*:"
 
 " Triple-colon template blocks (with {{var}} interpolation)
 syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
@@ -126,6 +127,7 @@ hi def link mlldWhenColon Keyword
 hi def link mlldControlKeyword Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
+hi def link mlldObjectKey Identifier
 hi def link mlldTripleTemplate String
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special

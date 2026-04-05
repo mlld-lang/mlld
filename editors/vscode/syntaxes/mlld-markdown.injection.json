@@ -22,7 +22,7 @@
       "contentName": "source.mlld.embedded",
       "patterns": [
         {
-          "begin": "^((var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
+          "begin": "^((var|record|shelf|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|store|needs|profiles)\\b)",
           "end": "$",
           "name": "meta.embedded.line.mlld",
           "beginCaptures": {
@@ -457,8 +457,12 @@
               "match": "\\.([A-Za-z_][A-Za-z0-9_-]*|\\d+)"
             },
             {
+              "name": "support.type.property-name.mlld",
+              "match": "(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))"
+            },
+            {
               "name": "keyword.operator.mlld",
-              "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\\b"
+              "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
             },
             {
               "name": "support.type.guard-filter.mlld",
@@ -497,7 +501,7 @@
       ]
     },
     {
-      "begin": "^((var|record|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|needs|profiles)\\b)",
+      "begin": "^((var|record|shelf|show|stream|run|exe|import|when|if|output|append|file|files|for|loop|log|bail|checkpoint|guard|hook|export|policy|auth|sign|verify|box|while|store|needs|profiles)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
@@ -932,8 +936,12 @@
           "match": "\\.([A-Za-z_][A-Za-z0-9_-]*|\\d+)"
         },
         {
+          "name": "support.type.property-name.mlld",
+          "match": "(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))"
+        },
+        {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",

@@ -53,7 +53,10 @@ export class VariableVisitor extends BaseVisitor {
       const includesAt = charAtOffset === '@';
 
       if (!includesAt) {
-        return;
+        const isImplicitReference = Array.isArray(node.fields) && node.fields.length > 0;
+        if (!isImplicitReference) {
+          return;
+        }
       }
       // If location includes @, fall through to process it
     }
@@ -144,27 +147,96 @@ export class VariableVisitor extends BaseVisitor {
       // - Multi-byte characters, tabs, datatype labels, etc.
       const source = this.document.getText();
       const startOffset = node.location!.start.offset;
+      const endOffset = node.location!.end.offset;
       const charAtOffset = source.charAt(startOffset);
       const includesAt = charAtOffset === '@';
+      const nodeText = source.substring(startOffset, endOffset);
+      const referenceNeedle = `@${identifier}`;
 
       // Search for @ symbol near node location
       let atOffset = startOffset;
       if (!includesAt) {
-        // Location doesn't include @, search for it nearby
-        // First try searching forward (for bracket expressions like [@var])
-        const forwardSearchEnd = Math.min(source.length, startOffset + 3);
-        const forwardText = source.substring(startOffset, forwardSearchEnd);
-        const forwardIndex = forwardText.indexOf('@');
+        if (identifier && nodeText.includes('|')) {
+          const afterPipeStart = nodeText.lastIndexOf('|') + 1;
+          const pipeText = nodeText.substring(afterPipeStart);
+          const pipeIndex = pipeText.indexOf(referenceNeedle);
 
-        if (forwardIndex !== -1) {
-          atOffset = startOffset + forwardIndex;
+          if (pipeIndex !== -1) {
+            atOffset = startOffset + afterPipeStart + pipeIndex;
+          }
+        }
+
+        // Location doesn't include @, search for it nearby
+        if (atOffset === startOffset) {
+          const forwardSearchEnd = Math.min(source.length, Math.max(startOffset + 3, endOffset));
+          const forwardText = source.substring(startOffset, forwardSearchEnd);
+          const forwardIndex = identifier ? forwardText.indexOf(referenceNeedle) : forwardText.indexOf('@');
+
+          if (forwardIndex !== -1) {
+            atOffset = startOffset + forwardIndex;
+          }
+        }
+
+        if (atOffset !== startOffset) {
+          // Found the actual @ position
         } else {
           // Try searching backwards (for other cases)
-          const searchStart = Math.max(0, startOffset - 10);
-          const searchText = source.substring(searchStart, startOffset + 1);
-          const backwardIndex = searchText.lastIndexOf('@');
+          const searchStart = Math.max(0, startOffset - 25);
+          const searchText = source.substring(searchStart, endOffset);
+          const backwardIndex = identifier ? searchText.lastIndexOf(referenceNeedle) : searchText.lastIndexOf('@');
           if (backwardIndex !== -1) {
             atOffset = searchStart + backwardIndex;
+          } else if (valueType === 'identifier' && Array.isArray(node.fields) && node.fields.length > 0) {
+            const implicitLength = Math.max(node.location!.end.offset - node.location!.start.offset, 1);
+            const modifiers: string[] = ['reference'];
+
+            if (identifier.endsWith('_key')) {
+              modifiers.push('key');
+            }
+
+            this.tokenBuilder.addToken({
+              line: node.location!.start.line - 1,
+              char: node.location!.start.column - 1,
+              length: implicitLength,
+              tokenType: 'variableRef',
+              modifiers
+            });
+
+            this.operatorHelper.tokenizePropertyAccess(node as BaseMlldNode & { fields: FieldAccessNode[] });
+
+            if (node.fields && Array.isArray(node.fields)) {
+              for (const field of node.fields) {
+                if (field.type === 'variableIndex' && (field.value as unknown as BaseMlldNode)?.type === 'VariableReference') {
+                  this.mainVisitor.visitNode(field.value as unknown as BaseMlldNode, context);
+                }
+              }
+            }
+
+            return;
+          } else if (identifier && nodeText.includes('=>')) {
+            const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const arrowPattern = new RegExp(`=>\\s*${escapedIdentifier}\\b`);
+            const arrowMatch = nodeText.match(arrowPattern);
+
+            if (arrowMatch && arrowMatch.index !== undefined) {
+              const bareIdentifierOffset = startOffset + arrowMatch.index + arrowMatch[0].lastIndexOf(identifier);
+              const barePos = this.document.positionAt(bareIdentifierOffset);
+              const modifiers: string[] = ['reference'];
+
+              if (identifier.endsWith('_key')) {
+                modifiers.push('key');
+              }
+
+              this.tokenBuilder.addToken({
+                line: barePos.line,
+                char: barePos.character,
+                length: identifier.length,
+                tokenType: 'variableRef',
+                modifiers
+              });
+
+              return;
+            }
           } else {
             // Fallback: couldn't find @, skip this token
             return;
@@ -175,10 +247,11 @@ export class VariableVisitor extends BaseVisitor {
       // Convert offset to line/character position
       const atPos = this.document.positionAt(atOffset);
       const charPos = atPos.character;
+      const isPipelineTransform = !includesAt && nodeText.includes('|') && atOffset > startOffset;
 
       // All variable references are tokenized as variables
       // (built-in resolver names like @now, @input can be shadowed by user variables)
-      const tokenType = 'variableRef';
+      const tokenType = isPipelineTransform ? 'function' : 'variableRef';
       const modifiers: string[] = ['reference'];
 
       // Check for _key pattern (used in for loops for array indices)

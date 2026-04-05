@@ -50,8 +50,29 @@ vi.mock('vscode-languageserver-textdocument', () => ({
           return result;
         }
       },
-      offsetAt: (position: any) => 0,
-      positionAt: (offset: number) => ({ line: 0, character: offset })
+      offsetAt: (position: any) => {
+        const lines = content.split('\n');
+        let offset = 0;
+        for (let i = 0; i < position.line; i++) {
+          offset += (lines[i]?.length || 0) + 1;
+        }
+        return offset + position.character;
+      },
+      positionAt: (offset: number) => {
+        const lines = content.split('\n');
+        let remaining = offset;
+
+        for (let line = 0; line < lines.length; line++) {
+          const lineLength = lines[line].length;
+          if (remaining <= lineLength) {
+            return { line, character: remaining };
+          }
+          remaining -= lineLength + 1;
+        }
+
+        const lastLine = Math.max(lines.length - 1, 0);
+        return { line: lastLine, character: lines[lastLine]?.length || 0 };
+      }
     })
   }
 }));
@@ -323,7 +344,7 @@ describe('Semantic Tokens - Unit Tests', () => {
       });
       expectToken(tokens, {
         text: '@mx',
-        tokenType: 'variable'
+        tokenType: 'variableRef'
       });
       expectToken(tokens, {
         text: 'op',
@@ -348,6 +369,113 @@ describe('Semantic Tokens - Unit Tests', () => {
       // At least one exported symbol marked as variable declaration
       const decl = tokens.find(t => t.tokenType === 'variable' && t.modifiers.includes('declaration'));
       expect(decl).toBeDefined();
+    });
+
+    it('highlights append template interpolations and nested fields', async () => {
+      const code = '/append `@mx.op.name hit=@mx.checkpoint.hit` to "cache.log"';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@mx',
+        tokenType: 'interpolation'
+      });
+      expectToken(tokens, {
+        text: 'op',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'checkpoint',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'to',
+        tokenType: 'keyword'
+      });
+    });
+
+    it('highlights dynamic tool collection dispatch', async () => {
+      const code = '/show @writeTools[@step.write_tool](@step.args) with { policy: @auth.policy }';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@writeTools',
+        tokenType: 'function',
+        modifiers: ['reference']
+      });
+      expectToken(tokens, {
+        text: '@step',
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+      expectToken(tokens, {
+        text: 'write_tool',
+        tokenType: 'property'
+      });
+    });
+
+    it('highlights trailing property access after exec invocations', async () => {
+      const code = '/when @policy.validate(@output, @writeTools).valid == false => show "retry"';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@policy',
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+      expectToken(tokens, {
+        text: 'validate',
+        tokenType: 'function'
+      });
+      expectToken(tokens, {
+        text: 'valid',
+        tokenType: 'property'
+      });
+    });
+
+    it('highlights pipeline stages after literal values', async () => {
+      const code = '/var @msg = "  hello pipeline  " | @trim';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@trim',
+        tokenType: 'function'
+      });
+    });
+
+    it('highlights sign directive targets and methods', async () => {
+      const code = 'sign @template with sha256';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@template',
+        tokenType: 'variableRef'
+      });
+      expectToken(tokens, {
+        text: 'with',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: 'sha256',
+        tokenType: 'keyword'
+      });
+    });
+
+    it('highlights shelf directives and shelf declarations', async () => {
+      const code = `/shelf @pipeline = {
+  recipients: contact[],
+  selected: contact? from recipients
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/shelf',
+        tokenType: 'directiveDefinition'
+      });
+      expectToken(tokens, {
+        text: '@pipeline',
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
     });
   });
   
@@ -417,6 +545,24 @@ describe('Semantic Tokens - Unit Tests', () => {
 
       const interpolations = tokens.filter(t => t.tokenType === 'interpolation' && t.length === 2);
       expect(interpolations.length).toBeGreaterThan(0);
+    });
+
+    it('visits inline /for source literals inside templates', async () => {
+      const code = `/var @tpl = \`
+/for @v in ["x","y"]
+- @v
+/end
+\``;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '"x"',
+        tokenType: 'string'
+      });
+      expectToken(tokens, {
+        text: '"y"',
+        tokenType: 'string'
+      });
     });
 
     it('highlights inline /show inside templates', async () => {
@@ -533,6 +679,36 @@ describe('Semantic Tokens - Unit Tests', () => {
       expect(secondNameToken?.tokenType).toBe('variableRef');
       expect(secondNameToken?.modifiers).toContain('reference');
     });
+
+    it('highlights implicit record fact source shorthands', async () => {
+      const code = `/record @contact = {
+  facts: [email: string]
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'email',
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+    });
+
+    it('highlights bare output-record references after exe code blocks', async () => {
+      const code = `record @contact = {
+  facts: [email: string]
+}
+
+exe @emitContacts() = js {
+  return []
+} => contact`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'contact',
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+    });
   });
   
   describe('Complex Scenarios', () => {
@@ -577,6 +753,69 @@ describe('Semantic Tokens - Unit Tests', () => {
       const strings = tokens.filter(t => t.tokenType === 'string');
       expect(strings.length).toBeGreaterThan(0);
     });
+
+    it('highlights nullish operators in block expressions', async () => {
+      const code = `loop(1) [
+  let @x = @none ?? \`loop-@suffix\`
+  show @x
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '??',
+        tokenType: 'operator'
+      });
+    });
+
+    it('highlights skip results in for/when filters as keywords', async () => {
+      const code = `var @filtered = for @x in @items => when [
+  none => skip
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'skip',
+        tokenType: 'keyword'
+      });
+    });
+  });
+
+  describe('Foreach Wrappers', () => {
+    it('handles foreach-command wrappers in exe bodies', async () => {
+      const code = 'exe @wrapAll(items) = foreach @wrap(@items)';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'foreach',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: '@wrap',
+        tokenType: 'function',
+        modifiers: ['reference']
+      });
+    });
+
+    it('visits variable refs inside piped cmd blocks', async () => {
+      const code = `exe llm @agent(prompt, config) = [
+  => @prompt | cmd { claude -p --allowedTools "@mx.llm.allowed" }
+]`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@mx',
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+      expectToken(tokens, {
+        text: 'llm',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'allowed',
+        tokenType: 'property'
+      });
+    });
   });
 
   describe('MCP Import Directives', () => {
@@ -617,6 +856,17 @@ describe('Semantic Tokens - Unit Tests', () => {
       expectToken(tokens, {
         text: 'mcp',
         tokenType: 'keyword'
+      });
+    });
+
+    it('tokenizes MCP tool collections sourced from variables', async () => {
+      const code = `var @serverSpec = "node ./calendar-server.cjs"
+var tools trusted @calendarTools = mcp @serverSpec`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@serverSpec',
+        tokenType: 'variableRef'
       });
     });
   });
@@ -697,6 +947,15 @@ describe('Semantic Tokens - Unit Tests', () => {
 
       const resolverSuffix = filesTokens.find(t => t.tokenType === 'alligator' && t.text?.includes('/src/'));
       expect(resolverSuffix).toBeDefined();
+    });
+
+    it('tokenizes path-segment fields inside load-content references', async () => {
+      const tokens = await getSemanticTokens('exe @pick() = [ => <@mx.outPath>? | @parse.llm ]');
+
+      expectToken(tokens, {
+        text: 'outPath',
+        tokenType: 'property'
+      });
     });
   });
 

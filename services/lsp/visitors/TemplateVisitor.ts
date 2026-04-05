@@ -21,12 +21,12 @@ export class TemplateVisitor extends BaseVisitor {
   
   visitNode(node: unknown, context: VisitorContext): void {
     const astNode = asLspAstNode(node);
-    if (!astNode.location) return;
-
     if (astNode.type === 'TemplateForBlock') {
       this.visitTemplateForBlock(astNode, context);
       return;
     }
+
+    if (!astNode.location) return;
 
     if (astNode.type === 'TemplateInlineShow') {
       this.visitTemplateInlineShow(astNode, context);
@@ -231,31 +231,34 @@ export class TemplateVisitor extends BaseVisitor {
   }
 
   private visitTemplateForBlock(node: LspAstNode, context: VisitorContext): void {
-    // Heuristic tokenization: highlight 'for' and 'end' markers inside the block span
-    const src = this.document.getText();
-    const text = src.substring(node.location.start.offset, node.location.end.offset);
-    // Match slash-style and mustache-style
-    const forRegexes = [/\/(for)\b/, /\{\{\s*(for)\b/];
-    const endRegexes = [/\/(end)\b/, /\{\{\s*(end)\s*\}\}/];
+    if (node.location) {
+      // Heuristic tokenization: highlight 'for' and 'end' markers inside the block span
+      const src = this.document.getText();
+      const text = src.substring(node.location.start.offset, node.location.end.offset);
+      // Match slash-style and mustache-style
+      const forRegexes = [/\/(for)\b/, /\{\{\s*(for)\b/];
+      const endRegexes = [/\/(end)\b/, /\{\{\s*(end)\s*\}\}/];
 
-    for (const re of forRegexes) {
-      const m = text.match(re);
-      if (m && m.index !== undefined && m[1]) {
-        const abs = node.location.start.offset + m.index + (m[0].length - m[1].length);
-        const pos = this.document.positionAt(abs);
-        // Use 'property' for teal color (italic will be added in nvim config)
-        this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: m[1].length, tokenType: 'property', modifiers: [] });
-        break;
+      for (const re of forRegexes) {
+        const m = text.match(re);
+        if (m && m.index !== undefined && m[1]) {
+          const abs = node.location.start.offset + m.index + (m[0].length - m[1].length);
+          const pos = this.document.positionAt(abs);
+          // Use 'property' for teal color (italic will be added in nvim config)
+          this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: m[1].length, tokenType: 'property', modifiers: [] });
+          break;
+        }
       }
-    }
-    for (const re of endRegexes) {
-      const m = text.match(re);
-      if (m && m.index !== undefined && m[1]) {
-        const abs = node.location.start.offset + m.index + (m[0].length - m[1].length);
-        const pos = this.document.positionAt(abs);
-        // Use 'property' for teal color (italic will be added in nvim config)
-        this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: m[1].length, tokenType: 'property', modifiers: [] });
-        break;
+
+      for (const re of endRegexes) {
+        const m = text.match(re);
+        if (m && m.index !== undefined && m[1]) {
+          const abs = node.location.start.offset + m.index + (m[0].length - m[1].length);
+          const pos = this.document.positionAt(abs);
+          // Use 'property' for teal color (italic will be added in nvim config)
+          this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: m[1].length, tokenType: 'property', modifiers: [] });
+          break;
+        }
       }
     }
 
@@ -266,12 +269,19 @@ export class TemplateVisitor extends BaseVisitor {
 
     // Visit source (the iterable)
     if (node.source) {
+      const sourceContext = {
+        ...context,
+        templateType: undefined,
+        wrapperType: undefined,
+        interpolationAllowed: false
+      };
+
       if (Array.isArray(node.source)) {
         for (const sourceNode of node.source) {
-          this.mainVisitor.visitNode(sourceNode, context);
+          this.mainVisitor.visitNode(sourceNode, sourceContext);
         }
       } else {
-        this.mainVisitor.visitNode(node.source, context);
+        this.mainVisitor.visitNode(node.source, sourceContext);
       }
     }
 

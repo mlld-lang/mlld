@@ -50,14 +50,14 @@ export class OperatorTokenHelper {
    * Handles: ==, !=, >=, <=, >, <, &&, ||
    * @param node Binary expression node with left, right, and operator
    */
-  tokenizeBinaryExpression(node: BinaryExpression): void {
-    if (!node.operator || !node.left?.location || !node.right?.location) return;
+  tokenizeBinaryExpression(node: BinaryExpression): boolean {
+    if (!node.operator || !node.left?.location || !node.right?.location) return false;
     
     const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
-    if (!operatorText) return;
+    if (!operatorText) return false;
     
     // Find operator between left and right operands
-    this.tokenizeOperatorBetween(
+    return this.tokenizeOperatorBetween(
       node.left.location.end.offset,
       node.right.location.start.offset,
       operatorText

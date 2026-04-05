@@ -129,8 +129,22 @@ export class ExpressionVisitor extends BaseVisitor {
         // Visit left side first
         this.mainVisitor.visitNode(node.left, context);
         
-        // Use helper to tokenize binary operator
-        this.operatorHelper.tokenizeBinaryExpression(node);
+        // Use helper to tokenize binary operator, falling back to the full
+        // expression span when wrapper-style right-hand nodes have no location.
+        const tokenized = this.operatorHelper.tokenizeBinaryExpression(node);
+        if (!tokenized && node.location) {
+          const searchStart = node.left?.location?.end?.offset ?? node.location.start.offset;
+          const searchEnd = node.right?.location?.start?.offset ?? node.location.end.offset;
+          const operatorOffset = this.operatorHelper.findOperatorNear(
+            searchStart,
+            operatorText,
+            Math.max(searchEnd - searchStart, operatorText.length),
+            'forward'
+          );
+          if (operatorOffset !== null && operatorOffset < searchEnd) {
+            this.operatorHelper.addOperatorToken(operatorOffset, operatorText.length);
+          }
+        }
         
         // Visit right side after
         this.mainVisitor.visitNode(node.right, context);

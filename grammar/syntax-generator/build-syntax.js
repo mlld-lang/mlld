@@ -50,7 +50,7 @@ class MlldSyntaxGenerator {
       directiveForms: '\\b(loop|while)\\b(?=\\s*\\()|\\bif\\b(?=\\s*[@\\[(])|\\bbox\\b(?=\\s*(with\\b|\\[|@))|\\b(file|files)\\b(?=\\s*(<|"|@))|\\b(needs|profiles)\\b(?=\\s*\\{)|\\bauth\\b(?=\\s+@)',
       controlKeywords: '\\b(until|endless|else)\\b',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|untrusted|node|new|tools|mcp|git|using)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b',
       // Block keywords (inside [...] blocks)
       blockKeywords: '\\b(let|done|continue|skip|bail)\\b',
       // Wildcard in when blocks
@@ -98,7 +98,7 @@ class MlldSyntaxGenerator {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
           // Ensure newer directives are present even if grammar scan misses them
-          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'record', 'shelf', 'sign', 'verify', 'box', 'bail', 'needs', 'profiles'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
+          ['for', 'loop', 'log', 'guard', 'hook', 'export', 'stream', 'append', 'file', 'files', 'checkpoint', 'if', 'while', 'policy', 'record', 'shelf', 'store', 'sign', 'verify', 'box', 'bail', 'needs', 'profiles'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -108,7 +108,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'record', 'shelf', 'sign', 'verify', 'box', 'needs', 'profiles'];
+    return ['var', 'show', 'stream', 'run', 'exe', 'import', 'when', 'if', 'output', 'append', 'file', 'files', 'for', 'loop', 'while', 'log', 'bail', 'checkpoint', 'guard', 'hook', 'export', 'policy', 'auth', 'record', 'shelf', 'store', 'sign', 'verify', 'box', 'needs', 'profiles'];
   }
 
   generatePrism() {
@@ -876,6 +876,10 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         match: this.patterns.fieldAccess
       },
       {
+        name: 'support.type.property-name.mlld',
+        match: this.patterns.objectKey
+      },
+      {
         name: 'keyword.operator.mlld',
         match: this.patterns.operators
       },
@@ -972,6 +976,7 @@ syn match mlldReservedVar "@\\."
 
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@[A-Za-z_][A-Za-z0-9_-]*"
+syn match mlldObjectKey "\\<[A-Za-z_][A-Za-z0-9_-]*\\>\\ze\\s*:"
 
 " Triple-colon template blocks (with {{var}} interpolation)
 syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
@@ -1043,6 +1048,7 @@ hi def link mlldWhenColon Keyword
 hi def link mlldControlKeyword Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
+hi def link mlldObjectKey Identifier
 hi def link mlldTripleTemplate String
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special

@@ -58,6 +58,43 @@ export class FileReferenceVisitor extends BaseVisitor {
         break;
     }
   }
+
+  private tokenizePathVariableSegment(segment: LspAstNode): void {
+    if (!segment.location || typeof segment.identifier !== 'string') return;
+
+    this.tokenBuilder.addToken({
+      line: segment.location.start.line - 1,
+      char: segment.location.start.column - 1,
+      length: segment.identifier.length + 1,
+      tokenType: 'variable',
+      modifiers: []
+    });
+
+    if (!Array.isArray(segment.fields)) return;
+
+    for (const field of segment.fields) {
+      if (!field?.location || typeof field.value !== 'string') continue;
+
+      const dotOffset = field.location.start.offset - 1;
+      const dotPos = this.document.positionAt(dotOffset);
+      this.tokenBuilder.addToken({
+        line: dotPos.line,
+        char: dotPos.character,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+
+      const fieldPos = this.document.positionAt(field.location.start.offset);
+      this.tokenBuilder.addToken({
+        line: fieldPos.line,
+        char: fieldPos.character,
+        length: field.value.length,
+        tokenType: 'property',
+        modifiers: []
+      });
+    }
+  }
   
   private visitFileReference(node: LspAstNode, context: VisitorContext): void {
     const text = TextExtractor.extract([node]);
@@ -141,14 +178,7 @@ export class FileReferenceVisitor extends BaseVisitor {
           // Tokenize each segment individually
           for (const segment of node.source.segments) {
             if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
-              // Variable like @base - highlight as variable (light blue)
-              this.tokenBuilder.addToken({
-                line: segment.location.start.line - 1,
-                char: segment.location.start.column - 1,
-                length: segment.identifier.length + 1, // +1 for @
-                tokenType: 'variable',
-                modifiers: []
-              });
+              this.tokenizePathVariableSegment(segment);
             } else if (segment.type === 'Text' && segment.location && segment.content) {
               // Text content like "file.md" - highlight as alligator (light teal)
               this.tokenBuilder.addToken({
@@ -219,14 +249,7 @@ export class FileReferenceVisitor extends BaseVisitor {
           // Tokenize each segment individually
           for (const segment of node.source.segments) {
             if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
-              // Variable like @base - highlight as variable (light blue)
-              this.tokenBuilder.addToken({
-                line: segment.location.start.line - 1,
-                char: segment.location.start.column - 1,
-                length: segment.identifier.length + 1, // +1 for @
-                tokenType: 'variable',
-                modifiers: []
-              });
+              this.tokenizePathVariableSegment(segment);
             } else if (segment.type === 'Text' && segment.location && segment.content) {
               // Text content like "file.md" - highlight as alligator (light teal)
               this.tokenBuilder.addToken({
@@ -479,14 +502,7 @@ export class FileReferenceVisitor extends BaseVisitor {
         // Tokenize each segment individually
         for (const segment of node.source.segments) {
           if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
-            // Variable like @base - highlight as variable (light blue)
-            this.tokenBuilder.addToken({
-              line: segment.location.start.line - 1,
-              char: segment.location.start.column - 1,
-              length: segment.identifier.length + 1, // +1 for @
-              tokenType: 'variable',
-              modifiers: []
-            });
+            this.tokenizePathVariableSegment(segment);
           } else if (segment.type === 'Text' && segment.location && segment.content) {
             // Text content like "file.md" - highlight as alligator (light teal)
             this.tokenBuilder.addToken({
@@ -558,14 +574,7 @@ export class FileReferenceVisitor extends BaseVisitor {
         // Tokenize each segment individually
         for (const segment of node.source.segments) {
           if (segment.type === 'VariableReference' && segment.valueType === 'varIdentifier' && segment.location) {
-            // Variable like @base - highlight as variable (light blue)
-            this.tokenBuilder.addToken({
-              line: segment.location.start.line - 1,
-              char: segment.location.start.column - 1,
-              length: segment.identifier.length + 1, // +1 for @
-              tokenType: 'variable',
-              modifiers: []
-            });
+            this.tokenizePathVariableSegment(segment);
           } else if (segment.type === 'Text' && segment.location && segment.content) {
             // Text content like "file.md" - highlight as alligator (light teal)
             this.tokenBuilder.addToken({
