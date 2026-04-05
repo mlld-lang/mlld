@@ -15,19 +15,18 @@ class FsStatusTest(unittest.TestCase):
             captured["params"] = params
             captured["timeout"] = timeout
             return (
-                {
-                    "value": [
-                        {
-                            "path": "/repo/docs/a.txt",
-                            "relativePath": "docs/a.txt",
-                            "status": "verified",
-                            "verified": True,
-                            "signer": "user:alice",
-                            "labels": ["trusted"],
-                            "taint": ["secret"],
-                        }
-                    ]
-                },
+                [
+                    {
+                        "path": "/repo/docs/a.txt",
+                        "relativePath": "docs/a.txt",
+                        "status": "verified",
+                        "verified": True,
+                        "signer": "user:alice",
+                        "labels": ["trusted"],
+                        "taint": ["secret"],
+                    }
+                ],
+                [],
                 [],
             )
 

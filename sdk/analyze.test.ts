@@ -225,11 +225,11 @@ needs: [js, sh]
 
       const namedGuard = analysis.guards.find(g => g.name === '@noSecrets');
       expect(namedGuard?.timing).toBe('before');
-      expect(namedGuard?.filter).toBe('secret');
+      expect(namedGuard?.trigger).toBe('secret');
 
       const anonGuard = analysis.guards.find(g => !g.name);
       expect(anonGuard?.timing).toBe('after');
-      expect(anonGuard?.filter).toBe('network');
+      expect(anonGuard?.trigger).toBe('network');
     });
   });
 

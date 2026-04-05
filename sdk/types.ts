@@ -15,6 +15,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ExecutionEmitter } from './execution-emitter';
 import type { GuardResult } from '@core/types/guard';
+import type { FileVerifyResult } from '@core/security';
 
 export type InterpretMode = 'document' | 'structured' | 'stream' | 'debug';
 
@@ -389,6 +390,7 @@ export interface StreamExecution extends AsyncIterable<SDKEvent> {
   isComplete: () => boolean;
   abort?: () => void;
   updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
+  writeFile?: (path: string, content: string) => Promise<FileVerifyResult>;
 }
 
 export interface DebugResult extends StructuredResult {

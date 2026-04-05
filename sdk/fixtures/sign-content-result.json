@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "result": {
+    "id": "content-1",
+    "hash": "sha256:def",
+    "algorithm": "sha256",
+    "signedBy": "user:alice",
+    "signedAt": "2026-04-04T00:00:00.000Z",
+    "contentLength": 11,
+    "metadata": {
+      "channel": "sdk"
+    }
+  }
+}

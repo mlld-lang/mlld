@@ -1,0 +1,20 @@
+{
+  "id": 1,
+  "result": [
+    {
+      "path": "/repo/docs/a.txt",
+      "relativePath": "docs/a.txt",
+      "status": "verified",
+      "verified": true,
+      "signer": "user:alice",
+      "labels": [
+        "trusted"
+      ],
+      "taint": [
+        "secret"
+      ],
+      "signedAt": "2026-04-04T00:00:00.000Z",
+      "error": null
+    }
+  ]
+}

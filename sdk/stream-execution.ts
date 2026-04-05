@@ -13,12 +13,14 @@ export class StreamExecution implements StreamExecutionInterface {
   private aborted = false;
   private abortFn?: () => void;
   updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
+  writeFile?: StreamExecutionInterface['writeFile'];
 
   constructor(
     private readonly emitter: ExecutionEmitter,
     options?: {
       abort?: () => void;
       updateState?: (path: string, value: unknown, labels?: string[]) => Promise<void>;
+      writeFile?: StreamExecutionInterface['writeFile'];
     }
   ) {
     this.donePromise = new Promise<void>((resolve, reject) => {
@@ -37,6 +39,15 @@ export class StreamExecution implements StreamExecutionInterface {
           throw new Error('StreamExecution already completed');
         }
         await options.updateState?.(path, value, labels);
+      };
+    }
+
+    if (options?.writeFile) {
+      this.writeFile = async (path: string, content: string) => {
+        if (this.completed) {
+          throw new Error('StreamExecution already completed');
+        }
+        return await options.writeFile(path, content);
       };
     }
   }

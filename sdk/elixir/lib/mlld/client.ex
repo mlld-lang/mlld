@@ -21,9 +21,13 @@ defmodule Mlld.Client do
   @opt_key_mapping %{
     "filePath" => :file_path,
     "file_path" => :file_path,
+    "basePath" => :base_path,
+    "base_path" => :base_path,
     "payload" => :payload,
     "payloadLabels" => :payload_labels,
     "payload_labels" => :payload_labels,
+    "mcpServers" => :mcp_servers,
+    "mcp_servers" => :mcp_servers,
     "state" => :state,
     "dynamicModules" => :dynamic_modules,
     "dynamic_modules" => :dynamic_modules,
@@ -36,7 +40,7 @@ defmodule Mlld.Client do
   }
 
   @type request_status ::
-          {:ok, map(), [Mlld.StateWrite.t()]}
+          {:ok, term(), [Mlld.StateWrite.t()]}
           | {:error, Mlld.Error.t()}
 
   @type client_option ::
@@ -54,6 +58,7 @@ defmodule Mlld.Client do
           | {:state, map()}
           | {:dynamic_modules, map()}
           | {:dynamic_module_source, String.t()}
+          | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
           | {:allow_absolute_paths, boolean()}
           | {:timeout, non_neg_integer() | nil}
@@ -63,8 +68,30 @@ defmodule Mlld.Client do
           | {:state, map()}
           | {:dynamic_modules, map()}
           | {:dynamic_module_source, String.t()}
+          | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
           | {:allow_absolute_paths, boolean()}
+          | {:timeout, non_neg_integer() | nil}
+
+  @type fs_status_option ::
+          {:base_path, String.t()}
+          | {:timeout, non_neg_integer() | nil}
+
+  @type sign_option ::
+          {:identity, String.t()}
+          | {:metadata, map()}
+          | {:base_path, String.t()}
+          | {:timeout, non_neg_integer() | nil}
+
+  @type verify_option ::
+          {:base_path, String.t()}
+          | {:timeout, non_neg_integer() | nil}
+
+  @type sign_content_option ::
+          {:metadata, %{optional(String.t()) => String.t()}}
+          | {:signature_id, String.t()}
+          | {:id, String.t()}
+          | {:base_path, String.t()}
           | {:timeout, non_neg_integer() | nil}
 
   @type start_result :: {:ok, pid()} | {:error, term()}
@@ -103,22 +130,12 @@ defmodule Mlld.Client do
   @spec process_async(GenServer.server(), String.t(), [process_option()]) ::
           {:ok, Handle.t()} | {:error, Error.t()}
   def process_async(client, script, opts \\ []) when is_binary(script) do
-    opts = normalize_opts(opts)
-    timeout_ms = requested_timeout(opts)
-
-    params =
-      %{"script" => script}
-      |> put_if_present("filePath", Keyword.get(opts, :file_path))
-      |> put_if_present("payload", Keyword.get(opts, :payload))
-      |> put_if_present("payloadLabels", normalize_payload_labels(Keyword.get(opts, :payload_labels)))
-      |> put_if_present("state", Keyword.get(opts, :state))
-      |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
-      |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
-      |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
-      |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
-
-    with {:ok, request_id} <- start_request(client, "process", params, timeout_ms) do
-      emit_start(:process, request_id, %{file_path: Keyword.get(opts, :file_path), mode: params["mode"]})
+    with {method, params, timeout_ms} <- build_process_request(script, opts),
+         {:ok, request_id} <- start_request(client, method, params, timeout_ms) do
+      emit_start(:process, request_id, %{
+        file_path: params["filePath"],
+        mode: params["mode"]
+      })
 
       task =
         Task.async(fn ->
@@ -152,20 +169,8 @@ defmodule Mlld.Client do
   @spec execute_async(GenServer.server(), String.t(), term(), [execute_option()]) ::
           {:ok, Handle.t()} | {:error, Error.t()}
   def execute_async(client, filepath, payload \\ nil, opts \\ []) when is_binary(filepath) do
-    opts = normalize_opts(opts)
-    timeout_ms = requested_timeout(opts)
-
-    params =
-      %{"filepath" => filepath}
-      |> put_if_present("payload", payload)
-      |> put_if_present("payloadLabels", normalize_payload_labels(Keyword.get(opts, :payload_labels)))
-      |> put_if_present("state", Keyword.get(opts, :state))
-      |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
-      |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
-      |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
-      |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
-
-    with {:ok, request_id} <- start_request(client, "execute", params, timeout_ms) do
+    with {method, params, timeout_ms} <- build_execute_request(filepath, payload, opts),
+         {:ok, request_id} <- start_request(client, method, params, timeout_ms) do
       emit_start(:execute, request_id, %{filepath: filepath})
 
       task =
@@ -193,13 +198,195 @@ defmodule Mlld.Client do
     end
   end
 
-  @spec analyze(GenServer.server(), String.t()) :: {:ok, Mlld.AnalyzeResult.t()} | {:error, Error.t()}
+  @doc false
+  @spec build_process_request(String.t(), keyword() | map()) ::
+          {String.t(), map(), timeout() | nil} | {:error, Error.t()}
+  def build_process_request(script, opts \\ []) when is_binary(script) do
+    opts = normalize_opts(opts)
+
+    with {:ok, payload, payload_labels} <-
+           normalize_payload_and_labels(
+             Keyword.get(opts, :payload),
+             Keyword.get(opts, :payload_labels)
+           ) do
+      timeout_ms = requested_timeout(opts)
+
+      params =
+        %{"script" => script}
+        |> put_if_present("filePath", Keyword.get(opts, :file_path))
+        |> put_if_present("payload", payload)
+        |> put_if_present("payloadLabels", payload_labels)
+        |> put_if_present("state", Keyword.get(opts, :state))
+        |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
+        |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
+        |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
+        |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
+        |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
+
+      {"process", params, timeout_ms}
+    end
+  end
+
+  @doc false
+  @spec build_execute_request(String.t(), term(), keyword() | map()) ::
+          {String.t(), map(), timeout() | nil} | {:error, Error.t()}
+  def build_execute_request(filepath, payload \\ nil, opts \\ []) when is_binary(filepath) do
+    opts = normalize_opts(opts)
+
+    with {:ok, payload, payload_labels} <-
+           normalize_payload_and_labels(payload, Keyword.get(opts, :payload_labels)) do
+      timeout_ms = requested_timeout(opts)
+
+      params =
+        %{"filepath" => filepath}
+        |> put_if_present("payload", payload)
+        |> put_if_present("payloadLabels", payload_labels)
+        |> put_if_present("state", Keyword.get(opts, :state))
+        |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
+        |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
+        |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
+        |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
+        |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
+
+      {"execute", params, timeout_ms}
+    end
+  end
+
+  @spec analyze(GenServer.server(), String.t()) ::
+          {:ok, Mlld.AnalyzeResult.t()} | {:error, Error.t()}
   def analyze(client, filepath) when is_binary(filepath) do
     Telemetry.span(:analyze, %{filepath: filepath}, fn ->
-      with {:ok, result, _state_writes} <- call_request(client, "analyze", %{"filepath" => filepath}, nil) do
+      with {:ok, result, _state_writes} <-
+             call_request(client, "analyze", %{"filepath" => filepath}, nil) do
         {:ok, Types.decode_analyze_result(result, filepath)}
       end
-    end)
+      end)
+  end
+
+  @spec fs_status(GenServer.server(), String.t() | nil, [fs_status_option()]) ::
+          {:ok, [Mlld.FilesystemStatus.t()]} | {:error, Error.t()}
+  def fs_status(client, glob \\ nil, opts \\ [])
+
+  def fs_status(client, glob, opts) when is_nil(glob) or is_binary(glob) do
+    {method, params, timeout_ms} = build_fs_status_request(glob, opts)
+
+    with {:ok, result, _state_writes} <- call_request(client, method, params, timeout_ms),
+         true <- is_list(result) do
+      {:ok,
+       result
+       |> Enum.filter(&is_map/1)
+       |> Enum.map(&Types.decode_filesystem_status/1)}
+    else
+      false -> {:error, Error.transport("invalid fs:status payload")}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  @spec sign(GenServer.server(), String.t(), [sign_option()]) ::
+          {:ok, Mlld.FileVerifyResult.t()} | {:error, Error.t()}
+  def sign(client, path, opts \\ []) when is_binary(path) do
+    {method, params, timeout_ms} = build_sign_request(path, opts)
+
+    with {:ok, result, _state_writes} <- call_request(client, method, params, timeout_ms),
+         true <- is_map(result) do
+      {:ok, Types.decode_file_verify_result(result)}
+    else
+      false -> {:error, Error.transport("invalid sig:sign payload")}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  @spec verify(GenServer.server(), String.t(), [verify_option()]) ::
+          {:ok, Mlld.FileVerifyResult.t()} | {:error, Error.t()}
+  def verify(client, path, opts \\ []) when is_binary(path) do
+    {method, params, timeout_ms} = build_verify_request(path, opts)
+
+    with {:ok, result, _state_writes} <- call_request(client, method, params, timeout_ms),
+         true <- is_map(result) do
+      {:ok, Types.decode_file_verify_result(result)}
+    else
+      false -> {:error, Error.transport("invalid sig:verify payload")}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  @spec sign_content(GenServer.server(), String.t(), String.t(), [sign_content_option()]) ::
+          {:ok, Mlld.ContentSignature.t()} | {:error, Error.t()}
+  def sign_content(client, content, identity, opts \\ [])
+      when is_binary(content) and is_binary(identity) do
+    {method, params, timeout_ms} = build_sign_content_request(content, identity, opts)
+
+    with {:ok, result, _state_writes} <-
+           call_request(client, method, params, timeout_ms),
+         true <- is_map(result) do
+      {:ok, Types.decode_content_signature(result)}
+    else
+      false -> {:error, Error.transport("invalid sig:sign-content payload")}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  @doc false
+  @spec build_fs_status_request(String.t() | nil, keyword() | map()) ::
+          {String.t(), map(), timeout() | nil}
+  def build_fs_status_request(glob \\ nil, opts \\ [])
+
+  def build_fs_status_request(glob, opts) when is_nil(glob) or is_binary(glob) do
+    opts = normalize_opts(opts)
+    timeout_ms = requested_timeout(opts)
+
+    params =
+      %{}
+      |> put_if_present("glob", glob)
+      |> put_if_present("basePath", Keyword.get(opts, :base_path))
+
+    {"fs:status", params, timeout_ms}
+  end
+
+  @doc false
+  @spec build_sign_request(String.t(), keyword() | map()) :: {String.t(), map(), timeout() | nil}
+  def build_sign_request(path, opts \\ []) when is_binary(path) do
+    opts = normalize_opts(opts)
+    timeout_ms = requested_timeout(opts)
+
+    params =
+      %{"path" => path}
+      |> put_if_present("identity", Keyword.get(opts, :identity))
+      |> put_if_present("metadata", normalize_map_option(Keyword.get(opts, :metadata)))
+      |> put_if_present("basePath", Keyword.get(opts, :base_path))
+
+    {"sig:sign", params, timeout_ms}
+  end
+
+  @doc false
+  @spec build_verify_request(String.t(), keyword() | map()) ::
+          {String.t(), map(), timeout() | nil}
+  def build_verify_request(path, opts \\ []) when is_binary(path) do
+    opts = normalize_opts(opts)
+    timeout_ms = requested_timeout(opts)
+
+    params =
+      %{"path" => path}
+      |> put_if_present("basePath", Keyword.get(opts, :base_path))
+
+    {"sig:verify", params, timeout_ms}
+  end
+
+  @doc false
+  @spec build_sign_content_request(String.t(), String.t(), keyword() | map()) ::
+          {String.t(), map(), timeout() | nil}
+  def build_sign_content_request(content, identity, opts \\ [])
+      when is_binary(content) and is_binary(identity) do
+    opts = normalize_opts(opts)
+    timeout_ms = requested_timeout(opts)
+
+    params =
+      %{"content" => content, "identity" => identity}
+      |> put_if_present("metadata", normalize_string_map_option(Keyword.get(opts, :metadata)))
+      |> put_if_present("id", Keyword.get(opts, :signature_id) || Keyword.get(opts, :id))
+      |> put_if_present("basePath", Keyword.get(opts, :base_path))
+
+    {"sig:sign-content", params, timeout_ms}
   end
 
   @spec process_task(GenServer.server(), String.t(), [process_option()]) :: Task.t()
@@ -212,10 +399,10 @@ defmodule Mlld.Client do
     Task.async(fn -> execute(client, filepath, payload, opts) end)
   end
 
-  @spec await_request(GenServer.server(), integer()) ::
-          {:ok, map(), [Mlld.StateWrite.t()]} | {:error, Error.t()}
-  def await_request(client, request_id) when is_integer(request_id) do
-    GenServer.call(client, {:await_request, request_id}, :infinity)
+  @spec await_request(GenServer.server(), integer(), timeout()) ::
+          {:ok, term(), [Mlld.StateWrite.t()]} | {:error, Error.t()}
+  def await_request(client, request_id, timeout \\ :infinity) when is_integer(request_id) do
+    GenServer.call(client, {:await_request, request_id}, timeout)
   end
 
   @spec cancel_request(GenServer.server(), integer()) :: :ok
@@ -237,6 +424,7 @@ defmodule Mlld.Client do
       resolved_timeout = resolve_timeout_for_update(client, Keyword.get(opts, :timeout))
       max_wait = resolved_timeout || 2_000
       deadline = System.monotonic_time(:millisecond) + max_wait
+
       do_update_state(
         client,
         request_id,
@@ -253,8 +441,38 @@ defmodule Mlld.Client do
     {:error, Error.invalid_request("state update path is required")}
   end
 
+  @spec write_file(GenServer.server(), integer(), String.t(), String.t(), keyword()) ::
+          {:ok, Mlld.FileVerifyResult.t()} | {:error, Error.t()}
+  def write_file(client, request_id, path, content, opts \\ [])
+
+  def write_file(client, request_id, path, content, opts)
+      when is_integer(request_id) and is_binary(path) and is_binary(content) do
+    if String.trim(path) == "" do
+      {:error, Error.invalid_request("file write path is required")}
+    else
+      opts = normalize_opts(opts)
+      resolved_timeout = resolve_timeout_for_update(client, Keyword.get(opts, :timeout))
+      max_wait = resolved_timeout || 2_000
+      deadline = System.monotonic_time(:millisecond) + max_wait
+
+      do_write_file(
+        client,
+        request_id,
+        path,
+        content,
+        resolved_timeout,
+        deadline
+      )
+    end
+  end
+
+  def write_file(_client, _request_id, _path, _content, _opts) do
+    {:error, Error.invalid_request("file write path is required")}
+  end
+
   @spec subscribe(GenServer.server(), integer(), pid()) :: :ok | {:error, Error.t()}
-  def subscribe(client, request_id, subscriber \\ self()) when is_integer(request_id) and is_pid(subscriber) do
+  def subscribe(client, request_id, subscriber \\ self())
+      when is_integer(request_id) and is_pid(subscriber) do
     GenServer.call(client, {:subscribe, request_id, subscriber})
   end
 
@@ -465,10 +683,84 @@ defmodule Mlld.Client do
     end
   end
 
+  defp do_write_file(client, request_id, path, content, timeout_ms, deadline_ms) do
+    params = %{"requestId" => request_id, "path" => path, "content" => content}
+
+    case call_request(client, "file:write", params, timeout_ms) do
+      {:ok, result, _state_writes} when is_map(result) ->
+        {:ok, Types.decode_file_verify_result(result)}
+
+      {:ok, _result, _state_writes} ->
+        {:error, Error.transport("invalid file:write payload")}
+
+      {:error, %Error{code: "REQUEST_NOT_FOUND"} = error} ->
+        if System.monotonic_time(:millisecond) >= deadline_ms do
+          {:error, error}
+        else
+          Process.sleep(25)
+          do_write_file(client, request_id, path, content, timeout_ms, deadline_ms)
+        end
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+    end
+  end
+
   defp call_request(client, method, params, timeout_ms) do
     with {:ok, request_id} <- start_request(client, method, params, timeout_ms),
          {:ok, result, state_writes} <- await_request(client, request_id) do
       {:ok, result, state_writes}
+    end
+  end
+
+  defp normalize_payload_and_labels(payload, payload_labels) do
+    merged_labels = %{}
+
+    {normalized_payload, merged_labels} =
+      if is_map(payload) do
+        Enum.reduce(payload, {%{}, merged_labels}, fn {key, value}, {payload_acc, labels_acc} ->
+          field = to_string(key)
+
+          case value do
+            %Mlld.LabeledValue{value: raw_value, labels: labels} ->
+              normalized = normalize_labels(labels)
+              next_labels =
+                if normalized == nil do
+                  labels_acc
+                else
+                  Map.put(labels_acc, field, normalized)
+                end
+
+              {Map.put(payload_acc, field, raw_value), next_labels}
+
+            _ ->
+              {Map.put(payload_acc, field, value), labels_acc}
+          end
+        end)
+      else
+        {payload, merged_labels}
+      end
+
+    if not is_map(payload) and payload_labels != nil do
+      {:error, Error.invalid_request("payload_labels requires payload to be a map")}
+    else
+      case normalize_payload_labels(payload_labels) do
+        nil ->
+          {:ok, normalized_payload, if(map_size(merged_labels) == 0, do: nil, else: merged_labels)}
+
+        explicit_labels when is_map(normalized_payload) ->
+          with :ok <- validate_payload_label_keys(normalized_payload, explicit_labels) do
+            labels =
+              Enum.reduce(explicit_labels, merged_labels, fn {field, labels}, acc ->
+                Map.update(acc, field, labels, &merge_labels(&1, labels))
+              end)
+
+            {:ok, normalized_payload, if(map_size(labels) == 0, do: nil, else: labels)}
+          end
+
+        _ ->
+          {:error, Error.invalid_request("payload_labels requires payload to be a map")}
+      end
     end
   end
 
@@ -489,6 +781,34 @@ defmodule Mlld.Client do
   end
 
   defp normalize_payload_labels(_), do: nil
+
+  defp validate_payload_label_keys(payload, labels) do
+    case Enum.find(Map.keys(labels), fn field -> not Map.has_key?(payload, field) end) do
+      nil -> :ok
+      field -> {:error, Error.invalid_request("payload_labels contains unknown field: #{field}")}
+    end
+  end
+
+  defp normalize_map_option(value) when is_map(value), do: value
+  defp normalize_map_option(_), do: nil
+
+  defp normalize_string_map_option(value) when is_map(value) do
+    normalized =
+      value
+      |> Enum.reduce(%{}, fn
+        {key, item}, acc when is_binary(key) and is_binary(item) -> Map.put(acc, key, item)
+        _, acc -> acc
+      end)
+
+    if map_size(normalized) == 0, do: nil, else: normalized
+  end
+
+  defp normalize_string_map_option(_), do: nil
+
+  defp merge_labels(existing, incoming) do
+    (existing ++ incoming)
+    |> Enum.uniq()
+  end
 
   defp normalize_labels(nil), do: nil
 
@@ -586,17 +906,15 @@ defmodule Mlld.Client do
           state
       end
 
-    case Protocol.result(envelope) do
-      %{} = result ->
-        handle_result(result, state)
-
-      nil ->
-        state
+    if Map.has_key?(envelope, "result") or Map.has_key?(envelope, "error") do
+      handle_result(envelope, state)
+    else
+      state
     end
   end
 
   defp handle_event(event, state) do
-    case Protocol.request_id(Map.get(event, "id")) do
+    case Protocol.request_id(Map.get(event, "requestId") || Map.get(event, "id")) do
       nil ->
         state
 
@@ -619,11 +937,11 @@ defmodule Mlld.Client do
             |> put_in([:pending, request_id], updated_pending)
             |> notify_subscribers(request_id, {:mlld_event, request_id, event})
         end
-      end
+    end
   end
 
-  defp handle_result(result, state) do
-    case Protocol.request_id(Map.get(result, "id")) do
+  defp handle_result(envelope, state) do
+    case Protocol.request_id(Map.get(envelope, "id")) do
       nil ->
         state
 
@@ -634,12 +952,12 @@ defmodule Mlld.Client do
 
           pending ->
             request_status =
-              case Map.get(result, "error") do
+              case Protocol.error(envelope) do
                 %{} = error_payload ->
                   {:error, Error.from_payload(error_payload)}
 
                 _ ->
-                  {:ok, Protocol.strip_result_id(result), Enum.reverse(pending.state_writes)}
+                  {:ok, Protocol.result(envelope), Enum.reverse(pending.state_writes)}
               end
 
             complete_request(state, request_id, request_status)
@@ -765,7 +1083,11 @@ defmodule Mlld.Client do
   defp normalize_opt_key(key), do: key
 
   defp emit_start(operation, request_id, metadata) do
-    Telemetry.execute([operation, :start], %{system_time: System.system_time()}, Map.put(metadata, :request_id, request_id))
+    Telemetry.execute(
+      [operation, :start],
+      %{system_time: System.system_time()},
+      Map.put(metadata, :request_id, request_id)
+    )
   end
 
   defp emit_stop(operation, request_id, started_at, metadata) do

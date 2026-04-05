@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { parse, parseSync } from '@grammar/parser';
 import { Environment } from './env/Environment';
 import { DefaultEffectHandler, type EffectHandler } from './env/EffectHandler';
@@ -44,6 +45,7 @@ import { extractLeadingResumeDirective } from '@core/checkpoint/config';
 import { DEFAULT_SCRIPT_CHECKPOINT_RESUME_MODE } from '@interpreter/checkpoint/policy';
 import { finalizePendingCheckpointScope } from './eval/checkpoint';
 import { VirtualFS } from '@services/fs/VirtualFS';
+import { createExecutionFileWriter } from '@cli/commands/live-stdio-security';
 
 function validateCheckpointOptions(options: InterpretOptions): void {
   if (options.noCheckpoint !== true) {
@@ -881,13 +883,22 @@ export async function interpret(
 
   if (mode === 'stream') {
     const emitter = options.emitter ?? new ExecutionEmitter();
+    const writeFile =
+      options.filePath && typeof options.filePath === 'string'
+        ? await createExecutionFileWriter({
+            requestId: randomUUID(),
+            scriptPath: options.filePath,
+            fileSystem: options.fileSystem
+          })
+        : undefined;
     const streamExecution = new StreamExecution(emitter, {
       abort: () => {
         env.cleanup();
       },
       updateState: async (path: string, value: unknown, labels?: string[]) => {
         env.applyExternalStateUpdate(path, value, labels);
-      }
+      },
+      writeFile
     });
     env.enableSDKEvents(emitter);
 

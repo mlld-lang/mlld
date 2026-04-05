@@ -218,11 +218,11 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(3);
     const lines = harness.jsonLines();
 
-    expect(lines[0].event.id).toBe(1);
+    expect(lines[0].event.requestId).toBe(1);
     expect(lines[0].event.type).toBe('command:start');
     expect(lines[1].event.type).toBe('state:write');
     expect(lines[1].event.write.path).toBe('foo');
-    expect(lines[2].result.id).toBe(1);
+    expect(lines[2].id).toBe(1);
     expect(lines[2].result.output).toBe('hi');
 
     await harness.close();
@@ -306,7 +306,7 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe(13);
+    expect(line.id).toBe(13);
     expect(line.result.output).toBe(largeOutput);
     expect(line.result.output).not.toContain('[truncated');
     expect(() => JSON.parse(line.result.output)).not.toThrow();
@@ -388,8 +388,8 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe(21);
-    expect(line.result.value).toEqual([
+    expect(line.id).toBe(21);
+    expect(line.result).toEqual([
       expect.objectContaining({
         relativePath: 'docs/a.txt',
         status: 'verified',
@@ -418,7 +418,7 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe(22);
+    expect(line.id).toBe(22);
     expect(line.result).toEqual(
       expect.objectContaining({
         relativePath: 'docs/a.txt',
@@ -465,7 +465,7 @@ describe('LiveStdioServer', () => {
         status: 'verified'
       })
     );
-    expect(signContentLine.result.value).toEqual(
+    expect(signContentLine.result).toEqual(
       expect.objectContaining({
         id: 'sig-1',
         signedBy: 'user:alice'
@@ -501,7 +501,7 @@ describe('LiveStdioServer', () => {
 
     await harness.waitForLineCount(1);
     const [writeLine] = harness.jsonLines();
-    expect(writeLine.result.id).toBe(32);
+    expect(writeLine.id).toBe(32);
     expect(writeLine.result).toEqual(
       expect.objectContaining({
         relativePath: 'out.txt',
@@ -527,7 +527,7 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe('a1');
+    expect(line.id).toBe('a1');
     expect(line.result.filepath).toBe('./module.mld');
     expect(line.result.valid).toBe(true);
 
@@ -542,8 +542,8 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBeNull();
-    expect(line.result.error.code).toBe('INVALID_JSON');
+    expect(line.id).toBeNull();
+    expect(line.error.code).toBe('INVALID_JSON');
 
     await harness.close();
   });
@@ -568,8 +568,8 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe(7);
-    expect(line.result.error.code).toBe('ABORTED');
+    expect(line.id).toBe(7);
+    expect(line.error.code).toBe('ABORTED');
 
     await harness.close();
   });
@@ -594,10 +594,10 @@ describe('LiveStdioServer', () => {
       })}\n`
     );
 
-    await harness.waitFor(() => harness.jsonLines().some(line => line.result?.id === 'u1'));
+    await harness.waitFor(() => harness.jsonLines().some(line => line.id === 'u1'));
     const updateResult = harness
       .jsonLines()
-      .find(line => line.result?.id === 'u1');
+      .find(line => line.id === 'u1');
 
     expect(updateResult.result.requestId).toBe(7);
     expect(updateResult.result.path).toBe('exit');
@@ -627,12 +627,12 @@ describe('LiveStdioServer', () => {
       })}\n`
     );
 
-    await harness.waitFor(() => harness.jsonLines().some(line => line.result?.id === 'u2'));
+    await harness.waitFor(() => harness.jsonLines().some(line => line.id === 'u2'));
     const updateResult = harness
       .jsonLines()
-      .find(line => line.result?.id === 'u2');
+      .find(line => line.id === 'u2');
 
-    expect(updateResult.result.error.code).toBe('STATE_UNAVAILABLE');
+    expect(updateResult.error.code).toBe('STATE_UNAVAILABLE');
 
     handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
     await harness.close();
@@ -652,8 +652,8 @@ describe('LiveStdioServer', () => {
     await harness.waitForLineCount(1);
     const [line] = harness.jsonLines();
 
-    expect(line.result.id).toBe('u3');
-    expect(line.result.error.code).toBe('REQUEST_NOT_FOUND');
+    expect(line.id).toBe('u3');
+    expect(line.error.code).toBe('REQUEST_NOT_FOUND');
 
     await harness.close();
   });

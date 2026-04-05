@@ -6,9 +6,7 @@ This SDK intentionally matches the behavior and option model used by the Go, Pyt
 
 ## Status
 
-- Phase 1 parity: implemented (`Client`, `Handle`, typed results, async control, timeout/cancel, transport restart)
-- Phase 2 native features: implemented (`GenServer` integration, named registration, pool, telemetry, Phoenix bridge)
-- Phase 3 future readiness: option/model guidance documented; runtime support depends on upstream mlld features
+All SDK spec features are implemented: core operations, async handles with `next_event` and `write_file`, MCP server injection, filesystem integrity (sign/verify/fs_status/sign_content), label helpers, plus BEAM-native extensions (GenServer, pool, telemetry, Phoenix bridge).
 
 ## Table Of Contents
 
@@ -104,27 +102,39 @@ Client.stop(client)
 - `execute(client, filepath, payload, opts)`
 - `execute_async(client, filepath, payload, opts)`
 - `analyze(client, filepath)`
+- `fs_status(client, glob \\ nil, opts)`
+- `sign(client, path, opts)`
+- `verify(client, path, opts)`
+- `sign_content(client, content, identity, opts)`
 - `process_task(client, script, opts)`
 - `execute_task(client, filepath, payload, opts)`
 - `cancel_request(client, request_id)`
 - `update_state(client, request_id, path, value, opts)`
+- `subscribe(client, request_id, subscriber_pid)`
+- `unsubscribe(client, request_id, subscriber_pid)`
 
 ### `Mlld.Handle`
 
 - `request_id(handle)`
 - `cancel(handle)`
-- `update_state(handle, path, value, opts)`
-- `wait(handle)`
-- `result(handle)`
+- `update_state(handle, path, value, opts)` — opts include `:labels`, `:timeout`
+- `next_event(handle, timeout \\ 5_000)` — returns `{:ok, HandleEvent}` or `:timeout`
+- `write_file(handle, path, content, opts)` — ExecuteHandle only
+- `wait(handle)` / `result(handle)`
 - `task(handle)`
+
+### Label helpers
+
+- `Mlld.labeled(value, labels)` — wraps value with security labels
+- `Mlld.trusted(value)` — shortcut for `labeled(value, ["trusted"])`
+- `Mlld.untrusted(value)` — shortcut for `labeled(value, ["untrusted"])`
 
 ### Module-level convenience (`Mlld`)
 
-- `Mlld.process(script, opts)`
-- `Mlld.process_async(script, opts)`
-- `Mlld.execute(filepath, payload, opts)`
-- `Mlld.execute_async(filepath, payload, opts)`
+- `Mlld.process(script, opts)` / `Mlld.process_async(script, opts)`
+- `Mlld.execute(filepath, payload, opts)` / `Mlld.execute_async(filepath, payload, opts)`
 - `Mlld.analyze(filepath)`
+- `Mlld.fs_status(glob, opts)` / `Mlld.sign(path, opts)` / `Mlld.verify(path, opts)` / `Mlld.sign_content(content, identity, opts)`
 - `Mlld.close()`
 
 ## 5. Core Types
@@ -151,6 +161,7 @@ Returned structs are aligned with other SDK wrappers:
   - `path`
   - `value`
   - `timestamp`
+  - `security`
 - `Mlld.Error` (exception struct, returned in `{:error, ...}` tuples)
   - `message`
   - `code`
@@ -183,24 +194,29 @@ Local repo CLI example:
 
 - `:file_path`
 - `:payload`
+- `:payload_labels` — `%{"field" => ["label1", "label2"]}`
 - `:state`
 - `:dynamic_modules`
 - `:dynamic_module_source`
+- `:mcp_servers` — `%{"name" => "command"}`
 - `:mode` (`:strict`, `:markdown`, or string)
 - `:allow_absolute_paths`
 - `:timeout` (request-specific ms override)
 
 ### Execute options (`execute/4`, `execute_async/4`)
 
+- `:payload_labels`
 - `:state`
 - `:dynamic_modules`
 - `:dynamic_module_source`
+- `:mcp_servers`
 - `:mode`
 - `:allow_absolute_paths`
 - `:timeout`
 
 ### Update-state options (`update_state/5`, `Handle.update_state/4`)
 
+- `:labels` - security labels to attach to the state update
 - `:timeout` - timeout for each `state:update` request
 
 Behavior:
@@ -422,17 +438,22 @@ end
 
 ## 15. Behavioral Parity With Other SDKs
 
-Parity guarantees in this implementation:
+This SDK implements the full [SDK Interface Specification](../SPEC.md):
 
 - Live transport command shape: `command + command_args + ["live", "--stdio"]`
-- Request IDs are integers and multiplexed in one live client
-- `state:write` events are merged with final `stateWrites` in execute results
-- `ExecuteResult.denials` collects structured guard/policy label-flow denials observed during execution
-- Timeout behavior cancels request and returns `TIMEOUT`
+- Request IDs are integers, multiplexed in one live client
+- Result envelope: always `{ id, result }` — no method-specific unwrapping
+- Handle lifecycle: PENDING → STREAMING → COMPLETE with event buffering
+- `state:write` and `guard_denial` events merged into final `ExecuteResult`
+- `next_event` on handles for event-driven consumption
+- `write_file` on execute handles for in-flight file operations
+- MCP server injection via `:mcp_servers` option
+- Filesystem integrity: `fs_status`, `sign`, `verify`, `sign_content`
+- Label helpers: `labeled`, `trusted`, `untrusted`
+- `Guard.trigger` field name (not `filter` or `label`)
+- Timeout cancels request and returns `TIMEOUT`
 - `update_state` retries `REQUEST_NOT_FOUND` with short backoff
 - Transport closure fails pending operations and triggers lazy restart
-
-This makes behavior consistent across Go/Python/Ruby/Rust/Elixir wrappers.
 
 ## 16. Testing
 
@@ -440,6 +461,12 @@ Run in `sdk/elixir/`:
 
 ```bash
 mix test
+```
+
+If `mix test` is unavailable in a constrained environment, use the checked-in fallback runner:
+
+```bash
+elixir test_runner.exs
 ```
 
 Integration tests expect:

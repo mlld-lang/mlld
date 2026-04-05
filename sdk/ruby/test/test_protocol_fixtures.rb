@@ -1,0 +1,82 @@
+# frozen_string_literal: true
+
+require 'minitest/autorun'
+require 'json'
+require_relative '../lib/mlld'
+
+class ProtocolFixturesTest < Minitest::Test
+  def setup
+    @client = Mlld::Client.new
+  end
+
+  def test_execute_result_fixture_preserves_security
+    fixture = load_fixture('execute-result.json')
+    result = @client.send(:decode_execute_result, fixture.fetch('result'), [])
+
+    assert_equal(1, result.state_writes.length)
+    assert_equal(['trusted'], result.state_writes.first.security['labels'])
+    assert_equal(['trusted'], result.effects.first.security['labels'])
+  end
+
+  def test_analyze_result_fixture_uses_trigger
+    fixture = load_fixture('analyze-result.json')
+    result = @client.send(:build_analyze_result, fixture.fetch('result'), 'fallback.mld')
+
+    assert_equal(2, result.guards.length)
+    assert_equal('secret', result.guards.first.trigger)
+    assert_equal('', result.guards.last.name)
+    assert_equal('net:w', result.guards.last.trigger)
+  end
+
+  def test_state_write_event_fixture_preserves_security
+    fixture = load_fixture('state-write-event.json')
+    state_write = @client.send(:state_write_from_event, fixture.fetch('event'))
+
+    refute_nil(state_write)
+    assert_equal('payload', state_write.path)
+    assert_equal(['trusted'], state_write.security['labels'])
+  end
+
+  def test_error_fixture_decodes_transport_error
+    fixture = load_fixture('error-result.json')
+    error = @client.send(:error_from_payload, fixture.fetch('error'))
+
+    assert_instance_of(Mlld::Error, error)
+    assert_equal('TIMEOUT', error.code)
+    assert_match(/timeout/i, error.message)
+  end
+
+  def test_sign_result_fixture_decodes_file_verify_result
+    fixture = load_fixture('sign-result.json')
+    result = @client.send(:file_verify_result_from_payload, fixture.fetch('result'))
+
+    assert_equal('docs/a.txt', result.relative_path)
+    assert_equal('sha256:abc', result.expected_hash)
+    assert_equal({ 'purpose' => 'sdk' }, result.metadata)
+  end
+
+  def test_fs_status_fixture_decodes_filesystem_status
+    fixture = load_fixture('fs-status-result.json')
+    result = @client.send(:filesystem_status_from_payload, fixture.fetch('result').first)
+
+    assert_equal('docs/a.txt', result.relative_path)
+    assert_equal(['trusted'], result.labels)
+    assert_equal(['secret'], result.taint)
+  end
+
+  def test_sign_content_fixture_decodes_content_signature
+    fixture = load_fixture('sign-content-result.json')
+    result = @client.send(:content_signature_from_payload, fixture.fetch('result'))
+
+    assert_equal('content-1', result.id)
+    assert_equal('user:alice', result.signed_by)
+    assert_equal({ 'channel' => 'sdk' }, result.metadata)
+  end
+
+  private
+
+  def load_fixture(name)
+    path = File.expand_path(File.join('..', '..', 'fixtures', name), __dir__)
+    JSON.parse(File.read(path))
+  end
+end

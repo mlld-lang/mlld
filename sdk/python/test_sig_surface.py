@@ -26,6 +26,7 @@ class SigSurfaceUnitTest(unittest.TestCase):
                         "metadata": {"purpose": "sdk"},
                     },
                     [],
+                    [],
                 )
             if method == "sig:verify":
                 return (
@@ -40,6 +41,7 @@ class SigSurfaceUnitTest(unittest.TestCase):
                         "error": "Content has been modified since signing",
                     },
                     [],
+                    [],
                 )
             if method == "sig:sign-content":
                 return (
@@ -52,6 +54,7 @@ class SigSurfaceUnitTest(unittest.TestCase):
                         "contentLength": 11,
                         "metadata": {"channel": "sdk"},
                     },
+                    [],
                     [],
                 )
             raise AssertionError(f"unexpected method: {method}")

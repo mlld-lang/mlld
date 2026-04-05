@@ -1,0 +1,18 @@
+{
+  "event": {
+    "requestId": 1,
+    "type": "guard_denial",
+    "guard_denial": {
+      "guard": "@blocker",
+      "operation": "send",
+      "reason": "recipient not authorized",
+      "rule": "*",
+      "labels": [
+        "secret"
+      ],
+      "args": {
+        "value": "hello"
+      }
+    }
+  }
+}

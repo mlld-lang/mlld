@@ -1,0 +1,52 @@
+{
+  "id": 1,
+  "result": {
+    "filepath": "/repo/routes/example.mld",
+    "valid": true,
+    "errors": [],
+    "executables": [
+      {
+        "name": "@send",
+        "params": [
+          "value"
+        ],
+        "labels": [
+          "net:w"
+        ]
+      }
+    ],
+    "exports": [
+      "@send"
+    ],
+    "imports": [
+      {
+        "from": "@config",
+        "names": [
+          "@mode"
+        ]
+      }
+    ],
+    "guards": [
+      {
+        "name": "@noSecrets",
+        "timing": "before",
+        "trigger": "secret"
+      },
+      {
+        "timing": "after",
+        "trigger": "net:w"
+      }
+    ],
+    "needs": {
+      "cmd": [
+        "curl"
+      ],
+      "node": [
+        "tsx"
+      ],
+      "py": [
+        "requests"
+      ]
+    }
+  }
+}
