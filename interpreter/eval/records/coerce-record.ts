@@ -442,6 +442,13 @@ function coerceFieldValue(
     return { ok: false, actual: describeRecordValueType(value) };
   }
 
+  if (field.valueType === 'object') {
+    if (isPlainObject(extracted)) {
+      return { ok: true, value };
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
   if (field.valueType === 'handle') {
     return resolveHandleTypedFieldValue(value, env);
   }
@@ -514,6 +521,30 @@ function finalizeArrayFieldValue(options: {
     options.factsources,
     options.projection
   ) as StructuredValue<unknown[]>;
+}
+
+function finalizeObjectFieldValue(options: {
+  value: unknown;
+  descriptor?: SecurityDescriptor;
+  factsources: readonly FactSourceHandle[];
+  projection: RecordFieldProjectionMetadata;
+}): StructuredValue<Record<string, unknown>> {
+  const extracted = extractRecordInputValue(options.value);
+  const sourceObject = isPlainObject(extracted) ? extracted : {};
+  const clonedEntries = Object.fromEntries(
+    Object.entries(sourceObject).map(([key, entry]) => [key, cloneValueIfStructured(entry)])
+  );
+
+  const wrapped = wrapStructured(clonedEntries, 'object', undefined, {
+    factsources: [...options.factsources],
+    projection: options.projection
+  });
+  return applyFieldMetadata(
+    wrapped,
+    mergeFieldDescriptorWithValue(options.value, options.descriptor),
+    options.factsources,
+    options.projection
+  ) as StructuredValue<Record<string, unknown>>;
 }
 
 async function evaluateFieldValue(
@@ -799,6 +830,13 @@ async function coerceRecordEntry(
         factsources: fieldFactsources,
         projection: fieldProjection,
         materializeElementMetadata: !allData && field.classification === 'fact'
+      });
+    } else if (field.valueType === 'object') {
+      shaped[field.name] = finalizeObjectFieldValue({
+        value: shaped[field.name],
+        descriptor: effectiveArraySecurity,
+        factsources: fieldFactsources,
+        projection: fieldProjection
       });
     }
     namespaceMetadata[field.name] = {

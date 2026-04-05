@@ -302,6 +302,7 @@ RecordFieldValueType
   / value:$("number" ![a-zA-Z0-9_]) { return value; }
   / value:$("boolean" ![a-zA-Z0-9_]) { return value; }
   / value:$("array" ![a-zA-Z0-9_]) { return value; }
+  / value:$("object" ![a-zA-Z0-9_]) { return value; }
   / value:$("handle" ![a-zA-Z0-9_]) { return value; }
 
 RecordWhenRules

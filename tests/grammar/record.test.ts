@@ -228,6 +228,28 @@ describe('record grammar', () => {
     ]);
   });
 
+  it('parses object-typed record field annotations', () => {
+    const directive = getFirstDirective(`
+/record @worker_output = {
+  facts: [worker: string],
+  data: [state_patch: object, summary: string?]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.data).toEqual([
+      expect.objectContaining({
+        name: 'state_patch',
+        valueType: 'object',
+        optional: false
+      }),
+      expect.objectContaining({
+        name: 'summary',
+        valueType: 'string',
+        optional: true
+      })
+    ]);
+  });
+
   it('parses named display modes with bare, ref, mask, and handle entries', () => {
     const directive = getFirstDirective(`
 /record @email = {

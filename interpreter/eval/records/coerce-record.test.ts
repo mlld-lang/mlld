@@ -453,6 +453,76 @@ describe('record output coercion', () => {
     expect(channelFromWrapper.mx.labels).toContain('fact:@ticket.channel');
   });
 
+  it('accepts plain objects for object-typed record fields', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @worker_output = {
+  facts: [worker: string],
+  data: [state_patch: object]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        worker: 'planner',
+        state_patch: {
+          queue: ['a', 'b'],
+          summary: { done: false }
+        }
+      },
+      env
+    });
+
+    expect(output.mx.schema?.valid).toBe(true);
+
+    const statePatch = await accessNamedField(output, 'state_patch');
+    expect(isStructuredValue(statePatch)).toBe(true);
+    expect(statePatch.type).toBe('object');
+    expect(statePatch.data).toEqual({
+      queue: ['a', 'b'],
+      summary: { done: false }
+    });
+  });
+
+  it('rejects non-objects for object-typed record fields and marks schema invalid', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @worker_output = {
+  facts: [worker: string],
+  data: [state_patch: object],
+  validate: "demote"
+}
+`);
+
+    const cases = [
+      { label: 'string', value: 'nope', actual: 'string' },
+      { label: 'array', value: ['nope'], actual: 'array' },
+      { label: 'number', value: 42, actual: 'number' }
+    ] as const;
+
+    for (const testCase of cases) {
+      const output = await coerceRecordOutput({
+        definition,
+        value: {
+          worker: 'planner',
+          state_patch: testCase.value
+        },
+        env
+      });
+
+      expect(output.mx.schema?.valid, testCase.label).toBe(false);
+      expect(output.mx.schema?.errors).toEqual([
+        expect.objectContaining({
+          path: 'state_patch',
+          code: 'type',
+          expected: 'object',
+          actual: testCase.actual
+        })
+      ]);
+    }
+  });
+
   it('clears inherited untrusted from fact fields while preserving it on data fields', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

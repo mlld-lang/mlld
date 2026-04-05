@@ -53,6 +53,16 @@ function createLabeledVariable(name: string, value: string, labels: string[]) {
   );
 }
 
+async function registerDirectives(env: Environment, source: string): Promise<void> {
+  const directives = parseSync(source).filter((node): node is DirectiveNode => {
+    return Boolean(node) && typeof node === 'object' && (node as DirectiveNode).type === 'Directive';
+  });
+
+  for (const directive of directives) {
+    await evaluateDirective(directive, env);
+  }
+}
+
 describe('guard post-hook integration', () => {
   it('denies after guards and exposes output context', async () => {
     const env = createEnv();
@@ -346,6 +356,132 @@ describe('guard post-hook integration', () => {
       decision: 'deny',
       reason: expect.stringMatching(/schema invalid/i)
     });
+  });
+
+  it('accesses schema metadata on function-call results in guard conditions', async () => {
+    const env = createEnv();
+    await registerDirectives(
+      env,
+      `
+/record @shape = {
+  data: [name: string, count: number]
+}
+
+/exe @checkShape(value) = @value => shape
+/guard after for op:named:producer = when [
+  @checkShape(@output).mx.schema.valid == false => retry "Bad shape"
+  * => allow
+]
+`
+    );
+
+    const result = {
+      value: wrapStructured({ name: 'test', count: 'wrong' }, 'object'),
+      env
+    };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'producer', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [], env, {
+        type: 'exe',
+        name: 'producer',
+        named: 'op:named:producer'
+      })
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: expect.stringMatching(/bad shape/i)
+    });
+  });
+
+  it('evaluates schema-bearing function calls inside && guard conditions', async () => {
+    const env = createEnv();
+    await registerDirectives(
+      env,
+      `
+/record @shape = {
+  data: [name: string, count: number]
+}
+
+/exe @checkShape(value) = @value => shape
+/guard after for op:named:producer = when [
+  @checkShape(@output).mx.schema.valid == false && @mx.guard.try < 2 => retry "Bad shape"
+  * => allow
+]
+`
+    );
+
+    const result = {
+      value: wrapStructured({ name: 'test', count: 'wrong' }, 'object'),
+      env
+    };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'producer', args: [] }
+    };
+
+    await expect(
+      guardPostHook(node, result, [], env, {
+        type: 'exe',
+        name: 'producer',
+        named: 'op:named:producer'
+      })
+    ).rejects.toMatchObject({
+      decision: 'retry',
+      retryHint: expect.stringMatching(/bad shape/i)
+    });
+  });
+
+  it('evaluates @mx.guard.try on the right side of && with schema-bearing function results', async () => {
+    const env = createEnv();
+    await registerDirectives(
+      env,
+      `
+/record @shape = {
+  data: [name: string, count: number]
+}
+
+/exe @checkShape(value) = @value => shape
+/guard after for op:named:producer = when [
+  @checkShape(@output).mx.schema.valid == false && @mx.guard.try < 2 => retry "Bad shape"
+  @checkShape(@output).mx.schema.valid == false => deny "Schema invalid"
+  * => allow
+]
+`
+    );
+
+    env.getContextManager().pushGenericContext('guardRetry', {
+      attempt: 2,
+      tries: [{ attempt: 1, decision: 'retry', hint: 'Bad shape' }],
+      hintHistory: ['Bad shape'],
+      max: 3
+    });
+
+    const result = {
+      value: wrapStructured({ name: 'test', count: 'wrong' }, 'object'),
+      env
+    };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'producer', args: [] }
+    };
+
+    try {
+      await expect(
+        guardPostHook(node, result, [], env, {
+          type: 'exe',
+          name: 'producer',
+          named: 'op:named:producer'
+        })
+      ).rejects.toMatchObject({
+        decision: 'deny',
+        reason: expect.stringMatching(/schema invalid/i)
+      });
+    } finally {
+      env.getContextManager().popGenericContext('guardRetry');
+    }
   });
 
   it('denies retry inside pipelines when the source is not retryable', async () => {

@@ -4,7 +4,7 @@ import type { DataValue } from './var';
 
 export type RecordFieldClassification = 'fact' | 'data';
 export type RecordDataTrustLevel = 'trusted' | 'untrusted';
-export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'handle';
+export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'handle';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
 export type RecordDisplayMode = 'bare' | 'ref' | 'mask' | 'handle';
 export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
