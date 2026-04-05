@@ -432,7 +432,9 @@ async function handleCommandRefExecutable(
       }
     }
 
-    const refEnv = env.createChild();
+    // Preserve ambient per-invocation state such as @mx.llm when a wrapper
+    // delegates to another executable without forwarding config.tools again.
+    const refEnv = execEnv.createChild();
     if (capturedModuleEnv instanceof Map) {
       refEnv.setCapturedModuleEnv(capturedModuleEnv);
     }
@@ -449,7 +451,9 @@ async function handleCommandRefExecutable(
     return refResult.value as string;
   }
 
-  const refEnv = env.createChild();
+  // Preserve ambient per-invocation state such as @mx.llm when a wrapper
+  // delegates to another executable without forwarding config.tools again.
+  const refEnv = execEnv.createChild();
   if (capturedModuleEnv instanceof Map) {
     refEnv.setCapturedModuleEnv(capturedModuleEnv);
   }

@@ -19,13 +19,20 @@ const CONFIG_FILES = ['mlld-config.json', 'mlld-lock.json', 'mlld.lock.json'];
 /**
  * Find the nearest directory (starting from startDir and moving up) that contains
  * an mlld config or lock file. Returns null if none are found.
+ *
+ * stopDir optionally bounds the upward search. When provided, parents above
+ * that directory are ignored.
  */
-export function findNearestConfigDir(startDir: string): string | null {
+export function findNearestConfigDir(startDir: string, stopDir?: string): string | null {
   let current = path.resolve(startDir);
+  const ceiling = stopDir ? path.resolve(stopDir) : null;
   while (true) {
     const hasConfig = CONFIG_FILES.some(file => existsSync(path.join(current, file)));
     if (hasConfig) {
       return current;
+    }
+    if (ceiling && current === ceiling) {
+      return null;
     }
     const parent = path.dirname(current);
     if (parent === current) {

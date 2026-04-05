@@ -788,6 +788,76 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves ambient @mx.llm bridge context through imported llm wrappers that omit inner config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      `/exe llm @provider(prompt, config) = cmd { ${process.execPath} -e "process.stdout.write(process.argv[1] ?? 'MISSING')" "@mx.llm.allowed" }`,
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe @hello() = "hi"',
+      '/exe llm @agent(prompt, config) = @provider(@prompt, { system: "nested config without tools" })',
+      '/show @agent("Use the tool bridge", { tools: [@hello] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves ambient @mx.llm bridge context through imported block-style llm wrappers that omit inner config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe llm @provider(prompt, config) = [',
+      '  let @allowed = when [',
+      '    @mx.llm && @mx.llm.allowed => @mx.llm.allowed',
+      '    * => "MISSING"',
+      '  ]',
+      '  => @allowed',
+      ']',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe @hello() = "hi"',
+      '/exe llm @agent(prompt, config) = @provider(@prompt, { system: "nested config without tools" })',
+      '/show @agent("Use the tool bridge", { tools: [@hello] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves record coercion for imported MCP-backed wrapper exes on the llm tool bridge', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

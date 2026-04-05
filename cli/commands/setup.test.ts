@@ -12,7 +12,7 @@ describe('setup helpers', () => {
     await fs.mkdir(child, { recursive: true });
     await fs.writeFile(path.join(parent, 'mlld-config.json'), '{}');
 
-    const result = findNearestConfigDir(child);
+    const result = findNearestConfigDir(child, base);
     expect(result).toBe(parent);
   });
 
@@ -21,7 +21,7 @@ describe('setup helpers', () => {
     const child = path.join(base, 'child');
     await fs.mkdir(child, { recursive: true });
 
-    const result = findNearestConfigDir(child);
+    const result = findNearestConfigDir(child, base);
     expect(result).toBeNull();
   });
 });

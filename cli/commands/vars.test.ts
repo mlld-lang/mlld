@@ -4,6 +4,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { varsCommand } from './vars';
 import { ProjectConfig } from '@core/registry/ProjectConfig';
+import { getCommandContext } from '../utils/command-context';
+
+vi.mock('../utils/command-context', () => ({
+  getCommandContext: vi.fn()
+}));
 
 describe('vars command', () => {
   let tempDir: string;
@@ -15,11 +20,18 @@ describe('vars command', () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlld-vars-test-'));
     configFilePath = path.join(tempDir, 'mlld-config.json');
     lockFilePath = path.join(tempDir, 'mlld-lock.json');
+    vi.mocked(getCommandContext).mockResolvedValue({
+      projectRoot: tempDir,
+      lockFile: null,
+      currentDir: tempDir,
+      relativeToRoot: ''
+    });
   });
 
   afterEach(() => {
     // Clean up temporary directory
     fs.rmSync(tempDir, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   describe('vars list', () => {
