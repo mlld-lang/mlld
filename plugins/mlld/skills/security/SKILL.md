@@ -276,16 +276,22 @@ guard @internalOnly before op:named:sendemail = when [
 ]
 ```
 
-### Schema validation with retry
+### Schema validation with resume
+
+For LLM exes that call write tools, use `resume` instead of `retry`. `retry` re-executes tool calls (double-sends, double-creates). `resume` continues the LLM conversation — the model sees its prior tool calls and reformats:
 
 ```mlld
-guard after @checkSchema for op:named:parseTask = when [
+guard after @checkSchema for op:named:executeWorker = when [
   @output.mx.schema.valid == false && @mx.guard.try < 2
-    => retry "Fix: @output.mx.schema.errors"
+    => resume "Return valid JSON. Errors: @output.mx.schema.errors"
   @output.mx.schema.valid == false => deny "Schema invalid"
   * => allow
 ]
 ```
+
+Use `retry` for read-only exes. Use `resume` for write exes.
+
+Guard action precedence: `deny > resume > retry > allow`.
 
 ### Privileged guards for strategic exceptions
 

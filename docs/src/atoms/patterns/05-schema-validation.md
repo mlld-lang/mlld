@@ -37,6 +37,23 @@ Three pieces:
 2. **`=> record`** on the exe applies coercion automatically on every call
 3. **Guard** checks `@output.mx.schema.valid` and retries with `@output.mx.schema.errors`
 
+### `resume` vs `retry` for tool-calling exes
+
+If the exe calls write tools, use `resume` instead of `retry`. `retry` re-executes the entire exe — including tool calls. That means double-sending emails, double-creating events. `resume` continues the existing LLM conversation without re-executing tools:
+
+```mlld
+guard after @fixShape for op:named:executeWorker = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2
+    => resume "Return valid JSON. Errors: @output.mx.schema.errors"
+  @output.mx.schema.valid == false => deny "Still invalid after resume"
+  * => allow
+]
+```
+
+The LLM sees its prior tool calls and results, plus the correction message. It reformats. `=> record` coercion runs on the new response. No tools re-fire.
+
+Use `retry` for exes without side effects (read-only tools, template exes, JS exes). Use `resume` for exes with write tools.
+
 The LLM gets told exactly what's wrong: missing fields, wrong types, structural issues. It corrects on the next attempt.
 
 ## Supported field types

@@ -157,7 +157,14 @@ guard @redact before secret = when [
 
 **After guards:**
 
-After guards validate or transform operation output:
+After guards validate or transform operation output. Four actions:
+
+| Action | What happens |
+|---|---|
+| `allow` | Proceed with the output |
+| `deny` | Block the operation |
+| `retry` | Re-execute the entire exe from scratch |
+| `resume` | Append a message to the LLM conversation, get a new response (no tool re-execution) |
 
 ```mlld
 guard @validateJson after op:exe = when [
@@ -166,4 +173,17 @@ guard @validateJson after op:exe = when [
 ]
 ```
 
-After-guard transforms chain sequentially in declaration order — each matching guard receives the output from the previous guard. See `guard-composition` for the full resolution model.
+`resume` is for LLM exes that called write tools and then produced malformed output. Unlike `retry`, `resume` continues the existing conversation — the LLM sees its prior tool calls and results, plus the correction message. No tools re-fire.
+
+```mlld
+guard after @fixShape for op:named:myWorker = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2
+    => resume "Return valid JSON. Errors: @output.mx.schema.errors"
+  @output.mx.schema.valid == false => deny "Still invalid"
+  * => allow
+]
+```
+
+When multiple guards disagree: `deny > resume > retry > allow`.
+
+After-guard transforms chain sequentially in declaration order — each matching guard receives the output from the previous guard. `resume` is rejected if an earlier guard already transformed the output. See `guard-composition` for the full resolution model.
