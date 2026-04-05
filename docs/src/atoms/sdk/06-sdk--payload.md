@@ -54,19 +54,29 @@ result = client.execute(
 )
 ```
 
-Python also supports inline helpers:
+All wrapper SDKs support inline label helpers — `labeled`, `trusted`, and `untrusted`:
 
 ```python
-from mlld import trusted, untrusted
+from mlld import trusted, untrusted, labeled
 
 result = client.execute(
     "./agent.mld",
     {
         "query": trusted("approved request"),
         "history": untrusted("external tool output"),
+        "data": labeled(value, "pii", "sensitive"),
     },
 )
 ```
+
+```go
+payload := map[string]any{
+    "query":   mlld.Trusted("approved request"),
+    "history": mlld.Untrusted("external tool output"),
+}
+```
+
+These wrap values so the SDK extracts raw values for the payload and collects labels into `payload_labels` automatically.
 
 Per-field payload labels work for both direct `@payload.field` access and imports from `@payload`.
 

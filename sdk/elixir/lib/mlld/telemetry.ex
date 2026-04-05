@@ -14,7 +14,8 @@ defmodule Mlld.Telemetry do
     _ -> :ok
   end
 
-  @spec span(atom(), map(), (() -> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}
+  @spec span(atom(), map(), (-> {:ok, term()} | {:error, term()})) ::
+          {:ok, term()} | {:error, term()}
   def span(operation, metadata, fun) when is_atom(operation) and is_function(fun, 0) do
     start_native = System.monotonic_time()
     start_system = System.system_time()

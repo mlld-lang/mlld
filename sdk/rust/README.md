@@ -26,11 +26,6 @@ use std::time::Duration;
 fn main() -> mlld::Result<()> {
     let client = Client::new();
 
-    // Optional command override (local repo build example)
-    // let client = Client::new()
-    //     .with_command("node")
-    //     .with_command_args(["./dist/cli.cjs"]);
-
     let output = client.process(r#"show "Hello World""#, None)?;
     println!("{}", output);
 
@@ -54,29 +49,66 @@ fn main() -> mlld::Result<()> {
 }
 ```
 
-## In-Flight State Updates
+## In-Flight Events and State Updates
 
 ```rust
-use mlld::{Client, ProcessOptions};
-use serde_json::json;
-use std::time::Duration;
+let mut handle = client.execute_async("./agent.mld", Some(payload), None)?;
 
-let client = Client::new();
-let mut handle = client.process_async(
-    "loop(99999, 50ms) until @state.exit [\n  continue\n]\nshow \"done\"",
-    Some(ProcessOptions {
-        state: Some(json!({ "exit": false })),
-        mode: Some("strict".to_string()),
-        timeout: Some(Duration::from_secs(10)),
+// Consume events as they arrive
+loop {
+    match handle.next_event(Some(Duration::from_secs(5)))? {
+        Some(event) if event.event_type == "state_write" => {
+            println!("State: {} = {:?}", event.state_write.unwrap().path, event.state_write.unwrap().value);
+        }
+        Some(event) if event.event_type == "complete" => break,
+        _ => break,
+    }
+}
+
+// Or skip events and get the final result directly
+let result = handle.result()?;
+```
+
+## MCP Server Injection
+
+```rust
+let mut mcp = HashMap::new();
+mcp.insert("tools".to_string(), "uv run python3 mcp_server.py".to_string());
+
+let result = client.execute(
+    "./agent.mld",
+    Some(payload),
+    Some(ExecuteOptions {
+        mcp_servers: Some(mcp),
         ..Default::default()
     }),
 )?;
+```
 
-std::thread::sleep(Duration::from_millis(120));
-handle.update_state("exit", true)?;
+## Security Labels
 
-let output = handle.result()?;
-println!("{}", output);
+```rust
+use mlld::{labeled, trusted, untrusted};
+
+let mut payload = HashMap::new();
+payload.insert("config", trusted(json!({"mode": "safe"})));
+payload.insert("user_input", untrusted(raw_input));
+payload.insert("data", labeled(value, &["pii", "sensitive"]));
+
+let result = client.execute("script.mld", Some(&payload), None)?;
+```
+
+## Filesystem Integrity
+
+```rust
+let signed = client.sign("docs/note.txt", Some(SignOptions { identity: Some("user:alice".into()), ..Default::default() }))?;
+let verified = client.verify("docs/note.txt", None)?;
+let status = client.fs_status(Some("src/**/*.mld"), None)?;
+let content_sig = client.sign_content("runtime payload", "user:alice", None)?;
+
+// Write file within an active execution
+let mut handle = client.execute_async("./agent.mld", None, None)?;
+let file_sig = handle.write_file("out.txt", "hello from sdk", None)?;
 ```
 
 ## API
@@ -84,16 +116,15 @@ println!("{}", output);
 ### Client
 
 - `Client::new()`
-- `with_command(command)`
-- `with_command_args(args)`
-- `with_timeout(timeout)`
-- `with_working_dir(dir)`
-- `close()`
-- `process(script, opts)`
-- `process_async(script, opts) -> ProcessHandle`
-- `execute(filepath, payload, opts)`
-- `execute_async(filepath, payload, opts) -> ExecuteHandle`
+- `with_command(command)` / `with_command_args(args)` / `with_timeout(timeout)` / `with_working_dir(dir)`
+- `process(script, opts)` / `process_async(script, opts) -> ProcessHandle`
+- `execute(filepath, payload, opts)` / `execute_async(filepath, payload, opts) -> ExecuteHandle`
 - `analyze(filepath)`
+- `fs_status(glob, opts) -> Vec<FilesystemStatus>`
+- `sign(path, opts) -> FileVerifyResult`
+- `verify(path, opts) -> FileVerifyResult`
+- `sign_content(content, identity, opts) -> ContentSignature`
+- `close()`
 
 ### Handle Methods
 
@@ -101,19 +132,39 @@ println!("{}", output);
 
 - `request_id()`
 - `cancel()`
-- `update_state(path, value)`
-- `wait()`
-- `result()`
+- `update_state(path, value)` / `update_state_with_labels(path, value, labels)`
+- `next_event(timeout) -> Option<HandleEvent>`
+- `wait()` / `result()`
+
+`ExecuteHandle` also provides:
+
+- `write_file(path, content, timeout) -> FileVerifyResult`
+
+### ProcessOptions / ExecuteOptions
+
+- `file_path` (ProcessOptions only)
+- `payload` (ProcessOptions only)
+- `payload_labels: Option<HashMap<String, Vec<String>>>`
+- `state` / `dynamic_modules` / `dynamic_module_source`
+- `mcp_servers: Option<HashMap<String, String>>`
+- `mode` / `allow_absolute_paths` / `timeout`
+
+### Label Helpers
+
+- `labeled(value, labels) -> LabeledValue`
+- `trusted(value) -> LabeledValue`
+- `untrusted(value) -> LabeledValue`
 
 ### Convenience Functions
 
-- `mlld::process(...)`
-- `mlld::execute(...)`
-- `mlld::analyze(...)`
+- `mlld::process(...)` / `mlld::execute(...)` / `mlld::analyze(...)`
+- `mlld::fs_status(...)` / `mlld::sign(...)` / `mlld::verify(...)` / `mlld::sign_content(...)`
 
 ## Notes
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events.
-- `ExecuteResult.denials` collects structured guard/policy label-flow denials observed during execution.
-- Blocking client methods remain as wrappers around handle APIs.
+- `ExecuteResult.denials` collects structured guard/policy label-flow denials.
+- `ExecuteResult.effects` contains output effects with security metadata.
+- `ExecuteResult.metrics` contains timing statistics.
+- `next_event` yields `HandleEvent` with type `"state_write"`, `"guard_denial"`, or `"complete"`.

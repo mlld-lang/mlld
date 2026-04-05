@@ -23,9 +23,11 @@ const output = await processMlld(script);
 
 ```typescript
 const result = await execute(filePath, payload);
-console.log(result.output);
-console.log(result.effects);
-console.log(result.stateWrites);
+console.log(result.output);        // text output
+console.log(result.stateWrites);   // state:// writes
+console.log(result.effects);       // output effects
+console.log(result.denials);       // guard/policy denials
+console.log(result.metrics);       // timing (totalMs, parseMs, evaluateMs)
 ```
 
 **Streaming** — pass `stream: true` to get real-time events

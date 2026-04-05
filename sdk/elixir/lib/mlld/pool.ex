@@ -49,7 +49,8 @@ defmodule Mlld.Pool do
     :ok
   end
 
-  @spec process(GenServer.server(), String.t(), keyword()) :: {:ok, String.t()} | {:error, Mlld.Error.t()}
+  @spec process(GenServer.server(), String.t(), keyword()) ::
+          {:ok, String.t()} | {:error, Mlld.Error.t()}
   def process(pool, script, opts \\ []) do
     with_client(pool, fn client -> Client.process(client, script, opts) end)
   end
@@ -60,7 +61,8 @@ defmodule Mlld.Pool do
     with_client(pool, fn client -> Client.execute(client, filepath, payload, opts) end)
   end
 
-  @spec analyze(GenServer.server(), String.t()) :: {:ok, Mlld.AnalyzeResult.t()} | {:error, Mlld.Error.t()}
+  @spec analyze(GenServer.server(), String.t()) ::
+          {:ok, Mlld.AnalyzeResult.t()} | {:error, Mlld.Error.t()}
   def analyze(pool, filepath) do
     with_client(pool, fn client -> Client.analyze(client, filepath) end)
   end
@@ -103,7 +105,12 @@ defmodule Mlld.Pool do
         {:reply, {:ok, client}, next_state}
 
       {:error, :empty, next_state} ->
-        pending_checkouts = :queue.in({from, owner, now_ms() + state.checkout_timeout}, next_state.pending_checkouts)
+        pending_checkouts =
+          :queue.in(
+            {from, owner, now_ms() + state.checkout_timeout},
+            next_state.pending_checkouts
+          )
+
         {:noreply, %{next_state | pending_checkouts: pending_checkouts}}
 
       {:error, reason, next_state} ->
@@ -223,7 +230,9 @@ defmodule Mlld.Pool do
               next_state
 
             {:error, :empty, next_state} ->
-              pending_checkouts = :queue.in({from, owner, deadline_ms}, next_state.pending_checkouts)
+              pending_checkouts =
+                :queue.in({from, owner, deadline_ms}, next_state.pending_checkouts)
+
               %{next_state | pending_checkouts: pending_checkouts}
 
             {:error, reason, next_state} ->

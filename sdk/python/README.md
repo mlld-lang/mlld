@@ -111,9 +111,9 @@ print(handle.result())
 ### Client
 
 - `Client(command='mlld', command_args=None, timeout=30.0, working_dir=None)`
-- `process(script, *, file_path=None, payload=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None, mcp_servers=None)`
+- `process(script, *, file_path=None, payload=None, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None, mcp_servers=None)`
 - `process_async(...) -> ProcessHandle`
-- `execute(filepath, payload=None, *, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None, mcp_servers=None)`
+- `execute(filepath, payload=None, *, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None, mcp_servers=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
 - `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
@@ -128,7 +128,7 @@ print(handle.result())
 
 - `request_id`
 - `cancel()`
-- `update_state(path, value, *, timeout=None)`
+- `update_state(path, value, *, labels=None, timeout=None)`
 - `next_event(timeout=None) -> HandleEvent | None`
 - `wait()`
 - `result()`
@@ -149,10 +149,28 @@ print(handle.result())
 - `mlld.sign_content(...)`
 - `mlld.fs_status(...)`
 
+## Security Labels
+
+Attach labels to payload fields for mlld's taint tracking:
+
+```python
+from mlld import execute, trusted, untrusted, labeled
+
+result = execute("script.mld", {
+    "config": trusted({"mode": "safe"}),
+    "user_input": untrusted(raw_input),
+    "data": labeled(value, "pii", "sensitive"),
+})
+```
+
+`labeled(value, *labels)` wraps a value with security labels. `trusted(value)` and `untrusted(value)` are shortcuts. The SDK extracts labels into `payload_labels` automatically.
+
 ## Notes
 
 - Each `Client` keeps one live RPC subprocess for repeated calls.
 - `ExecuteResult.state_writes` merges final-result writes and streamed `state:write` events.
 - `ExecuteResult.denials` collects structured guard/policy label-flow denials seen during execution.
-- `handle.next_event()` can yield `guard_denial` before completion, alongside `state_write` and `complete`.
-- Sync methods remain as wrappers around async handle methods.
+- `ExecuteResult.effects` contains output effects with security metadata.
+- `ExecuteResult.metrics` contains timing statistics (`total_ms`, `parse_ms`, `evaluate_ms`).
+- `handle.next_event()` yields `HandleEvent` with type `"state_write"`, `"guard_denial"`, or `"complete"`.
+- Sync methods are wrappers around async handle methods.

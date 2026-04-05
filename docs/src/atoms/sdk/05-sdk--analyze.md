@@ -24,4 +24,17 @@ const tools = analysis.executables
   .filter(e => analysis.exports.includes(e.name));
 ```
 
+`AnalyzeResult` contains:
+
+| Field | Description |
+|-------|-------------|
+| `filepath` | Absolute path to analyzed file |
+| `valid` | Whether the module is valid |
+| `errors` | Parse/analysis errors (message, line, column) |
+| `executables` | Executable definitions (name, params, labels) |
+| `exports` | Exported names |
+| `imports` | Import statements (source, names) |
+| `guards` | Guard definitions (name, timing, trigger) |
+| `needs` | Capability requirements (cmd, node, py) |
+
 Use cases: MCP proxy, module validation, IDE/LSP, security auditing.
