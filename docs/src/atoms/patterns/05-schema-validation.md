@@ -65,11 +65,11 @@ record @strict_result = {
 
 | Mode | Behavior |
 |---|---|
-| `demote` (default) | Any validation error demotes the whole record to data — no fact labels minted |
-| `strict` | Any invalid field fails the entire record |
-| `drop` | Invalid fields are silently dropped; valid fields keep their classification |
+| `demote` (default) | Any validation error demotes the whole record to data — no fact labels minted. Schema metadata is attached. Guards can inspect and retry. |
+| `strict` | Any invalid field throws a hard error. Guards do NOT fire — the error propagates before the after-guard evaluates. |
+| `drop` | Invalid fields are silently dropped; valid fields keep their classification. Schema metadata is attached. |
 
-For LLM output validation with retry, `demote` or `strict` both work. `demote` lets you proceed with degraded data. `strict` forces a clean retry.
+For LLM output validation with guard retry, use `demote` (default) or `drop`. Do NOT use `strict` — it throws before the guard fires, making retry impossible. `demote` is the right choice for most LLM output validation: the value is accessible (for debugging), schema errors are available (for retry feedback), and the guard controls what happens next.
 
 ## Schema metadata
 
