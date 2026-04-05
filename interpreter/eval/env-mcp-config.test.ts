@@ -537,6 +537,48 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('clears tools for plain llm continuations even without guard-triggered resume', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe tool:w @write_once() = js { return "write-ready"; }',
+      '/exe llm @agent(prompt, config) = js {',
+      '  return {',
+      '    tools: config?.tools ?? null,',
+      '    resume: config?._mlld?.resume ?? null',
+      '  };',
+      '}',
+      '/var @result = @agent("start", {',
+      '  tools: [@write_once],',
+      '  _mlld: { resume: { sessionId: "resume-session", provider: "fake", continue: true } }',
+      '})',
+      '/show @result'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        tools: [],
+        resume: {
+          sessionId: 'resume-session',
+          provider: 'fake',
+          continue: true
+        }
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('allows a later pre-guard on the same exe llm to switch from retry to resume', async () => {
     const fileSystem = new MemoryFileSystem();
     const promptKey = '__mlldGuardResumePrePrompt';

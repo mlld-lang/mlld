@@ -85,6 +85,18 @@ describe('exe evaluator characterization', () => {
     expect(getExecutableDef(env, 'createFile').controlArgs).toEqual([]);
   });
 
+  it('materializes exe-level updateArgs and exactPayloadArgs from with-clause metadata', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @updateScheduledTransaction(id, recipient, amount, subject) = run { echo ok } with { controlArgs: ["id", "recipient"], updateArgs: ["amount", "subject"], exactPayloadArgs: ["subject"] }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    const executableDef = getExecutableDef(env, 'updateScheduledTransaction');
+    expect(executableDef.updateArgs).toEqual(['amount', 'subject']);
+    expect(executableDef.exactPayloadArgs).toEqual(['subject']);
+  });
+
   it('materializes exe-level correlateControlArgs from with-clause metadata', async () => {
     const env = createEnvironment();
     const directive = parseSync(
@@ -143,6 +155,24 @@ describe('exe evaluator characterization', () => {
     )[0] as DirectiveNode;
 
     await expect(evaluateExe(directive, env)).rejects.toThrow(/controlArgs entry 'missing'/i);
+  });
+
+  it('rejects exe-level updateArgs that overlap controlArgs', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @sendMoney(recipient, amount) = run { echo ok } with { controlArgs: ["recipient"], updateArgs: ["recipient"] }'
+    )[0] as DirectiveNode;
+
+    await expect(evaluateExe(directive, env)).rejects.toThrow(/updateArgs must be disjoint from controlArgs/i);
+  });
+
+  it('rejects exe-level exactPayloadArgs that overlap controlArgs', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:w @sendMoney(recipient, amount) = run { echo ok } with { controlArgs: ["recipient"], exactPayloadArgs: ["recipient"] }'
+    )[0] as DirectiveNode;
+
+    await expect(evaluateExe(directive, env)).rejects.toThrow(/exactPayloadArgs must reference non-control parameters/i);
   });
 
   it('keeps subtype-to-definition mapping stable across representative exec forms', async () => {

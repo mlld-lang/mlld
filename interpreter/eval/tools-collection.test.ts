@@ -294,6 +294,7 @@ describe('tool collections', () => {
       /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
 
       /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+        with { controlArgs: ["recipients", "cc", "bcc"] }
 
       /var tools @agentTools = {
         send_email: {
@@ -344,7 +345,8 @@ describe('tool collections', () => {
         /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
 
         /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
-        /exe tool:w @archive_email(id) = \`archived:@id\`
+          with { controlArgs: ["recipients", "cc", "bcc"] }
+        /exe tool:w @archive_email(id) = \`archived:@id\` with { controlArgs: ["id"] }
 
         /var tools @agentTools = {
           send_email: {
@@ -387,6 +389,7 @@ describe('tool collections', () => {
     await expect(
       interpretWithEnv(`
         /exe tool:w @send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+          with { controlArgs: ["recipients", "cc", "bcc"] }
 
         /var tools @agentTools = {
           send_email: {
@@ -450,6 +453,7 @@ describe('tool collections', () => {
   it('spreads a single arg object across the collection surface for direct dispatch', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`
+        with { controlArgs: ["recipients"] }
 
       /var tools @writeTools = {
         send_email: {
@@ -659,7 +663,7 @@ describe('tool collections', () => {
         attachments: @attachments,
         cc: @cc,
         bcc: @bcc
-      }
+      } with { controlArgs: ["recipients"] }
 
       /var tools @writeTools = {
         send_email: {
@@ -727,7 +731,7 @@ describe('tool collections', () => {
             attachments: @attachments,
             cc: @cc,
             bcc: @bcc
-          }
+          } with { controlArgs: ["recipients"] }
 
           /var tools @writeTools = {
             send_email: {
@@ -757,6 +761,7 @@ describe('tool collections', () => {
   it('keeps positional direct collection dispatch behavior unchanged', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`
+        with { controlArgs: ["recipients"] }
 
       /var tools @writeTools = {
         send_email: {
@@ -785,6 +790,7 @@ describe('tool collections', () => {
       /exe @get_contact() = { email: "mark@example.com", name: "Mark Davies" } => contact
 
       /exe tool:w @dispatch_send_email(recipients, cc, bcc, subject) = \`sent:@subject\`
+        with { controlArgs: ["recipients", "cc", "bcc"] }
 
       /var tools @writeTools = {
         send_email: {

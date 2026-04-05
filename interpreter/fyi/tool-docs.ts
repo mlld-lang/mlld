@@ -39,6 +39,8 @@ type JsonToolDocEntry = {
   description?: string;
   params: string[];
   controlArgs: string[];
+  updateArgs: string[];
+  exactPayloadArgs: string[];
   dataArgs: string[];
   multiControlArgCorrelation: boolean;
   discoveryCall?: string;
@@ -85,6 +87,8 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+          updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
+          exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }
@@ -222,7 +226,11 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
     labels: [...metadata.labels],
     ...(metadata.description ? { description: metadata.description } : {}),
-    ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {})
+    ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {}),
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    ...(metadata.updateArgs ? { updateArgs: [...metadata.updateArgs] } : {}),
+    hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
+    ...(metadata.exactPayloadArgs ? { exactPayloadArgs: [...metadata.exactPayloadArgs] } : {})
   };
 }
 
@@ -248,6 +256,7 @@ function buildNameOnlyMetadata(name: string): EffectiveToolMetadata {
     params: [],
     labels: [],
     hasControlArgsMetadata: false,
+    hasUpdateArgsMetadata: false,
     correlateControlArgs: false,
     taintFacts: false
   };
@@ -444,8 +453,20 @@ function formatRequiredArgsCell(entry: EffectiveToolMetadata): string {
 }
 
 function formatPayloadArgsCell(entry: EffectiveToolMetadata): string {
-  const controlArgs = new Set(entry.controlArgs ?? []);
-  return formatArgList(entry.params.filter(param => !controlArgs.has(param)));
+  const reservedArgs = new Set([
+    ...(entry.controlArgs ?? []),
+    ...(entry.updateArgs ?? []),
+    ...(entry.exactPayloadArgs ?? [])
+  ]);
+  return formatArgList(entry.params.filter(param => !reservedArgs.has(param)));
+}
+
+function formatUpdateArgsCell(entry: EffectiveToolMetadata): string {
+  if (!entry.hasUpdateArgsMetadata) {
+    return '';
+  }
+
+  return formatArgList(entry.updateArgs ?? []);
 }
 
 function buildDeniedLine(denied: readonly string[]): string {
@@ -507,21 +528,38 @@ function buildToolTableLines(options: {
 }): string[] {
   const { audience, isMcpContext, writeEntries, helperStatus, includeHelpers } = options;
   const includeDiscoveryColumn = audience === 'worker';
+  const includeUpdateColumn = writeEntries.some(entry => entry.hasUpdateArgsMetadata);
   const lines = [
     isMcpContext
       ? (includeDiscoveryColumn
-          ? '| Tool | Control Args | Discover Targets |'
-          : '| Tool | Control Args |')
+          ? (includeUpdateColumn
+              ? '| Tool | Control Args | Update Args | Discover Targets |'
+              : '| Tool | Control Args | Discover Targets |')
+          : (includeUpdateColumn
+              ? '| Tool | Control Args | Update Args |'
+              : '| Tool | Control Args |'))
       : (includeDiscoveryColumn
-          ? '| Tool | Description | Control Args | Discover Targets |'
-          : '| Tool | Description | Control Args |'),
+          ? (includeUpdateColumn
+              ? '| Tool | Description | Control Args | Update Args | Discover Targets |'
+              : '| Tool | Description | Control Args | Discover Targets |')
+          : (includeUpdateColumn
+              ? '| Tool | Description | Control Args | Update Args |'
+              : '| Tool | Description | Control Args |')),
     isMcpContext
       ? (includeDiscoveryColumn
-          ? '|------|-------------|------------------|'
-          : '|------|-------------|')
+          ? (includeUpdateColumn
+              ? '|------|-------------|-------------|------------------|'
+              : '|------|-------------|------------------|')
+          : (includeUpdateColumn
+              ? '|------|-------------|-------------|'
+              : '|------|-------------|'))
       : (includeDiscoveryColumn
-          ? '|------|-------------|-------------|------------------|'
-          : '|------|-------------|-------------|')
+          ? (includeUpdateColumn
+              ? '|------|-------------|-------------|-------------|------------------|'
+              : '|------|-------------|-------------|------------------|')
+          : (includeUpdateColumn
+              ? '|------|-------------|-------------|-------------|'
+              : '|------|-------------|-------------|'))
   ];
 
   for (const entry of writeEntries) {
@@ -532,6 +570,10 @@ function buildToolTableLines(options: {
     }
 
     cells.push(formatTableCell(formatControlArgsCell(entry)));
+
+    if (includeUpdateColumn) {
+      cells.push(formatTableCell(formatUpdateArgsCell(entry)));
+    }
 
     if (includeDiscoveryColumn) {
       const controlArgs = entry.controlArgs ?? [];
@@ -582,6 +624,8 @@ function buildExplicitPlannerWriteToolContractLines(
       `  description: ${entry.description ?? 'No description provided.'}`,
       `  args: ${formatArgList(entry.params)}`,
       `  control_args: ${formatControlArgsCell(entry)}`,
+      `  update_args: ${entry.hasUpdateArgsMetadata ? formatArgList(entry.updateArgs ?? []) : '(none)'}`,
+      `  exact_payload_args: ${formatArgList(entry.exactPayloadArgs ?? [])}`,
       `  payload_args: ${formatPayloadArgsCell(entry)}`,
       `  optional_args: ${formatOptionalArgsCell(entry)}`,
       `  required_args: ${formatRequiredArgsCell(entry)}`
@@ -703,15 +747,25 @@ function buildToolDescriptionAnnotationLines(entry: EffectiveToolMetadata): stri
     return [];
   }
 
+  const lines: string[] = [];
   const controlArgs = entry.controlArgs ?? [];
-  if (controlArgs.length === 0) {
-    return [];
+  if (controlArgs.length > 0) {
+    const suffix = entry.correlateControlArgs && controlArgs.length > 1
+      ? `${formatArgList(controlArgs)} (same source)`
+      : formatArgList(controlArgs);
+    lines.push(`[CONTROL: ${suffix}]`);
   }
 
-  const suffix = entry.correlateControlArgs && controlArgs.length > 1
-    ? `${formatArgList(controlArgs)} (same source)`
-    : formatArgList(controlArgs);
-  return [`[CONTROL: ${suffix}]`];
+  if (entry.hasUpdateArgsMetadata) {
+    lines.push(`[UPDATE: ${formatArgList(entry.updateArgs ?? [])}]`);
+  }
+
+  const exactPayloadArgs = entry.exactPayloadArgs ?? [];
+  if (exactPayloadArgs.length > 0) {
+    lines.push(`[EXACT PAYLOAD: ${formatArgList(exactPayloadArgs)} (must appear in user task)]`);
+  }
+
+  return lines;
 }
 
 function renderText(options: {
@@ -733,13 +787,18 @@ function buildJsonToolEntry(
   includeOperationLabels: boolean
 ): JsonToolDocEntry {
   const controlArgs = entry.controlArgs ?? [];
-  const dataArgs = entry.params.filter(param => !controlArgs.includes(param));
+  const updateArgs = entry.updateArgs ?? [];
+  const exactPayloadArgs = entry.exactPayloadArgs ?? [];
+  const reservedArgs = new Set([...controlArgs, ...updateArgs, ...exactPayloadArgs]);
+  const dataArgs = entry.params.filter(param => !reservedArgs.has(param));
   return {
     name: entry.name,
     kind: isWriteToolMetadata(env, entry) ? 'write' : 'read',
     ...(entry.description ? { description: entry.description } : {}),
     params: [...entry.params],
     controlArgs: [...controlArgs],
+    updateArgs: [...updateArgs],
+    exactPayloadArgs: [...exactPayloadArgs],
     dataArgs,
     multiControlArgCorrelation: entry.correlateControlArgs && controlArgs.length > 1,
     ...(helperStatus.available && controlArgs.length > 0

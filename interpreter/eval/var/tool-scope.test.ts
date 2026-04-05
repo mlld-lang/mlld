@@ -15,12 +15,39 @@ const executableSource = {
   isMultiLine: false
 } as const;
 
-function createEnvWithExecutables(paramsByName: Record<string, string[]>): Environment {
+function createEnvWithExecutables(
+  paramsByName: Record<
+    string,
+    string[] | {
+      params: string[];
+      controlArgs?: string[];
+      updateArgs?: string[];
+      exactPayloadArgs?: string[];
+    }
+  >
+): Environment {
   const variables = new Map(
-    Object.entries(paramsByName).map(([name, paramNames]) => [
-      name,
-      createExecutableVariable(name, 'code', '', paramNames, 'js', executableSource)
-    ])
+    Object.entries(paramsByName).map(([name, config]) => {
+      const normalized = Array.isArray(config)
+        ? { params: config }
+        : config;
+      return [
+        name,
+        createExecutableVariable(name, 'code', '', normalized.params, 'js', executableSource, {
+          internal: {
+            executableDef: {
+              type: 'code',
+              language: 'js',
+              paramNames: normalized.params,
+              sourceDirective: 'exec',
+              ...(Array.isArray(normalized.controlArgs) ? { controlArgs: normalized.controlArgs } : {}),
+              ...(Array.isArray(normalized.updateArgs) ? { updateArgs: normalized.updateArgs } : {}),
+              ...(Array.isArray(normalized.exactPayloadArgs) ? { exactPayloadArgs: normalized.exactPayloadArgs } : {})
+            }
+          }
+        })
+      ];
+    })
   );
 
   return {
@@ -75,7 +102,10 @@ describe('tool scope helpers', () => {
 
   it('normalizes tool collection entries and validates bind/expose coverage', () => {
     const env = createEnvWithExecutables({
-      createIssue: ['owner', 'repo', 'title', 'body']
+      createIssue: {
+        params: ['owner', 'repo', 'title', 'body'],
+        controlArgs: ['title']
+      }
     });
 
     const collection = normalizeToolCollection(
@@ -107,6 +137,46 @@ describe('tool scope helpers', () => {
       expose: ['title', 'body'],
       controlArgs: ['title'],
       correlateControlArgs: true
+    });
+  });
+
+  it('accepts restrict-only overrides for controlArgs, updateArgs, and exactPayloadArgs', () => {
+    const env = createEnvWithExecutables({
+      updateIssue: {
+        params: ['owner', 'repo', 'id', 'title', 'body'],
+        controlArgs: ['owner', 'repo', 'id'],
+        updateArgs: ['title', 'body'],
+        exactPayloadArgs: ['title', 'body']
+      }
+    });
+
+    const collection = normalizeToolCollection(
+      {
+        issue: {
+          mlld: '@updateIssue',
+          bind: {
+            owner: 'mlld',
+            repo: 'mlld'
+          },
+          expose: ['id', 'title', 'body'],
+          controlArgs: ['id'],
+          updateArgs: ['title'],
+          exactPayloadArgs: ['title']
+        }
+      },
+      env
+    );
+
+    expect(collection.issue).toEqual({
+      mlld: 'updateIssue',
+      bind: {
+        owner: 'mlld',
+        repo: 'mlld'
+      },
+      expose: ['id', 'title', 'body'],
+      controlArgs: ['id'],
+      updateArgs: ['title'],
+      exactPayloadArgs: ['title']
     });
   });
 
@@ -202,6 +272,56 @@ describe('tool scope helpers', () => {
         env
       )
     ).toThrow(/controlArgs must reference visible parameters/i);
+  });
+
+  it('rejects controlArgs, updateArgs, and exactPayloadArgs overrides that widen executable metadata', () => {
+    const env = createEnvWithExecutables({
+      updateIssue: {
+        params: ['id', 'title', 'body'],
+        controlArgs: ['id'],
+        updateArgs: ['title'],
+        exactPayloadArgs: ['title']
+      }
+    });
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            expose: ['id', 'title', 'body'],
+            controlArgs: ['id', 'title']
+          }
+        },
+        env
+      )
+    ).toThrow(/controlArgs must be a subset of executable controlArgs/i);
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            expose: ['id', 'title', 'body'],
+            updateArgs: ['body']
+          }
+        },
+        env
+      )
+    ).toThrow(/updateArgs must be a subset of executable updateArgs/i);
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            expose: ['id', 'title', 'body'],
+            exactPayloadArgs: ['body']
+          }
+        },
+        env
+      )
+    ).toThrow(/exactPayloadArgs must be a subset of executable exactPayloadArgs/i);
   });
 
   it('returns literal tools values unchanged when withClause.tools is not an AST node', async () => {

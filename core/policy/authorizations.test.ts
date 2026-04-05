@@ -109,7 +109,9 @@ describe('policy authorizations', () => {
           name: 'send_email',
           params: new Set(['recipients', 'cc', 'bcc', 'subject']),
           controlArgs: new Set(['recipients', 'cc', 'bcc']),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ],
       [
@@ -118,7 +120,9 @@ describe('policy authorizations', () => {
           name: 'create_file',
           params: new Set(['title']),
           controlArgs: new Set<string>(),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ],
       [
@@ -127,7 +131,9 @@ describe('policy authorizations', () => {
           name: 'send_money',
           params: new Set(['recipient', 'amount']),
           controlArgs: new Set<string>(),
-          hasControlArgsMetadata: false
+          hasControlArgsMetadata: false,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);
@@ -166,7 +172,9 @@ describe('policy authorizations', () => {
           name: 'send_email',
           params: new Set(['recipients']),
           controlArgs: new Set(['recipients']),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);
@@ -200,7 +208,9 @@ describe('policy authorizations', () => {
           name: 'send_money',
           params: new Set(['recipient', 'amount']),
           controlArgs: new Set<string>(),
-          hasControlArgsMetadata: false
+          hasControlArgsMetadata: false,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);
@@ -257,7 +267,9 @@ describe('policy authorizations', () => {
           name: 'create_calendar_event',
           params: new Set(['participants', 'title', 'start_time', 'location']),
           controlArgs: new Set(['participants']),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);
@@ -299,7 +311,9 @@ describe('policy authorizations', () => {
           name: 'create_calendar_event',
           params: new Set(['participants', 'title', 'start_time']),
           controlArgs: new Set(['participants']),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);
@@ -365,7 +379,9 @@ describe('policy authorizations', () => {
           name: 'create_file',
           params: new Set(['title', 'body']),
           controlArgs: new Set<string>(),
-          hasControlArgsMetadata: true
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
         }
       ]
     ]);

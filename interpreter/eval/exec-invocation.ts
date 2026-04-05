@@ -755,6 +755,40 @@ function buildToolCallArguments(
   return argsRecord;
 }
 
+function hasProvidedUpdateArgValue(
+  args: Record<string, unknown> | undefined,
+  argName: string
+): boolean {
+  return Boolean(
+    args
+    && Object.prototype.hasOwnProperty.call(args, argName)
+    && args[argName] !== null
+    && args[argName] !== undefined
+  );
+}
+
+function enforceUpdateToolArguments(options: {
+  metadata: {
+    updateArgs?: readonly string[];
+    hasUpdateArgsMetadata: boolean;
+  };
+  args: Record<string, unknown> | undefined;
+}): void {
+  if (!options.metadata.hasUpdateArgsMetadata) {
+    return;
+  }
+
+  const updateArgs = options.metadata.updateArgs ?? [];
+  if (updateArgs.some(argName => hasProvidedUpdateArgValue(options.args, argName))) {
+    return;
+  }
+
+  if (updateArgs.length > 0) {
+    throw new Error(`Update with no changed fields - specify at least one of: ${updateArgs.join(', ')}`);
+  }
+  throw new Error('Update with no changed fields - specify at least one declared update field');
+}
+
 function mergeAuthorizationAttestationsIntoArgDescriptors(options: {
   env: Environment;
   paramNames: readonly string[];
@@ -3063,7 +3097,13 @@ async function evaluateExecInvocationInternal(
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
 
       llmResumeEligible = true;
-      if (!existingRuntimeResumeConfig && !isLlmResumeContinuation) {
+      if (existingRuntimeResumeConfig?.continue === true) {
+        isLlmResumeContinuation = true;
+        if ('tools' in nextConfig) {
+          nextConfig.tools = [];
+          didUpdateConfigArg = true;
+        }
+      } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
           sessionId: randomUUID(),
           provider: 'unknown',
@@ -3225,6 +3265,11 @@ async function evaluateExecInvocationInternal(
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels);
+  const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
+  enforceUpdateToolArguments({
+    metadata: effectiveToolMetadata,
+    args: authorizationArgs
+  });
   let effectiveArgSecurityDescriptors = mergeResolvedArgValueDescriptors({
     env: runtimeEnv,
     evaluatedArgs,
@@ -3236,7 +3281,6 @@ async function evaluateExecInvocationInternal(
       throw createPolicyAuthorizationValidationError(validation);
     }
 
-    const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
     const authorizationDecision = evaluatePolicyAuthorizationDecision({
       authorizations: runtimeEnv.getPolicySummary()!.authorizations!,
       operationName: toolOperationName ?? variable.name ?? commandName,

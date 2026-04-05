@@ -171,6 +171,8 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+          updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
+          exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }

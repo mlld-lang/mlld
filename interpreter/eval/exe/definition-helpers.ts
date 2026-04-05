@@ -88,6 +88,31 @@ export async function resolveExeControlArgs(
   env: Environment,
   paramNames: readonly string[]
 ): Promise<string[] | undefined> {
+  return resolveExecutableArgListMetadata(raw, env, paramNames, 'controlArgs');
+}
+
+export async function resolveExeUpdateArgs(
+  raw: unknown,
+  env: Environment,
+  paramNames: readonly string[]
+): Promise<string[] | undefined> {
+  return resolveExecutableArgListMetadata(raw, env, paramNames, 'updateArgs');
+}
+
+export async function resolveExeExactPayloadArgs(
+  raw: unknown,
+  env: Environment,
+  paramNames: readonly string[]
+): Promise<string[] | undefined> {
+  return resolveExecutableArgListMetadata(raw, env, paramNames, 'exactPayloadArgs');
+}
+
+async function resolveExecutableArgListMetadata(
+  raw: unknown,
+  env: Environment,
+  paramNames: readonly string[],
+  fieldName: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs'
+): Promise<string[] | undefined> {
   if (raw === undefined) {
     return undefined;
   }
@@ -95,7 +120,7 @@ export async function resolveExeControlArgs(
   const value = await resolveExecutableWithClauseValue(raw, env);
 
   if (!Array.isArray(value)) {
-    throw new Error('Executable controlArgs must be an array of parameter names');
+    throw new Error(`Executable ${fieldName} must be an array of parameter names`);
   }
 
   const knownParams = new Set(paramNames);
@@ -103,14 +128,14 @@ export async function resolveExeControlArgs(
 
   for (const entry of value) {
     if (typeof entry !== 'string') {
-      throw new Error('Executable controlArgs entries must be strings');
+      throw new Error(`Executable ${fieldName} entries must be strings`);
     }
     const trimmed = entry.trim();
     if (!trimmed) {
-      throw new Error('Executable controlArgs entries must be non-empty strings');
+      throw new Error(`Executable ${fieldName} entries must be non-empty strings`);
     }
     if (!knownParams.has(trimmed)) {
-      throw new Error(`Executable controlArgs entry '${trimmed}' is not a declared parameter`);
+      throw new Error(`Executable ${fieldName} entry '${trimmed}' is not a declared parameter`);
     }
     if (!normalized.includes(trimmed)) {
       normalized.push(trimmed);
@@ -118,6 +143,27 @@ export async function resolveExeControlArgs(
   }
 
   return normalized;
+}
+
+export function validateExecutableAuthorizationMetadata(options: {
+  controlArgs?: readonly string[];
+  updateArgs?: readonly string[];
+  exactPayloadArgs?: readonly string[];
+}): void {
+  const controlArgs = new Set(options.controlArgs ?? []);
+  const updateOverlap = (options.updateArgs ?? []).filter(argName => controlArgs.has(argName));
+  if (updateOverlap.length > 0) {
+    throw new Error(
+      `Executable updateArgs must be disjoint from controlArgs: ${updateOverlap.join(', ')}`
+    );
+  }
+
+  const exactPayloadControlArgs = (options.exactPayloadArgs ?? []).filter(argName => controlArgs.has(argName));
+  if (exactPayloadControlArgs.length > 0) {
+    throw new Error(
+      `Executable exactPayloadArgs must reference non-control parameters: ${exactPayloadControlArgs.join(', ')}`
+    );
+  }
 }
 
 export async function resolveExeCorrelateControlArgs(

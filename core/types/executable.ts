@@ -26,6 +26,10 @@ export interface BaseExecutable {
   optionalParams?: string[];
   /** Security-relevant args that must be pinned by policy.authorizations */
   controlArgs?: string[];
+  /** Mutable fields that count as actual changes for update-style tools */
+  updateArgs?: string[];
+  /** Payload fields that must appear verbatim in the user task text */
+  exactPayloadArgs?: string[];
   /** Whether multiple control args must be authorized from the same source record */
   correlateControlArgs?: boolean;
   /** Human-readable summary for tool metadata */

@@ -823,6 +823,139 @@ describe('@policy builtin', () => {
     }
   });
 
+  it('reports no_update_fields and drops update tools when no changed fields are authorized', async () => {
+    const env = await interpretWithEnv(`
+      /exe finance:w, tool:w @updateScheduledTransaction(id, recipient, amount, date, subject) = js { return amount; } with {
+        controlArgs: ["id", "recipient"],
+        updateArgs: ["amount", "date", "subject"]
+      }
+
+      /var tools @writeTools = {
+        updateScheduledTransaction: {
+          mlld: @updateScheduledTransaction,
+          expose: ["id", "recipient", "amount", "date", "subject"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        allow: {
+          updateScheduledTransaction: {
+            id: 'txn-1',
+            recipient: 'acct-1'
+          }
+        }
+      },
+      rawSource: {
+        allow: {
+          updateScheduledTransaction: {
+            id: 'txn-1',
+            recipient: 'acct-1'
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'no_update_fields',
+          tool: 'updateScheduledTransaction'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow).toEqual({});
+  });
+
+  it('validates exactPayloadArgs against task text for known bucket values', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with {
+        controlArgs: [],
+        exactPayloadArgs: ["subject"]
+      }
+
+      /var tools @writeTools = {
+        createDraft: {
+          mlld: @createDraft,
+          expose: ["subject", "body"]
+        }
+      }
+
+      /var @query = "Draft an email with subject line: Q3 Review"
+      /var @intent = {
+        known: {
+          createDraft: {
+            subject: {
+              value: "Urgent follow-up",
+              source: "user explicitly provided the subject"
+            }
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+      /var @validated = @policy.validate(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(false);
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'payload_not_in_task',
+            tool: 'createDraft',
+            arg: 'subject',
+            message: "Payload literal 'Urgent follow-up' for 'subject' not found in task text"
+          })
+        ])
+      );
+      expect(result.policy.authorizations.allow).toEqual({});
+    }
+  });
+
+  it('accepts flat-intent exactPayloadArgs values that appear in the task text', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with {
+        controlArgs: [],
+        exactPayloadArgs: ["subject"]
+      }
+
+      /var tools @writeTools = {
+        createDraft: {
+          mlld: @createDraft,
+          expose: ["subject", "body"]
+        }
+      }
+
+      /var @query = "Draft an email with subject line: Q3 Review"
+      /var @intent = {
+        createDraft: {
+          subject: "q3 review"
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools, { task: @query })
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.createDraft).toEqual({
+      kind: 'unconstrained'
+    });
+  });
+
   it('accepts handle wrapper values in the resolved bucket', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }

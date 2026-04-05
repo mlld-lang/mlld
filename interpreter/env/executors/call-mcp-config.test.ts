@@ -432,6 +432,55 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('injects update and exact-payload annotations into bridge tool descriptions', async () => {
+    const env = await createInterpretedEnv([
+      '/exe tool:w @updateDraft(id, subject, body) = "ok" with {',
+      '  controlArgs: ["id"],',
+      '  updateArgs: ["subject", "body"],',
+      '  exactPayloadArgs: ["subject"]',
+      '}',
+      '',
+      '/var tools @draftTools = {',
+      '  updateDraft: {',
+      '    mlld: @updateDraft,',
+      '    expose: ["id", "subject", "body"],',
+      '    description: "Update a draft"',
+      '  }',
+      '}'
+    ].join('\n'));
+
+    let toolCollection = await extractVariableValue(env.getVariable('draftTools') as any, env);
+    if (isStructuredValue(toolCollection)) {
+      toolCollection = asData(toolCollection);
+    }
+
+    const result = await createCallMcpConfig({
+      tools: toolCollection,
+      env
+    });
+
+    try {
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 21,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{
+        name?: string;
+        description?: string;
+      }>;
+      const updateDraft = tools.find(tool => tool.name === 'update_draft');
+      expect(updateDraft?.description).toContain('Update a draft [CONTROL: id]');
+      expect(updateDraft?.description).toContain('[UPDATE: subject, body]');
+      expect(updateDraft?.description).toContain('[EXACT PAYLOAD: subject (must appear in user task)]');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('serializes display-projected record results through the generated function MCP bridge', async () => {
     const env = await createInterpretedEnv(
       [

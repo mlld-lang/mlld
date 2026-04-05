@@ -5,9 +5,12 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
 import {
   extractParamTypes,
+  resolveExeExactPayloadArgs,
   resolveExeCorrelateControlArgs,
   resolveExeControlArgs,
-  resolveExeDescription
+  resolveExeDescription,
+  resolveExeUpdateArgs,
+  validateExecutableAuthorizationMetadata
 } from './exe/definition-helpers';
 import { buildCoreExecutableFamily } from './exe/core-definition-builders';
 import { buildControlFlowExecutableDefinition } from './exe/control-flow-definition-builders';
@@ -98,6 +101,24 @@ export async function evaluateExe(
   if (controlArgs !== undefined) {
     executableDef.controlArgs = controlArgs;
   }
+
+  const rawUpdateArgs = getWithClauseField(directive.values?.withClause, 'updateArgs');
+  const updateArgs = await resolveExeUpdateArgs(rawUpdateArgs, env, executableDef.paramNames);
+  if (updateArgs !== undefined) {
+    executableDef.updateArgs = updateArgs;
+  }
+
+  const rawExactPayloadArgs = getWithClauseField(directive.values?.withClause, 'exactPayloadArgs');
+  const exactPayloadArgs = await resolveExeExactPayloadArgs(rawExactPayloadArgs, env, executableDef.paramNames);
+  if (exactPayloadArgs !== undefined) {
+    executableDef.exactPayloadArgs = exactPayloadArgs;
+  }
+
+  validateExecutableAuthorizationMetadata({
+    controlArgs: executableDef.controlArgs,
+    updateArgs: executableDef.updateArgs,
+    exactPayloadArgs: executableDef.exactPayloadArgs
+  });
 
   const rawCorrelateControlArgs = getWithClauseField(directive.values?.withClause, 'correlateControlArgs');
   const correlateControlArgs = await resolveExeCorrelateControlArgs(rawCorrelateControlArgs, env);

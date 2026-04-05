@@ -10,6 +10,8 @@ export interface ToolDefinition {
   expose?: string[];
   optional?: string[];
   controlArgs?: string[];
+  updateArgs?: string[];
+  exactPayloadArgs?: string[];
   correlateControlArgs?: boolean;
 }
 
@@ -19,6 +21,9 @@ export interface ToolAuthorizationContextEntry {
   params: string[];
   controlArgs: string[];
   hasControlArgsMetadata: boolean;
+  updateArgs?: string[];
+  hasUpdateArgsMetadata?: boolean;
+  exactPayloadArgs?: string[];
   labels?: string[];
   description?: string;
   correlateControlArgs?: boolean;
@@ -53,6 +58,11 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
     && Array.isArray(candidate.controlArgs)
     && candidate.controlArgs.every(entry => typeof entry === 'string')
     && typeof candidate.hasControlArgsMetadata === 'boolean'
+    && (candidate.updateArgs === undefined
+      || (Array.isArray(candidate.updateArgs) && candidate.updateArgs.every(entry => typeof entry === 'string')))
+    && (candidate.hasUpdateArgsMetadata === undefined || typeof candidate.hasUpdateArgsMetadata === 'boolean')
+    && (candidate.exactPayloadArgs === undefined
+      || (Array.isArray(candidate.exactPayloadArgs) && candidate.exactPayloadArgs.every(entry => typeof entry === 'string')))
     && (candidate.labels === undefined
       || (Array.isArray(candidate.labels) && candidate.labels.every(entry => typeof entry === 'string')))
     && (candidate.description === undefined || typeof candidate.description === 'string')
@@ -80,6 +90,15 @@ export function cloneToolCollectionAuthorizationContext(
         params: cloneStringList(entry.params),
         controlArgs: cloneStringList(entry.controlArgs),
         hasControlArgsMetadata: entry.hasControlArgsMetadata === true,
+        ...(Array.isArray(entry.updateArgs)
+          ? { updateArgs: cloneStringList(entry.updateArgs) }
+          : {}),
+        ...(entry.hasUpdateArgsMetadata !== undefined
+          ? { hasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true }
+          : {}),
+        ...(Array.isArray(entry.exactPayloadArgs)
+          ? { exactPayloadArgs: cloneStringList(entry.exactPayloadArgs) }
+          : {}),
         ...(Array.isArray(entry.labels)
           ? { labels: cloneStringList(entry.labels) }
           : {}),

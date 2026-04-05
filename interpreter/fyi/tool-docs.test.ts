@@ -239,6 +239,38 @@ describe('@fyi.tools', () => {
     }
   });
 
+  it('renders updateArgs and exactPayloadArgs in worker tables and planner contracts', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @updateDraft(id, subject, body) = "ok" with {
+        controlArgs: ["id"],
+        updateArgs: ["subject", "body"],
+        exactPayloadArgs: ["subject"]
+      }
+
+      /var tools @tools = {
+        update_draft: {
+          mlld: @updateDraft,
+          expose: ["id", "subject", "body"]
+        }
+      }
+
+      /var @plannerDocs = @toolDocs(@tools, { audience: "planner" })
+    `);
+
+    try {
+      const workerDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(workerDocs.text).toContain('| Tool | Description | Control Args | Update Args | Discover Targets |');
+      expect(workerDocs.text).toContain('| update_draft |  | id | subject, body | @fyi.known("update_draft") |');
+
+      const plannerDocs = await readVarData(env, 'plannerDocs') as string;
+      expect(plannerDocs).toContain('update_args: subject, body');
+      expect(plannerDocs).toContain('exact_payload_args: subject');
+      expect(plannerDocs).toContain('payload_args: (none)');
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('renders read-only tool sets instead of collapsing to empty output', async () => {
     const env = await interpretWithEnv(`
       /exe tool:r @lookupContact(query) = "Ada"

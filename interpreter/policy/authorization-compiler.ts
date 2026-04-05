@@ -57,6 +57,8 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'superseded_by_resolved'
     | 'known_from_influenced_source'
     | 'known_not_in_task'
+    | 'no_update_fields'
+    | 'payload_not_in_task'
     | 'known_contains_handle'
     | 'ambiguous_projected_value';
   message: string;
@@ -295,12 +297,19 @@ function buildKnownNotInTaskMessage(literal: string): string {
   return `Known literal '${literal}' not found in task text`;
 }
 
-function validateKnownValueAgainstTask(options: {
+function buildPayloadNotInTaskMessage(argName: string, literal: string): string {
+  return `Payload literal '${literal}' for '${argName}' not found in task text`;
+}
+
+function validateLiteralValueAgainstTask(options: {
   toolName: string;
   argName: string;
   value: unknown;
   normalizedTaskText: string;
   issues: PolicyAuthorizationCompilerIssue[];
+  reason: 'known_not_in_task' | 'payload_not_in_task';
+  buildMessage: (literal: string) => string;
+  rejectHandleWrappers: boolean;
 }): boolean {
   const visit = (candidate: unknown): boolean => {
     if (candidate === null || candidate === undefined) {
@@ -327,8 +336,16 @@ function validateKnownValueAgainstTask(options: {
 
     if (isPlainObject(candidate)) {
       let valid = true;
+      if (hasOwnProperty(candidate, 'eq')) {
+        return visit((candidate as Record<string, unknown>).eq) && valid;
+      }
+      if (hasOwnProperty(candidate, 'oneOf')) {
+        return visit((candidate as Record<string, unknown>).oneOf) && valid;
+      }
+
       if (
         hasOwnProperty(candidate, 'handle')
+        && options.rejectHandleWrappers
         && extractHandleTokenCandidate((candidate as Record<string, unknown>).handle) !== undefined
       ) {
         pushCompilerIssue(options.issues, {
@@ -366,8 +383,8 @@ function validateKnownValueAgainstTask(options: {
     }
 
     pushCompilerIssue(options.issues, {
-      reason: 'known_not_in_task',
-      message: buildKnownNotInTaskMessage(literal),
+      reason: options.reason,
+      message: options.buildMessage(literal),
       tool: options.toolName,
       arg: options.argName
     });
@@ -375,6 +392,36 @@ function validateKnownValueAgainstTask(options: {
   };
 
   return visit(options.value);
+}
+
+function validateKnownValueAgainstTask(options: {
+  toolName: string;
+  argName: string;
+  value: unknown;
+  normalizedTaskText: string;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): boolean {
+  return validateLiteralValueAgainstTask({
+    ...options,
+    reason: 'known_not_in_task',
+    buildMessage: buildKnownNotInTaskMessage,
+    rejectHandleWrappers: true
+  });
+}
+
+function validateExactPayloadValueAgainstTask(options: {
+  toolName: string;
+  argName: string;
+  value: unknown;
+  normalizedTaskText: string;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): boolean {
+  return validateLiteralValueAgainstTask({
+    ...options,
+    reason: 'payload_not_in_task',
+    buildMessage: literal => buildPayloadNotInTaskMessage(options.argName, literal),
+    rejectHandleWrappers: false
+  });
 }
 
 function cloneRawAuthorizationEntry(entry: unknown): unknown {
@@ -1047,6 +1094,146 @@ function stripNonControlArgsFromRawPolicyAuthorizations(
       }
     }
     entry.args = strippedArgs;
+  }
+}
+
+function extractRawAuthorizationArgs(entry: unknown): Record<string, unknown> | undefined {
+  if (!isPlainObject(entry)) {
+    return undefined;
+  }
+
+  if (isPlainObject(entry.args)) {
+    return entry.args as Record<string, unknown>;
+  }
+
+  if (!hasOwnProperty(entry, 'args') && !hasOwnProperty(entry, 'kind')) {
+    return entry as Record<string, unknown>;
+  }
+
+  return undefined;
+}
+
+function hasNonNullAuthorizationValue(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (isStructuredValue(value)) {
+    return hasNonNullAuthorizationValue(value.data);
+  }
+
+  if (Array.isArray(value)) {
+    return true;
+  }
+
+  if (isPlainObject(value)) {
+    if (hasOwnProperty(value, 'eq')) {
+      return hasNonNullAuthorizationValue((value as Record<string, unknown>).eq);
+    }
+    if (hasOwnProperty(value, 'oneOf')) {
+      const candidates = (value as Record<string, unknown>).oneOf;
+      return Array.isArray(candidates)
+        ? candidates.some(candidate => hasNonNullAuthorizationValue(candidate))
+        : candidates !== null && candidates !== undefined;
+    }
+    if (hasOwnProperty(value, 'value') || hasOwnProperty(value, 'source')) {
+      return hasOwnProperty(value, 'value')
+        ? hasNonNullAuthorizationValue((value as Record<string, unknown>).value)
+        : false;
+    }
+    return true;
+  }
+
+  return true;
+}
+
+function buildNoUpdateFieldsMessage(toolName: string, updateArgs: readonly string[]): string {
+  const fieldList = updateArgs.join(', ');
+  return fieldList.length > 0
+    ? `Tool '${toolName}' update authorization must specify at least one update field: ${fieldList}`
+    : `Tool '${toolName}' update authorization must specify at least one update field`;
+}
+
+function deleteRawAuthorizationTool(
+  rawAuthorizations: unknown,
+  toolName: string
+): void {
+  const allow = isPlainObject(rawAuthorizations) && isPlainObject(rawAuthorizations.allow)
+    ? rawAuthorizations.allow
+    : undefined;
+  if (!allow) {
+    return;
+  }
+  delete allow[toolName];
+}
+
+function validateRawAuthorizationMetadata(options: {
+  rawAuthorizations: unknown;
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  taskText?: string;
+  issues: PolicyAuthorizationCompilerIssue[];
+}): void {
+  const allow = isPlainObject(options.rawAuthorizations) && isPlainObject(options.rawAuthorizations.allow)
+    ? options.rawAuthorizations.allow
+    : undefined;
+  if (!allow) {
+    return;
+  }
+
+  const normalizedTaskText =
+    typeof options.taskText === 'string' && options.taskText.trim().length > 0
+      ? options.taskText.trim().toLowerCase()
+      : undefined;
+
+  for (const [toolName, entry] of Object.entries({ ...allow })) {
+    const tool = options.toolContext?.get(toolName);
+    if (!tool) {
+      continue;
+    }
+
+    const rawArgs = extractRawAuthorizationArgs(entry);
+    if (tool.hasUpdateArgsMetadata) {
+      const updateArgs = [...tool.updateArgs];
+      const hasUpdateValue =
+        rawArgs !== undefined
+          && updateArgs.some(argName =>
+            hasOwnProperty(rawArgs, argName) && hasNonNullAuthorizationValue(rawArgs[argName])
+          );
+      if (!hasUpdateValue) {
+        pushCompilerIssue(options.issues, {
+          reason: 'no_update_fields',
+          message: buildNoUpdateFieldsMessage(toolName, updateArgs),
+          tool: toolName
+        });
+        delete allow[toolName];
+        continue;
+      }
+    }
+
+    if (!normalizedTaskText || !rawArgs || !(tool.exactPayloadArgs && tool.exactPayloadArgs.size > 0)) {
+      continue;
+    }
+
+    let payloadValid = true;
+    for (const argName of tool.exactPayloadArgs) {
+      if (!hasOwnProperty(rawArgs, argName)) {
+        continue;
+      }
+
+      payloadValid =
+        validateExactPayloadValueAgainstTask({
+          toolName,
+          argName,
+          value: rawArgs[argName],
+          normalizedTaskText,
+          issues: options.issues
+        })
+        && payloadValid;
+    }
+
+    if (!payloadValid) {
+      delete allow[toolName];
+    }
   }
 }
 
@@ -1941,6 +2128,13 @@ export async function compilePolicyAuthorizations(
   if (rawAuthorizations === undefined || rawAuthorizations === null) {
     return { authorizations: undefined, issues, report };
   }
+
+  validateRawAuthorizationMetadata({
+    rawAuthorizations,
+    toolContext: options.toolContext,
+    taskText: options.taskText,
+    issues
+  });
 
   stripNonControlArgsFromRawPolicyAuthorizations(rawAuthorizations, options.toolContext, report);
   await canonicalizePolicyAuthorizationConstraints(

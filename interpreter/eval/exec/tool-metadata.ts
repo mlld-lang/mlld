@@ -19,6 +19,9 @@ export interface EffectiveToolMetadata {
   description?: string;
   controlArgs?: string[];
   hasControlArgsMetadata: boolean;
+  updateArgs?: string[];
+  hasUpdateArgsMetadata: boolean;
+  exactPayloadArgs?: string[];
   correlateControlArgs: boolean;
   taintFacts: boolean;
 }
@@ -119,6 +122,18 @@ function getExecutableControlArgs(executable: ExecutableVariable): string[] | un
   return Array.isArray(controlArgs) ? normalizeStringList(controlArgs) : undefined;
 }
 
+function getExecutableUpdateArgs(executable: ExecutableVariable): string[] | undefined {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const updateArgs = (executableDef as any)?.updateArgs;
+  return Array.isArray(updateArgs) ? normalizeStringList(updateArgs) : undefined;
+}
+
+function getExecutableExactPayloadArgs(executable: ExecutableVariable): string[] | undefined {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const exactPayloadArgs = (executableDef as any)?.exactPayloadArgs;
+  return Array.isArray(exactPayloadArgs) ? normalizeStringList(exactPayloadArgs) : undefined;
+}
+
 function getExecutableCorrelateControlArgs(executable: ExecutableVariable): boolean {
   const executableDef = executable.internal?.executableDef ?? executable.value;
   return (executableDef as any)?.correlateControlArgs === true;
@@ -144,6 +159,8 @@ function buildToolContextFromExecutable(
   const params = getExecutableParamNames(executable);
   const optionalParams = getExecutableOptionalParamNames(executable)?.filter(param => params.includes(param));
   const controlArgs = getExecutableControlArgs(executable);
+  const updateArgs = getExecutableUpdateArgs(executable);
+  const exactPayloadArgs = getExecutableExactPayloadArgs(executable);
   const description = getExecutableDescription(executable);
   return {
     name,
@@ -151,8 +168,11 @@ function buildToolContextFromExecutable(
     ...(optionalParams && optionalParams.length > 0 ? { optionalParams } : {}),
     labels: getExecutableLabels(executable),
     ...(description ? { description } : {}),
-    ...(controlArgs ? { controlArgs } : {}),
+    ...(Array.isArray(controlArgs) ? { controlArgs } : {}),
     hasControlArgsMetadata: Array.isArray(controlArgs),
+    ...(Array.isArray(updateArgs) ? { updateArgs } : {}),
+    hasUpdateArgsMetadata: Array.isArray(updateArgs),
+    ...(Array.isArray(exactPayloadArgs) ? { exactPayloadArgs } : {}),
     correlateControlArgs: getExecutableCorrelateControlArgs(executable),
     taintFacts: getExecutableTaintFacts(executable)
   };
@@ -226,6 +246,52 @@ function getEffectiveToolControlArgs(options: {
   };
 }
 
+function getEffectiveToolUpdateArgs(options: {
+  params: readonly string[];
+  baseUpdateArgs?: readonly string[];
+  baseHasUpdateArgsMetadata: boolean;
+  definition?: ToolDefinition;
+}): { updateArgs: string[]; hasUpdateArgsMetadata: boolean } {
+  const visibleParams = new Set(options.params);
+
+  if (Array.isArray(options.definition?.updateArgs)) {
+    return {
+      updateArgs: normalizeStringList(options.definition.updateArgs).filter(arg => visibleParams.has(arg)),
+      hasUpdateArgsMetadata: true
+    };
+  }
+
+  if (options.baseHasUpdateArgsMetadata) {
+    return {
+      updateArgs: normalizeStringList(options.baseUpdateArgs).filter(arg => visibleParams.has(arg)),
+      hasUpdateArgsMetadata: true
+    };
+  }
+
+  return {
+    updateArgs: [],
+    hasUpdateArgsMetadata: false
+  };
+}
+
+function getEffectiveToolExactPayloadArgs(options: {
+  params: readonly string[];
+  baseExactPayloadArgs?: readonly string[];
+  definition?: ToolDefinition;
+}): string[] | undefined {
+  const visibleParams = new Set(options.params);
+
+  if (Array.isArray(options.definition?.exactPayloadArgs)) {
+    return normalizeStringList(options.definition.exactPayloadArgs).filter(arg => visibleParams.has(arg));
+  }
+
+  if (Array.isArray(options.baseExactPayloadArgs)) {
+    return normalizeStringList(options.baseExactPayloadArgs).filter(arg => visibleParams.has(arg));
+  }
+
+  return undefined;
+}
+
 function getEffectiveToolCorrelateControlArgs(
   baseCorrelateControlArgs: boolean,
   definition?: ToolDefinition
@@ -254,6 +320,17 @@ function applyToolDefinitionAuthMetadata(
     baseHasControlArgsMetadata: base.hasControlArgsMetadata,
     definition
   });
+  const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
+    params,
+    baseUpdateArgs: base.updateArgs,
+    baseHasUpdateArgsMetadata: base.hasUpdateArgsMetadata,
+    definition
+  });
+  const exactPayloadArgs = getEffectiveToolExactPayloadArgs({
+    params,
+    baseExactPayloadArgs: base.exactPayloadArgs,
+    definition
+  });
   const description = normalizeTrimmedString(definition.description) ?? base.description;
 
   return {
@@ -264,6 +341,9 @@ function applyToolDefinitionAuthMetadata(
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,
+    ...(hasUpdateArgsMetadata ? { updateArgs } : {}),
+    hasUpdateArgsMetadata,
+    ...(exactPayloadArgs !== undefined ? { exactPayloadArgs } : {}),
     correlateControlArgs: getEffectiveToolCorrelateControlArgs(base.correlateControlArgs, definition)
   };
 }
@@ -278,9 +358,13 @@ function mergeToolDefinitionMetadata(
 
   const labels = mergeStringLists(base.labels, definition.labels);
   const mergedControlArgs = mergeStringLists(base.controlArgs, definition.controlArgs);
+  const mergedUpdateArgs = mergeStringLists(base.updateArgs, definition.updateArgs);
+  const mergedExactPayloadArgs = mergeStringLists(base.exactPayloadArgs, definition.exactPayloadArgs);
   const optionalParams = getEffectiveToolOptionalParams(base.params, base.optionalParams, definition);
   const hasControlArgsMetadata =
     base.hasControlArgsMetadata || Array.isArray(definition.controlArgs);
+  const hasUpdateArgsMetadata =
+    base.hasUpdateArgsMetadata || Array.isArray(definition.updateArgs);
   const description = base.description ?? normalizeTrimmedString(definition.description);
 
   return {
@@ -290,6 +374,9 @@ function mergeToolDefinitionMetadata(
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs: mergedControlArgs } : {}),
     hasControlArgsMetadata,
+    ...(hasUpdateArgsMetadata ? { updateArgs: mergedUpdateArgs } : {}),
+    hasUpdateArgsMetadata,
+    ...(mergedExactPayloadArgs.length > 0 ? { exactPayloadArgs: mergedExactPayloadArgs } : {}),
     correlateControlArgs: base.correlateControlArgs || definition.correlateControlArgs === true
   };
 }
@@ -304,13 +391,19 @@ function getScopedToolCollection(env: Environment): ToolCollection | undefined {
 
 function createAuthorizationToolContextEntry(
   toolName: string,
-  metadata: Pick<EffectiveToolMetadata, 'params' | 'controlArgs' | 'hasControlArgsMetadata'>
+  metadata: Pick<
+    EffectiveToolMetadata,
+    'params' | 'controlArgs' | 'hasControlArgsMetadata' | 'updateArgs' | 'hasUpdateArgsMetadata' | 'exactPayloadArgs'
+  >
 ): AuthorizationToolContext {
   return {
     name: toolName,
     params: new Set(metadata.params),
     controlArgs: new Set(metadata.controlArgs ?? []),
-    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    updateArgs: new Set(metadata.updateArgs ?? []),
+    hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
+    exactPayloadArgs: new Set(metadata.exactPayloadArgs ?? [])
   };
 }
 
@@ -324,7 +417,10 @@ function buildAuthorizationToolContextFromStoredContext(
       name: toolName,
       params: new Set(entry.params),
       controlArgs: new Set(entry.controlArgs),
-      hasControlArgsMetadata: entry.hasControlArgsMetadata
+      hasControlArgsMetadata: entry.hasControlArgsMetadata,
+      updateArgs: new Set(entry.updateArgs ?? []),
+      hasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true,
+      exactPayloadArgs: new Set(entry.exactPayloadArgs ?? [])
     });
   }
 
@@ -345,6 +441,17 @@ function buildToolContextFromStoredEntry(
     baseHasControlArgsMetadata: entry.hasControlArgsMetadata,
     definition
   });
+  const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
+    params,
+    baseUpdateArgs: entry.updateArgs,
+    baseHasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true,
+    definition
+  });
+  const exactPayloadArgs = getEffectiveToolExactPayloadArgs({
+    params,
+    baseExactPayloadArgs: entry.exactPayloadArgs,
+    definition
+  });
   const description = normalizeTrimmedString(definition?.description) ?? normalizeTrimmedString(entry.description);
 
   return {
@@ -355,6 +462,9 @@ function buildToolContextFromStoredEntry(
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,
+    ...(hasUpdateArgsMetadata ? { updateArgs } : {}),
+    hasUpdateArgsMetadata,
+    ...(exactPayloadArgs !== undefined ? { exactPayloadArgs } : {}),
     correlateControlArgs: getEffectiveToolCorrelateControlArgs(entry.correlateControlArgs === true, definition),
     taintFacts: false
   };
@@ -363,13 +473,24 @@ function buildToolContextFromStoredEntry(
 function toStoredAuthorizationContextEntry(
   metadata: Pick<
     EffectiveToolMetadata,
-    'params' | 'controlArgs' | 'hasControlArgsMetadata' | 'labels' | 'description' | 'correlateControlArgs'
+    | 'params'
+    | 'controlArgs'
+    | 'hasControlArgsMetadata'
+    | 'updateArgs'
+    | 'hasUpdateArgsMetadata'
+    | 'exactPayloadArgs'
+    | 'labels'
+    | 'description'
+    | 'correlateControlArgs'
   >
 ): ToolAuthorizationContextEntry {
   return {
     params: [...metadata.params],
     controlArgs: [...(metadata.controlArgs ?? [])],
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    updateArgs: [...(metadata.updateArgs ?? [])],
+    hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
+    ...(metadata.exactPayloadArgs ? { exactPayloadArgs: [...metadata.exactPayloadArgs] } : {}),
     ...(metadata.labels.length > 0 ? { labels: [...metadata.labels] } : {}),
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.correlateControlArgs ? { correlateControlArgs: true } : {})
@@ -529,6 +650,15 @@ export function resolveToolCollectionEntryMetadata(
     baseHasControlArgsMetadata: false,
     definition
   });
+  const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
+    params,
+    baseHasUpdateArgsMetadata: false,
+    definition
+  });
+  const exactPayloadArgs = getEffectiveToolExactPayloadArgs({
+    params,
+    definition
+  });
   const description = normalizeTrimmedString(definition.description);
 
   return {
@@ -539,6 +669,9 @@ export function resolveToolCollectionEntryMetadata(
     ...(description ? { description } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,
+    ...(hasUpdateArgsMetadata ? { updateArgs } : {}),
+    hasUpdateArgsMetadata,
+    ...(exactPayloadArgs !== undefined ? { exactPayloadArgs } : {}),
     correlateControlArgs: definition.correlateControlArgs === true,
     taintFacts: false
   };

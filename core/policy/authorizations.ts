@@ -21,6 +21,9 @@ export interface AuthorizationToolContext {
   params: Set<string>;
   controlArgs: Set<string>;
   hasControlArgsMetadata: boolean;
+  updateArgs: Set<string>;
+  hasUpdateArgsMetadata: boolean;
+  exactPayloadArgs?: Set<string>;
 }
 
 export interface PolicyAuthorizationIssue {

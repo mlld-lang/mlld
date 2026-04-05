@@ -141,6 +141,10 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     const paramSet = new Set(paramNames);
+    const executableDef = execVar.internal?.executableDef ?? execVar.value;
+    const executableControlArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.controlArgs);
+    const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
+    const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
 
     const description = toolValue.description;
     if (description !== undefined && typeof description !== 'string') {
@@ -155,6 +159,8 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
     const optional = normalizeStringArray(toolValue.optional, toolName, 'optional');
     const controlArgs = normalizeStringArray(toolValue.controlArgs, toolName, 'controlArgs');
+    const updateArgs = normalizeStringArray(toolValue.updateArgs, toolName, 'updateArgs');
+    const exactPayloadArgs = normalizeStringArray(toolValue.exactPayloadArgs, toolName, 'exactPayloadArgs');
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -237,15 +243,27 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const visibleParams = expose
       ? expose
       : paramNames.filter(paramName => !boundKeys.includes(paramName));
-    if (controlArgs) {
-      const visibleSet = new Set(visibleParams);
-      const invalidControlArgs = controlArgs.filter(name => !visibleSet.has(name));
-      if (invalidControlArgs.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' controlArgs must reference visible parameters: ${invalidControlArgs.join(', ')}`
-        );
-      }
-    }
+    validateRestrictedArgOverride({
+      field: 'controlArgs',
+      toolName,
+      values: controlArgs,
+      visibleParams,
+      executableValues: executableControlArgs
+    });
+    validateRestrictedArgOverride({
+      field: 'updateArgs',
+      toolName,
+      values: updateArgs,
+      visibleParams,
+      executableValues: executableUpdateArgs
+    });
+    validateRestrictedArgOverride({
+      field: 'exactPayloadArgs',
+      toolName,
+      values: exactPayloadArgs,
+      visibleParams,
+      executableValues: executableExactPayloadArgs
+    });
 
     collection[toolName] = {
       mlld: mlldName,
@@ -255,6 +273,8 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ...(expose ? { expose } : {}),
       ...(optional ? { optional } : {}),
       ...(controlArgs ? { controlArgs } : {}),
+      ...(updateArgs ? { updateArgs } : {}),
+      ...(exactPayloadArgs ? { exactPayloadArgs } : {}),
       ...(correlateControlArgs === true ? { correlateControlArgs: true } : {})
     };
   }
@@ -281,7 +301,7 @@ function resolveToolMlldName(value: unknown, toolName: string): string {
 function normalizeStringArray(
   value: unknown,
   toolName: string,
-  field: 'labels' | 'expose' | 'optional' | 'controlArgs'
+  field: 'labels' | 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs'
 ): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -290,4 +310,41 @@ function normalizeStringArray(
     throw new Error(`Tool '${toolName}' ${field} must be an array of strings`);
   }
   return value;
+}
+
+function normalizeExecutableMetadataStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function validateRestrictedArgOverride(options: {
+  field: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs';
+  toolName: string;
+  values: string[] | undefined;
+  visibleParams: readonly string[];
+  executableValues: readonly string[];
+}): void {
+  const { field, toolName, values, visibleParams, executableValues } = options;
+  if (!values) {
+    return;
+  }
+
+  const visibleSet = new Set(visibleParams);
+  const invalidVisibleValues = values.filter(name => !visibleSet.has(name));
+  if (invalidVisibleValues.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' ${field} must reference visible parameters: ${invalidVisibleValues.join(', ')}`
+    );
+  }
+
+  const executableSet = new Set(executableValues);
+  const widenedValues = values.filter(name => !executableSet.has(name));
+  if (widenedValues.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' ${field} must be a subset of executable ${field}: ${widenedValues.join(', ')}`
+    );
+  }
 }
