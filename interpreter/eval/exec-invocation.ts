@@ -3050,9 +3050,10 @@ async function evaluateExecInvocationInternal(
     });
   }
 
-  // Auto-bridge: when an exe llm is invoked with config.tools, create MCP bridges
-  // and expose the result on @mx.llm for the exe body to consume. Shelf-scoped
-  // llm calls also receive agent-visible shelf notes in config.system.
+  // Provider-neutral resume state is injected into llm config for any exe llm
+  // that accepts a config object. Tool-bridge setup remains opt-in via
+  // config.tools. Shelf-scoped llm calls also receive agent-visible shelf notes
+  // in config.system.
   const variableLabels = variable.mx?.labels;
   const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
   const llmParamNames = Array.isArray(definition.paramNames) ? definition.paramNames : [];
@@ -3064,10 +3065,21 @@ async function evaluateExecInvocationInternal(
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
 
-      if (pendingGuardAction?.decision === 'resume') {
-        llmResumeEligible = true;
-        nextConfig.tools = [];
+      llmResumeEligible = true;
+      if (!existingRuntimeResumeConfig && !isLlmResumeContinuation) {
+        nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
+          sessionId: randomUUID(),
+          provider: 'unknown',
+          continue: false
+        });
         didUpdateConfigArg = true;
+      }
+
+      if (pendingGuardAction?.decision === 'resume') {
+        if ('tools' in nextConfig) {
+          nextConfig.tools = [];
+          didUpdateConfigArg = true;
+        }
         if (currentLlmResumeState) {
           nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
             sessionId: currentLlmResumeState.sessionId,
@@ -3079,7 +3091,6 @@ async function evaluateExecInvocationInternal(
       }
 
       if ('tools' in nextConfig) {
-        llmResumeEligible = true;
         // config.tools selects capabilities for the bridge; it is not model-visible input and
         // must not seed the conversation descriptor used for policy/attestation checks.
         resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
