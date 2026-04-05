@@ -547,9 +547,6 @@ function defineStructuredCtx<T>(
   metadata: StructuredValueMetadata | undefined,
   type: StructuredValueType
 ): void {
-  if ((value as any)[STRUCTURED_VALUE_CTX_INITIALIZED]) {
-    return;
-  }
   const descriptor = Object.getOwnPropertyDescriptor(value, 'mx');
   if (descriptor?.get) {
     const derived = descriptor.get.call(value) as StructuredValueContext;
@@ -586,9 +583,6 @@ function defineStructuredInternal<T>(
   value: StructuredValue<T>,
   initial: StructuredValueInternal | undefined
 ): void {
-  if ((value as any)[STRUCTURED_VALUE_INTERNAL_INITIALIZED]) {
-    return;
-  }
   const descriptor = Object.getOwnPropertyDescriptor(value, 'internal');
   if (descriptor?.get) {
     const derived = descriptor.get.call(value) as StructuredValueInternal;

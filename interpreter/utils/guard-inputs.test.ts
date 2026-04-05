@@ -11,6 +11,29 @@ import {
 } from './guard-inputs';
 
 describe('materializeGuardInputs', () => {
+  it('rehydrates structured objects that are missing mx before copying schema metadata', () => {
+    const payload = wrapStructured(
+      { worker: 'extract_target', state_patch: {} },
+      'object',
+      '{"worker":"extract_target","state_patch":{}}',
+      {
+        security: makeSecurityDescriptor({ labels: ['tool-output'] }),
+        schema: {
+          valid: true,
+          errors: [],
+          mode: 'drop'
+        }
+      }
+    );
+    delete (payload as any).mx;
+
+    const [result] = materializeGuardInputs([payload], { nameHint: '__effect_input__' });
+
+    expect(result?.type).toBe('structured');
+    expect(result?.mx?.labels).toContain('tool-output');
+    expect(result?.mx?.schema?.valid).toBe(true);
+  });
+
   it('preserves labels from structured primitive payloads', () => {
     const payload = wrapStructured('secret-log', 'text', 'secret-log');
     applySecurityDescriptorToStructuredValue(
