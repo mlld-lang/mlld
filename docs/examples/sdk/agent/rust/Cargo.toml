@@ -1,0 +1,13 @@
+[package]
+name = "mlld-agent-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "agent"
+path = "src/agent.rs"
+
+[dependencies]
+mlld = "2.0"
+notify = "7"
+serde_json = "1"

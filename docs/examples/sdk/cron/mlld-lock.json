@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 1,
+  "modules": {
+    "@mlld/claude": {
+      "version": "latest",
+      "resolved": "35b05a6e5c1cf2afba8f10c0b2db00fa3caef92bc3885630c4b0a50e61738420",
+      "source": "registry://@mlld/claude@3.2.1",
+      "integrity": "sha256:35b05a6e5c1cf2afba8f10c0b2db00fa3caef92bc3885630c4b0a50e61738420",
+      "fetchedAt": "2026-04-04T20:22:08.138Z",
+      "registryVersion": "3.2.1",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/87e69bc115a665303ef47223d0f5fb7f8df2007e/claude/index.mld"
+    }
+  },
+  "metadata": {
+    "createdAt": "2026-04-04T20:22:07.998Z",
+    "updatedAt": "2026-04-04T20:22:08.138Z"
+  }
+}

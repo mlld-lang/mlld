@@ -1,0 +1,281 @@
+needs { sh }
+
+>> All Claude Code native tool names (from https://code.claude.com/docs/en/tools-reference)
+var @ccNativeTools = "Agent,AskUserQuestion,Bash,CronCreate,CronDelete,CronList,Edit,EnterPlanMode,EnterWorktree,ExitPlanMode,ExitWorktree,Glob,Grep,LSP,ListMcpResourcesTool,NotebookEdit,Read,ReadMcpResourceTool,Skill,TaskCreate,TaskGet,TaskList,TaskOutput,TaskStop,TaskUpdate,TodoWrite,ToolSearch,WebFetch,WebSearch,Write"
+
+>> Stream format adapter for Claude Code CLI NDJSON output
+var @claudeStreamFormat = {
+  name: "claude-code",
+  format: "ndjson",
+  schemas: [
+    {
+      kind: "message",
+      matchPath: "type",
+      matchValue: "text",
+      extract: { chunk: "content" }
+    },
+    {
+      kind: "thinking",
+      matchPath: "type",
+      matchValue: "thinking",
+      extract: { text: "text" }
+    },
+    {
+      kind: "tool-use",
+      matchPath: "type",
+      matchValue: "tool_use",
+      extract: {
+        name: "name",
+        input: "input",
+        id: "id"
+      }
+    },
+    {
+      kind: "tool-result",
+      matchPath: "type",
+      matchValue: "tool_result",
+      extract: {
+        result: "result",
+        toolUseId: "tool_use_id"
+      }
+    },
+    {
+      kind: "error",
+      matchPath: "type",
+      matchValue: "error",
+      extract: { message: "message" }
+    },
+    {
+      kind: "metadata",
+      matchPath: "type",
+      matchValue: "result",
+      extract: {
+        inputTokens: "input_tokens",
+        outputTokens: "output_tokens"
+      }
+    }
+  ]
+}
+
+>> Returns the subset of native tools to disallow (all minus the ones the user selected)
+exe @computeDisallowed(native, all) = sh {
+  if [ -z "$native" ]; then
+    printf '%s' "$all"
+  else
+    printf '%s' "$all" | tr ',' '\n' | while IFS= read -r tool; do
+      case ",$native," in
+        *",$tool,"*) ;;
+        *) printf '%s,' "$tool" ;;
+      esac
+    done | sed 's/,$//'
+  fi
+}
+
+>> ── CLI flag builder ──
+>> Reads @mx.llm (set automatically by the runtime for exe llm with config.tools)
+>> and produces Claude CLI flags. --strict-mcp-config is used whenever a bridge
+>> config exists to prevent the child agent from loading its own MCP servers.
+>> --disallowedTools explicitly blocks native tools the user didn't select.
+
+exe @claudeFlags(llm) = [
+  let @dis = @llm.hasTools ? @computeDisallowed(@llm.native, @ccNativeTools) : ""
+  let @disFlag = @dis ? `--disallowedTools "@dis"` : ""
+  => when [
+    @llm.config => `--mcp-config "@llm.config" --strict-mcp-config --allowedTools "@llm.allowed" @disFlag`
+    @llm.allowed => `--allowedTools "@llm.allowed" @disFlag`
+    @llm.hasTools => `@disFlag`
+    * => ""
+  ]
+]
+
+>> ── Core invocation ──
+
+>> @claude(prompt, config)
+>> config.model   - haiku, sonnet, opus (default: sonnet)
+>> config.dir     - working directory
+>> config.tools   - mixed array: strings for built-in tools, exe refs for mlld functions
+>> config.stream  - boolean, enables streaming
+>> config.system  - appended system prompt
+exe llm @claude(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  let @model = @cfg.model ? @cfg.model : "sonnet"
+  let @dir = @cfg.dir ? @cfg.dir : @root
+  let @bare = @cfg.bare ? "--bare" : ""
+  let @dis = @mx.llm && @mx.llm.hasTools ? @computeDisallowed(@mx.llm.native, @ccNativeTools) : ""
+  => when [
+    @cfg.system && @mx.llm && @mx.llm.config => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --append-system-prompt "@cfg.system" --mcp-config "@mx.llm.config" --strict-mcp-config --allowedTools "@mx.llm.allowed" --disallowedTools "@dis"
+    }
+    @cfg.system && @mx.llm && @mx.llm.allowed => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --append-system-prompt "@cfg.system" --allowedTools "@mx.llm.allowed" --disallowedTools "@dis"
+    }
+    @cfg.system && @mx.llm && @mx.llm.hasTools => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --append-system-prompt "@cfg.system" --disallowedTools "@dis"
+    }
+    @cfg.system => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --append-system-prompt "@cfg.system"
+    }
+    @mx.llm && @mx.llm.config => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --mcp-config "@mx.llm.config" --strict-mcp-config --allowedTools "@mx.llm.allowed" --disallowedTools "@dis"
+    }
+    @mx.llm && @mx.llm.allowed => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --allowedTools "@mx.llm.allowed" --disallowedTools "@dis"
+    }
+    @mx.llm && @mx.llm.hasTools => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model --disallowedTools "@dis"
+    }
+    * => @prompt | cmd:@dir {
+      env -u CLAUDECODE claude -p @bare --model @model
+    }
+  ]
+] with { stream: @cfg.stream, streamFormat: @claudeStreamFormat }
+
+>> ── Model shortcuts ──
+
+exe llm @haiku(prompt) = @claude(@prompt, { model: "haiku" })
+exe llm @sonnet(prompt) = @claude(@prompt, { model: "sonnet" })
+exe llm @opus(prompt) = @claude(@prompt, { model: "opus" })
+
+>> ── Internal poll helpers ──
+>> Flat params for sh env var compatibility.
+>> cmdLine is a fully-formed claude CLI command string.
+
+exe @pollFileImpl(prompt, cmdLine, poll, timeout) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  eval "$cmdLine" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  ELAPSED=0
+  while ! test -f "$poll"; do
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+    if [ "$ELAPSED" -ge "$timeout" ]; then
+      kill $CLAUDE_PID 2>/dev/null
+      wait $CLAUDE_PID 2>/dev/null
+      rm -f "$PROMPT_FILE"
+      exit 0
+    fi
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then
+      break
+    fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  cat "$poll" 2>/dev/null
+}
+
+exe @pollJsonlImpl(prompt, cmdLine, jsonlFile, pattern, timeout) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  eval "$cmdLine" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  ELAPSED=0
+  while ! grep -q "$pattern" "$jsonlFile" 2>/dev/null; do
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+    if [ "$ELAPSED" -ge "$timeout" ]; then
+      kill $CLAUDE_PID 2>/dev/null
+      wait $CLAUDE_PID 2>/dev/null
+      rm -f "$PROMPT_FILE"
+      exit 0
+    fi
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then
+      break
+    fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  grep "$pattern" "$jsonlFile" 2>/dev/null | tail -1
+}
+
+exe @pollEventImpl(prompt, cmdLine, jsonlFile, eventType, itemId, timeout) = sh {
+  PROMPT_FILE=$(mktemp)
+  printf '%s' "$prompt" > "$PROMPT_FILE"
+
+  PATTERN="\"event\":[[:space:]]*\"$eventType\".*\"id\":[[:space:]]*\"$itemId\""
+
+  eval "$cmdLine" < "$PROMPT_FILE" > /dev/null 2>&1 &
+  CLAUDE_PID=$!
+
+  ELAPSED=0
+  while ! grep -qE "$PATTERN" "$jsonlFile" 2>/dev/null; do
+    sleep 5
+    ELAPSED=$((ELAPSED + 5))
+    if [ "$ELAPSED" -ge "$timeout" ]; then
+      kill $CLAUDE_PID 2>/dev/null
+      wait $CLAUDE_PID 2>/dev/null
+      rm -f "$PROMPT_FILE"
+      exit 0
+    fi
+    if ! kill -0 $CLAUDE_PID 2>/dev/null; then
+      break
+    fi
+  done
+
+  sleep 15
+  kill $CLAUDE_PID 2>/dev/null
+  wait $CLAUDE_PID 2>/dev/null
+  rm -f "$PROMPT_FILE"
+  grep -E "$PATTERN" "$jsonlFile" 2>/dev/null | tail -1
+}
+
+>> ── Poll exes ──
+>> @claudePoll(prompt, config)
+>> config extends @claude config plus:
+>>   config.poll    - marker file path (required)
+>>   config.timeout - seconds (default: 3600)
+
+exe llm @claudePoll(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  let @model = @cfg.model ? @cfg.model : "sonnet"
+  let @flags = @mx.llm ? @claudeFlags(@mx.llm) : ""
+  let @systemFlag = @cfg.system ? `--append-system-prompt "@cfg.system"` : ""
+  let @cmdLine = `env -u CLAUDECODE claude -p --bare --model @model @flags @systemFlag`
+  let @timeout = @cfg.timeout ? @cfg.timeout : 3600
+  => @pollFileImpl(@prompt, @cmdLine, @cfg.poll, @timeout)
+]
+
+>> @claudePollJsonl(prompt, config)
+>> config extends @claude config plus:
+>>   config.poll    - JSONL file path (required)
+>>   config.pattern - grep pattern to match (required)
+>>   config.timeout - seconds (default: 3600)
+
+exe llm @claudePollJsonl(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  let @model = @cfg.model ? @cfg.model : "sonnet"
+  let @flags = @mx.llm ? @claudeFlags(@mx.llm) : ""
+  let @systemFlag = @cfg.system ? `--append-system-prompt "@cfg.system"` : ""
+  let @cmdLine = `env -u CLAUDECODE claude -p --bare --model @model @flags @systemFlag`
+  let @timeout = @cfg.timeout ? @cfg.timeout : 3600
+  => @pollJsonlImpl(@prompt, @cmdLine, @cfg.poll, @cfg.pattern, @timeout)
+]
+
+>> @claudePollEvent(prompt, config)
+>> config extends @claude config plus:
+>>   config.poll    - JSONL file path (required)
+>>   config.event   - event type to match (required)
+>>   config.itemId  - item ID to match (required)
+>>   config.timeout - seconds (default: 3600)
+
+exe llm @claudePollEvent(prompt, config) = [
+  let @cfg = @config ? @config : {}
+  let @model = @cfg.model ? @cfg.model : "sonnet"
+  let @flags = @mx.llm ? @claudeFlags(@mx.llm) : ""
+  let @systemFlag = @cfg.system ? `--append-system-prompt "@cfg.system"` : ""
+  let @cmdLine = `env -u CLAUDECODE claude -p --bare --model @model @flags @systemFlag`
+  let @timeout = @cfg.timeout ? @cfg.timeout : 3600
+  => @pollEventImpl(@prompt, @cmdLine, @cfg.poll, @cfg.event, @cfg.itemId, @timeout)
+]
+
+export { @claude, @haiku, @sonnet, @opus, @claudePoll, @claudePollJsonl, @claudePollEvent, @claudeStreamFormat }

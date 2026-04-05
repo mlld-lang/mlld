@@ -1,0 +1,12 @@
+[package]
+name = "mlld-cron-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cron"
+path = "src/cron.rs"
+
+[dependencies]
+mlld = "2.0"
+serde_json = "1"
