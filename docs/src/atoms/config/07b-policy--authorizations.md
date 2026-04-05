@@ -173,6 +173,59 @@ Tools declare which arguments are security-relevant (control args) via `controlA
 - Arguments not declared as control args are unconstrained data args — the worker fills them freely.
 - If the planner includes data args in the authorization (title, description, etc.), the runtime strips them at compilation time. Only declared control args are compiled into constraints. The planner doesn't need to know which args are control args vs data args.
 
+## Update and Payload Arg Enforcement
+
+Two additional exe metadata fields refine write tool contracts:
+
+### `updateArgs`
+
+Declares which args are mutable fields on the target:
+
+```mlld
+exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, recurring) = [...]
+  with {
+    controlArgs: ["id", "recipient"],
+    updateArgs: ["amount", "date", "subject", "recurring"]
+  }
+```
+
+`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: ["toolName"]` when `updateArgs` is declared (issue: `no_update_fields`).
+
+`updateArgs` must be disjoint from `controlArgs`.
+
+### `exactPayloadArgs`
+
+Declares which payload fields must be explicitly user-provided text:
+
+```mlld
+exe tool:w @sendDirectMessage(recipient, body) = [...]
+  with {
+    controlArgs: ["recipient"],
+    exactPayloadArgs: ["body"]
+  }
+```
+
+When `@policy.build(@intent, @tools, { task: @query })` is called, `exactPayloadArgs` values are checked against the task text (case-insensitive, trimmed). Values not in the task text are rejected (issue: `payload_not_in_task`). This applies to values in `resolved`, `known`, and flat intent.
+
+`exactPayloadArgs` must be a subset of non-control params. It may overlap with `updateArgs`.
+
+### Combined example
+
+```mlld
+exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, recurring) = [...]
+  with {
+    controlArgs: ["id", "recipient"],
+    updateArgs: ["amount", "date", "subject", "recurring"],
+    exactPayloadArgs: ["subject"]
+  }
+```
+
+- `id` and `recipient` need proof (handles)
+- At least one of `amount`, `date`, `subject`, `recurring` must have a value
+- `subject` must appear in the user's task text
+
+All three metadata fields use restrict-only override semantics on tool collections.
+
 **Example:** `send_email` declares `recipients`, `cc`, `bcc` as control args. `subject`, `body`, `attachments` are data args.
 
 ```json

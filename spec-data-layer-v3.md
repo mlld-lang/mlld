@@ -57,6 +57,9 @@ Sections marked **Future** preserve the broader direction from v2, but they are 
 | 36 | Trusted data fields (`data: { trusted, untrusted }` with conditional `when` promotion) | **Shipped** — see `spec-trusted-data-fields.md` |
 | 37 | Shelf slots (typed state accumulation, record-backed grounding, cross-slot `from` constraints, merge semantics) | **Shipped** — see `spec-shelf-slots.md` |
 | 38 | `resume` guard action for LLM exes (continue conversation without re-executing tools) | **Shipped** — see `spec-guard-resume.md` |
+| 39 | `updateArgs` on exe metadata (at least one changed field required for updates) | **Shipped** — see `spec-update-args-and-payload-validation.md` |
+| 40 | `exactPayloadArgs` on exe metadata (payload fields validated against task text) | **Shipped** |
+| 41 | Restrict-only override semantics for `controlArgs`, `updateArgs`, `exactPayloadArgs` on tool collections | **Shipped** |
 | 37 | Collection-key policy matching and arg-object spreading for dynamic tool dispatch | **Shipped** — see `req-runtime-tool-collection-policy-dispatch.md` |
 
 ### Phase 2 — Stronger Source And Namespace Semantics

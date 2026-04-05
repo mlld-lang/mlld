@@ -258,12 +258,27 @@ exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
 For multi-control-arg tools where the args must come from the same source record, add `correlateControlArgs`:
 
 ```mlld
-exe finance:w @updateTransaction(id, recipient, amount) = run cmd {
-  bank-cli update @id --recipient @recipient --amount @amount
-} with { controlArgs: ["id", "recipient"], correlateControlArgs: true }
+exe finance:w @updateTransaction(id, recipient, amount, date, subject) = run cmd {
+  bank-cli update @id --recipient @recipient --amount @amount --date @date --subject @subject
+} with {
+  controlArgs: ["id", "recipient"],
+  correlateControlArgs: true,
+  updateArgs: ["amount", "date", "subject"],
+  exactPayloadArgs: ["subject"]
+}
 ```
 
-The runtime's tool annotations will warn the LLM that `id` and `recipient` must come from the same source. Without this flag, multi-control-arg tools get no same-source guidance.
+Three kinds of args on write tools:
+
+| Metadata | Purpose | What the runtime checks |
+|---|---|---|
+| `controlArgs` | Target identification (who/what) | Proof required (handle/fact/known) |
+| `updateArgs` | Mutable fields (what to change) | At least one must have a non-null value |
+| `exactPayloadArgs` | User-provided literal text | Must appear in the user's task text |
+
+`controlArgs` says "which args identify the target." `updateArgs` says "which args are changes" — an update call with no changed fields is rejected as a no-op. `exactPayloadArgs` says "which payload fields must be exact user text, not LLM-composed."
+
+`correlateControlArgs: true` adds same-source guidance in tool annotations. All three metadata fields use restrict-only override semantics on tool collections (can tighten, never widen).
 
 ## Guards
 
