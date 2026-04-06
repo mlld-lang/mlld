@@ -6,7 +6,7 @@ category: cli
 tags: [cli, sdk, rpc, stdio, transport]
 related: [config-sdk-execute, config-sdk-execution-modes, config-sdk-dynamic-modules]
 related-code: [cli/commands/live.ts, cli/commands/live-stdio-server.ts, sdk/execute.ts, sdk/types.ts]
-updated: 2026-02-16
+updated: 2026-04-05
 qa_tier: 2
 ---
 
@@ -20,7 +20,7 @@ mlld live --stdio
 
 ```json
 >> Request
-{"method":"process","id":1,"params":{"script":"show 'hello'"}}
+{"method":"process","id":1,"params":{"script":"show 'hello'","eventMode":"all","recordEffects":true}}
 
 >> Event stream (during execution)
 {"event":{"id":1,"type":"stream:chunk","content":"hello"}}
@@ -38,6 +38,8 @@ mlld live --stdio
 - `state:update` — Update in-flight `@state` for `params.requestId` (path + value)
 - `cancel` — Abort active request by id
 
+By default, streamed requests only emit `state:write` and `guard_denial` events. Set `eventMode: "all"` to receive the full event stream, including command and streaming events like `stream:chunk`. Set `recordEffects: true` to include `effects` in the final structured result. Wrapper SDKs enable `recordEffects` automatically.
+
 **Process params:**
 
 ```json
@@ -49,7 +51,9 @@ mlld live --stdio
   "state": {"sessionId": "123"},
   "dynamicModules": {"@custom": {"data": [1,2,3]}},
   "mcpServers": {"tools": "uv run python3 server.py"},
-  "allowAbsolutePaths": true
+  "allowAbsolutePaths": true,
+  "eventMode": "all",
+  "recordEffects": true
 }
 ```
 
@@ -63,7 +67,9 @@ mlld live --stdio
   "dynamicModules": {"@tools": "export @search = ..."},
   "mcpServers": {"tools": "uv run python3 server.py --config abc"},
   "timeoutMs": 30000,
-  "mode": "markdown"
+  "mode": "markdown",
+  "eventMode": "all",
+  "recordEffects": true
 }
 ```
 

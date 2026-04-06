@@ -221,8 +221,10 @@ describe('VariableImporter characterization', () => {
     const restored = importer.createVariableFromValue('run', exportedExecutable, '/project/module.mld');
     expect(isExecutableVariable(restored)).toBe(true);
     expect((restored as any).internal?.capturedShadowEnvs?.js instanceof Map).toBe(true);
-    expect((restored as any).internal?.capturedModuleEnv instanceof Map).toBe(true);
-    expect((restored as any).internal?.capturedModuleEnv.get('dep')?.value).toBe('ok');
+    expect((restored as any).internal?.capturedModuleEnv instanceof Map).toBe(false);
+    const restoredCapturedEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv);
+    expect(restoredCapturedEnv instanceof Map).toBe(true);
+    expect(restoredCapturedEnv.get('dep')?.value).toBe('ok');
   });
 
   it('preserves executable security metadata for executables exported inside arrays', () => {

@@ -482,7 +482,7 @@ mlld live --stdio
 
 ```json
 >> Request
-{"method":"process","id":1,"params":{"script":"show 'hello'"}}
+{"method":"process","id":1,"params":{"script":"show 'hello'","eventMode":"all","recordEffects":true}}
 
 >> Event stream (during execution)
 {"event":{"id":1,"type":"stream:chunk","content":"hello"}}
@@ -498,6 +498,8 @@ mlld live --stdio
 - `fs:status` — Return filesystem signature status for an optional `glob` and `basePath`
 - `state:update` — Update in-flight `@state` for `params.requestId`
 - `cancel` — Abort active request by id
+
+By default, streamed requests only emit `state:write` and `guard_denial` events. Set `eventMode: "all"` to receive the full event stream, including command and streaming events like `stream:chunk`. Set `recordEffects: true` to include `effects` in the final structured result. Wrapper SDKs enable `recordEffects` automatically.
 
 **SDK integration:**
 

@@ -240,6 +240,37 @@ function appendDescriptor(
   }
 }
 
+async function applyCapturedModuleEnv(
+  targetEnv: Environment,
+  execVar: ExecutableVariable
+): Promise<Map<string, Variable> | undefined> {
+  const rawCaptured = execVar.internal?.capturedModuleEnv;
+  if (!rawCaptured) {
+    return undefined;
+  }
+
+  if (rawCaptured instanceof Map) {
+    targetEnv.setCapturedModuleEnv(rawCaptured);
+    return rawCaptured;
+  }
+
+  if (typeof rawCaptured !== 'object') {
+    return undefined;
+  }
+
+  const { VariableImporter } = await import('@interpreter/eval/import/VariableImporter');
+  const { ObjectReferenceResolver } = await import('@interpreter/eval/import/ObjectReferenceResolver');
+  const importer = new VariableImporter(new ObjectReferenceResolver());
+  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured, targetEnv);
+
+  execVar.internal = {
+    ...(execVar.internal ?? {}),
+    capturedModuleEnv: moduleEnvMap
+  };
+  targetEnv.setCapturedModuleEnv(moduleEnvMap);
+  return moduleEnvMap;
+}
+
 function bindRunParameterVariable(
   targetEnv: Environment,
   name: string,
@@ -328,9 +359,7 @@ async function handleCommandDefinition(
     sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
   );
   const tempEnv = env.createChild();
-  if (execVar.internal?.capturedModuleEnv instanceof Map) {
-    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-  }
+  await applyCapturedModuleEnv(tempEnv, execVar);
   bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
 
   const workingDirectory = await executeInWorkingDirectory(
@@ -522,9 +551,7 @@ async function handleCommandRefDefinition(
   if (refAst) {
     const { evaluateExecInvocation } = await import('@interpreter/eval/exec-invocation');
     const execEnv = env.createChild();
-    if (execVar.internal?.capturedModuleEnv instanceof Map) {
-      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-    }
+    await applyCapturedModuleEnv(execEnv, execVar);
     bindRunParameterVariables(
       execEnv,
       argValues,
@@ -683,9 +710,7 @@ async function handleCodeDefinition(
     sourceTaintLabel ? makeSecurityDescriptor({ taint: [sourceTaintLabel] }) : undefined
   );
   const tempEnv = env.createChild();
-  if (execVar.internal?.capturedModuleEnv instanceof Map) {
-    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-  }
+  await applyCapturedModuleEnv(tempEnv, execVar);
   bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
   const workingDirectory = await executeInWorkingDirectory(
     (definition as any)?.workingDir,
@@ -799,9 +824,7 @@ async function handleCodeDefinition(
     if (exeLabels.length > 0) {
       execEnv.setExeLabels(exeLabels);
     }
-    if (execVar.internal?.capturedModuleEnv instanceof Map) {
-      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-    }
+    await applyCapturedModuleEnv(execEnv, execVar);
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
         originalVariable: argOriginalVariables[key],
@@ -832,9 +855,7 @@ async function handleCodeDefinition(
     if (exeLabels.length > 0) {
       execEnv.setExeLabels(exeLabels);
     }
-    if (execVar.internal?.capturedModuleEnv instanceof Map) {
-      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-    }
+    await applyCapturedModuleEnv(execEnv, execVar);
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
         originalVariable: argOriginalVariables[key],
@@ -863,9 +884,7 @@ async function handleCodeDefinition(
     if (exeLabels.length > 0) {
       execEnv.setExeLabels(exeLabels);
     }
-    if (execVar.internal?.capturedModuleEnv instanceof Map) {
-      execEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-    }
+    await applyCapturedModuleEnv(execEnv, execVar);
     for (const [key, value] of Object.entries(codeParams)) {
       bindRunParameterVariable(execEnv, key, value, argValues[key] ?? '', {
         originalVariable: argOriginalVariables[key],
@@ -956,9 +975,7 @@ async function handleTemplateDefinition(
     execVar
   } = ctx;
   const tempEnv = createTemplateInterpolationEnv(env.createChild(), definition);
-  if (execVar.internal?.capturedModuleEnv instanceof Map) {
-    tempEnv.setCapturedModuleEnv(execVar.internal.capturedModuleEnv);
-  }
+  await applyCapturedModuleEnv(tempEnv, execVar);
   bindRunParameterVariables(tempEnv, argValues, argRuntimeValues, argOriginalVariables, argBindingDescriptors);
 
   const templateOutput = await services.interpolateWithPendingDescriptor(

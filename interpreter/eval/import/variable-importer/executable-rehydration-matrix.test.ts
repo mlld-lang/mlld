@@ -83,7 +83,7 @@ describe('Executable rehydration matrix', () => {
     };
 
     const restored = importer.createVariableFromValue('top', payload, '/project/module.mld', undefined, { env });
-    const outerEnv = (restored as any).internal?.capturedModuleEnv as Map<string, any>;
+    const outerEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv, env);
     const helper = outerEnv.get('helper');
     const nestedEnv = helper.internal?.capturedModuleEnv as Map<string, any>;
 
@@ -116,7 +116,7 @@ describe('Executable rehydration matrix', () => {
 
     const restored = importer.createVariableFromValue('top', payload, '/project/module.mld', undefined, { env });
     const shadow = (restored as any).internal?.capturedShadowEnvs;
-    const moduleEnv = (restored as any).internal?.capturedModuleEnv as Map<string, any>;
+    const moduleEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv, env);
     const helper = moduleEnv.get('helper');
 
     expect(shadow?.js instanceof Map).toBe(true);
@@ -126,7 +126,38 @@ describe('Executable rehydration matrix', () => {
     expect(helper.internal?.capturedModuleEnv).toBe(moduleEnv);
   });
 
-  it('keeps circular captured-env guardrail failure behavior stable', () => {
+  it('preserves nested helper captured envs when rehydrating an outer imported executable env', () => {
+    const importer = createImporter();
+    const env = createEnv();
+
+    const restoredOuterEnv = importer.deserializeModuleEnv(
+      {
+        agentflowLike: {
+          ...createExecutablePayload('outer'),
+          internal: {
+            capturedModuleEnv: {
+              normalizeLoopState: {
+                ...createExecutablePayload('inner')
+              }
+            }
+          }
+        },
+        workspaceState: 'outer-state'
+      },
+      env
+    );
+
+    const restoredAgentflowLike = restoredOuterEnv.get('agentflowLike') as any;
+    const restoredInnerEnv = restoredAgentflowLike.internal?.capturedModuleEnv as Map<string, any>;
+    const restoredNormalize = restoredInnerEnv.get('normalizeLoopState');
+
+    expect(restoredOuterEnv.get('workspaceState')?.value).toBe('outer-state');
+    expect(restoredInnerEnv instanceof Map).toBe(true);
+    expect(restoredInnerEnv).not.toBe(restoredOuterEnv);
+    expect(restoredNormalize?.type).toBe('executable');
+  });
+
+  it('rehydrates repeated circular captured-env payloads without flattening them', () => {
     const importer = createImporter();
     const env = createEnv();
     const circularEnv: Record<string, any> = {};
@@ -141,9 +172,13 @@ describe('Executable rehydration matrix', () => {
       capturedModuleEnv: circularEnv
     };
 
-    expect(() =>
-      importer.createVariableFromValue('top', payload, '/project/module.mld', undefined, { env })
-    ).toThrow(/Maximum call stack size exceeded|call stack|applySecurityMetadata/i);
+    const restored = importer.createVariableFromValue('top', payload, '/project/module.mld', undefined, { env });
+    const restoredCapturedEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv, env);
+    const restoredSelfExec = restoredCapturedEnv.get('selfExec') as any;
+    const restoredNestedEnv = restoredSelfExec.internal?.capturedModuleEnv as Map<string, any>;
+
+    expect(restoredNestedEnv instanceof Map).toBe(true);
+    expect(restoredNestedEnv.get('selfExec')).toBeDefined();
   });
 
   it('keeps executable import baseline behavior stable with and without captured env', () => {
@@ -175,13 +210,19 @@ describe('Executable rehydration matrix', () => {
     expect(restoredWithout.type).toBe('executable');
     expect(restoredWith.type).toBe('executable');
     expect((restoredWithout as any).internal?.capturedModuleEnv).toBeUndefined();
-    expect((restoredWith as any).internal?.capturedModuleEnv instanceof Map).toBe(true);
+    const restoredWithCapturedEnv = importer.deserializeModuleEnv(
+      (restoredWith as any).internal?.capturedModuleEnv,
+      env
+    );
+    expect(restoredWithCapturedEnv instanceof Map).toBe(true);
+    expect(restoredWithCapturedEnv.get('dep')?.value).toBe('value');
     expect((restoredWithout as any).internal?.executableDef).toEqual((restoredWith as any).internal?.executableDef);
     expect((restoredWithout as any).paramNames).toEqual((restoredWith as any).paramNames);
   });
 
   it('preserves recursive labels for captured module executables during import rehydration', () => {
     const importer = createImporter();
+    const env = createEnv();
     const childVars = new Map<string, any>();
     childVars.set(
       'fact',
@@ -198,7 +239,7 @@ describe('Executable rehydration matrix', () => {
 
     const { moduleObject } = importer.processModuleExports(childVars, {}, false, null);
     const restored = importer.createVariableFromValue('wrapper', moduleObject.wrapper, '/project/module.mld');
-    const capturedEnv = (restored as any).internal?.capturedModuleEnv as Map<string, any>;
+    const capturedEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv, env);
     const restoredFact = capturedEnv.get('fact');
 
     expect(capturedEnv instanceof Map).toBe(true);

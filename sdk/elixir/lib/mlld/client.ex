@@ -212,7 +212,7 @@ defmodule Mlld.Client do
       timeout_ms = requested_timeout(opts)
 
       params =
-        %{"script" => script}
+        %{"script" => script, "recordEffects" => true}
         |> put_if_present("filePath", Keyword.get(opts, :file_path))
         |> put_if_present("payload", payload)
         |> put_if_present("payloadLabels", payload_labels)
@@ -238,7 +238,7 @@ defmodule Mlld.Client do
       timeout_ms = requested_timeout(opts)
 
       params =
-        %{"filepath" => filepath}
+        %{"filepath" => filepath, "recordEffects" => true}
         |> put_if_present("payload", payload)
         |> put_if_present("payloadLabels", payload_labels)
         |> put_if_present("state", Keyword.get(opts, :state))

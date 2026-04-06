@@ -46,17 +46,12 @@ export class ExecutableImportRehydrator {
     }
 
     const capturedModuleEnv = getCapturedModuleEnv(originalInternal);
-    if (capturedModuleEnv) {
-      const deserializedEnv = this.capturedEnvRehydrator.deserializeModuleEnv(
+    if (capturedModuleEnv instanceof Map) {
+      this.capturedEnvRehydrator.rehydrateNestedCapturedModuleScope(
         capturedModuleEnv,
+        new WeakMap<object, Map<string, Variable>>(),
         request.createVariableFromValue
       );
-      this.capturedEnvRehydrator.rehydrateCapturedModuleScope(deserializedEnv);
-
-      originalInternal = {
-        ...originalInternal,
-        capturedModuleEnv: deserializedEnv
-      };
     }
 
     const enhancedMetadata = {

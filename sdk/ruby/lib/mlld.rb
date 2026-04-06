@@ -487,7 +487,7 @@ module Mlld
       normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
       normalized_mcp_servers = normalize_string_map(mcp_servers)
 
-      params = { 'script' => script }
+      params = { 'script' => script, 'recordEffects' => true }
       params['filePath'] = file_path if file_path
       params['payload'] = normalized_payload unless normalized_payload.nil?
       params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
@@ -514,7 +514,7 @@ module Mlld
       normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
       normalized_mcp_servers = normalize_string_map(mcp_servers)
 
-      params = { 'filepath' => filepath }
+      params = { 'filepath' => filepath, 'recordEffects' => true }
       params['payload'] = normalized_payload unless normalized_payload.nil?
       params['payloadLabels'] = normalized_payload_labels if normalized_payload_labels
       params['state'] = state if state

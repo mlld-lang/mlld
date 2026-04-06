@@ -545,7 +545,7 @@ class Client:
         """
 
         payload, payload_labels = _normalize_payload_and_labels(payload, payload_labels)
-        params: dict[str, Any] = {"script": script}
+        params: dict[str, Any] = {"script": script, "recordEffects": True}
         if file_path is not None:
             params["filePath"] = file_path
         if payload is not None:
@@ -642,7 +642,7 @@ class Client:
         """
 
         payload, payload_labels = _normalize_payload_and_labels(payload, payload_labels)
-        params: dict[str, Any] = {"filepath": filepath}
+        params: dict[str, Any] = {"filepath": filepath, "recordEffects": True}
         if payload is not None:
             params["payload"] = payload
         if payload_labels is not None:

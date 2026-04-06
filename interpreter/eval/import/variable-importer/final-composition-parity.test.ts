@@ -114,7 +114,10 @@ describe('VariableImporter final composition parity', () => {
     );
 
     const restored = targetEnv.getVariable('run') as any;
-    const restoredOuterEnv = restored.internal?.capturedModuleEnv as Map<string, any>;
+    const restoredOuterEnv = importer.deserializeModuleEnv(
+      restored.internal?.capturedModuleEnv,
+      targetEnv
+    );
     const restoredHelper = restoredOuterEnv.get('helper');
     const restoredNestedEnv = restoredHelper.internal?.capturedModuleEnv as Map<string, any>;
 

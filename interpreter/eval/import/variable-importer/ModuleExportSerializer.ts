@@ -300,13 +300,17 @@ export class ModuleExportSerializer {
     if (context.shouldSerializeModuleEnv) {
       const capturedEnv = !isImported
         ? context.getModuleEnvSnapshot()
-        : existingCapturedEnv instanceof Map
+        : existingCapturedEnv !== undefined
           ? existingCapturedEnv
           : context.getModuleEnvSnapshot();
-      sealCapturedModuleEnv(
-        serializedInternal,
-        context.serializeModuleEnv(capturedEnv, context.serializingEnvs)
-      );
+      if (capturedEnv instanceof Map) {
+        sealCapturedModuleEnv(
+          serializedInternal,
+          context.serializeModuleEnv(capturedEnv, context.serializingEnvs)
+        );
+      } else {
+        sealCapturedModuleEnv(serializedInternal, capturedEnv);
+      }
     } else {
       const existingCapture = existingCapturedEnv;
       if (!isImported) {

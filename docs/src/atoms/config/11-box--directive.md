@@ -7,7 +7,7 @@ parent: box
 tags: [box, isolation, credentials, tools, scoping, security]
 related: [box-overview, box-config, box-blocks, policy-auth, security-getting-started]
 related-code: [interpreter/eval/box.ts, interpreter/env/Environment.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-04
+updated: 2026-04-05
 qa_tier: 2
 ---
 
@@ -134,6 +134,8 @@ var @result = box @config [
   => @data
 ]
 ```
+
+`box` does not automatically return the last expression in the block. Without `=>`, a box with a workspace returns the workspace object instead. Use `=> @some_call(...)` when you want the call result, and omit `=>` only when you intentionally want the workspace back.
 
 **Scoped environment:**
 

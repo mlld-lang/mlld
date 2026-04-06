@@ -120,7 +120,8 @@ function createNonCommandHandlerMap(): Record<NonCommandHandlerKey, NonCommandHa
 }
 
 async function getCapturedModuleEnvMap(
-  variableLike: { internal?: Record<string, unknown> } | undefined
+  variableLike: { internal?: Record<string, unknown> } | undefined,
+  targetEnv?: Environment
 ): Promise<Map<string, Variable> | undefined> {
   const rawCaptured = variableLike?.internal?.capturedModuleEnv;
   if (!rawCaptured) {
@@ -136,16 +137,7 @@ async function getCapturedModuleEnvMap(
   const { VariableImporter } = await import('@interpreter/eval/import/VariableImporter');
   const { ObjectReferenceResolver } = await import('@interpreter/eval/import/ObjectReferenceResolver');
   const importer = new VariableImporter(new ObjectReferenceResolver());
-  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured);
-
-  for (const [, capturedVar] of moduleEnvMap) {
-    if (capturedVar.type === 'executable') {
-      capturedVar.internal = {
-        ...(capturedVar.internal ?? {}),
-        capturedModuleEnv: moduleEnvMap
-      };
-    }
-  }
+  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured, targetEnv);
 
   if (variableLike?.internal) {
     variableLike.internal.capturedModuleEnv = moduleEnvMap;
@@ -338,7 +330,10 @@ async function handleCommandRefExecutable(
   options: NonCommandExecutableHandlerOptions
 ): Promise<unknown> {
   const { definition, commandName, node, env, execEnv, variable, params, evaluatedArgs, services } = options;
-  const capturedModuleEnv = await getCapturedModuleEnvMap(variable as { internal?: Record<string, unknown> } | undefined);
+  const capturedModuleEnv = await getCapturedModuleEnvMap(
+    variable as { internal?: Record<string, unknown> } | undefined,
+    execEnv
+  );
   const refAst = (definition as any).commandRefAst;
   if (refAst) {
     const refWithClause = mergeAuthUsingIntoWithClause((definition as any).withClause, node.withClause);

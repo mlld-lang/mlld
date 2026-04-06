@@ -108,19 +108,20 @@ export async function runWithGuardRetry<T>(options: GuardRetryOptions<T>): Promi
 
   // Re-evaluate until success or a non-retry error
   for (;;) {
+    const nextActionSnapshot = state.nextAction
+      ? {
+          decision: state.nextAction.decision,
+          hint: state.nextAction.hint ?? null,
+          ...(state.nextAction.details ? { details: { ...state.nextAction.details } } : {})
+        }
+      : null;
     const guardRetryContext = {
       attempt: state.attempt,
       try: state.attempt,
       tries: state.history.map(entry => ({ ...entry })),
       max: state.max,
       hintHistory: state.hintHistory.slice(),
-      nextAction: state.nextAction
-        ? {
-            decision: state.nextAction.decision,
-            hint: state.nextAction.hint ?? null,
-            ...(state.nextAction.details ? { details: { ...state.nextAction.details } } : {})
-          }
-        : undefined
+      nextAction: nextActionSnapshot ?? undefined
     };
 
     const bufferEffects = shouldBufferEffects(options.env, options.operationContext);

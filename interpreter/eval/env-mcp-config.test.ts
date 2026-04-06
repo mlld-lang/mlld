@@ -392,9 +392,13 @@ describe('box MCP config integration', () => {
     const counterKey = '__mlldGuardResumeToolCount';
     const promptKey = '__mlldGuardResumePrompt';
     const agentCallKey = '__mlldGuardResumeAgentCalls';
+    const initialSessionKey = '__mlldGuardResumeToolInitialSession';
+    const resumedSessionKey = '__mlldGuardResumeToolResumedSession';
     (globalThis as Record<string, unknown>)[counterKey] = 0;
     (globalThis as Record<string, unknown>)[promptKey] = null;
     (globalThis as Record<string, unknown>)[agentCallKey] = 0;
+    (globalThis as Record<string, unknown>)[initialSessionKey] = null;
+    (globalThis as Record<string, unknown>)[resumedSessionKey] = null;
 
     const source = [
       '/record @agent_result = {',
@@ -406,20 +410,24 @@ describe('box MCP config integration', () => {
       `/exe @read_calls() = js { return globalThis.${counterKey} || 0; }`,
       `/exe @read_prompt() = js { return globalThis.${promptKey} ?? null; }`,
       `/exe @read_agent_calls() = js { return globalThis.${agentCallKey} || 0; }`,
+      `/exe @read_initial_session() = js { return globalThis.${initialSessionKey} ?? null; }`,
+      `/exe @read_resumed_session() = js { return globalThis.${resumedSessionKey} ?? null; }`,
       `/exe llm @agent(prompt, config) = js {
   globalThis.${agentCallKey} = (globalThis.${agentCallKey} || 0) + 1;
   const resume = config?._mlld?.resume;
   if (resume?.continue) {
     globalThis.${promptKey} = prompt;
+    globalThis.${resumedSessionKey} = resume.sessionId ?? null;
     return {
       value: { ok: true },
       _mlld: { sessionId: resume.sessionId, provider: 'fake' }
     };
   }
   globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  globalThis.${initialSessionKey} = resume?.sessionId ?? null;
   return {
     value: { ok: 'bad' },
-    _mlld: { sessionId: resume?.sessionId, provider: 'fake' }
+    _mlld: { sessionId: 'tool-bridge-session', provider: 'fake' }
   };
 }`,
       '/guard after for op:named:agent = when [',
@@ -429,7 +437,7 @@ describe('box MCP config integration', () => {
       ']',
       '/var @result = @agent("start", { tools: [@write_once] })',
       '/var @checked = @check_result(@result)',
-      '/var @summary = { ok: @checked.ok, schemaValid: @checked.mx.schema.valid, calls: @read_calls(), prompt: @read_prompt(), agentCalls: @read_agent_calls() }',
+      '/var @summary = { ok: @checked.ok, schemaValid: @checked.mx.schema.valid, calls: @read_calls(), prompt: @read_prompt(), agentCalls: @read_agent_calls(), initialSession: @read_initial_session(), resumedSession: @read_resumed_session() }',
       '/show @summary'
     ].join('\n');
 
@@ -450,12 +458,16 @@ describe('box MCP config integration', () => {
         schemaValid: true,
         calls: 1,
         prompt: 'Return valid JSON only',
-        agentCalls: 2
+        agentCalls: 2,
+        initialSession: '',
+        resumedSession: 'tool-bridge-session'
       });
     } finally {
       delete (globalThis as Record<string, unknown>)[counterKey];
       delete (globalThis as Record<string, unknown>)[promptKey];
       delete (globalThis as Record<string, unknown>)[agentCallKey];
+      delete (globalThis as Record<string, unknown>)[initialSessionKey];
+      delete (globalThis as Record<string, unknown>)[resumedSessionKey];
       environment?.cleanup();
     }
   });

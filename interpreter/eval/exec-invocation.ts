@@ -477,7 +477,8 @@ async function normalizeExecutableDispatchArguments(
 async function ensureCapturedModuleEnvMap(
   variableLike:
     | ({ internal?: Record<string, unknown> } & Record<string, unknown>)
-    | undefined
+    | undefined,
+  targetEnv?: Environment
 ): Promise<Map<string, Variable> | undefined> {
   const rawCaptured =
     getCapturedModuleEnv(variableLike?.internal)
@@ -495,16 +496,7 @@ async function ensureCapturedModuleEnvMap(
   const { VariableImporter } = await import('./import/VariableImporter');
   const { ObjectReferenceResolver } = await import('./import/ObjectReferenceResolver');
   const importer = new VariableImporter(new ObjectReferenceResolver());
-  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured);
-
-  for (const [, capturedVar] of moduleEnvMap) {
-    if (capturedVar.type === 'executable') {
-      capturedVar.internal = {
-        ...(capturedVar.internal ?? {}),
-        capturedModuleEnv: moduleEnvMap
-      };
-    }
-  }
+  const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured, targetEnv);
 
   if (variableLike?.internal) {
     sealCapturedModuleEnv(variableLike.internal, moduleEnvMap);
@@ -1998,16 +1990,6 @@ async function evaluateExecInvocationInternal(
         const importer = new VariableImporter(null); // ObjectResolver not needed for this
         const moduleEnvMap = importer.deserializeModuleEnv(capturedModuleEnv);
 
-        // Each executable in the module env needs access to the full env
-        for (const [_, variable] of moduleEnvMap) {
-          if (variable.type === 'executable') {
-            variable.internal = {
-              ...(variable.internal ?? {}),
-              capturedModuleEnv: moduleEnvMap
-            };
-          }
-        }
-
         capturedModuleEnv = moduleEnvMap;
         serializedInternal.capturedModuleEnv = moduleEnvMap;
       }
@@ -2122,15 +2104,6 @@ async function evaluateExecInvocationInternal(
       const { VariableImporter } = await import('./import/VariableImporter');
       const importer = new VariableImporter(null);
       const moduleEnvMap = importer.deserializeModuleEnv(capturedModuleEnv);
-
-      for (const [_, envVariable] of moduleEnvMap) {
-        if (envVariable.type === 'executable') {
-          envVariable.internal = {
-            ...(envVariable.internal ?? {}),
-            capturedModuleEnv: moduleEnvMap
-          };
-        }
-      }
 
       capturedModuleEnv = moduleEnvMap;
       serializedInternal.capturedModuleEnv = moduleEnvMap;
@@ -2824,7 +2797,8 @@ async function evaluateExecInvocationInternal(
 
   // Set captured module environment for variable lookup fallback
   const capturedModuleEnv = await ensureCapturedModuleEnvMap(
-    variable as { internal?: Record<string, unknown> } | undefined
+    variable as { internal?: Record<string, unknown> } | undefined,
+    execEnv
   );
   if (capturedModuleEnv instanceof Map) {
     execEnv.setCapturedModuleEnv(capturedModuleEnv);
@@ -3095,6 +3069,7 @@ async function evaluateExecInvocationInternal(
       let nextConfig = { ...(rawConfig as Record<string, unknown>) };
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
+      const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
 
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
@@ -3103,7 +3078,7 @@ async function evaluateExecInvocationInternal(
           nextConfig.tools = [];
           didUpdateConfigArg = true;
         }
-      } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation) {
+      } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation && !hasToolSelection) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
           sessionId: randomUUID(),
           provider: 'unknown',
@@ -3152,19 +3127,6 @@ async function evaluateExecInvocationInternal(
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
 
-        if (!isLlmResumeContinuation) {
-          const nextResumeConfig: LlmRuntimeResumeConfig = {
-            sessionId: existingRuntimeResumeConfig?.sessionId ?? callConfig.sessionId,
-            provider: existingRuntimeResumeConfig?.provider ?? 'unknown',
-            continue: false
-          };
-          const previousResumeConfig = readLlmRuntimeResumeConfig(nextConfig);
-          nextConfig = injectLlmRuntimeResumeConfig(nextConfig, nextResumeConfig);
-          didUpdateConfigArg ||=
-            previousResumeConfig?.sessionId !== nextResumeConfig.sessionId ||
-            previousResumeConfig?.provider !== nextResumeConfig.provider ||
-            previousResumeConfig?.continue !== nextResumeConfig.continue;
-        }
       }
 
       const previousSystem = nextConfig.system;

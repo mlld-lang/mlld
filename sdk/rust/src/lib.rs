@@ -1615,6 +1615,7 @@ fn build_process_request(
         normalize_payload_and_labels(opts.payload, opts.payload_labels)?;
     let mut params = serde_json::Map::new();
     params.insert("script".to_string(), Value::String(script.to_string()));
+    params.insert("recordEffects".to_string(), Value::Bool(true));
 
     if let Some(file_path) = opts.file_path {
         params.insert("filePath".to_string(), Value::String(file_path));
@@ -1670,6 +1671,7 @@ fn build_execute_request(
     let (payload, payload_labels) = normalize_payload_and_labels(payload, opts.payload_labels)?;
     let mut params = serde_json::Map::new();
     params.insert("filepath".to_string(), Value::String(filepath.to_string()));
+    params.insert("recordEffects".to_string(), Value::Bool(true));
 
     if let Some(payload) = payload {
         params.insert("payload".to_string(), payload);
@@ -2795,6 +2797,7 @@ mod tests {
             params,
             json!({
                 "script": "show @payload.history",
+                "recordEffects": true,
                 "filePath": "/repo/agent.mld",
                 "payload": {
                     "history": "tool transcript",
@@ -2834,6 +2837,7 @@ mod tests {
             params,
             json!({
                 "filepath": "/repo/agent.mld",
+                "recordEffects": true,
                 "payload": { "history": "tool transcript" },
                 "payloadLabels": { "history": ["untrusted", "trusted"] },
                 "mcpServers": { "tools": "uv run python3 mcp_server.py" }

@@ -1,5 +1,10 @@
 import { VariableMetadataUtils, type Variable } from '@core/types/variable';
+import type { Environment } from '@interpreter/env/Environment';
 import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvironmentCapture';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from './CapturedModuleEnvKeychain';
 
 export type CapturedEnvVariableFactory = (
   name: string,
@@ -8,6 +13,7 @@ export type CapturedEnvVariableFactory = (
   originalName?: string,
   options?: {
     serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
+    env?: Environment;
   }
 ) => Variable;
 
@@ -31,7 +37,8 @@ export class CapturedEnvRehydrator {
 
   deserializeModuleEnv(
     moduleEnv: any,
-    createVariableFromValue: CapturedEnvVariableFactory
+    createVariableFromValue: CapturedEnvVariableFactory,
+    env?: Environment
   ): Map<string, Variable> {
     const result = new Map<string, Variable>();
     if (!moduleEnv || typeof moduleEnv !== 'object') {
@@ -43,7 +50,8 @@ export class CapturedEnvRehydrator {
 
     for (const [name, varData] of moduleEnvEntries) {
       const variable = createVariableFromValue(name, varData, 'module-env', name, {
-        serializedMetadata: metadataMap?.[name]
+        serializedMetadata: metadataMap?.[name],
+        ...(env ? { env } : {})
       });
       result.set(name, variable);
     }
@@ -52,17 +60,58 @@ export class CapturedEnvRehydrator {
   }
 
   rehydrateCapturedModuleScope(moduleEnv: Map<string, Variable>): void {
+    this.rehydrateNestedCapturedModuleScope(moduleEnv, new WeakMap<object, Map<string, Variable>>());
+  }
+
+  rehydrateNestedCapturedModuleScope(
+    moduleEnv: Map<string, Variable>,
+    cache: WeakMap<object, Map<string, Variable>>,
+    createVariableFromValue?: CapturedEnvVariableFactory,
+    env?: Environment
+  ): void {
+    cache.set(moduleEnv, moduleEnv);
+
     for (const [, variable] of moduleEnv) {
       if (variable.type !== 'executable') {
         continue;
       }
-      const existingEnv = variable.internal?.capturedModuleEnv;
-      if (!existingEnv || !(existingEnv instanceof Map)) {
-        variable.internal = {
-          ...(variable.internal ?? {}),
-          capturedModuleEnv: moduleEnv
-        };
+
+      const internal = { ...(variable.internal ?? {}) };
+      let existingEnv =
+        getCapturedModuleEnv(internal)
+        ?? getCapturedModuleEnv(variable.internal)
+        ?? getCapturedModuleEnv(variable);
+
+      if (existingEnv instanceof Map) {
+        sealCapturedModuleEnv(internal, existingEnv);
+        variable.internal = internal;
+
+        if (existingEnv !== moduleEnv && !cache.has(existingEnv)) {
+          this.rehydrateNestedCapturedModuleScope(existingEnv, cache, createVariableFromValue, env);
+        }
+        continue;
       }
+
+      if (existingEnv && typeof existingEnv === 'object') {
+        const cachedExistingEnv = cache.get(existingEnv);
+        if (cachedExistingEnv) {
+          sealCapturedModuleEnv(internal, cachedExistingEnv);
+          variable.internal = internal;
+          continue;
+        }
+
+        if (createVariableFromValue) {
+          const nestedEnv = this.deserializeModuleEnv(existingEnv, createVariableFromValue, env);
+          cache.set(existingEnv, nestedEnv);
+          this.rehydrateNestedCapturedModuleScope(nestedEnv, cache, createVariableFromValue, env);
+          sealCapturedModuleEnv(internal, nestedEnv);
+          variable.internal = internal;
+          continue;
+        }
+      }
+
+      sealCapturedModuleEnv(internal, moduleEnv);
+      variable.internal = internal;
     }
   }
 

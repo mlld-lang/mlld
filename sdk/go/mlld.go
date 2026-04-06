@@ -755,7 +755,8 @@ func (c *Client) buildProcessRequest(script string, opts *ProcessOptions) (map[s
 	}
 
 	params := map[string]any{
-		"script": script,
+		"script":        script,
+		"recordEffects": true,
 	}
 	if opts.FilePath != "" {
 		params["filePath"] = opts.FilePath
@@ -799,7 +800,8 @@ func (c *Client) buildExecuteRequest(filepath string, payload any, opts *Execute
 	}
 
 	params := map[string]any{
-		"filepath": filepath,
+		"filepath":      filepath,
+		"recordEffects": true,
 	}
 	if normalizedPayload != nil {
 		params["payload"] = normalizedPayload

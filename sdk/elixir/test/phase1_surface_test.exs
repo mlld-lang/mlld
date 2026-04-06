@@ -27,7 +27,8 @@ defmodule Mlld.Phase1SurfaceTest do
               },
               "dynamicModuleSource" => "sdk",
               "mcpServers" => %{"tools" => "uv run python3 mcp_server.py"},
-              "allowAbsolutePaths" => true
+              "allowAbsolutePaths" => true,
+              "recordEffects" => true
             }, 5_000} =
              Client.build_process_request("show @payload.history",
                file_path: "/repo/agent.mld",
@@ -46,6 +47,7 @@ defmodule Mlld.Phase1SurfaceTest do
     assert {"execute",
             %{
               "filepath" => "/repo/agent.mld",
+              "recordEffects" => true,
               "payload" => %{"history" => "tool transcript"},
               "payloadLabels" => %{"history" => ["untrusted", "trusted"]},
               "mcpServers" => %{"tools" => "uv run python3 mcp_server.py"}

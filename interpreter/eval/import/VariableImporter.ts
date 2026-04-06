@@ -99,7 +99,11 @@ export class VariableImporter {
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
    * IMPORTANT: Use the exact same serialization as processModuleExports to ensure compatibility
    */
-  private serializeModuleEnv(moduleEnv: Map<string, Variable>, seen?: WeakSet<object>): any {
+  private serializeModuleEnv(
+    moduleEnv: Map<string, Variable>,
+    seen?: WeakSet<object>,
+    childEnv?: Environment
+  ): any {
     // Track Maps currently being serialized to detect circular references.
     // captureModuleEnvironment() creates new Map instances each time, so identity
     // checks (===) miss circularity between Maps holding the same module's variables.
@@ -112,7 +116,16 @@ export class VariableImporter {
     // Create a temporary childVars map and reuse processModuleExports logic
     // Skip module env serialization to prevent infinite recursion, but pass the
     // current target so we can detect circular references within the env.
-    const tempResult = this.processModuleExports(moduleEnv, {}, true, null, undefined, undefined, moduleEnv, seenSet);
+    const tempResult = this.processModuleExports(
+      moduleEnv,
+      {},
+      true,
+      null,
+      childEnv,
+      undefined,
+      moduleEnv,
+      seenSet
+    );
     return tempResult.moduleObject;
   }
 
@@ -120,11 +133,29 @@ export class VariableImporter {
    * Deserialize module environment after import (object to Map)
    * IMPORTANT: Reuse createVariableFromValue to ensure proper Variable reconstruction
    */
-  deserializeModuleEnv(moduleEnv: any): Map<string, Variable> {
-    return this.capturedEnvRehydrator.deserializeModuleEnv(
+  deserializeModuleEnv(moduleEnv: any, env?: Environment): Map<string, Variable> {
+    const deserialized = this.capturedEnvRehydrator.deserializeModuleEnv(
       moduleEnv,
       (name, varData, importPath, originalName, options) =>
-        this.createVariableFromValue(name, varData, importPath, originalName, options)
+        this.createVariableFromValue(name, varData, importPath, originalName, {
+          ...options,
+          ...(env ? { env } : {})
+        })
+    );
+    this.rehydrateCapturedModuleScope(deserialized, env);
+    return deserialized;
+  }
+
+  rehydrateCapturedModuleScope(moduleEnv: Map<string, Variable>, env?: Environment): void {
+    this.capturedEnvRehydrator.rehydrateNestedCapturedModuleScope(
+      moduleEnv,
+      new WeakMap<object, Map<string, Variable>>(),
+      (name, varData, importPath, originalName, options) =>
+        this.createVariableFromValue(name, varData, importPath, originalName, {
+          ...options,
+          ...(env ? { env } : {})
+        }),
+      env
     );
   }
 
@@ -185,7 +216,7 @@ export class VariableImporter {
       serializingEnvs: _serializingEnvs,
       isLegitimateVariableForExport: variable => this.importUtilities.isLegitimateVariableForExport(variable),
       serializeShadowEnvs: envs => serializeShadowEnvironmentMaps(envs),
-      serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen)
+      serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen, childEnv)
     });
 
     const guards = this.guardExportChecker.serializeGuardsByName(guardNames, childEnv);

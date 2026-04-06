@@ -295,6 +295,13 @@ function coerceFieldValue(
     return { ok: false, actual: describeRecordValueType(value) };
   }
 
+  if (field.valueType === 'object') {
+    if (isPlainObject(extracted)) {
+      return { ok: true, value };
+    }
+    return { ok: false, actual: describeRecordValueType(value) };
+  }
+
   if (field.valueType === 'handle') {
     return resolveHandleTypedFieldValue(value, env);
   }
@@ -647,6 +654,47 @@ function mergeCollectionItems(
   return next;
 }
 
+function collectShelfRecordDefinitions(
+  env: Environment,
+  definition: ShelfDefinition
+): Record<string, RecordDefinition> {
+  const records: Record<string, RecordDefinition> = {};
+  for (const slot of Object.values(definition.slots)) {
+    const record = env.getRecordDefinition(slot.record);
+    if (record && !records[slot.record]) {
+      records[slot.record] = record;
+    }
+  }
+  return records;
+}
+
+function ensureShelfSlotAvailable(env: Environment, ref: ShelfScopeSlotRef): void {
+  if (env.getShelfDefinition(ref.shelfName)?.slots[ref.slotName]) {
+    return;
+  }
+
+  const shelfVar = env.getVariable(ref.shelfName);
+  if (!shelfVar?.internal?.isShelf) {
+    return;
+  }
+
+  const shelfDefinition = (shelfVar.internal as Record<string, unknown>).shelfDefinition as ShelfDefinition | undefined;
+  const recordDefinitions =
+    (shelfVar.internal as Record<string, unknown>).shelfRecordDefinitions as Record<string, RecordDefinition> | undefined;
+
+  if (recordDefinitions) {
+    for (const [recordName, definition] of Object.entries(recordDefinitions)) {
+      if (!env.getRecordDefinition(recordName)) {
+        env.registerRecordDefinition(recordName, definition);
+      }
+    }
+  }
+
+  if (shelfDefinition && !env.getShelfDefinition(shelfDefinition.name)) {
+    env.registerShelfDefinition(shelfDefinition.name, shelfDefinition);
+  }
+}
+
 export function extractShelfSlotRef(value: unknown): ShelfScopeSlotRef | undefined {
   if (isVariable(value)) {
     return extractShelfSlotRef(value.value);
@@ -811,6 +859,7 @@ async function writeToShelfSlot(
   }
 
   assertShelfWriteAllowed(env, ref);
+  ensureShelfSlotAvailable(env, ref);
 
   const shelf = env.getShelfDefinition(ref.shelfName);
   const slot = shelf?.slots[ref.slotName];
@@ -882,6 +931,8 @@ async function readShelfSlot(
     });
   }
 
+  ensureShelfSlotAvailable(env, ref);
+
   return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName).current;
 }
 
@@ -896,6 +947,7 @@ async function clearShelfSlot(
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
+  ensureShelfSlotAvailable(env, ref);
   assertShelfWriteAllowed(env, ref);
   env.clearShelfSlot(ref.shelfName, ref.slotName);
   return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
@@ -913,6 +965,7 @@ async function removeFromShelfSlot(
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
+  ensureShelfSlotAvailable(env, slotRef);
   assertShelfWriteAllowed(env, slotRef);
 
   const shelf = env.getShelfDefinition(slotRef.shelfName);
@@ -988,7 +1041,9 @@ export function createShelfVariable(env: Environment, definition: ShelfDefinitio
   return createObjectVariable(definition.name, value, false, SHELF_VARIABLE_SOURCE, {
     internal: {
       isShelf: true,
-      shelfName: definition.name
+      shelfName: definition.name,
+      shelfDefinition: definition,
+      shelfRecordDefinitions: collectShelfRecordDefinitions(env, definition)
     }
   });
 }

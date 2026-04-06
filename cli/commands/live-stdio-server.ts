@@ -71,6 +71,8 @@ interface ProcessRequestParams {
   dynamicModuleMode?: MlldMode;
   allowAbsolutePaths?: boolean;
   mcpServers?: Record<string, string>;
+  eventMode?: LiveEventMode;
+  recordEffects?: boolean;
 }
 
 interface ExecuteRequestParams {
@@ -84,7 +86,11 @@ interface ExecuteRequestParams {
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
   mcpServers?: Record<string, string>;
+  eventMode?: LiveEventMode;
+  recordEffects?: boolean;
 }
+
+type LiveEventMode = 'minimal' | 'all';
 
 interface AnalyzeRequestParams {
   filepath: string;
@@ -153,6 +159,11 @@ const SDK_EVENT_TYPES: SDKEvent['type'][] = [
   'streaming:metadata'
 ];
 
+const MINIMAL_LIVE_EVENT_TYPES: SDKEvent['type'][] = [
+  'state:write',
+  'guard_denial'
+];
+
 const defaultDependencies: LiveStdioServerDependencies = {
   interpret,
   executeFile: execute,
@@ -204,7 +215,9 @@ export class LiveStdioServer {
   private stopping = false;
   private writeChain: Promise<void> = Promise.resolve();
   private signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
+  private previousNoStream: string | undefined;
   private previousNoStreaming: string | undefined;
+  private appliedNoStream = false;
   private appliedNoStreaming = false;
 
   constructor(io: LiveStdioServerIO = defaultIO, deps: LiveStdioServerDependencies = defaultDependencies) {
@@ -276,7 +289,12 @@ export class LiveStdioServer {
   }
 
   private enableProtocolSafeOutputMode(): void {
+    this.previousNoStream = process.env.MLLD_NO_STREAM;
     this.previousNoStreaming = process.env.MLLD_NO_STREAMING;
+    if (process.env.MLLD_NO_STREAM !== 'true') {
+      process.env.MLLD_NO_STREAM = 'true';
+      this.appliedNoStream = true;
+    }
     if (process.env.MLLD_NO_STREAMING !== 'true') {
       process.env.MLLD_NO_STREAMING = 'true';
       this.appliedNoStreaming = true;
@@ -284,6 +302,15 @@ export class LiveStdioServer {
   }
 
   private restoreProtocolSafeOutputMode(): void {
+    if (this.appliedNoStream) {
+      if (this.previousNoStream === undefined) {
+        delete process.env.MLLD_NO_STREAM;
+      } else {
+        process.env.MLLD_NO_STREAM = this.previousNoStream;
+      }
+      this.appliedNoStream = false;
+    }
+
     if (!this.appliedNoStreaming) {
       return;
     }
@@ -556,10 +583,11 @@ export class LiveStdioServer {
       payloadLabels: parsed.payloadLabels,
       dynamicModuleMode: parsed.dynamicModuleMode,
       allowAbsolutePaths: parsed.allowAbsolutePaths,
-      mcpServers: parsed.mcpServers
+      mcpServers: parsed.mcpServers,
+      recordEffects: parsed.recordEffects
     } as any)) as StreamExecution;
 
-    await this.streamExecution(requestId, streamHandle);
+    await this.streamExecution(requestId, streamHandle, { eventMode: parsed.eventMode });
   }
 
   private async runExecute(requestId: RequestId, params: unknown): Promise<void> {
@@ -581,13 +609,17 @@ export class LiveStdioServer {
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mode: parsed.mode,
       mcpServers: parsed.mcpServers,
+      recordEffects: parsed.recordEffects,
       fileSystem,
       pathService,
       stream: true
     };
 
     const streamHandle = (await this.deps.executeFile(parsed.filepath, parsed.payload, options)) as StreamExecution;
-    await this.streamExecution(requestId, streamHandle, { writeFile });
+    await this.streamExecution(requestId, streamHandle, {
+      writeFile,
+      eventMode: parsed.eventMode
+    });
   }
 
   private async runAnalyze(requestId: RequestId, params: unknown): Promise<void> {
@@ -643,9 +675,11 @@ export class LiveStdioServer {
   private async streamExecution(
     requestId: RequestId,
     execution: StreamExecution,
-    activeExtensions: Partial<ActiveExecution> = {}
+    activeExtensions: Partial<ActiveExecution> & { eventMode?: LiveEventMode } = {}
   ): Promise<void> {
     const listeners: Array<[SDKEvent['type'], (event: SDKEvent) => void]> = [];
+    const { eventMode = 'minimal', ...activeExecution } = activeExtensions;
+    const eventTypes = eventMode === 'all' ? SDK_EVENT_TYPES : MINIMAL_LIVE_EVENT_TYPES;
 
     const attach = (type: SDKEvent['type']) => {
       const handler = (event: SDKEvent) => {
@@ -655,7 +689,7 @@ export class LiveStdioServer {
       execution.on(type, handler);
     };
 
-    for (const type of SDK_EVENT_TYPES) {
+    for (const type of eventTypes) {
       attach(type);
     }
 
@@ -666,7 +700,7 @@ export class LiveStdioServer {
             await execution.updateState?.(path, value, labels);
           }
         : undefined,
-      ...activeExtensions
+      ...activeExecution
     });
 
     try {
@@ -715,7 +749,9 @@ export class LiveStdioServer {
       dynamicModuleMode: this.parseMode(params.dynamicModuleMode),
       allowAbsolutePaths:
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
-      mcpServers: this.parseMcpServers(params.mcpServers)
+      mcpServers: this.parseMcpServers(params.mcpServers),
+      eventMode: this.parseEventMode(params.eventMode),
+      recordEffects: this.parseRecordEffects(params.recordEffects)
     };
   }
 
@@ -740,8 +776,18 @@ export class LiveStdioServer {
       allowAbsolutePaths:
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
       mode: this.parseMode(params.mode),
-      mcpServers: this.parseMcpServers(params.mcpServers)
+      mcpServers: this.parseMcpServers(params.mcpServers),
+      eventMode: this.parseEventMode(params.eventMode),
+      recordEffects: this.parseRecordEffects(params.recordEffects)
     };
+  }
+
+  private parseEventMode(value: unknown): LiveEventMode {
+    return value === 'all' ? 'all' : 'minimal';
+  }
+
+  private parseRecordEffects(value: unknown): boolean {
+    return value === true;
   }
 
   private parseMcpServers(value: unknown): Record<string, string> | undefined {
@@ -978,6 +1024,17 @@ export class LiveStdioServer {
     return this.toSerializable(rest);
   }
 
+  private addLegacyRequestId(requestId: RequestId | null, payload: unknown): unknown {
+    if (requestId === null || !isRecord(payload) || 'id' in payload) {
+      return payload;
+    }
+
+    return {
+      id: requestId,
+      ...payload
+    };
+  }
+
   private normalizeEvent(event: SDKEvent): unknown {
     if (event.type === 'execution:complete' && event.result) {
       const completeEvent = event as SDKEvent & { result?: StructuredResult };
@@ -1047,25 +1104,37 @@ export class LiveStdioServer {
   }
 
   private async writeEvent(requestId: RequestId, event: unknown): Promise<void> {
+    const normalizedEvent = isRecord(event) ? { ...event } : { payload: event };
     await this.writeLine({
       event: {
+        id: requestId,
         requestId,
-        ...(isRecord(event) ? event : { payload: event })
+        ...normalizedEvent
       }
     });
   }
 
   private async writeResult(requestId: RequestId | null, payload: unknown): Promise<void> {
+    const serializable = this.toSerializable(payload);
     await this.writeLine({
       id: requestId,
-      result: this.toSerializable(payload)
+      result: this.addLegacyRequestId(requestId, serializable)
     });
   }
 
   private async writeError(requestId: RequestId | null, error: LiveErrorPayload): Promise<void> {
+    const serializable = this.toSerializable(error);
     await this.writeLine({
       id: requestId,
-      error: this.toSerializable(error)
+      error: serializable,
+      ...(requestId !== null
+        ? {
+            result: {
+              id: requestId,
+              error: this.toSerializable(error)
+            }
+          }
+        : {})
     });
   }
 
