@@ -12,7 +12,22 @@ import { wrapStructured } from '../utils/structured-value';
 
 // Mock the module imports
 vi.mock('@interpreter/eval/data-value-evaluator', () => ({
-  evaluateDataValue: vi.fn(async (value) => value)
+  evaluateDataValue: vi.fn(async (value) => value),
+  hasUnevaluatedDirectives: vi.fn((value) => {
+    return Boolean(
+      value &&
+      typeof value === 'object' &&
+      (
+        ('wrapperType' in value && Array.isArray((value as any).content)) ||
+        (
+          ((value as any).type === 'object' || (value as any).type === 'array') &&
+          (Array.isArray((value as any).entries)
+            || Array.isArray((value as any).items)
+            || (value as any).properties)
+        )
+      )
+    );
+  })
 }));
 
 describe('Variable Resolution Strategy', () => {
@@ -75,7 +90,15 @@ describe('Variable Resolution Strategy', () => {
     });
     
     it('should handle complex Variables by evaluating but preserving wrapper', async () => {
-      const complexVar = createObjectVariable('complex', { nested: 'value' }, true, mockSource);
+      const complexVar = createObjectVariable('complex', {
+        type: 'object',
+        properties: {
+          nested: {
+            type: 'Text',
+            content: 'value'
+          }
+        }
+      } as any, true, mockSource);
       const result = await resolveVariable(complexVar, mockEnv, ResolutionContext.ObjectProperty);
       
       expect(isVariable(result)).toBe(true);
@@ -83,6 +106,20 @@ describe('Variable Resolution Strategy', () => {
         expect(result.internal?.wasEvaluated).toBe(true);
         expect(result.internal?.evaluatedAt).toBeDefined();
       }
+    });
+
+    it('should preserve already materialized complex Variables without re-evaluating', async () => {
+      const structuredLeaf = wrapStructured({ ok: true }, 'object');
+      const materializedVar = createObjectVariable(
+        'complex',
+        { nested: structuredLeaf },
+        true,
+        mockSource
+      );
+
+      const result = await resolveVariable(materializedVar, mockEnv, ResolutionContext.ObjectProperty);
+
+      expect(result).toBe(materializedVar);
     });
   });
   

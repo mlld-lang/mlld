@@ -68,4 +68,54 @@ describe('exe block return structured metadata', () => {
     expect(readVariableData(env, 'schemaValid')).toBe(false);
     expect(readVariableData(env, 'schemaCode')).toBe('required');
   });
+
+  it('preserves schema metadata through let-bound object wrappers returned from exe blocks', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/exe @coerce(v) = js { return v; } => contact',
+      '/exe @broken(item) = [',
+      '  let @w = @coerce(@item)',
+      '  let @wrap = { payload: @w }',
+      '  => @wrap',
+      ']',
+      '/var @result = @broken({ name: "No Email" })',
+      '/var @schemaValid = @result.payload.mx.schema.valid',
+      '/var @schemaCode = @result.payload.mx.schema.errors[0].code'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'schemaValid')).toBe(false);
+    expect(readVariableData(env, 'schemaCode')).toBe('required');
+  });
+
+  it('preserves structured payload metadata through loop result assembly', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/exe @coerce(v) = js { return v; } => contact',
+      '/var @result = loop(1) [',
+      '  let @w = @coerce({ name: "No Email" })',
+      '  done { payload: @w }',
+      ']',
+      '/var @schemaValid = @result.payload.mx.schema.valid',
+      '/var @schemaCode = @result.payload.mx.schema.errors[0].code'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'schemaValid')).toBe(false);
+    expect(readVariableData(env, 'schemaCode')).toBe('required');
+  });
+
+  it('preserves deep mx field access through interpolation after exe passthrough wrapping', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/exe @coerce(v) = js { return v; } => contact',
+      '/exe @broken(item) = [',
+      '  let @w = @coerce(@item)',
+      '  let @wrap = { payload: @w }',
+      '  => @wrap',
+      ']',
+      '/var @result = @broken({ name: "No Email" })',
+      '/var @message = `valid=@result.payload.mx.schema.valid code=@result.payload.mx.schema.errors[0].code`'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'message')).toBe('valid=false code=required');
+  });
 });

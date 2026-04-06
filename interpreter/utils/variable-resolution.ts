@@ -23,6 +23,67 @@ import { asData, asText, isStructuredValue } from './structured-value';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 // Import removed to avoid circular dependency - will use dynamic import if needed
 
+function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isAstLikeComplexValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  if (isStructuredValue(value) || isShelfSlotRefValue(value)) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(item => isAstLikeComplexValue(item));
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if ('wrapperType' in record && Array.isArray(record.content)) {
+    return true;
+  }
+
+  if (
+    record.type === 'object' &&
+    (Array.isArray((record as { entries?: unknown[] }).entries)
+      || isPlainObjectRecord((record as { properties?: unknown }).properties))
+  ) {
+    return true;
+  }
+
+  if (
+    record.type === 'array' &&
+    (Array.isArray((record as { items?: unknown[] }).items)
+      || Array.isArray((record as { elements?: unknown[] }).elements))
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    typeof record.type === 'string' &&
+    (Object.prototype.hasOwnProperty.call(record, 'nodeId')
+      || Object.prototype.hasOwnProperty.call(record, 'location'))
+  );
+}
+
+async function shouldEvaluateComplexStructuredValue(value: unknown): Promise<boolean> {
+  const evaluatorModule = await import('@interpreter/eval/data-value-evaluator');
+  const hasUnevaluatedDirectives =
+    'hasUnevaluatedDirectives' in evaluatorModule
+    && typeof evaluatorModule.hasUnevaluatedDirectives === 'function'
+      ? evaluatorModule.hasUnevaluatedDirectives
+      : undefined;
+
+  if (hasUnevaluatedDirectives?.(value as any)) {
+    return true;
+  }
+
+  return isAstLikeComplexValue(value);
+}
+
 /**
  * Resolution context to determine when to extract values
  * 
@@ -141,6 +202,10 @@ export async function resolveVariable(
     if (isStructured(variable)) {
       const complexFlag = (variable as any).isComplex;
       if (complexFlag) {
+        if (!(await shouldEvaluateComplexStructuredValue(variable.value))) {
+          return variable;
+        }
+
         // Complex data needs evaluation but we can wrap result in a new Variable
         // Dynamic import to avoid circular dependency
         const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
@@ -226,10 +291,11 @@ export async function extractVariableValue(
     const complexFlag = (variable as any).isComplex;
     
     if (complexFlag) {
-      // Dynamic import to avoid circular dependency
-      const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
-      const evaluatedValue = await evaluateDataValue(variable.value, env);
-      return evaluatedValue;
+      if (await shouldEvaluateComplexStructuredValue(variable.value)) {
+        const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+        const evaluatedValue = await evaluateDataValue(variable.value, env);
+        return evaluatedValue;
+      }
     }
     
     // Check if this is an array with custom behaviors (load-content-result, renamed-content)
@@ -247,24 +313,6 @@ export async function extractVariableValue(
     }
     
     return variable.value;
-  } else if (
-    (variable.type === 'object' || variable.type === 'array') &&
-    (variable as any).isComplex
-  ) {
-    if (process.env.MLLD_DEBUG_FIX === 'true') {
-      console.error('[extractVariableValue] evaluating complex collection', {
-        name: (variable as any).name,
-        type: variable.type,
-        isComplex: (variable as any).isComplex,
-        valuePreview:
-          variable.value && typeof variable.value === 'object'
-            ? { type: (variable.value as any).type, keys: Object.keys(variable.value || {}) }
-            : typeof variable.value
-      });
-    }
-    // Lazy-evaluate complex object/array AST nodes to plain JS values
-    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
-    return await evaluateDataValue((variable as any).value, env);
   } else if (isPath(variable)) {
     return variable.value.resolvedPath;
   } else if (isPipelineInput(variable)) {
