@@ -36,6 +36,39 @@ export type RuntimeTraceCategory =
   | 'llm'
   | 'record';
 
+type TraceRecord<T extends object> = T & Record<string, unknown>;
+
+export type RuntimeTraceEventName =
+  | 'shelf.read'
+  | 'shelf.write'
+  | 'shelf.clear'
+  | 'shelf.remove'
+  | 'shelf.stale_read'
+  | 'guard.evaluate'
+  | 'guard.allow'
+  | 'guard.deny'
+  | 'guard.retry'
+  | 'guard.resume'
+  | 'guard.env'
+  | 'guard.crash'
+  | 'handle.mint'
+  | 'handle.resolve'
+  | 'handle.resolve_fail'
+  | 'policy.build'
+  | 'policy.validate'
+  | 'policy.compile_drop'
+  | 'policy.compile_repair'
+  | 'auth.check'
+  | 'auth.allow'
+  | 'auth.deny'
+  | 'display.project'
+  | 'llm.call'
+  | 'llm.resume'
+  | 'llm.tool_call'
+  | 'llm.tool_result'
+  | 'record.coerce'
+  | 'record.schema_fail';
+
 export interface RuntimeTraceScope {
   exe?: string;
   operation?: string;
@@ -45,14 +78,167 @@ export interface RuntimeTraceScope {
   [key: string]: unknown;
 }
 
-export interface RuntimeTraceEvent {
-  ts: string;
-  level: RuntimeTraceEmissionLevel;
-  category: RuntimeTraceCategory;
-  event: string;
-  scope: RuntimeTraceScope;
-  data: Record<string, unknown>;
+export interface RuntimeTraceEventSpecMap {
+  'shelf.read': {
+    category: 'shelf';
+    level: 'verbose';
+    data: TraceRecord<{ slot: string; found: boolean; value?: unknown }>;
+  };
+  'shelf.write': {
+    category: 'shelf';
+    level: 'effects';
+    data: TraceRecord<{ slot: string; action: string; success: boolean; value?: unknown }>;
+  };
+  'shelf.clear': {
+    category: 'shelf';
+    level: 'effects';
+    data: TraceRecord<{ slot: string; action: string; success: boolean }>;
+  };
+  'shelf.remove': {
+    category: 'shelf';
+    level: 'effects';
+    data: TraceRecord<{ slot: string; action: string; success: boolean; value?: unknown }>;
+  };
+  'shelf.stale_read': {
+    category: 'shelf';
+    level: 'effects';
+    data: TraceRecord<{
+      slot: string;
+      writeTs: string;
+      readTs: string;
+      expected: unknown;
+      actual: unknown;
+      message: string;
+    }>;
+  };
+  'guard.evaluate': {
+    category: 'guard';
+    level: 'effects';
+    data: TraceRecord<{
+      phase: 'before' | 'after';
+      guard: string | null;
+      operation: string | null;
+      scope?: string;
+      attempt?: number;
+      inputPreview?: unknown;
+    }>;
+  };
+  'guard.allow': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'guard.deny': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'guard.retry': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'guard.resume': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'guard.env': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'guard.crash': RuntimeTraceEventSpecMap['guard.evaluate'];
+  'handle.mint': {
+    category: 'handle';
+    level: 'verbose';
+    data: TraceRecord<{ handle: string; value?: unknown }>;
+  };
+  'handle.resolve': {
+    category: 'handle';
+    level: 'verbose';
+    data: TraceRecord<{ handle: string; value?: unknown }>;
+  };
+  'handle.resolve_fail': {
+    category: 'handle';
+    level: 'verbose';
+    data: TraceRecord<{ handle: string; reason?: string }>;
+  };
+  'policy.build': {
+    category: 'policy';
+    level: 'effects';
+    data: TraceRecord<{
+      mode: string;
+      toolCount: number;
+      valid: boolean;
+      issueCount: number;
+      repairedArgCount: number;
+      droppedEntryCount: number;
+      droppedArrayElementCount: number;
+    }>;
+  };
+  'policy.validate': RuntimeTraceEventSpecMap['policy.build'];
+  'policy.compile_drop': {
+    category: 'policy';
+    level: 'effects';
+    data: TraceRecord<{ mode: string; droppedEntries: unknown; droppedArrayElements: unknown }>;
+  };
+  'policy.compile_repair': {
+    category: 'policy';
+    level: 'verbose';
+    data: TraceRecord<{ mode: string; repairedArgs: unknown[] }>;
+  };
+  'auth.check': {
+    category: 'auth';
+    level: 'effects';
+    data: TraceRecord<{ tool: string; args: unknown }>;
+  };
+  'auth.allow': {
+    category: 'auth';
+    level: 'effects';
+    data: TraceRecord<{ tool: string }>;
+  };
+  'auth.deny': RuntimeTraceEventSpecMap['auth.allow'];
+  'display.project': {
+    category: 'display';
+    level: 'verbose';
+    data: TraceRecord<{ record: string; field: string; mode: string }>;
+  };
+  'llm.call': {
+    category: 'llm';
+    level: 'verbose';
+    data: TraceRecord<{
+      phase: 'finish';
+      sessionId?: string;
+      provider?: string;
+      model?: string;
+      toolCount?: number;
+      resume: boolean;
+      ok: boolean;
+      error?: string;
+      durationMs?: number;
+    }>;
+  };
+  'llm.resume': RuntimeTraceEventSpecMap['llm.call'];
+  'llm.tool_call': {
+    category: 'llm';
+    level: 'verbose';
+    data: TraceRecord<{ phase: 'start'; tool: string; args: unknown }>;
+  };
+  'llm.tool_result': {
+    category: 'llm';
+    level: 'verbose';
+    data: TraceRecord<{
+      phase: 'finish';
+      tool: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+      durationMs?: number;
+    }>;
+  };
+  'record.coerce': {
+    category: 'record';
+    level: 'verbose';
+    data: TraceRecord<{ record: string; field: string; shelf: string; expected: string; value?: unknown }>;
+  };
+  'record.schema_fail': {
+    category: 'record';
+    level: 'effects';
+    data: TraceRecord<{ record: string; shelf: string; reason: string }>;
+  };
 }
+
+export type RuntimeTraceEvent = {
+  [K in RuntimeTraceEventName]: {
+  ts: string;
+    level: RuntimeTraceEventSpecMap[K]['level'];
+    category: RuntimeTraceEventSpecMap[K]['category'];
+    event: K;
+    scope: RuntimeTraceScope;
+    data: RuntimeTraceEventSpecMap[K]['data'];
+  };
+}[RuntimeTraceEventName];
 
 export interface RuntimeTraceOptions {
   filePath?: string;

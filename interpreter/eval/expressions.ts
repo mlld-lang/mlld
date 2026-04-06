@@ -590,11 +590,16 @@ async function evaluateBinaryExpression(
   }
 
   if (operator === '??') {
+    // Shelf slot refs preserve capability identity even when the current slot
+    // contents are null, so nullish coalescing should keep the ref.
+    if (isShelfSlotRefValue(leftValue)) {
+      return leftResult;
+    }
+
     // Unwrap StructuredValue to check the inner data for nullish
-    const rawLeft =
-      isStructuredValue(leftValue) || isShelfSlotRefValue(leftValue)
-        ? asData(leftValue)
-        : leftValue;
+    const rawLeft = isStructuredValue(leftValue)
+      ? asData(leftValue)
+      : leftValue;
     const isNullish = rawLeft === null || rawLeft === undefined;
     if (!isNullish) {
       return leftResult;

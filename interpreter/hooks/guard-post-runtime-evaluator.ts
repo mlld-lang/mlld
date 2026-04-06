@@ -21,6 +21,7 @@ import {
 } from './guard-post-runtime-actions';
 import { extractGuardLabelModifications } from './guard-utils';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
+import { buildGuardTraceEmitter, getGuardTraceOperationName } from './guard-trace';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -238,20 +239,14 @@ export async function evaluatePostGuardRuntime(
   } as GuardContextSnapshot;
 
   const contextSnapshotForMetadata = { ...guardContext };
-  const emitGuardTrace = (
-    event: string,
-    data: Record<string, unknown>
-  ): void => {
-    env.emitRuntimeTrace('effects', 'guard', event, {
-      phase: 'after',
-      guard: guard.name ?? null,
-      operation: operation.named ?? operation.name ?? operation.type,
-      scope,
-      attempt: attemptNumber,
-      inputPreview,
-      ...data
-    });
-  };
+  const emitGuardTrace = buildGuardTraceEmitter(env, {
+    phase: 'after',
+    guard: guard.name ?? null,
+    operation: getGuardTraceOperationName(operation),
+    scope,
+    attempt: attemptNumber,
+    inputPreview
+  });
 
   const evaluateGuardBlockFn = dependencies.evaluateGuardBlock ?? evaluatePostGuardBlock;
   let action: GuardActionNode | undefined;

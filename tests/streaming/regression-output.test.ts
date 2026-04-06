@@ -118,6 +118,52 @@ describe('streaming output regression', () => {
     expect(output).not.toContain('hihi');
   });
 
+  it('treats MLLD_NO_STREAMING as a streaming disable alias', async () => {
+    const prevNoStream = process.env.MLLD_NO_STREAM;
+    const prevNoStreaming = process.env.MLLD_NO_STREAMING;
+    const prevStream = process.env.MLLD_STREAMING;
+    delete process.env.MLLD_NO_STREAM;
+    process.env.MLLD_NO_STREAMING = 'true';
+    process.env.MLLD_STREAMING = 'true';
+
+    const script = `
+/run stream sh { printf 'quiet' }
+`.trim();
+
+    const stdout = captureWrites(process.stdout);
+    const stderr = captureWrites(process.stderr);
+    try {
+      const result = await interpret(script, {
+        fileSystem: new NodeFileSystem(),
+        pathService: new PathService(),
+        streamingManager: manager,
+        mode: 'structured'
+      }) as any;
+
+      expect(stdout.writes.join('')).not.toContain('quiet');
+      expect(result.streaming).toBeUndefined();
+      expect(result.output).toContain('quiet');
+    } finally {
+      if (prevNoStream === undefined) {
+        delete process.env.MLLD_NO_STREAM;
+      } else {
+        process.env.MLLD_NO_STREAM = prevNoStream;
+      }
+      if (prevNoStreaming === undefined) {
+        delete process.env.MLLD_NO_STREAMING;
+      } else {
+        process.env.MLLD_NO_STREAMING = prevNoStreaming;
+      }
+      if (prevStream === undefined) {
+        delete process.env.MLLD_STREAMING;
+      } else {
+        process.env.MLLD_STREAMING = prevStream;
+      }
+      stdout.restore();
+      stderr.restore();
+    }
+  });
+
   it('creates adapters from streamFormat config objects', async () => {
     const prevNoStream = process.env.MLLD_NO_STREAMING;
     const prevStream = process.env.MLLD_STREAMING;

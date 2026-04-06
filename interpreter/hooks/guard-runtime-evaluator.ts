@@ -34,6 +34,7 @@ import { attachGuardHelper } from './guard-helper-injection';
 import { formatGuardFilterForMetadata } from './guard-filter-display';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
 import { asData, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { buildGuardTraceEmitter, getGuardTraceOperationName } from './guard-trace';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -283,20 +284,14 @@ export async function evaluateGuardRuntime(
     inputPreview
   });
 
-  const emitGuardTrace = (
-    event: string,
-    data: Record<string, unknown>
-  ): void => {
-    env.emitRuntimeTrace('effects', 'guard', event, {
-      phase: 'before',
-      guard: guard.name ?? null,
-      operation: operation.named ?? operation.name ?? operation.type,
-      scope,
-      attempt: options.attemptNumber,
-      inputPreview,
-      ...data
-    });
-  };
+  const emitGuardTrace = buildGuardTraceEmitter(env, {
+    phase: 'before',
+    guard: guard.name ?? null,
+    operation: getGuardTraceOperationName(operation),
+    scope,
+    attempt: options.attemptNumber,
+    inputPreview
+  });
 
   if (guard.policyCondition) {
     const policyGuardMode = guard.policyGuardMode ?? 'policy';

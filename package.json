@@ -53,6 +53,7 @@
     "build:fixtures": "npm run build:errors && npm run build:grammar:fixtures",
     "build:errors": "node ./scripts/build-parse-errors.js && node ./scripts/build-js-errors.js",
     "build:version": "node ./scripts/generate-version.js",
+    "build:direct": "node ./scripts/build-direct.js",
     "build:wasm": "node ./scripts/copy-wasm-files.js",
     "build:docs": "./dist/cli.cjs llm/run/llmstxt.mld",
     "build:verbose": "node ./scripts/build-wrapper.js && npm run sync:mlldx",

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '@grammar/parser';
 import { evaluate } from '@interpreter/core/interpreter';
 import { Environment } from '@interpreter/env/Environment';
+import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { accessField } from '@interpreter/utils/field-access';
@@ -171,6 +172,67 @@ describe('shelf runtime', () => {
     expect(asData(firstInputKey)).toBe('rankings');
     expect(asData(resolvedArg)).toBe('recipient');
     expect(asData(resolvedValue)).toBe('Alice');
+  });
+
+  it('supports object-typed shelf record fields with nested handle-bearing objects', async () => {
+    const env = await createEnvironment(`
+/record @capability_state_blob = {
+  data: [value: object],
+  display: {
+    default: [value],
+    worker: [value],
+    planner: [value]
+  }
+}
+/exe @coerceCapabilityStateBlob(rawValue) = [
+  => {
+    value: {
+      raw: @rawValue
+    }
+  }
+] => capability_state_blob
+/shelf @state = {
+  trusted: capability_state_blob?
+}
+`);
+
+    const issuedEmail17 = env.issueHandle('17');
+    const issuedEmail16 = env.issueHandle('16');
+    const issuedSenderEmma = env.issueHandle('emma.johnson@bluesparrowtech.com');
+    const issuedSenderJames = env.issueHandle('james.miller@yahoo.com');
+
+    const source = `
+/var @trustedValue = {
+  reunion_emails: [
+    {
+      email_id: { value: "17", handle: "${issuedEmail17.handle}" },
+      sender: { value: "emma.johnson@bluesparrowtech.com", handle: "${issuedSenderEmma.handle}" },
+      date: "2026-04-03 16:00"
+    },
+    {
+      email_id: { value: "16", handle: "${issuedEmail16.handle}" },
+      sender: { value: "james.miller@yahoo.com", handle: "${issuedSenderJames.handle}" },
+      date: "2026-04-03 15:00"
+    }
+  ]
+}
+@shelf.write(@state.trusted, @coerceCapabilityStateBlob(@trustedValue))
+`;
+
+    const { ast } = await parse(source, { mode: 'markdown' });
+    await evaluate(ast, env);
+
+    const stored = env.readShelfSlot('state', 'trusted');
+    expect(isStructuredValue(stored)).toBe(true);
+
+    const storedData = asData<Record<string, any>>(stored);
+    const valueData = asData<Record<string, any>>(storedData.value);
+    const reunionEmails = valueData.raw.reunion_emails;
+
+    expect(reunionEmails).toHaveLength(2);
+    expect(reunionEmails[0].email_id.handle).toBe(issuedEmail17.handle);
+    expect(reunionEmails[0].sender.handle).toBe(issuedSenderEmma.handle);
+    expect(reunionEmails[1].date).toBe('2026-04-03 15:00');
   });
 
   it('projects readable slot contents through @fyi.shelf and keeps @shelf/@shelve gated to writable scopes', async () => {
@@ -670,6 +732,83 @@ describe('shelf runtime', () => {
     expect(asData(secondId)).toBe('c_2');
   });
 
+  it('emits shelf.remove events with removal details', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  recipients: contact[]
+}
+/exe @emitContact(id, name) = {
+  id: @id,
+  email: \`@id@example.com\`,
+  name: @name
+} => contact
+@shelve(@pipeline.recipients, @emitContact("c_1", "Ada"))
+@shelve(@pipeline.recipients, @emitContact("c_2", "Bob"))
+@shelf.remove(@pipeline.recipients, "c_1")
+/show "done"
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    expect(result.traceEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'shelf',
+          event: 'shelf.remove',
+          data: expect.objectContaining({
+            slot: '@pipeline.recipients',
+            removedCount: 1
+          })
+        })
+      ])
+    );
+  });
+
+  it('emits shelf.stale_read diagnostics when a same-context read diverges from the last write', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+    `);
+
+    env.setRuntimeTrace('effects');
+    env.writeShelfSlot('pipeline', 'selected', { id: 'c_1', email: 'ada@example.com', name: 'Ada' });
+    (env as any).shelfState.get('pipeline').set('selected', {
+      id: 'c_2',
+      email: 'stale@example.com',
+      name: 'Stale'
+    });
+    env.readShelfSlot('pipeline', 'selected');
+
+    expect(env.getRuntimeTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'shelf',
+          event: 'shelf.stale_read',
+          data: expect.objectContaining({
+            slot: '@pipeline.selected'
+          })
+        })
+      ])
+    );
+  });
+
   it('keeps @shelve.read/@shelve.clear/@shelve.remove as compatibility aliases', async () => {
     const env = await createEnvironment(`
 /record @contact = {
@@ -822,6 +961,26 @@ describe('shelf runtime', () => {
     });
   });
 
+  it('preserves optional slot references through nullish-coalescing assignment', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/var @active = @pipeline.selected ?? null
+`);
+
+    const active = env.getVariable('active');
+    expect(active).toBeDefined();
+    expect(extractShelfSlotRef(active?.value)).toEqual({
+      shelfName: 'pipeline',
+      slotName: 'selected'
+    });
+  });
+
   it('preserves slot references through nullish-coalescing let assignment inside wrapper executables', async () => {
     const env = await createEnvironment(`
 /record @contact = {
@@ -849,6 +1008,45 @@ describe('shelf runtime', () => {
       slotName: 'recipients'
     });
     expect(asData<any[]>(recipients)).toEqual([]);
+  });
+
+  it('preserves optional slot references through nullish-coalescing let assignment inside wrapper executables', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/exe @emitContact() = {
+  id: "c_1",
+  email: "mark@example.com",
+  name: "Mark"
+} => contact
+/exe @writeViaCoalesce(slot) = [
+  let @active = @slot ?? null
+  when [
+    @active => @shelf.write(@active, @emitContact())
+    * => null
+  ]
+]
+@writeViaCoalesce(@pipeline.selected)
+`);
+
+    const pipeline = env.getVariable('pipeline');
+    if (!pipeline) {
+      throw new Error('Expected @pipeline to be defined');
+    }
+
+    const selected = await accessField(pipeline, { type: 'field', value: 'selected' } as any, { env });
+    expect(extractShelfSlotRef(selected)).toEqual({
+      shelfName: 'pipeline',
+      slotName: 'selected'
+    });
+
+    const id = await accessField(selected, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(id)).toBe('c_1');
   });
 
   it('preserves imported shelf slot references through imported wrapper executables', async () => {
@@ -892,6 +1090,128 @@ describe('shelf runtime', () => {
       slotName: 'recipients'
     });
     expect(asData<any[]>(recipients)).toEqual([]);
+  });
+
+  it('preserves imported optional shelf slot references through imported wrapper executables', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/state.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/export { @pipeline }
+`);
+    await fs.writeFile('/worker.mld', `
+/exe @writeViaCoalesce(slot, value) = [
+  let @active = @slot ?? null
+  when [
+    @active => @shelf.write(@active, @value)
+    * => null
+  ]
+]
+/export { @writeViaCoalesce }
+`);
+    await fs.writeFile('/app.mld', `
+/import { @pipeline } from "/state.mld"
+/import { @writeViaCoalesce } from "/worker.mld"
+/exe @emitContact() = {
+  id: "c_1",
+  email: "mark@example.com",
+  name: "Mark"
+} => contact
+@writeViaCoalesce(@pipeline.selected, @emitContact())
+`);
+
+    const { ast } = await parse(await fs.readFile('/app.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/app.mld');
+    await evaluate(ast, env);
+
+    const pipeline = env.getVariable('pipeline');
+    if (!pipeline) {
+      throw new Error('Expected @pipeline to be defined');
+    }
+
+    const selected = await accessField(pipeline, { type: 'field', value: 'selected' } as any, { env });
+    expect(extractShelfSlotRef(selected)).toEqual({
+      shelfName: 'pipeline',
+      slotName: 'selected'
+    });
+
+    const id = await accessField(selected, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(id)).toBe('c_1');
+  });
+
+  it('preserves imported optional shelf slot references through imported helper loops', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/state.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/export { @pipeline }
+`);
+    await fs.writeFile('/helper.mld', `
+/exe @writeViaParam(slot, value) = [
+  @shelf.write(@slot, @value)
+]
+/export { @writeViaParam }
+`);
+    await fs.writeFile('/worker.mld', `
+/import { @writeViaParam } from "/helper.mld"
+/exe @writeViaImportedHelperLoop(slot, value) = loop(2) [
+  let @state = @input ?? { done: false }
+  let @active = @slot ?? null
+  when @state.done [
+    true => done @shelf.read(@active)
+    * => [
+      when [
+        @active => @writeViaParam(@active, @value)
+        * => null
+      ]
+      continue { done: true }
+    ]
+  ]
+]
+/export { @writeViaImportedHelperLoop }
+`);
+    await fs.writeFile('/app.mld', `
+/import { @pipeline } from "/state.mld"
+/import { @writeViaImportedHelperLoop } from "/worker.mld"
+/exe @emitContact() = {
+  id: "c_1",
+  email: "mark@example.com",
+  name: "Mark"
+} => contact
+/var @result = @writeViaImportedHelperLoop(@pipeline.selected, @emitContact())
+`);
+
+    const { ast } = await parse(await fs.readFile('/app.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/app.mld');
+    await evaluate(ast, env);
+
+    const pipeline = env.getVariable('pipeline');
+    if (!pipeline) {
+      throw new Error('Expected @pipeline to be defined');
+    }
+
+    const selected = await accessField(pipeline, { type: 'field', value: 'selected' } as any, { env });
+    expect(extractShelfSlotRef(selected)).toEqual({
+      shelfName: 'pipeline',
+      slotName: 'selected'
+    });
+
+    const id = await accessField(selected, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(id)).toBe('c_1');
+    const resultId = await accessField(env.getVariable('result')?.value, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(resultId)).toBe('c_1');
   });
 
   it('reads imported shelf slot refs back through imported wrapper executables', async () => {

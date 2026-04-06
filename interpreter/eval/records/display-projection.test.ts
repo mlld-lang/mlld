@@ -290,6 +290,43 @@ describe('renderDisplayProjection', () => {
     );
   });
 
+  it('emits runtime trace events for projection decisions in verbose mode', async () => {
+    const env = createEnvironment();
+    env.setRuntimeTrace('verbose');
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  display: [name, { mask: "email" }]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace'
+      },
+      env
+    });
+
+    await renderDisplayProjection(output, env);
+
+    expect(env.getRuntimeTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'display',
+          event: 'display.project',
+          data: expect.objectContaining({
+            record: 'contact',
+            field: 'email',
+            mode: 'mask',
+            handleIssued: true
+          })
+        })
+      ])
+    );
+  });
+
   it('projects array fact fields element-by-element for bare, masked, and handle-only displays', async () => {
     const env = createEnvironment();
     env.setLlmToolConfig({

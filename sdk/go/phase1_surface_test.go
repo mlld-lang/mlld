@@ -54,6 +54,9 @@ func TestBuildProcessRequestMergesLabeledPayloadAndMcpServers(t *testing.T) {
 	if !reflect.DeepEqual(params["mcpServers"], expectedMcpServers) {
 		t.Fatalf("unexpected mcpServers: %#v", params["mcpServers"])
 	}
+	if params["recordEffects"] != true {
+		t.Fatalf("expected recordEffects=true, got %#v", params["recordEffects"])
+	}
 }
 
 func TestBuildExecuteRequestRejectsUnknownPayloadLabelField(t *testing.T) {

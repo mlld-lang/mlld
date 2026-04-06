@@ -65,6 +65,7 @@ import {
   buildGuardArgsSnapshot,
   getGuardArgNamesFromMetadata
 } from '../utils/guard-args';
+import { emitAggregateGuardTrace, getGuardTraceOperationName } from './guard-trace';
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -259,10 +260,6 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   currentDescriptor = nextDescriptor;
 
   appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
-  const guardName =
-    guardTrace[0]?.guard?.name ??
-    guardTrace[0]?.guard?.filterKind ??
-    '';
   const contextLabels = operation.labels ?? [];
   const provenance =
     env.isProvenanceEnabled?.() === true
@@ -272,7 +269,7 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
       : undefined;
   env.emitSDKEvent({
     type: 'debug:guard:after',
-    guard: guardName,
+    guard: guardTrace[0]?.guard?.name ?? guardTrace[0]?.guard?.filterKind ?? '',
     labels: contextLabels,
     decision: currentDecision,
     trace: guardTrace,
@@ -281,25 +278,13 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     timestamp: Date.now(),
     ...(provenance && { provenance })
   });
-  env.emitRuntimeTrace('effects', 'guard', 'guard.evaluate', {
+  emitAggregateGuardTrace(env, {
     phase: 'after',
-    guard: guardName || null,
-    operation: operation.named ?? operation.name ?? operation.type,
+    guardTrace,
     decision: currentDecision,
-    traceCount: guardTrace.length,
-    decisionCounts: guardTrace.reduce<Record<string, number>>((counts, entry) => {
-      counts[entry.decision] = (counts[entry.decision] ?? 0) + 1;
-      return counts;
-    }, {}),
+    operation: getGuardTraceOperationName(operation),
     reasons,
-    hintCount: hints.length
-  });
-  env.emitRuntimeTrace('effects', 'guard', `guard.${currentDecision}`, {
-    phase: 'after',
-    guard: guardName || null,
-    operation: operation.named ?? operation.name ?? operation.type,
-    reasons,
-    hints: hints.map(hint => hint?.hint ?? null)
+    hints
   });
 
   if (currentDecision === 'allow' && hints.length > 0) {

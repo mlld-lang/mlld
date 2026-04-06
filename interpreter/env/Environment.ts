@@ -23,19 +23,13 @@ import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS'
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type {
   DirectiveTrace,
-  RuntimeTraceCategory,
-  RuntimeTraceEmissionLevel,
-  RuntimeTraceEvent,
   RuntimeTraceLevel,
   RuntimeTraceOptions,
   RuntimeTraceScope
 } from '@core/types/trace';
-import { shouldEmitRuntimeTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { EnvironmentConfig } from '@core/types/environment';
-import { sanitizeSerializableValue } from '@core/errors/errorSerialization';
 import { execSync } from 'child_process';
-import { appendFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
@@ -138,13 +132,6 @@ import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
-
-type RuntimeTraceShelfWriteState = {
-  ts: string;
-  scopeSignature: string;
-  fingerprint: string;
-  summary: unknown;
-};
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { createFyiVariable, createToolDocsExecutable } from './builtins/fyi';
 import { createPolicyVariable } from './builtins/policy';
@@ -153,6 +140,17 @@ import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
+import { RuntimeTraceManager } from '@interpreter/tracing/RuntimeTraceManager';
+import { buildRuntimeTraceScope, type RuntimeTraceScopeSnapshot } from '@interpreter/tracing/RuntimeTraceScope';
+import type { RuntimeTraceEnvelope } from '@interpreter/tracing/events';
+import {
+  traceHandleMint,
+  traceHandleResolve,
+  traceHandleResolveFail,
+  traceShelfClear,
+  traceShelfRead,
+  traceShelfWrite
+} from '@interpreter/tracing/events';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
@@ -361,12 +359,7 @@ export class Environment
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
-  private runtimeTraceLevel: RuntimeTraceLevel = 'off';
-  private runtimeTraceOverrideLevel?: RuntimeTraceLevel;
-  private runtimeTraceEvents: RuntimeTraceEvent[] = [];
-  private runtimeTraceFilePath?: string;
-  private runtimeTraceStderr = false;
-  private runtimeTraceShelfWrites = new Map<string, RuntimeTraceShelfWriteState>();
+  private runtimeTraceManager: RuntimeTraceManager;
 
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
@@ -446,6 +439,7 @@ export class Environment
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
     this.valueHandleRegistry = parent?.valueHandleRegistry ?? new ValueHandleRegistry();
+    this.runtimeTraceManager = parent?.runtimeTraceManager.createChild() ?? new RuntimeTraceManager();
     if (parent) {
       this.streamingOptions = { ...parent.streamingOptions };
     }
@@ -951,12 +945,12 @@ export class Environment
       root.valueHandleRegistry = new ValueHandleRegistry();
     }
     const issued = root.valueHandleRegistry.issue(value, options);
-    this.emitRuntimeTrace('verbose', 'handle', 'handle.mint', {
+    this.emitRuntimeTraceEvent(traceHandleMint({
       handle: issued.handle,
       preview: issued.preview,
       source: issued.metadata?.source,
       value: this.summarizeTraceValue(value)
-    });
+    }));
     return issued;
   }
 
@@ -964,20 +958,21 @@ export class Environment
     const root = this.getRootEnvironment();
     const entry = root.valueHandleRegistry?.resolve(handle);
     if (!entry) {
-      this.emitRuntimeTrace('verbose', 'handle', 'handle.resolve_fail', {
+      this.emitRuntimeTraceEvent(traceHandleResolveFail({
         handle,
+        reason: 'HANDLE_NOT_FOUND',
         success: false
-      });
+      }));
       throw new MlldSecurityError(`Unknown handle '${handle}'`, {
         code: 'HANDLE_NOT_FOUND',
         details: { handle }
       });
     }
-    this.emitRuntimeTrace('verbose', 'handle', 'handle.resolve', {
+    this.emitRuntimeTraceEvent(traceHandleResolve({
       handle,
       success: true,
       value: this.summarizeTraceValue(entry.value)
-    });
+    }));
     return entry.value;
   }
 
@@ -1280,12 +1275,13 @@ export class Environment
     const value = owner.shelfState?.get(shelfName)?.get(slotName);
     const slotRef = `@${shelfName}.${slotName}`;
     const readTs = new Date().toISOString();
-    this.maybeEmitRuntimeTraceStaleShelfRead(slotRef, value, readTs);
-    this.emitRuntimeTrace('verbose', 'shelf', 'shelf.read', {
+    const traceScope = this.buildRuntimeTraceScope();
+    this.runtimeTraceManager.emitStaleShelfRead(slotRef, value, readTs, traceScope);
+    this.emitRuntimeTraceEvent(traceShelfRead({
       slot: slotRef,
       found: value !== undefined,
       value: this.summarizeTraceValue(value)
-    });
+    }), traceScope);
     return value;
   }
 
@@ -1305,14 +1301,16 @@ export class Environment
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
     const slotRef = `@${shelfName}.${slotName}`;
-    this.recordRuntimeTraceShelfWrite(slotRef, value);
-    this.emitRuntimeTrace('effects', 'shelf', options.traceEvent ?? 'shelf.write', {
+    const traceScope = this.buildRuntimeTraceScope();
+    this.runtimeTraceManager.recordShelfWrite(slotRef, value, traceScope);
+    this.emitRuntimeTraceEvent(traceShelfWrite({
       slot: slotRef,
       action: options.action ?? 'write',
       success: true,
       value: this.summarizeTraceValue(value),
-      ...(options.traceData ?? {})
-    });
+      event: options.traceEvent,
+      traceData: options.traceData
+    }), traceScope);
   }
 
   clearShelfSlot(shelfName: string, slotName: string): void {
@@ -1323,13 +1321,13 @@ export class Environment
     const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
     const slotRef = `@${shelfName}.${slotName}`;
     if (removed) {
-      this.recordRuntimeTraceShelfWrite(slotRef, undefined);
+      this.runtimeTraceManager.recordShelfWrite(slotRef, undefined, this.buildRuntimeTraceScope());
     }
-    this.emitRuntimeTrace('effects', 'shelf', 'shelf.clear', {
+    this.emitRuntimeTraceEvent(traceShelfClear({
       slot: slotRef,
       action: 'clear',
       success: removed
-    });
+    }));
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {
@@ -2880,10 +2878,6 @@ export class Environment
     if (options.includeTraceInheritance) {
       child.traceEnabled = this.traceEnabled;
       child.directiveTrace = this.directiveTrace;
-      child.runtimeTraceLevel = this.runtimeTraceLevel;
-      child.runtimeTraceEvents = this.runtimeTraceEvents;
-      child.runtimeTraceFilePath = this.runtimeTraceFilePath;
-      child.runtimeTraceStderr = this.runtimeTraceStderr;
     }
 
     if (this.allowedTools) {
@@ -3468,248 +3462,61 @@ export class Environment
   }
 
   setRuntimeTrace(level: RuntimeTraceLevel, options: RuntimeTraceOptions = {}): void {
-    const root = this.getRootEnvironment();
-    root.runtimeTraceLevel = level;
-    root.runtimeTraceFilePath = options.filePath
-      ? path.resolve(options.filePath)
-      : undefined;
-    root.runtimeTraceStderr = options.stderr === true;
-    if (level === 'off') {
-      root.runtimeTraceEvents = [];
-      root.runtimeTraceShelfWrites.clear();
-    }
-    this.runtimeTraceLevel = root.runtimeTraceLevel;
-    this.runtimeTraceFilePath = root.runtimeTraceFilePath;
-    this.runtimeTraceStderr = root.runtimeTraceStderr;
+    this.getRootEnvironment().runtimeTraceManager.configure(level, options);
   }
 
   setRuntimeTraceOverride(level?: RuntimeTraceLevel): void {
-    this.runtimeTraceOverrideLevel = level;
+    this.runtimeTraceManager.setOverride(level);
   }
 
   getRuntimeTraceLevel(): RuntimeTraceLevel {
-    if (this.runtimeTraceOverrideLevel !== undefined) {
-      return this.runtimeTraceOverrideLevel;
-    }
-    if (this.parent) {
-      return this.parent.getRuntimeTraceLevel();
-    }
-    return this.runtimeTraceLevel;
+    return this.runtimeTraceManager.getLevel();
   }
 
-  getRuntimeTraceEvents(): RuntimeTraceEvent[] {
-    return [...this.getRootEnvironment().runtimeTraceEvents];
+  getRuntimeTraceEvents() {
+    return this.runtimeTraceManager.getEvents();
+  }
+
+  emitRuntimeTraceEvent(
+    trace: RuntimeTraceEnvelope,
+    scopeOverrides?: Partial<RuntimeTraceScope>
+  ): void {
+    this.runtimeTraceManager.emitTrace(trace, this.buildRuntimeTraceScope(scopeOverrides));
   }
 
   emitRuntimeTrace(
-    requiredLevel: RuntimeTraceEmissionLevel,
-    category: RuntimeTraceCategory,
+    requiredLevel: RuntimeTraceEnvelope['requiredLevel'],
+    category: RuntimeTraceEnvelope['category'],
     event: string,
     data: Record<string, unknown>,
     scope?: Partial<RuntimeTraceScope>
   ): void {
-    const root = this.getRootEnvironment();
-    if (!shouldEmitRuntimeTrace(this.getRuntimeTraceLevel(), requiredLevel)) {
-      return;
-    }
-
-    const payload: RuntimeTraceEvent = {
-      ts: new Date().toISOString(),
-      level: requiredLevel,
-      category,
-      event,
-      scope: this.buildRuntimeTraceScope(scope),
-      data: sanitizeSerializableValue(data) as Record<string, unknown>
-    };
-
-    root.runtimeTraceEvents.push(payload);
-
-    if (root.runtimeTraceFilePath) {
-      try {
-        mkdirSync(path.dirname(root.runtimeTraceFilePath), { recursive: true });
-        appendFileSync(root.runtimeTraceFilePath, `${JSON.stringify(payload)}\n`, 'utf8');
-      } catch {
-        // Best-effort file sink; trace collection still succeeds in memory.
-      }
-    }
-
-    if (root.runtimeTraceStderr) {
-      process.stderr.write(`${this.formatRuntimeTraceLine(payload)}\n`);
-    }
+    this.emitRuntimeTraceEvent({ requiredLevel, category, event, data, scope });
   }
 
   summarizeTraceValue(value: unknown): unknown {
-    if (value === null || value === undefined) {
-      return value;
-    }
-    if (typeof value === 'string') {
-      return value.length > 160 ? `${value.slice(0, 157)}...` : value;
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return value;
-    }
-    if (Array.isArray(value)) {
-      return {
-        kind: 'array',
-        length: value.length
-      };
-    }
-    if (typeof value === 'object') {
-      if ('handle' in (value as Record<string, unknown>) && typeof (value as any).handle === 'string') {
-        return { handle: (value as any).handle };
-      }
-      const keys = Object.keys(value as Record<string, unknown>);
-      return {
-        kind: 'object',
-        keys: keys.slice(0, 8),
-        size: keys.length
-      };
-    }
-    return String(value);
+    return this.runtimeTraceManager.summarizeValue(value);
   }
 
   private buildRuntimeTraceScope(
     overrides?: Partial<RuntimeTraceScope>
   ): RuntimeTraceScope {
-    const scope: RuntimeTraceScope = {};
     const operation = this.contextManager.peekOperation();
     const guard = this.contextManager.peekGuardContext();
     const pipeline = this.getPipelineContext();
     const scopedConfig = this.getScopedEnvironmentConfig();
     const bridge = this.getActiveBridge();
-
-    if (operation?.type === 'exe' && operation.name) {
-      scope.exe = operation.name.startsWith('@') ? operation.name : `@${operation.name}`;
-    } else if (operation?.name) {
-      scope.operation = operation.name.startsWith('@') ? operation.name : `@${operation.name}`;
-    } else if (operation?.named) {
-      scope.operation = operation.named;
-    } else if (operation?.type) {
-      scope.operation = operation.type;
-    }
-
-    const guardTry =
-      typeof guard?.try === 'number'
-        ? guard.try
-        : typeof guard?.attempt === 'number'
-          ? guard.attempt
-          : undefined;
-    if (guardTry !== undefined) {
-      scope.guard_try = guardTry;
-    }
-
-    if (typeof pipeline?.stage === 'number') {
-      scope.pipeline_stage = pipeline.stage;
-    }
-
-    if (typeof scopedConfig?.name === 'string' && scopedConfig.name.trim().length > 0) {
-      scope.box = scopedConfig.name.trim();
-    } else if (bridge?.mcpConfigPath) {
-      scope.box = bridge.mcpConfigPath;
-    }
-
-    return {
-      ...scope,
-      ...(overrides ?? {})
+    const snapshot: RuntimeTraceScopeSnapshot = {
+      operationType: operation?.type,
+      operationName: operation?.name,
+      operationNamed: operation?.named,
+      guardTry: typeof guard?.try === 'number' ? guard.try : undefined,
+      guardAttempt: typeof guard?.attempt === 'number' ? guard.attempt : undefined,
+      pipelineStage: typeof pipeline?.stage === 'number' ? pipeline.stage : undefined,
+      boxName: typeof scopedConfig?.name === 'string' ? scopedConfig.name : undefined,
+      bridgeBox: bridge?.mcpConfigPath
     };
-  }
-
-  private buildRuntimeTraceScopeSignature(
-    overrides?: Partial<RuntimeTraceScope>
-  ): string {
-    return JSON.stringify(this.buildRuntimeTraceScope(overrides));
-  }
-
-  private getRuntimeTraceValueFingerprint(value: unknown): string {
-    const sanitized = sanitizeSerializableValue(value);
-    if (sanitized === undefined) {
-      return JSON.stringify({ __runtimeTraceUndefined: true });
-    }
-    return JSON.stringify(sanitized);
-  }
-
-  private recordRuntimeTraceShelfWrite(slot: string, value: unknown): void {
-    if (this.getRuntimeTraceLevel() === 'off') {
-      return;
-    }
-
-    const root = this.getRootEnvironment();
-    root.runtimeTraceShelfWrites.set(slot, {
-      ts: new Date().toISOString(),
-      scopeSignature: this.buildRuntimeTraceScopeSignature(),
-      fingerprint: this.getRuntimeTraceValueFingerprint(value),
-      summary: this.summarizeTraceValue(value)
-    });
-  }
-
-  private maybeEmitRuntimeTraceStaleShelfRead(
-    slot: string,
-    value: unknown,
-    readTs: string
-  ): void {
-    if (this.getRuntimeTraceLevel() === 'off') {
-      return;
-    }
-
-    const root = this.getRootEnvironment();
-    const lastWrite = root.runtimeTraceShelfWrites.get(slot);
-    if (!lastWrite) {
-      return;
-    }
-
-    if (lastWrite.scopeSignature !== this.buildRuntimeTraceScopeSignature()) {
-      return;
-    }
-
-    const currentFingerprint = this.getRuntimeTraceValueFingerprint(value);
-    if (currentFingerprint === lastWrite.fingerprint) {
-      return;
-    }
-
-    this.emitRuntimeTrace('effects', 'shelf', 'shelf.stale_read', {
-      slot,
-      writeTs: lastWrite.ts,
-      readTs,
-      expected: lastWrite.summary,
-      actual: this.summarizeTraceValue(value),
-      message: 'shelf.read returned stale data after shelf.write in the same context'
-    });
-  }
-
-  private formatRuntimeTraceLine(event: RuntimeTraceEvent): string {
-    const scopeTokens = Object.entries(event.scope)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => `${key}=${this.formatRuntimeTraceScalar(value)}`);
-    const dataTokens = Object.entries(event.data)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => `${key}=${this.formatRuntimeTraceScalar(value)}`);
-    const tokens = [
-      `[trace:${event.category}]`,
-      event.event,
-      ...scopeTokens,
-      ...dataTokens
-    ];
-    return tokens.join(' ');
-  }
-
-  private formatRuntimeTraceScalar(value: unknown): string {
-    if (typeof value === 'string') {
-      return JSON.stringify(value);
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-    if (value === null) {
-      return 'null';
-    }
-    if (value === undefined) {
-      return 'undefined';
-    }
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
+    return buildRuntimeTraceScope(snapshot, overrides);
   }
   
   /**

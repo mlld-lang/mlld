@@ -68,6 +68,7 @@ class SigSurfaceTest < Minitest::Test
     assert_equal(
       {
         'script' => 'show @payload.history',
+        'recordEffects' => true,
         'filePath' => '/repo/agent.mld',
         'payload' => {
           'history' => 'tool transcript',
@@ -88,6 +89,7 @@ class SigSurfaceTest < Minitest::Test
     assert_equal(
       {
         'filepath' => '/repo/agent.mld',
+        'recordEffects' => true,
         'payload' => { 'history' => 'tool transcript' },
         'payloadLabels' => { 'history' => ['untrusted', 'trusted'] },
         'mcpServers' => { 'tools' => 'uv run python3 mcp_server.py' }

@@ -23,6 +23,7 @@ import {
 } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { maskFactFieldValue } from './display-masking';
+import { traceDisplayProject } from '@interpreter/tracing/events';
 
 type RefProjection = { value: unknown; handle: string };
 type MaskedProjection = { preview: string; handle: string };
@@ -242,12 +243,12 @@ function projectFieldValue(
   parent?: StructuredValue
 ): unknown | typeof OMITTED_FIELD {
   const emitProjectionTrace = (mode: string, data: Record<string, unknown> = {}): void => {
-    env.emitRuntimeTrace('verbose', 'display', 'display.project', {
+    env.emitRuntimeTraceEvent(traceDisplayProject({
       record: fieldProjection.recordName,
       field: fieldProjection.fieldName,
       mode,
       ...data
-    });
+    }));
   };
   const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
   if (resolution.omitted) {

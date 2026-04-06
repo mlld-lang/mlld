@@ -19,6 +19,7 @@ import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/ex
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { tracePolicyEvent } from '@interpreter/tracing/events';
 
 const POLICY_SOURCE: VariableSource = {
   directive: 'var',
@@ -348,7 +349,7 @@ async function buildPolicyAuthorizations(
     mode: 'builder'
   });
 
-  executionEnv.emitRuntimeTrace('effects', 'policy', `policy.${mode}`, {
+  executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('effects', `policy.${mode}`, {
     mode,
     toolCount: Object.keys(toolCollection).length,
     valid: compilation.issues.length === 0,
@@ -356,26 +357,26 @@ async function buildPolicyAuthorizations(
     repairedArgCount: compilation.report.repairedArgs.length,
     droppedEntryCount: compilation.report.droppedEntries.length,
     droppedArrayElementCount: compilation.report.droppedArrayElements.length
-  });
+  }));
   if (compilation.report.repairedArgs.length > 0) {
-    executionEnv.emitRuntimeTrace('verbose', 'policy', 'policy.compile_repair', {
+    executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('verbose', 'policy.compile_repair', {
       mode,
       repairedArgs: compilation.report.repairedArgs.map(entry => ({
         tool: entry.tool,
         arg: entry.arg,
         steps: entry.steps
       }))
-    });
+    }));
   }
   if (
     compilation.report.droppedEntries.length > 0
     || compilation.report.droppedArrayElements.length > 0
   ) {
-    executionEnv.emitRuntimeTrace('effects', 'policy', 'policy.compile_drop', {
+    executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('effects', 'policy.compile_drop', {
       mode,
       droppedEntries: compilation.report.droppedEntries,
       droppedArrayElements: compilation.report.droppedArrayElements
-    });
+    }));
   }
 
   return createPolicyBuilderResult(compilation, activePolicy);

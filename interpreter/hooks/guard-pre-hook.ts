@@ -66,6 +66,7 @@ import {
   buildGuardArgsSnapshot,
   getGuardArgNamesFromMetadata
 } from '../utils/guard-args';
+import { emitAggregateGuardTrace, getGuardTraceOperationName } from './guard-trace';
 
 function applyCurrentInputToCandidate(
   candidate: PerInputCandidate,
@@ -733,10 +734,6 @@ export const guardPreHook: PreHook = async (
       decisionState.hints,
       decisionState.reasons
     );
-    const guardName =
-      guardTrace[0]?.guard?.name ??
-      guardTrace[0]?.guard?.filterKind ??
-      '';
     const contextLabels = operation.labels ?? [];
     const provenance =
       env.isProvenanceEnabled?.() === true
@@ -746,7 +743,7 @@ export const guardPreHook: PreHook = async (
         : undefined;
     env.emitSDKEvent({
       type: 'debug:guard:before',
-      guard: guardName,
+      guard: guardTrace[0]?.guard?.name ?? guardTrace[0]?.guard?.filterKind ?? '',
       labels: contextLabels,
       decision: decisionState.decision,
       trace: guardTrace,
@@ -755,25 +752,13 @@ export const guardPreHook: PreHook = async (
       timestamp: Date.now(),
       ...(provenance && { provenance })
     });
-    env.emitRuntimeTrace('effects', 'guard', 'guard.evaluate', {
+    emitAggregateGuardTrace(env, {
       phase: 'before',
-      guard: guardName || null,
-      operation: operation.named ?? operation.name ?? operation.type,
+      guardTrace,
       decision: decisionState.decision,
-      traceCount: guardTrace.length,
-      decisionCounts: guardTrace.reduce<Record<string, number>>((counts, entry) => {
-        counts[entry.decision] = (counts[entry.decision] ?? 0) + 1;
-        return counts;
-      }, {}),
+      operation: getGuardTraceOperationName(operation),
       reasons: decisionState.reasons,
-      hintCount: decisionState.hints.length
-    });
-    env.emitRuntimeTrace('effects', 'guard', `guard.${decisionState.decision}`, {
-      phase: 'before',
-      guard: guardName || null,
-      operation: operation.named ?? operation.name ?? operation.type,
-      reasons: decisionState.reasons,
-      hints: decisionState.hints.map(hint => hint?.hint ?? null)
+      hints: decisionState.hints
     });
 
     logGuardDecisionSummary({
