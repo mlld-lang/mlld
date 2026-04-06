@@ -21,10 +21,21 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS';
 import type { ResolvedURLConfig } from '@core/types/url-config';
-import type { DirectiveTrace } from '@core/types/trace';
+import type {
+  DirectiveTrace,
+  RuntimeTraceCategory,
+  RuntimeTraceEmissionLevel,
+  RuntimeTraceEvent,
+  RuntimeTraceLevel,
+  RuntimeTraceOptions,
+  RuntimeTraceScope
+} from '@core/types/trace';
+import { shouldEmitRuntimeTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { EnvironmentConfig } from '@core/types/environment';
+import { sanitizeSerializableValue } from '@core/errors/errorSerialization';
 import { execSync } from 'child_process';
+import { appendFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
 // Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
@@ -343,6 +354,10 @@ export class Environment
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
+  private runtimeTraceLevel: RuntimeTraceLevel = 'off';
+  private runtimeTraceEvents: RuntimeTraceEvent[] = [];
+  private runtimeTraceFilePath?: string;
+  private runtimeTraceStderr = false;
 
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
@@ -926,18 +941,34 @@ export class Environment
     if (!root.valueHandleRegistry) {
       root.valueHandleRegistry = new ValueHandleRegistry();
     }
-    return root.valueHandleRegistry.issue(value, options);
+    const issued = root.valueHandleRegistry.issue(value, options);
+    root.emitRuntimeTrace('verbose', 'handle', 'handle.mint', {
+      handle: issued.handle,
+      preview: issued.preview,
+      source: issued.metadata?.source,
+      value: root.summarizeTraceValue(value)
+    });
+    return issued;
   }
 
   resolveHandle(handle: string): unknown {
     const root = this.getRootEnvironment();
     const entry = root.valueHandleRegistry?.resolve(handle);
     if (!entry) {
+      root.emitRuntimeTrace('verbose', 'handle', 'handle.resolve_fail', {
+        handle,
+        success: false
+      });
       throw new MlldSecurityError(`Unknown handle '${handle}'`, {
         code: 'HANDLE_NOT_FOUND',
         details: { handle }
       });
     }
+    root.emitRuntimeTrace('verbose', 'handle', 'handle.resolve', {
+      handle,
+      success: true,
+      value: root.summarizeTraceValue(entry.value)
+    });
     return entry.value;
   }
 
@@ -1237,7 +1268,13 @@ export class Environment
     if (!owner) {
       return undefined;
     }
-    return owner.shelfState?.get(shelfName)?.get(slotName);
+    const value = owner.shelfState?.get(shelfName)?.get(slotName);
+    owner.emitRuntimeTrace('verbose', 'shelf', 'shelf.read', {
+      slot: `@${shelfName}.${slotName}`,
+      found: value !== undefined,
+      value: owner.summarizeTraceValue(value)
+    });
+    return value;
   }
 
   writeShelfSlot(shelfName: string, slotName: string, value: unknown): void {
@@ -1246,6 +1283,12 @@ export class Environment
       throw new Error(`Shelf '@${shelfName}' is not defined`);
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
+    owner.emitRuntimeTrace('effects', 'shelf', 'shelf.write', {
+      slot: `@${shelfName}.${slotName}`,
+      action: 'write',
+      success: true,
+      value: owner.summarizeTraceValue(value)
+    });
   }
 
   clearShelfSlot(shelfName: string, slotName: string): void {
@@ -1253,7 +1296,12 @@ export class Environment
     if (!owner) {
       return;
     }
-    owner.shelfState?.get(shelfName)?.delete(slotName);
+    const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
+    owner.emitRuntimeTrace('effects', 'shelf', 'shelf.clear', {
+      slot: `@${shelfName}.${slotName}`,
+      action: 'clear',
+      success: removed
+    });
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {
@@ -2804,6 +2852,10 @@ export class Environment
     if (options.includeTraceInheritance) {
       child.traceEnabled = this.traceEnabled;
       child.directiveTrace = this.directiveTrace;
+      child.runtimeTraceLevel = this.runtimeTraceLevel;
+      child.runtimeTraceEvents = this.runtimeTraceEvents;
+      child.runtimeTraceFilePath = this.runtimeTraceFilePath;
+      child.runtimeTraceStderr = this.runtimeTraceStderr;
     }
 
     if (this.allowedTools) {
@@ -3384,6 +3436,178 @@ export class Environment
     this.traceEnabled = enabled;
     if (!enabled) {
       this.directiveTrace = [];
+    }
+  }
+
+  setRuntimeTrace(level: RuntimeTraceLevel, options: RuntimeTraceOptions = {}): void {
+    const root = this.getRootEnvironment();
+    root.runtimeTraceLevel = level;
+    root.runtimeTraceFilePath = options.filePath
+      ? path.resolve(options.filePath)
+      : undefined;
+    root.runtimeTraceStderr = options.stderr === true;
+    if (level === 'off') {
+      root.runtimeTraceEvents = [];
+    }
+    this.runtimeTraceLevel = root.runtimeTraceLevel;
+    this.runtimeTraceFilePath = root.runtimeTraceFilePath;
+    this.runtimeTraceStderr = root.runtimeTraceStderr;
+  }
+
+  getRuntimeTraceLevel(): RuntimeTraceLevel {
+    return this.getRootEnvironment().runtimeTraceLevel;
+  }
+
+  getRuntimeTraceEvents(): RuntimeTraceEvent[] {
+    return [...this.getRootEnvironment().runtimeTraceEvents];
+  }
+
+  emitRuntimeTrace(
+    requiredLevel: RuntimeTraceEmissionLevel,
+    category: RuntimeTraceCategory,
+    event: string,
+    data: Record<string, unknown>,
+    scope?: Partial<RuntimeTraceScope>
+  ): void {
+    const root = this.getRootEnvironment();
+    if (!shouldEmitRuntimeTrace(root.runtimeTraceLevel, requiredLevel)) {
+      return;
+    }
+
+    const payload: RuntimeTraceEvent = {
+      ts: new Date().toISOString(),
+      level: requiredLevel,
+      category,
+      event,
+      scope: this.buildRuntimeTraceScope(scope),
+      data: sanitizeSerializableValue(data) as Record<string, unknown>
+    };
+
+    root.runtimeTraceEvents.push(payload);
+
+    if (root.runtimeTraceFilePath) {
+      try {
+        mkdirSync(path.dirname(root.runtimeTraceFilePath), { recursive: true });
+        appendFileSync(root.runtimeTraceFilePath, `${JSON.stringify(payload)}\n`, 'utf8');
+      } catch {
+        // Best-effort file sink; trace collection still succeeds in memory.
+      }
+    }
+
+    if (root.runtimeTraceStderr) {
+      process.stderr.write(`${this.formatRuntimeTraceLine(payload)}\n`);
+    }
+  }
+
+  summarizeTraceValue(value: unknown): unknown {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      return value.length > 160 ? `${value.slice(0, 157)}...` : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return {
+        kind: 'array',
+        length: value.length
+      };
+    }
+    if (typeof value === 'object') {
+      if ('handle' in (value as Record<string, unknown>) && typeof (value as any).handle === 'string') {
+        return { handle: (value as any).handle };
+      }
+      const keys = Object.keys(value as Record<string, unknown>);
+      return {
+        kind: 'object',
+        keys: keys.slice(0, 8),
+        size: keys.length
+      };
+    }
+    return String(value);
+  }
+
+  private buildRuntimeTraceScope(
+    overrides?: Partial<RuntimeTraceScope>
+  ): RuntimeTraceScope {
+    const scope: RuntimeTraceScope = {};
+    const operation = this.contextManager.peekOperation();
+    const guard = this.contextManager.peekGuardContext();
+    const pipeline = this.getPipelineContext();
+    const scopedConfig = this.getScopedEnvironmentConfig();
+    const bridge = this.getActiveBridge();
+
+    if (operation?.type === 'exe' && operation.name) {
+      scope.exe = operation.name.startsWith('@') ? operation.name : `@${operation.name}`;
+    } else if (operation?.name) {
+      scope.operation = operation.name.startsWith('@') ? operation.name : `@${operation.name}`;
+    } else if (operation?.named) {
+      scope.operation = operation.named;
+    } else if (operation?.type) {
+      scope.operation = operation.type;
+    }
+
+    const guardTry =
+      typeof guard?.try === 'number'
+        ? guard.try
+        : typeof guard?.attempt === 'number'
+          ? guard.attempt
+          : undefined;
+    if (guardTry !== undefined) {
+      scope.guard_try = guardTry;
+    }
+
+    if (typeof pipeline?.stage === 'number') {
+      scope.pipeline_stage = pipeline.stage;
+    }
+
+    if (typeof scopedConfig?.name === 'string' && scopedConfig.name.trim().length > 0) {
+      scope.box = scopedConfig.name.trim();
+    } else if (bridge?.mcpConfigPath) {
+      scope.box = bridge.mcpConfigPath;
+    }
+
+    return {
+      ...scope,
+      ...(overrides ?? {})
+    };
+  }
+
+  private formatRuntimeTraceLine(event: RuntimeTraceEvent): string {
+    const scopeTokens = Object.entries(event.scope)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key}=${this.formatRuntimeTraceScalar(value)}`);
+    const dataTokens = Object.entries(event.data)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key}=${this.formatRuntimeTraceScalar(value)}`);
+    const tokens = [
+      `[trace:${event.category}]`,
+      event.event,
+      ...scopeTokens,
+      ...dataTokens
+    ];
+    return tokens.join(' ');
+  }
+
+  private formatRuntimeTraceScalar(value: unknown): string {
+    if (typeof value === 'string') {
+      return JSON.stringify(value);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (value === null) {
+      return 'null';
+    }
+    if (value === undefined) {
+      return 'undefined';
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
     }
   }
   

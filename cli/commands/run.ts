@@ -17,6 +17,7 @@ import { execute, TimeoutError } from '@sdk/execute';
 import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { isRuntimeTraceLevel, type RuntimeTraceLevel } from '@core/types/trace';
 import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
 import { analyzeDeep, type AnalyzeResult } from './analyze';
 import {
@@ -35,6 +36,8 @@ export interface RunOptions {
   timeoutMs?: number;
   debug?: boolean;
   inject?: string[];
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
   checkpoint?: boolean;
   noCheckpoint?: boolean;
   fresh?: boolean;
@@ -412,6 +415,9 @@ export class RunCommand {
         fork: options.fork,
         checkpointScriptName: scriptName,
         checkpointCacheRootDir,
+        trace: options.trace,
+        traceFile: options.traceFile,
+        traceStderr: options.trace !== undefined && options.trace !== 'off',
         signingContext: { tier: 'user' }
       };
       const result = await execute(scriptPath, undefined, executeOptions as any) as StructuredResult;
@@ -536,6 +542,8 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
+  --trace <level>         Runtime effect tracing: off, effects, or verbose
+  --trace-file <path>     Write runtime trace events as JSONL
   --mlld-env <env>        Load MLLD env file or inline KEY=VALUE overrides (reserved flag)
   --no-warn               Suppress pre-flight warning output (errors still block execution)
   --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
@@ -568,6 +576,7 @@ Examples:
   mlld run hello                     # Run llm/run/hello.mld
   mlld run my-app                    # Run llm/run/my-app/index.mld
   mlld run hello --debug             # Show execution metrics
+  mlld run hello --trace effects     # Trace runtime effects to stderr
   mlld run qa --topic variables      # Pass --topic as payload
 
 Payload:
@@ -588,6 +597,8 @@ Creating Scripts:
 
       // Parse timeout flag (supports durations like 5m, 1h, 30s)
       let timeoutMs: number | undefined;
+      let trace: RuntimeTraceLevel | undefined;
+      let traceFile: string | undefined;
       if (flags.timeout !== undefined) {
         try {
           timeoutMs = parseDuration(String(flags.timeout));
@@ -600,6 +611,16 @@ Creating Scripts:
           process.exit(1);
         }
       }
+      if (flags.trace !== undefined) {
+        if (!isRuntimeTraceLevel(flags.trace)) {
+          console.error(chalk.red('Error: --trace must be one of off, effects, verbose'));
+          process.exit(1);
+        }
+        trace = flags.trace;
+      }
+      if (flags['trace-file'] !== undefined) {
+        traceFile = String(flags['trace-file']);
+      }
 
       // Known flags that are NOT payload
       const knownFlags = new Set([
@@ -608,6 +629,8 @@ Creating Scripts:
         'timeout',
         'debug',
         'd',
+        'trace',
+        'trace-file',
         'mlld-env',
         'no-warn',
         'noWarn',
@@ -686,6 +709,8 @@ Creating Scripts:
         timeoutMs,
         debug: isDebug,
         inject: inject.length > 0 ? inject : undefined,
+        trace,
+        traceFile,
         checkpoint: checkpointEnabled,
         noCheckpoint,
         fresh,

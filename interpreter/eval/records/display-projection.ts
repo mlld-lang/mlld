@@ -243,10 +243,20 @@ function projectFieldValue(
 ): unknown | typeof OMITTED_FIELD {
   const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
   if (resolution.omitted) {
+    env.emitRuntimeTrace('verbose', 'display', 'display.project', {
+      record: fieldProjection.recordName,
+      field: fieldProjection.fieldName,
+      mode: 'omitted'
+    });
     return OMITTED_FIELD;
   }
 
   const effectiveDisplay = resolution.mode;
+  env.emitRuntimeTrace('verbose', 'display', 'display.project', {
+    record: fieldProjection.recordName,
+    field: fieldProjection.fieldName,
+    mode: effectiveDisplay
+  });
   if (value.type === 'array' && Array.isArray(value.data)) {
     const elements = value.data.map(item => toStructuredProjectionElement(item));
 

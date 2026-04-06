@@ -1615,6 +1615,7 @@ fn build_process_request(
         normalize_payload_and_labels(opts.payload, opts.payload_labels)?;
     let mut params = serde_json::Map::new();
     params.insert("script".to_string(), Value::String(script.to_string()));
+    params.insert("recordEffects".to_string(), Value::Bool(true));
 
     if let Some(file_path) = opts.file_path {
         params.insert("filePath".to_string(), Value::String(file_path));
@@ -1670,6 +1671,7 @@ fn build_execute_request(
     let (payload, payload_labels) = normalize_payload_and_labels(payload, opts.payload_labels)?;
     let mut params = serde_json::Map::new();
     params.insert("filepath".to_string(), Value::String(filepath.to_string()));
+    params.insert("recordEffects".to_string(), Value::Bool(true));
 
     if let Some(payload) = payload {
         params.insert("payload".to_string(), payload);
@@ -1703,6 +1705,12 @@ fn build_execute_request(
     }
     if let Some(mode) = opts.mode {
         params.insert("mode".to_string(), Value::String(mode));
+    }
+    if let Some(trace) = opts.trace {
+        params.insert("trace".to_string(), Value::String(trace));
+    }
+    if let Some(trace_file) = opts.trace_file {
+        params.insert("traceFile".to_string(), Value::String(trace_file));
     }
 
     Ok((
@@ -1769,6 +1777,12 @@ pub struct ExecuteOptions {
 
     /// Allow absolute path access.
     pub allow_absolute_paths: Option<bool>,
+
+    /// Runtime effect tracing: off|effects|verbose.
+    pub trace: Option<String>,
+
+    /// Write runtime trace events as JSONL.
+    pub trace_file: Option<String>,
 
     /// Override the client default timeout.
     pub timeout: Option<Duration>,
@@ -1844,7 +1858,24 @@ pub struct ExecuteResult {
     #[serde(default)]
     pub denials: Vec<GuardDenial>,
 
+    #[serde(default)]
+    pub trace_events: Vec<TraceEvent>,
+
     pub metrics: Option<Metrics>,
+}
+
+/// Structured runtime trace event.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceEvent {
+    pub ts: String,
+    pub level: String,
+    pub category: String,
+    pub event: String,
+    #[serde(default)]
+    pub scope: Value,
+    #[serde(default)]
+    pub data: Value,
 }
 
 /// An output effect from execution.
@@ -2795,6 +2826,7 @@ mod tests {
             params,
             json!({
                 "script": "show @payload.history",
+                "recordEffects": true,
                 "filePath": "/repo/agent.mld",
                 "payload": {
                     "history": "tool transcript",
@@ -2834,6 +2866,7 @@ mod tests {
             params,
             json!({
                 "filepath": "/repo/agent.mld",
+                "recordEffects": true,
                 "payload": { "history": "tool transcript" },
                 "payloadLabels": { "history": ["untrusted", "trusted"] },
                 "mcpServers": { "tools": "uv run python3 mcp_server.py" }

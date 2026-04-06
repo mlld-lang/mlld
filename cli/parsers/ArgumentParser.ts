@@ -1,5 +1,6 @@
 import type { CLIOptions } from '../index';
 import * as path from 'path';
+import { isRuntimeTraceLevel } from '@core/types/trace';
 
 export interface ParsedCLIArguments {
   command?: string;
@@ -214,6 +215,22 @@ export class ArgumentParser {
         case '--metrics':
           options.metrics = true;
           break;
+        case '--trace': {
+          const traceLevel = args[++i];
+          if (!isRuntimeTraceLevel(traceLevel)) {
+            throw new Error('--trace must be one of: off, effects, verbose');
+          }
+          options.trace = traceLevel;
+          break;
+        }
+        case '--trace-file': {
+          const traceFile = args[++i];
+          if (!traceFile) {
+            throw new Error('--trace-file requires a path');
+          }
+          options.traceFile = traceFile;
+          break;
+        }
         // Import approval bypass options
         case '--risky-approve-all':
           options.riskyApproveAll = true;

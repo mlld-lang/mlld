@@ -755,6 +755,22 @@ export const guardPreHook: PreHook = async (
       timestamp: Date.now(),
       ...(provenance && { provenance })
     });
+    env.emitRuntimeTrace('effects', 'guard', 'guard.evaluate', {
+      phase: 'before',
+      guard: guardName || null,
+      operation: operation.named ?? operation.name ?? operation.type,
+      decision: decisionState.decision,
+      traceCount: guardTrace.length,
+      reasons: decisionState.reasons,
+      hintCount: decisionState.hints.length
+    });
+    env.emitRuntimeTrace('effects', 'guard', `guard.${decisionState.decision}`, {
+      phase: 'before',
+      guard: guardName || null,
+      operation: operation.named ?? operation.name ?? operation.type,
+      reasons: decisionState.reasons,
+      hints: decisionState.hints.map(hint => hint?.hint ?? null)
+    });
 
     logGuardDecisionSummary({
       decision: decisionState.decision,

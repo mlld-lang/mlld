@@ -309,6 +309,7 @@ async function normalizeIntentContainer(
 }
 
 async function buildPolicyAuthorizations(
+  mode: 'build' | 'validate',
   intentOrEnv?: unknown,
   toolsOrEnv?: unknown,
   optionsOrEnv?: unknown,
@@ -347,6 +348,36 @@ async function buildPolicyAuthorizations(
     mode: 'builder'
   });
 
+  executionEnv.emitRuntimeTrace('effects', 'policy', `policy.${mode}`, {
+    mode,
+    toolCount: Object.keys(toolCollection).length,
+    valid: compilation.issues.length === 0,
+    issueCount: compilation.issues.length,
+    repairedArgCount: compilation.report.repairedArgs.length,
+    droppedEntryCount: compilation.report.droppedEntries.length,
+    droppedArrayElementCount: compilation.report.droppedArrayElements.length
+  });
+  if (compilation.report.repairedArgs.length > 0) {
+    executionEnv.emitRuntimeTrace('verbose', 'policy', 'policy.compile_repair', {
+      mode,
+      repairedArgs: compilation.report.repairedArgs.map(entry => ({
+        tool: entry.tool,
+        arg: entry.arg,
+        steps: entry.steps
+      }))
+    });
+  }
+  if (
+    compilation.report.droppedEntries.length > 0
+    || compilation.report.droppedArrayElements.length > 0
+  ) {
+    executionEnv.emitRuntimeTrace('effects', 'policy', 'policy.compile_drop', {
+      mode,
+      droppedEntries: compilation.report.droppedEntries,
+      droppedArrayElements: compilation.report.droppedArrayElements
+    });
+  }
+
   return createPolicyBuilderResult(compilation, activePolicy);
 }
 
@@ -364,7 +395,7 @@ function createPolicyMethod(
       optionsOrEnv?: unknown,
       boundEnv?: Environment
     ) =>
-      buildPolicyAuthorizations(intentOrEnv, toolsOrEnv, optionsOrEnv, boundEnv, env),
+      buildPolicyAuthorizations(name, intentOrEnv, toolsOrEnv, optionsOrEnv, boundEnv, env),
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['intent', 'tools', 'options'],

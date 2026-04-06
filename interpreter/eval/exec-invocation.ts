@@ -3070,6 +3070,10 @@ async function evaluateExecInvocationInternal(
   let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
   let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
+  let llmTraceSessionId: string | undefined;
+  let llmTraceProvider: string | undefined;
+  let llmTraceModel: string | undefined;
+  let llmTraceToolCount: number | undefined;
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';
@@ -3092,9 +3096,17 @@ async function evaluateExecInvocationInternal(
     const originalConfigArg = evaluatedArgs[1];
     const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
+      const captureLlmTraceConfig = (config: Record<string, unknown>): void => {
+        const runtimeConfig = readLlmRuntimeResumeConfig(config);
+        llmTraceSessionId = runtimeConfig?.sessionId;
+        llmTraceProvider = runtimeConfig?.provider;
+        llmTraceModel = typeof config.model === 'string' ? config.model : undefined;
+        llmTraceToolCount = Array.isArray(config.tools) ? config.tools.length : undefined;
+      };
       let nextConfig = { ...(rawConfig as Record<string, unknown>) };
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
+      const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
 
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
@@ -3103,7 +3115,7 @@ async function evaluateExecInvocationInternal(
           nextConfig.tools = [];
           didUpdateConfigArg = true;
         }
-      } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation) {
+      } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation && !hasToolSelection) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
           sessionId: randomUUID(),
           provider: 'unknown',
@@ -3152,19 +3164,6 @@ async function evaluateExecInvocationInternal(
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
 
-        if (!isLlmResumeContinuation) {
-          const nextResumeConfig: LlmRuntimeResumeConfig = {
-            sessionId: existingRuntimeResumeConfig?.sessionId ?? callConfig.sessionId,
-            provider: existingRuntimeResumeConfig?.provider ?? 'unknown',
-            continue: false
-          };
-          const previousResumeConfig = readLlmRuntimeResumeConfig(nextConfig);
-          nextConfig = injectLlmRuntimeResumeConfig(nextConfig, nextResumeConfig);
-          didUpdateConfigArg ||=
-            previousResumeConfig?.sessionId !== nextResumeConfig.sessionId ||
-            previousResumeConfig?.provider !== nextResumeConfig.provider ||
-            previousResumeConfig?.continue !== nextResumeConfig.continue;
-        }
       }
 
       const previousSystem = nextConfig.system;
@@ -3185,7 +3184,17 @@ async function evaluateExecInvocationInternal(
           evaluatedArgStrings
         });
       }
+      captureLlmTraceConfig(nextConfig);
     }
+  }
+  if (hasLlmLabel) {
+    runtimeEnv.emitRuntimeTrace('verbose', 'llm', isLlmResumeContinuation ? 'llm.resume' : 'llm.call', {
+      sessionId: llmTraceSessionId,
+      provider: llmTraceProvider,
+      model: llmTraceModel,
+      toolCount: llmTraceToolCount,
+      resume: isLlmResumeContinuation
+    });
   }
   
   const guardHelperImpl =
@@ -3276,6 +3285,11 @@ async function evaluateExecInvocationInternal(
     argSecurityDescriptors
   });
   if (shouldValidatePolicyAuthorizations) {
+    runtimeEnv.emitRuntimeTrace('effects', 'auth', 'auth.check', {
+      tool: toolOperationName ?? variable.name ?? commandName,
+      args: runtimeEnv.summarizeTraceValue(authorizationArgs),
+      controlArgs: authorizationDecisionControlArgs
+    });
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
       throw createPolicyAuthorizationValidationError(validation);
@@ -3287,6 +3301,20 @@ async function evaluateExecInvocationInternal(
       args: authorizationArgs,
       controlArgs: authorizationDecisionControlArgs
     });
+    runtimeEnv.emitRuntimeTrace(
+      'effects',
+      'auth',
+      authorizationDecision.decision === 'allow' ? 'auth.allow' : 'auth.deny',
+      {
+        tool: toolOperationName ?? variable.name ?? commandName,
+        matched: authorizationDecision.matched,
+        code: authorizationDecision.code ?? null,
+        reason: authorizationDecision.reason ?? null,
+        matchedAttestationCount: authorizationDecision.matchedAttestations
+          ? Object.keys(authorizationDecision.matchedAttestations).length
+          : 0
+      }
+    );
     if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
         env: runtimeEnv,
@@ -3318,6 +3346,15 @@ async function evaluateExecInvocationInternal(
           timestamp: Date.now()
         }
       : null;
+  const traceLlmToolCall =
+    trackedToolName.length > 0 &&
+    Array.from(env.getEnclosingExeLabels()).includes('llm');
+  if (traceLlmToolCall) {
+    env.emitRuntimeTrace('verbose', 'llm', 'llm.tool_call', {
+      tool: trackedToolName,
+      args: env.summarizeTraceValue(toolCallArguments)
+    });
+  }
   const recordToolCall = (ok: boolean, error?: unknown): void => {
     if (!toolCallRecordBase) {
       return;
@@ -3891,10 +3928,24 @@ async function evaluateExecInvocationInternal(
       env.recordKnownUrlsFromValue(invocationResult.value);
     }
     await recordToolAudit(true, invocationResult.value);
+    if (traceLlmToolCall) {
+      env.emitRuntimeTrace('verbose', 'llm', 'llm.tool_result', {
+        tool: trackedToolName,
+        ok: true,
+        result: env.summarizeTraceValue(invocationResult.value)
+      });
+    }
     recordToolCall(true);
     return invocationResult;
   } catch (error) {
     await recordToolAudit(false, undefined, error);
+    if (traceLlmToolCall) {
+      env.emitRuntimeTrace('verbose', 'llm', 'llm.tool_result', {
+        tool: trackedToolName,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
     recordToolCall(false, error);
     throw error;
   }

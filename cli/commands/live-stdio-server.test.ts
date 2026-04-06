@@ -194,7 +194,7 @@ function createServerHarness(
 }
 
 describe('LiveStdioServer', () => {
-  it('handles process requests and streams events before final result', async () => {
+  it('handles process requests and streams all events when explicitly requested', async () => {
     const handle = new FakeStreamExecution();
 
     const harness = createServerHarness({
@@ -202,7 +202,7 @@ describe('LiveStdioServer', () => {
     });
 
     harness.input.write(
-      `${JSON.stringify({ method: 'process', id: 1, params: { script: '/show "hi"' } })}\n`
+      `${JSON.stringify({ method: 'process', id: 1, params: { script: '/show "hi"', eventMode: 'all' } })}\n`
     );
 
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -219,11 +219,120 @@ describe('LiveStdioServer', () => {
     const lines = harness.jsonLines();
 
     expect(lines[0].event.requestId).toBe(1);
+    expect(lines[0].event.id).toBe(1);
     expect(lines[0].event.type).toBe('command:start');
     expect(lines[1].event.type).toBe('state:write');
+    expect(lines[1].event.id).toBe(1);
     expect(lines[1].event.write.path).toBe('foo');
     expect(lines[2].id).toBe(1);
+    expect(lines[2].result.id).toBe(1);
     expect(lines[2].result.output).toBe('hi');
+
+    await harness.close();
+  });
+
+  it('forwards only live-handle events by default', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 14, params: { filepath: '/tmp/agent.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    handle.emit({ type: 'command:start', command: '@demo', timestamp: Date.now() } as any);
+    handle.emit({
+      type: 'state:write',
+      write: { index: 0, path: 'foo', value: 'bar', operation: 'set', timestamp: '2026-01-01T00:00:00.000Z' },
+      timestamp: Date.now()
+    } as any);
+    handle.resolve({ output: 'hi', effects: [], exports: {}, stateWrites: [] } as any);
+
+    await harness.waitForLineCount(2);
+    const lines = harness.jsonLines();
+
+    expect(lines[0].event.type).toBe('state:write');
+    expect(lines[0].event.id).toBe(14);
+    expect(lines[1].id).toBe(14);
+    expect(lines[1].result.id).toBe(14);
+    expect(lines[1].result.output).toBe('hi');
+    expect(lines.some(line => line.event?.type === 'command:start')).toBe(false);
+
+    await harness.close();
+  });
+
+  it('disables effect recording by default and allows explicit opt-in', async () => {
+    const seen: Array<boolean | undefined> = [];
+    const createHandle = () => {
+      const handle = new FakeStreamExecution();
+      handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [] } as any);
+      return handle;
+    };
+
+    const harness = createServerHarness({
+      executeFile: async (_filepath: string, _payload: unknown, options: any) => {
+        seen.push(options?.recordEffects);
+        return createHandle();
+      }
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 15, params: { filepath: '/tmp/default.mld' } })}\n`
+    );
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 16, params: { filepath: '/tmp/explicit.mld', recordEffects: true } })}\n`
+    );
+
+    await harness.waitForLineCount(2);
+
+    expect(seen).toEqual([false, true]);
+
+    await harness.close();
+  });
+
+  it('forwards trace params to execute requests without enabling stderr output', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const createHandle = () => {
+      const handle = new FakeStreamExecution();
+      handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [], traceEvents: [] } as any);
+      return handle;
+    };
+
+    const harness = createServerHarness({
+      executeFile: async (_filepath: string, _payload: unknown, options: any) => {
+        seen.push({
+          trace: options?.trace,
+          traceFile: options?.traceFile,
+          traceStderr: options?.traceStderr
+        });
+        return createHandle();
+      }
+    });
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'execute',
+        id: 17,
+        params: {
+          filepath: '/tmp/traced.mld',
+          trace: 'effects',
+          traceFile: '/tmp/runtime.jsonl'
+        }
+      })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+
+    expect(seen).toEqual([
+      {
+        trace: 'effects',
+        traceFile: '/tmp/runtime.jsonl',
+        traceStderr: false
+      }
+    ]);
 
     await harness.close();
   });
@@ -267,7 +376,9 @@ describe('LiveStdioServer', () => {
     const lines = harness.jsonLines();
 
     expect(lines[0].event.type).toBe('guard_denial');
+    expect(lines[0].event.id).toBe(12);
     expect(lines[0].event.guard_denial).toEqual(denial);
+    expect(lines[1].result.id).toBe(12);
     expect(lines[1].result.denials).toEqual([denial]);
 
     await harness.close();
@@ -307,6 +418,7 @@ describe('LiveStdioServer', () => {
     const [line] = harness.jsonLines();
 
     expect(line.id).toBe(13);
+    expect(line.result.id).toBe(13);
     expect(line.result.output).toBe(largeOutput);
     expect(line.result.output).not.toContain('[truncated');
     expect(() => JSON.parse(line.result.output)).not.toThrow();
@@ -321,7 +433,7 @@ describe('LiveStdioServer', () => {
     });
 
     harness.input.write(
-      `${JSON.stringify({ method: 'process', id: 11, params: { script: '/show "hi"' } })}\n`
+      `${JSON.stringify({ method: 'process', id: 11, params: { script: '/show "hi"', eventMode: 'all' } })}\n`
     );
 
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -570,6 +682,12 @@ describe('LiveStdioServer', () => {
 
     expect(line.id).toBe(7);
     expect(line.error.code).toBe('ABORTED');
+    expect(line.result).toEqual(
+      expect.objectContaining({
+        id: 7,
+        error: expect.objectContaining({ code: 'ABORTED' })
+      })
+    );
 
     await harness.close();
   });
@@ -661,8 +779,10 @@ describe('LiveStdioServer', () => {
 });
 
 describe('LiveStdioServer output mode', () => {
-  it('restores MLLD_NO_STREAMING value after shutdown', async () => {
+  it('restores protocol-safe streaming env vars after shutdown', async () => {
+    const originalNoStream = process.env.MLLD_NO_STREAM;
     const original = process.env.MLLD_NO_STREAMING;
+    process.env.MLLD_NO_STREAM = 'legacy-value';
     process.env.MLLD_NO_STREAMING = 'custom-value';
 
     const harness = createServerHarness({
@@ -673,10 +793,20 @@ describe('LiveStdioServer output mode', () => {
       `${JSON.stringify({ method: 'analyze', id: 9, params: { filepath: './x.mld' } })}\n`
     );
     await harness.waitForLineCount(1);
+
+    expect(process.env.MLLD_NO_STREAM).toBe('true');
+    expect(process.env.MLLD_NO_STREAMING).toBe('true');
+
     await harness.close();
 
+    expect(process.env.MLLD_NO_STREAM).toBe('legacy-value');
     expect(process.env.MLLD_NO_STREAMING).toBe('custom-value');
 
+    if (originalNoStream === undefined) {
+      delete process.env.MLLD_NO_STREAM;
+    } else {
+      process.env.MLLD_NO_STREAM = originalNoStream;
+    }
     if (original === undefined) {
       delete process.env.MLLD_NO_STREAMING;
     } else {

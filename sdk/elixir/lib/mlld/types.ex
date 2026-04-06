@@ -59,7 +59,13 @@ end
 
 defmodule Mlld.ExecuteResult do
   @moduledoc "Structured output from `execute/3`."
-  defstruct output: "", state_writes: [], exports: [], effects: [], denials: [], metrics: nil
+  defstruct output: "",
+            state_writes: [],
+            exports: [],
+            effects: [],
+            denials: [],
+            trace_events: [],
+            metrics: nil
 
   @type t :: %__MODULE__{
           output: String.t(),
@@ -67,6 +73,7 @@ defmodule Mlld.ExecuteResult do
           exports: term(),
           effects: [Mlld.Effect.t()],
           denials: [Mlld.GuardDenial.t()],
+          trace_events: [map()],
           metrics: Mlld.Metrics.t() | nil
         }
 end
@@ -273,12 +280,18 @@ defmodule Mlld.Types do
       |> Map.get("denials", [])
       |> Enum.flat_map(&decode_guard_denial/1)
 
+    trace_events =
+      result
+      |> Map.get("traceEvents", [])
+      |> Enum.filter(&is_map/1)
+
     %ExecuteResult{
       output: decode_output(result),
       state_writes: state_writes,
       exports: Map.get(result, "exports", []),
       effects: effects,
       denials: denials,
+      trace_events: trace_events,
       metrics: metrics
     }
   end

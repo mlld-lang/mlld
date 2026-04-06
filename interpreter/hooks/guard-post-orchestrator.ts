@@ -281,6 +281,22 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     timestamp: Date.now(),
     ...(provenance && { provenance })
   });
+  env.emitRuntimeTrace('effects', 'guard', 'guard.evaluate', {
+    phase: 'after',
+    guard: guardName || null,
+    operation: operation.named ?? operation.name ?? operation.type,
+    decision: currentDecision,
+    traceCount: guardTrace.length,
+    reasons,
+    hintCount: hints.length
+  });
+  env.emitRuntimeTrace('effects', 'guard', `guard.${currentDecision}`, {
+    phase: 'after',
+    guard: guardName || null,
+    operation: operation.named ?? operation.name ?? operation.type,
+    reasons,
+    hints: hints.map(hint => hint?.hint ?? null)
+  });
 
   if (currentDecision === 'allow' && hints.length > 0) {
     emitGuardWarningHints(env, hints);

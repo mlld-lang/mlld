@@ -212,7 +212,7 @@ defmodule Mlld.Client do
       timeout_ms = requested_timeout(opts)
 
       params =
-        %{"script" => script}
+        %{"script" => script, "recordEffects" => true}
         |> put_if_present("filePath", Keyword.get(opts, :file_path))
         |> put_if_present("payload", payload)
         |> put_if_present("payloadLabels", payload_labels)
@@ -238,7 +238,7 @@ defmodule Mlld.Client do
       timeout_ms = requested_timeout(opts)
 
       params =
-        %{"filepath" => filepath}
+        %{"filepath" => filepath, "recordEffects" => true}
         |> put_if_present("payload", payload)
         |> put_if_present("payloadLabels", payload_labels)
         |> put_if_present("state", Keyword.get(opts, :state))
@@ -247,6 +247,8 @@ defmodule Mlld.Client do
         |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
         |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
+        |> put_if_present("trace", Keyword.get(opts, :trace))
+        |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
 
       {"execute", params, timeout_ms}
     end
