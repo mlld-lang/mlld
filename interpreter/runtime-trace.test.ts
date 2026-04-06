@@ -38,7 +38,7 @@ describe('runtime trace', () => {
           event: 'shelf.write',
           level: 'effects',
           scope: expect.objectContaining({
-            exe: '@write'
+            exe: '@shelf.write'
           })
         })
       ])

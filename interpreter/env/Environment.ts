@@ -1267,7 +1267,13 @@ export class Environment
     return bucket;
   }
 
-  readShelfSlot(shelfName: string, slotName: string): unknown {
+  readShelfSlot(
+    shelfName: string,
+    slotName: string,
+    options: {
+      traceScope?: Partial<RuntimeTraceScope>;
+    } = {}
+  ): unknown {
     const owner = this.getShelfOwner(shelfName);
     if (!owner) {
       return undefined;
@@ -1275,7 +1281,7 @@ export class Environment
     const value = owner.shelfState?.get(shelfName)?.get(slotName);
     const slotRef = `@${shelfName}.${slotName}`;
     const readTs = new Date().toISOString();
-    const traceScope = this.buildRuntimeTraceScope();
+    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
     this.runtimeTraceManager.emitStaleShelfRead(slotRef, value, readTs, traceScope);
     this.emitRuntimeTraceEvent(traceShelfRead({
       slot: slotRef,
@@ -1293,6 +1299,7 @@ export class Environment
       traceEvent?: string;
       action?: string;
       traceData?: Record<string, unknown>;
+      traceScope?: Partial<RuntimeTraceScope>;
     } = {}
   ): void {
     const owner = this.getShelfOwner(shelfName);
@@ -1301,7 +1308,7 @@ export class Environment
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
     const slotRef = `@${shelfName}.${slotName}`;
-    const traceScope = this.buildRuntimeTraceScope();
+    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
     this.runtimeTraceManager.recordShelfWrite(slotRef, value, traceScope);
     this.emitRuntimeTraceEvent(traceShelfWrite({
       slot: slotRef,
@@ -1313,21 +1320,28 @@ export class Environment
     }), traceScope);
   }
 
-  clearShelfSlot(shelfName: string, slotName: string): void {
+  clearShelfSlot(
+    shelfName: string,
+    slotName: string,
+    options: {
+      traceScope?: Partial<RuntimeTraceScope>;
+    } = {}
+  ): void {
     const owner = this.getShelfOwner(shelfName);
     if (!owner) {
       return;
     }
     const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
     const slotRef = `@${shelfName}.${slotName}`;
+    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
     if (removed) {
-      this.runtimeTraceManager.recordShelfWrite(slotRef, undefined, this.buildRuntimeTraceScope());
+      this.runtimeTraceManager.recordShelfWrite(slotRef, undefined, traceScope);
     }
     this.emitRuntimeTraceEvent(traceShelfClear({
       slot: slotRef,
       action: 'clear',
       success: removed
-    }));
+    }), traceScope);
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {

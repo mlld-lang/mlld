@@ -35,6 +35,7 @@ import {
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import type { DataAliasedValue, DataValue } from '@core/types/var';
 import { isHandleWrapper } from '@core/types/handle';
+import type { RuntimeTraceScope } from '@core/types/trace';
 import { traceRecordCoerce, traceRecordSchemaFail } from '@interpreter/tracing/events';
 
 type ShelfNamespaceMetadata = {
@@ -746,11 +747,14 @@ export function extractShelfSlotRef(value: unknown): ShelfScopeSlotRef | undefin
 function createShelfSlotReferenceValue(
   env: Environment,
   shelfName: string,
-  slotName: string
+  slotName: string,
+  options: {
+    traceScope?: Partial<RuntimeTraceScope>;
+  } = {}
 ): ShelfSlotRefValue {
   const definition = env.getShelfDefinition(shelfName);
   const slot = definition?.slots[slotName];
-  const stored = env.readShelfSlot(shelfName, slotName);
+  const stored = env.readShelfSlot(shelfName, slotName, { traceScope: options.traceScope });
   const wrapped = stored === undefined
     ? (
         slot?.cardinality === 'collection'
@@ -943,15 +947,16 @@ async function writeToShelfSlot(
     assertFromConstraint(env, shelf, ref.slotName, item);
   }
 
+  const traceScope = { exe: callLabel };
   if (slot.cardinality === 'collection') {
-    const current = normalizeStoredCollection(env.readShelfSlot(ref.shelfName, ref.slotName));
+    const current = normalizeStoredCollection(env.readShelfSlot(ref.shelfName, ref.slotName, { traceScope }));
     const next = mergeCollectionItems(current, validatedItems, recordDefinition, slot.merge);
-    env.writeShelfSlot(ref.shelfName, ref.slotName, next);
+    env.writeShelfSlot(ref.shelfName, ref.slotName, next, { traceScope });
   } else {
-    env.writeShelfSlot(ref.shelfName, ref.slotName, validatedItems[0]);
+    env.writeShelfSlot(ref.shelfName, ref.slotName, validatedItems[0], { traceScope });
   }
 
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
+  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope });
 }
 
 async function readShelfSlot(
@@ -967,8 +972,9 @@ async function readShelfSlot(
   }
 
   ensureShelfSlotAvailable(env, ref);
+  const traceScope = { exe: callLabel };
 
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName).current;
+  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope }).current;
 }
 
 async function clearShelfSlot(
@@ -984,8 +990,8 @@ async function clearShelfSlot(
   }
   ensureShelfSlotAvailable(env, ref);
   assertShelfWriteAllowed(env, ref);
-  env.clearShelfSlot(ref.shelfName, ref.slotName);
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName);
+  env.clearShelfSlot(ref.shelfName, ref.slotName, { traceScope: { exe: callLabel } });
+  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope: { exe: callLabel } });
 }
 
 async function removeFromShelfSlot(
@@ -1021,7 +1027,8 @@ async function removeFromShelfSlot(
     });
   }
 
-  const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName));
+  const traceScope = { exe: callLabel };
+  const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName, { traceScope }));
   const resolvedRef = await resolveValueHandles(refValue, env);
   let next = current;
 
@@ -1052,12 +1059,13 @@ async function removeFromShelfSlot(
   env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next, {
     traceEvent: 'shelf.remove',
     action: 'remove',
+    traceScope,
     traceData: {
       removedCount: Math.max(0, current.length - next.length),
       ref: env.summarizeTraceValue(resolvedRef)
     }
   });
-  return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName);
+  return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName, { traceScope });
 }
 
 function defineEnumerableGetter(

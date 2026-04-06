@@ -182,7 +182,14 @@ export interface RuntimeTraceEventSpecMap {
   'display.project': {
     category: 'display';
     level: 'verbose';
-    data: TraceRecord<{ record: string; field: string; mode: string }>;
+    data: TraceRecord<{
+      record: string;
+      field: string;
+      mode: string;
+      handleIssued?: boolean;
+      handleCount?: number;
+      elementCount?: number;
+    }>;
   };
   'llm.call': {
     category: 'llm';
