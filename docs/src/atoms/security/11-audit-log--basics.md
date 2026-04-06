@@ -5,7 +5,7 @@ brief: Event ledgers with stable IDs, tool calls, and signing records
 category: security
 parent: audit-log
 tags: [audit, security, labels, signing, taint]
-related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking]
+related: [labels-overview, label-modification, signing-overview, policy-label-flow, security-label-tracking, runtime-tracing]
 related-code: [core/security/AuditLogger.ts, core/security/AuditLogIndex.ts, core/security/sig-adapter.ts, interpreter/utils/audit-log.ts]
 updated: 2026-03-23
 qa_tier: 2

@@ -5,7 +5,7 @@ title: mlld run Command
 brief: Execute scripts with payload injection
 category: cli
 tags: [cli, run, scripts, payload, checkpoint, resume]
-related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint]
+related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint, runtime-tracing]
 related-code: [cli/commands/run.ts]
 updated: 2026-03-06
 ---
@@ -45,6 +45,8 @@ var @fast = @payload.fast ? @payload.fast : false
 | `--resume [target]` | Enable checkpoint replay for this run; optional target invalidates entries |
 | `--fork <script>` | Seed cache from another script's checkpoints (read-only) |
 | `--mlld-env <env>` | Load agent env file(s) or inline KEY=VALUE overrides |
+| `--trace <level>` | Runtime effect tracing: `off`, `effects`, or `verbose` |
+| `--trace-file <path>` | Write trace events as JSONL to a file |
 | `--<name> <value>` | Payload field |
 
 **Checkpoint/resume**: `llm`-labeled exes are checkpointed automatically. Scripts default to manual replay unless they declare `resume: auto`, so use `--resume` to opt into hits or targeted invalidation:

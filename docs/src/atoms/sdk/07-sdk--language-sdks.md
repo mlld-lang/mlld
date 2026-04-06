@@ -35,6 +35,7 @@ Every `execute` call returns a structured result:
 | `exports` | Exported values |
 | `effects` | Output effects with security metadata |
 | `denials` | Guard/policy label-flow denials observed during execution |
+| `trace_events` | Runtime trace events (when `trace` option is set) |
 | `metrics` | Timing statistics (total_ms, parse_ms, evaluate_ms) |
 
 ### Options
@@ -51,6 +52,8 @@ Common options for `process` and `execute`:
 | `mode` | Parsing mode: `"strict"` or `"markdown"` |
 | `allow_absolute_paths` | Allow absolute path access |
 | `timeout` | Override client default |
+| `trace` | Runtime trace level: `"off"`, `"effects"`, or `"verbose"` |
+| `trace_file` | Write trace events as JSONL to a file path |
 
 ## Handle API
 
