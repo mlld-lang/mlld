@@ -88,7 +88,7 @@ Hydration behavior:
 
 **Return values and workspace binding:**
 
-`box` does not implicitly return the last expression in the block. Bare directives and calls inside the block run for side effects. To return a value from the box, use `=>`.
+`box` does not implicitly return the last expression. Use `=>` to return a value:
 
 ```mlld
 var @result = box [
@@ -96,37 +96,21 @@ var @result = box [
   => "completed"
 ]
 
-show @result                >> "completed" — box returned a value via =>
+show @result                >> "completed"
 ```
 
-When a box uses `=>`, the variable gets the returned value, not the workspace.
-
-Common mistake:
+Without `=>`, the box returns its workspace object:
 
 ```mlld
-var @planner = box {
-  shelf: {
-    read: [@state.trusted]
-  }
-} [
-  @claude("Plan the next step")   >> runs, but does not become the box result
+var @plan = box [
+  @claude("Plan the next step")   >> runs, but the box ignores it
 ]
+show @plan.type                   >> "workspace"
 
-show @planner.type               >> "workspace"
-```
-
-If the block finishes without `=>`, the box returns its workspace object for inspection.
-
-Correct version:
-
-```mlld
-var @planner = box {
-  shelf: {
-    read: [@state.trusted]
-  }
-} [
-  => @claude("Plan the next step")
+var @plan = box [
+  => @claude("Plan the next step") >> returns the LLM response
 ]
+show @plan                        >> the plan text
 ```
 
 To access workspace files after the box exits, omit `=>` so the variable binds to the workspace:
@@ -140,7 +124,6 @@ show <@ws/data.txt>         >> "hello" — reads from workspace via resolver
 ```
 
 The `<@name/path>` resolver syntax reads from the workspace VFS after the box exits. Inside the box body, use `run cmd { cat file.txt }` to read via the ShellSession — bare `<file.txt>` reads from the real filesystem, not the active workspace.
-Use bare block statements when you want side effects or want to inspect the resulting workspace. Use `=>` when you want the value of a call or expression.
 
 **Inline derivation with `with`:**
 

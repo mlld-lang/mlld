@@ -149,6 +149,28 @@ mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` 
 - **Handle wrappers pass through as plain objects.** `{ handle: "h_xxx" }` enters JS as a normal object with one key. Don't special-case it. Don't resolve it. If you need handle-aware logic, do it in mlld, not JS.
 - **Need `.mx` in JS?** Use `.keep` or `.keepStructured` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly.
 
+### Returns are always explicit
+
+mlld never implicitly returns the last expression. Use `=>` to return a value from any block:
+
+```mlld
+exe @greet(name) = [
+  let @msg = `Hello @name`
+  => @msg                      >> without =>, exe returns nothing
+]
+
+var @plan = box [
+  @claude("Plan the next step") >> side effect — box ignores it
+  => @claude("Plan the next step") >> returns the result
+]
+```
+
+Without `=>`:
+- An exe returns nothing
+- A box returns its workspace object (for file inspection via `<@ws/path>`)
+
+This catches people who expect the last expression to be the return value. It's not — `=>` is the only way to return.
+
 **Use `>>` for comments, not `//`**
 
 Labels are comma-separated: `var secret,pii @data = "x"`

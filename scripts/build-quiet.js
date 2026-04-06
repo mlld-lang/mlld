@@ -8,6 +8,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
+const args = process.argv.slice(2);
 
 // ANSI color codes
 const yellow = '\x1b[33m';
@@ -255,7 +256,19 @@ process.on('SIGINT', () => {
   process.exit(130);
 });
 
-build().catch(error => {
-  console.error('Unexpected error:', error);
-  process.exit(1);
-});
+if (args.includes('--verbose')) {
+  const child = spawn('npm run build:verbose', {
+    shell: true,
+    cwd: projectRoot,
+    stdio: 'inherit'
+  });
+
+  child.on('close', (code) => {
+    process.exit(code ?? 1);
+  });
+} else {
+  build().catch(error => {
+    console.error('Unexpected error:', error);
+    process.exit(1);
+  });
+}

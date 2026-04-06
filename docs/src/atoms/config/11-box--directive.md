@@ -135,7 +135,7 @@ var @result = box @config [
 ]
 ```
 
-`box` does not automatically return the last expression in the block. Without `=>`, a box with a workspace returns the workspace object instead. Use `=> @some_call(...)` when you want the call result, and omit `=>` only when you intentionally want the workspace back.
+`box` does not implicitly return the last expression. Without `=>`, the box returns its workspace object. Use `=> @some_call(...)` to return a call result.
 
 **Scoped environment:**
 
