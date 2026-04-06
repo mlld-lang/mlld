@@ -38,6 +38,32 @@ function assertArrayBehavior(condition: boolean, message: string, context?: Reco
   }
 }
 
+function isExecutableReferenceValue(
+  value: unknown
+): value is { name?: unknown; paramNames?: unknown; __executable?: unknown; type?: unknown } {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (
+      (value as { type?: unknown }).type === 'executable' ||
+      (value as { __executable?: unknown }).__executable === true
+    )
+  );
+}
+
+function formatExecutableReferenceValue(value: unknown): string {
+  if (!isExecutableReferenceValue(value)) {
+    return '[executable]';
+  }
+
+  if (typeof value.name === 'string' && value.name.trim().length > 0) {
+    return `[executable: ${value.name}]`;
+  }
+
+  const params = Array.isArray(value.paramNames) ? value.paramNames.filter(param => typeof param === 'string') : [];
+  return `<function(${params.join(', ')})>`;
+}
+
 export interface InterpolationNode {
   type: string;
   content?: string;
@@ -339,6 +365,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           stringValue = 'null';
         } else if (value === undefined) {
           stringValue = '';
+        } else if (isExecutableReferenceValue(value)) {
+          stringValue = formatExecutableReferenceValue(value);
         } else if (isStructuredValue(value)) {
           stringValue = asText(value);
           collectDescriptor(extractInterpolationDescriptor(value));
@@ -457,39 +485,6 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
 
         if (!resolvedValueReady) {
           collectDescriptor(variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined);
-
-          const { isExecutableVariable } = await import('@core/types/variable');
-
-          // Special handling for executable variables
-          if (isExecutableVariable(variable)) {
-            const { evaluateExecInvocation } = await import('../eval/exec-invocation');
-            const commandRef = (baseNode as any).commandRef || {
-              identifier: variable.name,
-              args: []
-            };
-            const execInvocation: ExecInvocation = {
-              type: 'ExecInvocation',
-              commandRef: {
-                identifier: commandRef.identifier || variable.name || (baseNode as any).name || (baseNode as any).identifier,
-                args: commandRef.args || []
-              },
-              location: commandRef.location || (baseNode as any).location
-            };
-            const result = await evaluateExecInvocation(execInvocation, env);
-            collectDescriptor(extractInterpolationDescriptor(result.value));
-            if (isConditionalOmission && !isTruthy(result.value)) {
-              continue;
-            }
-            if (isNullCoalescingTight && (result.value === null || result.value === undefined)) {
-              const strategy = EscapingStrategyFactory.getStrategy(context);
-              pushPart(strategy.escape(String(fallbackValue ?? '')));
-              continue;
-            }
-            const execOutput = asText(result.value);
-            const strategy = EscapingStrategyFactory.getStrategy(context);
-            pushPart(strategy.escape(execOutput));
-            continue;
-          }
 
           // Handle TemplateVariable references (e.g., ::{{var}}::)
           if ((baseNode as any).type === 'TemplateVariable') {
@@ -700,6 +695,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
         } else if (typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray((value as any).content)) {
           // Handle wrapped strings (quotes, backticks, brackets)
           stringValue = await interpolateImpl((value as any).content, env, context, options);
+        } else if (isExecutableReferenceValue(value)) {
+          stringValue = formatExecutableReferenceValue(value);
         } else if (typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
           const nodeValue = value as Record<string, unknown>;
           
@@ -752,6 +749,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
           const { isLoadContentResult } = await import('@core/types/load-content');
           if (isLoadContentResult(value)) {
             stringValue = asText(value);
+          } else if (isExecutableReferenceValue(value)) {
+            stringValue = formatExecutableReferenceValue(value);
           } else if (isStructuredValue(value) && value.type === 'array') {
             // StructuredValue arrays already have concatenated text
             stringValue = value.text;

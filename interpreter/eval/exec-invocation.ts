@@ -263,6 +263,9 @@ async function resolveCollectionBoundValue(
   const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
 
   if (isVariable(value)) {
+    if (isExecutableVariable(value)) {
+      return value;
+    }
     const extracted = await extractVariableValue(value, env);
     return resolveCollectionBoundValue(extracted, env, options);
   }
@@ -2084,6 +2087,16 @@ async function evaluateExecInvocationInternal(
           if (varObj) {
             const inferSimpleTypeFromValue = (value: unknown): string => {
               if (value === null || value === undefined) return 'null';
+              if (
+                value &&
+                typeof value === 'object' &&
+                (
+                  (('__executable' in value) && Boolean((value as { __executable?: unknown }).__executable)) ||
+                  (('type' in value) && (value as { type?: unknown }).type === 'executable')
+                )
+              ) {
+                return 'executable';
+              }
               if (isStructuredValue(value)) {
                 return inferSimpleTypeFromValue(value.data === undefined ? value.text : value.data);
               }
@@ -2148,9 +2161,33 @@ async function evaluateExecInvocationInternal(
               return typeInfo;
             };
 
-            const selectedTypeInfo = normalizedBuiltinName === 'typeof'
+            let selectedTypeInfo = normalizedBuiltinName === 'typeof'
               ? getSimpleTypeInfo(varObj)
               : getRichTypeInfo(varObj);
+
+            if (Array.isArray(varRef.fields) && varRef.fields.length > 0) {
+              const { accessFields } = await import('../utils/field-access');
+              const {
+                isVariable,
+                resolveVariable,
+                ResolutionContext
+              } = await import('../utils/variable-resolution');
+
+              let resolvedTarget = await resolveVariable(varObj, env, ResolutionContext.FieldAccess);
+              const fieldResult = await accessFields(resolvedTarget, normalizeFields(varRef.fields), {
+                env,
+                preserveContext: true,
+                sourceLocation: varRef.location
+              });
+              resolvedTarget = (fieldResult as { value?: unknown }).value;
+
+              selectedTypeInfo =
+                isVariable(resolvedTarget)
+                  ? (normalizedBuiltinName === 'typeof'
+                      ? getSimpleTypeInfo(resolvedTarget)
+                      : getRichTypeInfo(resolvedTarget))
+                  : inferSimpleTypeFromValue(resolvedTarget);
+            }
 
             const result = await variable.internal.transformerImplementation(
               `__MLLD_VARIABLE_OBJECT__:${selectedTypeInfo}`

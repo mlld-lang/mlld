@@ -243,6 +243,13 @@ export async function resolveVariable(
     return formatRecordDefinition(variable.value as any);
   }
 
+  if (
+    isExecutableVariable(variable) &&
+    (context === ResolutionContext.StringInterpolation || context === ResolutionContext.Display)
+  ) {
+    return variable;
+  }
+
   const extracted = await extractVariableValue(variable, env);
   if (isShelfSlotRefValue(extracted)) {
     if (context === ResolutionContext.CommandExecution) {

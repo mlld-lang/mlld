@@ -159,9 +159,10 @@ export async function evaluateShowVariable({
       if (Array.isArray(templateContent) && templateContent.length === 1 && templateContent[0].type === 'Literal') {
         value = templateContent[0].value;
       } else {
-        // More complex template - evaluate it
-        const result = await evaluate(templateContent, env);
-        value = result.value;
+        // Template literals should follow interpolation semantics, not generic node evaluation.
+        value = await interpolate(templateContent, env, undefined, {
+          collectSecurityDescriptor: collectInterpolatedDescriptor
+        });
       }
     } else {
       value = '';
@@ -369,10 +370,16 @@ export async function evaluateShowVariable({
    */
   const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
   value = await resolveValue(value, env, ResolutionContext.Display);
-  const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
+  const hadFieldAccess = Boolean(
+    variableNode?.type === 'VariableReferenceWithTail'
+      ? (variableNode as any).variable?.fields?.length
+      : variableNode?.fields?.length
+  );
   const isNamespaceVariable = variable?.internal?.isNamespace && !hadFieldAccess;
 
-  if (isNamespaceVariable && value && typeof value === 'object') {
+  if (value && typeof value === 'object' && isExecutable(value as Variable)) {
+    content = `[executable: ${value.name}]`;
+  } else if (isNamespaceVariable && value && typeof value === 'object') {
     content = JSONFormatter.stringifyNamespace(value);
   } else if (value && typeof value === 'object' && (value as any).__executable) {
     const params = (value as any).paramNames || [];

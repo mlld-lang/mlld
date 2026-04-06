@@ -487,10 +487,16 @@ export async function resolveBuiltinInvocationObject(options: {
       throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
     }
 
-    const { extractVariableValue, isVariable } = await import('@interpreter/utils/variable-resolution');
+    const {
+      extractVariableValue,
+      isVariable,
+      resolveVariable,
+      ResolutionContext
+    } = await import('@interpreter/utils/variable-resolution');
     if (objectRef.fields && objectRef.fields.length > 0) {
       const { accessFields } = await import('@interpreter/utils/field-access');
-      objectValue = await accessFields(objectVar, normalizeFields(objectRef.fields), {
+      const resolvedObjectVar = await resolveVariable(objectVar, env, ResolutionContext.FieldAccess);
+      objectValue = await accessFields(resolvedObjectVar, normalizeFields(objectRef.fields), {
         env,
         preserveContext: false,
         returnUndefinedForMissing: true,

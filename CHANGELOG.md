@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Authorization-generated privileged guards now preserve built-in positive checks for destination/target trust and untrusted privileged inputs. Matching authorizations no longer punch through rules like `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, or `no-untrusted-privileged`.
 - Native bridged tool calls now key `policy.authorizations.allow` against the exposed tool name instead of an internal temporary bridge executable name.
 - `with { policy: ... }` now activates managed `policy.defaults.rules` even when the applied policy fragment has no `authorizations` block. Base policy rules like `no-send-to-unknown` and `no-untrusted-destructive` now enforce correctly on fallback task-policy paths.
+- Executable references now preserve identity through namespace dispatch, object field access, and mixed object literals, so inline exe arrays no longer collapse in `@ns.fn(...)`, bare refs no longer auto-invoke outside pipeline contexts, and sibling builtin method calls like `@obj.items.join("/")` keep working when the same object also stores an exe.
 
 ## [2.0.5]
 
