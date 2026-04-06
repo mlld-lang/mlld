@@ -270,6 +270,45 @@ Note the `data: { trusted, untrusted }` split: `subject` and `body` can be LLM-c
 
 When possible, define the extraction record once per write tool shape (one record for email inputs, one for calendar inputs, etc.) so the contract is visible and reusable. The downstream write tool's parameter list is the source of truth — the record mirrors it.
 
+### Dynamic coercion for framework-driven contracts
+
+When a framework takes contracts as configuration (e.g., `@rig.build({ contracts: { email: @emailPayload } })`), the extract worker needs to coerce output against a record that was passed in, not one referenced statically by name. Use `=> record @schema`:
+
+```mlld
+>> The extract worker takes the contract as a parameter
+exe @extractWorker(source, target, contract) = [
+  => @claude(`
+    Extract data matching this shape from: @source
+    Target: @target
+  `) => record @contract
+]
+
+guard after @checkExtract for op:named:extractWorker = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2
+    => retry "Schema errors: @output.mx.schema.errors"
+  * => allow
+]
+```
+
+The orchestration layer picks the right contract from a configured map:
+
+```mlld
+import { @emailPayload, @assignmentRows } from "./domain/contracts.mld"
+
+var @contracts = {
+  email_task_payload: @emailPayload,
+  assignment_rows: @assignmentRows
+}
+
+>> The planner requested contract_name: "email_task_payload"
+let @contract = @contracts[@request.contract_name]
+let @result = @extractWorker(@source, @target, @contract)
+```
+
+The record definitions live in the domain layer. The framework takes them as configuration and coerces extract output against the chosen one. Wrong field names still fail coercion, the guard still retries with schema errors — same enforcement, but the framework doesn't need to know about `email_task_payload` or `assignment_rows` specifically. The developer's domain records are the contract.
+
+This is the pattern that makes framework-driven capability agents possible. The framework owns orchestration, phases, guards, and policy integration. The developer owns records, tools, and contracts. Dynamic coercion is the interface between them.
+
 ## What this replaces
 
 JS shape validators like:

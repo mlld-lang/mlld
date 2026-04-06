@@ -338,6 +338,126 @@ show @contact.email.mx.factsources[0].ref
 
 Returns `@contact.email` -- the canonical source reference.
 
+## Records as first-class values
+
+A `record @foo` declaration registers two things: the record definition (used for static coercion via `=> foo`) and a record value (`@foo`) that can be passed around like any other mlld value.
+
+```mlld
+record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?]
+}
+
+>> @contact is now a value you can reference, import, export, store, and pass
+show @contact
+```
+
+`show @contact` prints the record in declaration form:
+
+```
+record contact {
+  facts: [email: string, name: string]
+  data: [notes: string?]
+}
+```
+
+### Import and export
+
+Records flow through the standard variable import/export paths:
+
+```mlld
+>> domain/records.mld
+record @contact = { facts: [email: string] }
+record @email_msg = { facts: [from: string], data: [body: string] }
+
+export { @contact, @email_msg }
+```
+
+```mlld
+>> agent.mld
+import { @contact, @email_msg } from "./domain/records.mld"
+
+exe @fetchContact(id) = run cmd { contacts-cli get @id } => contact
+```
+
+The imported records work identically to records declared in the same file.
+
+### Records as parameters and in collections
+
+Records can be passed as exe parameters and stored in objects or arrays:
+
+```mlld
+record @email_task_payload = {
+  data: {
+    trusted: [subject: string, body: string],
+    untrusted: [recipients: string]
+  }
+}
+
+record @assignment_rows = {
+  data: [rows: array]
+}
+
+var @contracts = {
+  email: @email_task_payload,
+  tasks: @assignment_rows
+}
+
+exe @extract(source, contract) = [
+  => @claude(`Extract from: @source`) => record @contract
+]
+
+var @result = @extract(@source_text, @contracts.email)
+```
+
+Records stored in collections render as their declaration form when displayed — same as top-level records.
+
+### Dynamic coercion: `=> record @schema`
+
+Static coercion uses a bare record name:
+
+```mlld
+exe @emitContact() = js { return { email: "ada@example.com" } } => contact
+```
+
+Dynamic coercion uses a variable reference prefixed by the `record` keyword:
+
+```mlld
+exe @validate(input, schema) = [
+  => @input => record @schema
+]
+```
+
+The `record` keyword disambiguates — `=> @schema` alone could be ambiguous, but `=> record @schema` is explicitly "coerce the output against the record referenced by `@schema`."
+
+**Nested references work:**
+
+```mlld
+var @contracts = {
+  email: @email_task_payload,
+  tasks: @assignment_rows
+}
+
+exe @extract(source, contractName) = [
+  let @contract = @contracts[@contractName]
+  => @claude(`Extract from: @source`) => record @contract
+]
+
+var @result = @extract(@source, "email")
+```
+
+Resolution happens at exe invocation time. If `@contract` doesn't reference a record, coercion fails with a clear error.
+
+### When to use dynamic coercion
+
+Static `=> contact` is the common case — use it whenever the record is known at write time. Dynamic `=> record @schema` is for patterns where the contract is passed in as configuration:
+
+- **Framework-driven coercion.** A framework (like the capability agent pattern) takes a contract map from the developer and coerces extract output against the appropriate record at runtime.
+- **Contract-per-write-tool patterns.** The extract phase emits data shaped for a downstream write tool. The contract for each write tool is defined once, passed into the extract worker, and coerced dynamically.
+- **Shared validation exes.** A single `@validate` exe that takes both data and a schema, used across many records.
+
+If you're writing a single-use exe with a known record, static coercion is simpler. Reach for dynamic coercion when the same exe needs to validate against different contracts at different call sites.
+
 ## What records are not
 
 Records are pure data-shaping definitions. They cannot:
@@ -349,4 +469,4 @@ Records are pure data-shaping definitions. They cannot:
 
 This keeps records predictable, testable, and security-reviewable.
 
-See `facts-and-handles` for how records, fact labels, and handles work together in the security model. See `labels-facts` for the fact label system.
+See `facts-and-handles` for how records, fact labels, and handles work together in the security model. See `labels-facts` for the fact label system. See `pattern-schema-validation` for the dynamic coercion pattern in extract-to-write contracts.
