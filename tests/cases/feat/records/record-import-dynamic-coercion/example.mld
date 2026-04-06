@@ -1,0 +1,9 @@
+import { @contact } from "./record-import-dynamic-coercion-module.mld"
+
+exe @parseWith(schema) = js {
+  return { email: "ada@example.com", name: "Ada Lovelace" };
+} => record @schema
+
+var @result = @parseWith(@contact)
+show @result.email
+show @result.mx.schema.valid

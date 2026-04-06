@@ -41,8 +41,11 @@ describe('evaluateRecord', () => {
 
     const result = await evaluateDirective(directive, env);
     const definition = env.getRecordDefinition('contact');
+    const recordVariable = env.getVariable('contact');
 
     expect(result.value).toBe(definition);
+    expect(recordVariable?.type).toBe('record');
+    expect(recordVariable?.value).toBe(definition);
     expect(definition).toMatchObject({
       name: 'contact',
       rootMode: 'object',

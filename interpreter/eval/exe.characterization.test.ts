@@ -127,6 +127,22 @@ describe('exe evaluator characterization', () => {
     expect(getExecutableDef(env, 'getContact').outputRecord).toBe('contact');
   });
 
+  it('stores dynamic trailing output record annotations on executable definitions', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe @parseWithSchema(input, schema) = @input => record @schema'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'parseWithSchema').outputRecord).toMatchObject({
+      kind: 'dynamic',
+      ref: {
+        type: 'VariableReference',
+        identifier: 'schema'
+      }
+    });
+  });
+
   it('embeds display metadata from referenced records into executable variable metadata', async () => {
     const env = createEnvironment();
     env.setCurrentFilePath('/project/records.mld');

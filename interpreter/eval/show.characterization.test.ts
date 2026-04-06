@@ -9,6 +9,7 @@ import { asText, isStructuredValue } from '../utils/structured-value';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { TestEffectHandler } from '../env/EffectHandler';
+import { evaluateRecord } from './record';
 
 const SOURCE_INFO = {
   directive: 'var' as const,
@@ -160,6 +161,41 @@ describe('evaluateShow (characterization)', () => {
     expect(displayed).toContain('"exports"');
     expect(displayed).toContain('"answer": 42');
     expect(displayed).toContain('<function(name)>');
+  });
+
+  it('shows record variables as readable record definitions', async () => {
+    const recordDirective = parseSync(
+      '/record @contact = { facts: [email: string, name: string], data: [notes: string?], display: [name, { mask: "email" }] }'
+    )[0] as DirectiveNode;
+    await evaluateRecord(recordDirective as any, env);
+
+    const [showDirective] = parseDirectives('/show @contact');
+    const result = await evaluateShow(toShowDirective(showDirective), env);
+    const displayed = asText(result.value);
+
+    expect(displayed).toContain('record contact {');
+    expect(displayed).toContain('facts: [email: string, name: string]');
+    expect(displayed).toContain('data: [notes: string?]');
+    expect(displayed).toContain('display: [name, { mask: "email" }]');
+  });
+
+  it('shows records from object fields as readable record definitions', async () => {
+    const directives = parseDirectives(`
+/record @contact = { facts: [email: string, name: string], data: [notes: string?], display: [name, { mask: "email" }] }
+/var @contracts = { primary: @contact }
+/show @contracts.primary
+`);
+    await evaluateSetupDirectives(directives, env);
+    const showDirective = directives.find(directive => directive.subtype === 'showVariable');
+    expect(showDirective).toBeDefined();
+
+    const result = await evaluateShow(toShowDirective(showDirective), env);
+    const displayed = asText(result.value);
+
+    expect(displayed).toContain('record contact {');
+    expect(displayed).toContain('facts: [email: string, name: string]');
+    expect(displayed).toContain('data: [notes: string?]');
+    expect(displayed).toContain('display: [name, { mask: "email" }]');
   });
 
   it('keeps legacy showPath and showPathSection handling stable', async () => {

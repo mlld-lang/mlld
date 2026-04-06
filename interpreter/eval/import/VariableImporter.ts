@@ -19,8 +19,12 @@ import { PolicyImportHandler } from './variable-importer/PolicyImportHandler';
 import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSelectedImportHandler';
 import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
-import { isSerializedRecordDefinition } from '@core/types/record';
+import {
+  isSerializedRecordDefinition,
+  isSerializedRecordVariable
+} from '@core/types/record';
 import { createShelfVariable, isSerializedShelfDefinition } from '@interpreter/shelf/runtime';
+import { createRecordVariable } from '@core/types/variable';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -266,6 +270,22 @@ export class VariableImporter {
       env?: Environment;
     }
   ): Variable {
+    const buildImportedRecordMetadata = () => {
+      const deserialized = VariableMetadataUtils.deserializeSecurityMetadata(options?.serializedMetadata);
+      return VariableMetadataUtils.applySecurityMetadata(
+        {
+          isImported: true,
+          importPath,
+          ...(originalName && originalName !== name ? { originalName } : {})
+        },
+        {
+          labels: options?.securityLabels,
+          existingDescriptor: deserialized.security,
+          capability: deserialized.capability
+        }
+      );
+    };
+
     if (options?.env && isSerializedShelfDefinition(value)) {
       for (const [recordName, definition] of Object.entries(value.records ?? {})) {
         if (!options.env.getRecordDefinition(recordName)) {
@@ -281,19 +301,42 @@ export class VariableImporter {
       return createShelfVariable(options.env, definition);
     }
 
-    if (options?.env && isSerializedRecordDefinition(value)) {
+    if (isSerializedRecordDefinition(value)) {
       const definition = {
         ...value.definition,
         name
       };
-      options.env.registerRecordDefinition(name, definition);
-      return this.variableFactoryOrchestrator.createVariableFromValue(
-        name,
-        definition,
-        importPath,
-        originalName,
-        options
-      );
+      if (options?.env) {
+        options.env.registerRecordDefinition(name, definition);
+      }
+      return createRecordVariable(name, definition, {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: true
+      }, {
+        metadata: buildImportedRecordMetadata()
+      });
+    }
+
+    if (isSerializedRecordVariable(value)) {
+      const definition = {
+        ...value.definition,
+        name
+      };
+      if (options?.env) {
+        options.env.registerRecordDefinition(name, definition);
+      }
+      return createRecordVariable(name, definition, {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: true
+      }, {
+        metadata: buildImportedRecordMetadata(),
+        mx: (value.mx ?? {}) as Record<string, unknown>,
+        internal: (value.internal ?? {}) as Record<string, unknown>
+      });
     }
 
     return this.variableFactoryOrchestrator.createVariableFromValue(

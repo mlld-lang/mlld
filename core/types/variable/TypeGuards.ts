@@ -19,6 +19,7 @@ import {
   PathVariable,
   ImportedVariable,
   ExecutableVariable,
+  RecordVariable,
   PipelineInputVariable,
   PrimitiveVariable,
   TextLikeVariable,
@@ -116,6 +117,13 @@ export function isExecutable(variable: Variable): variable is ExecutableVariable
 }
 
 /**
+ * Type guard for RecordVariable
+ */
+export function isRecord(variable: Variable): variable is RecordVariable {
+  return variable.type === 'record';
+}
+
+/**
  * Type guard for PipelineInputVariable
  */
 export function isPipelineInput(variable: Variable): variable is PipelineInputVariable {
@@ -192,6 +200,7 @@ export class VariableTypeGuards {
   static isPath = isPath;
   static isImported = isImported;
   static isExecutable = isExecutable;
+  static isRecord = isRecord;
   static isPipelineInput = isPipelineInput;
   static isStructuredValue = isStructuredValueVariable;
   static isPrimitive = isPrimitive;

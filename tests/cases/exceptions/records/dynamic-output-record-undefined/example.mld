@@ -1,0 +1,5 @@
+exe @parse() = js {
+  return { email: "ada@example.com" };
+} => record @missing
+
+show @parse()

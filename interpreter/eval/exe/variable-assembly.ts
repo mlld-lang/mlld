@@ -143,7 +143,7 @@ function collectEmbeddedRecordDefinitions(
   env: Environment
 ): Record<string, RecordDefinition> {
   const outputRecord = executableDef.outputRecord;
-  if (!outputRecord) {
+  if (!outputRecord || typeof outputRecord !== 'string') {
     return {};
   }
   const definition = env.getRecordDefinition(outputRecord);

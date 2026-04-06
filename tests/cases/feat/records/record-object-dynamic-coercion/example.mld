@@ -1,0 +1,21 @@
+record @email_payload = {
+  data: [subject: string, body: string]
+}
+
+record @task_rows = {
+  data: [rows: array]
+}
+
+var @contracts = {
+  email: @email_payload,
+  tasks: @task_rows
+}
+
+exe @extract(contractName) = [
+  let @contract = @contracts[@contractName]
+  => { rows: [1, 2, 3] }
+] => record @contract
+
+var @result = @extract("tasks")
+show @result.rows[1]
+show @result.mx.schema.valid

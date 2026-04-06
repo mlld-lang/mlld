@@ -1,4 +1,5 @@
 import type { Variable } from '@core/types/variable';
+import { formatRecordDefinition } from '@core/types/record';
 import { interpreterLogger as logger } from '@core/utils/logger';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
@@ -25,6 +26,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     isPath,
     isPipelineInput,
     isExecutableVariable,
+    isRecordVariable,
     isImported,
     isComputed,
     isPrimitive
@@ -69,6 +71,10 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     };
     const result = await evaluateExecInvocation(invocation as any, env);
     return result.value as VariableValue;
+  }
+
+  if (isRecordVariable(variable)) {
+    return formatRecordDefinition(variable.value as any);
   }
 
   if (isImported(variable)) {

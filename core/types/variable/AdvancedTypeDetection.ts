@@ -10,7 +10,7 @@ import {
   VariableTypeDiscriminator,
   ImportedVariable
 } from './VariableTypes';
-import { isImported, isExecutable } from './TypeGuards';
+import { isImported, isExecutable, isRecord } from './TypeGuards';
 
 // =========================================================================
 // ADVANCED TYPE DETECTION CLASS
@@ -42,6 +42,19 @@ export class AdvancedTypeDetection {
       const imported = variable as ImportedVariable;
       return imported.originalType === 'executable' ||
              imported.internal?.originalType === 'executable';
+    }
+    return false;
+  }
+
+  /**
+   * Check if variable is a record definition, including imported records
+   */
+  static isRecordVariable(variable: Variable): boolean {
+    if (isRecord(variable)) return true;
+    if (isImported(variable)) {
+      const imported = variable as ImportedVariable;
+      return imported.originalType === 'record' ||
+             imported.internal?.originalType === 'record';
     }
     return false;
   }
@@ -155,6 +168,7 @@ export class AdvancedTypeDetection {
     return (
       effectiveType === 'template' ||
       effectiveType === 'executable' ||
+      effectiveType === 'record' ||
       effectiveType === 'pipeline-input' ||
       effectiveType === 'computed' ||
       this.detectComplexVariable(variable)
@@ -188,6 +202,7 @@ export class AdvancedTypeDetection {
 
       case 'template':
       case 'executable':
+      case 'record':
         return 6; // Low priority - complex evaluation
 
       case 'pipeline-input':

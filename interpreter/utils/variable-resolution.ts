@@ -11,12 +11,14 @@ import {
   isPath,
   isPipelineInput,
   isExecutableVariable,
+  isRecordVariable,
   isImported,
   isComputed,
   isPrimitive,
   isObject,
   isArray
 } from '@core/types/variable';
+import { formatRecordDefinition, isRecordDefinition } from '@core/types/record';
 import { asData, asText, isStructuredValue } from './structured-value';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 // Import removed to avoid circular dependency - will use dynamic import if needed
@@ -169,6 +171,13 @@ export async function resolveVariable(
   }
   
   // Context requires extraction
+  if (
+    isRecordVariable(variable) &&
+    (context === ResolutionContext.StringInterpolation || context === ResolutionContext.Display)
+  ) {
+    return formatRecordDefinition(variable.value as any);
+  }
+
   const extracted = await extractVariableValue(variable, env);
   if (isShelfSlotRefValue(extracted)) {
     if (context === ResolutionContext.CommandExecution) {
@@ -279,6 +288,8 @@ export async function extractVariableValue(
     };
     const result = await evaluateExecInvocation(invocation as any, env);
     return result.value;
+  } else if (isRecordVariable(variable)) {
+    return variable.value;
   } else if (isImported(variable)) {
     return variable.value;
   } else if (isComputed(variable)) {
@@ -323,6 +334,12 @@ export async function resolveValue(
 ): Promise<Variable | VariableValue> {
   if (isVariable(value)) {
     return resolveVariable(value, env, context);
+  }
+  if (
+    isRecordDefinition(value) &&
+    (context === ResolutionContext.StringInterpolation || context === ResolutionContext.Display)
+  ) {
+    return formatRecordDefinition(value);
   }
   return value;
 }

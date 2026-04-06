@@ -10,7 +10,14 @@ import { VariableContext, VariableInternal } from './index';
 import type { PipelineStage } from './run';
 import type { DataValue } from './var';
 import type { PathMeta } from './meta';
-import type { CommandReference, ExecInvocation } from './primitives';
+import type { CommandReference, ExecInvocation, VariableReferenceNode } from './primitives';
+
+export interface DynamicExecutableOutputRecord {
+  kind: 'dynamic';
+  ref: VariableReferenceNode;
+}
+
+export type ExecutableOutputRecord = string | DynamicExecutableOutputRecord;
 
 /**
  * Base executable definition that can be invoked with parameters
@@ -35,7 +42,7 @@ export interface BaseExecutable {
   /** Human-readable summary for tool metadata */
   description?: string;
   /** Optional record definition applied to executable output */
-  outputRecord?: string;
+  outputRecord?: ExecutableOutputRecord;
   /** Original directive type this came from (exec or text) */
   sourceDirective: 'exec' | 'text';
 }

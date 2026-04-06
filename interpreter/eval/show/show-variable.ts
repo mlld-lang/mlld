@@ -9,11 +9,13 @@ import {
   isPath,
   isPipelineInput,
   isPrimitive,
+  isRecord,
   isStructuredValueVariable,
   isTemplate,
   isTextLike
 } from '@core/types/variable';
 import type { Variable } from '@core/types/variable';
+import { formatRecordDefinition } from '@core/types/record';
 import { logger } from '@core/utils/logger';
 import { MlldSecurityError } from '@core/errors';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
@@ -267,6 +269,8 @@ export async function evaluateShowVariable({
     } else if (isExecutable(variable)) {
       // Show a representation of the executable
       value = `[executable: ${variable.name}]`;
+    } else if (isRecord(variable)) {
+      value = formatRecordDefinition(variable.value);
     } else if (isPrimitive(variable)) {
       // Primitive variables (numbers, booleans, null)
       value = variable.value;
@@ -373,6 +377,8 @@ export async function evaluateShowVariable({
   } else if (value && typeof value === 'object' && (value as any).__executable) {
     const params = (value as any).paramNames || [];
     content = `<function(${params.join(', ')})>`;
+  } else if (variable && isRecord(variable) && !hadFieldAccess) {
+    content = formatRecordDefinition(variable.value);
   } else {
     if (isStructuredValue(value)) {
       if (hasErrorMetadata(value)) {

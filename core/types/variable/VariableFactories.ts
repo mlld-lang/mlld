@@ -20,6 +20,7 @@ import {
   PathVariable,
   ImportedVariable,
   ExecutableVariable,
+  RecordVariable,
   PipelineInputVariable,
   StructuredValueVariable,
   PrimitiveVariable,
@@ -28,6 +29,7 @@ import {
   VariableContext,
   VariableInternalMetadata
 } from './VariableTypes';
+import type { RecordDefinition } from '@core/types/record';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
 import { legacyMetadataToVarMx, legacyMetadataToInternal } from './VarMxHelpers';
@@ -416,6 +418,18 @@ export function createExecutableVariable(
     source,
     metadataOrOptions
   );
+}
+
+/**
+ * Create a RecordVariable
+ */
+export function createRecordVariable(
+  name: string,
+  definition: RecordDefinition,
+  source: VariableSource,
+  metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
+): RecordVariable {
+  return VariableFactory.createRecord(name, definition, source, metadataOrOptions);
 }
 
 /**
@@ -817,6 +831,35 @@ export class VariableFactory {
       variable.internal = {
         ...(variable.internal ?? {}),
         executableDef: executableDefinition
+      };
+    }
+    return variable;
+  }
+
+  /**
+   * Create a RecordVariable
+   */
+  static createRecord(
+    name: string,
+    definition: RecordDefinition,
+    source: VariableSource,
+    metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
+  ): RecordVariable {
+    const init = normalizeFactoryOptions(metadataOrOptions);
+    const variable = finalizeVariable({
+      type: 'record',
+      name,
+      value: definition,
+      source,
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      mx: init.mx,
+      internal: init.internal
+    });
+    if (init.internal?.recordDefinition === undefined) {
+      variable.internal = {
+        ...(variable.internal ?? {}),
+        recordDefinition: definition
       };
     }
     return variable;

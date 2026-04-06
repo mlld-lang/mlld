@@ -5,8 +5,10 @@ import {
   isArray,
   isExecutable as isExecutableVariable,
   isObject,
+  isRecord,
   isTextLike
 } from '@core/types/variable';
+import { formatRecordDefinition } from '@core/types/record';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import { interpolate } from '@interpreter/core/interpreter';
 import { JSONFormatter } from '@interpreter/core/json-formatter';
@@ -124,6 +126,9 @@ function hasErrorMetadata(value: unknown): boolean {
 function variableToString(variable: any): string {
   if (isTextLike(variable)) {
     return variable.value;
+  }
+  if (isRecord(variable)) {
+    return formatRecordDefinition(variable.value);
   }
   if (isObject(variable) || isArray(variable)) {
     return JSONFormatter.stringify(variable.value, { pretty: false });

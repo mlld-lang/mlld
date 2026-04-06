@@ -73,6 +73,13 @@ export function isExecutableVariable(variable: Variable): boolean {
 }
 
 /**
+ * Check if variable is a record definition, including imported records (backward compatibility)
+ */
+export function isRecordVariable(variable: Variable): boolean {
+  return AdvancedTypeDetection.isRecordVariable(variable);
+}
+
+/**
  * Get the effective type of a variable, considering imported variables (backward compatibility)
  */
 export function getEffectiveType(variable: Variable) {

@@ -2,8 +2,13 @@ import type { DirectiveNode } from '@core/types';
 import type { DataLabel } from '@core/types/security';
 import { makeSecurityDescriptor } from '@core/types/security';
 import {
+  isSerializedRecordDefinition,
+  isSerializedRecordVariable
+} from '@core/types/record';
+import {
   createArrayVariable,
   createObjectVariable,
+  createRecordVariable,
   type ExecutableVariable,
   type Variable,
   type VariableMetadata,
@@ -98,6 +103,34 @@ export class VariableImportUtilities {
           source,
           { isImported: true, importPath }
         );
+      }
+
+      if (isSerializedRecordVariable(value)) {
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: true
+        };
+        return createRecordVariable(
+          value.name || value.definition.name,
+          value.definition,
+          source,
+          {
+            mx: (value.mx ?? {}) as Record<string, unknown>,
+            internal: (value.internal ?? {}) as Record<string, unknown>
+          }
+        );
+      }
+
+      if (isSerializedRecordDefinition(value)) {
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: true
+        };
+        return createRecordVariable(value.definition.name, value.definition, source);
       }
 
       if (isStructuredValue(value)) {
@@ -199,6 +232,10 @@ export class VariableImportUtilities {
     }
 
     if (value.__executable) {
+      return false;
+    }
+
+    if (value.__recordVariable || value.__record) {
       return false;
     }
 

@@ -1,0 +1,9 @@
+import { @contact } from "./record-import-static-coercion-module.mld"
+
+exe @parseContact() = js {
+  return { email: "ada@example.com", name: "Ada Lovelace" };
+} => contact
+
+var @result = @parseContact()
+show @result.email
+show @result.mx.schema.valid

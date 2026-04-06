@@ -29,6 +29,13 @@ export async function evaluateExeBlock(
   const shouldBubbleReturn = scope === 'block' && hasFunctionBoundary;
 
   let blockEnv = env.createChild();
+  const createBlockResult = (value: unknown, targetEnv: Environment): EvalResult => ({
+    value,
+    env: targetEnv,
+    metadata: {
+      blockEnv
+    }
+  });
 
   if (args && Object.keys(args).length > 0) {
     const importer = new VariableImporter();
@@ -62,9 +69,9 @@ export async function evaluateExeBlock(
         blockEnv = returnResult.env;
         env.mergeChild(blockEnv);
         if (shouldBubbleReturn) {
-          return { value: createExeReturnControl(returnResult.value), env };
+          return createBlockResult(createExeReturnControl(returnResult.value), env);
         }
-        return { value: returnResult.value, env };
+        return createBlockResult(returnResult.value, env);
       }
 
       if (stmt.type === 'WhenExpression') {
@@ -83,9 +90,9 @@ export async function evaluateExeBlock(
         if (isExeReturnControl(whenResult.value)) {
           env.mergeChild(blockEnv);
           if (shouldBubbleReturn) {
-            return { value: whenResult.value, env };
+            return createBlockResult(whenResult.value, env);
           }
-          return { value: whenResult.value.value, env };
+          return createBlockResult(whenResult.value.value, env);
         }
 
         const hasLoopContext = Boolean(
@@ -95,7 +102,7 @@ export async function evaluateExeBlock(
         );
         if (hasLoopContext && isLoopControlValue(whenResult.value)) {
           env.mergeChild(blockEnv);
-          return { value: whenResult.value, env };
+          return createBlockResult(whenResult.value, env);
         }
 
         const preservesMidBlockReturn = stmt.meta?.form === 'inline' || stmt.meta?.form === 'bound-list';
@@ -106,9 +113,9 @@ export async function evaluateExeBlock(
 
         env.mergeChild(blockEnv);
         if (shouldBubbleReturn) {
-          return { value: createExeReturnControl(whenResult.value), env };
+          return createBlockResult(createExeReturnControl(whenResult.value), env);
         }
-        return { value: whenResult.value, env };
+        return createBlockResult(whenResult.value, env);
       }
 
       const result = await evaluate(stmt, blockEnv);
@@ -116,9 +123,9 @@ export async function evaluateExeBlock(
       if (isExeReturnControl(result.value)) {
         env.mergeChild(blockEnv);
         if (shouldBubbleReturn) {
-          return { value: result.value, env };
+          return createBlockResult(result.value, env);
         }
-        return { value: result.value.value, env };
+        return createBlockResult(result.value.value, env);
       }
 
       const hasLoopContext = Boolean(
@@ -128,7 +135,7 @@ export async function evaluateExeBlock(
       );
       if (hasLoopContext && isLoopControlValue(result.value)) {
         env.mergeChild(blockEnv);
-        return { value: result.value, env };
+        return createBlockResult(result.value, env);
       }
     }
 
@@ -140,12 +147,12 @@ export async function evaluateExeBlock(
       blockEnv = returnResult.env;
       if (shouldBubbleReturn) {
         env.mergeChild(blockEnv);
-        return { value: createExeReturnControl(returnValue), env };
+        return createBlockResult(createExeReturnControl(returnValue), env);
       }
     }
 
     env.mergeChild(blockEnv);
-    return { value: returnValue, env };
+    return createBlockResult(returnValue, env);
   } finally {
     blockEnv.popExecutionContext('exe');
   }

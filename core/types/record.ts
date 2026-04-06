@@ -120,9 +120,30 @@ export interface RecordDefinition {
   location?: SourceLocation;
 }
 
+export function isRecordDefinition(value: unknown): value is RecordDefinition {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<RecordDefinition>;
+  return (
+    typeof candidate.name === 'string' &&
+    Array.isArray(candidate.fields) &&
+    (candidate.rootMode === 'object' || candidate.rootMode === 'scalar' || candidate.rootMode === 'map-entry')
+  );
+}
+
 export interface SerializedRecordDefinition {
   __record: true;
   definition: RecordDefinition;
+}
+
+export interface SerializedRecordVariable {
+  __recordVariable: true;
+  name: string;
+  definition: RecordDefinition;
+  mx?: unknown;
+  internal?: unknown;
 }
 
 export function serializeRecordDefinition(
@@ -141,6 +162,173 @@ export function isSerializedRecordDefinition(value: unknown): value is Serialize
     (value as SerializedRecordDefinition).__record === true &&
     (value as SerializedRecordDefinition).definition
   );
+}
+
+export function serializeRecordVariable(variable: {
+  name: string;
+  value: RecordDefinition;
+  mx?: unknown;
+  internal?: unknown;
+}): SerializedRecordVariable {
+  return {
+    __recordVariable: true,
+    name: variable.name,
+    definition: variable.value,
+    ...(variable.mx !== undefined ? { mx: variable.mx } : {}),
+    ...(variable.internal !== undefined ? { internal: variable.internal } : {})
+  };
+}
+
+export function isSerializedRecordVariable(value: unknown): value is SerializedRecordVariable {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    (value as SerializedRecordVariable).__recordVariable === true &&
+    (value as SerializedRecordVariable).definition
+  );
+}
+
+function formatRecordFieldValueType(field: RecordFieldDefinition): string {
+  return field.valueType ? `: ${field.valueType}${field.optional ? '?' : ''}` : '';
+}
+
+function formatRecordField(field: RecordFieldDefinition): string {
+  const source =
+    field.kind === 'input'
+      ? formatInputRecordField(field)
+      : `{ ${field.name}: ... }`;
+  const typeSuffix = formatRecordFieldValueType(field);
+  return `${source}${typeSuffix}`;
+}
+
+function formatInputRecordField(field: RecordInputFieldDefinition): string {
+  const path = (field.source.fields ?? [])
+    .map(segment => {
+      if (segment.type === 'field' && typeof segment.value === 'string') {
+        return segment.value;
+      }
+      return undefined;
+    })
+    .filter((segment): segment is string => typeof segment === 'string' && segment.length > 0);
+
+  if (field.source.identifier === 'input' && path.length === 1 && path[0] === field.name) {
+    return field.name;
+  }
+
+  const sourcePath = path.length > 0 ? `.${path.join('.')}` : '';
+  const sourceLabel = `@${field.source.identifier}${sourcePath}`;
+  if (path.length === 0 && field.source.identifier === field.name) {
+    return field.name;
+  }
+  return `${sourceLabel} as ${field.name}`;
+}
+
+function formatRecordFields(fields: RecordFieldDefinition[]): string {
+  return `[${fields.map(formatRecordField).join(', ')}]`;
+}
+
+function formatRecordDisplayEntry(entry: RecordDisplayEntry): string {
+  switch (entry.kind) {
+    case 'bare':
+      return entry.field;
+    case 'ref':
+      return `{ ref: "${entry.field}" }`;
+    case 'mask':
+      return `{ mask: "${entry.field}" }`;
+    case 'handle':
+      return `{ handle: "${entry.field}" }`;
+    default:
+      return entry.field;
+  }
+}
+
+function formatRecordDisplay(display: RecordDisplayConfig): string | undefined {
+  if (display.kind === 'open') {
+    return undefined;
+  }
+
+  if (display.kind === 'legacy') {
+    return `[${display.entries.map(formatRecordDisplayEntry).join(', ')}]`;
+  }
+
+  const modes = Object.entries(display.modes).map(
+    ([mode, entries]) => `${mode}: [${entries.map(formatRecordDisplayEntry).join(', ')}]`
+  );
+  return `{ ${modes.join(', ')} }`;
+}
+
+function formatRecordWhenCondition(condition: RecordWhenCondition): string {
+  if (condition.type === 'wildcard') {
+    return '*';
+  }
+
+  const sourceRoot = condition.sourceRoot ? `@${condition.sourceRoot}` : '@input';
+  const path = Array.isArray(condition.path) && condition.path.length > 0
+    ? condition.path.join('.')
+    : condition.field;
+  if (condition.type === 'truthy') {
+    return `${sourceRoot}.${path}`;
+  }
+
+  return `${sourceRoot}.${path} ${condition.operator} ${JSON.stringify(condition.value)}`;
+}
+
+function formatRecordWhenResult(result: RecordWhenResult): string {
+  if (result.type === 'data') {
+    return 'data';
+  }
+
+  const tiers = result.tiers.map(tier => `:${tier}`).join(', ');
+  return tiers || 'data';
+}
+
+export function formatRecordDefinition(definition: RecordDefinition): string {
+  const factFields = definition.fields.filter(field => field.classification === 'fact');
+  const trustedDataFields = definition.fields.filter(
+    field => field.classification === 'data' && field.dataTrust === 'trusted'
+  );
+  const untrustedDataFields = definition.fields.filter(
+    field => field.classification === 'data' && field.dataTrust !== 'trusted'
+  );
+
+  const lines = [`record ${definition.name} {`];
+  if (definition.key) {
+    lines.push(`  key: ${definition.key}`);
+  }
+  if (factFields.length > 0) {
+    lines.push(`  facts: ${formatRecordFields(factFields)}`);
+  }
+  if (trustedDataFields.length > 0 && untrustedDataFields.length > 0) {
+    lines.push('  data: {');
+    lines.push(`    trusted: ${formatRecordFields(trustedDataFields)}`);
+    lines.push(`    untrusted: ${formatRecordFields(untrustedDataFields)}`);
+    lines.push('  }');
+  } else {
+    const dataFields = trustedDataFields.length > 0 ? trustedDataFields : untrustedDataFields;
+    if (dataFields.length > 0) {
+      lines.push(`  data: ${formatRecordFields(dataFields)}`);
+    }
+  }
+
+  const display = formatRecordDisplay(definition.display);
+  if (display) {
+    lines.push(`  display: ${display}`);
+  }
+
+  if (definition.when && definition.when.length > 0) {
+    lines.push('  when: [');
+    for (const rule of definition.when) {
+      lines.push(`    ${formatRecordWhenCondition(rule.condition)} => ${formatRecordWhenResult(rule.result)}`);
+    }
+    lines.push('  ]');
+  }
+
+  if (definition.validate !== 'demote') {
+    lines.push(`  validate: "${definition.validate}"`);
+  }
+
+  lines.push('}');
+  return lines.join('\n');
 }
 
 export interface RecordValidationError {

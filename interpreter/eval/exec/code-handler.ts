@@ -58,6 +58,7 @@ export type CodeExecutableHandlerResult =
       kind: 'continue';
       result: unknown;
       execEnv: Environment;
+      outputRecordEnv?: Environment;
     }
   | {
       kind: 'return';
@@ -87,6 +88,7 @@ export async function executeCodeExecutable(
   } = options;
 
   let execEnv = options.execEnv;
+  let outputRecordEnv: Environment | undefined;
   let result: unknown;
 
   if (exeLabels.length > 0) {
@@ -150,6 +152,7 @@ export async function executeCodeExecutable(
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     result = blockResult.value;
     execEnv = blockResult.env;
+    outputRecordEnv = (blockResult.metadata?.blockEnv as Environment | undefined) ?? execEnv;
   } else if (definition.language === 'mlld-box') {
     const envDirectiveNode = Array.isArray(definition.codeTemplate)
       ? (definition.codeTemplate[0] as any)
@@ -474,7 +477,8 @@ export async function executeCodeExecutable(
   return {
     kind: 'continue',
     result,
-    execEnv
+    execEnv,
+    outputRecordEnv
   };
 }
 

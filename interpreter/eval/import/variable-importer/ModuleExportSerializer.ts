@@ -1,5 +1,5 @@
 import type { Environment } from '@interpreter/env/Environment';
-import { serializeRecordDefinition } from '@core/types/record';
+import { serializeRecordDefinition, serializeRecordVariable } from '@core/types/record';
 import { makeSecurityDescriptor, mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import {
   getToolCollectionMetadata,
@@ -14,6 +14,7 @@ import {
 } from './executable/CapturedModuleEnvKeychain';
 import {
   type ExecutableVariable,
+  type RecordVariable,
   type TemplateVariable,
   type Variable,
   type VariableMetadata,
@@ -149,6 +150,10 @@ export class ModuleExportSerializer {
 
     if (variable.type === 'executable') {
       return this.serializeExecutableVariable(variable as ExecutableVariable, context);
+    }
+
+    if (variable.type === 'record') {
+      return serializeRecordVariable(variable as RecordVariable);
     }
 
     if (variable.type === 'template') {

@@ -15,7 +15,7 @@ import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
 import type { ToolCollection } from '../tools';
-import type { RecordSchemaMetadata } from '../record';
+import type { RecordDefinition, RecordSchemaMetadata } from '../record';
 import type { FactSourceHandle } from '../handle';
 
 // =========================================================================
@@ -144,6 +144,7 @@ export type VariableContextSnapshot = VariableContext;
 
 export interface VariableInternalMetadata extends Record<string, unknown> {
   executableDef?: ExecutableDefinition;
+  recordDefinition?: RecordDefinition;
   toolCollection?: ToolCollection;
   isToolsCollection?: boolean;
   transformerImplementation?: (...args: unknown[]) => unknown;
@@ -207,6 +208,7 @@ export type VariableTypeDiscriminator =
   | 'path'
   | 'imported'
   | 'executable'
+  | 'record'
   | 'pipeline-input'
   | 'primitive';
 
@@ -382,6 +384,15 @@ export interface ExecutableVariable extends BaseVariable {
 }
 
 /**
+ * Record definitions from @record directives.
+ */
+export interface RecordVariable extends BaseVariable {
+  type: 'record';
+  value: RecordDefinition;
+  metadata?: VariableMetadata;
+}
+
+/**
  * Special wrapper for pipeline stage inputs
  */
 export interface PipelineInputVariable extends BaseVariable {
@@ -449,6 +460,7 @@ export type Variable =
   | PathVariable
   | ImportedVariable
   | ExecutableVariable
+  | RecordVariable
   | PipelineInputVariable
   | PrimitiveVariable;
 

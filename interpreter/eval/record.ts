@@ -1,5 +1,6 @@
 import type { EvalResult } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import { createRecordVariable, type VariableSource } from '@core/types/variable';
 import type {
   RecordDirectiveNode,
   RecordDefinition,
@@ -113,6 +114,17 @@ export async function evaluateRecord(
   };
 
   env.registerRecordDefinition(name, definition);
+  const source: VariableSource = {
+    directive: 'var',
+    syntax: 'object',
+    hasInterpolation: false,
+    isMultiLine: true
+  };
+  env.setVariable(name, createRecordVariable(name, definition, source, {
+    internal: {
+      recordDefinition: definition
+    }
+  }));
   return {
     value: definition,
     env

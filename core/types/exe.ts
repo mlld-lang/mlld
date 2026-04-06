@@ -2,10 +2,24 @@
  * Exe directive type definitions
  */
 import { DirectiveNode, TypedDirectiveNode } from './base';
-import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
+import { ContentNodeArray, TextNodeArray } from './values';
 import { WithClause } from './run';
-import type { BaseMlldNode, ParameterNode } from './primitives';
+import type { BaseMlldNode, ParameterNode, VariableReferenceNode } from './primitives';
 import type { DataLabel } from './security';
+
+export interface StaticOutputRecordNode extends BaseMlldNode {
+  type: 'ExeOutputRecord';
+  kind: 'static';
+  name: string;
+}
+
+export interface DynamicOutputRecordNode extends BaseMlldNode {
+  type: 'ExeOutputRecord';
+  kind: 'dynamic';
+  ref: VariableReferenceNode;
+}
+
+export type ExeOutputRecordNode = StaticOutputRecordNode | DynamicOutputRecordNode;
 
 export interface ExeReturnNode extends BaseMlldNode {
   type: 'ExeReturn';
@@ -105,7 +119,7 @@ export interface ExeValues {
   identifier: TextNodeArray;
   params: ParameterNode[];
   metadata?: TextNodeArray;
-  outputRecord?: VariableNodeArray;
+  outputRecord?: ExeOutputRecordNode[];
   command?: ContentNodeArray;
   lang?: TextNodeArray;
   code?: ContentNodeArray;

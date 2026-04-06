@@ -133,14 +133,16 @@ export async function evaluateExe(
   }
 
   const outputRecordNode = directive.values?.outputRecord?.[0];
-  const outputRecord =
-    outputRecordNode && outputRecordNode.type === 'VariableReference'
-      ? outputRecordNode.identifier
-      : typeof (directive.raw as any)?.outputRecord === 'string'
-        ? (directive.raw as any).outputRecord
-        : undefined;
-  if (outputRecord) {
-    executableDef.outputRecord = outputRecord;
+  if (outputRecordNode && outputRecordNode.type === 'ExeOutputRecord') {
+    executableDef.outputRecord =
+      outputRecordNode.kind === 'static'
+        ? outputRecordNode.name
+        : {
+            kind: 'dynamic',
+            ref: outputRecordNode.ref
+          };
+  } else if (typeof (directive.raw as any)?.outputRecord === 'string') {
+    executableDef.outputRecord = (directive.raw as any).outputRecord;
   }
 
   return materializeExecutableVariable({

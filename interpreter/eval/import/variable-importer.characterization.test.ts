@@ -7,8 +7,11 @@ import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import {
   createArrayVariable,
   createExecutableVariable,
+  createObjectVariable,
+  createRecordVariable,
   createSimpleTextVariable,
-  isExecutableVariable
+  isExecutableVariable,
+  isRecordVariable
 } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
@@ -225,6 +228,101 @@ describe('VariableImporter characterization', () => {
     const restoredCapturedEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv);
     expect(restoredCapturedEnv instanceof Map).toBe(true);
     expect(restoredCapturedEnv.get('dep')?.value).toBe('ok');
+  });
+
+  it('rehydrates top-level record exports as record variables and registers their definitions', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const env = createEnv();
+    const record = createRecordVariable(
+      'contact',
+      {
+        name: 'contact',
+        fields: [
+          {
+            kind: 'input',
+            name: 'email',
+            classification: 'fact',
+            sourceRoot: 'input',
+            source: {
+              type: 'VariableReference',
+              nodeId: 'record-contact-email',
+              valueType: 'varIdentifier',
+              identifier: 'input',
+              fields: [{ type: 'field', value: 'email' }]
+            },
+            valueType: 'string',
+            optional: false
+          }
+        ],
+        rootMode: 'object',
+        display: { kind: 'open' },
+        validate: 'demote'
+      },
+      SOURCE
+    );
+
+    const childVars = new Map<string, any>([['contact', record]]);
+    const exportsResult = importer.processModuleExports(childVars, {}, false, null, env);
+    const restored = importer.createVariableFromValue(
+      'contact',
+      exportsResult.moduleObject.contact,
+      '/project/module.mld',
+      undefined,
+      { env }
+    );
+
+    expect(isRecordVariable(restored)).toBe(true);
+    expect(env.getRecordDefinition('contact')).toMatchObject({
+      name: 'contact'
+    });
+  });
+
+  it('rehydrates nested record exports inside imported objects', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const env = createEnv();
+    const record = createRecordVariable(
+      'contact',
+      {
+        name: 'contact',
+        fields: [
+          {
+            kind: 'input',
+            name: 'email',
+            classification: 'fact',
+            sourceRoot: 'input',
+            source: {
+              type: 'VariableReference',
+              nodeId: 'nested-record-contact-email',
+              valueType: 'varIdentifier',
+              identifier: 'input',
+              fields: [{ type: 'field', value: 'email' }]
+            },
+            valueType: 'string',
+            optional: false
+          }
+        ],
+        rootMode: 'object',
+        display: { kind: 'open' },
+        validate: 'demote'
+      },
+      SOURCE
+    );
+    const childVars = new Map<string, any>([
+      ['contact', record],
+      ['contracts', createObjectVariable('contracts', { email: record }, false, SOURCE)]
+    ]);
+
+    const exportsResult = importer.processModuleExports(childVars, {}, false, null, env);
+    const restored = importer.createVariableFromValue(
+      'contracts',
+      exportsResult.moduleObject.contracts,
+      '/project/module.mld',
+      undefined,
+      { env }
+    ) as any;
+
+    expect(restored.type).toBe('object');
+    expect(isRecordVariable(restored.value.email)).toBe(true);
   });
 
   it('preserves executable security metadata for executables exported inside arrays', () => {

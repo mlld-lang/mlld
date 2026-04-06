@@ -616,10 +616,22 @@ SlashExe
     }
 
 ExeOutputRecordAnnotation
-  = __ "=>" _ "@"? identifier:BaseIdentifier {
+  = __ "=>" _ "record" __ ref:UnifiedVariableNoTail {
       return {
-        identifier,
-        node: helpers.createVariableReferenceNode('varIdentifier', { identifier }, location())
+        identifier: text().replace(/^\s*=>\s*/, '').trim(),
+        node: helpers.createNode('ExeOutputRecord', {
+          kind: 'dynamic',
+          ref
+        }, location())
+      };
+    }
+  / __ "=>" _ "@"? identifier:BaseIdentifier {
+      return {
+        identifier: text().replace(/^\s*=>\s*/, '').trim(),
+        node: helpers.createNode('ExeOutputRecord', {
+          kind: 'static',
+          name: identifier
+        }, location())
       };
     }
 

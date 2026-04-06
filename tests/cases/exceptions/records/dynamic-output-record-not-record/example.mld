@@ -1,0 +1,7 @@
+var @not_a_record = { nope: true }
+
+exe @parse(schema) = js {
+  return { email: "ada@example.com" };
+} => record @schema
+
+show @parse(@not_a_record)

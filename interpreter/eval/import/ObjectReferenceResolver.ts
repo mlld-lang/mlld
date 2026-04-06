@@ -1,4 +1,5 @@
-import type { Variable, ExecutableVariable } from '@core/types/variable';
+import type { Variable, ExecutableVariable, RecordVariable } from '@core/types/variable';
+import { serializeRecordVariable } from '@core/types/record';
 import { logger } from '@core/utils/logger';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 import {
@@ -117,7 +118,15 @@ export class ObjectReferenceResolver {
       }
 
       // If the result is an object that might contain more AST nodes, recursively resolve it
-      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result) && !(result as any).__arraySnapshot) {
+      if (
+        result &&
+        typeof result === 'object' &&
+        !result.__executable &&
+        !result.__recordVariable &&
+        !result.__record &&
+        !Array.isArray(result) &&
+        !(result as any).__arraySnapshot
+      ) {
         return this.resolveObjectReferences(result, variableMap, options);
       }
 
@@ -169,6 +178,8 @@ export class ObjectReferenceResolver {
       };
       stashCapturedModuleEnv(result, getCapturedModuleEnv(serializedInternal));
       return result;
+    } else if (referencedVar.type === 'record') {
+      return serializeRecordVariable(referencedVar as RecordVariable);
     } else {
       // For all other variable types (including arrays), return the value directly
       // This ensures object properties contain raw values, not Variable wrappers
@@ -210,6 +221,8 @@ export class ObjectReferenceResolver {
           mx: serializedCtx,
           internal: serializedInternal
         };
+      } else if (variable.type === 'record') {
+        result[name] = serializeRecordVariable(variable as RecordVariable);
       } else {
         // For other variables, export the value directly
         result[name] = variable.value;

@@ -1,4 +1,5 @@
 import { JSONFormatter } from '../core/json-formatter';
+import { formatRecordDefinition, isRecordDefinition } from '@core/types/record';
 import { isLoadContentResult } from '@core/types/load-content';
 import { asText, isStructuredValue } from './structured-value';
 
@@ -67,6 +68,10 @@ export function formatForDisplay(value: unknown, options: DisplayFormatOptions =
     }
     const printableArray = value.map(item => normalizeArrayEntry(item));
     return JSONFormatter.stringify(printableArray, { pretty, indent });
+  }
+
+  if (isRecordDefinition(value)) {
+    return formatRecordDefinition(value);
   }
 
   if (value && typeof value === 'object') {
