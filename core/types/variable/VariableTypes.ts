@@ -303,8 +303,6 @@ export interface ArrayVariable extends BaseVariable {
   all?: QuantifierHelper;
   none?: QuantifierHelper;
   raw?: readonly unknown[];
-  totalTokens?: () => number;
-  maxTokens?: () => number;
 }
 
 // =========================================================================

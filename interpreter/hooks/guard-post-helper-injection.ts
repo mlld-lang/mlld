@@ -32,8 +32,6 @@ export function attachPostGuardInputHelper(target: Variable, helper: GuardInputH
   apply('any', helper.any);
   apply('all', helper.all);
   apply('none', helper.none);
-  apply('totalTokens', helper.totalTokens);
-  apply('maxTokens', helper.maxTokens);
 }
 
 export function injectPostGuardHelpers(

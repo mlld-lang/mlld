@@ -532,8 +532,6 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       'internal',
       'mx',
       'raw',
-      'totalTokens',
-      'maxTokens',
       ...(!isStructuredVariable && !isUserDataContainer ? ['source', 'metadata'] : [])
     ];
 

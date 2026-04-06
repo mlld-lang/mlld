@@ -101,7 +101,7 @@ describe('guard input helper', () => {
 
     const helper = createGuardInputHelper([secretVar, piiVar]);
     expect(helper.mx.labels).toEqual(['secret', 'pii']);
-    expect(helper.totalTokens()).toBeGreaterThan(0);
+    expect(helper.mx.totalTokens()).toBeGreaterThan(0);
     expect(helper.any.mx.labels.includes('secret')).toBe(true);
     expect(helper.all.mx.labels.includes('secret')).toBe(false);
     expect(helper.none.mx.labels.includes('public')).toBe(true);
@@ -122,7 +122,7 @@ describe('guard input helper', () => {
 
     const helper = createGuardInputHelper([variable]);
     expect(helper.mx.tokens[0]).toBe(3);
-    expect(helper.totalTokens()).toBe(3);
-    expect(helper.maxTokens()).toBe(3);
+    expect(helper.mx.totalTokens()).toBe(3);
+    expect(helper.mx.maxTokens()).toBe(3);
   });
 });

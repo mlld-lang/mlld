@@ -36,8 +36,6 @@ export function attachGuardHelper(target: Variable, helper: GuardInputHelper): v
     apply(receiver, 'any', helper.any);
     apply(receiver, 'all', helper.all);
     apply(receiver, 'none', helper.none);
-    apply(receiver, 'totalTokens', helper.totalTokens);
-    apply(receiver, 'maxTokens', helper.maxTokens);
   };
 
   applyAll(target as object);

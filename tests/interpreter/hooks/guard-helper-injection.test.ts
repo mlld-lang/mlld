@@ -181,8 +181,6 @@ describe('guard helper injection', () => {
     expect(keys).not.toContain('any');
     expect(keys).not.toContain('all');
     expect(keys).not.toContain('none');
-    expect(keys).not.toContain('totalTokens');
-    expect(keys).not.toContain('maxTokens');
 
     const anyDescriptor = Object.getOwnPropertyDescriptor(target as object, 'any');
     expect(anyDescriptor?.enumerable).toBe(false);
@@ -192,8 +190,9 @@ describe('guard helper injection', () => {
     expect((target as any).any).toBe(helper.any);
     expect((target as any).all).toBe(helper.all);
     expect((target as any).none).toBe(helper.none);
-    expect((target as any).totalTokens()).toBe(helper.totalTokens());
-    expect((target as any).maxTokens()).toBe(helper.maxTokens());
+    // Token helpers are available via helper.mx namespace
+    expect(typeof helper.mx.totalTokens).toBe('function');
+    expect(typeof helper.mx.maxTokens).toBe('function');
   });
 
   it('attaches helper members to object values for raw-value field chains', () => {

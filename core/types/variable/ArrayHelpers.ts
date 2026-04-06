@@ -58,8 +58,6 @@ export interface GuardInputHelper {
     totalTokens(): number;
     maxTokens(): number;
   };
-  totalTokens(): number;
-  maxTokens(): number;
   any: QuantifierHelper;
   all: QuantifierHelper;
   none: QuantifierHelper;
@@ -83,8 +81,6 @@ export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputH
       totalTokens: aggregate.totalTokens,
       maxTokens: aggregate.maxTokens
     },
-    totalTokens: aggregate.totalTokens,
-    maxTokens: aggregate.maxTokens,
     any: quantifiers.any,
     all: quantifiers.all,
     none: quantifiers.none
@@ -118,8 +114,6 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
     defineHelperProperty(target, 'any', quantifiers.any);
     defineHelperProperty(target, 'all', quantifiers.all);
     defineHelperProperty(target, 'none', quantifiers.none);
-    defineHelperProperty(target, 'totalTokens', aggregate.totalTokens);
-    defineHelperProperty(target, 'maxTokens', aggregate.maxTokens);
   }
 
   if (!variable.internal) {

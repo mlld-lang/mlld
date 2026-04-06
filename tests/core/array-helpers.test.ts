@@ -29,8 +29,6 @@ describe('universal array helpers', () => {
     expect(typeof mx.totalTokens()).toBe('number');
     expect(typeof mx.maxTokens()).toBe('number');
 
-    expect(typeof arrayVar.totalTokens).toBe('function');
-    expect(typeof arrayVar.maxTokens).toBe('function');
     expect(Array.isArray(arrayVar.raw)).toBe(true);
     expect(Object.keys(arrayVar)).not.toContain('any');
   });
@@ -44,7 +42,7 @@ describe('universal array helpers', () => {
     expect(mx.labels).toEqual([]);
     expect(mx.sources).toEqual([]);
     expect(mx.tokens).toEqual([]);
-    expect(mx.totalTokens()).toBe(0);
-    expect(mx.maxTokens()).toBe(0);
+    expect(mx.totalTokens!()).toBe(0);
+    expect(mx.maxTokens!()).toBe(0);
   });
 });
