@@ -9,6 +9,7 @@ import {
 import { executeParallelExecInvocations } from './helpers/parallel-exec';
 import { assertNoErrorLikeBooleanValue } from './truthiness-guard';
 import type { Variable } from '@core/types/variable';
+import { astLocationToSourceLocation } from '@core/types';
 import {
   isTextLike,
   isArray as isArrayVariable,
@@ -24,6 +25,8 @@ import {
   isStructuredValue
 } from '../utils/structured-value';
 import { isShelfSlotRefValue } from '@core/types/shelf';
+import { coerceRecordOutput } from './records/coerce-record';
+import { resolveDynamicRecordDefinition } from './records/resolve-record-definition';
 
 /**
  * Determines if a value is truthy according to mlld rules
@@ -435,6 +438,8 @@ export async function evaluateUnifiedExpression(
         return await evaluateUnaryExpression(node, env, expressionContext);
       case 'TernaryExpression':
         return await evaluateTernaryExpression(node, env, expressionContext);
+      case 'CoerceExpression':
+        return await evaluateCoerceExpression(node, env, expressionContext);
       case 'ArrayFilterExpression':
         return await evaluateArrayFilterExpression(node, env, expressionContext);
       case 'ArraySliceExpression':
@@ -764,8 +769,79 @@ async function evaluateArraySliceExpression(
   
   const start = node.start || 0;
   const end = node.end !== undefined ? node.end : array.length;
-  
+
   return createEvaluatorResult(array.slice(start, end), arrayResult.descriptor);
+}
+
+async function evaluateCoerceExpression(
+  node: any,
+  env: Environment,
+  context: EvaluationContext
+): Promise<EvaluatorResult> {
+  const expressionContext: EvaluationContext =
+    context.isExpression ? context : { ...context, isExpression: true };
+  const sourceLocation = astLocationToSourceLocation(node?.location, env.getCurrentFilePath() ?? undefined);
+
+  let baseValue: unknown;
+  let descriptor = extractSecurityDescriptor(node?.value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+
+  if (
+    node?.value &&
+    typeof node.value === 'object' &&
+    ('wrapperType' in node.value || 'needsInterpolation' in node.value)
+  ) {
+    const { evaluateDataValue } = await import('./data-value-evaluator');
+    baseValue = await evaluateDataValue(node.value as any, env);
+  } else {
+    const baseResult = await evaluate(node.value as any, env, expressionContext);
+    baseValue = baseResult.value;
+  }
+
+  const runtimeDescriptor = extractSecurityDescriptor(baseValue, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  descriptor = descriptor
+    ? (runtimeDescriptor ? env.mergeSecurityDescriptors(descriptor, runtimeDescriptor) : descriptor)
+    : runtimeDescriptor;
+
+  const recordDefinition = await resolveDynamicRecordDefinition({
+    ref: node.schema,
+    execEnv: env,
+    nodeSourceLocation: sourceLocation,
+    missingReferenceMessage: displayRef => `Inline record schema '${displayRef}' is not defined`,
+    invalidReferenceMessage: displayRef => `Inline record schema '${displayRef}' did not resolve to a record`
+  });
+
+  let result = await coerceRecordOutput({
+    definition: recordDefinition,
+    value: baseValue,
+    env,
+    inheritedDescriptor: descriptor
+  });
+
+  const postFields: any[] = Array.isArray(node?.fields) ? node.fields : [];
+  if (postFields.length > 0) {
+    const { accessField } = await import('../utils/field-access');
+    let current: any = result;
+    for (const field of postFields) {
+      current = await accessField(current, field, {
+        env,
+        sourceLocation
+      });
+    }
+    result = current;
+  }
+
+  const resultDescriptor = extractSecurityDescriptor(result, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+
+  return createEvaluatorResult(result, resultDescriptor ?? descriptor);
 }
 
 /**
@@ -776,6 +852,7 @@ export function isUnifiedExpressionNode(node: any): boolean {
     'BinaryExpression',
     'UnaryExpression', 
     'TernaryExpression',
+    'CoerceExpression',
     'ArrayFilterExpression',
     'ArraySliceExpression',
     'Literal',

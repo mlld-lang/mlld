@@ -88,9 +88,23 @@ BlockExpressionInArgsError "block expression in argument"
 
 // Use existing proven patterns from CommandArgument - handles all edge cases
 UnifiedArgument "unified argument"
+  = value:UnifiedArgumentBase coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return value;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+UnifiedArgumentBase "unified argument"
   = BlockExpressionInArgsError
   / WhenExpression              // Allow when-expressions as arguments
   / ForeachCommandExpression    // Allow foreach as argument (returns array)
+  / GroupedCoerceExpressionAccess
   / ExecResultMethodCall        // Allow chained helper calls (e.g., @secret.trim().slice())
   / FieldAccessExecPattern      // Allow builtin helpers invoked on variables (@var.trim())
   / ExecInvocationPattern       // Allow direct exec invocations @helper()
@@ -115,6 +129,7 @@ UnifiedArgument "unified argument"
       }
     }
   / ExpressionWithOperator     // Operator expressions (ternary, comparison, etc.)
+  / GroupedUnifiedExpression
   / varRef:VariableNoTail {  // Use unified variable pattern for all contexts
       return varRef;
     }

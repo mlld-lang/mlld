@@ -96,7 +96,8 @@ function isExpressionNode(valueNode: unknown): boolean {
   const nodeType = (valueNode as { type?: string }).type;
   return nodeType === 'BinaryExpression'
     || nodeType === 'TernaryExpression'
-    || nodeType === 'UnaryExpression';
+    || nodeType === 'UnaryExpression'
+    || nodeType === 'CoerceExpression';
 }
 
 async function evaluateToolCollectionObject(

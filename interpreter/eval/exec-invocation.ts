@@ -118,8 +118,6 @@ import {
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
 import {
-  isSerializedRecordDefinition,
-  isSerializedRecordVariable,
   type RecordDefinition
 } from '@core/types/record';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
@@ -139,6 +137,7 @@ import {
   applyInvocationScopedRuntimeConfig,
   normalizeInvocationWithClause
 } from './exec/scoped-runtime-config';
+import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -3908,153 +3907,4 @@ async function evaluateExecInvocationInternal(
 
     finalizeExecInvocationStreaming(env, streamingManager);
   }
-}
-
-function readEmbeddedRecordDefinition(
-  variable: { internal?: Record<string, unknown> } | undefined,
-  recordName: string
-): RecordDefinition | undefined {
-  const container = variable?.internal?.recordDefinitions;
-  if (!container || typeof container !== 'object' || Array.isArray(container)) {
-    return undefined;
-  }
-  const embedded = (container as Record<string, unknown>)[recordName];
-  if (!embedded || typeof embedded !== 'object' || Array.isArray(embedded)) {
-    return undefined;
-  }
-  return embedded as RecordDefinition;
-}
-
-async function resolveConfiguredOutputRecordDefinition(options: {
-  outputRecord: ExecutableDefinition['outputRecord'];
-  variable: { name?: string; internal?: Record<string, unknown> } | undefined;
-  commandName: string;
-  runtimeEnv: Environment;
-  execEnv: Environment;
-  nodeSourceLocation: ReturnType<typeof astLocationToSourceLocation> | null | undefined;
-}): Promise<RecordDefinition> {
-  const { outputRecord, variable, commandName, runtimeEnv, execEnv, nodeSourceLocation } = options;
-
-  if (typeof outputRecord === 'string') {
-    const recordDefinition =
-      runtimeEnv.getRecordDefinition(outputRecord) ??
-      readEmbeddedRecordDefinition(variable, outputRecord);
-    if (recordDefinition) {
-      return recordDefinition;
-    }
-
-    throw new MlldInterpreterError(
-      `Executable '@${variable?.name ?? commandName}' references unknown record '@${outputRecord}'`,
-      'exec',
-      nodeSourceLocation,
-      { code: 'RECORD_NOT_FOUND' }
-    );
-  }
-
-  const displayRef = formatDynamicRecordReference(outputRecord?.ref);
-  try {
-    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
-    const resolved = await evaluateDataValue(outputRecord.ref as any, execEnv);
-    const recordDefinition = normalizeResolvedRecordDefinition(resolved);
-    if (recordDefinition) {
-      return recordDefinition;
-    }
-  } catch (error) {
-    if (error instanceof MlldInterpreterError) {
-      throw error;
-    }
-    if (error instanceof Error && /Variable not found:/i.test(error.message)) {
-      throw new MlldInterpreterError(
-        `Dynamic output record reference '${displayRef}' is not defined`,
-        'exec',
-        nodeSourceLocation,
-        { code: 'RECORD_NOT_FOUND' }
-      );
-    }
-    throw error;
-  }
-
-  throw new MlldInterpreterError(
-    `Dynamic output record reference '${displayRef}' did not resolve to a record`,
-    'exec',
-    nodeSourceLocation,
-    { code: 'INVALID_RECORD_REFERENCE' }
-  );
-}
-
-function normalizeResolvedRecordDefinition(value: unknown): RecordDefinition | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  if (isRecordVariable(value as Variable)) {
-    return (value as Variable & { type: 'record'; value: RecordDefinition }).value;
-  }
-
-  if (isSerializedRecordVariable(value)) {
-    return value.definition;
-  }
-
-  if (isSerializedRecordDefinition(value)) {
-    return value.definition;
-  }
-
-  if (isVariableLikeRecordWrapper(value)) {
-    return normalizeResolvedRecordDefinition((value as { value: unknown }).value);
-  }
-
-  if (looksLikeRecordDefinition(value)) {
-    return value as RecordDefinition;
-  }
-
-  return undefined;
-}
-
-function isVariableLikeRecordWrapper(value: unknown): value is { type: string; value: unknown } {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof (value as { type?: unknown }).type === 'string' &&
-    'value' in (value as Record<string, unknown>)
-  );
-}
-
-function looksLikeRecordDefinition(value: unknown): value is RecordDefinition {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof (value as RecordDefinition).name === 'string' &&
-    Array.isArray((value as RecordDefinition).fields) &&
-    typeof (value as RecordDefinition).rootMode === 'string' &&
-    typeof (value as RecordDefinition).validate === 'string'
-  );
-}
-
-function formatDynamicRecordReference(ref: { identifier?: string; fields?: any[] } | undefined): string {
-  if (!ref?.identifier) {
-    return '@<unknown>';
-  }
-
-  const suffix = (ref.fields ?? [])
-    .map(field => {
-      if (field?.type === 'field' && typeof field.value === 'string') {
-        return `.${field.value}`;
-      }
-      if (field?.type === 'numericField' && typeof field.value === 'number') {
-        return `.${field.value}`;
-      }
-      if (field?.type === 'arrayIndex' && typeof field.value === 'number') {
-        return `[${field.value}]`;
-      }
-      if (field?.type === 'bracketAccess') {
-        return `[${JSON.stringify(field.value)}]`;
-      }
-      if (field?.type === 'variableIndex') {
-        return `[@${field.value}]`;
-      }
-      return '';
-    })
-    .join('');
-
-  return `@${ref.identifier}${suffix}`;
 }

@@ -37,6 +37,15 @@ Three pieces:
 2. **`=> record`** on the exe applies coercion automatically on every call
 3. **Guard** checks `@output.mx.schema.valid` and retries with `@output.mx.schema.errors`
 
+The same coercion engine is also available inline for ordinary values:
+
+```mlld
+var @checked = @raw as record @task_result
+show @checked.mx.schema.valid
+```
+
+Use `=> record` when the coercion belongs to the exe's return contract. Use `as record @schema` when you need to validate or re-coerce a value inside a larger expression.
+
 ### `resume` vs `retry` for tool-calling exes
 
 If the exe calls write tools, use `resume` instead of `retry`. `retry` re-executes the entire exe — including tool calls. That means double-sending emails, double-creating events. `resume` continues the existing LLM conversation without re-executing tools:
@@ -107,6 +116,8 @@ guard after @check for op:named:myExe = when [
 ```
 
 The retry message includes the actual errors. The LLM sees "missing required field: count" not "return valid JSON."
+
+Inline `as record @schema` attaches the same `mx.schema` metadata, so grouped expressions like `(@value as record @schema).mx.schema.errors` work the same way.
 
 ## Nested output validation
 

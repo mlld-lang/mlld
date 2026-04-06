@@ -3,8 +3,23 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
+  = value:VarRHSContentBase coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return value;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+VarRHSContentBase "var assignment value"
   = LeadingParallelPipeline     // Leading || for parallel pipeline execution
+  / GroupedCoerceExpressionAccess
   / ExpressionWithOperator      // Try expressions FIRST but only if operators present
+  / GroupedUnifiedExpression
   / WhenExpressionAny           // Allow value-returning when-expressions (inline or bracketed)
   / ForExpression               // for @var in @collection => expression
   / LoopExpression              // loop(...) [ ... ]

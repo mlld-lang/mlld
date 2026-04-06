@@ -412,7 +412,7 @@ var @result = @extract(@source_text, @contracts.email)
 
 Records stored in collections render as their declaration form when displayed — same as top-level records.
 
-### Dynamic coercion: `=> record @schema`
+### Dynamic coercion: `=> record @schema` and `as record @schema`
 
 Static coercion uses a bare record name:
 
@@ -420,7 +420,10 @@ Static coercion uses a bare record name:
 exe @emitContact() = js { return { email: "ada@example.com" } } => contact
 ```
 
-Dynamic coercion uses a variable reference prefixed by the `record` keyword:
+Dynamic coercion uses a variable reference prefixed by the `record` keyword. There are two forms:
+
+- `=> record @schema` for exe return coercion
+- `@value as record @schema` for inline value coercion in ordinary expressions
 
 ```mlld
 exe @validate(input, schema) = [
@@ -428,7 +431,19 @@ exe @validate(input, schema) = [
 ]
 ```
 
-The `record` keyword disambiguates — `=> @schema` alone could be ambiguous, but `=> record @schema` is explicitly "coerce the output against the record referenced by `@schema`."
+```mlld
+var @checked = @raw as record @schema
+var @valid = (@raw as record @schema).mx.schema.valid
+```
+
+The `record` keyword disambiguates — `=> @schema` alone could be ambiguous, but `=> record @schema` is explicitly "coerce the output against the record referenced by `@schema`." The same applies to inline coercion: `@raw as record @schema` means "take this value and coerce it against the record referenced by `@schema`."
+
+Inline coercion is terminal postfix syntax. Producer modifiers happen before it, and field access after coercion needs grouping:
+
+```mlld
+run cmd { ... } with { policy: @p } as record @schema
+(@raw as record @schema).mx.schema.errors
+```
 
 **Nested references work:**
 
@@ -446,17 +461,18 @@ exe @extract(source, contractName) = [
 var @result = @extract(@source, "email")
 ```
 
-Resolution happens at exe invocation time. If `@contract` doesn't reference a record, coercion fails with a clear error.
+Resolution happens at runtime. If `@contract` doesn't reference a record, coercion fails with a clear error.
 
 ### When to use dynamic coercion
 
-Static `=> contact` is the common case — use it whenever the record is known at write time. Dynamic `=> record @schema` is for patterns where the contract is passed in as configuration:
+Static `=> contact` is the common case — use it whenever the record is known at write time. Dynamic `=> record @schema` and `@value as record @schema` are for patterns where the contract is passed in as configuration:
 
 - **Framework-driven coercion.** A framework (like the capability agent pattern) takes a contract map from the developer and coerces extract output against the appropriate record at runtime.
 - **Contract-per-write-tool patterns.** The extract phase emits data shaped for a downstream write tool. The contract for each write tool is defined once, passed into the extract worker, and coerced dynamically.
 - **Shared validation exes.** A single `@validate` exe that takes both data and a schema, used across many records.
+- **Inline validation within larger expressions.** Coerce a pipeline result, object field, array item, or direct variable before continuing the expression.
 
-If you're writing a single-use exe with a known record, static coercion is simpler. Reach for dynamic coercion when the same exe needs to validate against different contracts at different call sites.
+If you're writing a single-use exe with a known record, static coercion is simpler. Reach for dynamic coercion when the same exe or expression path needs to validate against different contracts at different call sites.
 
 ## What records are not
 

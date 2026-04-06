@@ -20,6 +20,7 @@ function isExpressionNode(value: unknown): boolean {
   return nodeType === 'BinaryExpression'
     || nodeType === 'TernaryExpression'
     || nodeType === 'UnaryExpression'
+    || nodeType === 'CoerceExpression'
     || nodeType === 'ArrayFilterExpression'
     || nodeType === 'ArraySliceExpression';
 }

@@ -117,7 +117,7 @@ var @alt = ::Hello @name!::
 
 **Modules** - Import/export: `import { @helper } from @corp/utils`
 
-**Records** - Declare data shapes with facts/data classification; first-class values that can be imported, passed as parameters, and used for coercion statically (`=> contact`) or dynamically (`=> record @schema`)
+**Records** - Declare data shapes with facts/data classification; first-class values that can be imported, passed as parameters, and used for coercion statically (`=> contact`) or dynamically (`=> record @schema`, `@value as record @schema`)
 
 **Security** - Labels + policies + guards = prompt injection defense
 

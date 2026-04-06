@@ -120,6 +120,47 @@ function createNonCommandHandlerMap(): Record<NonCommandHandlerKey, NonCommandHa
   };
 }
 
+async function tryEvaluateSingleTemplateValue(
+  template: readonly unknown[] | undefined,
+  env: Environment
+): Promise<{ matched: boolean; value: unknown }> {
+  if (!Array.isArray(template) || template.length !== 1) {
+    return { matched: false, value: undefined };
+  }
+
+  const [part] = template;
+  if (part == null) {
+    return { matched: true, value: '' };
+  }
+
+  if (typeof part !== 'object') {
+    return { matched: true, value: part };
+  }
+
+  const node = part as Record<string, unknown>;
+  if (node.type === 'Text') {
+    return { matched: true, value: node.content ?? '' };
+  }
+  if (node.type === 'Literal') {
+    return { matched: true, value: node.value };
+  }
+  if (
+    node.type === 'VariableReference' &&
+    typeof node.identifier === 'string' &&
+    (!Array.isArray(node.fields) || node.fields.length === 0)
+  ) {
+    const variable = env.getVariable(node.identifier);
+    if (!variable) {
+      throw new MlldInterpreterError(`Variable not found: ${node.identifier}`);
+    }
+    return { matched: true, value: variable.value };
+  }
+
+  const { evaluate } = await import('@interpreter/core/interpreter');
+  const evaluated = await evaluate(part as any, env, { isExpression: true });
+  return { matched: true, value: evaluated?.value };
+}
+
 async function getCapturedModuleEnvMap(
   variableLike: { internal?: Record<string, unknown> } | undefined,
   targetEnv?: Environment
@@ -233,10 +274,16 @@ async function handleTemplateExecutable(
     services
   } = options;
   const templateInterpolationEnv = createTemplateInterpolationEnv(execEnv, definition);
-  const templateResult = await services.interpolateWithResultDescriptor(
+  const directTemplateValue = await tryEvaluateSingleTemplateValue(
     definition.template,
     templateInterpolationEnv
   );
+  const templateResult = directTemplateValue.matched
+    ? directTemplateValue.value
+    : await services.interpolateWithResultDescriptor(
+        definition.template,
+        templateInterpolationEnv
+      );
   let result: unknown;
   if (isStructuredValue(templateResult)) {
     result = templateResult;

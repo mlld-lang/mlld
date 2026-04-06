@@ -13,6 +13,41 @@ function getFirstDirective(source: string): DirectiveNode {
 }
 
 describe('record grammar', () => {
+  it('parses inline dynamic record coercion as a terminal postfix expression', () => {
+    const directive = getFirstDirective(`
+/var @result = @raw as record @schema
+`) as DirectiveNode;
+
+    expect(directive.kind).toBe('var');
+    expect((directive.values as any).value?.[0]).toMatchObject({
+      type: 'CoerceExpression',
+      value: {
+        type: 'VariableReference',
+        identifier: 'raw'
+      },
+      schema: {
+        type: 'VariableReference',
+        identifier: 'schema'
+      }
+    });
+  });
+
+  it('parses grouped inline coercion field access for mx metadata reads', () => {
+    const directive = getFirstDirective(`
+/var @valid = (@raw as record @schema).mx.schema.valid
+`) as DirectiveNode;
+
+    expect(directive.kind).toBe('var');
+    expect((directive.values as any).value?.[0]).toMatchObject({
+      type: 'CoerceExpression',
+      fields: [
+        { type: 'field', value: 'mx' },
+        { type: 'field', value: 'schema' },
+        { type: 'field', value: 'valid' }
+      ]
+    });
+  });
+
   it('parses record fields, remaps, computed values, and newline-separated when rules', () => {
     const directive = getFirstDirective(`
 /record @contact = {

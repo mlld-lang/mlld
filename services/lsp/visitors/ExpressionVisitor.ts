@@ -5,10 +5,15 @@ import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { TokenBuilder } from '@services/lsp/utils/TokenBuilder';
 import { LspAstNode, asLspAstNode } from '@services/lsp/visitors/base/LspAstNode';
+import type { FieldAccessNode } from '@core/types';
 
 interface ConditionPairNode extends LspAstNode {
   condition?: Array<LspAstNode | LspAstNode[]>;
   action?: LspAstNode[] | LspAstNode;
+}
+
+interface PropertyAccessHostNode extends LspAstNode {
+  fields: FieldAccessNode[];
 }
 
 export class ExpressionVisitor extends BaseVisitor {
@@ -32,6 +37,7 @@ export class ExpressionVisitor extends BaseVisitor {
            astNode.type === 'UnaryExpression' ||
            astNode.type === 'TernaryExpression' ||
            astNode.type === 'NewExpression' ||
+           astNode.type === 'CoerceExpression' ||
            astNode.type === 'WhenExpression' ||
            astNode.type === 'ForExpression' ||
            astNode.type === 'LoopExpression' ||
@@ -53,6 +59,9 @@ export class ExpressionVisitor extends BaseVisitor {
         break;
       case 'NewExpression':
         this.visitNewExpression(astNode, context);
+        break;
+      case 'CoerceExpression':
+        this.visitCoerceExpression(astNode, context);
         break;
       case 'WhenExpression':
         this.visitWhenExpression(astNode, context);
@@ -90,6 +99,43 @@ export class ExpressionVisitor extends BaseVisitor {
       for (const arg of node.args) {
         this.mainVisitor.visitNode(arg, context);
       }
+    }
+  }
+
+  private visitCoerceExpression(node: LspAstNode, context: VisitorContext): void {
+    const valueNode = node.value ? asLspAstNode(node.value) : null;
+    const schemaNode = node.schema ? asLspAstNode(node.schema) : null;
+
+    if (valueNode?.type) {
+      this.mainVisitor.visitNode(valueNode, context);
+    }
+
+    const sourceText = this.document.getText();
+    const searchStart = valueNode?.location?.end?.offset ?? node.location.start.offset;
+    const searchEnd = schemaNode?.location?.start?.offset ?? node.location.end.offset;
+    const betweenText = sourceText.substring(searchStart, searchEnd);
+    const coercionMatch = /\bas\b\s+record\b/.exec(betweenText);
+
+    if (coercionMatch?.index !== undefined) {
+      const asOffset = searchStart + coercionMatch.index;
+      const recordOffset = asOffset + coercionMatch[0].indexOf('record');
+      this.addKeywordToken(asOffset, 'as'.length);
+      this.addKeywordToken(recordOffset, 'record'.length);
+    }
+
+    if (schemaNode?.type) {
+      this.mainVisitor.visitNode(schemaNode, context);
+    }
+
+    const fields = Array.isArray(node.fields)
+      ? node.fields.filter((field): field is FieldAccessNode => this.isFieldAccessNode(field))
+      : [];
+
+    if (fields.length > 0) {
+      this.operatorHelper.tokenizePropertyAccess({
+        ...node,
+        fields
+      } as PropertyAccessHostNode);
     }
   }
   
@@ -180,6 +226,23 @@ export class ExpressionVisitor extends BaseVisitor {
         node.falseBranch.location.start.offset
       );
     }
+  }
+
+  private addKeywordToken(offset: number, length: number): void {
+    const position = this.document.positionAt(offset);
+    this.tokenBuilder.addToken({
+      line: position.line,
+      char: position.character,
+      length,
+      tokenType: 'keyword',
+      modifiers: []
+    });
+  }
+
+  private isFieldAccessNode(value: unknown): value is FieldAccessNode {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Partial<FieldAccessNode>;
+    return typeof candidate.type === 'string';
   }
   
   private visitWhenExpression(node: LspAstNode, context: VisitorContext): void {

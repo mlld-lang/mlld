@@ -91,12 +91,27 @@ ConditionalArrayElement
 
 // Values that can appear in arrays - all mlld data types
 ArrayValue "array value"
+  = value:ArrayValueBase coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return value;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+ArrayValueBase
   = BlockExpressionInArrayError
+  / GroupedCoerceExpressionAccess
   / AlligatorExpression     // <file.md> - load file content
   / ArrayLiteral            // nested arrays [1, [2, 3]]
   / DataObjectLiteral       // { key: value } objects
   / ConditionalArrayElement // @var? conditional element
   / ExpressionWithOperator  // Operator expressions (ternary, comparison, etc.)
+  / GroupedUnifiedExpression
   / ExecInvocationPattern   // @func() execution
   / DataAliasedValue        // @var as alias
   / VariableWithTail        // @var with modifiers

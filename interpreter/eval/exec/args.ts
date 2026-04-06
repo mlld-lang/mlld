@@ -193,6 +193,7 @@ export async function evaluateExecInvocationArgs(options: {
         case 'BinaryExpression':
         case 'TernaryExpression':
         case 'UnaryExpression':
+        case 'CoerceExpression':
         case 'ArrayFilterExpression':
         case 'ArraySliceExpression': {
           const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');

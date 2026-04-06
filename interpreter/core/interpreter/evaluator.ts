@@ -346,7 +346,8 @@ export async function evaluateCore({
     dispatchTarget === 'unifiedExpression' &&
     (node.type === 'BinaryExpression' ||
       node.type === 'TernaryExpression' ||
-      node.type === 'UnaryExpression')
+      node.type === 'UnaryExpression' ||
+      node.type === 'CoerceExpression')
   ) {
     const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
     const result = await evaluateUnifiedExpression(node as any, env);

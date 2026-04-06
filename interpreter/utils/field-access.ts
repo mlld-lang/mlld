@@ -58,6 +58,7 @@ const COMMON_FILE_EXTENSION_FIELDS = new Set([
 ]);
 
 const WORKSPACE_MX_CONTEXT = Symbol('mlld.workspace-mx-context');
+const OBJECT_UTILITY_MX_VIEW = Symbol('mlld.object-utility-mx-view');
 
 interface WorkspaceMxContext {
   workspace?: WorkspaceValue;
@@ -132,6 +133,9 @@ function hasObjectField(obj: any, fieldName: string): boolean {
  */
 function isObjectAST(value: any): boolean {
   if (!value || typeof value !== 'object' || value.type !== 'object') {
+    return false;
+  }
+  if ((value as Record<PropertyKey, unknown>)[OBJECT_UTILITY_MX_VIEW] === true) {
     return false;
   }
 
@@ -221,6 +225,12 @@ function createObjectUtilityMxView(
       configurable: true
     });
   }
+
+  Object.defineProperty(view, OBJECT_UTILITY_MX_VIEW, {
+    value: true,
+    enumerable: false,
+    configurable: true
+  });
 
   return view;
 }

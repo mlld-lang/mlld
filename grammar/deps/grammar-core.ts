@@ -25,6 +25,7 @@ export const NodeType = {
   BinaryExpression: 'BinaryExpression',
   TernaryExpression: 'TernaryExpression',
   UnaryExpression: 'UnaryExpression',
+  CoerceExpression: 'CoerceExpression',
   WhenExpression: 'WhenExpression',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;

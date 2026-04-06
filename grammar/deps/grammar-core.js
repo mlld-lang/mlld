@@ -24,6 +24,7 @@ export const NodeType = {
     BinaryExpression: 'BinaryExpression',
     TernaryExpression: 'TernaryExpression',
     UnaryExpression: 'UnaryExpression',
+    CoerceExpression: 'CoerceExpression',
     WhenExpression: 'WhenExpression',
 };
 export const DirectiveKind = {

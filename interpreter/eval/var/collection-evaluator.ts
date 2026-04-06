@@ -323,7 +323,8 @@ export async function evaluateArrayItem(
     }
     case 'TernaryExpression':
     case 'BinaryExpression':
-    case 'UnaryExpression': {
+    case 'UnaryExpression':
+    case 'CoerceExpression': {
       const { evaluateUnifiedExpression } = await import('../expressions');
       const result = await evaluateUnifiedExpression(item as any, env, context);
       if (collectDescriptor) {

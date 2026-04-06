@@ -50,7 +50,7 @@ class MlldSyntaxGenerator {
       directiveForms: '\\b(loop|while)\\b(?=\\s*\\()|\\bif\\b(?=\\s*[@\\[(])|\\bbox\\b(?=\\s*(with\\b|\\[|@))|\\b(file|files)\\b(?=\\s*(<|"|@))|\\b(needs|profiles)\\b(?=\\s*\\{)|\\bauth\\b(?=\\s+@)',
       controlKeywords: '\\b(until|endless|else)\\b',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b',
+      operators: '\\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b',
       // Block keywords (inside [...] blocks)
       blockKeywords: '\\b(let|done|continue|skip|bail)\\b',
       // Wildcard in when blocks
@@ -1022,7 +1022,7 @@ syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldRese
 syn match mlldURL "https\\?://[^\\]>]*" contained
 
 " Keywords
-syn keyword mlldKeyword from as foreach with to tools mcp git using
+syn keyword mlldKeyword from as record foreach with to tools mcp git using
 
 " Numbers
 syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"

@@ -366,6 +366,30 @@ describe('structured value mx accessors', () => {
     expect(userMxThroughData).toBe('user-mx');
   });
 
+  it('keeps inherited .mx.schema metadata accessible on utility views', async () => {
+    const structured = wrapStructured(
+      {},
+      'object',
+      '{}',
+      {
+        schema: {
+          valid: false,
+          errors: [{ path: 'email', code: 'required', message: 'Missing required field' }],
+          mode: 'demote'
+        } as any
+      }
+    );
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const schemaValid = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'schema' } as const,
+      { type: 'field', value: 'valid' } as const
+    ], { preserveContext: false });
+
+    expect(schemaValid).toBe(false);
+  });
+
   it('keeps plain dotted access aligned with .mx.data', async () => {
     const payload = { stance: 'approved', score: 9 };
     const structured = wrapStructured(payload, 'object', '{"stance":"approved","score":9}');

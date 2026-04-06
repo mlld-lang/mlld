@@ -177,6 +177,7 @@ describe('Highlighting Rules', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('foreach');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('from');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('as');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('record');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('known');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('trusted');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('resolved');

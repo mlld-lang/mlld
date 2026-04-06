@@ -59,6 +59,7 @@ export function getDispatchTarget(node: MlldNode): DispatchTarget {
     case 'BinaryExpression':
     case 'TernaryExpression':
     case 'UnaryExpression':
+    case 'CoerceExpression':
       return 'unifiedExpression';
     case 'WhenExpression':
       return 'whenExpression';
