@@ -1,3 +1,6 @@
+import { readFile, mkdtemp, rm } from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { interpret, Environment } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -41,5 +44,106 @@ describe('interpret structured mode', () => {
     expect(exports[exportKey].value).toBe('sk-123');
     expect(exports[exportKey].metadata?.security).toBeDefined();
     expect((result as any).environment).toBeInstanceOf(Environment);
+  });
+
+  it('collects runtime trace events in structured mode and mirrors them to JSONL', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const traceDir = await mkdtemp(path.join(os.tmpdir(), 'mlld-trace-'));
+    const traceFile = path.join(traceDir, 'runtime.jsonl');
+    const source = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/exe @emitContact() = {
+  id: "c_1",
+  email: "ada@example.com",
+  name: "Ada"
+} => contact
+@shelf.write(@pipeline.selected, @emitContact())
+/show @pipeline.selected.name
+    `.trim();
+
+    try {
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        format: 'markdown',
+        mode: 'structured',
+        trace: 'verbose',
+        traceFile
+      }) as any;
+
+      expect(result.output).toContain('Ada');
+      expect(result.traceEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'shelf',
+            event: 'shelf.write',
+            level: 'effects',
+            data: expect.objectContaining({ slot: '@pipeline.selected' })
+          }),
+          expect.objectContaining({
+            category: 'shelf',
+            event: 'shelf.read',
+            level: 'verbose',
+            data: expect.objectContaining({ slot: '@pipeline.selected' })
+          })
+        ])
+      );
+
+      const traceLines = (await readFile(traceFile, 'utf8'))
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line));
+
+      expect(traceLines).toHaveLength(result.traceEvents.length);
+      expect(traceLines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ event: 'shelf.write' }),
+          expect.objectContaining({ event: 'shelf.read' })
+        ])
+      );
+    } finally {
+      await rm(traceDir, { recursive: true, force: true });
+    }
+  });
+
+  it('filters verbose-only runtime events out of effects-level traces', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/exe @emitContact() = {
+  id: "c_1",
+  email: "ada@example.com",
+  name: "Ada"
+} => contact
+@shelf.write(@pipeline.selected, @emitContact())
+/show @pipeline.selected.name
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      format: 'markdown',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    expect(result.traceEvents.some((event: any) => event.event === 'shelf.write')).toBe(true);
+    expect(result.traceEvents.some((event: any) => event.event === 'shelf.read')).toBe(false);
   });
 });

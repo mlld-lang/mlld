@@ -51,6 +51,8 @@ export class OptionProcessor {
       fresh: cliOptions.fresh,
       resume: cliOptions.resume,
       fork: cliOptions.fork,
+      trace: cliOptions.trace,
+      traceFile: cliOptions.traceFile,
       // Streaming options
       streaming: this.buildStreamingOptions(cliOptions)
     };
@@ -214,6 +216,8 @@ export class OptionProcessor {
       '--max-output-lines',
       '--error-behavior',
       '--command-timeout',
+      '--trace',
+      '--trace-file',
       '--fork',
       '--viz-type',
       '--root-state-id',

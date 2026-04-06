@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
+import { isRuntimeTraceLevel, type RuntimeTraceLevel } from '@core/types/trace';
 import { interpret } from '@interpreter/index';
 import type { SDKEvent, StreamExecution, StructuredResult } from '@sdk/types';
 import { sanitizeSerializableValue, serializeError } from '@core/errors/errorSerialization';
@@ -71,6 +72,8 @@ interface ProcessRequestParams {
   dynamicModuleMode?: MlldMode;
   allowAbsolutePaths?: boolean;
   mcpServers?: Record<string, string>;
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
   eventMode?: LiveEventMode;
   recordEffects?: boolean;
 }
@@ -86,6 +89,8 @@ interface ExecuteRequestParams {
   allowAbsolutePaths?: boolean;
   mode?: MlldMode;
   mcpServers?: Record<string, string>;
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
   eventMode?: LiveEventMode;
   recordEffects?: boolean;
 }
@@ -584,6 +589,9 @@ export class LiveStdioServer {
       dynamicModuleMode: parsed.dynamicModuleMode,
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mcpServers: parsed.mcpServers,
+      trace: parsed.trace,
+      traceFile: parsed.traceFile,
+      traceStderr: false,
       recordEffects: parsed.recordEffects
     } as any)) as StreamExecution;
 
@@ -609,6 +617,9 @@ export class LiveStdioServer {
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mode: parsed.mode,
       mcpServers: parsed.mcpServers,
+      trace: parsed.trace,
+      traceFile: parsed.traceFile,
+      traceStderr: false,
       recordEffects: parsed.recordEffects,
       fileSystem,
       pathService,
@@ -750,6 +761,8 @@ export class LiveStdioServer {
       allowAbsolutePaths:
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
       mcpServers: this.parseMcpServers(params.mcpServers),
+      trace: this.parseTraceLevel(params.trace),
+      traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
       eventMode: this.parseEventMode(params.eventMode),
       recordEffects: this.parseRecordEffects(params.recordEffects)
     };
@@ -777,6 +790,8 @@ export class LiveStdioServer {
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
       mode: this.parseMode(params.mode),
       mcpServers: this.parseMcpServers(params.mcpServers),
+      trace: this.parseTraceLevel(params.trace),
+      traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
       eventMode: this.parseEventMode(params.eventMode),
       recordEffects: this.parseRecordEffects(params.recordEffects)
     };
@@ -786,6 +801,15 @@ export class LiveStdioServer {
     return value === 'all' ? 'all' : 'minimal';
   }
 
+  private parseTraceLevel(value: unknown): RuntimeTraceLevel | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (!isRuntimeTraceLevel(value)) {
+      throw new Error('trace must be one of: off, effects, verbose');
+    }
+    return value;
+  }
   private parseRecordEffects(value: unknown): boolean {
     return value === true;
   }

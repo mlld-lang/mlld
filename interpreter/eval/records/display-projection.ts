@@ -23,6 +23,7 @@ import {
 } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { maskFactFieldValue } from './display-masking';
+import { traceDisplayProject } from '@interpreter/tracing/events';
 
 type RefProjection = { value: unknown; handle: string };
 type MaskedProjection = { preview: string; handle: string };
@@ -241,8 +242,17 @@ function projectFieldValue(
   context: ProjectionContext,
   parent?: StructuredValue
 ): unknown | typeof OMITTED_FIELD {
+  const emitProjectionTrace = (mode: string, data: Record<string, unknown> = {}): void => {
+    env.emitRuntimeTraceEvent(traceDisplayProject({
+      record: fieldProjection.recordName,
+      field: fieldProjection.fieldName,
+      mode,
+      ...data
+    }));
+  };
   const resolution = resolveEffectiveDisplayMode(fieldProjection, context);
   if (resolution.omitted) {
+    emitProjectionTrace('omitted', { handleIssued: false });
     return OMITTED_FIELD;
   }
 
@@ -251,11 +261,20 @@ function projectFieldValue(
     const elements = value.data.map(item => toStructuredProjectionElement(item));
 
     if (effectiveDisplay === 'bare') {
+      emitProjectionTrace('bare', {
+        handleIssued: false,
+        elementCount: elements.length
+      });
       return elements.map(element => toDisplayPrimitive(element));
     }
 
     const qualifies = fieldSatisfiesActiveRequirements(value, context.activeRequirements);
     if (effectiveDisplay === 'ref') {
+      emitProjectionTrace('ref', {
+        handleIssued: qualifies,
+        handleCount: qualifies ? elements.length : 0,
+        elementCount: elements.length
+      });
       return elements.map(element => {
         const primitive = toDisplayPrimitive(element);
         if (!qualifies) {
@@ -274,14 +293,27 @@ function projectFieldValue(
 
     if (!qualifies) {
       if (effectiveDisplay === 'mask') {
+        emitProjectionTrace('mask', {
+          handleIssued: false,
+          elementCount: elements.length
+        });
         return elements.map(element => ({
           preview: maskFactFieldValue(fieldProjection.fieldName, asText(element).trim())
         } satisfies PreviewOnlyProjection));
       }
+      emitProjectionTrace(effectiveDisplay, {
+        handleIssued: false,
+        elementCount: elements.length
+      });
       return elements.map(() => ({ unavailable: true } satisfies UnavailableProjection));
     }
 
     if (effectiveDisplay === 'mask') {
+      emitProjectionTrace('mask', {
+        handleIssued: true,
+        handleCount: elements.length,
+        elementCount: elements.length
+      });
       return elements.map(element => {
         const preview = maskFactFieldValue(fieldProjection.fieldName, asText(element).trim());
         const handle = issueProjectionHandle(env, element, fieldProjection, preview);
@@ -289,6 +321,11 @@ function projectFieldValue(
       });
     }
 
+    emitProjectionTrace(effectiveDisplay, {
+      handleIssued: true,
+      handleCount: elements.length,
+      elementCount: elements.length
+    });
     return elements.map(element => {
       const handle = issueProjectionHandle(
         env,
@@ -301,6 +338,7 @@ function projectFieldValue(
   }
 
   if (effectiveDisplay === 'bare') {
+    emitProjectionTrace('bare', { handleIssued: false });
     return toDisplayPrimitive(value);
   }
 
@@ -310,11 +348,13 @@ function projectFieldValue(
 
   if (effectiveDisplay === 'ref') {
     if (!qualifies) {
+      emitProjectionTrace('ref', { handleIssued: false });
       return {
         value: primitive
       } satisfies ValueOnlyProjection;
     }
 
+    emitProjectionTrace('ref', { handleIssued: true });
     const handle = issueProjectionHandle(
       env,
       value,
@@ -329,23 +369,27 @@ function projectFieldValue(
 
   if (!qualifies) {
     if (effectiveDisplay === 'mask') {
+      emitProjectionTrace('mask', { handleIssued: false });
       const projected: PreviewOnlyProjection = {
         preview: maskFactFieldValue(fieldProjection.fieldName, rawText)
       };
       return projected;
     }
 
+    emitProjectionTrace(effectiveDisplay, { handleIssued: false });
     const projected: UnavailableProjection = { unavailable: true };
     return projected;
   }
 
   if (effectiveDisplay === 'mask') {
+    emitProjectionTrace('mask', { handleIssued: true });
     const preview = maskFactFieldValue(fieldProjection.fieldName, rawText);
     const handle = issueProjectionHandle(env, value, fieldProjection, preview);
     const projected: MaskedProjection = { preview, handle };
     return projected;
   }
 
+  emitProjectionTrace(effectiveDisplay, { handleIssued: true });
   const handle = issueProjectionHandle(
     env,
     value,

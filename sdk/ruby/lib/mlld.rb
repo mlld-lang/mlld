@@ -20,7 +20,8 @@ module Mlld
   Metrics = Struct.new(:total_ms, :parse_ms, :evaluate_ms, keyword_init: true)
   Effect = Struct.new(:type, :content, :security, keyword_init: true)
   GuardDenial = Struct.new(:guard, :operation, :reason, :rule, :labels, :args, keyword_init: true)
-  ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :denials, :metrics, keyword_init: true)
+  TraceEvent = Struct.new(:ts, :level, :category, :event, :scope, :data, keyword_init: true)
+  ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :denials, :trace_events, :metrics, keyword_init: true)
   HandleEvent = Struct.new(:type, :state_write, :guard_denial, keyword_init: true)
   FilesystemStatus = Struct.new(
     :path,
@@ -419,6 +420,8 @@ module Mlld
       dynamic_module_source: nil,
       allow_absolute_paths: nil,
       mode: nil,
+      trace: nil,
+      trace_file: nil,
       timeout: nil
     )
       execute_async(
@@ -431,6 +434,8 @@ module Mlld
         dynamic_module_source: dynamic_module_source,
         allow_absolute_paths: allow_absolute_paths,
         mode: mode,
+        trace: trace,
+        trace_file: trace_file,
         timeout: timeout
       ).result
     end
@@ -445,6 +450,8 @@ module Mlld
       dynamic_module_source: nil,
       allow_absolute_paths: nil,
       mode: nil,
+      trace: nil,
+      trace_file: nil,
       timeout: nil
     )
       params = build_execute_request(
@@ -456,7 +463,9 @@ module Mlld
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
         allow_absolute_paths: allow_absolute_paths,
-        mode: mode
+        mode: mode,
+        trace: trace,
+        trace_file: trace_file
       )
       request_id, response_queue = send_request('execute', params)
       ExecuteHandle.new(
@@ -509,7 +518,9 @@ module Mlld
       dynamic_modules: nil,
       dynamic_module_source: nil,
       allow_absolute_paths: nil,
-      mode: nil
+      mode: nil,
+      trace: nil,
+      trace_file: nil
     )
       normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
       normalized_mcp_servers = normalize_string_map(mcp_servers)
@@ -523,6 +534,8 @@ module Mlld
       params['mcpServers'] = normalized_mcp_servers if normalized_mcp_servers
       params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
       params['mode'] = mode if mode
+      params['trace'] = trace if trace
+      params['traceFile'] = trace_file if trace_file
       params
     end
 
@@ -775,6 +788,7 @@ module Mlld
           exports: [],
           effects: [],
           denials: guard_denial_events,
+          trace_events: [],
           metrics: nil
         )
       end
@@ -816,6 +830,18 @@ module Mlld
         guard_denial_from_payload(entry)
       end.compact
       denials = merge_guard_denials(denials, guard_denial_events)
+      trace_events = Array(result['traceEvents']).map do |entry|
+        next unless entry.is_a?(Hash)
+
+        TraceEvent.new(
+          ts: entry['ts'].to_s,
+          level: entry['level'].to_s,
+          category: entry['category'].to_s,
+          event: entry['event'].to_s,
+          scope: entry['scope'].is_a?(Hash) ? entry['scope'] : {},
+          data: entry['data'].is_a?(Hash) ? entry['data'] : {}
+        )
+      end.compact
 
       ExecuteResult.new(
         output: result['output'].to_s,
@@ -823,6 +849,7 @@ module Mlld
         exports: result.fetch('exports', []),
         effects: effects,
         denials: denials,
+        trace_events: trace_events,
         metrics: metrics
       )
     end

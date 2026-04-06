@@ -114,17 +114,26 @@ import {
   appendShelfNotesToSystemPrompt,
   renderInjectedShelfNotes
 } from '@interpreter/shelf/shelf-notes';
-import { convertEntriesToProperties } from '@interpreter/utils/object-compat';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
 import type { RecordDefinition } from '@core/types/record';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { descriptorHasExternalInputSource } from '@core/security/url-provenance';
-import { getWithClauseField, normalizeWithClauseFields } from '@interpreter/utils/with-clause';
 import {
   collectSecurityRelevantArgNamesForOperation,
   repairSecurityRelevantValue
 } from '@interpreter/security/runtime-repair';
+import {
+  traceAuthCheck,
+  traceAuthDecision,
+  traceLlmInvocation,
+  traceLlmToolCall,
+  traceLlmToolResult
+} from '@interpreter/tracing/events';
+import {
+  applyInvocationScopedRuntimeConfig,
+  normalizeInvocationWithClause
+} from './exec/scoped-runtime-config';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -1282,97 +1291,6 @@ function shouldResolveHandlesBeforeExecutableDispatch(options: {
   }
 
   return true;
-}
-
-function normalizeInvocationWithClause(node: ExecInvocation): Record<string, any> | undefined {
-  const withClause = node.withClause as any;
-  if (!withClause) {
-    return undefined;
-  }
-
-  if (!Array.isArray(withClause)) {
-    return normalizeWithClauseFields(withClause) ?? withClause;
-  }
-
-  const inlineValue = withClause[0];
-  if (inlineValue?.type !== 'inlineValue' || inlineValue?.value?.type !== 'object') {
-    return undefined;
-  }
-
-  return convertEntriesToProperties(inlineValue.value.entries ?? []);
-}
-
-async function resolveScopedExecConfigValue(
-  raw: unknown,
-  env: Environment
-): Promise<unknown> {
-  let value = raw;
-
-  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
-    const { evaluate } = await import('../core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    value = result.value;
-  }
-
-  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
-  if (isVariable(value)) {
-    value = await extractVariableValue(value, env);
-  }
-
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
-
-  return value;
-}
-
-async function resolveScopedExecDisplayMode(
-  raw: unknown,
-  env: Environment
-): Promise<string | undefined> {
-  if (raw === undefined || raw === null) {
-    return undefined;
-  }
-
-  const value = await resolveScopedExecConfigValue(raw, env);
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (typeof value !== 'string') {
-    throw new MlldInterpreterError('display must be a string.');
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function getExecutableDefinitionWithClauseField(
-  definition: ExecutableDefinition,
-  field: string
-): unknown {
-  const direct = getWithClauseField((definition as any).withClause, field);
-  if (direct !== undefined) {
-    return direct;
-  }
-  return getWithClauseField((definition as any).meta?.withClause, field);
-}
-
-function getInvocationWithClauseField(
-  node: ExecInvocation,
-  invocationWithClause: Record<string, any> | undefined,
-  field: string
-): unknown {
-  if (invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, field)) {
-    return invocationWithClause[field];
-  }
-
-  const normalizedMetaWithClause = normalizeWithClauseFields(node.meta?.withClause);
-  if (normalizedMetaWithClause && Object.prototype.hasOwnProperty.call(normalizedMetaWithClause, field)) {
-    return normalizedMetaWithClause[field];
-  }
-
-  return getWithClauseField(node.meta?.withClause, field);
 }
 
 /**
@@ -2763,32 +2681,13 @@ async function evaluateExecInvocationInternal(
     runtimeEnv = policyScope.env;
   }
 
-  const resolvedScopedConfig: Record<string, unknown> = {};
-  const resolvedDefinitionDisplay = await resolveScopedExecDisplayMode(
-    getExecutableDefinitionWithClauseField(definition, 'display'),
-    env
-  );
-  if (resolvedDefinitionDisplay !== undefined) {
-    resolvedScopedConfig.display = resolvedDefinitionDisplay;
-  }
-
-  const resolvedInvocationDisplay = await resolveScopedExecDisplayMode(
-    getInvocationWithClauseField(node, invocationWithClause, 'display'),
-    env
-  );
-  if (resolvedInvocationDisplay !== undefined) {
-    resolvedScopedConfig.display = resolvedInvocationDisplay;
-  }
-
-  if (Object.keys(resolvedScopedConfig).length > 0) {
-    const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
-    const scopedEnv = runtimeEnv.createChild();
-    scopedEnv.setScopedEnvironmentConfig({
-      ...(scopedConfig ?? {}),
-      ...resolvedScopedConfig
-    });
-    runtimeEnv = scopedEnv;
-  }
+  runtimeEnv = await applyInvocationScopedRuntimeConfig({
+    runtimeEnv,
+    env,
+    definition,
+    node,
+    invocationWithClause
+  });
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
@@ -3044,6 +2943,11 @@ async function evaluateExecInvocationInternal(
   let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
   let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
+  let llmTraceSessionId: string | undefined;
+  let llmTraceProvider: string | undefined;
+  let llmTraceModel: string | undefined;
+  let llmTraceToolCount: number | undefined;
+  let llmTraceStartedAt: number | undefined;
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';
@@ -3066,6 +2970,13 @@ async function evaluateExecInvocationInternal(
     const originalConfigArg = evaluatedArgs[1];
     const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
+      const captureLlmTraceConfig = (config: Record<string, unknown>): void => {
+        const runtimeConfig = readLlmRuntimeResumeConfig(config);
+        llmTraceSessionId = runtimeConfig?.sessionId;
+        llmTraceProvider = runtimeConfig?.provider;
+        llmTraceModel = typeof config.model === 'string' ? config.model : undefined;
+        llmTraceToolCount = Array.isArray(config.tools) ? config.tools.length : undefined;
+      };
       let nextConfig = { ...(rawConfig as Record<string, unknown>) };
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
@@ -3147,7 +3058,11 @@ async function evaluateExecInvocationInternal(
           evaluatedArgStrings
         });
       }
+      captureLlmTraceConfig(nextConfig);
     }
+  }
+  if (hasLlmLabel) {
+    llmTraceStartedAt = Date.now();
   }
   
   const guardHelperImpl =
@@ -3238,6 +3153,11 @@ async function evaluateExecInvocationInternal(
     argSecurityDescriptors
   });
   if (shouldValidatePolicyAuthorizations) {
+    runtimeEnv.emitRuntimeTraceEvent(traceAuthCheck({
+      tool: toolOperationName ?? variable.name ?? commandName,
+      args: runtimeEnv.summarizeTraceValue(authorizationArgs),
+      controlArgs: authorizationDecisionControlArgs
+    }));
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
       throw createPolicyAuthorizationValidationError(validation);
@@ -3249,6 +3169,18 @@ async function evaluateExecInvocationInternal(
       args: authorizationArgs,
       controlArgs: authorizationDecisionControlArgs
     });
+    runtimeEnv.emitRuntimeTraceEvent(traceAuthDecision(
+      authorizationDecision.decision === 'allow' ? 'allow' : 'deny',
+      {
+        tool: toolOperationName ?? variable.name ?? commandName,
+        matched: authorizationDecision.matched,
+        code: authorizationDecision.code ?? null,
+        reason: authorizationDecision.reason ?? null,
+        matchedAttestationCount: authorizationDecision.matchedAttestations
+          ? Object.keys(authorizationDecision.matchedAttestations).length
+          : 0
+      }
+    ));
     if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
         env: runtimeEnv,
@@ -3280,6 +3212,15 @@ async function evaluateExecInvocationInternal(
           timestamp: Date.now()
         }
       : null;
+  const shouldTraceLlmToolCall =
+    trackedToolName.length > 0 &&
+    Array.from(env.getEnclosingExeLabels()).includes('llm');
+  if (shouldTraceLlmToolCall) {
+    env.emitRuntimeTraceEvent(traceLlmToolCall({
+      tool: trackedToolName,
+      args: env.summarizeTraceValue(toolCallArguments)
+    }));
+  }
   const recordToolCall = (ok: boolean, error?: unknown): void => {
     if (!toolCallRecordBase) {
       return;
@@ -3853,10 +3794,61 @@ async function evaluateExecInvocationInternal(
       env.recordKnownUrlsFromValue(invocationResult.value);
     }
     await recordToolAudit(true, invocationResult.value);
+    if (shouldTraceLlmToolCall) {
+      env.emitRuntimeTraceEvent(traceLlmToolResult({
+        tool: trackedToolName,
+        ok: true,
+        result: env.summarizeTraceValue(invocationResult.value),
+        durationMs:
+          toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
+            ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
+            : undefined
+      }));
+    }
+    if (hasLlmLabel) {
+      env.emitRuntimeTraceEvent(traceLlmInvocation(
+        isLlmResumeContinuation ? 'llm.resume' : 'llm.call',
+        {
+        sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+        provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+        model: llmTraceModel,
+        toolCount: llmTraceToolCount,
+        resume: isLlmResumeContinuation,
+        ok: true,
+        durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
+        }
+      ));
+    }
     recordToolCall(true);
     return invocationResult;
   } catch (error) {
     await recordToolAudit(false, undefined, error);
+    if (shouldTraceLlmToolCall) {
+      env.emitRuntimeTraceEvent(traceLlmToolResult({
+        tool: trackedToolName,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs:
+          toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
+            ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
+            : undefined
+      }));
+    }
+    if (hasLlmLabel) {
+      env.emitRuntimeTraceEvent(traceLlmInvocation(
+        isLlmResumeContinuation ? 'llm.resume' : 'llm.call',
+        {
+        sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+        provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+        model: llmTraceModel,
+        toolCount: llmTraceToolCount,
+        resume: isLlmResumeContinuation,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
+        }
+      ));
+    }
     recordToolCall(false, error);
     throw error;
   }

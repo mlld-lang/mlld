@@ -216,6 +216,12 @@ type ExecuteOptions struct {
 	// Mode sets strict|markdown parsing mode.
 	Mode string
 
+	// Trace enables runtime effect tracing: off|effects|verbose.
+	Trace string
+
+	// TraceFile writes runtime trace events as JSONL.
+	TraceFile string
+
 	// Timeout overrides the client default.
 	Timeout time.Duration
 }
@@ -275,7 +281,18 @@ type ExecuteResult struct {
 	Exports     any           `json:"exports,omitempty"` // Can be array or object depending on mlld output
 	Effects     []Effect      `json:"effects,omitempty"`
 	Denials     []GuardDenial `json:"denials,omitempty"`
+	TraceEvents []TraceEvent  `json:"traceEvents,omitempty"`
 	Metrics     *Metrics      `json:"metrics,omitempty"`
+}
+
+// TraceEvent represents a structured runtime trace event.
+type TraceEvent struct {
+	TS       string         `json:"ts"`
+	Level    string         `json:"level"`
+	Category string         `json:"category"`
+	Event    string         `json:"event"`
+	Scope    map[string]any `json:"scope,omitempty"`
+	Data     map[string]any `json:"data,omitempty"`
 }
 
 // Effect represents an output effect from execution.
@@ -826,6 +843,12 @@ func (c *Client) buildExecuteRequest(filepath string, payload any, opts *Execute
 	}
 	if opts.Mode != "" {
 		params["mode"] = opts.Mode
+	}
+	if opts.Trace != "" {
+		params["trace"] = opts.Trace
+	}
+	if opts.TraceFile != "" {
+		params["traceFile"] = opts.TraceFile
 	}
 
 	return params, c.resolveTimeout(opts.Timeout), nil

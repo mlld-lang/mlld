@@ -66,6 +66,7 @@ import {
   buildGuardArgsSnapshot,
   getGuardArgNamesFromMetadata
 } from '../utils/guard-args';
+import { emitAggregateGuardTrace, getGuardTraceOperationName } from './guard-trace';
 
 function applyCurrentInputToCandidate(
   candidate: PerInputCandidate,
@@ -733,10 +734,6 @@ export const guardPreHook: PreHook = async (
       decisionState.hints,
       decisionState.reasons
     );
-    const guardName =
-      guardTrace[0]?.guard?.name ??
-      guardTrace[0]?.guard?.filterKind ??
-      '';
     const contextLabels = operation.labels ?? [];
     const provenance =
       env.isProvenanceEnabled?.() === true
@@ -746,7 +743,7 @@ export const guardPreHook: PreHook = async (
         : undefined;
     env.emitSDKEvent({
       type: 'debug:guard:before',
-      guard: guardName,
+      guard: guardTrace[0]?.guard?.name ?? guardTrace[0]?.guard?.filterKind ?? '',
       labels: contextLabels,
       decision: decisionState.decision,
       trace: guardTrace,
@@ -754,6 +751,14 @@ export const guardPreHook: PreHook = async (
       reasons: decisionState.reasons,
       timestamp: Date.now(),
       ...(provenance && { provenance })
+    });
+    emitAggregateGuardTrace(env, {
+      phase: 'before',
+      guardTrace,
+      decision: decisionState.decision,
+      operation: getGuardTraceOperationName(operation),
+      reasons: decisionState.reasons,
+      hints: decisionState.hints
     });
 
     logGuardDecisionSummary({

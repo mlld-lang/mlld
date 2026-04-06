@@ -35,6 +35,7 @@ import {
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import type { DataAliasedValue, DataValue } from '@core/types/var';
 import { isHandleWrapper } from '@core/types/handle';
+import { traceRecordCoerce, traceRecordSchemaFail } from '@interpreter/tracing/events';
 
 type ShelfNamespaceMetadata = {
   security?: ReturnType<typeof serializeSecurityDescriptor>;
@@ -428,6 +429,13 @@ async function validateShelfRecordValue(options: {
   const context = buildRecordRootContext(options.value, options.definition);
   const rootInput = extractRecordInputValue(context.input);
   if (options.definition.rootMode === 'object' && !isPlainObject(rootInput)) {
+    options.env.emitRuntimeTraceEvent(traceRecordSchemaFail({
+      record: options.definition.name,
+      shelf: `@${options.shelfName}.${options.slotName}`,
+      reason: 'invalid_root_type',
+      expected: 'object',
+      actual: describeRecordValueType(context.input)
+    }));
     throw new MlldInterpreterError(
       `Slot '@${options.shelfName}.${options.slotName}' expects an object for record '@${options.definition.name}'`,
       'shelf',
@@ -444,6 +452,12 @@ async function validateShelfRecordValue(options: {
     let rawFieldValue = await evaluateFieldValue(field, context, options.env);
     if (rawFieldValue === undefined || rawFieldValue === null) {
       if (!field.optional) {
+        options.env.emitRuntimeTraceEvent(traceRecordSchemaFail({
+          record: options.definition.name,
+          field: field.name,
+          shelf: `@${options.shelfName}.${options.slotName}`,
+          reason: 'missing_required_field'
+        }));
         throw new MlldInterpreterError(
           `Missing required field '${field.name}' for slot '@${options.shelfName}.${options.slotName}'`,
           'shelf',
@@ -473,6 +487,14 @@ async function validateShelfRecordValue(options: {
 
     const coerced = coerceFieldValue(field, rawFieldValue, options.env);
     if (!coerced.ok) {
+      options.env.emitRuntimeTraceEvent(traceRecordSchemaFail({
+        record: options.definition.name,
+        field: field.name,
+        shelf: `@${options.shelfName}.${options.slotName}`,
+        reason: 'invalid_field_type',
+        expected: field.valueType ?? 'scalar',
+        actual: coerced.actual
+      }));
       throw new MlldInterpreterError(
         `Field '${field.name}' in slot '@${options.shelfName}.${options.slotName}' expected ${field.valueType ?? 'scalar'} but received ${coerced.actual}`,
         'shelf',
@@ -480,6 +502,13 @@ async function validateShelfRecordValue(options: {
         { code: 'INVALID_SHELF_VALUE' }
       );
     }
+    options.env.emitRuntimeTraceEvent(traceRecordCoerce({
+      record: options.definition.name,
+      field: field.name,
+      shelf: `@${options.shelfName}.${options.slotName}`,
+      expected: field.valueType ?? 'scalar',
+      value: options.env.summarizeTraceValue(coerced.value)
+    }));
 
     const projection = buildRecordFieldProjectionMetadata(options.definition, field);
     const fieldDescriptor = stripKnownDescriptor(
@@ -501,6 +530,12 @@ async function validateShelfRecordValue(options: {
         ? allArrayElementsCarryFactProof(normalizedFieldValue)
         : fieldCarriesFactProof(normalizedFieldValue);
       if (!grounded) {
+        options.env.emitRuntimeTraceEvent(traceRecordSchemaFail({
+          record: options.definition.name,
+          field: field.name,
+          shelf: `@${options.shelfName}.${options.slotName}`,
+          reason: 'missing_fact_proof'
+        }));
         throw new MlldSecurityError(
           `Fact field '${field.name}' in slot '@${options.shelfName}.${options.slotName}' is missing fact proof`,
           {
@@ -1014,7 +1049,14 @@ async function removeFromShelfSlot(
       : current;
   }
 
-  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next);
+  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next, {
+    traceEvent: 'shelf.remove',
+    action: 'remove',
+    traceData: {
+      removedCount: Math.max(0, current.length - next.length),
+      ref: env.summarizeTraceValue(resolvedRef)
+    }
+  });
   return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName);
 }
 

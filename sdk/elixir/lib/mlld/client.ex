@@ -247,6 +247,8 @@ defmodule Mlld.Client do
         |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
         |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
+        |> put_if_present("trace", Keyword.get(opts, :trace))
+        |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
 
       {"execute", params, timeout_ms}
     end

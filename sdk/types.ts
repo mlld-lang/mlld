@@ -3,7 +3,11 @@ import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { PathContext } from '@core/services/PathContextService';
 import type { DirectiveKind, MlldNode } from '@core/types';
 import type { MlldMode } from '@core/types/mode';
-import type { DirectiveTrace } from '@core/types/trace';
+import type {
+  DirectiveTrace,
+  RuntimeTraceEvent,
+  RuntimeTraceLevel
+} from '@core/types/trace';
 import type { CapabilityContext, DataLabel, SecurityDescriptor } from '@core/types/security';
 import type { StateWrite } from '@core/types/state';
 import type { Variable } from '@core/types/variable';
@@ -53,6 +57,9 @@ export interface InterpretOptions {
   approveAllImports?: boolean;
   normalizeBlankLines?: boolean;
   enableTrace?: boolean;
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
+  traceStderr?: boolean;
   useMarkdownFormatter?: boolean;
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean;
   resolverManager?: any;
@@ -117,6 +124,7 @@ export interface StructuredResult {
   exports: ExportMap;
   stateWrites: StateWrite[];
   denials: SDKGuardDenial[];
+  traceEvents: RuntimeTraceEvent[];
   metrics?: ExecuteMetrics;
   environment?: Environment;
   streaming?: StreamingResult;

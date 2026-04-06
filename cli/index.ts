@@ -27,6 +27,7 @@ import { interpret } from '@interpreter/index';
 import { logger, cliLogger } from '@core/utils/logger';
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type { MlldMode } from '@core/types/mode';
+import type { RuntimeTraceLevel } from '@core/types/trace';
 import type { Environment } from '@interpreter/env/Environment';
 import { ErrorHandler } from './error/ErrorHandler';
 import { PathContextBuilder } from '@core/services/PathContextService';
@@ -114,6 +115,9 @@ export interface CLIOptions {
   fork?: string;
   // Show parse/evaluate timing metrics
   metrics?: boolean;
+  // Runtime effect tracing
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
   // Dynamic module injection
   inject?: string[];  // ['@module=value', '@data=@file.json']
   // Raw @state inputs from CLI (resolved during execution)

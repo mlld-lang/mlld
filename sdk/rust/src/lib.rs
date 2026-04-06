@@ -1706,6 +1706,12 @@ fn build_execute_request(
     if let Some(mode) = opts.mode {
         params.insert("mode".to_string(), Value::String(mode));
     }
+    if let Some(trace) = opts.trace {
+        params.insert("trace".to_string(), Value::String(trace));
+    }
+    if let Some(trace_file) = opts.trace_file {
+        params.insert("traceFile".to_string(), Value::String(trace_file));
+    }
 
     Ok((
         "execute",
@@ -1771,6 +1777,12 @@ pub struct ExecuteOptions {
 
     /// Allow absolute path access.
     pub allow_absolute_paths: Option<bool>,
+
+    /// Runtime effect tracing: off|effects|verbose.
+    pub trace: Option<String>,
+
+    /// Write runtime trace events as JSONL.
+    pub trace_file: Option<String>,
 
     /// Override the client default timeout.
     pub timeout: Option<Duration>,
@@ -1846,7 +1858,24 @@ pub struct ExecuteResult {
     #[serde(default)]
     pub denials: Vec<GuardDenial>,
 
+    #[serde(default)]
+    pub trace_events: Vec<TraceEvent>,
+
     pub metrics: Option<Metrics>,
+}
+
+/// Structured runtime trace event.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceEvent {
+    pub ts: String,
+    pub level: String,
+    pub category: String,
+    pub event: String,
+    #[serde(default)]
+    pub scope: Value,
+    #[serde(default)]
+    pub data: Value,
 }
 
 /// An output effect from execution.

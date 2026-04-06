@@ -1,0 +1,196 @@
+import type {
+  RuntimeTraceCategory,
+  RuntimeTraceEmissionLevel,
+  RuntimeTraceEventName,
+  RuntimeTraceEventSpecMap,
+  RuntimeTraceScope
+} from '@core/types/trace';
+
+export interface RuntimeTraceEnvelope<K extends RuntimeTraceEventName = RuntimeTraceEventName> {
+  requiredLevel: RuntimeTraceEventSpecMap[K]['level'];
+  category: RuntimeTraceEventSpecMap[K]['category'];
+  event: K;
+  data: RuntimeTraceEventSpecMap[K]['data'];
+  scope?: Partial<RuntimeTraceScope>;
+}
+
+export type GuardTracePhase = 'before' | 'after';
+export type GuardTraceDecision = 'allow' | 'deny' | 'retry' | 'resume' | 'env';
+
+interface GuardTraceBase {
+  phase: GuardTracePhase;
+  guard: string | null;
+  operation: string | null;
+  scope: string;
+  attempt?: number;
+  inputPreview?: unknown;
+}
+
+function createRuntimeTraceEnvelope<K extends RuntimeTraceEventName>(
+  requiredLevel: RuntimeTraceEventSpecMap[K]['level'],
+  category: RuntimeTraceEventSpecMap[K]['category'],
+  event: K,
+  data: RuntimeTraceEventSpecMap[K]['data'],
+  scope?: Partial<RuntimeTraceScope>
+): RuntimeTraceEnvelope<K> {
+  return {
+    requiredLevel,
+    category,
+    event,
+    data,
+    ...(scope ? { scope } : {})
+  };
+}
+
+export function traceHandleMint(data: RuntimeTraceEventSpecMap['handle.mint']['data']): RuntimeTraceEnvelope<'handle.mint'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.mint', data);
+}
+
+export function traceHandleResolve(data: RuntimeTraceEventSpecMap['handle.resolve']['data']): RuntimeTraceEnvelope<'handle.resolve'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolve', data);
+}
+
+export function traceHandleResolveFail(data: RuntimeTraceEventSpecMap['handle.resolve_fail']['data']): RuntimeTraceEnvelope<'handle.resolve_fail'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolve_fail', data);
+}
+
+export function traceShelfRead(data: RuntimeTraceEventSpecMap['shelf.read']['data']): RuntimeTraceEnvelope<'shelf.read'> {
+  return createRuntimeTraceEnvelope('verbose', 'shelf', 'shelf.read', data);
+}
+
+export function traceShelfWrite(data: {
+  slot: string;
+  action?: string;
+  success?: boolean;
+  value: unknown;
+  event?: 'shelf.write' | 'shelf.remove';
+  traceData?: Record<string, unknown>;
+}): RuntimeTraceEnvelope<'shelf.write'> | RuntimeTraceEnvelope<'shelf.remove'> {
+  const {
+    event = 'shelf.write',
+    action = 'write',
+    success = true,
+    traceData,
+    ...rest
+  } = data;
+  return createRuntimeTraceEnvelope('effects', 'shelf', event, {
+    ...rest,
+    action,
+    success,
+    ...(traceData ?? {})
+  });
+}
+
+export function traceShelfClear(data: RuntimeTraceEventSpecMap['shelf.clear']['data']): RuntimeTraceEnvelope<'shelf.clear'> {
+  return createRuntimeTraceEnvelope('effects', 'shelf', 'shelf.clear', {
+    action: 'clear',
+    ...data
+  });
+}
+
+export function traceShelfStaleRead(data: RuntimeTraceEventSpecMap['shelf.stale_read']['data']): RuntimeTraceEnvelope<'shelf.stale_read'> {
+  return createRuntimeTraceEnvelope('effects', 'shelf', 'shelf.stale_read', data);
+}
+
+export function traceGuardEvent(
+  event: 'guard.evaluate' | 'guard.allow' | 'guard.deny' | 'guard.retry' | 'guard.resume' | 'guard.env' | 'guard.crash',
+  base: GuardTraceBase,
+  data: Record<string, unknown> = {}
+): RuntimeTraceEnvelope {
+  return createRuntimeTraceEnvelope('effects', 'guard', event, {
+    ...base,
+    ...data
+  });
+}
+
+export function traceGuardAggregateEvaluation(data: RuntimeTraceEventSpecMap['guard.evaluate']['data'] & {
+  phase: GuardTracePhase;
+  guard: string | null;
+  operation: string | null;
+  decision: GuardTraceDecision;
+  traceCount: number;
+  decisionCounts: Record<string, number>;
+  reasons: unknown[];
+  hintCount: number;
+}): RuntimeTraceEnvelope<'guard.evaluate'> {
+  return createRuntimeTraceEnvelope('effects', 'guard', 'guard.evaluate', data);
+}
+
+export function traceGuardAggregateDecision(data: {
+  phase: GuardTracePhase;
+  guard: string | null;
+  operation: string | null;
+  decision: GuardTraceDecision;
+  reasons: unknown[];
+  hints: unknown[];
+}): RuntimeTraceEnvelope<'guard.allow'> | RuntimeTraceEnvelope<'guard.deny'> | RuntimeTraceEnvelope<'guard.retry'> | RuntimeTraceEnvelope<'guard.resume'> | RuntimeTraceEnvelope<'guard.env'> {
+  return createRuntimeTraceEnvelope('effects', 'guard', `guard.${data.decision}`, data);
+}
+
+export function tracePolicyEvent<K extends 'policy.build' | 'policy.validate' | 'policy.compile_drop' | 'policy.compile_repair'>(
+  level: RuntimeTraceEventSpecMap[K]['level'],
+  event: K,
+  data: RuntimeTraceEventSpecMap[K]['data']
+): RuntimeTraceEnvelope<K> {
+  return createRuntimeTraceEnvelope(level, 'policy', event, data);
+}
+
+export function traceAuthCheck(data: RuntimeTraceEventSpecMap['auth.check']['data']): RuntimeTraceEnvelope<'auth.check'> {
+  return createRuntimeTraceEnvelope('effects', 'auth', 'auth.check', data);
+}
+
+export function traceAuthDecision<K extends 'allow' | 'deny'>(
+  decision: K,
+  data: RuntimeTraceEventSpecMap[`auth.${K}`]['data']
+): RuntimeTraceEnvelope<`auth.${K}`> {
+  return createRuntimeTraceEnvelope('effects', 'auth', `auth.${decision}` as `auth.${K}`, data);
+}
+
+export function traceDisplayProject(data: RuntimeTraceEventSpecMap['display.project']['data']): RuntimeTraceEnvelope<'display.project'> {
+  return createRuntimeTraceEnvelope('verbose', 'display', 'display.project', data);
+}
+
+export function traceLlmToolCall(
+  data: Omit<RuntimeTraceEventSpecMap['llm.tool_call']['data'], 'phase'>
+): RuntimeTraceEnvelope<'llm.tool_call'> {
+  return createRuntimeTraceEnvelope('verbose', 'llm', 'llm.tool_call', {
+    phase: 'start',
+    ...data
+  });
+}
+
+export function traceLlmToolResult(
+  data: Omit<RuntimeTraceEventSpecMap['llm.tool_result']['data'], 'phase'>
+): RuntimeTraceEnvelope<'llm.tool_result'> {
+  return createRuntimeTraceEnvelope('verbose', 'llm', 'llm.tool_result', {
+    phase: 'finish',
+    ...data
+  });
+}
+
+export function traceLlmInvocation(
+  event: 'llm.call' | 'llm.resume',
+  data: {
+    sessionId?: string;
+    provider?: string;
+    model?: string;
+    toolCount?: number;
+    resume: boolean;
+    ok: boolean;
+    error?: string;
+    durationMs?: number;
+  }
+): RuntimeTraceEnvelope<'llm.call'> | RuntimeTraceEnvelope<'llm.resume'> {
+  return createRuntimeTraceEnvelope('verbose', 'llm', event, {
+    phase: 'finish',
+    ...data
+  });
+}
+
+export function traceRecordSchemaFail(data: RuntimeTraceEventSpecMap['record.schema_fail']['data']): RuntimeTraceEnvelope<'record.schema_fail'> {
+  return createRuntimeTraceEnvelope('effects', 'record', 'record.schema_fail', data);
+}
+
+export function traceRecordCoerce(data: RuntimeTraceEventSpecMap['record.coerce']['data']): RuntimeTraceEnvelope<'record.coerce'> {
+  return createRuntimeTraceEnvelope('verbose', 'record', 'record.coerce', data);
+}

@@ -65,6 +65,7 @@ import {
   buildGuardArgsSnapshot,
   getGuardArgNamesFromMetadata
 } from '../utils/guard-args';
+import { emitAggregateGuardTrace, getGuardTraceOperationName } from './guard-trace';
 
 const GUARD_INPUT_SOURCE: VariableSource = {
   directive: 'var',
@@ -259,10 +260,6 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
   currentDescriptor = nextDescriptor;
 
   appendGuardHistory(env, operation, currentDecision, guardTrace, hints, reasons);
-  const guardName =
-    guardTrace[0]?.guard?.name ??
-    guardTrace[0]?.guard?.filterKind ??
-    '';
   const contextLabels = operation.labels ?? [];
   const provenance =
     env.isProvenanceEnabled?.() === true
@@ -272,7 +269,7 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
       : undefined;
   env.emitSDKEvent({
     type: 'debug:guard:after',
-    guard: guardName,
+    guard: guardTrace[0]?.guard?.name ?? guardTrace[0]?.guard?.filterKind ?? '',
     labels: contextLabels,
     decision: currentDecision,
     trace: guardTrace,
@@ -280,6 +277,14 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     reasons,
     timestamp: Date.now(),
     ...(provenance && { provenance })
+  });
+  emitAggregateGuardTrace(env, {
+    phase: 'after',
+    guardTrace,
+    decision: currentDecision,
+    operation: getGuardTraceOperationName(operation),
+    reasons,
+    hints
   });
 
   if (currentDecision === 'allow' && hints.length > 0) {

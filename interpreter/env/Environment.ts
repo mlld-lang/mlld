@@ -21,7 +21,12 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS';
 import type { ResolvedURLConfig } from '@core/types/url-config';
-import type { DirectiveTrace } from '@core/types/trace';
+import type {
+  DirectiveTrace,
+  RuntimeTraceLevel,
+  RuntimeTraceOptions,
+  RuntimeTraceScope
+} from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import type { EnvironmentConfig } from '@core/types/environment';
 import { execSync } from 'child_process';
@@ -135,6 +140,17 @@ import { GuardRegistry, type SerializedGuardDefinition } from '../guards';
 import type { ExecutionEmitter } from '@sdk/execution-emitter';
 import type { SDKEvent, SDKGuardDenial, StreamingResult } from '@sdk/types';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
+import { RuntimeTraceManager } from '@interpreter/tracing/RuntimeTraceManager';
+import { buildRuntimeTraceScope, type RuntimeTraceScopeSnapshot } from '@interpreter/tracing/RuntimeTraceScope';
+import type { RuntimeTraceEnvelope } from '@interpreter/tracing/events';
+import {
+  traceHandleMint,
+  traceHandleResolve,
+  traceHandleResolveFail,
+  traceShelfClear,
+  traceShelfRead,
+  traceShelfWrite
+} from '@interpreter/tracing/events';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
@@ -343,6 +359,7 @@ export class Environment
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
+  private runtimeTraceManager: RuntimeTraceManager;
 
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
@@ -422,6 +439,7 @@ export class Environment
     this.pathContext = normalizedPathContext.pathContext;
     this.parent = parent;
     this.valueHandleRegistry = parent?.valueHandleRegistry ?? new ValueHandleRegistry();
+    this.runtimeTraceManager = parent?.runtimeTraceManager.createChild() ?? new RuntimeTraceManager();
     if (parent) {
       this.streamingOptions = { ...parent.streamingOptions };
     }
@@ -926,18 +944,35 @@ export class Environment
     if (!root.valueHandleRegistry) {
       root.valueHandleRegistry = new ValueHandleRegistry();
     }
-    return root.valueHandleRegistry.issue(value, options);
+    const issued = root.valueHandleRegistry.issue(value, options);
+    this.emitRuntimeTraceEvent(traceHandleMint({
+      handle: issued.handle,
+      preview: issued.preview,
+      source: issued.metadata?.source,
+      value: this.summarizeTraceValue(value)
+    }));
+    return issued;
   }
 
   resolveHandle(handle: string): unknown {
     const root = this.getRootEnvironment();
     const entry = root.valueHandleRegistry?.resolve(handle);
     if (!entry) {
+      this.emitRuntimeTraceEvent(traceHandleResolveFail({
+        handle,
+        reason: 'HANDLE_NOT_FOUND',
+        success: false
+      }));
       throw new MlldSecurityError(`Unknown handle '${handle}'`, {
         code: 'HANDLE_NOT_FOUND',
         details: { handle }
       });
     }
+    this.emitRuntimeTraceEvent(traceHandleResolve({
+      handle,
+      success: true,
+      value: this.summarizeTraceValue(entry.value)
+    }));
     return entry.value;
   }
 
@@ -1237,15 +1272,45 @@ export class Environment
     if (!owner) {
       return undefined;
     }
-    return owner.shelfState?.get(shelfName)?.get(slotName);
+    const value = owner.shelfState?.get(shelfName)?.get(slotName);
+    const slotRef = `@${shelfName}.${slotName}`;
+    const readTs = new Date().toISOString();
+    const traceScope = this.buildRuntimeTraceScope();
+    this.runtimeTraceManager.emitStaleShelfRead(slotRef, value, readTs, traceScope);
+    this.emitRuntimeTraceEvent(traceShelfRead({
+      slot: slotRef,
+      found: value !== undefined,
+      value: this.summarizeTraceValue(value)
+    }), traceScope);
+    return value;
   }
 
-  writeShelfSlot(shelfName: string, slotName: string, value: unknown): void {
+  writeShelfSlot(
+    shelfName: string,
+    slotName: string,
+    value: unknown,
+    options: {
+      traceEvent?: string;
+      action?: string;
+      traceData?: Record<string, unknown>;
+    } = {}
+  ): void {
     const owner = this.getShelfOwner(shelfName);
     if (!owner) {
       throw new Error(`Shelf '@${shelfName}' is not defined`);
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
+    const slotRef = `@${shelfName}.${slotName}`;
+    const traceScope = this.buildRuntimeTraceScope();
+    this.runtimeTraceManager.recordShelfWrite(slotRef, value, traceScope);
+    this.emitRuntimeTraceEvent(traceShelfWrite({
+      slot: slotRef,
+      action: options.action ?? 'write',
+      success: true,
+      value: this.summarizeTraceValue(value),
+      event: options.traceEvent,
+      traceData: options.traceData
+    }), traceScope);
   }
 
   clearShelfSlot(shelfName: string, slotName: string): void {
@@ -1253,7 +1318,16 @@ export class Environment
     if (!owner) {
       return;
     }
-    owner.shelfState?.get(shelfName)?.delete(slotName);
+    const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
+    const slotRef = `@${shelfName}.${slotName}`;
+    if (removed) {
+      this.runtimeTraceManager.recordShelfWrite(slotRef, undefined, this.buildRuntimeTraceScope());
+    }
+    this.emitRuntimeTraceEvent(traceShelfClear({
+      slot: slotRef,
+      action: 'clear',
+      success: removed
+    }));
   }
 
   getSecuritySnapshot(): SecuritySnapshotLike | undefined {
@@ -3385,6 +3459,64 @@ export class Environment
     if (!enabled) {
       this.directiveTrace = [];
     }
+  }
+
+  setRuntimeTrace(level: RuntimeTraceLevel, options: RuntimeTraceOptions = {}): void {
+    this.getRootEnvironment().runtimeTraceManager.configure(level, options);
+  }
+
+  setRuntimeTraceOverride(level?: RuntimeTraceLevel): void {
+    this.runtimeTraceManager.setOverride(level);
+  }
+
+  getRuntimeTraceLevel(): RuntimeTraceLevel {
+    return this.runtimeTraceManager.getLevel();
+  }
+
+  getRuntimeTraceEvents() {
+    return this.runtimeTraceManager.getEvents();
+  }
+
+  emitRuntimeTraceEvent(
+    trace: RuntimeTraceEnvelope,
+    scopeOverrides?: Partial<RuntimeTraceScope>
+  ): void {
+    this.runtimeTraceManager.emitTrace(trace, this.buildRuntimeTraceScope(scopeOverrides));
+  }
+
+  emitRuntimeTrace(
+    requiredLevel: RuntimeTraceEnvelope['requiredLevel'],
+    category: RuntimeTraceEnvelope['category'],
+    event: string,
+    data: Record<string, unknown>,
+    scope?: Partial<RuntimeTraceScope>
+  ): void {
+    this.emitRuntimeTraceEvent({ requiredLevel, category, event, data, scope });
+  }
+
+  summarizeTraceValue(value: unknown): unknown {
+    return this.runtimeTraceManager.summarizeValue(value);
+  }
+
+  private buildRuntimeTraceScope(
+    overrides?: Partial<RuntimeTraceScope>
+  ): RuntimeTraceScope {
+    const operation = this.contextManager.peekOperation();
+    const guard = this.contextManager.peekGuardContext();
+    const pipeline = this.getPipelineContext();
+    const scopedConfig = this.getScopedEnvironmentConfig();
+    const bridge = this.getActiveBridge();
+    const snapshot: RuntimeTraceScopeSnapshot = {
+      operationType: operation?.type,
+      operationName: operation?.name,
+      operationNamed: operation?.named,
+      guardTry: typeof guard?.try === 'number' ? guard.try : undefined,
+      guardAttempt: typeof guard?.attempt === 'number' ? guard.attempt : undefined,
+      pipelineStage: typeof pipeline?.stage === 'number' ? pipeline.stage : undefined,
+      boxName: typeof scopedConfig?.name === 'string' ? scopedConfig.name : undefined,
+      bridgeBox: bridge?.mcpConfigPath
+    };
+    return buildRuntimeTraceScope(snapshot, overrides);
   }
   
   /**

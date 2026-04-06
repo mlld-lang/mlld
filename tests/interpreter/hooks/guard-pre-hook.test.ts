@@ -187,6 +187,58 @@ describe('guard pre-hook integration', () => {
     expect(Array.isArray(guardCtx.hints)).toBe(true);
   });
 
+  it('emits runtime trace events for aggregate and per-guard denials', async () => {
+    const env = createEnv();
+    env.setRuntimeTrace('effects');
+    const guardDirective = parseSync(
+      '/guard @ga for secret = when [ * => deny "blocked by trace" ]'
+    )[0] as DirectiveNode;
+    await evaluateDirective(guardDirective, env);
+
+    env.setVariable(
+      'secretVar',
+      createSimpleTextVariable(
+        'secretVar',
+        'hi',
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          security: makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+        }
+      )
+    );
+
+    await expect(
+      evaluateDirective(parseSync('/show @secretVar')[0] as DirectiveNode, env)
+    ).rejects.toBeInstanceOf(GuardError);
+
+    expect(env.getRuntimeTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'guard',
+          event: 'guard.evaluate',
+          data: expect.objectContaining({
+            phase: 'before',
+            decision: 'deny'
+          })
+        }),
+        expect.objectContaining({
+          category: 'guard',
+          event: 'guard.deny',
+          data: expect.objectContaining({
+            phase: 'before',
+            guard: 'ga',
+            message: 'blocked by trace'
+          })
+        })
+      ])
+    );
+  });
+
   it('records guard history when pipeline context is active', async () => {
     const env = createEnv();
     env.resetPipelineGuardHistory();

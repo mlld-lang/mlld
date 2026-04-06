@@ -10,6 +10,7 @@ import type {
   ExecuteMetrics,
   ExecuteErrorCode
 } from './types';
+import type { RuntimeTraceLevel } from '@core/types/trace';
 import { MemoryAstCache } from './cache/memory-ast-cache';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -48,6 +49,9 @@ export interface ExecuteOptions {
   checkpointScriptName?: string;
   checkpointCacheRootDir?: string;
   mcpServers?: Record<string, string>;
+  trace?: RuntimeTraceLevel;
+  traceFile?: string;
+  traceStderr?: boolean;
 }
 
 const astCache = new MemoryAstCache();
@@ -101,7 +105,10 @@ export async function execute(
     fork: options.fork,
     checkpointScriptName: options.checkpointScriptName,
     checkpointCacheRootDir: options.checkpointCacheRootDir,
-    mcpServers: options.mcpServers
+    mcpServers: options.mcpServers,
+    trace: options.trace,
+    traceFile: options.traceFile,
+    traceStderr: options.traceStderr
   } as InterpretOptions;
   const signingContext = (options as { signingContext?: unknown }).signingContext;
   if (signingContext !== undefined) {

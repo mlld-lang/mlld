@@ -62,6 +62,18 @@ class GuardDenial:
 
 
 @dataclass
+class TraceEvent:
+    """Structured runtime trace event."""
+
+    ts: str
+    level: str
+    category: str
+    event: str
+    scope: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ExecuteResult:
     """Structured output from execute()."""
 
@@ -70,6 +82,7 @@ class ExecuteResult:
     exports: Any = field(default_factory=list)  # Can be list or dict depending on mlld output
     effects: list[Effect] = field(default_factory=list)
     denials: list[GuardDenial] = field(default_factory=list)
+    trace_events: list[TraceEvent] = field(default_factory=list)
     metrics: Metrics | None = None
 
 
@@ -586,6 +599,8 @@ class Client:
         mode: str | None = None,
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
+        trace: str | None = None,
+        trace_file: str | None = None,
     ) -> ExecuteResult:
         """
         Run an mlld file with a payload and optional state.
@@ -621,6 +636,8 @@ class Client:
             mode=mode,
             timeout=timeout,
             mcp_servers=mcp_servers,
+            trace=trace,
+            trace_file=trace_file,
         ).result()
 
     def execute_async(
@@ -636,6 +653,8 @@ class Client:
         mode: str | None = None,
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
+        trace: str | None = None,
+        trace_file: str | None = None,
     ) -> ExecuteHandle:
         """
         Start an mlld file execution and return an in-flight request handle.
@@ -659,6 +678,10 @@ class Client:
             params["mode"] = mode
         if mcp_servers is not None:
             params["mcpServers"] = mcp_servers
+        if trace is not None:
+            params["trace"] = trace
+        if trace_file is not None:
+            params["traceFile"] = trace_file
 
         request_id, response_queue = self._send_request("execute", params)
         return ExecuteHandle(
@@ -1355,6 +1378,18 @@ def _execute_result_from_payload(
         for e in result.get("effects", [])
         if isinstance(e, dict)
     ]
+    trace_events = [
+        TraceEvent(
+            ts=str(event.get("ts", "")),
+            level=str(event.get("level", "")),
+            category=str(event.get("category", "")),
+            event=str(event.get("event", "")),
+            scope=event.get("scope", {}) if isinstance(event.get("scope"), dict) else {},
+            data=event.get("data", {}) if isinstance(event.get("data"), dict) else {},
+        )
+        for event in result.get("traceEvents", [])
+        if isinstance(event, dict)
+    ]
 
     return ExecuteResult(
         output=result.get("output", ""),
@@ -1362,6 +1397,7 @@ def _execute_result_from_payload(
         exports=result.get("exports", []),
         effects=effects,
         denials=denials,
+        trace_events=trace_events,
         metrics=metrics,
     )
 

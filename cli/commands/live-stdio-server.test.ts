@@ -293,6 +293,49 @@ describe('LiveStdioServer', () => {
     await harness.close();
   });
 
+  it('forwards trace params to execute requests without enabling stderr output', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const createHandle = () => {
+      const handle = new FakeStreamExecution();
+      handle.resolve({ output: 'ok', effects: [], exports: {}, stateWrites: [], traceEvents: [] } as any);
+      return handle;
+    };
+
+    const harness = createServerHarness({
+      executeFile: async (_filepath: string, _payload: unknown, options: any) => {
+        seen.push({
+          trace: options?.trace,
+          traceFile: options?.traceFile,
+          traceStderr: options?.traceStderr
+        });
+        return createHandle();
+      }
+    });
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'execute',
+        id: 17,
+        params: {
+          filepath: '/tmp/traced.mld',
+          trace: 'effects',
+          traceFile: '/tmp/runtime.jsonl'
+        }
+      })}\n`
+    );
+
+    await harness.waitForLineCount(1);
+
+    expect(seen).toEqual([
+      {
+        trace: 'effects',
+        traceFile: '/tmp/runtime.jsonl',
+        traceStderr: false
+      }
+    ]);
+
+    await harness.close();
+  });
   it('forwards guard_denial events and preserves result denials', async () => {
     const handle = new FakeStreamExecution();
 

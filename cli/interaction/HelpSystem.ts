@@ -603,6 +603,8 @@ Options:
   --structured            Output JSON with effects, exports, and security metadata
   --timeout <duration>    Overall execution timeout (e.g., 5m, 1h, 30s)
   --metrics               Show execution timing on stderr
+  --trace <level>         Runtime effect tracing: off, effects, or verbose
+  --trace-file <path>     Write runtime trace events as JSONL
   --inject, --payload KEY=VALUE
                           Inject dynamic module (can use multiple times)
                           VALUE formats: JSON object, @file.json, or mlld source

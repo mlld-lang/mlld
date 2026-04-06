@@ -791,6 +791,16 @@ export async function interpret(
   if (options.enableTrace !== undefined) {
     env.setTraceEnabled(options.enableTrace);
   }
+
+  if (options.trace !== undefined || options.traceFile !== undefined || options.traceStderr !== undefined) {
+    env.setRuntimeTrace(
+      options.trace ?? 'off',
+      {
+        filePath: options.traceFile,
+        stderr: options.traceStderr
+      }
+    );
+  }
   
   // Set fuzzy matching for local files (default: true)
   if (options.localFileFuzzyMatch !== undefined) {
@@ -998,6 +1008,7 @@ function buildStructuredResult(env: Environment, output: string, provenanceEnabl
     exports,
     stateWrites: env.getStateWrites(),
     denials: env.getGuardDenials(),
+    traceEvents: env.getRuntimeTraceEvents(),
     environment: env,
     ...(streaming ? { streaming } : {})
   };
