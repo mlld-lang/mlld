@@ -34,6 +34,41 @@ When tools mix phases (search + read content in one call), the planner sees untr
 
 Multi-write tasks become multiple execute steps, each with its own `@policy.build` authorization. One write per step keeps authorization, state, and failure recovery simple.
 
+## Workers receive typed inputs, not state blobs
+
+A common mistake is to pass a worker the full shelf state and rely on prompt instructions to narrow it:
+
+```mlld
+>> Wrong: worker sees everything, prompt tries to filter
+exe @executeWorker(slotState, request) = [
+  ...prompt says "use only the referenced inputs"
+]
+```
+
+The worker drifts. It sees all the shelf content and copies nearby prose instead of the exact values the request referenced. The fix isn't better prompt discipline — it's a different interface. The orchestration should resolve slot references into concrete values *before* calling the worker:
+
+```mlld
+>> Right: orchestration resolves references, worker receives typed inputs
+let @target = @fyi.shelf(@request.target_slot, @request.target_name)
+let @inputs = for @ref in @request.input_refs => {
+  name: @ref.name,
+  value: @fyi.shelf(@ref.slot, @ref.name)
+}
+let @result = @executeWorker(@target, @inputs, @request, @policy)
+```
+
+The worker signature becomes:
+
+```mlld
+exe @executeWorker(target, inputs, request, policy) = [
+  >> worker body with typed, bounded parameters
+]
+```
+
+Now the worker has semantic arguments, not raw state. It cannot accidentally access slots it wasn't given. Display projections apply automatically through the shelf read. The orchestration does the slot access; the worker does the semantic work.
+
+The rule: **the worker's interface should describe what it needs, not the state it operates on.** Structural narrowing (the worker literally cannot see what it wasn't passed) beats prompt discipline every time.
+
 ## Structure
 
 ```mlld

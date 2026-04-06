@@ -403,6 +403,10 @@ Three buckets:
 
 The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
+**Where user-typed payload values go.** User-provided literal values — update fields like `new_start_time: "14:00"`, payload values like `subject: "Q4 Review"` — belong in `known`, keyed by the tool they satisfy. If the user's task is "reschedule my 2pm meeting to 3pm," then `event_id: h_abc` (from a prior resolve phase) goes in `resolved.reschedule_calendar_event.event_id` and `new_start_time: "15:00"` (from the user's task text) goes in `known.reschedule_calendar_event.new_start_time`. The runtime validates both buckets against the tool's `controlArgs` / `updateArgs` / `exactPayloadArgs` metadata.
+
+If a planner produces a request with separate `authorizations` and `literal_inputs` (or equivalent) fields, merge `literal_inputs` into the `known` bucket before calling `@policy.build`. Without this merge, the builder sees control args (via `resolved`) but no payload values, and the `updateArgs` check fails with `no_update_fields`. The fix is not to read tool metadata in orchestration code and synthesize a richer intent — it's to put the user's literal values in the right bucket. `known` is the primitive for uninfluenced user-provided payloads; use it.
+
 The builder also accepts flat and nested intent shapes for backward compatibility:
 
 ```json

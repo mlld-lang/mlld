@@ -236,6 +236,40 @@ guard after @checkExecute for op:named:executeWorker = when [
 
 Same pattern for every worker. The record defines the contract. The guard enforces it with retry. No JS validation functions.
 
+## Extract-to-write contracts
+
+When an extract phase produces data that feeds a downstream write tool, the record schema is the contract between them. Shape the extract record's fields to match the write tool's parameter names exactly — then the planner can pass extracted values through without renaming, and wrong field names fail coercion.
+
+The wrong shape causes drift. Consider an extract step that produces `email_subject` and `email_recipient`, followed by a planner that synthesizes a `send_email(recipients, subject, body)` call. The rename step is where values drift — the planner reconstructs field names and often copies nearby prose instead of the extracted literals.
+
+The right shape is to define a record whose fields match `send_email`'s parameters:
+
+```mlld
+record @sendEmailInput = {
+  data: {
+    trusted: [subject: string, body: string],
+    untrusted: [recipients: string]
+  }
+}
+
+exe @extractSendEmailInput(source_content) = [
+  >> LLM extracts the data, shaped to match the record
+  => @claude(`Extract subject, body, and recipients from: @source_content`)
+] => sendEmailInput
+
+guard after @checkExtract for op:named:extractSendEmailInput = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2
+    => retry "Wrong shape: @output.mx.schema.errors. Required fields: subject, body, recipients."
+  * => allow
+]
+```
+
+If the LLM returns `email_subject` instead of `subject`, `=> record` coercion fails and the guard retries with the schema errors. The record's field names ARE the contract — there's nothing for the next phase to rename.
+
+Note the `data: { trusted, untrusted }` split: `subject` and `body` can be LLM-composed from source content (trusted for read-only use), while `recipients` stays untrusted because it needs resolution through the contacts directory before it can be used as a control arg in `send_email`. This is phase discipline: **extract doesn't resolve**. If the source gives you a name but not an email, extract produces `person_name`, not `recipients`. A separate resolve step turns `person_name` into a handle.
+
+When possible, define the extraction record once per write tool shape (one record for email inputs, one for calendar inputs, etc.) so the contract is visible and reusable. The downstream write tool's parameter list is the source of truth — the record mirrors it.
+
 ## What this replaces
 
 JS shape validators like:
