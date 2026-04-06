@@ -1002,7 +1002,14 @@ async function removeFromShelfSlot(
       : current;
   }
 
-  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next);
+  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next, {
+    traceEvent: 'shelf.remove',
+    action: 'remove',
+    traceData: {
+      removedCount: Math.max(0, current.length - next.length),
+      ref: env.summarizeTraceValue(resolvedRef)
+    }
+  });
   return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName);
 }
 

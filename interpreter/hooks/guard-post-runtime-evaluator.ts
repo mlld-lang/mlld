@@ -238,11 +238,33 @@ export async function evaluatePostGuardRuntime(
   } as GuardContextSnapshot;
 
   const contextSnapshotForMetadata = { ...guardContext };
+  const emitGuardTrace = (
+    event: string,
+    data: Record<string, unknown>
+  ): void => {
+    env.emitRuntimeTrace('effects', 'guard', event, {
+      phase: 'after',
+      guard: guard.name ?? null,
+      operation: operation.named ?? operation.name ?? operation.type,
+      scope,
+      attempt: attemptNumber,
+      inputPreview,
+      ...data
+    });
+  };
 
   const evaluateGuardBlockFn = dependencies.evaluateGuardBlock ?? evaluatePostGuardBlock;
-  const action = await env.withGuardContext(guardContext, async () => {
-    return await evaluateGuardBlockFn(guard.block, guardEnv);
-  });
+  let action: GuardActionNode | undefined;
+  try {
+    action = await env.withGuardContext(guardContext, async () => {
+      return await evaluateGuardBlockFn(guard.block, guardEnv);
+    });
+  } catch (error) {
+    emitGuardTrace('guard.crash', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 
   const metadataBase: Record<string, unknown> = {
     guardName: guard.name ?? null,
@@ -255,6 +277,14 @@ export async function evaluatePostGuardRuntime(
   };
 
   if (!action || action.decision === 'allow') {
+    emitGuardTrace('guard.evaluate', {
+      decision: 'allow',
+      matched: Boolean(action)
+    });
+    emitGuardTrace('guard.allow', {
+      matched: Boolean(action),
+      ...(action?.warning ? { warning: action.warning } : {})
+    });
     const labelModifications = extractGuardLabelModifications(action);
     const allowHint =
       action?.warning
@@ -283,6 +313,10 @@ export async function evaluatePostGuardRuntime(
   }
 
   if (action.decision === 'env') {
+    emitGuardTrace('guard.evaluate', {
+      decision: 'env',
+      matched: true
+    });
     const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
     throw new MlldWhenExpressionError(
       'Guard env actions apply only before execution',
@@ -300,6 +334,15 @@ export async function evaluatePostGuardRuntime(
     inputPreview,
     inputVariable,
     contextSnapshot: contextSnapshotForMetadata
+  });
+  emitGuardTrace('guard.evaluate', {
+    decision: action.decision,
+    matched: true,
+    ...(action.message ? { message: action.message } : {})
+  });
+  emitGuardTrace(`guard.${action.decision}`, {
+    matched: true,
+    ...(action.message ? { message: action.message } : {})
   });
 
   if (action.decision === 'deny') {

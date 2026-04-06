@@ -761,6 +761,10 @@ export const guardPreHook: PreHook = async (
       operation: operation.named ?? operation.name ?? operation.type,
       decision: decisionState.decision,
       traceCount: guardTrace.length,
+      decisionCounts: guardTrace.reduce<Record<string, number>>((counts, entry) => {
+        counts[entry.decision] = (counts[entry.decision] ?? 0) + 1;
+        return counts;
+      }, {}),
       reasons: decisionState.reasons,
       hintCount: decisionState.hints.length
     });

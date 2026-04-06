@@ -283,6 +283,21 @@ export async function evaluateGuardRuntime(
     inputPreview
   });
 
+  const emitGuardTrace = (
+    event: string,
+    data: Record<string, unknown>
+  ): void => {
+    env.emitRuntimeTrace('effects', 'guard', event, {
+      phase: 'before',
+      guard: guard.name ?? null,
+      operation: operation.named ?? operation.name ?? operation.type,
+      scope,
+      attempt: options.attemptNumber,
+      inputPreview,
+      ...data
+    });
+  };
+
   if (guard.policyCondition) {
     const policyGuardMode = guard.policyGuardMode ?? 'policy';
     const policyInput = options.perInput
@@ -315,6 +330,18 @@ export async function evaluateGuardRuntime(
       urlRegistry: env.getKnownUrls()
     });
     if (policyResult.decision === 'deny') {
+      emitGuardTrace('guard.evaluate', {
+        decision: 'deny',
+        policyGuard: true,
+        matched: true,
+        reason: policyResult.reason ?? null
+      });
+      emitGuardTrace('guard.deny', {
+        policyGuard: true,
+        matched: true,
+        reason: policyResult.reason ?? null,
+        message: policyResult.reason ?? null
+      });
       const metadataBase: Record<string, unknown> = {
         guardName: guard.name ?? null,
         guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
@@ -358,6 +385,15 @@ export async function evaluateGuardRuntime(
         }
       };
     }
+    emitGuardTrace('guard.evaluate', {
+      decision: 'allow',
+      policyGuard: true,
+      matched: true
+    });
+    emitGuardTrace('guard.allow', {
+      policyGuard: true,
+      matched: true
+    });
     return {
       guardName: guard.name ?? null,
       decision: 'allow',
@@ -378,9 +414,17 @@ export async function evaluateGuardRuntime(
     };
   }
 
-  const action = await env.withGuardContext(guardContext, async () => {
-    return await deps.evaluateGuardBlock(guard.block, guardEnv);
-  });
+  let action: GuardActionNode | undefined;
+  try {
+    action = await env.withGuardContext(guardContext, async () => {
+      return await deps.evaluateGuardBlock(guard.block, guardEnv);
+    });
+  } catch (error) {
+    emitGuardTrace('guard.crash', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 
   const metadataBase: Record<string, unknown> = {
     guardName: guard.name ?? null,
@@ -395,6 +439,16 @@ export async function evaluateGuardRuntime(
   };
 
   if (!action || action.decision === 'allow') {
+    emitGuardTrace('guard.evaluate', {
+      decision: 'allow',
+      matched: Boolean(action),
+      guardActionMatched: Boolean(action)
+    });
+    emitGuardTrace('guard.allow', {
+      matched: Boolean(action),
+      guardActionMatched: Boolean(action),
+      ...(action?.warning ? { warning: action.warning } : {})
+    });
     const allowHint =
       action?.warning
         ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
@@ -416,6 +470,10 @@ export async function evaluateGuardRuntime(
   }
 
   if (action.decision === 'env') {
+    emitGuardTrace('guard.evaluate', {
+      decision: 'env',
+      matched: true
+    });
     const envDecision = await deps.resolveGuardEnvConfig(action, guardEnv);
     const envConfig = envDecision.envConfig;
     const metadata = {
@@ -469,6 +527,18 @@ export async function evaluateGuardRuntime(
         ? action.message ?? null
         : null,
     inputPreview
+  });
+
+  emitGuardTrace('guard.evaluate', {
+    decision: action.decision,
+    matched: true,
+    guardActionMatched: true,
+    ...(action.message ? { message: action.message } : {})
+  });
+  emitGuardTrace(`guard.${action.decision}`, {
+    matched: true,
+    guardActionMatched: true,
+    ...(action.message ? { message: action.message } : {})
   });
 
   if (action.decision === 'deny') {

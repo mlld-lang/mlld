@@ -138,6 +138,13 @@ import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
+
+type RuntimeTraceShelfWriteState = {
+  ts: string;
+  scopeSignature: string;
+  fingerprint: string;
+  summary: unknown;
+};
 import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
 import { createFyiVariable, createToolDocsExecutable } from './builtins/fyi';
 import { createPolicyVariable } from './builtins/policy';
@@ -355,9 +362,11 @@ export class Environment
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
   private runtimeTraceLevel: RuntimeTraceLevel = 'off';
+  private runtimeTraceOverrideLevel?: RuntimeTraceLevel;
   private runtimeTraceEvents: RuntimeTraceEvent[] = [];
   private runtimeTraceFilePath?: string;
   private runtimeTraceStderr = false;
+  private runtimeTraceShelfWrites = new Map<string, RuntimeTraceShelfWriteState>();
 
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
@@ -942,11 +951,11 @@ export class Environment
       root.valueHandleRegistry = new ValueHandleRegistry();
     }
     const issued = root.valueHandleRegistry.issue(value, options);
-    root.emitRuntimeTrace('verbose', 'handle', 'handle.mint', {
+    this.emitRuntimeTrace('verbose', 'handle', 'handle.mint', {
       handle: issued.handle,
       preview: issued.preview,
       source: issued.metadata?.source,
-      value: root.summarizeTraceValue(value)
+      value: this.summarizeTraceValue(value)
     });
     return issued;
   }
@@ -955,7 +964,7 @@ export class Environment
     const root = this.getRootEnvironment();
     const entry = root.valueHandleRegistry?.resolve(handle);
     if (!entry) {
-      root.emitRuntimeTrace('verbose', 'handle', 'handle.resolve_fail', {
+      this.emitRuntimeTrace('verbose', 'handle', 'handle.resolve_fail', {
         handle,
         success: false
       });
@@ -964,10 +973,10 @@ export class Environment
         details: { handle }
       });
     }
-    root.emitRuntimeTrace('verbose', 'handle', 'handle.resolve', {
+    this.emitRuntimeTrace('verbose', 'handle', 'handle.resolve', {
       handle,
       success: true,
-      value: root.summarizeTraceValue(entry.value)
+      value: this.summarizeTraceValue(entry.value)
     });
     return entry.value;
   }
@@ -1269,25 +1278,40 @@ export class Environment
       return undefined;
     }
     const value = owner.shelfState?.get(shelfName)?.get(slotName);
-    owner.emitRuntimeTrace('verbose', 'shelf', 'shelf.read', {
-      slot: `@${shelfName}.${slotName}`,
+    const slotRef = `@${shelfName}.${slotName}`;
+    const readTs = new Date().toISOString();
+    this.maybeEmitRuntimeTraceStaleShelfRead(slotRef, value, readTs);
+    this.emitRuntimeTrace('verbose', 'shelf', 'shelf.read', {
+      slot: slotRef,
       found: value !== undefined,
-      value: owner.summarizeTraceValue(value)
+      value: this.summarizeTraceValue(value)
     });
     return value;
   }
 
-  writeShelfSlot(shelfName: string, slotName: string, value: unknown): void {
+  writeShelfSlot(
+    shelfName: string,
+    slotName: string,
+    value: unknown,
+    options: {
+      traceEvent?: string;
+      action?: string;
+      traceData?: Record<string, unknown>;
+    } = {}
+  ): void {
     const owner = this.getShelfOwner(shelfName);
     if (!owner) {
       throw new Error(`Shelf '@${shelfName}' is not defined`);
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
-    owner.emitRuntimeTrace('effects', 'shelf', 'shelf.write', {
-      slot: `@${shelfName}.${slotName}`,
-      action: 'write',
+    const slotRef = `@${shelfName}.${slotName}`;
+    this.recordRuntimeTraceShelfWrite(slotRef, value);
+    this.emitRuntimeTrace('effects', 'shelf', options.traceEvent ?? 'shelf.write', {
+      slot: slotRef,
+      action: options.action ?? 'write',
       success: true,
-      value: owner.summarizeTraceValue(value)
+      value: this.summarizeTraceValue(value),
+      ...(options.traceData ?? {})
     });
   }
 
@@ -1297,8 +1321,12 @@ export class Environment
       return;
     }
     const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
-    owner.emitRuntimeTrace('effects', 'shelf', 'shelf.clear', {
-      slot: `@${shelfName}.${slotName}`,
+    const slotRef = `@${shelfName}.${slotName}`;
+    if (removed) {
+      this.recordRuntimeTraceShelfWrite(slotRef, undefined);
+    }
+    this.emitRuntimeTrace('effects', 'shelf', 'shelf.clear', {
+      slot: slotRef,
       action: 'clear',
       success: removed
     });
@@ -3448,14 +3476,25 @@ export class Environment
     root.runtimeTraceStderr = options.stderr === true;
     if (level === 'off') {
       root.runtimeTraceEvents = [];
+      root.runtimeTraceShelfWrites.clear();
     }
     this.runtimeTraceLevel = root.runtimeTraceLevel;
     this.runtimeTraceFilePath = root.runtimeTraceFilePath;
     this.runtimeTraceStderr = root.runtimeTraceStderr;
   }
 
+  setRuntimeTraceOverride(level?: RuntimeTraceLevel): void {
+    this.runtimeTraceOverrideLevel = level;
+  }
+
   getRuntimeTraceLevel(): RuntimeTraceLevel {
-    return this.getRootEnvironment().runtimeTraceLevel;
+    if (this.runtimeTraceOverrideLevel !== undefined) {
+      return this.runtimeTraceOverrideLevel;
+    }
+    if (this.parent) {
+      return this.parent.getRuntimeTraceLevel();
+    }
+    return this.runtimeTraceLevel;
   }
 
   getRuntimeTraceEvents(): RuntimeTraceEvent[] {
@@ -3470,7 +3509,7 @@ export class Environment
     scope?: Partial<RuntimeTraceScope>
   ): void {
     const root = this.getRootEnvironment();
-    if (!shouldEmitRuntimeTrace(root.runtimeTraceLevel, requiredLevel)) {
+    if (!shouldEmitRuntimeTrace(this.getRuntimeTraceLevel(), requiredLevel)) {
       return;
     }
 
@@ -3573,6 +3612,68 @@ export class Environment
       ...scope,
       ...(overrides ?? {})
     };
+  }
+
+  private buildRuntimeTraceScopeSignature(
+    overrides?: Partial<RuntimeTraceScope>
+  ): string {
+    return JSON.stringify(this.buildRuntimeTraceScope(overrides));
+  }
+
+  private getRuntimeTraceValueFingerprint(value: unknown): string {
+    const sanitized = sanitizeSerializableValue(value);
+    if (sanitized === undefined) {
+      return JSON.stringify({ __runtimeTraceUndefined: true });
+    }
+    return JSON.stringify(sanitized);
+  }
+
+  private recordRuntimeTraceShelfWrite(slot: string, value: unknown): void {
+    if (this.getRuntimeTraceLevel() === 'off') {
+      return;
+    }
+
+    const root = this.getRootEnvironment();
+    root.runtimeTraceShelfWrites.set(slot, {
+      ts: new Date().toISOString(),
+      scopeSignature: this.buildRuntimeTraceScopeSignature(),
+      fingerprint: this.getRuntimeTraceValueFingerprint(value),
+      summary: this.summarizeTraceValue(value)
+    });
+  }
+
+  private maybeEmitRuntimeTraceStaleShelfRead(
+    slot: string,
+    value: unknown,
+    readTs: string
+  ): void {
+    if (this.getRuntimeTraceLevel() === 'off') {
+      return;
+    }
+
+    const root = this.getRootEnvironment();
+    const lastWrite = root.runtimeTraceShelfWrites.get(slot);
+    if (!lastWrite) {
+      return;
+    }
+
+    if (lastWrite.scopeSignature !== this.buildRuntimeTraceScopeSignature()) {
+      return;
+    }
+
+    const currentFingerprint = this.getRuntimeTraceValueFingerprint(value);
+    if (currentFingerprint === lastWrite.fingerprint) {
+      return;
+    }
+
+    this.emitRuntimeTrace('effects', 'shelf', 'shelf.stale_read', {
+      slot,
+      writeTs: lastWrite.ts,
+      readTs,
+      expected: lastWrite.summary,
+      actual: this.summarizeTraceValue(value),
+      message: 'shelf.read returned stale data after shelf.write in the same context'
+    });
   }
 
   private formatRuntimeTraceLine(event: RuntimeTraceEvent): string {

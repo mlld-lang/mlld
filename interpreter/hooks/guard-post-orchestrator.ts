@@ -287,6 +287,10 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
     operation: operation.named ?? operation.name ?? operation.type,
     decision: currentDecision,
     traceCount: guardTrace.length,
+    decisionCounts: guardTrace.reduce<Record<string, number>>((counts, entry) => {
+      counts[entry.decision] = (counts[entry.decision] ?? 0) + 1;
+      return counts;
+    }, {}),
     reasons,
     hintCount: hints.length
   });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { ExecInvocation } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
+import { isRuntimeTraceLevel, type RuntimeTraceLevel } from '@core/types/trace';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
@@ -1353,6 +1354,26 @@ async function resolveScopedExecDisplayMode(
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+async function resolveScopedExecTraceLevel(
+  raw: unknown,
+  env: Environment
+): Promise<RuntimeTraceLevel | undefined> {
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+
+  const value = await resolveScopedExecConfigValue(raw, env);
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (!isRuntimeTraceLevel(value)) {
+    throw new MlldInterpreterError('trace must be one of: off, effects, verbose.');
+  }
+
+  return value;
 }
 
 function getExecutableDefinitionWithClauseField(
@@ -2807,6 +2828,15 @@ async function evaluateExecInvocationInternal(
     resolvedScopedConfig.display = resolvedInvocationDisplay;
   }
 
+  const resolvedDefinitionTrace = await resolveScopedExecTraceLevel(
+    getExecutableDefinitionWithClauseField(definition, 'trace'),
+    env
+  );
+  const resolvedInvocationTrace = await resolveScopedExecTraceLevel(
+    getInvocationWithClauseField(node, invocationWithClause, 'trace'),
+    env
+  );
+
   if (Object.keys(resolvedScopedConfig).length > 0) {
     const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
     const scopedEnv = runtimeEnv.createChild();
@@ -2815,6 +2845,13 @@ async function evaluateExecInvocationInternal(
       ...resolvedScopedConfig
     });
     runtimeEnv = scopedEnv;
+  }
+
+  const resolvedTraceLevel = resolvedInvocationTrace ?? resolvedDefinitionTrace;
+  if (resolvedTraceLevel !== undefined) {
+    const tracedEnv = runtimeEnv.createChild();
+    tracedEnv.setRuntimeTraceOverride(resolvedTraceLevel);
+    runtimeEnv = tracedEnv;
   }
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
@@ -3074,6 +3111,7 @@ async function evaluateExecInvocationInternal(
   let llmTraceProvider: string | undefined;
   let llmTraceModel: string | undefined;
   let llmTraceToolCount: number | undefined;
+  let llmTraceStartedAt: number | undefined;
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';
@@ -3188,13 +3226,7 @@ async function evaluateExecInvocationInternal(
     }
   }
   if (hasLlmLabel) {
-    runtimeEnv.emitRuntimeTrace('verbose', 'llm', isLlmResumeContinuation ? 'llm.resume' : 'llm.call', {
-      sessionId: llmTraceSessionId,
-      provider: llmTraceProvider,
-      model: llmTraceModel,
-      toolCount: llmTraceToolCount,
-      resume: isLlmResumeContinuation
-    });
+    llmTraceStartedAt = Date.now();
   }
   
   const guardHelperImpl =
@@ -3932,7 +3964,22 @@ async function evaluateExecInvocationInternal(
       env.emitRuntimeTrace('verbose', 'llm', 'llm.tool_result', {
         tool: trackedToolName,
         ok: true,
-        result: env.summarizeTraceValue(invocationResult.value)
+        result: env.summarizeTraceValue(invocationResult.value),
+        durationMs:
+          toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
+            ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
+            : undefined
+      });
+    }
+    if (hasLlmLabel) {
+      env.emitRuntimeTrace('verbose', 'llm', isLlmResumeContinuation ? 'llm.resume' : 'llm.call', {
+        sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+        provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+        model: llmTraceModel,
+        toolCount: llmTraceToolCount,
+        resume: isLlmResumeContinuation,
+        ok: true,
+        durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
       });
     }
     recordToolCall(true);
@@ -3943,7 +3990,23 @@ async function evaluateExecInvocationInternal(
       env.emitRuntimeTrace('verbose', 'llm', 'llm.tool_result', {
         tool: trackedToolName,
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        durationMs:
+          toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
+            ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
+            : undefined
+      });
+    }
+    if (hasLlmLabel) {
+      env.emitRuntimeTrace('verbose', 'llm', isLlmResumeContinuation ? 'llm.resume' : 'llm.call', {
+        sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+        provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+        model: llmTraceModel,
+        toolCount: llmTraceToolCount,
+        resume: isLlmResumeContinuation,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
       });
     }
     recordToolCall(false, error);
