@@ -250,7 +250,7 @@ var @failures = for @r in @results when @r.error => @r
 
 **Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
 
-**Reserved field accessors**: `.mx`, `.raw`. These resolve to the system-owned StructuredValue namespace at every level of the value hierarchy, not to user fields. A user object `{ raw: "hello" }` reads as blank via `@obj.raw` — use bracket access (`@obj["raw"]`) or pick a different field name. `.text` and `.data` fall back to user data when present, so they're safe as user field names; the six above are not.
+**Reserved field accessors**: `.mx`, `.raw`. These resolve to the system-owned StructuredValue namespace at every level of the value hierarchy, not to user fields. A user object `{ raw: "hello" }` reads as blank via `@obj.raw` — use bracket access (`@obj["raw"]`) or pick a different field name. `.text` and `.data` fall back to user data when present, so they're safe as user field names.
 
 **Built-in transformers** (pipes: `@data | name`): `@parse` (`.strict`, `.loose`, `.llm`, `.fromlist`), `@xml`, `@csv`, `@md`, `@upper`, `@lower`, `@trim`, `@pretty`, `@sort`
 
