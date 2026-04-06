@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
-import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
+import {
+  createExecutableVariable,
+  createObjectVariable,
+  createSimpleTextVariable
+} from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 const source: VariableSource = {
   directive: 'var',
@@ -75,5 +83,40 @@ describe('ObjectReferenceResolver string resolution', () => {
     );
 
     expect(moduleObject.obj.msg).toBe('@foo');
+  });
+
+  it('preserves imported executable captured envs inside exported wrapper objects', () => {
+    const resolver = new ObjectReferenceResolver();
+
+    const helper = createExecutableVariable('helper', 'command', 'echo helper', [], 'sh', source);
+    const importedFn = createExecutableVariable('fn', 'command', 'echo fn', [], 'sh', source, {
+      metadata: {
+        isImported: true,
+        importPath: '/project/checkfix.mld'
+      }
+    });
+    const wrapper = createExecutableVariable('wrapper', 'command', 'echo wrapper', [], 'sh', source);
+
+    const fnModuleEnv = new Map<string, any>([['helper', helper]]);
+    sealCapturedModuleEnv(importedFn.internal, fnModuleEnv);
+
+    const wrapperModuleEnv = new Map<string, any>([
+      ['fn', importedFn],
+      ['wrapper', wrapper]
+    ]);
+    sealCapturedModuleEnv(wrapper.internal, wrapperModuleEnv);
+
+    const result = resolver.resolveObjectReferences(
+      { run: '@wrapper' },
+      new Map<string, any>([['wrapper', wrapper]])
+    );
+
+    const serializedWrapper = result.run as { internal?: Record<string, unknown> };
+    const serializedWrapperEnv = getCapturedModuleEnv(serializedWrapper.internal) as Record<string, any>;
+    const serializedFn = serializedWrapperEnv.fn as { internal?: Record<string, unknown> };
+    const serializedFnEnv = getCapturedModuleEnv(serializedFn.internal) as Record<string, any>;
+
+    expect(serializedWrapperEnv.fn?.__executable).toBe(true);
+    expect(serializedFnEnv.helper?.__executable).toBe(true);
   });
 });

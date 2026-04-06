@@ -142,7 +142,10 @@ export class ObjectReferenceResolver {
   /**
    * Handle executable variable references with special serialization format
    */
-  private resolveExecutableReference(referencedVar: Variable): any {
+  private resolveExecutableReference(
+    referencedVar: Variable,
+    serializingEnvs: WeakSet<object> = new WeakSet<object>()
+  ): any {
     // For executables, we need to export them with the proper structure
     if (referencedVar.type === 'executable') {
       const execVar = referencedVar as ExecutableVariable;
@@ -150,7 +153,9 @@ export class ObjectReferenceResolver {
       // Serialize shadow environments if present (Maps don't serialize to JSON)
       let serializedCtx = { ...execVar.mx };
       let serializedInternal = { ...execVar.internal };
-      const capturedModuleEnv = getCapturedModuleEnv(execVar.internal);
+      const capturedModuleEnv =
+        getCapturedModuleEnv(execVar.internal)
+        ?? getCapturedModuleEnv(execVar);
 
       if (execVar.internal?.capturedShadowEnvs) {
         serializedInternal = {
@@ -160,7 +165,10 @@ export class ObjectReferenceResolver {
       }
       // Serialize module environment if present
       if (capturedModuleEnv instanceof Map) {
-        sealCapturedModuleEnv(serializedInternal, this.serializeModuleEnv(capturedModuleEnv));
+        sealCapturedModuleEnv(
+          serializedInternal,
+          this.serializeCapturedModuleEnv(capturedModuleEnv, serializingEnvs)
+        );
       } else if (capturedModuleEnv !== undefined) {
         sealCapturedModuleEnv(serializedInternal, capturedModuleEnv);
       }
@@ -192,37 +200,30 @@ export class ObjectReferenceResolver {
    * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
    * IMPORTANT: Delegate to VariableImporter to ensure consistent serialization
    */
-  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
-    // Use a simpler approach: serialize each variable individually using the same logic as resolveExecutableReference
+  private serializeCapturedModuleEnv(
+    moduleEnv: Map<string, Variable>,
+    serializingEnvs: WeakSet<object>
+  ): unknown {
+    if (serializingEnvs.has(moduleEnv)) {
+      return undefined;
+    }
+
+    serializingEnvs.add(moduleEnv);
+    try {
+      return this.serializeModuleEnv(moduleEnv, serializingEnvs);
+    } finally {
+      serializingEnvs.delete(moduleEnv);
+    }
+  }
+
+  private serializeModuleEnv(
+    moduleEnv: Map<string, Variable>,
+    serializingEnvs: WeakSet<object> = new WeakSet<object>()
+  ): any {
     const result: Record<string, any> = {};
     for (const [name, variable] of moduleEnv) {
-      if (variable.type === 'executable') {
-        const execVar = variable as ExecutableVariable;
-        let serializedCtx = { ...execVar.mx };
-        let serializedInternal = { ...execVar.internal };
-
-        if (serializedInternal.capturedShadowEnvs) {
-          serializedInternal = {
-            ...serializedInternal,
-            capturedShadowEnvs: serializeShadowEnvironmentMaps(serializedInternal.capturedShadowEnvs)
-          };
-        }
-        // Skip capturedModuleEnv only for items IN the module env to avoid recursion
-        delete serializedInternal.capturedModuleEnv;
-
-        result[name] = {
-          __executable: true,
-          name: execVar.name,
-          value: execVar.value,
-          paramNames: execVar.paramNames,
-          paramTypes: execVar.paramTypes,
-          description: execVar.description,
-          executableDef: execVar.internal?.executableDef,
-          mx: serializedCtx,
-          internal: serializedInternal
-        };
-      } else if (variable.type === 'record') {
-        result[name] = serializeRecordVariable(variable as RecordVariable);
+      if (variable.type === 'executable' || variable.type === 'record') {
+        result[name] = this.resolveExecutableReference(variable, serializingEnvs);
       } else {
         // For other variables, export the value directly
         result[name] = variable.value;

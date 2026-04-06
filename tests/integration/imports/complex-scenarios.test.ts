@@ -100,6 +100,31 @@ HELLO FROM C`
       expect(result.success).toBe(true);
       expect(result.exitCode).toBe(0);
     });
+
+    it('preserves sibling executable scope through a wrapped namespace re-export', async () => {
+      const result = await testImport(`
+import { @ns } from "./checkfix-idx.mld"
+show @ns.run("hi")`, {
+        files: {
+          'checkfix.mld': `
+exe @helper() = js { return "helped"; }
+exe @fn(x) = [
+  let @v = @helper()
+  => @v
+]
+export { @fn }`,
+          'checkfix-idx.mld': `
+import { @fn } from "./checkfix.mld"
+exe @wrapper(x) = [ => @fn(@x) ]
+var @ns = { run: @wrapper }
+export { @ns }`
+        },
+        expectedOutput: 'helped'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+    });
     
     it.skip('should handle aggregate re-exports', async () => {
       // TODO: Implement aggregate re-export functionality (https://github.com/mlld-lang/modules/issues/7)
