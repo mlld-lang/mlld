@@ -3649,14 +3649,23 @@ async function evaluateExecInvocationInternal(
       if (isExecutableVariable(result)) {
         result = wrapStructured(result as any, 'object');
       } else {
-        const extracted = await extractVariableValue(result, execEnv);
-        const typeHint = Array.isArray(extracted)
-          ? 'array'
-          : typeof extracted === 'object' && extracted !== null
-            ? 'object'
-            : 'text';
-        const structured = wrapStructured(extracted as any, typeHint as any);
-        result = structured;
+        let extracted = await extractVariableValue(result, execEnv);
+        while (isVariable(extracted) && !isExecutableVariable(extracted)) {
+          extracted = await extractVariableValue(extracted, execEnv);
+        }
+        if (isStructuredValue(extracted)) {
+          // Preserve the original wrapper so record projection/internal field
+          // metadata survives returned variable normalization.
+          result = wrapStructured(extracted as any);
+        } else {
+          const typeHint = Array.isArray(extracted)
+            ? 'array'
+            : typeof extracted === 'object' && extracted !== null
+              ? 'object'
+              : 'text';
+          const structured = wrapStructured(extracted as any, typeHint as any);
+          result = structured;
+        }
       }
     }
   }

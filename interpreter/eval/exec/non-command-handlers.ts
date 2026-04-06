@@ -12,6 +12,7 @@ import {
 } from '@core/types/executable';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable, VariableContext } from '@core/types/variable';
+import { isExecutableVariable } from '@core/types/variable';
 import { MlldInterpreterError } from '@core/errors';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { Environment } from '@interpreter/env/Environment';
@@ -386,6 +387,7 @@ async function handleCommandRefExecutable(
 
     let refArgs: any[] = [];
     const { evaluate } = await import('@interpreter/core/interpreter');
+    const { isVariable, extractVariableValue } = await import('@interpreter/utils/variable-resolution');
     for (const argNode of (definition as any).commandArgs as any[]) {
       let value: any;
       if (Array.isArray(argNode)) {
@@ -397,6 +399,9 @@ async function handleCommandRefExecutable(
       } else {
         const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
         value = argResult?.value;
+      }
+      while (isVariable(value) && !isExecutableVariable(value)) {
+        value = await extractVariableValue(value, execEnv);
       }
       if (typeof value === 'string') {
         const paramVar = execEnv.getVariable(value);

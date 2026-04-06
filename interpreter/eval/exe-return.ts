@@ -49,7 +49,19 @@ export async function resolveExeReturnValue(
   if (returnNodes.length === 0) {
     return { value: undefined, env };
   }
-  const result = await evaluate(returnNodes, env, { isExpression: true });
+  const preserveBareVariableReference =
+    returnNodes.length === 1 &&
+    returnNodes[0] &&
+    typeof returnNodes[0] === 'object' &&
+    (returnNodes[0] as { type?: string }).type === 'VariableReference' &&
+    (!Array.isArray((returnNodes[0] as { fields?: unknown[] }).fields) ||
+      ((returnNodes[0] as { fields?: unknown[] }).fields?.length ?? 0) === 0) &&
+    (!Array.isArray((returnNodes[0] as { pipes?: unknown[] }).pipes) ||
+      ((returnNodes[0] as { pipes?: unknown[] }).pipes?.length ?? 0) === 0);
+  const result = await evaluate(returnNodes, env, {
+    isExpression: true,
+    preserveBareVariableReference
+  });
   const resolvedEnv = normalizeReturnEnvironment(env, result.env || env);
   return { value: result.value, env: resolvedEnv };
 }

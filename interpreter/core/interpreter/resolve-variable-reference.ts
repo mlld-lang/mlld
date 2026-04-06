@@ -6,6 +6,7 @@ import type { InterpolationNode } from '@interpreter/utils/interpolation';
 export interface ResolveVariableReferenceContext {
   isCondition?: boolean;
   isExpression?: boolean;
+  preserveBareVariableReference?: boolean;
 }
 
 export interface ResolveVariableReferenceResult {
@@ -158,9 +159,11 @@ export async function resolveVariableReference({
   const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
 
   const isInExpression = context && context.isExpression;
+  const preserveBareVariableReference = context?.preserveBareVariableReference === true;
   const hasFieldAccess = Array.isArray(node.fields) && node.fields.length > 0;
   const resolutionContext =
     hasFieldAccess ? ResolutionContext.FieldAccess
+    : preserveBareVariableReference ? ResolutionContext.FieldAccess
     : isInExpression ? ResolutionContext.Equality
     : ResolutionContext.FieldAccess;
 

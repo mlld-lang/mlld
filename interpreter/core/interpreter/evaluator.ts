@@ -47,6 +47,7 @@ export interface EvalResult {
 export interface EvaluationContext {
   isCondition?: boolean;
   isExpression?: boolean;
+  preserveBareVariableReference?: boolean;
   allowEffects?: boolean;
   privileged?: boolean;
   extractedInputs?: readonly unknown[];
