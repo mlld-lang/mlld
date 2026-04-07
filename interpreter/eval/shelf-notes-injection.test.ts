@@ -34,6 +34,35 @@ async function evaluateToOutput(source: string, env: Environment, effects: TestE
     .join('');
 }
 
+async function createNamedDisplayShelfEnvironment(): Promise<{
+  env: Environment;
+  effects: TestEffectHandler;
+}> {
+  return createEnvironment(`
+/record @contact = {
+  facts: [email: string, id: string],
+  data: [name: string, notes: string],
+  display: {
+    worker: [name, notes, { ref: "email" }],
+    planner: [{ ref: "email" }, { ref: "id" }]
+  }
+}
+/shelf @outreach = {
+  contacts: contact[]
+}
+/exe @seed() = js {
+  return {
+    email: "alice@example.com",
+    id: "c1",
+    name: "Alice",
+    notes: "Loves cats"
+  };
+} => contact
+@shelf.write(@outreach.contacts, @seed())
+/exe llm @agent(prompt, config) = js { return prompt; }
+`);
+}
+
 describe('shelf notes injection', () => {
   it('injects shelf notes for llm calls inside shelf-scoped environments even without config.tools', async () => {
     const { env, effects } = await createEnvironment(`
@@ -204,6 +233,71 @@ describe('shelf notes injection', () => {
 
       const output = await evaluateToOutput('/show @agent("Pick the recipient")', scopedEnv, effects);
       expect(output.trim()).toBe('');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('applies call-site display before prompt interpolation for shelf-scoped llm calls', async () => {
+    const { env, effects } = await createNamedDisplayShelfEnvironment();
+
+    try {
+      const output = await evaluateToOutput(`
+/box {
+  shelf: { read: [@outreach.contacts as contacts] }
+} [
+  show @agent("Contact: @fyi.shelf.contacts") with { display: "worker" }
+]
+`, env, effects);
+
+      expect(output).toContain('"name":"Alice"');
+      expect(output).toContain('"notes":"Loves cats"');
+      expect(output).toContain('"email":{"value":"alice@example.com"');
+      expect(output).not.toContain('"id":');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('keeps box-level display working for shelf prompt interpolation', async () => {
+    const { env, effects } = await createNamedDisplayShelfEnvironment();
+
+    try {
+      const output = await evaluateToOutput(`
+/box {
+  shelf: { read: [@outreach.contacts as contacts] },
+  display: "worker"
+} [
+  show @agent("Contact: @fyi.shelf.contacts")
+]
+`, env, effects);
+
+      expect(output).toContain('"name":"Alice"');
+      expect(output).toContain('"notes":"Loves cats"');
+      expect(output).toContain('"email":{"value":"alice@example.com"');
+      expect(output).not.toContain('"id":');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('lets call-site display override box display for shelf prompt interpolation', async () => {
+    const { env, effects } = await createNamedDisplayShelfEnvironment();
+
+    try {
+      const output = await evaluateToOutput(`
+/box {
+  shelf: { read: [@outreach.contacts as contacts] },
+  display: "planner"
+} [
+  show @agent("Contact: @fyi.shelf.contacts") with { display: "worker" }
+]
+`, env, effects);
+
+      expect(output).toContain('"name":"Alice"');
+      expect(output).toContain('"notes":"Loves cats"');
+      expect(output).toContain('"email":{"value":"alice@example.com"');
+      expect(output).not.toContain('"id":');
     } finally {
       env.cleanup();
     }

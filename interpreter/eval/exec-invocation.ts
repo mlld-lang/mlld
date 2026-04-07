@@ -2691,11 +2691,20 @@ async function evaluateExecInvocationInternal(
     whenExprNode = candidate;
   }
 
+  let runtimeEnv = env;
+  runtimeEnv = await applyInvocationScopedRuntimeConfig({
+    runtimeEnv,
+    env,
+    definition,
+    node,
+    invocationWithClause
+  });
+
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
   let { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
     args,
-    env,
+    env: runtimeEnv,
     commandName,
     services: {
       interpolate: interpolateWithResultDescriptor,
@@ -2704,10 +2713,9 @@ async function evaluateExecInvocationInternal(
     }
   });
 
-  let runtimeEnv = env;
   if (collectionDispatchContext) {
-    const scopedConfig = env.getScopedEnvironmentConfig();
-    const scopedEnv = env.createChild();
+    const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
+    const scopedEnv = runtimeEnv.createChild();
     scopedEnv.setScopedEnvironmentConfig({
       ...(scopedConfig ?? {}),
       tools: collectionDispatchContext.collection
@@ -2722,14 +2730,6 @@ async function evaluateExecInvocationInternal(
     const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment);
     runtimeEnv = policyScope.env;
   }
-
-  runtimeEnv = await applyInvocationScopedRuntimeConfig({
-    runtimeEnv,
-    env,
-    definition,
-    node,
-    invocationWithClause
-  });
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
@@ -3610,15 +3610,15 @@ async function evaluateExecInvocationInternal(
         }
       })
     );
-        if (codeResult.kind === 'return') {
-          return codeResult.evalResult;
-        }
-        result = codeResult.result;
-        execEnv = codeResult.execEnv;
-        outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
-      } else {
-        throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
-      }
+    if (codeResult.kind === 'return') {
+      return codeResult.evalResult;
+    }
+    result = codeResult.result;
+    execEnv = codeResult.execEnv;
+    outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
+  } else {
+    throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
+  }
 
   const resumeEnvelope = tryExtractLlmResumeEnvelope(result);
   if (resumeEnvelope) {
