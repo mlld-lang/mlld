@@ -139,7 +139,7 @@ async function resolveScopedExecTraceLevel(
   }
 
   if (!isRuntimeTraceLevel(value)) {
-    throw new MlldInterpreterError('trace must be one of: off, effects, verbose.');
+    throw new MlldInterpreterError('trace must be one of: off, effects, handle, handles, verbose.');
   }
 
   return value;

@@ -4,11 +4,13 @@ export interface ValueHandleEntry {
   handle: string;
   value: unknown;
   issuedAt: number;
+  sessionId?: string;
   preview?: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface IssueValueHandleOptions {
+  sessionId?: string;
   preview?: string;
   metadata?: Record<string, unknown>;
 }
@@ -23,6 +25,9 @@ export class ValueHandleRegistry {
       handle,
       value,
       issuedAt: Date.now(),
+      ...(typeof options.sessionId === 'string' && options.sessionId.trim().length > 0
+        ? { sessionId: options.sessionId.trim() }
+        : {}),
       ...(options.preview ? { preview: options.preview } : {}),
       ...(options.metadata ? { metadata: { ...options.metadata } } : {})
     };
@@ -37,6 +42,18 @@ export class ValueHandleRegistry {
 
   getEntries(): readonly ValueHandleEntry[] {
     return Array.from(this.entries.values());
+  }
+
+  getEntriesForSession(sessionId: string): readonly ValueHandleEntry[] {
+    const normalized = sessionId.trim();
+    if (!normalized) {
+      return [];
+    }
+    return Array.from(this.entries.values()).filter(entry => entry.sessionId === normalized);
+  }
+
+  countEntriesForSession(sessionId: string): number {
+    return this.getEntriesForSession(sessionId).length;
   }
 
   findByCanonicalValue(value: unknown): readonly ValueHandleEntry[] {

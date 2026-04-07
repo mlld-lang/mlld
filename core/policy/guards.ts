@@ -127,7 +127,7 @@ function buildInheritedPositiveCheckFailure(options: {
     rule: options.rule,
     suggestions: [
       options.missingLabelSuggestion,
-      'Review active policies with @mx.policy.activePolicies'
+      'Review active policies with @mx.policy.active'
     ]
   };
 }
@@ -471,7 +471,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
           reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
           rule: 'policy.defaults.rules.no-untrusted-privileged',
           suggestions: [
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -704,7 +704,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         rule: 'deny',
         locked: policyLocked,
         suggestions: [
-          'Review active policies with @mx.policy.activePolicies'
+          'Review active policies with @mx.policy.active'
         ]
       })
     });
@@ -758,7 +758,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
           locked: policyLocked,
           suggestions: [
             'Remove sh from deny list to allow shell access',
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -786,7 +786,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
             locked: policyLocked,
             suggestions: [
               'Remove network from deny list to allow network commands',
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -837,7 +837,7 @@ function makeDeclarativeFactRequirementGuard(options: {
             projectedHandleSuggestion(
               `Use a projected handle for '${options.argName}'`
             ),
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -855,7 +855,7 @@ function makeDeclarativeFactRequirementGuard(options: {
               projectedHandleSuggestion(
                 `Use a projected handle for '${options.argName}'`
               ),
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -905,7 +905,7 @@ function buildCommandDenialSuggestions(commandName: string, rule: string): strin
   } else {
     suggestions.push(`Add 'cmd:${commandName}:*' to capabilities.allow`);
   }
-  suggestions.push('Review active policies with @mx.policy.activePolicies');
+  suggestions.push('Review active policies with @mx.policy.active');
   return suggestions;
 }
 
@@ -1388,7 +1388,7 @@ function makeNamedArgAttestationGuard(options: {
           locked: options.locked === true,
           suggestions: [
             options.missingLabelSuggestion,
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -1407,7 +1407,7 @@ function makeNamedArgAttestationGuard(options: {
             locked: options.locked === true,
             suggestions: [
               options.missingLabelSuggestion,
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -1487,7 +1487,7 @@ function makeNoNovelUrlsGuard(
             locked: locked === true,
             suggestions: [
               'Pass through a URL that was read from external input, or add the domain to policy.urls.allowConstruction',
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }

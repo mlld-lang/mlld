@@ -21,6 +21,7 @@ import {
 } from '@interpreter/eval/exec/tool-metadata';
 import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
 import { createAutoProvisionedShelveExecutable } from '@interpreter/shelf/runtime';
+import { traceHandleReleased } from '@interpreter/tracing/events';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -900,12 +901,20 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   const nativeAllowedTools = inBox ? '' : builtinTools.join(',');
 
+  const emitHandleReleaseTrace = (): void => {
+    options.env.emitRuntimeTraceEvent(traceHandleReleased({
+      sessionId,
+      handleCount: options.env.getIssuedHandlesForSession(sessionId).length
+    }));
+  };
+
   if (Object.keys(mcpServers).length === 0) {
     const configPath = path.join(
       os.tmpdir(),
       `mlld-toolbridge-call-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
     );
     await fs.writeFile(configPath, JSON.stringify({ mcpServers: {} }, null, 2), 'utf8');
+    let cleaned = false;
 
     return {
       sessionId,
@@ -919,6 +928,11 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       toolNotes,
       inBox,
       async cleanup(): Promise<void> {
+        if (cleaned) {
+          return;
+        }
+        cleaned = true;
+        emitHandleReleaseTrace();
         await removeFileIfExists(configPath);
       }
     };
@@ -936,6 +950,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       return;
     }
     cleaned = true;
+    emitHandleReleaseTrace();
     for (const fn of cleanupFns) {
       try {
         await fn();

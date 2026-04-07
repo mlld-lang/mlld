@@ -21,10 +21,11 @@ export interface DirectiveTrace {
   errorMessage?: string;
 }
 
-export const RUNTIME_TRACE_LEVELS = ['off', 'effects', 'verbose'] as const;
+export const RUNTIME_TRACE_LEVELS = ['off', 'effects', 'handle', 'handles', 'verbose'] as const;
 
 export type RuntimeTraceLevel = (typeof RUNTIME_TRACE_LEVELS)[number];
-export type RuntimeTraceEmissionLevel = Exclude<RuntimeTraceLevel, 'off'>;
+export type RuntimeTraceNormalizedLevel = Exclude<RuntimeTraceLevel, 'handles'>;
+export type RuntimeTraceEmissionLevel = 'effects' | 'verbose';
 
 export type RuntimeTraceCategory =
   | 'shelf'
@@ -51,9 +52,10 @@ export type RuntimeTraceEventName =
   | 'guard.resume'
   | 'guard.env'
   | 'guard.crash'
-  | 'handle.mint'
-  | 'handle.resolve'
-  | 'handle.resolve_fail'
+  | 'handle.issued'
+  | 'handle.resolved'
+  | 'handle.resolve_failed'
+  | 'handle.released'
   | 'policy.build'
   | 'policy.validate'
   | 'policy.compile_drop'
@@ -129,20 +131,25 @@ export interface RuntimeTraceEventSpecMap {
   'guard.resume': RuntimeTraceEventSpecMap['guard.evaluate'];
   'guard.env': RuntimeTraceEventSpecMap['guard.evaluate'];
   'guard.crash': RuntimeTraceEventSpecMap['guard.evaluate'];
-  'handle.mint': {
+  'handle.issued': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; value?: unknown }>;
+    data: TraceRecord<{ handle: string; valuePreview?: unknown; factsourceRef?: string; sessionId?: string }>;
   };
-  'handle.resolve': {
+  'handle.resolved': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; value?: unknown }>;
+    data: TraceRecord<{ handle: string; valuePreview?: unknown; sessionId?: string }>;
   };
-  'handle.resolve_fail': {
+  'handle.resolve_failed': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; reason?: string }>;
+    data: TraceRecord<{ handle: string; reason?: string; sessionId?: string }>;
+  };
+  'handle.released': {
+    category: 'handle';
+    level: 'verbose';
+    data: TraceRecord<{ sessionId: string; handleCount: number }>;
   };
   'policy.build': {
     category: 'policy';
@@ -256,15 +263,24 @@ export function isRuntimeTraceLevel(value: unknown): value is RuntimeTraceLevel 
   return typeof value === 'string' && (RUNTIME_TRACE_LEVELS as readonly string[]).includes(value);
 }
 
+export function normalizeRuntimeTraceLevel(level: RuntimeTraceLevel): RuntimeTraceNormalizedLevel {
+  return level === 'handles' ? 'handle' : level;
+}
+
 export function shouldEmitRuntimeTrace(
   current: RuntimeTraceLevel,
-  required: RuntimeTraceEmissionLevel
+  required: RuntimeTraceEmissionLevel,
+  category: RuntimeTraceCategory
 ): boolean {
-  if (current === 'off') {
+  const normalized = normalizeRuntimeTraceLevel(current);
+  if (normalized === 'off') {
     return false;
   }
-  if (current === 'verbose') {
+  if (normalized === 'verbose') {
     return true;
+  }
+  if (normalized === 'handle') {
+    return category === 'handle';
   }
   return required === 'effects';
 }

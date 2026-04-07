@@ -864,7 +864,7 @@ describe('generatePolicyGuards defaults rules', () => {
       rule: 'policy.facts.requirements.op:named:createcalendarevent.participants',
       suggestions: [
         "Use a projected handle for 'participants' from an approved tool result or another approved source",
-        'Review active policies with @mx.policy.activePolicies'
+        'Review active policies with @mx.policy.active'
       ]
     });
 

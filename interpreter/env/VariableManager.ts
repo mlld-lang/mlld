@@ -63,6 +63,7 @@ export interface VariableManagerDependencies {
   recordSecurityDescriptor?(descriptor: SecurityDescriptor | undefined): void;
   getContextManager?(): ContextManager | undefined;
   getLlmToolConfig?(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined;
+  buildAmbientMxValue?(): Record<string, unknown>;
 }
 
 export interface VariableManagerContext {
@@ -302,13 +303,17 @@ export class VariableManager implements IVariableManager {
       const contextManager = this.deps.getContextManager?.();
       const pipelineContext = this.deps.getPipelineContext?.();
       const securitySnapshot = this.deps.getSecuritySnapshot?.();
-      const bridge = this.deps.getActiveBridge?.();
-      const boxContext = bridge
-        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
-        : null;
-      const llmToolConfig = this.deps.getLlmToolConfig?.();
-      const mxValue = contextManager
-        ? contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext, llmToolConfig })
+      const mxValue = this.deps.buildAmbientMxValue
+        ? this.deps.buildAmbientMxValue()
+        : contextManager
+        ? (() => {
+            const bridge = this.deps.getActiveBridge?.();
+            const boxContext = bridge
+              ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+              : null;
+            const llmToolConfig = this.deps.getLlmToolConfig?.();
+            return contextManager.buildAmbientContext({ pipelineContext, securitySnapshot, boxContext, llmToolConfig });
+          })()
         : this.buildLegacyContext(pipelineContext, securitySnapshot);
 
       return createObjectVariable('mx', mxValue, false, undefined, {

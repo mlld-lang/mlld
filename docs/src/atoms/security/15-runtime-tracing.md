@@ -1,13 +1,13 @@
 ---
 id: runtime-tracing
 title: Runtime Effect Tracing
-brief: Real-time structured traces for shelf writes, guard decisions, handle resolution, policy builds, and authorization checks
+brief: Real-time structured traces for shelf writes, guard decisions, handle issue/resolve/release, policy builds, and authorization checks
 category: security
 parent: audit-log
 tags: [tracing, debugging, observability, guards, shelf, handles, policy]
 related: [audit-log, tool-call-tracking, security-guards-basics, labels-overview, facts-and-handles, shelf-slots, policy-auth]
 related-code: [core/types/trace.ts, interpreter/tracing/RuntimeTraceManager.ts, interpreter/tracing/events.ts, interpreter/env/Environment.ts]
-updated: 2026-04-05
+updated: 2026-04-07
 qa_tier: 2
 ---
 
@@ -21,6 +21,8 @@ Runtime tracing makes these cause-and-effect chains visible. Every security-rele
 
 ```bash
 mlld run pipeline --trace effects
+mlld run pipeline --trace handle
+mlld run pipeline --trace handles
 mlld run pipeline --trace verbose
 mlld run pipeline --trace verbose --trace-file tmp/trace.jsonl
 ```
@@ -45,9 +47,10 @@ var @result = @claude(@task, { tools: @writeTools }) with { trace: "effects" }
 |---|---|
 | `off` | Nothing (default) |
 | `effects` | Shelf writes/clears, guard decisions, policy builds, auth checks, record schema failures, stale-read detection |
-| `verbose` | Everything in `effects` plus shelf reads, handle mints/resolves, display projections, LLM calls, tool calls, record coercions |
+| `handle` / `handles` | Only handle lifecycle events (`handle.issued`, `handle.resolved`, `handle.resolve_failed`, `handle.released`) |
+| `verbose` | Everything in `effects` plus shelf reads, handle lifecycle events, display projections, LLM calls, tool calls, record coercions |
 
-Start with `effects` for debugging. Use `verbose` when you need to trace handle flow or see every record coercion.
+Start with `effects` for debugging. Use `handle` when you're isolating proof-bearing handle flow. Use `verbose` when you need the full runtime picture.
 
 ## Event categories
 
@@ -104,11 +107,12 @@ Guard traces show both individual evaluations and aggregate decisions. When mult
 
 | Event | Level | Data |
 |---|---|---|
-| `handle.mint` | verbose | handle ID, source, value summary |
-| `handle.resolve` | verbose | handle ID, value summary |
-| `handle.resolve_fail` | verbose | handle ID, reason |
+| `handle.issued` | verbose | handle ID, value preview, factsource ref, sessionId |
+| `handle.resolved` | verbose | handle ID, value preview, sessionId |
+| `handle.resolve_failed` | verbose | handle ID, reason, sessionId |
+| `handle.released` | verbose | sessionId, handleCount |
 
-Trace handle lifecycle to debug authorization failures. If `auth.deny` fires because a control arg lacks proof, check whether the corresponding `handle.mint` happened and whether `handle.resolve` succeeded.
+Trace handle lifecycle to debug authorization failures. If `auth.deny` fires because a control arg lacks proof, check whether the corresponding `handle.issued` happened and whether `handle.resolved` succeeded.
 
 ### Policy and authorization
 
@@ -127,7 +131,7 @@ The policy/auth chain is the most common debugging target. A typical investigati
 1. `auth.deny` shows which tool and why
 2. `policy.build` shows whether the authorization compiled correctly
 3. `policy.compile_drop` shows if bucketed intent entries were dropped (missing proof)
-4. `handle.resolve_fail` shows if a handle reference was broken
+4. `handle.resolve_failed` shows if a handle reference was broken
 
 ### Display
 
@@ -196,14 +200,28 @@ If `shelf.write` shows `success: true` but a later `shelf.read` returns stale da
 ### "Which handle resolved to which value?"
 
 ```bash
-mlld run pipeline --trace verbose --trace-file tmp/trace.jsonl
+mlld run pipeline --trace handle --trace-file tmp/trace.jsonl
 ```
 
 ```bash
 jq 'select(.category == "handle")' tmp/trace.jsonl
 ```
 
-Follow the lifecycle: `handle.mint` (where proof was created) → `handle.resolve` (where it was consumed) → or `handle.resolve_fail` (where it was lost).
+Follow the lifecycle: `handle.issued` (where proof was created) → `handle.resolved` (where it was consumed) → or `handle.resolve_failed` (where it was lost). `handle.released` marks per-call bridge teardown and reports how many handles were in scope for that session.
+
+## Related runtime metadata
+
+Tracing is one side of the debugging surface. Ambient `@mx.*` accessors expose the current runtime state directly inside mlld expressions:
+
+- `@mx.handles`
+- `@mx.llm.sessionId`
+- `@mx.llm.display`
+- `@mx.llm.resume`
+- `@mx.shelf.writable`
+- `@mx.shelf.readable`
+- `@mx.policy.active`
+
+See `docs/src/atoms/core/32-builtins--ambient-mx.md` for the accessor shapes and examples.
 
 ## Tracing vs audit logging
 

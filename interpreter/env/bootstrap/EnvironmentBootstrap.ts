@@ -77,6 +77,7 @@ export interface VariableManagerDependencyContext {
   recordSecurityDescriptor(descriptor: SecurityDescriptor | undefined): void;
   getContextManager(): ContextManager | undefined;
   getLlmToolConfig?(): import('../executors/call-mcp-config').CallMcpConfig | null | undefined;
+  buildAmbientMxValue?(): Record<string, unknown>;
 }
 
 export interface ImportResolverDependencyContext {
@@ -269,7 +270,8 @@ export function buildVariableManagerDependencies(
     getActiveBridge: context.getActiveBridge,
     recordSecurityDescriptor: context.recordSecurityDescriptor,
     getContextManager: context.getContextManager,
-    getLlmToolConfig: context.getLlmToolConfig
+    getLlmToolConfig: context.getLlmToolConfig,
+    buildAmbientMxValue: context.buildAmbientMxValue
   };
 }
 

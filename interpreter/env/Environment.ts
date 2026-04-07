@@ -125,7 +125,7 @@ import {
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
 import type { RecordDefinition } from '@core/types/record';
-import type { ShelfDefinition } from '@core/types/shelf';
+import type { ShelfDefinition, ShelfMergeMode, ShelfScopeSlotBinding } from '@core/types/shelf';
 import type { CheckpointManager } from '../checkpoint/CheckpointManager';
 import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
 import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
@@ -144,13 +144,14 @@ import { RuntimeTraceManager } from '@interpreter/tracing/RuntimeTraceManager';
 import { buildRuntimeTraceScope, type RuntimeTraceScopeSnapshot } from '@interpreter/tracing/RuntimeTraceScope';
 import type { RuntimeTraceEnvelope } from '@interpreter/tracing/events';
 import {
-  traceHandleMint,
-  traceHandleResolve,
-  traceHandleResolveFail,
+  traceHandleIssued,
+  traceHandleResolved,
+  traceHandleResolveFailed,
   traceShelfClear,
   traceShelfRead,
   traceShelfWrite
 } from '@interpreter/tracing/events';
+import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
 import type { ImportApproval } from '@core/security/ImportApproval';
 import type { ImmutableCache } from '@core/security/ImmutableCache';
 import type { WorkspaceValue, WorkspaceMcpBridgeHandle } from '@core/types/workspace';
@@ -161,8 +162,28 @@ import {
   type ValueHandleEntry,
   type IssueValueHandleOptions
 } from './ValueHandleRegistry';
+import type { FactSourceHandle } from '@core/types/handle';
+import { parseFactLabel } from '@core/policy/fact-labels';
+import { getNormalizedShelfScope } from '@interpreter/shelf/runtime';
+import {
+  asData,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
+const AMBIENT_HANDLE_PREVIEW_LIMIT = 200;
+
+type AmbientShelfAccessDescriptor = {
+  alias: string | null;
+  slotRef: string;
+  recordType: string | null;
+  merge: ShelfMergeMode | null;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
 
 interface EffectOptions {
   path?: string;
@@ -529,7 +550,8 @@ export class Environment
       getActiveBridge: this.getActiveBridge.bind(this),
       recordSecurityDescriptor: this.recordSecurityDescriptor.bind(this),
       getContextManager: () => this.contextManager,
-      getLlmToolConfig: this.getLlmToolConfig.bind(this)
+      getLlmToolConfig: this.getLlmToolConfig.bind(this),
+      buildAmbientMxValue: this.buildAmbientMxValue.bind(this)
     });
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -944,12 +966,17 @@ export class Environment
     if (!root.valueHandleRegistry) {
       root.valueHandleRegistry = new ValueHandleRegistry();
     }
-    const issued = root.valueHandleRegistry.issue(value, options);
-    this.emitRuntimeTraceEvent(traceHandleMint({
+    const sessionId = options.sessionId ?? this.getCurrentLlmSessionId();
+    const issued = root.valueHandleRegistry.issue(value, {
+      ...options,
+      ...(sessionId ? { sessionId } : {})
+    });
+    const factsourceRef = this.getPrimaryFactSourceHandle(value)?.ref;
+    this.emitRuntimeTraceEvent(traceHandleIssued({
       handle: issued.handle,
-      preview: issued.preview,
-      source: issued.metadata?.source,
-      value: this.summarizeTraceValue(value)
+      valuePreview: issued.preview ?? this.summarizeTraceValue(value),
+      ...(factsourceRef ? { factsourceRef } : {}),
+      ...(sessionId ? { sessionId } : {})
     }));
     return issued;
   }
@@ -957,21 +984,22 @@ export class Environment
   resolveHandle(handle: string): unknown {
     const root = this.getRootEnvironment();
     const entry = root.valueHandleRegistry?.resolve(handle);
+    const sessionId = this.getCurrentLlmSessionId();
     if (!entry) {
-      this.emitRuntimeTraceEvent(traceHandleResolveFail({
+      this.emitRuntimeTraceEvent(traceHandleResolveFailed({
         handle,
         reason: 'HANDLE_NOT_FOUND',
-        success: false
+        ...(sessionId ? { sessionId } : {})
       }));
       throw new MlldSecurityError(`Unknown handle '${handle}'`, {
         code: 'HANDLE_NOT_FOUND',
         details: { handle }
       });
     }
-    this.emitRuntimeTraceEvent(traceHandleResolve({
+    this.emitRuntimeTraceEvent(traceHandleResolved({
       handle,
-      success: true,
-      value: this.summarizeTraceValue(entry.value)
+      valuePreview: this.summarizeTraceValue(entry.value),
+      ...(sessionId ? { sessionId } : {})
     }));
     return entry.value;
   }
@@ -984,6 +1012,194 @@ export class Environment
   findIssuedHandlesByCanonicalValue(value: unknown): readonly ValueHandleEntry[] {
     const root = this.getRootEnvironment();
     return root.valueHandleRegistry?.findByCanonicalValue(value) ?? [];
+  }
+
+  getIssuedHandlesForSession(sessionId: string): readonly ValueHandleEntry[] {
+    const root = this.getRootEnvironment();
+    return root.valueHandleRegistry?.getEntriesForSession(sessionId) ?? [];
+  }
+
+  getIssuedHandlesForCurrentSession(): readonly ValueHandleEntry[] {
+    const sessionId = this.getCurrentLlmSessionId();
+    return sessionId ? this.getIssuedHandlesForSession(sessionId) : [];
+  }
+
+  private getAmbientBoxContext(): { mcpConfigPath?: string; socketPath?: string } | null {
+    const bridge = this.getActiveBridge();
+    return bridge
+      ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
+      : null;
+  }
+
+  private getPrimaryFactSourceHandle(value: unknown): FactSourceHandle | undefined {
+    if (isStructuredValue(value)) {
+      const directFactsources = Array.isArray(value.metadata?.factsources)
+        ? value.metadata.factsources
+        : Array.isArray(value.mx?.factsources)
+          ? value.mx.factsources
+          : undefined;
+      const direct = directFactsources?.[0];
+      if (direct && typeof direct === 'object') {
+        return { ...(direct as FactSourceHandle) };
+      }
+    }
+
+    const descriptor = extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const direct = Array.isArray(descriptor?.factsources) ? descriptor.factsources[0] : undefined;
+    if (direct && typeof direct === 'object') {
+      return { ...(direct as FactSourceHandle) };
+    }
+
+    const factLabel = collectProofClaimLabels(descriptor).find(label => label.startsWith('fact:'));
+    const parsed = factLabel ? parseFactLabel(factLabel) : null;
+    if (!parsed) {
+      return undefined;
+    }
+
+    return {
+      kind: 'record-field',
+      ref: parsed.ref,
+      sourceRef: parsed.sourceRef,
+      field: parsed.field
+    };
+  }
+
+  private buildAmbientHandleView(): Record<string, unknown> {
+    const entries = this.getIssuedHandlesForCurrentSession();
+    if (entries.length === 0) {
+      return {};
+    }
+
+    const handles: Record<string, unknown> = {};
+    for (const entry of entries) {
+      const descriptor = extractSecurityDescriptor(entry.value, {
+        recursive: true,
+        mergeArrayElements: true
+      });
+      const factsource = this.getPrimaryFactSourceHandle(entry.value);
+      handles[entry.handle] = {
+        value: entry.preview ?? this.buildAmbientHandlePreview(entry.value),
+        labels: Array.isArray(descriptor?.labels) ? [...descriptor.labels] : [],
+        ...(factsource ? { factsource } : {}),
+        issuedAt: new Date(entry.issuedAt).toISOString()
+      };
+    }
+
+    return handles;
+  }
+
+  private buildAmbientHandlePreview(value: unknown): unknown {
+    const candidate = isStructuredValue(value) ? asData(value) : value;
+    if (candidate === null || candidate === undefined) {
+      return candidate;
+    }
+    if (typeof candidate === 'string') {
+      return candidate.length > AMBIENT_HANDLE_PREVIEW_LIMIT
+        ? `${candidate.slice(0, AMBIENT_HANDLE_PREVIEW_LIMIT - 3)}...`
+        : candidate;
+    }
+    if (typeof candidate === 'number' || typeof candidate === 'boolean') {
+      return candidate;
+    }
+    if (typeof candidate === 'bigint') {
+      return candidate.toString();
+    }
+    if (Array.isArray(candidate)) {
+      return { kind: 'array', length: candidate.length };
+    }
+    if (typeof candidate === 'object') {
+      const keys = Object.keys(candidate as Record<string, unknown>);
+      return {
+        kind: 'object',
+        keys: keys.slice(0, 8),
+        size: keys.length
+      };
+    }
+    return String(candidate);
+  }
+
+  private getCurrentLlmDisplayMode(): string | null {
+    const display = this.getScopedEnvironmentConfig()?.display;
+    return typeof display === 'string' && display.trim().length > 0 ? display.trim() : null;
+  }
+
+  private getCurrentLlmResumeContext(): Record<string, unknown> | null {
+    const operation = this.getContextManager().peekOperation();
+    const metadata = isPlainRecord(operation?.metadata) ? operation.metadata : null;
+    const resumeState = isPlainRecord(metadata?.llmResumeState) ? metadata.llmResumeState : null;
+    const sessionId =
+      typeof resumeState?.sessionId === 'string' && resumeState.sessionId.trim().length > 0
+        ? resumeState.sessionId.trim()
+        : null;
+    if (!sessionId) {
+      return null;
+    }
+
+    const provider =
+      typeof resumeState?.provider === 'string' && resumeState.provider.trim().length > 0
+        ? resumeState.provider.trim()
+        : 'unknown';
+    const continuationOf =
+      typeof resumeState?.continuationOf === 'string' && resumeState.continuationOf.trim().length > 0
+        ? resumeState.continuationOf.trim()
+        : sessionId;
+    const attempt =
+      typeof resumeState?.attempt === 'number' && Number.isFinite(resumeState.attempt)
+        ? Math.max(1, Math.trunc(resumeState.attempt))
+        : 1;
+
+    return { sessionId, provider, continuationOf, attempt };
+  }
+
+  private buildAmbientShelfAccess(mode: 'read' | 'write'): AmbientShelfAccessDescriptor[] {
+    const scope = getNormalizedShelfScope(this);
+    const bindings = mode === 'write'
+      ? scope?.writeSlotBindings ?? []
+      : scope?.readSlotBindings ?? [];
+    return bindings
+      .map(binding => this.describeAmbientShelfBinding(binding))
+      .filter((entry): entry is AmbientShelfAccessDescriptor => entry !== null);
+  }
+
+  private describeAmbientShelfBinding(
+    binding: ShelfScopeSlotBinding
+  ): AmbientShelfAccessDescriptor | null {
+    const slot = this.getShelfDefinition(binding.ref.shelfName)?.slots[binding.ref.slotName];
+    return {
+      alias: typeof binding.alias === 'string' && binding.alias.trim().length > 0 ? binding.alias.trim() : null,
+      slotRef: `@${binding.ref.shelfName}.${binding.ref.slotName}`,
+      recordType: slot ? `@${slot.record}` : null,
+      merge: slot?.merge ?? null
+    };
+  }
+
+  private getActivePolicyNames(policyContext?: Record<string, unknown>): string[] {
+    const source = policyContext ?? this.getPolicyContext();
+    if (!source) {
+      return [];
+    }
+    return Array.isArray(source.activePolicies)
+      ? source.activePolicies.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      : [];
+  }
+
+  private buildAmbientPolicyDescriptors(
+    activePolicies: readonly string[],
+    policyContext?: Record<string, unknown>
+  ): Array<Record<string, unknown>> {
+    const source = policyContext ?? this.getPolicyContext();
+    const locked =
+      source?.locked === true
+      || (isPlainRecord(source?.configs) && source.configs.locked === true);
+
+    return activePolicies.map(name => ({
+      name,
+      locked,
+      source: name
+    }));
   }
 
   getExeLabels(): readonly string[] | undefined {
@@ -2964,6 +3180,58 @@ export class Environment
     return this.parent?.getLlmToolConfig();
   }
 
+  getCurrentLlmSessionId(): string | undefined {
+    const sessionId = this.getLlmToolConfig()?.sessionId;
+    return typeof sessionId === 'string' && sessionId.trim().length > 0
+      ? sessionId.trim()
+      : undefined;
+  }
+
+  buildAmbientMxValue(options: {
+    pipelineContext?: PipelineContextSnapshot;
+    securitySnapshot?: SecuritySnapshotLike;
+    boxContext?: { mcpConfigPath?: string; socketPath?: string } | null;
+  } = {}): Record<string, unknown> {
+    const mxValue = this.getContextManager().buildAmbientContext({
+      pipelineContext: options.pipelineContext ?? this.getPipelineContext(),
+      securitySnapshot: options.securitySnapshot ?? this.getSecuritySnapshot(),
+      boxContext: options.boxContext ?? this.getAmbientBoxContext(),
+      llmToolConfig: this.getLlmToolConfig()
+    });
+
+    const llmBase = isPlainRecord(mxValue.llm) ? { ...mxValue.llm } : {};
+    mxValue.llm = {
+      config: '',
+      allowed: '',
+      native: '',
+      inBox: false,
+      hasTools: false,
+      ...llmBase,
+      sessionId: this.getCurrentLlmSessionId() ?? null,
+      display: this.getCurrentLlmDisplayMode(),
+      resume: this.getCurrentLlmResumeContext()
+    };
+
+    const shelfBase = isPlainRecord(mxValue.shelf) ? { ...mxValue.shelf } : {};
+    mxValue.shelf = {
+      ...shelfBase,
+      writable: this.buildAmbientShelfAccess('write'),
+      readable: this.buildAmbientShelfAccess('read')
+    };
+
+    const policyBase = isPlainRecord(mxValue.policy) ? { ...mxValue.policy } : {};
+    const activePolicies = this.getActivePolicyNames(policyBase);
+    mxValue.policy = {
+      ...policyBase,
+      activePolicies,
+      active: this.buildAmbientPolicyDescriptors(activePolicies, policyBase)
+    };
+
+    mxValue.handles = this.buildAmbientHandleView();
+
+    return mxValue;
+  }
+
   registerScopeCleanup(fn: () => Promise<void>): void {
     this.scopeCleanups.push(fn);
   }
@@ -3942,17 +4210,9 @@ export class Environment
 
     try {
       const testCtxVar = this.getVariable('test_mx');
-      const bridge = this.getActiveBridge();
-      const boxContext = bridge
-        ? { mcpConfigPath: bridge.mcpConfigPath, socketPath: bridge.socketPath }
-        : null;
       const mxValue = testCtxVar
         ? (testCtxVar.value as any)
-        : this.getContextManager().buildAmbientContext({
-            pipelineContext: this.getPipelineContext(),
-            securitySnapshot: this.getSecuritySnapshot(),
-            boxContext
-          });
+        : this.buildAmbientMxValue();
       if (!('mx' in finalParams)) {
         finalParams = { ...finalParams, mx: Object.freeze(mxValue) };
       }

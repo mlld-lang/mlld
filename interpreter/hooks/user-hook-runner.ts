@@ -220,10 +220,7 @@ function buildHookMxOverride(env: Environment, operation?: OperationContext): Re
     return null;
   }
 
-  const baseMx = env.getContextManager().buildAmbientContext({
-    pipelineContext: env.getPipelineContext(),
-    securitySnapshot: env.getSecuritySnapshot()
-  });
+  const baseMx = env.buildAmbientMxValue();
   const forContext = buildForContextFromOperation(operation);
   return {
     ...baseMx,

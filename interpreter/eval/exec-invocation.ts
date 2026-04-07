@@ -210,6 +210,8 @@ type ExecutableDispatchArgNormalizationOptions = {
 interface LlmResumeState {
   sessionId: string;
   provider: string;
+  continuationOf?: string;
+  attempt?: number;
 }
 
 interface LlmRuntimeResumeConfig extends LlmResumeState {
@@ -905,6 +907,44 @@ function readLlmRuntimeResumeConfig(config: unknown): LlmRuntimeResumeConfig | n
   };
 }
 
+function normalizeLlmResumeState(state: LlmResumeState): LlmResumeState {
+  const continuationOf =
+    typeof state.continuationOf === 'string' && state.continuationOf.trim().length > 0
+      ? state.continuationOf.trim()
+      : state.sessionId;
+  const attempt =
+    typeof state.attempt === 'number' && Number.isFinite(state.attempt)
+      ? Math.max(0, Math.trunc(state.attempt))
+      : 0;
+  return {
+    sessionId: state.sessionId,
+    provider: state.provider,
+    continuationOf,
+    attempt
+  };
+}
+
+function activateLlmResumeState(state: LlmResumeState): LlmResumeState {
+  const normalized = normalizeLlmResumeState(state);
+  return {
+    ...normalized,
+    attempt: (normalized.attempt ?? 0) + 1
+  };
+}
+
+function mergeReturnedLlmResumeState(
+  previous: LlmResumeState | undefined,
+  next: LlmResumeState
+): LlmResumeState {
+  const normalizedNext = normalizeLlmResumeState(next);
+  const normalizedPrevious = previous ? normalizeLlmResumeState(previous) : undefined;
+  return {
+    ...normalizedNext,
+    continuationOf: normalizedPrevious?.continuationOf ?? normalizedNext.continuationOf,
+    attempt: normalizedPrevious?.attempt ?? normalizedNext.attempt
+  };
+}
+
 function injectLlmRuntimeResumeConfig(
   config: Record<string, unknown>,
   resumeConfig: LlmRuntimeResumeConfig
@@ -983,6 +1023,8 @@ function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
 
   const sessionId = runtimeRecord.sessionId;
   const provider = runtimeRecord.provider;
+  const continuationOf = runtimeRecord.continuationOf;
+  const attempt = runtimeRecord.attempt;
   const valueField =
     Object.prototype.hasOwnProperty.call(record, 'value')
       ? record.value
@@ -1002,7 +1044,13 @@ function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
     provider.trim().length > 0
       ? {
           sessionId: sessionId.trim(),
-          provider: provider.trim()
+          provider: provider.trim(),
+          ...(typeof continuationOf === 'string' && continuationOf.trim().length > 0
+            ? { continuationOf: continuationOf.trim() }
+            : {}),
+          ...(typeof attempt === 'number' && Number.isFinite(attempt)
+            ? { attempt: Math.max(0, Math.trunc(attempt)) }
+            : {})
         }
       : undefined;
 
@@ -1034,6 +1082,8 @@ function readLlmResumeStateFromGuardDetails(details: unknown): LlmResumeState | 
 
   const sessionId = (resumeState as Record<string, unknown>).sessionId;
   const provider = (resumeState as Record<string, unknown>).provider;
+  const continuationOf = (resumeState as Record<string, unknown>).continuationOf;
+  const attempt = (resumeState as Record<string, unknown>).attempt;
   if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
     return null;
   }
@@ -1043,7 +1093,13 @@ function readLlmResumeStateFromGuardDetails(details: unknown): LlmResumeState | 
 
   return {
     sessionId: sessionId.trim(),
-    provider: provider.trim()
+    provider: provider.trim(),
+    ...(typeof continuationOf === 'string' && continuationOf.trim().length > 0
+      ? { continuationOf: continuationOf.trim() }
+      : {}),
+    ...(typeof attempt === 'number' && Number.isFinite(attempt)
+      ? { attempt: Math.max(0, Math.trunc(attempt)) }
+      : {})
   };
 }
 
@@ -3109,6 +3165,7 @@ async function evaluateExecInvocationInternal(
         nextConfig = normalizedResumeConfig.config;
         didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
         if (currentLlmResumeState) {
+          currentLlmResumeState = activateLlmResumeState(currentLlmResumeState);
           nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
             sessionId: currentLlmResumeState.sessionId,
             provider: currentLlmResumeState.provider,
@@ -3699,7 +3756,7 @@ async function evaluateExecInvocationInternal(
   if (resumeEnvelope) {
     result = resumeEnvelope.value;
     if (resumeEnvelope.resumeState) {
-      currentLlmResumeState = resumeEnvelope.resumeState;
+      currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, resumeEnvelope.resumeState);
       const nextMetadata: Record<string, unknown> = {
         ...((operationContext.metadata ?? {}) as Record<string, unknown>),
         ...(llmResumeEligible ? { llmResumeEligible: true } : {}),

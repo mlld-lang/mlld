@@ -806,7 +806,7 @@ export class LiveStdioServer {
       return undefined;
     }
     if (!isRuntimeTraceLevel(value)) {
-      throw new Error('trace must be one of: off, effects, verbose');
+      throw new Error('trace must be one of: off, effects, handle, handles, verbose');
     }
     return value;
   }
