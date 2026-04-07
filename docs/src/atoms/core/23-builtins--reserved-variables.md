@@ -17,7 +17,9 @@ updated: 2026-03-24
 - `@state` - mutable state for SDK integrations
 - `@debug` - environment info
 - `@fm` - current file's frontmatter (in modules)
-- `@mx` - metadata accessor (labels, taint, attestations, guard context)
+- `@mx` - metadata accessor. Two distinct usage patterns:
+  - **Per-value:** `@someValue.mx.field` reads metadata attached to a specific structured value (labels, taint, factsources, attestations, guard context, frontmatter).
+  - **Ambient:** `@mx.namespace.field` reads runtime state for the current execution context (`@mx.handles`, `@mx.llm.*`, `@mx.shelf.*`, `@mx.policy.*`). See `builtins-ambient-mx`.
 
 `@root`/`@base` resolution algorithm:
 

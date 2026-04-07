@@ -162,6 +162,8 @@ var @call2 = box {
 
 This is the structural property that makes handles safe: a handle string carried in conversation history can never become a live reference to a value the LLM did not see in *this* call. There is no cross-call handle laundering.
 
+To inspect the handles currently visible in scope from mlld code, use `@mx.handles`. It returns the handles available to the current LLM bridge call as a structured map (handle string → value preview, labels, factsource). For trace-stream observability, use `--trace handle` to follow `handle.issued` / `handle.resolved` / `handle.resolve_failed` / `handle.released` events. See `builtins-ambient-mx` and `runtime-tracing`.
+
 ### How identity travels across phases
 
 If handles are per-call, what carries the planner's authorization across the planner/worker boundary?
@@ -212,8 +214,9 @@ var @policyConfig = {
 | `no-untrusted-destructive` | Tainted data can't flow into write operations (scopes to control args when declared) |
 | `no-untrusted-privileged` | Tainted data can't flow into credential/account operations (scopes to control args when declared) |
 | `no-secret-exfil` | Secret-labeled data can't be sent to external destinations |
+| `correlate-control-args` | When a write tool with multiple `controlArgs` declares `correlateControlArgs: true`, all control arg values on a single dispatch must come from the same source record instance — prevents mixing fact-bearing args across records. See `policy-authorizations`. |
 
-The first two are *positive checks* -- they require proof on specific values. The rest are *negative checks* -- they block contamination.
+The first two are *positive checks* -- they require proof on specific values. `correlate-control-args` is a *cross-arg correlation check* -- it's per-tool opt-in via metadata, not a default rule. The rest are *negative checks* -- they block contamination.
 
 ## Guards with facts
 

@@ -113,6 +113,8 @@ export interface DocumentState {
   uri: string;
   version: number;
   content: string;
+  externalContent?: string;
+  externalContentVersion?: number;
   lastValidAST?: any[];
   lastValidTokens?: any; // SemanticTokens data
   currentEditLine?: number;

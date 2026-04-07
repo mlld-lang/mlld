@@ -320,6 +320,8 @@ Authorization denial reasons distinguish the cause:
 
 When an array control arg has one ambiguous element, only that element is dropped — the rest of the array and the tool entry are preserved. Ambiguous matches that resolve to the same canonical value are treated as equivalent and kept.
 
+When debugging "why was this dispatch denied," the policy denial hint includes a pointer to `@mx.policy.active` — the ambient accessor that returns structured descriptors for the policies active in the current execution context (`{ name, locked, source }` per active policy). Use this from a guard, a probe, or a test to verify which policies are actually layered into the current dispatch and which one (or several) issued the denial. See `builtins-ambient-mx`.
+
 ## Deny list
 
 `authorizations.deny` prevents specific tools from ever being planner-authorized:

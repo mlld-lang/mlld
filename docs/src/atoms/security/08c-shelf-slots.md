@@ -114,6 +114,8 @@ Don't read via `@fyi.shelf` from orchestrator code that needs the full structure
 
 **Inspecting metadata.** Fact provenance lives on individual field values, not on the record container. Reading `@contact.mx` on a record container returns its container-level metadata (often empty); reading `@contact.email.mx` on a fact field returns the field's labels, factsources, and other proof details. To inspect a value's full provenance from a JS helper, use `.keep` and read `value.mx` inside the `js {}` block — see the JS interop section in `intro` for details on `.keep`.
 
+To inspect the **current shelf scope** (which slots the active execution context can read or write, by alias), use the ambient accessors `@mx.shelf.writable` and `@mx.shelf.readable`. They return slot-alias metadata only — use `@shelf.read(@slotRef)` if you want the actual stored values. See `builtins-ambient-mx`.
+
 ## Slot operations
 
 `@shelf` exposes the full slot API. `@shelve(...)` is sugar for `@shelf.write` and is also the name of the auto-provisioned LLM tool described below.

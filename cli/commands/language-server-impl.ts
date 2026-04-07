@@ -25,6 +25,7 @@ import {
   DiagnosticSeverity,
   Range,
   Position,
+  FileChangeType,
   SemanticTokens,
   SemanticTokensBuilder,
   SemanticTokensParams,
@@ -49,6 +50,11 @@ import {
   MergedParseResult
 } from './chunk-parsing';
 import { collectUnsafeCommandFragmentDiagnostics } from './unsafe-command-fragment-diagnostics';
+import {
+  applyExternalFileRewrite,
+  clearExternalDocumentOverride,
+  getEffectiveDocumentSnapshot
+} from './language-server-state';
 
 /**
  * Determine the parsing mode from a file URI
@@ -498,6 +504,10 @@ export async function startLanguageServer(): Promise<void> {
   documents.onDidOpen(async (event) => {
     const document = event.document;
     const settings = await getDocumentSettings(document.uri) || defaultSettings;
+    const state = getOrCreateDocumentState(document.uri);
+    state.version = document.version;
+    state.content = document.getText();
+    clearExternalDocumentOverride(state);
 
     // Log document info for debugging
     const templateType = getTemplateTypeFromUri(document.uri);
@@ -528,6 +538,7 @@ export async function startLanguageServer(): Promise<void> {
     const state = getOrCreateDocumentState(document.uri);
     state.version = document.version;
     state.content = document.getText();
+    clearExternalDocumentOverride(state);
     
     // Track which line is being edited
     const changeEvent = (change as any);
@@ -550,6 +561,48 @@ export async function startLanguageServer(): Promise<void> {
       document,
       settings.semanticTokenDelay ?? defaultSettings.semanticTokenDelay!
     );
+  });
+
+  connection.onDidChangeWatchedFiles(async (params) => {
+    for (const change of params.changes) {
+      const uri = change.uri;
+      if (!isSupportedDocument(uri)) continue;
+
+      documentCache.delete(uri);
+      const openDocument = documents.get(uri);
+
+      if (change.type === FileChangeType.Deleted) {
+        if (openDocument) {
+          const state = getOrCreateDocumentState(uri);
+          applyExternalFileRewrite(state, openDocument.version, '');
+          connection.sendDiagnostics({ uri, diagnostics: [] });
+        }
+        continue;
+      }
+
+      if (!openDocument) {
+        continue;
+      }
+
+      try {
+        const filePath = uri.replace('file://', '');
+        const freshText = await fileSystem.readFile(filePath);
+        const state = getOrCreateDocumentState(uri);
+        const refreshedVersion = applyExternalFileRewrite(state, openDocument.version, freshText);
+
+        const refreshedDocument = TextDocument.create(
+          uri,
+          openDocument.languageId,
+          refreshedVersion,
+          freshText
+        );
+
+        await debouncedProcessor.validateNow(refreshedDocument);
+        debouncedProcessor.scheduleTokenGeneration(refreshedDocument, 0);
+      } catch (error) {
+        logger.warn('Failed to refresh diagnostics after watched file change', { uri, error });
+      }
+    }
   });
 
   async function validateDocument(textDocument: TextDocument): Promise<void> {
@@ -604,12 +657,16 @@ export async function startLanguageServer(): Promise<void> {
       return empty;
     }
 
+    const state = getOrCreateDocumentState(document.uri);
+    const snapshot = getEffectiveDocumentSnapshot(document.version, document.getText(), state);
+    const analysisVersion = snapshot.version;
+
     const cached = documentCache.get(document.uri);
-    if (cached && cached.lastAnalyzed === document.version) {
+    if (cached && cached.lastAnalyzed === analysisVersion) {
       return cached;
     }
 
-    const text = document.getText();
+    const text = snapshot.text;
     const errors: Diagnostic[] = [];
     const variables = new Map<string, VariableInfo>();
     const imports: string[] = [];
@@ -627,7 +684,7 @@ export async function startLanguageServer(): Promise<void> {
           variables,
           imports,
           exports,
-          lastAnalyzed: document.version
+          lastAnalyzed: analysisVersion
         };
         documentCache.set(document.uri, analysis);
         return analysis;
@@ -757,7 +814,7 @@ export async function startLanguageServer(): Promise<void> {
         variables,
         imports,
         exports,
-        lastAnalyzed: document.version
+        lastAnalyzed: analysisVersion
       };
 
       documentCache.set(document.uri, analysis);
@@ -781,7 +838,7 @@ export async function startLanguageServer(): Promise<void> {
         variables,
         imports,
         exports,
-        lastAnalyzed: document.version
+        lastAnalyzed: analysisVersion
       };
       
       documentCache.set(document.uri, analysis);

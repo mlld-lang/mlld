@@ -197,6 +197,8 @@ If the resumed call could fire tools or shelve writes, the LLM might paste a han
 
 What this means semantically: **resume fixes the LLM's text or JSON output, not its tool calls.** Use it when the model called the right tools but produced malformed final text. If you want the LLM to take more actions, that is a new step in the orchestration loop — not a resume. Use `retry` (which starts a fresh call with a fresh mint table) if you want to re-attempt the entire operation, but be careful: `retry` re-fires write tools, so it is dangerous for exes that send email, create issues, or otherwise have side effects.
 
+To inspect resume state from a guard or post-call code, read `@mx.llm.resume`. It returns `null` outside a resumed call and a structured object (`{ sessionId, provider, continuationOf, attempt }`) when the current call is a resume continuation. Useful for guards that need to behave differently on the second pass, or for tests that verify a resume actually fired the expected number of times. See `builtins-ambient-mx`.
+
 | Situation | Action |
 |---|---|
 | Read-only exe with malformed output | `retry` is fine |
