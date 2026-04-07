@@ -1523,7 +1523,7 @@ async function extractConstraintAttestationsSafe(
 }
 
 function getConstraintFactSourceKey(handle: FactSourceHandle): string {
-  if (handle.instanceKey) {
+  if (handle.instanceKey !== undefined) {
     return `${handle.sourceRef}:instance:${handle.instanceKey}`;
   }
   if (handle.coercionId && handle.position !== undefined) {

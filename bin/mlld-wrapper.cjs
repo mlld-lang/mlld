@@ -4,6 +4,7 @@
 const { spawn } = require('child_process');
 const { existsSync } = require('fs');
 const path = require('path');
+const { resolveTsxImportSpecifier } = require('./dev-runtime.cjs');
 
 // Get the arguments passed to this script
 const args = process.argv.slice(2);
@@ -14,7 +15,15 @@ const devCliPath = path.resolve(__dirname, '../cli/cli-entry.ts');
 function spawnCliProcess() {
   if (!existsSync(cliPath)) {
     if (existsSync(devCliPath)) {
-      return spawn(process.execPath, ['--import', 'tsx/esm', devCliPath, ...args], {
+      let tsxImportSpecifier;
+      try {
+        tsxImportSpecifier = resolveTsxImportSpecifier();
+      } catch (error) {
+        console.error(error.message);
+        process.exit(1);
+      }
+
+      return spawn(process.execPath, ['--import', tsxImportSpecifier, devCliPath, ...args], {
         stdio: 'inherit',
         env: process.env
       });

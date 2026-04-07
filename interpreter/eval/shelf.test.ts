@@ -55,7 +55,7 @@ describe('shelf runtime', () => {
       expect.objectContaining({
         sourceRef: '@contact',
         field: 'email',
-        instanceKey: 'string:"c1"'
+        instanceKey: 'c1'
       })
     ]);
     expect((afterEmail as any).mx?.factsources).toEqual((beforeEmail as any).mx?.factsources);

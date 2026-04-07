@@ -38,7 +38,10 @@ import {
   wrapStructured,
   type StructuredValue
 } from '@interpreter/utils/structured-value';
-import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
+import {
+  encodeCanonicalValue,
+  encodeDisplayInstanceKey
+} from '@interpreter/security/canonical-value';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
@@ -137,7 +140,7 @@ function getRecordInstanceKey(
   if (!definition.key || !Object.prototype.hasOwnProperty.call(shaped, definition.key)) {
     return undefined;
   }
-  return encodeCanonicalValue(shaped[definition.key]);
+  return encodeDisplayInstanceKey(shaped[definition.key]);
 }
 
 function hasDescriptorLabel(

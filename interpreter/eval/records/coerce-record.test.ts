@@ -328,11 +328,38 @@ describe('record output coercion', () => {
     expect(isStructuredValue(secondRecipient)).toBe(true);
     expect(firstRecipient.mx.factsources?.[0]).toMatchObject({
       ref: '@transaction.recipient',
-      instanceKey: 'string:"tx_001"'
+      instanceKey: 'tx_001'
     });
     expect(secondRecipient.mx.factsources?.[0]).toMatchObject({
       ref: '@transaction.recipient',
-      instanceKey: 'string:"tx_002"'
+      instanceKey: 'tx_002'
+    });
+  });
+
+  it('keeps typed instance keys for non-string record keys', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @invoice = {
+  key: invoiceNo,
+  facts: [recipient: string, invoiceNo: number]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: [{ recipient: 'bob@example.com', invoiceNo: 42 }],
+      env
+    });
+
+    expect(output.type).toBe('array');
+    const first = output.data[0];
+    expect(isStructuredValue(first)).toBe(true);
+
+    const recipient = await accessNamedField(first, 'recipient');
+    expect(isStructuredValue(recipient)).toBe(true);
+    expect(recipient.mx.factsources?.[0]).toMatchObject({
+      ref: '@invoice.recipient',
+      instanceKey: 'number:42'
     });
   });
 

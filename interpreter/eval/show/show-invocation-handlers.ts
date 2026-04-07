@@ -97,10 +97,6 @@ function getExtractedVariable(
 
 function toInvocationDisplayValue(value: unknown): string {
   if (isStructuredValue(value)) {
-    if (value.type === 'array' && Array.isArray(value.data)) {
-      const cleaned = value.data.map(item => (isStructuredValue(item) ? asText(item) : item));
-      return JSONFormatter.stringify(cleaned, { pretty: true });
-    }
     return asText(value);
   }
   if (typeof value === 'string') {

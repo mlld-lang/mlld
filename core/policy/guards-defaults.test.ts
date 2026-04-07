@@ -273,7 +273,7 @@ describe('generatePolicyGuards defaults rules', () => {
               createFactSourceHandle({
                 sourceRef: 'transaction',
                 field: 'recipient',
-                instanceKey: 'string:"tx_001"'
+                instanceKey: 'tx_001'
               })
             ]
           },
@@ -282,7 +282,7 @@ describe('generatePolicyGuards defaults rules', () => {
               createFactSourceHandle({
                 sourceRef: 'transaction',
                 field: 'txId',
-                instanceKey: 'string:"tx_001"'
+                instanceKey: 'tx_001'
               })
             ]
           }
@@ -308,7 +308,7 @@ describe('generatePolicyGuards defaults rules', () => {
               createFactSourceHandle({
                 sourceRef: 'transaction',
                 field: 'recipient',
-                instanceKey: 'string:"tx_001"'
+                instanceKey: 'tx_001'
               })
             ]
           },
@@ -317,7 +317,7 @@ describe('generatePolicyGuards defaults rules', () => {
               createFactSourceHandle({
                 sourceRef: 'transaction',
                 field: 'txId',
-                instanceKey: 'string:"tx_002"'
+                instanceKey: 'tx_002'
               })
             ]
           }
@@ -325,7 +325,7 @@ describe('generatePolicyGuards defaults rules', () => {
       })
     ).toMatchObject({
       rule: 'correlate-control-args',
-      reason: expect.stringContaining("recipient -> @transaction[instance=string:\"tx_001\"]")
+      reason: expect.stringContaining('recipient -> @transaction[instance=tx_001]')
     });
   });
 
@@ -346,7 +346,7 @@ describe('generatePolicyGuards defaults rules', () => {
               createFactSourceHandle({
                 sourceRef: 'transaction',
                 field: 'recipient',
-                instanceKey: 'string:"tx_001"'
+                instanceKey: 'tx_001'
               })
             ]
           },

@@ -173,6 +173,57 @@ Tools declare which arguments are security-relevant (control args) via `controlA
 - Arguments not declared as control args are unconstrained data args — the worker fills them freely.
 - If the planner includes data args in the authorization (title, description, etc.), the runtime strips them at compilation time. Only declared control args are compiled into constraints. The planner doesn't need to know which args are control args vs data args.
 
+## Cross-Arg Correlation: `correlateControlArgs`
+
+When a write tool has more than one control arg, the runtime can require that all of them came from the same source record. This blocks an attack class where the planner mixes a fact-bearing arg from one record with a fact-bearing arg from a different record — both args have proof, but together they target the wrong thing.
+
+```mlld
+exe tool:w @updateScheduledTransaction(id, recipient, amount, date) = [...]
+  with {
+    controlArgs: ["id", "recipient"],
+    correlateControlArgs: true
+  }
+```
+
+When `correlateControlArgs: true` is set on a tool with multiple `controlArgs`, the runtime checks at dispatch time that every control arg value's `factsources` provenance points to the **same source record instance**. If they don't, the dispatch is denied with `Rule 'correlate-control-args': control args on @<tool> must come from the same source record`.
+
+**The attack this defends against:**
+
+```
+User has two scheduled transactions in their account:
+  A: pay $500 to landlord on the 15th    (legitimate)
+  B: pay $200 to attacker@evil.com       (planted, but real in the bank)
+
+User says "update transaction A's amount to $600."
+
+Without correlateControlArgs:
+  Planner authorizes update_scheduled_transaction(A.id, B.recipient, 600)
+  Both args have fact proof — A.id and B.recipient are real fact-bearing values
+  no-send-to-unknown sees proof on both, allows the call
+  Bank updates transaction A's recipient to attacker@evil.com
+
+With correlateControlArgs: true:
+  Same dispatch attempted
+  Runtime checks A.id and B.recipient — different source record instances
+  Rule 'correlate-control-args' fires: DENIED
+```
+
+**How instance identity is determined.** Each fact-bearing value carries a `factsources` entry with up to three identity fields:
+
+- `instanceKey` — the value of the record's declared `key:` field, when the record has one. For string keys the runtime stores the bare value (`tx_001`). For non-string keys it keeps the canonical typed encoding (`number:42`, `object:{...}`) so different key types stay distinguishable.
+- `coercionId` — a UUID stamped at `=> record` coercion time, identifying the specific tool call that produced the value.
+- `position` — the array position of the value within its coercion's result, distinguishing siblings from the same call when the record has no `key`.
+
+The comparator prefers `instanceKey` when available, falling back to `(coercionId, position)` for keyless records. This means **re-fetching the same record from a separate tool call still correlates correctly** — two `@getTransactionById("tx_001")` calls produce values with different `coercionId`s but the same `instanceKey`, and dispatching control args mixed across the two fetches is allowed because they refer to the same logical record.
+
+**When to use it.** Set `correlateControlArgs: true` on any write tool whose control args together identify a single logical target. Account updates, transaction modifications, message replies, file moves — anywhere multiple args must agree on which entity they're operating on. The framework default for multi-`controlArg` tools should be `true`; opt out only when the tool genuinely takes unrelated control args.
+
+**What the rule does NOT defend against.** Single-control-arg tools are unaffected (one arg has nothing to correlate against). Tools with `correlateControlArgs: false` (or unset) skip the check entirely. Values without `factsources` (constructed via mlld code without going through `=> record` coercion) cannot be correlated and the dispatch will be denied with a "missing factsource" reason.
+
+The runtime check fires on both dispatch paths: orchestrator-side direct exec calls and LLM-bridge dispatched tool calls. There is no path that bypasses it.
+
+The factsource identity behavior described here is covered in the record coercion test matrix for `js`, `cmd`, `sh`, `node`, `py`, inline `as record`, and imported MCP-backed wrapper exes.
+
 ## Update and Payload Arg Enforcement
 
 Two additional exe metadata fields refine write tool contracts:

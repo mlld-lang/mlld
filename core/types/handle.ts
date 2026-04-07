@@ -50,8 +50,8 @@ export function createFactSourceHandle(input: {
 }): FactSourceHandle {
   const sourceRef = normalizeIdentifierPath(input.sourceRef, { requireLeadingAt: true });
   const field = normalizeIdentifierPath(input.field).toLowerCase();
-  const instanceKey = typeof input.instanceKey === 'string' && input.instanceKey.trim().length > 0
-    ? input.instanceKey.trim()
+  const instanceKey = typeof input.instanceKey === 'string'
+    ? input.instanceKey
     : undefined;
   const coercionId = typeof input.coercionId === 'string' && input.coercionId.trim().length > 0
     ? input.coercionId.trim()
@@ -69,7 +69,7 @@ export function createFactSourceHandle(input: {
     ref: `${sourceRef}.${field}`,
     sourceRef,
     field,
-    ...(instanceKey ? { instanceKey } : {}),
+    ...(instanceKey !== undefined ? { instanceKey } : {}),
     ...(coercionId ? { coercionId } : {}),
     ...(position !== undefined ? { position } : {}),
     ...(tiers && tiers.length > 0 ? { tiers: Object.freeze(Array.from(new Set(tiers))) } : {})

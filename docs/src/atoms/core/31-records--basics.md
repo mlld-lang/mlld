@@ -487,6 +487,8 @@ Static `=> contact` is the common case — use it whenever the record is known a
 
 If you're writing a single-use exe with a known record, static coercion is simpler. Reach for dynamic coercion when the same exe or expression path needs to validate against different contracts at different call sites.
 
+**Verified coercion paths.** The record coercion tests cover `=> record` across `js`, `cmd`, `sh`, `node`, `py`, and imported MCP-backed wrapper exes, plus inline `@value as record @schema`. Arrays of records and shelf write/read round-trips are also verified to preserve `mx.factsources` metadata.
+
 ## What records are not
 
 Records are pure data-shaping definitions. They cannot:

@@ -153,7 +153,7 @@ function shouldCorrelateControlArgs(operation: {
 }
 
 function getFactSourceInstanceKey(source: FactSourceHandle): string {
-  if (source.instanceKey) {
+  if (source.instanceKey !== undefined) {
     return `${source.sourceRef}:instance:${source.instanceKey}`;
   }
   if (source.coercionId && source.position !== undefined) {
@@ -174,7 +174,7 @@ function dedupeFactSources(factsources: readonly FactSourceHandle[]): FactSource
 }
 
 function describeFactSourceRecord(source: FactSourceHandle): string {
-  if (source.instanceKey) {
+  if (source.instanceKey !== undefined) {
     return `${source.sourceRef}[instance=${source.instanceKey}]`;
   }
   if (source.coercionId && source.position !== undefined) {
@@ -198,7 +198,7 @@ function sameFactSourceInstance(left: FactSourceHandle, right: FactSourceHandle)
   if (left.sourceRef !== right.sourceRef) {
     return false;
   }
-  if (left.instanceKey && right.instanceKey) {
+  if (left.instanceKey !== undefined && right.instanceKey !== undefined) {
     return left.instanceKey === right.instanceKey;
   }
   if (

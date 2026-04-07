@@ -945,7 +945,7 @@ describe('FunctionRouter', () => {
         body: 'cross'
       })
     ).rejects.toThrow(
-      "Rule 'correlate-control-args': control args on @sendPayment must come from the same source record; recipient -> @transaction[instance=string:\"tx_001\"], txId -> @transaction[instance=string:\"tx_002\"]"
+      /Rule 'correlate-control-args': control args on @sendPayment must come from the same source record; recipient -> @transaction\[instance=tx_001\], txId -> @transaction\[instance=tx_002\]/
     );
   });
 });
