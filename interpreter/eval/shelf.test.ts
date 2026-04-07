@@ -20,6 +20,45 @@ async function createEnvironment(source: string, filePath = '/main.mld'): Promis
 }
 
 describe('shelf runtime', () => {
+  it('preserves factsources through shelf write and read round-trips for scalar fact fields', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [email: string, id: string],
+  data: [name: string]
+}
+/shelf @s = {
+  things: contact[]
+}
+/exe @fetch() = js {
+  return [{ email: "alice@example.com", id: "c1", name: "Alice" }];
+} => contact
+/var @found = @fetch()
+/var @written = @shelf.write(@s.things, @found.0)
+/var @readBack = @shelf.read(@s.things)
+`);
+
+    const found = env.getVariable('found')?.value;
+    const readBack = env.getVariable('readBack')?.value;
+    if (!found || !readBack) {
+      throw new Error('Expected @found and @readBack to be defined');
+    }
+
+    const beforeRecord = await accessField(found, { type: 'arrayIndex', value: 0 } as any, { env });
+    const afterRecord = await accessField(readBack, { type: 'arrayIndex', value: 0 } as any, { env });
+    const beforeEmail = await accessField(beforeRecord, { type: 'field', value: 'email' } as any, { env });
+    const afterEmail = await accessField(afterRecord, { type: 'field', value: 'email' } as any, { env });
+
+    expect((beforeEmail as any).mx?.factsources).toEqual([
+      expect.objectContaining({
+        sourceRef: '@contact',
+        field: 'email',
+        instanceKey: 'string:"c1"'
+      })
+    ]);
+    expect((afterEmail as any).mx?.factsources).toEqual((beforeEmail as any).mx?.factsources);
+  });
+
   it('writes and upserts keyed collection slots through @shelve', async () => {
     const env = await createEnvironment(`
 /record @contact = {

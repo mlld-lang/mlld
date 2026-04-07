@@ -1,3 +1,4 @@
+import type { FactSourceHandle } from '@core/types/handle';
 import { isTolerantMatch } from '@interpreter/eval/expressions';
 
 export type AuthorizationConstraintClause =
@@ -63,6 +64,7 @@ export type PolicyAuthorizationDecision =
       decision: 'allow';
       matched: true;
       matchedAttestations?: Readonly<Record<string, readonly string[]>>;
+      matchedFactsources?: Readonly<Record<string, readonly FactSourceHandle[]>>;
     }
   | {
       decision: 'deny';
@@ -71,18 +73,91 @@ export type PolicyAuthorizationDecision =
       reason: string;
     };
 
+const authorizationConstraintEqFactsources = new WeakMap<
+  Extract<AuthorizationConstraintClause, { eq: unknown }>,
+  readonly FactSourceHandle[]
+>();
+
+const authorizationConstraintOneOfFactsources = new WeakMap<
+  Extract<AuthorizationConstraintClause, { oneOf: unknown[] }>,
+  readonly (readonly FactSourceHandle[])[]
+>();
+
+function cloneFactSourceHandle(handle: FactSourceHandle): FactSourceHandle {
+  return {
+    ...handle,
+    ...(Array.isArray(handle.tiers) ? { tiers: Object.freeze([...handle.tiers]) } : {})
+  };
+}
+
+function cloneFactSources(
+  factsources: readonly FactSourceHandle[]
+): readonly FactSourceHandle[] {
+  return Object.freeze(factsources.map(cloneFactSourceHandle));
+}
+
+function cloneOneOfFactsources(
+  factsources: readonly (readonly FactSourceHandle[])[]
+): readonly (readonly FactSourceHandle[])[] {
+  return Object.freeze(factsources.map(entry => cloneFactSources(entry)));
+}
+
+function copyConstraintClauseFactsources(
+  source: AuthorizationConstraintClause,
+  target: AuthorizationConstraintClause
+): void {
+  if ('eq' in source && 'eq' in target) {
+    const factsources = authorizationConstraintEqFactsources.get(source);
+    if (factsources) {
+      authorizationConstraintEqFactsources.set(target, cloneFactSources(factsources));
+    }
+    return;
+  }
+
+  if ('oneOf' in source && 'oneOf' in target) {
+    const factsources = authorizationConstraintOneOfFactsources.get(source);
+    if (factsources) {
+      authorizationConstraintOneOfFactsources.set(target, cloneOneOfFactsources(factsources));
+    }
+  }
+}
+
+export function setAuthorizationConstraintClauseEqFactsources(
+  clause: Extract<AuthorizationConstraintClause, { eq: unknown }>,
+  factsources: readonly FactSourceHandle[] | undefined
+): void {
+  if (!factsources || factsources.length === 0) {
+    authorizationConstraintEqFactsources.delete(clause);
+    return;
+  }
+  authorizationConstraintEqFactsources.set(clause, cloneFactSources(factsources));
+}
+
+export function setAuthorizationConstraintClauseOneOfFactsources(
+  clause: Extract<AuthorizationConstraintClause, { oneOf: unknown[] }>,
+  factsources: readonly (readonly FactSourceHandle[])[]
+): void {
+  if (!factsources.some(entry => entry.length > 0)) {
+    authorizationConstraintOneOfFactsources.delete(clause);
+    return;
+  }
+  authorizationConstraintOneOfFactsources.set(clause, cloneOneOfFactsources(factsources));
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function cloneConstraintClause(clause: AuthorizationConstraintClause): AuthorizationConstraintClause {
   if ('eq' in clause) {
-    return {
+    const cloned: AuthorizationConstraintClause = {
       eq: clause.eq,
       ...(Array.isArray(clause.attestations) ? { attestations: clause.attestations.slice() } : {})
     };
+    copyConstraintClauseFactsources(clause, cloned);
+    return cloned;
   }
-  return {
+  const cloned: AuthorizationConstraintClause = {
     oneOf: clause.oneOf.slice(),
     ...(Array.isArray(clause.oneOfAttestations)
       ? {
@@ -92,6 +167,8 @@ function cloneConstraintClause(clause: AuthorizationConstraintClause): Authoriza
         }
       : {})
   };
+  copyConstraintClauseFactsources(clause, cloned);
+  return cloned;
 }
 
 function cloneAuthorizationEntry(entry: AuthorizationEntry): AuthorizationEntry {
@@ -728,11 +805,16 @@ export function validateNormalizedPolicyAuthorizations(
 function clauseMatches(
   actual: unknown,
   clause: AuthorizationConstraintClause
-): { matched: boolean; attestations?: readonly string[] } {
+): {
+  matched: boolean;
+  attestations?: readonly string[];
+  factsources?: readonly FactSourceHandle[];
+} {
   if ('eq' in clause) {
     return {
       matched: isTolerantMatch(actual, clause.eq),
-      attestations: clause.attestations
+      attestations: clause.attestations,
+      factsources: authorizationConstraintEqFactsources.get(clause)
     };
   }
   for (let index = 0; index < clause.oneOf.length; index += 1) {
@@ -741,7 +823,8 @@ function clauseMatches(
     }
     return {
       matched: true,
-      attestations: clause.oneOfAttestations?.[index]
+      attestations: clause.oneOfAttestations?.[index],
+      factsources: authorizationConstraintOneOfFactsources.get(clause)?.[index]
     };
   }
   return { matched: false };
@@ -786,6 +869,7 @@ export function evaluatePolicyAuthorizationDecision(params: {
   }
 
   const matchedAttestations: Record<string, readonly string[]> = Object.create(null);
+  const matchedFactsources: Record<string, readonly FactSourceHandle[]> = Object.create(null);
 
   for (const [argName, clauses] of Object.entries(entry.args)) {
     const actualValue = args[argName];
@@ -808,6 +892,12 @@ export function evaluatePolicyAuthorizationDecision(params: {
     if (argAttestations.length > 0) {
       matchedAttestations[argName] = Object.freeze(argAttestations);
     }
+    const argFactsources = clauseMatchesForArg.flatMap(result =>
+      Array.isArray(result.factsources) ? [...result.factsources] : []
+    );
+    if (argFactsources.length > 0) {
+      matchedFactsources[argName] = cloneFactSources(argFactsources);
+    }
   }
 
   for (const controlArg of controlArgs) {
@@ -829,6 +919,9 @@ export function evaluatePolicyAuthorizationDecision(params: {
     matched: true,
     ...(Object.keys(matchedAttestations).length > 0
       ? { matchedAttestations: Object.freeze({ ...matchedAttestations }) }
+      : {}),
+    ...(Object.keys(matchedFactsources).length > 0
+      ? { matchedFactsources: Object.freeze({ ...matchedFactsources }) }
       : {})
   };
 }

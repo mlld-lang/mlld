@@ -48,6 +48,7 @@ import {
   type SecurityDescriptor,
   type ToolProvenance
 } from '@core/types/security';
+import type { FactSourceHandle } from '@core/types/handle';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -3138,6 +3139,10 @@ async function evaluateExecInvocationInternal(
     ? ((node as any).meta.argSecurityDescriptors as Array<SecurityDescriptor | undefined>)
         .map(descriptor => normalizeSecurityDescriptor(descriptor))
     : undefined;
+  const argFactSourceDescriptors = Array.isArray((node as any).meta?.argFactSourceDescriptors)
+    ? ((node as any).meta.argFactSourceDescriptors as Array<readonly FactSourceHandle[] | undefined>)
+        .map(entry => Array.isArray(entry) && entry.length > 0 ? [...entry] : undefined)
+    : undefined;
   const effectiveOperationTaintFacts = false;
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,
@@ -3340,6 +3345,7 @@ async function evaluateExecInvocationInternal(
       expressionSourceVariables,
       inputSecurityDescriptor,
       argSecurityDescriptors: effectiveArgSecurityDescriptors,
+      argFactSourceDescriptors,
       mcpSecurityDescriptor,
       argNames: params
     });

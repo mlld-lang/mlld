@@ -84,6 +84,22 @@ function createStructuredSnapshot(value: unknown): StructuredValue {
   return wrapStructured(value as any);
 }
 
+function preserveStructuredScalarValue<T extends string | number | boolean>(
+  original: unknown,
+  nextValue: T
+): unknown {
+  if (!isStructuredValue(original)) {
+    return nextValue;
+  }
+
+  const clone = cloneStructuredValue(original);
+  clone.data = nextValue as any;
+  clone.text = String(nextValue);
+  clone.mx.text = clone.text;
+  clone.mx.data = nextValue;
+  return clone;
+}
+
 function stripKnownDescriptor(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
   return removeLabelsFromDescriptor(descriptor, ['known']);
 }
@@ -255,20 +271,21 @@ function coerceFieldValue(
     if (extracted === null || extracted === undefined) {
       return { ok: false, actual: String(extracted) };
     }
+    const normalized = typeof extracted === 'string' ? extracted.trim() : String(extracted);
     return {
       ok: true,
-      value: typeof extracted === 'string' ? extracted.trim() : String(extracted)
+      value: preserveStructuredScalarValue(value, normalized)
     };
   }
 
   if (field.valueType === 'number') {
     if (typeof extracted === 'number' && Number.isFinite(extracted)) {
-      return { ok: true, value: extracted };
+      return { ok: true, value: preserveStructuredScalarValue(value, extracted) };
     }
     if (typeof extracted === 'string' && extracted.trim().length > 0) {
       const parsed = Number(extracted.trim());
       if (Number.isFinite(parsed)) {
-        return { ok: true, value: parsed };
+        return { ok: true, value: preserveStructuredScalarValue(value, parsed) };
       }
     }
     return { ok: false, actual: describeRecordValueType(value) };
@@ -276,15 +293,15 @@ function coerceFieldValue(
 
   if (field.valueType === 'boolean') {
     if (typeof extracted === 'boolean') {
-      return { ok: true, value: extracted };
+      return { ok: true, value: preserveStructuredScalarValue(value, extracted) };
     }
     if (typeof extracted === 'string') {
       const normalized = extracted.trim().toLowerCase();
       if (normalized === 'true') {
-        return { ok: true, value: true };
+        return { ok: true, value: preserveStructuredScalarValue(value, true) };
       }
       if (normalized === 'false') {
-        return { ok: true, value: false };
+        return { ok: true, value: preserveStructuredScalarValue(value, false) };
       }
     }
     return { ok: false, actual: describeRecordValueType(value) };

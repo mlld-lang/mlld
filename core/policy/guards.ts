@@ -85,6 +85,14 @@ function collectAuthorizedAttestations(
   return normalizeList(Array.isArray(labels) ? [...labels] : []);
 }
 
+function collectAuthorizedFactsources(
+  authorizedArgFactsources: Readonly<Record<string, readonly FactSourceHandle[]>> | undefined,
+  argName: string
+): FactSourceHandle[] {
+  const factsources = authorizedArgFactsources?.[argName];
+  return Array.isArray(factsources) ? dedupeFactSources(factsources) : [];
+}
+
 function getExpandedPolicyOperationLabels(
   operation: {
     opLabels?: readonly string[];
@@ -301,12 +309,15 @@ export function evaluateControlArgCorrelation(options: {
 export function evaluateAuthorizationInheritedPolicyChecks(options: {
   policy: PolicyConfig;
   operation: {
+    name?: string;
+    metadata?: Record<string, unknown>;
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
   args?: Readonly<Record<string, unknown>>;
   argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
   authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
+  authorizedArgFactsources?: Readonly<Record<string, readonly FactSourceHandle[]>>;
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
   const enabledRules = resolvePolicyDefaultRuleOptions(options.policy.defaults?.rules).filter(entry =>
     isBuiltinPolicyRuleName(entry.rule)
@@ -319,7 +330,8 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   const declarativeEntries = collectDeclarativeFactRequirementEntries(options.policy).filter(
     entry => entry.opRef === normalizedOperationRef
   );
-  if (enabledRules.length === 0 && declarativeEntries.length === 0) {
+  const shouldCheckControlArgCorrelation = shouldCorrelateControlArgs(options.operation);
+  if (enabledRules.length === 0 && declarativeEntries.length === 0 && !shouldCheckControlArgCorrelation) {
     return undefined;
   }
 
@@ -493,6 +505,31 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         });
       }
     }
+  }
+
+  if (shouldCheckControlArgCorrelation) {
+    const effectiveArgDescriptors: Record<string, PolicyArgDescriptor> = {
+      ...(options.argDescriptors ?? {})
+    };
+    for (const [argName, factsources] of Object.entries(options.authorizedArgFactsources ?? {})) {
+      const authorizedFactsources = collectAuthorizedFactsources(options.authorizedArgFactsources, argName);
+      if (authorizedFactsources.length === 0) {
+        continue;
+      }
+      const existingDescriptor = effectiveArgDescriptors[argName];
+      effectiveArgDescriptors[argName] = {
+        ...(existingDescriptor ?? {}),
+        factsources: dedupeFactSources([
+          ...(existingDescriptor?.factsources ?? []),
+          ...authorizedFactsources
+        ])
+      };
+    }
+    return evaluateControlArgCorrelation({
+      operation: options.operation,
+      args: options.args,
+      argDescriptors: effectiveArgDescriptors
+    });
   }
 
   return undefined;

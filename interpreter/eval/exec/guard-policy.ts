@@ -15,6 +15,7 @@ import {
   resolveCanonicalOperationRef,
   parseCommand
 } from '@core/policy/operation-labels';
+import type { FactSourceHandle } from '@core/types/handle';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
@@ -44,7 +45,7 @@ import {
   mergeGuardArgNamesIntoMetadata,
   type GuardArgName
 } from '@interpreter/utils/guard-args';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { getVariableSecurityDescriptor } from '@interpreter/eval/exec/security-descriptor';
@@ -82,6 +83,7 @@ export type PrepareExecGuardInputsOptions = {
   expressionSourceVariables: (Variable | undefined)[];
   inputSecurityDescriptor?: SecurityDescriptor;
   argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+  argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
   mcpSecurityDescriptor?: SecurityDescriptor;
   argNames?: readonly GuardArgName[];
 };
@@ -279,11 +281,26 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     expressionSourceVariables,
     inputSecurityDescriptor,
     argSecurityDescriptors,
+    argFactSourceDescriptors,
     mcpSecurityDescriptor,
     argNames
   } = options;
 
   for (let i = 0; i < guardVariableCandidates.length; i++) {
+    if (
+      !guardVariableCandidates[i] &&
+      isStructuredValue(evaluatedArgs[i]) &&
+      (
+        Boolean(extractSecurityDescriptor(evaluatedArgs[i], { recursive: true, mergeArrayElements: true }))
+        || Array.isArray(evaluatedArgs[i].mx?.factsources)
+      )
+    ) {
+      const materialized = materializeGuardInputs([evaluatedArgs[i]], { nameHint: '__guard_input__' })[0];
+      if (materialized) {
+        guardVariableCandidates[i] = materialized;
+        continue;
+      }
+    }
     if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
       const source = expressionSourceVariables[i]!;
       const cloned = cloneExecVariableWithNewValue(
@@ -306,7 +323,14 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
   );
 
   const hasPerArgOverrides = Array.isArray(argSecurityDescriptors) && argSecurityDescriptors.some(Boolean);
-  const hasAnyOverride = hasPerArgOverrides || Boolean(inputSecurityDescriptor) || Boolean(mcpSecurityDescriptor);
+  const hasPerArgFactsourceOverrides =
+    Array.isArray(argFactSourceDescriptors)
+    && argFactSourceDescriptors.some(entry => Array.isArray(entry) && entry.length > 0);
+  const hasAnyOverride =
+    hasPerArgOverrides
+    || hasPerArgFactsourceOverrides
+    || Boolean(inputSecurityDescriptor)
+    || Boolean(mcpSecurityDescriptor);
 
   if (hasAnyOverride) {
     if (guardInputsWithMapping.length === 0) {
@@ -348,20 +372,29 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
           : descriptorOverrides.length === 1
             ? descriptorOverrides[0]
             : env.mergeSecurityDescriptors(...descriptorOverrides);
-      if (!mergedOverrideDescriptor && !baseDescriptor) {
+      const factsourceOverride =
+        entry.index >= 0 && Array.isArray(argFactSourceDescriptors)
+          ? argFactSourceDescriptors[entry.index]
+          : undefined;
+      if (!mergedOverrideDescriptor && !baseDescriptor && (!factsourceOverride || factsourceOverride.length === 0)) {
         continue;
       }
       const mergedDescriptor = baseDescriptor && mergedOverrideDescriptor
         ? env.mergeSecurityDescriptors(baseDescriptor, mergedOverrideDescriptor)
         : baseDescriptor ?? mergedOverrideDescriptor;
-      if (!mergedDescriptor) {
+      if (!mergedDescriptor && (!factsourceOverride || factsourceOverride.length === 0)) {
         continue;
       }
       const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
       if (!cloned.mx) {
         cloned.mx = {};
       }
-      updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
+      if (mergedDescriptor) {
+        updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
+      }
+      if (Array.isArray(factsourceOverride) && factsourceOverride.length > 0) {
+        cloned.mx.factsources = [...factsourceOverride];
+      }
       if ((cloned.mx as any).mxCache) {
         delete (cloned.mx as any).mxCache;
       }

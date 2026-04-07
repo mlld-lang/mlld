@@ -1108,6 +1108,34 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     }
   });
 
+  it('enforces correlateControlArgs for array-projected control args on exfil dispatches', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @transaction = { facts: [recipient: string, txId: string], data: [memo: string] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe @fakeFetchTransactions() = js { return [ { recipient: "bob@example.com", txId: "tx_001", memo: "rent" }, { recipient: "bob@example.com", txId: "tx_002", memo: "utilities" } ]; } => transaction')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe exfil:send @sendPayment(recipient, txId, memo) = `recipient:@recipient txId:@txId memo:@memo` with { controlArgs: ["recipient", "txId"], correlateControlArgs: true }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @txs = @fakeFetchTransactions()')[0] as DirectiveNode, env);
+
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['exfil:send'] }
+    })!);
+
+    const allowed = parseSync('/show @sendPayment(@txs.0.recipient, @txs.0.txId, "A")')[0] as DirectiveNode;
+    await expect(evaluateDirective(allowed, env)).resolves.toBeDefined();
+
+    const denied = parseSync('/show @sendPayment(@txs.0.recipient, @txs.1.txId, "B")')[0] as DirectiveNode;
+    await expect(evaluateDirective(denied, env)).rejects.toThrow(/correlate-control-args/i);
+  });
+
   it('carries planner-time known attestations through with { policy } authorizations', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var known @approvedRecipient = "acct-1"')[0] as DirectiveNode, env);

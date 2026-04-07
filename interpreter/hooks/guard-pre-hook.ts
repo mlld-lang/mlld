@@ -447,7 +447,8 @@ function createAuthorizationGuard(
           operation: policyOperation,
           args,
           argDescriptors,
-          authorizedArgAttestations: decision.matchedAttestations
+          authorizedArgAttestations: decision.matchedAttestations,
+          authorizedArgFactsources: decision.matchedFactsources
         });
         if (!inheritedCheckFailure) {
           return { decision: 'allow' };
@@ -479,9 +480,15 @@ function createAuthorizationGuard(
 }
 
 function createCorrelateControlArgsGuard(
+  env: Parameters<PreHook>[2],
   operation: NonNullable<Parameters<PreHook>[3]>
 ): GuardDefinition | null {
-  if (!operation.name || !isToolWriteOperation(operation)) {
+  if (!operation.name || operation.type !== 'exe') {
+    return null;
+  }
+
+  const policy = env.getPolicySummary();
+  if (policy?.authorizations && hasToolWriteAuthorizationPolicy(policy.authorizations)) {
     return null;
   }
 
@@ -494,7 +501,7 @@ function createCorrelateControlArgsGuard(
     id: '__correlate_control_args__',
     name: '__correlate_control_args__',
     filterKind: 'operation',
-    filterValue: 'tool:w',
+    filterValue: 'exe',
     scope: 'perOperation',
     modifier: 'default',
     block: {
@@ -584,7 +591,7 @@ export const guardPreHook: PreHook = async (
       runtimePolicyGuards,
       guardOverride
     );
-    const correlateControlArgsGuard = createCorrelateControlArgsGuard(operation);
+    const correlateControlArgsGuard = createCorrelateControlArgsGuard(env, operation);
     const authorizationGuard = createAuthorizationGuard(env, operation);
     if (correlateControlArgsGuard) {
       operationGuards.push(correlateControlArgsGuard);

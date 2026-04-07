@@ -1,5 +1,7 @@
 import {
   normalizePolicyAuthorizations,
+  setAuthorizationConstraintClauseEqFactsources,
+  setAuthorizationConstraintClauseOneOfFactsources,
   validateNormalizedPolicyAuthorizations,
   validatePolicyAuthorizations,
   type AuthorizationConstraintClause,
@@ -8,7 +10,11 @@ import {
   type PolicyAuthorizationValidationResult,
   type PolicyAuthorizations
 } from '@core/policy/authorizations';
-import { isHandleWrapper } from '@core/types/handle';
+import {
+  isFactSourceHandle,
+  isHandleWrapper,
+  type FactSourceHandle
+} from '@core/types/handle';
 import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
@@ -1516,6 +1522,120 @@ async function extractConstraintAttestationsSafe(
   }
 }
 
+function getConstraintFactSourceKey(handle: FactSourceHandle): string {
+  if (handle.instanceKey) {
+    return `${handle.sourceRef}:instance:${handle.instanceKey}`;
+  }
+  if (handle.coercionId && handle.position !== undefined) {
+    return `${handle.sourceRef}:coercion:${handle.coercionId}:${handle.position}`;
+  }
+  return `${handle.ref}:unknown`;
+}
+
+function cloneConstraintFactSourceHandle(handle: FactSourceHandle): FactSourceHandle {
+  return {
+    ...handle,
+    ...(Array.isArray(handle.tiers) ? { tiers: Object.freeze([...handle.tiers]) } : {})
+  };
+}
+
+function dedupeConstraintFactsources(
+  factsources: readonly FactSourceHandle[]
+): FactSourceHandle[] {
+  const unique = new Map<string, FactSourceHandle>();
+  for (const handle of factsources) {
+    if (!isFactSourceHandle(handle)) {
+      continue;
+    }
+    unique.set(getConstraintFactSourceKey(handle), cloneConstraintFactSourceHandle(handle));
+  }
+  return Array.from(unique.values());
+}
+
+function collectConstraintFactsources(
+  value: unknown,
+  seen = new Set<unknown>()
+): FactSourceHandle[] {
+  const collected: FactSourceHandle[] = [];
+
+  const pushFactsources = (candidate: unknown): void => {
+    if (!Array.isArray(candidate)) {
+      return;
+    }
+    for (const handle of candidate) {
+      if (isFactSourceHandle(handle)) {
+        collected.push(handle);
+      }
+    }
+  };
+
+  const visit = (candidate: unknown): void => {
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+    if (seen.has(candidate)) {
+      return;
+    }
+    seen.add(candidate);
+
+    if (isVariable(candidate)) {
+      pushFactsources(candidate.mx?.factsources);
+    }
+
+    if (isStructuredValue(candidate)) {
+      pushFactsources(candidate.metadata?.factsources);
+      pushFactsources(candidate.mx?.factsources);
+      visit(candidate.data);
+      return;
+    }
+
+    const recordCandidate = candidate as {
+      mx?: { factsources?: readonly unknown[] };
+      metadata?: { factsources?: readonly unknown[] };
+    };
+    pushFactsources(recordCandidate.mx?.factsources);
+    pushFactsources(recordCandidate.metadata?.factsources);
+
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) {
+        visit(item);
+      }
+      return;
+    }
+
+    if (isPlainObject(candidate)) {
+      for (const entry of Object.values(candidate)) {
+        visit(entry);
+      }
+    }
+  };
+
+  visit(value);
+  return dedupeConstraintFactsources(collected);
+}
+
+async function extractConstraintFactsources(
+  value: unknown,
+  env: Environment
+): Promise<FactSourceHandle[]> {
+  const resolvedValue = await resolveConstraintSourceValue(value, env);
+  return collectConstraintFactsources(resolvedValue);
+}
+
+async function extractConstraintFactsourcesSafe(
+  value: unknown,
+  env: Environment
+): Promise<FactSourceHandle[]> {
+  try {
+    return await extractConstraintFactsources(value, env);
+  } catch (error) {
+    if (isAmbiguousProjectedValueError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 function getRawAuthorizationAllowObject(source: unknown): Record<string, unknown> | undefined {
   if (!isPlainObject(source)) {
     return undefined;
@@ -1626,18 +1746,46 @@ async function compileAuthorizationAttestations(
                     )
                   : await extractConstraintAttestationsSafe(clause.eq, env);
             }
-            if (compiledAttestations.length === 0) {
-              return clause;
+            let compiledFactsources =
+              Array.isArray(rawEqValue)
+                ? dedupeConstraintFactsources(
+                    (
+                      await Promise.all(
+                        rawEqValue.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+                      )
+                    ).flat()
+                  )
+                : await extractConstraintFactsourcesSafe(rawEqValue, env);
+            if (compiledFactsources.length === 0) {
+              compiledFactsources =
+                Array.isArray(clause.eq)
+                  ? dedupeConstraintFactsources(
+                      (
+                        await Promise.all(
+                          clause.eq.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+                        )
+                      ).flat()
+                    )
+                  : await extractConstraintFactsourcesSafe(clause.eq, env);
             }
-            report.compiledProofs.push({
-              tool: toolName,
-              arg: argName,
-              labels: [...compiledAttestations]
-            });
-            return {
-              ...clause,
-              attestations: compiledAttestations
-            };
+            const nextClause =
+              compiledAttestations.length > 0
+                ? {
+                    ...clause,
+                    attestations: compiledAttestations
+                  }
+                : clause;
+            if (compiledAttestations.length > 0) {
+              report.compiledProofs.push({
+                tool: toolName,
+                arg: argName,
+                labels: [...compiledAttestations]
+              });
+            }
+            if (compiledFactsources.length > 0) {
+              setAuthorizationConstraintClauseEqFactsources(nextClause, compiledFactsources);
+            }
+            return nextClause;
           }
 
           const rawOneOfCandidates =
@@ -1655,17 +1803,40 @@ async function compileAuthorizationAttestations(
             );
           }
           if (!oneOfAttestations.some(entry => entry.length > 0)) {
+            let fallbackOneOfFactsources = await Promise.all(
+              rawOneOfCandidates.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+            );
+            if (!fallbackOneOfFactsources.some(entry => entry.length > 0)) {
+              fallbackOneOfFactsources = await Promise.all(
+                clause.oneOf.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+              );
+            }
+            if (fallbackOneOfFactsources.some(entry => entry.length > 0)) {
+              setAuthorizationConstraintClauseOneOfFactsources(clause, fallbackOneOfFactsources);
+            }
             return clause;
+          }
+          let oneOfFactsources = await Promise.all(
+            rawOneOfCandidates.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+          );
+          if (!oneOfFactsources.some(entry => entry.length > 0)) {
+            oneOfFactsources = await Promise.all(
+              clause.oneOf.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+            );
           }
           report.compiledProofs.push({
             tool: toolName,
             arg: argName,
             labels: Array.from(new Set(oneOfAttestations.flatMap(entry => entry)))
           });
-          return {
+          const nextClause = {
             ...clause,
             oneOfAttestations
           };
+          if (oneOfFactsources.some(entry => entry.length > 0)) {
+            setAuthorizationConstraintClauseOneOfFactsources(nextClause, oneOfFactsources);
+          }
+          return nextClause;
         }));
       }
     } catch (error) {
