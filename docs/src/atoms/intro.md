@@ -136,6 +136,7 @@ mlld is its own language — don't assume JS/Python syntax works. Common mistake
 - **No computed object keys** — use `js{}`: `exe @build(key, val) = js { return {[key]: val} }`
 - **No methods on literals** — assign first: `var @s = "hello"` then `var @up = @s.toUpperCase()`
 - **No standalone boolean flags** — use `--flag true` not `--flag` (all CLI payload flags need values)
+- **Executable identifiers in templates render as `(executable: name)`.** A template like `` `calling @claude` `` interpolates `@claude` as `(executable: claude)`, not as the literal string `@claude`. Same for any `exe`-bound name. Use backticks around just the literal portion (`` `calling ` + "@claude" ``), escape the `@` (`` `calling \@claude` ``), or pick a different debug label.
 
 mlld has familiar built-in JS methods. See `mlld howto builtins` for the full list.
 
@@ -146,10 +147,12 @@ Loaded files are rich objects, not strings. Frontmatter is already parsed (@file
 mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` (metadata). When values cross into `js {}` or `py {}` blocks, the runtime auto-unwraps them to `.data`:
 
 - **JS/Node/Python receives raw data, not StructuredValues.** A JSON object becomes a plain JS object. A string becomes a string. `.mx` metadata (labels, taint, factsources) is NOT available inside the block.
+- **Auto-unwrap erases labels AND factsources.** A value that crosses a `js {}` or `py {}` boundary loses both its label metadata (`untrusted`, `secret`, `fact:@contact.email`) and its `factsources` provenance trail. If the value re-enters mlld through the JS return, it comes back as a fresh value with no fact proof — downstream positive checks like `no-send-to-unknown` will deny it. The boundary is the most common proof-loss vector.
 - **Return native objects, not JSON strings.** `return { foo: bar }` — not `return JSON.stringify({ foo: bar })`. mlld handles the conversion. Callers should NOT need `| @parse` on JS exe output.
 - **`JSON.stringify` inside JS erases mlld metadata.** If you serialize and parse within JS, label metadata and proof are lost. Work with values as-is.
 - **Handle wrappers pass through as plain objects.** `{ handle: "h_xxx" }` enters JS as a normal object with one key. Don't special-case it. Don't resolve it. If you need handle-aware logic, do it in mlld, not JS.
-- **Need `.mx` in JS?** Use `.keep` or `.keepStructured` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly.
+- **Need `.mx` in JS?** Use `.keep` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata (labels AND factsources) and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly. `.keep` is the canonical accessor for inspecting factsources or passing a fact-bearing value through a JS helper without losing its proof.
+- **Reserved identifiers can collide with your JS locals.** Names like `mx` are injected into the JS scope by the runtime. If you write `const mx = ...` in a `js {}` block you'll see `Identifier 'mx' has already been declared` — rename your local to something else.
 
 ### Returns are always explicit
 

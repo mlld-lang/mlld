@@ -145,19 +145,32 @@ record @email_msg = {
 
 Worker sees subject and body (its job to read them), from is masked. Planner sees from and message_id as ref (readable + handle), sees needs_reply, doesn't see subject or body (injection surfaces omitted).
 
-Select the mode at the box level or per LLM call:
+A display mode can be declared in three places. From least to most specific:
+
+1. **exe definition** — `exe @worker(...) with { display: "worker" } = ...`. The default mode every invocation of this exe uses.
+2. **box config** — `box { display: "worker" } [...]`. Applies to llm calls inside the box.
+3. **call site** — `@claude(...) with { display: "worker" }`. Applies to a single llm call.
+
+A more specific declaration overrides a less specific one. The call site is the most specific and always wins.
 
 ```mlld
->> Box-level (all tool results in the box use this mode)
+>> Box-level: every llm call inside this box uses worker mode
 box @worker with { tools: [@readEmail], display: "worker" } [...]
 
->> Call-site (this LLM session uses this mode)
+>> Call-site: this single llm call uses worker mode
 var @result = @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+
+>> Box sets one mode, call site overrides it for one call
+box { display: "planner" } [
+  show @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+]
 ```
 
-Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
+After m-2808, all three forms apply correctly to shelf reads (`@fyi.shelf.<alias>`) inside the scope, not just to tool result projections — the active display mode shapes what the agent sees through `@fyi.shelf` the same way it shapes tool result wrappers.
 
-In named modes, unlisted fields are omitted entirely (strict whitelist). Single-list display preserves backward compatibility (unlisted facts are handle-only, data fields remain visible). `"strict"` is a built-in override that makes all facts handle-only and omits all data.
+**Idiomatic pattern:** for dispatcher-style orchestrators that run multiple llm calls under different modes, set `with { display }` on each `@claude(...)` call rather than wrapping each call in its own box. The dispatch is the natural unit of mode selection — one prompt, one tool surface, one display mode — and inline `with { display }` reads more clearly than boxes that wrap a single call.
+
+Each named mode is a strict whitelist on its own: unlisted fields are omitted entirely. Switching modes replaces the prior whitelist; there's no cross-mode union. Single-list `display: [...]` preserves backward compatibility — unlisted facts become handle-only and data fields remain visible. `"strict"` is a built-in mode that makes every fact handle-only and omits every data field.
 
 See `facts-and-handles` for the boundary model and `pattern-planner` for the cross-phase pattern.
 

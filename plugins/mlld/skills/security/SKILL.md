@@ -110,7 +110,7 @@ All display forms are strict whitelists — unlisted fields are omitted entirely
 
 ## Handles
 
-Handles are opaque, root-scoped references to live values. They survive across planner/worker phase boundaries:
+Handles are opaque references to live values, embedded in display projections so the LLM can reference fact-bearing values without seeing copyable literals:
 
 ```json
 { "recipient": "h_a7x9k2" }
@@ -118,6 +118,12 @@ Handles are opaque, root-scoped references to live values. They survive across p
 ```
 
 Both forms work in tool calls and authorizations. The runtime resolves handles to the original live value with fact proof intact.
+
+**Handles are per-call ephemeral.** Each LLM call mints its own handles for the values it sees. When the call ends, the mint table dies. A handle string captured from one `@claude` call cannot be dispatched in a later call — handles are display labels valid only inside the call that minted them. Two calls reading the same shelf slot get different handle strings for the same underlying value. This is structural: a handle string carried in conversation history can never become a live reference to a value the LLM did not see in *this* call.
+
+Within a single call, the runtime mints a fresh handle for each occurrence of a fact field — two records sharing the same email value get distinct handle strings for each instance. The bridge resolves any of the live handles back to the same underlying value, so the LLM can use either as a control arg with the same effect. This per-record-position behavior is what makes `correlateControlArgs` enforceable: the comparator can tell which source record each control arg came from.
+
+**Cross-phase identity rides on values, not handle strings.** What carries the planner's authorization across the planner/worker boundary is the value plus its `factsources` metadata. When `=> record` coercion runs, fact fields get `fact:@record.field` labels and factsources metadata that travel with the value through assignment, parameter binding, shelf I/O, and the LLM bridge. `@policy.build` resolves the planner's handle strings against the planner's mint table immediately and stores compiled value claims, not handle strings. The worker's dispatch matches against those claims through the value-keyed proof claims registry — the worker mints fresh handles for the same underlying values, and they resolve correctly because the registry matches by value and provenance, not by handle string.
 
 Workers discover available handles via `@fyi.known("sendEmail")`, which returns all proof-bearing candidates for an operation's control args — both fact-bearing (from tool results) and `known`-attested (from the planner). The tool is implicitly available when write tools with `controlArgs` are present.
 
@@ -183,6 +189,145 @@ Agents read slot contents via `@fyi.shelf` with display projections applied.
 - Stored values get `src:shelf:@shelfName.slotName` source labels for provenance tracking
 
 See `mlld howto shelf-slots` for the full reference.
+
+## Shelf-mediated agent patterns
+
+Phase separation through shelves: an agent reads from one slot, picks an item, writes the choice to another slot via the auto-provisioned shelve tool, then a later phase reads the choice back and dispatches a downstream tool with it. This is the canonical dispatcher pattern — agents pass values to each other through typed state, not through prompt content.
+
+### The auto-provisioned @shelve tool
+
+When a box grants write access to any slot, the runtime injects a synthetic `shelve` tool into the LLM's tool surface. The agent calls it like any other MCP tool, addressing the slot by the alias the box config gave it. You don't list `@shelve` in the box's `tools:` config — write access to a slot is what triggers the provisioning.
+
+```mlld
+box {
+  shelf: {
+    read:  [@s.candidates as candidates],
+    write: [@s.selected   as selected]
+  }
+} [
+  => @claude("Pick a contact from @fyi.shelf.candidates and write it to the 'selected' slot using the shelve tool. Pass the contact exactly as it appears, including handle strings.", {
+    model: "sonnet",
+    tools: []
+  })
+]
+```
+
+`tools: []` is intentional: the agent's only tool is the auto-provisioned shelve. The runtime injects a `<shelf_notes>` block into the system prompt listing writable aliases, record types, merge modes, and any `from` constraints — the agent sees the surface it can write to without you describing it in the prompt.
+
+### Two read surfaces
+
+Slot contents are reachable two ways. Use the right one for the context:
+
+| Path | Audience | Projection | Returns |
+|---|---|---|---|
+| `@fyi.shelf.<alias>` | LLM agent inside a scoped box | Display modes apply | The agent's view — handle-bearing fact fields, projected data fields |
+| `@shelf.read(@slotRef)` | Orchestrator code outside the box | None | Full structured values with fact labels and factsources intact |
+
+`@fyi.shelf` is what an agent reads — display projection applies, so the agent sees handles for fact fields and only the data fields the record exposes. `@shelf.read` is what orchestrator code reads — it returns the unprojected stored value, the same shape it had when written. Use `@shelf.read` when you need to feed slot contents into another `@shelf.write`, into a JS exe, or into a downstream tool dispatch.
+
+Don't read via `@fyi.shelf` from orchestrator code that needs the full structured value — display projection will hide or transform fields you actually need.
+
+### Agent vs orchestrator write semantics
+
+| Aspect | Agent write (auto-provisioned shelve) | Orchestrator write (`@shelf.write`) |
+|---|---|---|
+| Fact field input | Must be handle-bearing | Already-labeled values from `=> record` or earlier slot reads |
+| Handle resolution | Yes — runtime resolves the agent's handle strings | No — values already carry their identity |
+| Schema + grounding | Validated | Validated |
+| Source labeling | `src:shelf:@shelf.slot` added | `src:shelf:@shelf.slot` added |
+
+The asymmetry is intentional: agents speak the display projection language (handles for fact fields), so the runtime must reconstruct identity at the boundary. Orchestrator code already holds live values, so it can write them directly — the value's existing factsources prove the contents are grounded. Both paths land in the same slot and produce the same stored value.
+
+### Dynamic aliasing for generic wrappers
+
+A box can use a *variable* slot ref in its shelf config, with `as <alias>` providing the agent-facing role name. This lets framework code take a slot ref as a parameter and expose it under a stable name without knowing the concrete shelf topology:
+
+```mlld
+exe @planAndExecute(task, candidatesSlot, selectedSlot, logSlot) = [
+  box {
+    shelf: {
+      read:  [@candidatesSlot as candidates],
+      write: [@selectedSlot   as selected,
+              @logSlot        as execution_log]
+    }
+  } [
+    => @claude(@task, { model: "sonnet", tools: [] })
+  ]
+]
+```
+
+The agent only sees `@fyi.shelf.candidates`, `@fyi.shelf.selected`, and `@fyi.shelf.execution_log` — the wrapper's role names — regardless of which concrete slots were passed. The same wrapper is reusable across different shelf topologies. When using a variable slot ref, `as <alias>` is required.
+
+### End-to-end dispatcher example
+
+```mlld
+import { @claude } from @mlld/claude
+
+record @contact = {
+  key: id,
+  facts: [email: string, id: string],
+  data: [name: string, notes: string],
+  display: [name, notes, { ref: "email" }, { ref: "id" }]
+}
+
+shelf @s = {
+  candidates: contact[],
+  selected: contact?
+}
+
+exe @fakeSearch() = js {
+  return [
+    { email: "alice@example.com", id: "c1", name: "Alice", notes: "lead" },
+    { email: "bob@example.com",   id: "c2", name: "Bob",   notes: "prospect" }
+  ];
+} => contact
+
+exe exfil:send @sendStuff(recipient, body) = cmd {
+  echo "TOOL RECEIVED recipient=@recipient body=@body"
+} with { controlArgs: ["recipient"] }
+
+>> Agent base policy. Both LLM phases below run under it via with { policy }.
+>> Define as a var (not a top-level `policy @p = ...` directive) so you
+>> can attach it per-dispatch and the script's default stays unchanged.
+var @basePolicy = {
+  defaults: { rules: ["no-send-to-unknown"] },
+  capabilities: { allow: ["cmd:*", "sh", "js", "node", "fs:r:**", "fs:w:**", "network"] },
+  operations: { "exfil:send": ["exfil:send"] }
+}
+
+>> 1. Orchestrator populates candidates with fact-bearing contacts
+var @found = @fakeSearch()
+@shelf.write(@s.candidates, @found.0)
+@shelf.write(@s.candidates, @found.1)
+
+>> 2. Agent picks one and writes via auto-provisioned shelve. tools: [] —
+>>    write access to @s.selected is what triggers shelve provisioning.
+>>    Base policy attached to the @claude call so any tool the agent
+>>    dispatches inside this scope is gated by the same rules.
+var @reply = box {
+  shelf: {
+    read:  [@s.candidates as candidates],
+    write: [@s.selected   as selected]
+  }
+} [
+  => @claude("Read @fyi.shelf.candidates. Pick the contact named 'Alice' and write it to 'selected' using the shelve tool. Pass it exactly as it appears, including handle strings.", {
+    model: "sonnet",
+    tools: []
+  }) with { policy: @basePolicy }
+]
+
+>> 3. Orchestrator reads the selected contact back. Fact labels and
+>>    factsources survived the round-trip through the agent.
+var @sel = @shelf.read(@s.selected)
+
+>> 4. Dispatch a downstream tool with selected.email as a control arg.
+>>    Same base policy. no-send-to-unknown passes because the value
+>>    still carries fact proof from the original coercion.
+var @result = @sendStuff(@sel.email, "from selected") with { policy: @basePolicy }
+show @result
+```
+
+If the agent tried to write a fabricated email like `evil@attacker.com`, the slot write would reject it (no handle, no fact resolution). If the orchestrator skipped the slot and let the agent dispatch `@sendStuff` directly with a bare literal, `no-send-to-unknown` would catch it at the policy layer. The shelf is the structural boundary that lets the orchestrator hand a typed, grounded value off to the next phase.
 
 ## Automatic tool security annotations
 
@@ -305,6 +450,8 @@ guard after @checkSchema for op:named:executeWorker = when [
 ```
 
 Use `retry` for read-only exes. Use `resume` for write exes.
+
+`resume` is not "retry but cheaper". During resume, mlld forces the bridge tool list to `[]` and disables auto-provisioned `@shelve`. That invariant is load-bearing for handle safety: handle aliases are minted per bridge call, so handles mentioned in prior tool results are dead across the resume boundary. If a future design wants tool calls during resume, it must first solve cross-call handle portability. See `spec-guard-resume.md#resume-invariants`.
 
 Guard action precedence: `deny > resume > retry > allow`.
 

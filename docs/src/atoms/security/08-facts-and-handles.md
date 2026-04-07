@@ -122,9 +122,66 @@ Both forms work. In control-arg positions, a bare handle string resolves the sam
 
 The runtime resolves `h_a7x9k2` back to the original live value with `fact:external:@contact.email` still attached. The positive check passes because the value has real provenance.
 
-Handles are root-scoped — a handle minted in one `@claude()` session resolves in any other session in the same execution. This is how values survive across planner/worker phase boundaries. See `pattern-planner` for the cross-phase pattern.
+Within a single `@claude()` call, the LLM can reference a handle it saw earlier in the same session and the runtime will resolve it. Each occurrence of a fact-bearing value in a projection gets its own freshly-minted handle string, even when two occurrences point at the same underlying value — handles are per-record-position labels, not per-value labels. The bridge resolves any of the live handles back to the same underlying value, so functionally the LLM can use either handle as a control arg and the result is identical.
 
 For security-relevant args, mlld resolves handles at dispatch time. Bare handle strings and `{ handle: "h_xxx" }` wrappers both resolve back to the original live value with its proof intact. Fresh literals stay fresh literals and do not inherit proof.
+
+### Handles are per-call ephemeral
+
+A handle is a label for a value within one LLM call. Each `@claude()` invocation gets its own mint table. When the call ends, the table is gone — the handle strings the LLM produced are dead and will not resolve in any later call.
+
+Two calls reading the same shelf slot get **different** handle strings for the same underlying value:
+
+```mlld
+record @contact = {
+  facts: [email: string, id: string],
+  data: [name: string],
+  display: [name, { ref: "email" }, { ref: "id" }]
+}
+
+shelf @s = { contacts: contact[] }
+
+>> ... populate @s.contacts with one fact-bearing contact ...
+
+var @call1 = box {
+  shelf: { read: [@s.contacts as contacts] }
+} [
+  => @claude("Read @fyi.shelf.contacts and report the email handle string", { tools: [] })
+]
+
+var @call2 = box {
+  shelf: { read: [@s.contacts as contacts] }
+} [
+  => @claude("Read @fyi.shelf.contacts and report the email handle string", { tools: [] })
+]
+
+>> @call1's reported handle != @call2's reported handle.
+>> Capturing @call1's handle as a string and trying to dispatch a tool with it
+>> from a later call would fail — that handle's mint table died with @call1.
+```
+
+This is the structural property that makes handles safe: a handle string carried in conversation history can never become a live reference to a value the LLM did not see in *this* call. There is no cross-call handle laundering.
+
+### How identity travels across phases
+
+If handles are per-call, what carries the planner's authorization across the planner/worker boundary?
+
+**Values carry identity. Handles are display labels for those values.**
+
+When `=> record` coercion runs on tool output, the resulting value carries fact labels (`fact:@contact.email`) and `factsources` metadata that identify the value's origin. This metadata travels with the value through:
+
+- variable assignment (`var @contact = @searchContacts(...)`)
+- exe parameter binding (`@worker(@contact)`)
+- shelf I/O (`@shelf.write` / `@shelf.read` / `@fyi.shelf`)
+- the LLM bridge (writes through `@shelve`, reads through display projection)
+
+What the planner emits as bucketed intent is consumed by `@policy.build`, which resolves the planner's `resolved` handle strings against the planner's own mint table immediately, before that mint table is gone. The builder upgrades the planner's authorized values from handle strings to live values, and stores them in the compiled policy as **value claims**, not handle strings.
+
+When the worker dispatches a tool, the runtime checks the worker's tool args against those compiled value claims using the value-keyed proof claims registry — which matches by the underlying value plus its factsources, not by handle string. The worker's call mints fresh handles for the same values, and those fresh handles resolve correctly because they all point to the same underlying live value.
+
+The cross-phase identity transport is: **authoritative source → fact label + factsources metadata on the value → preserved through assignment, parameter binding, shelf I/O, and the bridge → matched in the proof claims registry at dispatch time**. Handle strings are just the display labels at each end.
+
+See `pattern-planner` for the full planner-worker pattern and `shelf-slots` for shelf-mediated state transfer.
 
 ### Discovery is operation-aware
 
