@@ -18,7 +18,11 @@ import {
   maskPlainMlldTemplateFences,
   restorePlainMlldTemplateFences
 } from '@interpreter/eval/template-fence-literals';
-import { getWithClauseField } from '@interpreter/utils/with-clause';
+import {
+  getWithClauseField,
+  listWithClauseFields
+} from '@interpreter/utils/with-clause';
+import { validateExecutableAuthorizationMetadata } from '@interpreter/eval/exe/definition-helpers';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
 import {
@@ -26,9 +30,40 @@ import {
   type AuthorizationToolContext,
   type PolicyAuthorizationIssue
 } from '@core/policy/authorizations';
+import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import * as yaml from 'js-yaml';
-import type { MlldNode, ImportDirectiveNode, ExportDirectiveNode, GuardDirectiveNode, ExecutableDirectiveNode, RunDirective, ExecDirective } from '@core/types';
+import type {
+  MlldNode,
+  ImportDirectiveNode,
+  ExportDirectiveNode,
+  GuardDirectiveNode,
+  ExecutableDirectiveNode,
+  RunDirective,
+  ExecDirective,
+  VariableReferenceNode
+} from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
+import type { RecordDefinition } from '@core/types/record';
+import type {
+  BoxDirectiveNode
+} from '@core/types/box';
+import type {
+  ShelfDefinition,
+  ShelfScopeSlotBinding,
+  ShelfScopeSlotRef
+} from '@core/types/shelf';
+import { buildRecordDefinitionFromDirective } from '@core/validation/record-definition';
+import { buildShelfDefinitionFromDirective } from '@core/validation/shelf-definition';
+import {
+  analyzeStaticPolicyAuthorizationIntent,
+  type StaticPolicyCallIssue
+} from '@core/validation/policy-call';
+import {
+  validateShelfScopeBindingConflicts,
+  validateShelfScopeBindingTargets,
+  type ValidatableShelfScopeBinding
+} from '@core/validation/shelf-scope';
 
 export interface AnalyzeOptions {
   format?: 'json' | 'text';
@@ -53,6 +88,17 @@ export interface ExecutableInfo {
   params?: string[];
   labels?: string[];
   controlArgs?: string[];
+  updateArgs?: string[];
+  exactPayloadArgs?: string[];
+  sourceArgs?: string[];
+  correlateControlArgs?: boolean;
+  outputRecord?: ExecutableOutputRecordInfo;
+}
+
+export interface ExecutableOutputRecordInfo {
+  kind: 'static' | 'dynamic';
+  name?: string;
+  ref?: string;
 }
 
 export interface ImportInfo {
@@ -71,10 +117,42 @@ export interface GuardInfo {
 
 export interface GuardArmInfo {
   condition: string;
-  action: 'allow' | 'deny' | 'retry' | 'prompt' | 'env';
+  action: 'allow' | 'deny' | 'retry' | 'resume' | 'prompt' | 'env';
   reason?: string;
   line?: number;
   column?: number;
+}
+
+export interface RecordFieldInfo {
+  name: string;
+  kind: 'input' | 'computed';
+  classification: 'fact' | 'data';
+  optional: boolean;
+  valueType?: string;
+}
+
+export interface RecordInfo {
+  name: string;
+  key?: string;
+  validate?: string;
+  rootMode?: string;
+  display?: 'open' | 'legacy' | 'named';
+  whenCount?: number;
+  fields?: RecordFieldInfo[];
+}
+
+export interface ShelfSlotInfo {
+  name: string;
+  record: string;
+  cardinality: 'singular' | 'collection';
+  optional: boolean;
+  merge?: 'replace' | 'append' | 'upsert';
+  from?: string;
+}
+
+export interface ShelfInfo {
+  name: string;
+  slots: ShelfSlotInfo[];
 }
 
 export interface PolicyInfo {
@@ -83,6 +161,37 @@ export interface PolicyInfo {
   operations?: Record<string, string[]>;
   locked?: boolean;
   refs?: string[];
+}
+
+export type PolicyCallSourceKind = 'inline' | 'top_level_var' | 'field_access' | 'unknown';
+
+export type PolicyCallSkipReason =
+  | 'dynamic-source-intent'
+  | 'dynamic-source-tools'
+  | 'dynamic-source-task'
+  | 'unsupported-expression'
+  | 'unresolved-top-level-binding';
+
+export interface PolicyCallDiagnostic {
+  reason: string;
+  message: string;
+  tool?: string;
+  arg?: string;
+  element?: number;
+}
+
+export interface PolicyCallInfo {
+  callee: '@policy.build' | '@policy.validate';
+  location: {
+    line?: number;
+    column?: number;
+  };
+  status: 'analyzed' | 'skipped';
+  skipReason?: PolicyCallSkipReason;
+  intentSource: PolicyCallSourceKind;
+  toolsSource: PolicyCallSourceKind;
+  taskSource: PolicyCallSourceKind;
+  diagnostics?: PolicyCallDiagnostic[];
 }
 
 export interface NeedsInfo {
@@ -122,6 +231,9 @@ export type AntiPatternWarningCode =
   | 'guard-context-missing-exe'
   | 'guard-context-missing-op-label'
   | 'guard-context-missing-arg'
+  | 'policy-operations-unknown-label'
+  | 'policy-authorizations-deny-unknown-tool'
+  | 'policy-label-flow-unknown-target'
   | 'policy-authorizations-empty-entry'
   | 'policy-authorizations-unconstrained-tool';
 
@@ -158,6 +270,9 @@ export interface AnalyzeResult {
   imports?: ImportInfo[];
   guards?: GuardInfo[];
   policies?: PolicyInfo[];
+  policyCalls?: PolicyCallInfo[];
+  records?: RecordInfo[];
+  shelves?: ShelfInfo[];
   needs?: NeedsInfo;
   template?: TemplateInfo;
   ast?: MlldNode[];
@@ -253,6 +368,30 @@ const BUILTIN_TRANSFORMER_NAMES = builtinTransformers.flatMap(transformer => [
   transformer.uppercase,
 ]);
 
+const EXECUTABLE_WITH_CLAUSE_KEYS = new Set([
+  'auth',
+  'controlArgs',
+  'correlateControlArgs',
+  'delayMs',
+  'description',
+  'display',
+  'exactPayloadArgs',
+  'format',
+  'guards',
+  'parallel',
+  'pipeline',
+  'policy',
+  'profile',
+  'sourceArgs',
+  'stdin',
+  'stream',
+  'streamFormat',
+  'tools',
+  'trust',
+  'updateArgs',
+  'using'
+]);
+
 /**
  * Names that cause a hard runtime error when redefined.
  * These are enforced by VariableManager.setVariable().
@@ -315,6 +454,9 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'guard-context-missing-exe',
   'guard-context-missing-op-label',
   'guard-context-missing-arg',
+  'policy-operations-unknown-label',
+  'policy-authorizations-deny-unknown-tool',
+  'policy-label-flow-unknown-target',
   'policy-authorizations-empty-entry',
   'policy-authorizations-unconstrained-tool'
 ]);
@@ -325,6 +467,39 @@ const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['data', 'inputData'],
   ['value', 'inputValue']
 ]);
+const BUILTIN_POLICY_OPERATION_TARGETS = [
+  'advice',
+  'dangerous',
+  'destructive',
+  'exfil',
+  'filesystem',
+  'fs:r',
+  'fs:rw',
+  'fs:w',
+  'llm',
+  'moderate',
+  'net:r',
+  'net:rw',
+  'net:w',
+  'network',
+  'op:append',
+  'op:cmd',
+  'op:js',
+  'op:log',
+  'op:node',
+  'op:output',
+  'op:prose',
+  'op:py',
+  'op:sh',
+  'op:show',
+  'op:stream',
+  'paid',
+  'privileged',
+  'safe',
+  'tool:r',
+  'tool:rw',
+  'tool:w'
+] as const;
 
 
 function normalizeSuppressedWarningCode(code: string): AntiPatternWarningCode | null {
@@ -712,6 +887,60 @@ function readExecInvocationName(node: unknown): string | null {
   }
 
   return null;
+}
+
+function readExecInvocationQualifiedName(node: unknown): string | null {
+  if (!node || typeof node !== 'object') {
+    return null;
+  }
+
+  const invocation = node as Record<string, unknown>;
+  const commandRef =
+    invocation.commandRef && typeof invocation.commandRef === 'object'
+      ? (invocation.commandRef as Record<string, unknown>)
+      : undefined;
+
+  const objectReference =
+    commandRef?.objectReference && typeof commandRef.objectReference === 'object'
+      ? (commandRef.objectReference as Record<string, unknown>)
+      : undefined;
+  if (Array.isArray(commandRef?.identifier) && commandRef.identifier.length > 0) {
+    const firstIdentifier = commandRef.identifier[0];
+    if (
+      firstIdentifier &&
+      typeof firstIdentifier === 'object' &&
+      (firstIdentifier as Record<string, unknown>).type === 'VariableReference' &&
+      typeof (firstIdentifier as Record<string, unknown>).identifier === 'string' &&
+      Array.isArray((firstIdentifier as Record<string, unknown>).fields) &&
+      (firstIdentifier as Record<string, unknown>).fields.length > 0
+    ) {
+      const typedIdentifier = firstIdentifier as Record<string, unknown>;
+      const fieldSuffix = (typedIdentifier.fields as unknown[])
+        .map(field => getFieldAccessorName(field))
+        .filter((field): field is string => typeof field === 'string' && field.length > 0)
+        .join('.');
+      if (fieldSuffix) {
+        return `${typedIdentifier.identifier}.${fieldSuffix}`;
+      }
+    }
+  }
+
+  if (
+    objectReference?.type === 'VariableReference'
+    && typeof objectReference.identifier === 'string'
+    && Array.isArray(objectReference.fields)
+    && objectReference.fields.length > 0
+  ) {
+    const fieldSuffix = objectReference.fields
+      .map(field => getFieldAccessorName(field))
+      .filter((field): field is string => typeof field === 'string' && field.length > 0)
+      .join('.');
+    if (fieldSuffix) {
+      return `${objectReference.identifier}.${fieldSuffix}`;
+    }
+  }
+
+  return readExecInvocationName(node);
 }
 
 function readExecInvocationArgs(node: unknown): unknown[] {
@@ -1803,6 +2032,53 @@ function getObjectEntryValue(node: unknown, key: string): unknown {
   return undefined;
 }
 
+interface StaticStringEntry {
+  value: string;
+  line?: number;
+  column?: number;
+}
+
+function extractStaticStringEntries(node: unknown): StaticStringEntry[] {
+  if (
+    node &&
+    typeof node === 'object' &&
+    (node as Record<string, unknown>).type === 'array' &&
+    Array.isArray((node as Record<string, unknown>).items)
+  ) {
+    return ((node as Record<string, unknown>).items as unknown[])
+      .flatMap(item => {
+        const extracted = extractStaticValue(item);
+        if (typeof extracted !== 'string' || extracted.trim().length === 0) {
+          return [];
+        }
+
+        return [{
+          value: extracted.trim(),
+          line: (item as any)?.location?.start?.line,
+          column: (item as any)?.location?.start?.column
+        }];
+      });
+  }
+
+  const extracted = extractStaticValue(node);
+  if (!Array.isArray(extracted)) {
+    return [];
+  }
+
+  return extracted
+    .flatMap(value => {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        return [];
+      }
+
+      return [{
+        value: value.trim(),
+        line: (node as any)?.location?.start?.line,
+        column: (node as any)?.location?.start?.column
+      }];
+    });
+}
+
 function containsDynamicStaticValueReference(node: unknown): boolean {
   if (Array.isArray(node)) {
     return node.some(entry => containsDynamicStaticValueReference(entry));
@@ -1827,6 +2103,570 @@ function containsDynamicStaticValueReference(node: unknown): boolean {
   }
 
   return Object.values(typedNode).some(value => containsDynamicStaticValueReference(value));
+}
+
+function formatVariableReference(
+  ref: { identifier?: string; fields?: unknown[] } | undefined
+): string {
+  if (!ref?.identifier) {
+    return '@<unknown>';
+  }
+
+  const suffix = (ref.fields ?? [])
+    .map(field => {
+      if (!field || typeof field !== 'object') {
+        return '';
+      }
+
+      const typedField = field as Record<string, unknown>;
+      if (typedField.type === 'field' && typeof typedField.value === 'string') {
+        return `.${typedField.value}`;
+      }
+      if (typedField.type === 'numericField' && typeof typedField.value === 'number') {
+        return `.${typedField.value}`;
+      }
+      if (typedField.type === 'arrayIndex' && typeof typedField.value === 'number') {
+        return `[${typedField.value}]`;
+      }
+      if (typedField.type === 'bracketAccess') {
+        return `[${JSON.stringify(typedField.value)}]`;
+      }
+      if (typedField.type === 'variableIndex' && typeof typedField.value === 'string') {
+        return `[@${typedField.value}]`;
+      }
+
+      return '';
+    })
+    .join('');
+
+  return `@${ref.identifier}${suffix}`;
+}
+
+function extractStaticExecutableArgList(
+  raw: unknown,
+  paramNames: readonly string[],
+  fieldName: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
+): {
+  value?: string[];
+  error?: string;
+} {
+  if (raw === undefined) {
+    return {};
+  }
+
+  const value = extractStaticValue(raw);
+  if (value === undefined) {
+    return {};
+  }
+
+  if (!Array.isArray(value)) {
+    return {
+      error: `Executable ${fieldName} must be an array of parameter names`
+    };
+  }
+
+  const knownParams = new Set(paramNames);
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      return {
+        error: `Executable ${fieldName} entries must be strings`
+      };
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      return {
+        error: `Executable ${fieldName} entries must be non-empty strings`
+      };
+    }
+    if (!knownParams.has(trimmed)) {
+      return {
+        error: `Executable ${fieldName} entry '${trimmed}' is not a declared parameter`
+      };
+    }
+    if (!normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+
+  return { value: normalized };
+}
+
+function extractStaticExecutableBoolean(
+  raw: unknown,
+  fieldName: 'correlateControlArgs'
+): {
+  value?: boolean;
+  error?: string;
+} {
+  if (raw === undefined) {
+    return {};
+  }
+
+  const value = extractStaticValue(raw);
+  if (value === undefined) {
+    return {};
+  }
+
+  if (typeof value !== 'boolean') {
+    return {
+      error: `Executable ${fieldName} must be a boolean`
+    };
+  }
+
+  return { value };
+}
+
+function extractExecutableOutputRecordInfo(
+  exeNode: Record<string, any>
+): ExecutableOutputRecordInfo | undefined {
+  const outputRecordNode = exeNode.values?.outputRecord?.[0];
+  if (outputRecordNode?.type === 'ExeOutputRecord') {
+    if (outputRecordNode.kind === 'static' && typeof outputRecordNode.name === 'string') {
+      return {
+        kind: 'static',
+        name: outputRecordNode.name
+      };
+    }
+    if (outputRecordNode.kind === 'dynamic') {
+      return {
+        kind: 'dynamic',
+        ref: formatVariableReference(outputRecordNode.ref)
+      };
+    }
+  }
+
+  const rawOutputRecord = exeNode.raw?.outputRecord;
+  if (typeof rawOutputRecord === 'string' && rawOutputRecord.trim().length > 0) {
+    return {
+      kind: 'static',
+      name: rawOutputRecord.trim()
+    };
+  }
+
+  return undefined;
+}
+
+function collectExecutableDefinitionDiagnostics(ast: MlldNode[]): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+  const seen = new Set<string>();
+
+  const pushError = (message: string, line?: number, column?: number): void => {
+    const key = `${line ?? 0}:${column ?? 0}:${message}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    errors.push({ message, line, column });
+  };
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'exe') {
+      return;
+    }
+
+    const exeNode = node as any;
+    const paramNames = Array.isArray(exeNode.values?.params)
+      ? exeNode.values.params
+          .filter((param: any) => param?.type === 'Parameter' && typeof param.name === 'string')
+          .map((param: any) => param.name)
+      : [];
+
+    for (const entry of listWithClauseFields(exeNode.values?.withClause)) {
+      if (EXECUTABLE_WITH_CLAUSE_KEYS.has(entry.key)) {
+        continue;
+      }
+      const location = entry.location as Record<string, any> | undefined;
+      pushError(
+        `Unknown executable with-clause field '${entry.key}'`,
+        location?.start?.line ?? exeNode.location?.start?.line,
+        location?.start?.column ?? exeNode.location?.start?.column
+      );
+    }
+
+    const metadataLine = exeNode.location?.start?.line;
+    const metadataColumn = exeNode.location?.start?.column;
+    const rawControlArgs = getWithClauseField(exeNode.values?.withClause, 'controlArgs');
+    const rawUpdateArgs = getWithClauseField(exeNode.values?.withClause, 'updateArgs');
+    const rawExactPayloadArgs = getWithClauseField(exeNode.values?.withClause, 'exactPayloadArgs');
+    const rawSourceArgs = getWithClauseField(exeNode.values?.withClause, 'sourceArgs');
+    const rawCorrelateControlArgs = getWithClauseField(exeNode.values?.withClause, 'correlateControlArgs');
+
+    const controlArgs = extractStaticExecutableArgList(rawControlArgs, paramNames, 'controlArgs');
+    const updateArgs = extractStaticExecutableArgList(rawUpdateArgs, paramNames, 'updateArgs');
+    const exactPayloadArgs = extractStaticExecutableArgList(rawExactPayloadArgs, paramNames, 'exactPayloadArgs');
+    const sourceArgs = extractStaticExecutableArgList(rawSourceArgs, paramNames, 'sourceArgs');
+    const correlateControlArgs = extractStaticExecutableBoolean(rawCorrelateControlArgs, 'correlateControlArgs');
+
+    for (const issue of [controlArgs.error, updateArgs.error, exactPayloadArgs.error, sourceArgs.error, correlateControlArgs.error]) {
+      if (issue) {
+        pushError(issue, metadataLine, metadataColumn);
+      }
+    }
+
+    try {
+      validateExecutableAuthorizationMetadata({
+        controlArgs: controlArgs.value,
+        updateArgs: updateArgs.value,
+        exactPayloadArgs: exactPayloadArgs.value
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushError(message, metadataLine, metadataColumn);
+    }
+  });
+
+  return errors;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toAnalysisError(issue: { message: string; location?: { line?: number; column?: number } }): AnalysisError {
+  return {
+    message: issue.message,
+    line: issue.location?.line,
+    column: issue.location?.column
+  };
+}
+
+function recordInfoFromDefinition(definition: RecordDefinition): RecordInfo {
+  return {
+    name: definition.name,
+    ...(definition.key ? { key: definition.key } : {}),
+    validate: definition.validate,
+    rootMode: definition.rootMode,
+    display: definition.display.kind,
+    ...(Array.isArray(definition.when) ? { whenCount: definition.when.length } : {}),
+    fields: definition.fields.map(field => ({
+      name: field.name,
+      kind: field.kind,
+      classification: field.classification,
+      optional: field.optional,
+      ...(field.valueType ? { valueType: field.valueType } : {})
+    }))
+  };
+}
+
+function shelfInfoFromDefinition(definition: ShelfDefinition): ShelfInfo {
+  return {
+    name: definition.name,
+    slots: Object.values(definition.slots).map(slot => ({
+      name: slot.name,
+      record: slot.record,
+      cardinality: slot.cardinality,
+      optional: slot.optional,
+      merge: slot.merge,
+      ...(slot.from ? { from: slot.from } : {})
+    }))
+  };
+}
+
+function extractRecordsAndDiagnostics(
+  ast: MlldNode[],
+  filePath: string
+): {
+  records: RecordInfo[];
+  errors: AnalysisError[];
+  definitions: Map<string, RecordDefinition>;
+  declaredNames: Set<string>;
+} {
+  const records: RecordInfo[] = [];
+  const errors: AnalysisError[] = [];
+  const definitions = new Map<string, RecordDefinition>();
+  const declaredNames = new Set<string>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'record') {
+      return;
+    }
+
+    const directive = node as any;
+    const identifierNode = directive.values?.identifier?.[0];
+    const name =
+      identifierNode?.type === 'VariableReference'
+        ? identifierNode.identifier
+        : directive.raw?.identifier;
+
+    if (typeof name === 'string' && name.trim().length > 0) {
+      declaredNames.add(name.trim());
+    }
+
+    const buildResult = buildRecordDefinitionFromDirective(directive, { filePath });
+    if (buildResult.definition) {
+      records.push(recordInfoFromDefinition(buildResult.definition));
+      definitions.set(buildResult.definition.name, buildResult.definition);
+    } else {
+      errors.push(...buildResult.issues.map(toAnalysisError));
+    }
+  });
+
+  return { records, errors, definitions, declaredNames };
+}
+
+function extractShelvesAndDiagnostics(
+  ast: MlldNode[],
+  filePath: string,
+  knownRecords: ReadonlyMap<string, Pick<RecordDefinition, 'key'> | RecordDefinition>
+): {
+  shelves: ShelfInfo[];
+  errors: AnalysisError[];
+  definitions: Map<string, ShelfDefinition>;
+} {
+  const shelves: ShelfInfo[] = [];
+  const errors: AnalysisError[] = [];
+  const definitions = new Map<string, ShelfDefinition>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'shelf') {
+      return;
+    }
+
+    const directive = node as any;
+    const buildResult = buildShelfDefinitionFromDirective(directive, {
+      filePath,
+      records: knownRecords
+    });
+    if (buildResult.definition) {
+      shelves.push(shelfInfoFromDefinition(buildResult.definition));
+      definitions.set(buildResult.definition.name, buildResult.definition);
+    } else {
+      errors.push(...buildResult.issues.map(toAnalysisError));
+    }
+  });
+
+  return { shelves, errors, definitions };
+}
+
+function collectExecutableOutputRecordDiagnostics(
+  ast: MlldNode[],
+  recordDefinitions: ReadonlyMap<string, RecordDefinition>,
+  declaredRecordNames: ReadonlySet<string>
+): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'exe') {
+      return;
+    }
+
+    const exeNode = node as any;
+    const outputRecord = extractExecutableOutputRecordInfo(exeNode);
+    if (!outputRecord || outputRecord.kind !== 'static' || !outputRecord.name) {
+      return;
+    }
+
+    if (recordDefinitions.has(outputRecord.name) || declaredRecordNames.has(outputRecord.name)) {
+      return;
+    }
+
+    errors.push({
+      message: `Executable '@${exeNode.raw?.identifier ?? outputRecord.name}' references unknown record '@${outputRecord.name}'`,
+      line: exeNode.location?.start?.line,
+      column: exeNode.location?.start?.column
+    });
+  });
+
+  return errors;
+}
+
+function extractDirectShelfSlotRef(
+  node: unknown,
+  filePath: string
+): { ref: ShelfScopeSlotRef; location?: ReturnType<typeof astLocationToSourceLocation> } | undefined {
+  if (!node || typeof node !== 'object') {
+    return undefined;
+  }
+
+  const typedNode = node as VariableReferenceNode;
+  if (typedNode.type !== 'VariableReference' || typeof typedNode.identifier !== 'string') {
+    return undefined;
+  }
+
+  if (!Array.isArray(typedNode.fields) || typedNode.fields.length !== 1) {
+    return undefined;
+  }
+
+  const [field] = typedNode.fields;
+  if (field?.type !== 'field' || typeof field.value !== 'string') {
+    return undefined;
+  }
+
+  return {
+    ref: {
+      shelfName: typedNode.identifier,
+      slotName: field.value
+    },
+    location: astLocationToSourceLocation(typedNode.location, filePath)
+  };
+}
+
+function collectBoxShelfScopeDiagnostics(
+  ast: MlldNode[],
+  filePath: string,
+  shelfDefinitions: ReadonlyMap<string, ShelfDefinition>
+): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+
+  const push = (message: string, location?: { line?: number; column?: number }): void => {
+    errors.push({
+      message,
+      line: location?.line,
+      column: location?.column
+    });
+  };
+
+  const collectBindingsFromEntries = (
+    entries: unknown,
+    label: 'read' | 'write'
+  ): {
+    bindings: ValidatableShelfScopeBinding[];
+    readAliases: Record<string, true>;
+  } => {
+    const bindings: ValidatableShelfScopeBinding[] = [];
+    const readAliases: Record<string, true> = {};
+    const arrayEntries =
+      isPlainObject(entries) && entries.type === 'array' && Array.isArray(entries.items)
+        ? entries.items
+        : entries;
+
+    if (arrayEntries === undefined) {
+      return { bindings, readAliases };
+    }
+
+    if (!isPlainObject(arrayEntries) && !Array.isArray(arrayEntries)) {
+      push(
+        `box.shelf.${label} must be an array`,
+        astLocationToSourceLocation((arrayEntries as any)?.location, filePath)
+      );
+      return { bindings, readAliases };
+    }
+
+    if (!Array.isArray(arrayEntries)) {
+      push(
+        `box.shelf.${label} must be an array`,
+        astLocationToSourceLocation((arrayEntries as any)?.location, filePath)
+      );
+      return { bindings, readAliases };
+    }
+
+    for (const entry of arrayEntries) {
+      if (isPlainObject(entry) && entry.type === 'aliasedValue') {
+        const alias = typeof entry.alias === 'string' ? entry.alias.trim() : '';
+        const directRef = extractDirectShelfSlotRef(entry.value, filePath);
+
+        if (alias.length > 0 && directRef) {
+          bindings.push({
+            ref: directRef.ref,
+            alias,
+            location: directRef.location
+          });
+          continue;
+        }
+
+        if (label === 'read' && alias.length > 0) {
+          readAliases[alias] = true;
+          continue;
+        }
+
+        if (label === 'write') {
+          const location = astLocationToSourceLocation((entry as any).location, filePath);
+          push('box.shelf.write aliases must resolve to shelf slot references', location);
+        }
+        continue;
+      }
+
+      if (isPlainObject(entry) && entry.type === 'object') {
+        const aliasNode = getObjectEntryValue(entry, 'alias');
+        const valueNode = getObjectEntryValue(entry, 'value');
+        const alias = extractStaticValue(aliasNode);
+        const directRef = extractDirectShelfSlotRef(valueNode, filePath);
+
+        if (typeof alias === 'string' && alias.trim().length > 0) {
+          if (directRef) {
+            bindings.push({
+              ref: directRef.ref,
+              alias: alias.trim(),
+              location: directRef.location
+            });
+            continue;
+          }
+
+          if (label === 'read') {
+            readAliases[alias.trim()] = true;
+            continue;
+          }
+        }
+
+        if (label === 'write' && valueNode && !extractDirectShelfSlotRef(valueNode, filePath)) {
+          const location = astLocationToSourceLocation((entry as any).location, filePath);
+          push('box.shelf.write aliases must resolve to shelf slot references', location);
+        }
+        continue;
+      }
+
+      const directRef = extractDirectShelfSlotRef(entry, filePath);
+      if (directRef) {
+        bindings.push({
+          ref: directRef.ref,
+          location: directRef.location
+        });
+        continue;
+      }
+
+      if (isPlainObject(entry) && entry.type === 'VariableReference') {
+        continue;
+      }
+
+      push(
+        `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ' or aliased values' : ''}`,
+        astLocationToSourceLocation((entry as any)?.location, filePath)
+      );
+    }
+
+    return { bindings, readAliases };
+  };
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'box') {
+      return;
+    }
+
+    const boxNode = node as BoxDirectiveNode;
+    const configNode = Array.isArray(boxNode.values?.config) ? boxNode.values.config[0] : undefined;
+    const shelfNode = getObjectEntryValue(configNode, 'shelf');
+    if (shelfNode === undefined) {
+      return;
+    }
+
+    if (!isPlainObject(shelfNode) || shelfNode.type !== 'object') {
+      push(
+        'box.shelf must be an object',
+        astLocationToSourceLocation((shelfNode as any)?.location, filePath)
+      );
+      return;
+    }
+
+    const readNode = getObjectEntryValue(shelfNode, 'read');
+    const writeNode = getObjectEntryValue(shelfNode, 'write');
+    const readResult = collectBindingsFromEntries(readNode, 'read');
+    const writeResult = collectBindingsFromEntries(writeNode, 'write');
+
+    errors.push(
+      ...validateShelfScopeBindingTargets(
+        [...readResult.bindings, ...writeResult.bindings],
+        shelfDefinitions
+      ).map(toAnalysisError),
+      ...validateShelfScopeBindingConflicts(
+        readResult.bindings,
+        writeResult.bindings,
+        readResult.readAliases
+      ).map(toAnalysisError)
+    );
+  });
+
+  return errors;
 }
 
 function extractPolicies(ast: MlldNode[]): PolicyInfo[] {
@@ -1962,6 +2802,113 @@ function findClosestBuiltinPolicyRule(ruleName: string): string | null {
   }
 
   return bestDistance <= 6 ? bestRule : null;
+}
+
+function collectDeclaredPolicyOperationCategories(
+  policies: readonly PolicyInfo[]
+): Set<string> {
+  const categories = new Set<string>();
+  for (const policy of policies) {
+    if (!policy.operations) {
+      continue;
+    }
+    for (const category of Object.keys(policy.operations)) {
+      const normalized = category.trim();
+      if (normalized.length > 0) {
+        categories.add(normalized);
+      }
+    }
+  }
+  return categories;
+}
+
+function collectKnownPolicyOperationTargets(
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>,
+  declaredCategories: ReadonlySet<string>
+): Set<string> {
+  const targets = new Set<string>();
+
+  for (const category of declaredCategories) {
+    targets.add(category);
+  }
+
+  for (const executable of contextExecutables.values()) {
+    for (const label of executable.labels) {
+      const normalized = label.trim();
+      if (normalized.length > 0) {
+        targets.add(normalized);
+      }
+    }
+
+    const namedRef = normalizeNamedOperationRef(executable.name);
+    if (namedRef) {
+      targets.add(namedRef);
+    }
+  }
+
+  for (const builtinTarget of BUILTIN_POLICY_OPERATION_TARGETS) {
+    targets.add(builtinTarget);
+  }
+
+  return targets;
+}
+
+function hasKnownPolicyTargetMatch(
+  target: string,
+  knownTargets: ReadonlySet<string>
+): boolean {
+  const trimmedTarget = target.trim();
+  if (!trimmedTarget) {
+    return false;
+  }
+
+  const normalizedTarget = normalizeNamedOperationRef(trimmedTarget) ?? trimmedTarget;
+  for (const knownTarget of knownTargets) {
+    if (
+      matchesLabelPattern(normalizedTarget, knownTarget)
+      || matchesLabelPattern(knownTarget, normalizedTarget)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function findClosestKnownPolicyTarget(
+  target: string,
+  knownTargets: ReadonlySet<string>
+): string | null {
+  let bestTarget: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const knownTarget of knownTargets) {
+    const distance = levenshteinDistance(target, knownTarget);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestTarget = knownTarget;
+    }
+  }
+
+  return bestDistance <= 6 ? bestTarget : null;
+}
+
+function findClosestKnownToolName(
+  toolName: string,
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): string | null {
+  let bestToolName: string | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const candidate of contextExecutables.keys()) {
+    const distance = levenshteinDistance(toolName, candidate);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestToolName = candidate;
+    }
+  }
+
+  return bestDistance <= 6 ? bestToolName : null;
 }
 
 function detectUnknownPolicyRuleWarnings(ast: MlldNode[]): AntiPatternWarning[] {
@@ -2165,6 +3112,119 @@ function detectPrivilegedGuardWithoutPolicyOperationWarnings(
   return warnings;
 }
 
+function detectPolicyDeclarationWarnings(
+  ast: MlldNode[],
+  policies: readonly PolicyInfo[],
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+  const seen = new Set<string>();
+  const declaredCategories = collectDeclaredPolicyOperationCategories(policies);
+  const knownTargets = collectKnownPolicyOperationTargets(contextExecutables, declaredCategories);
+  const canValidateOperationMappings = contextExecutables.size > 0;
+  const canValidateLabelTargets = contextExecutables.size > 0 || declaredCategories.size > 0;
+
+  const pushWarning = (warning: AntiPatternWarning): void => {
+    const key = `${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    warnings.push(warning);
+  };
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'policy') {
+      return;
+    }
+
+    const policyNode = node as any;
+    const policyName = extractText(policyNode.values?.name) || policyNode.raw?.name || 'anonymous policy';
+    const expr = policyNode.values?.expr;
+    if (!expr || expr.type !== 'object') {
+      return;
+    }
+
+    const operationsNode = getObjectEntryValue(expr, 'operations');
+    if (
+      canValidateOperationMappings &&
+      operationsNode &&
+      typeof operationsNode === 'object' &&
+      (operationsNode as any).type === 'object' &&
+      Array.isArray((operationsNode as any).entries)
+    ) {
+      for (const entry of (operationsNode as any).entries as Array<Record<string, unknown>>) {
+        if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+          continue;
+        }
+
+        for (const labelEntry of extractStaticStringEntries(entry.value)) {
+          if (hasKnownPolicyTargetMatch(labelEntry.value, knownTargets)) {
+            continue;
+          }
+
+          const closestTarget = findClosestKnownPolicyTarget(labelEntry.value, knownTargets);
+          pushWarning({
+            code: 'policy-operations-unknown-label',
+            message: `Policy @${policyName} maps operations.${entry.key} to "${labelEntry.value}", but no executable or operation label in the validation context matches it.`,
+            line: labelEntry.line,
+            column: labelEntry.column,
+            suggestion: closestTarget
+              ? `Use "${closestTarget}" if that was the intended operation label, or add context that defines "${labelEntry.value}".`
+              : `Add a validation context that defines "${labelEntry.value}", or update operations.${entry.key}.`
+          });
+        }
+      }
+    }
+
+    const labelsNode = getObjectEntryValue(expr, 'labels');
+    if (
+      canValidateLabelTargets &&
+      labelsNode &&
+      typeof labelsNode === 'object' &&
+      (labelsNode as any).type === 'object' &&
+      Array.isArray((labelsNode as any).entries)
+    ) {
+      for (const labelEntry of (labelsNode as any).entries as Array<Record<string, unknown>>) {
+        if ((labelEntry.type !== 'pair' && labelEntry.type !== 'conditionalPair') || typeof labelEntry.key !== 'string') {
+          continue;
+        }
+
+        const ruleValue = labelEntry.value;
+        for (const ruleKind of ['deny', 'allow'] as const) {
+          const targetNode = getObjectEntryValue(ruleValue, ruleKind);
+          if (targetNode === undefined) {
+            continue;
+          }
+
+          for (const targetEntry of extractStaticStringEntries(targetNode)) {
+            if (hasKnownPolicyTargetMatch(targetEntry.value, knownTargets)) {
+              continue;
+            }
+
+            const closestTarget = findClosestKnownPolicyTarget(targetEntry.value, knownTargets);
+            if (!closestTarget && !canValidateOperationMappings) {
+              continue;
+            }
+
+            pushWarning({
+              code: 'policy-label-flow-unknown-target',
+              message: `Policy @${policyName} labels.${labelEntry.key}.${ruleKind} references "${targetEntry.value}", but no declared operation category or validation-context label matches it.`,
+              line: targetEntry.line,
+              column: targetEntry.column,
+              suggestion: closestTarget
+                ? `Use "${closestTarget}" if that was the intended target, or add context that defines "${targetEntry.value}".`
+                : `Add a declared operation category or validation context that defines "${targetEntry.value}", or update labels.${labelEntry.key}.${ruleKind}.`
+            });
+          }
+        }
+      }
+    }
+  });
+
+  return warnings;
+}
+
 interface ValidationContextExecutable extends AuthorizationToolContext {
   labels: Set<string>;
 }
@@ -2183,7 +3243,10 @@ function getOrCreateValidationExecutable(
     params: new Set<string>(),
     labels: new Set<string>(),
     controlArgs: new Set<string>(),
-    hasControlArgsMetadata: false
+    hasControlArgsMetadata: false,
+    updateArgs: new Set<string>(),
+    hasUpdateArgsMetadata: false,
+    exactPayloadArgs: new Set<string>()
   };
   byName.set(name, created);
   return created;
@@ -2205,6 +3268,20 @@ function mergeValidationContextAst(
       target.hasControlArgsMetadata = true;
       for (const controlArg of executable.controlArgs) {
         target.controlArgs.add(controlArg);
+      }
+    }
+    if (Array.isArray(executable.updateArgs)) {
+      target.hasUpdateArgsMetadata = true;
+      for (const updateArg of executable.updateArgs) {
+        target.updateArgs.add(updateArg);
+      }
+    }
+    if (Array.isArray(executable.exactPayloadArgs)) {
+      if (!target.exactPayloadArgs) {
+        target.exactPayloadArgs = new Set<string>();
+      }
+      for (const payloadArg of executable.exactPayloadArgs) {
+        target.exactPayloadArgs.add(payloadArg);
       }
     }
   }
@@ -2260,6 +3337,20 @@ function mergeValidationContextAst(
           target.controlArgs.add(controlArg);
         }
       }
+      if (executableTarget.hasUpdateArgsMetadata) {
+        target.hasUpdateArgsMetadata = true;
+        for (const updateArg of executableTarget.updateArgs) {
+          target.updateArgs.add(updateArg);
+        }
+      }
+      if (executableTarget.exactPayloadArgs) {
+        if (!target.exactPayloadArgs) {
+          target.exactPayloadArgs = new Set<string>();
+        }
+        for (const payloadArg of executableTarget.exactPayloadArgs) {
+          target.exactPayloadArgs.add(payloadArg);
+        }
+      }
 
       const labelsValue = extractStaticValue(getObjectEntryValue(toolValue, 'labels'));
       if (Array.isArray(labelsValue)) {
@@ -2271,19 +3362,43 @@ function mergeValidationContextAst(
       }
 
       const controlArgsNode = getObjectEntryValue(toolValue, 'controlArgs');
-      if (controlArgsNode === undefined) {
-        continue;
+      if (controlArgsNode !== undefined) {
+        const controlArgsValue = extractStaticValue(controlArgsNode);
+        if (Array.isArray(controlArgsValue)) {
+          target.hasControlArgsMetadata = true;
+          for (const controlArg of controlArgsValue) {
+            if (typeof controlArg === 'string' && controlArg.trim().length > 0) {
+              target.controlArgs.add(controlArg.trim());
+            }
+          }
+        }
       }
 
-      const controlArgsValue = extractStaticValue(controlArgsNode);
-      if (!Array.isArray(controlArgsValue)) {
-        continue;
+      const updateArgsNode = getObjectEntryValue(toolValue, 'updateArgs');
+      if (updateArgsNode !== undefined) {
+        const updateArgsValue = extractStaticValue(updateArgsNode);
+        if (Array.isArray(updateArgsValue)) {
+          target.hasUpdateArgsMetadata = true;
+          for (const updateArg of updateArgsValue) {
+            if (typeof updateArg === 'string' && updateArg.trim().length > 0) {
+              target.updateArgs.add(updateArg.trim());
+            }
+          }
+        }
       }
 
-      target.hasControlArgsMetadata = true;
-      for (const controlArg of controlArgsValue) {
-        if (typeof controlArg === 'string' && controlArg.trim().length > 0) {
-          target.controlArgs.add(controlArg.trim());
+      const exactPayloadArgsNode = getObjectEntryValue(toolValue, 'exactPayloadArgs');
+      if (exactPayloadArgsNode !== undefined) {
+        const exactPayloadArgsValue = extractStaticValue(exactPayloadArgsNode);
+        if (Array.isArray(exactPayloadArgsValue)) {
+          if (!target.exactPayloadArgs) {
+            target.exactPayloadArgs = new Set<string>();
+          }
+          for (const payloadArg of exactPayloadArgsValue) {
+            if (typeof payloadArg === 'string' && payloadArg.trim().length > 0) {
+              target.exactPayloadArgs.add(payloadArg.trim());
+            }
+          }
         }
       }
     }
@@ -2598,9 +3713,643 @@ function collectPolicyAuthorizationDiagnostics(
         column
       });
     }
+
+    if (contextExecutables.size === 0 || !validation.normalized?.deny || validation.normalized.deny.length === 0) {
+      return;
+    }
+
+    const denyNode = getObjectEntryValue(authorizationsNode, 'deny');
+    const denyEntries = extractStaticStringEntries(denyNode);
+    for (const deniedTool of validation.normalized.deny) {
+      if (contextExecutables.has(deniedTool)) {
+        continue;
+      }
+
+      const location = denyEntries.find(entry => entry.value === deniedTool);
+      const closestToolName = findClosestKnownToolName(deniedTool, contextExecutables);
+      const warningMessage = `policy.authorizations.deny references unknown tool '${deniedTool}'`;
+      const key = `warning:policy-authorizations-deny-unknown-tool:${location?.line ?? line ?? 0}:${location?.column ?? column ?? 0}:${warningMessage}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      warnings.push({
+        code: 'policy-authorizations-deny-unknown-tool',
+        message: warningMessage,
+        line: location?.line ?? (denyNode as any)?.location?.start?.line ?? line,
+        column: location?.column ?? (denyNode as any)?.location?.start?.column ?? column,
+        suggestion: closestToolName
+          ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${deniedTool}".`
+          : `Add validation context that defines "${deniedTool}", or update policy.authorizations.deny.`
+      });
+    }
   });
 
   return { errors, warnings };
+}
+
+interface TopLevelStaticBinding {
+  node: unknown;
+}
+
+type StaticResolutionFailure =
+  | 'dynamic'
+  | 'unsupported'
+  | 'unresolved-binding';
+
+type StaticResolutionResult =
+  | { ok: true; value: unknown }
+  | { ok: false; failure: StaticResolutionFailure };
+
+function buildTopLevelStaticBindings(ast: MlldNode[]): Map<string, TopLevelStaticBinding> {
+  const bindings = new Map<string, TopLevelStaticBinding>();
+
+  for (const node of ast) {
+    if (!node || typeof node !== 'object' || node.type !== 'Directive') {
+      continue;
+    }
+
+    if (node.kind === 'var') {
+      const name = (node as any).values?.identifier?.[0]?.identifier;
+      const valueNode = (node as any).values?.value;
+      if (typeof name === 'string' && valueNode !== undefined) {
+        bindings.set(name, { node: valueNode });
+      }
+      continue;
+    }
+
+    if (node.kind === 'policy') {
+      const name = extractText((node as any).values?.name) || (node as any).raw?.name;
+      const exprNode = (node as any).values?.expr;
+      if (typeof name === 'string' && exprNode !== undefined) {
+        bindings.set(name.replace(/^@/, ''), { node: exprNode });
+      }
+    }
+  }
+
+  return bindings;
+}
+
+function getStaticObjectEntryNode(node: unknown, key: string): unknown {
+  if (Array.isArray(node) && node.length === 1) {
+    return getStaticObjectEntryNode(node[0], key);
+  }
+  return getObjectEntryValue(node, key);
+}
+
+function readStaticFieldAccessor(field: unknown): string | number | undefined {
+  if (!field || typeof field !== 'object') {
+    return undefined;
+  }
+
+  const typedField = field as Record<string, unknown>;
+  if (typedField.type === 'field' && typeof typedField.value === 'string') {
+    return typedField.value;
+  }
+  if (typedField.type === 'numericField' && typeof typedField.value === 'number') {
+    return typedField.value;
+  }
+  if (typedField.type === 'arrayIndex' && typeof typedField.value === 'number') {
+    return typedField.value;
+  }
+  if (
+    typedField.type === 'bracketAccess'
+    && (typeof typedField.value === 'string' || typeof typedField.value === 'number')
+  ) {
+    return typedField.value;
+  }
+  return undefined;
+}
+
+function applyStaticFieldAccess(
+  value: unknown,
+  fields: readonly unknown[] | undefined
+): StaticResolutionResult {
+  let current = value;
+
+  for (const field of fields ?? []) {
+    const accessor = readStaticFieldAccessor(field);
+    if (accessor === undefined) {
+      return { ok: false, failure: 'unsupported' };
+    }
+
+    if (current === null || current === undefined) {
+      return { ok: false, failure: 'unresolved-binding' };
+    }
+
+    if (typeof accessor === 'number') {
+      if (Array.isArray(current)) {
+        if (accessor < 0 || accessor >= current.length) {
+          return { ok: false, failure: 'unresolved-binding' };
+        }
+        current = current[accessor];
+        continue;
+      }
+
+      if (typeof current === 'object' && current !== null && accessor in (current as Record<number, unknown>)) {
+        current = (current as Record<number, unknown>)[accessor];
+        continue;
+      }
+
+      return { ok: false, failure: 'unresolved-binding' };
+    }
+
+    if (typeof current === 'object' && current !== null && accessor in (current as Record<string, unknown>)) {
+      current = (current as Record<string, unknown>)[accessor];
+      continue;
+    }
+
+    return { ok: false, failure: 'unresolved-binding' };
+  }
+
+  return { ok: true, value: current };
+}
+
+function resolveStaticExpression(
+  node: unknown,
+  bindings: ReadonlyMap<string, TopLevelStaticBinding>,
+  stack: Set<string> = new Set<string>(),
+  currentObjectKey?: string
+): StaticResolutionResult {
+  if (node === null || node === undefined) {
+    return { ok: true, value: node };
+  }
+
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') {
+    return { ok: true, value: node };
+  }
+
+  if (Array.isArray(node)) {
+    const isSingleAstWrapper =
+      node.length === 1 &&
+      node[0] !== null &&
+      typeof node[0] === 'object' &&
+      !Array.isArray(node[0]) &&
+      'type' in (node[0] as Record<string, unknown>);
+
+    if (isSingleAstWrapper) {
+      return resolveStaticExpression(node[0], bindings, stack, currentObjectKey);
+    }
+
+    const resolvedParts: unknown[] = [];
+    for (const part of node) {
+      const resolved = resolveStaticExpression(part, bindings, stack, currentObjectKey);
+      if (!resolved.ok) {
+        return resolved;
+      }
+      resolvedParts.push(resolved.value);
+    }
+
+    if (resolvedParts.every(part => typeof part === 'string')) {
+      return { ok: true, value: resolvedParts.join('') };
+    }
+
+    return { ok: true, value: resolvedParts };
+  }
+
+  if (typeof node !== 'object') {
+    return { ok: false, failure: 'dynamic' };
+  }
+
+  const typedNode = node as Record<string, unknown>;
+
+  if (Array.isArray(typedNode.content)) {
+    const resolvedContent = resolveStaticExpression(typedNode.content, bindings, stack, currentObjectKey);
+    if (resolvedContent.ok) {
+      return resolvedContent;
+    }
+  }
+
+  if (typedNode.type === 'Literal') {
+    return { ok: true, value: typedNode.value };
+  }
+
+  if (typedNode.type === 'Text') {
+    return typeof typedNode.content === 'string'
+      ? { ok: true, value: typedNode.content }
+      : { ok: false, failure: 'unsupported' };
+  }
+
+  if (typedNode.type === 'VariableReference' && typeof typedNode.identifier === 'string') {
+    if (Array.isArray(typedNode.pipes) && typedNode.pipes.length > 0) {
+      return { ok: false, failure: 'dynamic' };
+    }
+
+    if (
+      currentObjectKey === 'mlld'
+      && (!Array.isArray(typedNode.fields) || typedNode.fields.length === 0)
+    ) {
+      return { ok: true, value: `@${typedNode.identifier}` };
+    }
+
+    const binding = bindings.get(typedNode.identifier);
+    if (!binding) {
+      return { ok: false, failure: 'unresolved-binding' };
+    }
+
+    if (stack.has(typedNode.identifier)) {
+      return { ok: false, failure: 'dynamic' };
+    }
+
+    const nextStack = new Set(stack);
+    nextStack.add(typedNode.identifier);
+
+    const resolvedBinding = resolveStaticExpression(binding.node, bindings, nextStack);
+    if (!resolvedBinding.ok) {
+      return resolvedBinding;
+    }
+
+    return applyStaticFieldAccess(resolvedBinding.value, typedNode.fields as readonly unknown[] | undefined);
+  }
+
+  if (typedNode.type === 'array' && Array.isArray(typedNode.items)) {
+    const resolvedItems: unknown[] = [];
+    for (const item of typedNode.items) {
+      const resolved = resolveStaticExpression(item, bindings, stack, currentObjectKey);
+      if (!resolved.ok) {
+        return resolved;
+      }
+      resolvedItems.push(resolved.value);
+    }
+    return { ok: true, value: resolvedItems };
+  }
+
+  if (typedNode.type === 'object' && Array.isArray(typedNode.entries)) {
+    const result: Record<string, unknown> = {};
+    for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
+      if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+        return { ok: false, failure: 'unsupported' };
+      }
+
+      const resolved = resolveStaticExpression(entry.value, bindings, stack, entry.key);
+      if (!resolved.ok) {
+        return resolved;
+      }
+      result[entry.key] = resolved.value;
+    }
+    return { ok: true, value: result };
+  }
+
+  return { ok: false, failure: 'dynamic' };
+}
+
+function classifyPolicyCallSource(node: unknown): PolicyCallSourceKind {
+  if (!node || typeof node !== 'object') {
+    return 'unknown';
+  }
+
+  const typedNode = node as Record<string, unknown>;
+  if (typedNode.type === 'VariableReference' && typeof typedNode.identifier === 'string') {
+    return Array.isArray(typedNode.fields) && typedNode.fields.length > 0
+      ? 'field_access'
+      : 'top_level_var';
+  }
+
+  return 'inline';
+}
+
+function mapResolutionFailureToSkipReason(
+  failure: StaticResolutionFailure,
+  kind: 'intent' | 'tools' | 'task'
+): PolicyCallSkipReason {
+  if (failure === 'unsupported') {
+    return 'unsupported-expression';
+  }
+  if (failure === 'unresolved-binding') {
+    return 'unresolved-top-level-binding';
+  }
+  return kind === 'intent'
+    ? 'dynamic-source-intent'
+    : kind === 'tools'
+      ? 'dynamic-source-tools'
+      : 'dynamic-source-task';
+}
+
+function createEmptyStaticToolContext(name: string): ValidationContextExecutable {
+  return {
+    name,
+    params: new Set<string>(),
+    labels: new Set<string>(),
+    controlArgs: new Set<string>(),
+    hasControlArgsMetadata: false,
+    updateArgs: new Set<string>(),
+    hasUpdateArgsMetadata: false,
+    exactPayloadArgs: new Set<string>()
+  };
+}
+
+function normalizeStaticStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      return null;
+    }
+    const trimmed = entry.trim();
+    if (!normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+
+  return normalized;
+}
+
+function buildStaticToolContext(
+  toolsValue: unknown,
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): Map<string, ValidationContextExecutable> | null {
+  if (!isPlainObject(toolsValue)) {
+    return null;
+  }
+
+  const byName = new Map<string, ValidationContextExecutable>();
+
+  for (const [toolName, rawToolEntry] of Object.entries(toolsValue)) {
+    if (!isPlainObject(rawToolEntry)) {
+      return null;
+    }
+
+    const mlldValue = rawToolEntry.mlld;
+    if (typeof mlldValue !== 'string' || !mlldValue.startsWith('@')) {
+      return null;
+    }
+
+    const executableName = mlldValue.slice(1).trim();
+    const baseExecutable = contextExecutables.get(executableName);
+    if (!baseExecutable) {
+      return null;
+    }
+
+    const target = createEmptyStaticToolContext(toolName);
+    for (const param of baseExecutable.params) {
+      target.params.add(param);
+    }
+    for (const label of baseExecutable.labels) {
+      target.labels.add(label);
+    }
+    if (baseExecutable.hasControlArgsMetadata) {
+      target.hasControlArgsMetadata = true;
+      for (const controlArg of baseExecutable.controlArgs) {
+        target.controlArgs.add(controlArg);
+      }
+    }
+    if (baseExecutable.hasUpdateArgsMetadata) {
+      target.hasUpdateArgsMetadata = true;
+      for (const updateArg of baseExecutable.updateArgs) {
+        target.updateArgs.add(updateArg);
+      }
+    }
+    if (baseExecutable.exactPayloadArgs) {
+      for (const payloadArg of baseExecutable.exactPayloadArgs) {
+        target.exactPayloadArgs.add(payloadArg);
+      }
+    }
+
+    const labelsValue = rawToolEntry.labels;
+    if (labelsValue !== undefined) {
+      const labels = normalizeStaticStringList(labelsValue);
+      if (!labels) {
+        return null;
+      }
+      for (const label of labels) {
+        target.labels.add(label);
+      }
+    }
+
+    if (rawToolEntry.controlArgs !== undefined) {
+      const controlArgs = normalizeStaticStringList(rawToolEntry.controlArgs);
+      if (!controlArgs) {
+        return null;
+      }
+      target.hasControlArgsMetadata = true;
+      target.controlArgs = new Set(controlArgs);
+    }
+
+    if (rawToolEntry.updateArgs !== undefined) {
+      const updateArgs = normalizeStaticStringList(rawToolEntry.updateArgs);
+      if (!updateArgs) {
+        return null;
+      }
+      target.hasUpdateArgsMetadata = true;
+      target.updateArgs = new Set(updateArgs);
+    }
+
+    if (rawToolEntry.exactPayloadArgs !== undefined) {
+      const exactPayloadArgs = normalizeStaticStringList(rawToolEntry.exactPayloadArgs);
+      if (!exactPayloadArgs) {
+        return null;
+      }
+      target.exactPayloadArgs = new Set(exactPayloadArgs);
+    }
+
+    byName.set(toolName, target);
+  }
+
+  return byName;
+}
+
+function extractDeniedToolsFromStaticPolicy(policyValue: unknown): readonly string[] | undefined {
+  if (!isPlainObject(policyValue)) {
+    return undefined;
+  }
+
+  const authorizations = isPlainObject(policyValue.authorizations)
+    ? policyValue.authorizations
+    : undefined;
+  if (!authorizations || !Array.isArray(authorizations.deny)) {
+    return undefined;
+  }
+
+  const deny = authorizations.deny
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+  return deny.length > 0 ? deny : undefined;
+}
+
+function toPolicyCallDiagnostic(
+  issue: StaticPolicyCallIssue | PolicyAuthorizationIssue
+): PolicyCallDiagnostic {
+  if ('reason' in issue) {
+    return {
+      reason: issue.reason,
+      message: issue.message,
+      ...(issue.tool ? { tool: issue.tool } : {}),
+      ...(issue.arg ? { arg: issue.arg } : {}),
+      ...(typeof issue.element === 'number' ? { element: issue.element } : {})
+    };
+  }
+
+  return {
+    reason: issue.code,
+    message: issue.message,
+    ...(issue.tool ? { tool: issue.tool } : {}),
+    ...(issue.arg ? { arg: issue.arg } : {})
+  };
+}
+
+function collectPolicyCallDiagnostics(
+  ast: MlldNode[],
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
+): {
+  errors: AnalysisError[];
+  policyCalls: PolicyCallInfo[];
+} {
+  const errors: AnalysisError[] = [];
+  const policyCalls: PolicyCallInfo[] = [];
+  const bindings = buildTopLevelStaticBindings(ast);
+
+  walkAST(ast, node => {
+    if (node.type !== 'ExecInvocation') {
+      return;
+    }
+
+    const invocationName = readExecInvocationQualifiedName(node);
+    if (invocationName !== 'policy.build' && invocationName !== 'policy.validate') {
+      return;
+    }
+
+    const invocation = node as Record<string, any>;
+    const invocationArgs = readExecInvocationArgs(node);
+    const line = invocation.location?.start?.line;
+    const column = invocation.location?.start?.column;
+
+    const intentArg = invocationArgs[0];
+    const toolsArg = invocationArgs[1];
+    const optionsArg = invocationArgs[2];
+
+    const callInfoBase: Omit<PolicyCallInfo, 'status'> = {
+      callee: invocationName === 'policy.build' ? '@policy.build' : '@policy.validate',
+      location: { line, column },
+      intentSource: classifyPolicyCallSource(intentArg),
+      toolsSource: classifyPolicyCallSource(toolsArg),
+      taskSource: 'unknown'
+    };
+
+    const resolvedIntent = resolveStaticExpression(intentArg, bindings);
+    if (!resolvedIntent.ok) {
+      policyCalls.push({
+        ...callInfoBase,
+        status: 'skipped',
+        skipReason: mapResolutionFailureToSkipReason(resolvedIntent.failure, 'intent')
+      });
+      return;
+    }
+
+    const resolvedTools = resolveStaticExpression(toolsArg, bindings);
+    if (!resolvedTools.ok) {
+      policyCalls.push({
+        ...callInfoBase,
+        status: 'skipped',
+        skipReason: mapResolutionFailureToSkipReason(resolvedTools.failure, 'tools')
+      });
+      return;
+    }
+
+    const toolContext = buildStaticToolContext(resolvedTools.value, contextExecutables);
+    if (!toolContext) {
+      policyCalls.push({
+        ...callInfoBase,
+        status: 'skipped',
+        skipReason: 'dynamic-source-tools'
+      });
+      return;
+    }
+
+    let taskText: string | undefined;
+    let taskSource: PolicyCallSourceKind = 'unknown';
+    if (optionsArg !== undefined) {
+      const optionsValue = resolveStaticExpression(optionsArg, bindings);
+      if (!optionsValue.ok || !isPlainObject(optionsValue.value)) {
+        policyCalls.push({
+          ...callInfoBase,
+          status: 'skipped',
+          skipReason: mapResolutionFailureToSkipReason(optionsValue.ok ? 'unsupported' : optionsValue.failure, 'task')
+        });
+        return;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(optionsValue.value, 'task')) {
+        const taskNode =
+          optionsArg && typeof optionsArg === 'object'
+            ? getStaticObjectEntryNode(optionsArg, 'task')
+            : undefined;
+        taskSource = classifyPolicyCallSource(taskNode);
+        const resolvedTask = resolveStaticExpression(taskNode, bindings);
+        if (!resolvedTask.ok) {
+          policyCalls.push({
+            ...callInfoBase,
+            taskSource,
+            status: 'skipped',
+            skipReason: mapResolutionFailureToSkipReason(resolvedTask.failure, 'task')
+          });
+          return;
+        }
+
+        if (resolvedTask.value === null || resolvedTask.value === '') {
+          taskText = undefined;
+        } else if (typeof resolvedTask.value === 'string') {
+          taskText = resolvedTask.value;
+        } else {
+          policyCalls.push({
+            ...callInfoBase,
+            taskSource,
+            status: 'skipped',
+            skipReason: 'unsupported-expression'
+          });
+          return;
+        }
+      }
+    }
+
+    let deniedTools: readonly string[] | undefined;
+    const policyNode = getWithClauseField(invocation.withClause, 'policy');
+    if (policyNode !== undefined) {
+      const resolvedPolicy = resolveStaticExpression(policyNode, bindings);
+      if (resolvedPolicy.ok) {
+        deniedTools = extractDeniedToolsFromStaticPolicy(resolvedPolicy.value);
+      }
+    }
+
+    const staticAnalysis = analyzeStaticPolicyAuthorizationIntent({
+      rawIntent: resolvedIntent.value,
+      toolContext,
+      taskText
+    });
+    const authorizationValidation = validatePolicyAuthorizations(
+      staticAnalysis.rawAuthorizations,
+      toolContext,
+      {
+        requireKnownTools: true,
+        requireControlArgsMetadata: true,
+        ...(deniedTools ? { deniedTools } : {})
+      }
+    );
+
+    const diagnostics = [
+      ...staticAnalysis.issues.map(issue => toPolicyCallDiagnostic(issue)),
+      ...authorizationValidation.errors.map(issue => toPolicyCallDiagnostic(issue))
+    ];
+
+    policyCalls.push({
+      ...callInfoBase,
+      taskSource,
+      status: 'analyzed',
+      ...(diagnostics.length > 0 ? { diagnostics } : {})
+    });
+
+    for (const diagnostic of diagnostics) {
+      errors.push({
+        message: diagnostic.message,
+        line,
+        column
+      });
+    }
+  });
+
+  return { errors, policyCalls };
 }
 
 /**
@@ -2640,13 +4389,53 @@ function extractExecutables(ast: MlldNode[]): ExecutableInfo[] {
           }
         }
 
-        const rawControlArgs = getWithClauseField(exeNode.values?.withClause, 'controlArgs');
-        const controlArgsValue = extractStaticValue(rawControlArgs);
-        if (Array.isArray(controlArgsValue)) {
-          const controlArgs = controlArgsValue
-            .filter((entry: unknown): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-            .map((entry: string) => entry.trim());
+        const controlArgs = extractStaticExecutableArgList(
+          getWithClauseField(exeNode.values?.withClause, 'controlArgs'),
+          exec.params ?? [],
+          'controlArgs'
+        ).value;
+        if (controlArgs && controlArgs.length > 0) {
           exec.controlArgs = controlArgs;
+        }
+
+        const updateArgs = extractStaticExecutableArgList(
+          getWithClauseField(exeNode.values?.withClause, 'updateArgs'),
+          exec.params ?? [],
+          'updateArgs'
+        ).value;
+        if (updateArgs && updateArgs.length > 0) {
+          exec.updateArgs = updateArgs;
+        }
+
+        const exactPayloadArgs = extractStaticExecutableArgList(
+          getWithClauseField(exeNode.values?.withClause, 'exactPayloadArgs'),
+          exec.params ?? [],
+          'exactPayloadArgs'
+        ).value;
+        if (exactPayloadArgs && exactPayloadArgs.length > 0) {
+          exec.exactPayloadArgs = exactPayloadArgs;
+        }
+
+        const sourceArgs = extractStaticExecutableArgList(
+          getWithClauseField(exeNode.values?.withClause, 'sourceArgs'),
+          exec.params ?? [],
+          'sourceArgs'
+        ).value;
+        if (sourceArgs && sourceArgs.length > 0) {
+          exec.sourceArgs = sourceArgs;
+        }
+
+        const correlateControlArgs = extractStaticExecutableBoolean(
+          getWithClauseField(exeNode.values?.withClause, 'correlateControlArgs'),
+          'correlateControlArgs'
+        ).value;
+        if (correlateControlArgs !== undefined) {
+          exec.correlateControlArgs = correlateControlArgs;
+        }
+
+        const outputRecord = extractExecutableOutputRecordInfo(exeNode);
+        if (outputRecord) {
+          exec.outputRecord = outputRecord;
         }
 
         executables.push(exec);
@@ -2831,6 +4620,7 @@ function extractGuards(ast: MlldNode[], sourceText: string): GuardInfo[] {
               decision !== 'allow' &&
               decision !== 'deny' &&
               decision !== 'retry' &&
+              decision !== 'resume' &&
               decision !== 'prompt' &&
               decision !== 'env'
             ) {
@@ -3899,8 +5689,25 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const imports = extractImports(ast);
       const guards = extractGuards(ast, content);
       const policies = extractPolicies(ast);
+      const recordExtraction = extractRecordsAndDiagnostics(ast, filepath);
+      const recordsForShelfValidation = new Map<string, Pick<RecordDefinition, 'key'>>();
+      for (const recordName of recordExtraction.declaredNames) {
+        recordsForShelfValidation.set(recordName, { key: recordExtraction.definitions.get(recordName)?.key });
+      }
+      const shelfExtraction = extractShelvesAndDiagnostics(ast, filepath, recordsForShelfValidation);
       const needs = extractNeeds(content, ast);
       const checkpointErrors = detectCheckpointDirectiveErrors(ast);
+      const executableDefinitionErrors = collectExecutableDefinitionDiagnostics(ast);
+      const outputRecordErrors = collectExecutableOutputRecordDiagnostics(
+        ast,
+        recordExtraction.definitions,
+        recordExtraction.declaredNames
+      );
+      const boxShelfScopeErrors = collectBoxShelfScopeDiagnostics(
+        ast,
+        filepath,
+        shelfExtraction.definitions
+      );
       const contextExecutables = await buildValidationContextExecutables(
         filepath,
         ast,
@@ -3910,23 +5717,72 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ast,
         contextExecutables
       );
+      const policyCallDiagnostics = collectPolicyCallDiagnostics(
+        ast,
+        contextExecutables
+      );
 
       if (executables.length > 0) result.executables = executables;
       if (exports.length > 0) result.exports = exports;
       if (imports.length > 0) result.imports = imports;
       if (guards.length > 0) result.guards = guards;
       if (policies.length > 0) result.policies = policies;
+      if (policyCallDiagnostics.policyCalls.length > 0) result.policyCalls = policyCallDiagnostics.policyCalls;
+      if (recordExtraction.records.length > 0) result.records = recordExtraction.records;
+      if (shelfExtraction.shelves.length > 0) result.shelves = shelfExtraction.shelves;
       if (needs) result.needs = needs;
       if (checkpointErrors.length > 0) {
         result.valid = false;
         result.errors = checkpointErrors;
         return result;
       }
+      if (recordExtraction.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...recordExtraction.errors
+        ];
+      }
+      if (shelfExtraction.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...shelfExtraction.errors
+        ];
+      }
+      if (executableDefinitionErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...executableDefinitionErrors
+        ];
+      }
+      if (outputRecordErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...outputRecordErrors
+        ];
+      }
+      if (boxShelfScopeErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...boxShelfScopeErrors
+        ];
+      }
       if (policyAuthorizationDiagnostics.errors.length > 0) {
         result.valid = false;
         result.errors = [
           ...(result.errors ?? []),
           ...policyAuthorizationDiagnostics.errors
+        ];
+      }
+      if (policyCallDiagnostics.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...policyCallDiagnostics.errors
         ];
       }
 
@@ -3968,6 +5824,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ...detectUnreachableGuardArmWarnings(ast, content),
         ...detectUnknownPolicyRuleWarnings(ast),
         ...detectPrivilegedGuardWithoutPolicyOperationWarnings(ast, policies),
+        ...detectPolicyDeclarationWarnings(ast, policies, contextExecutables),
         ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : []),
         ...policyAuthorizationDiagnostics.warnings
       ]).filter(warning => !suppressedWarningCodes.has(warning.code));
@@ -4043,7 +5900,32 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
       const labels = executable.labels && executable.labels.length > 0
         ? ` ${chalk.dim(`[${executable.labels.join(', ')}]`)}`
         : '';
-      console.log(`  ${executable.name}${params}${labels}`);
+      const metadata: string[] = [];
+      if (executable.controlArgs && executable.controlArgs.length > 0) {
+        metadata.push(`controlArgs=${executable.controlArgs.join(', ')}`);
+      }
+      if (executable.updateArgs && executable.updateArgs.length > 0) {
+        metadata.push(`updateArgs=${executable.updateArgs.join(', ')}`);
+      }
+      if (executable.exactPayloadArgs && executable.exactPayloadArgs.length > 0) {
+        metadata.push(`exactPayloadArgs=${executable.exactPayloadArgs.join(', ')}`);
+      }
+      if (executable.sourceArgs && executable.sourceArgs.length > 0) {
+        metadata.push(`sourceArgs=${executable.sourceArgs.join(', ')}`);
+      }
+      if (executable.correlateControlArgs === true) {
+        metadata.push('correlateControlArgs=true');
+      }
+      if (executable.outputRecord?.kind === 'static' && executable.outputRecord.name) {
+        metadata.push(`outputRecord=@${executable.outputRecord.name}`);
+      }
+      if (executable.outputRecord?.kind === 'dynamic' && executable.outputRecord.ref) {
+        metadata.push(`outputRecord=${executable.outputRecord.ref}`);
+      }
+      const metadataText = metadata.length > 0
+        ? ` ${chalk.dim(`{ ${metadata.join('; ')} }`)}`
+        : '';
+      console.log(`  ${executable.name}${params}${labels}${metadataText}`);
     }
   }
 
@@ -4094,6 +5976,44 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
           console.log(`    ${operation}: ${labels.join(', ')}`);
         }
       }
+    }
+  }
+
+  if (result.records && result.records.length > 0) {
+    console.log(`${label('records')}`);
+    for (const record of result.records) {
+      const attributes: string[] = [];
+      if (record.key) {
+        attributes.push(`key=${record.key}`);
+      }
+      if (record.rootMode) {
+        attributes.push(`root=${record.rootMode}`);
+      }
+      if (record.display) {
+        attributes.push(`display=${record.display}`);
+      }
+      if (record.fields && record.fields.length > 0) {
+        attributes.push(`fields=${record.fields.map(field => field.name).join(', ')}`);
+      }
+      console.log(`  ${record.name}${attributes.length > 0 ? ` ${chalk.dim(`{ ${attributes.join('; ')} }`)}` : ''}`);
+    }
+  }
+
+  if (result.shelves && result.shelves.length > 0) {
+    console.log(`${label('shelves')}`);
+    for (const shelf of result.shelves) {
+      const slotSummary = shelf.slots
+        .map(slot => {
+          const suffix =
+            slot.cardinality === 'collection'
+              ? '[]'
+              : slot.optional
+                ? '?'
+                : '';
+          return `${slot.name}:${slot.record}${suffix}`;
+        })
+        .join(', ');
+      console.log(`  ${shelf.name}${slotSummary ? ` ${chalk.dim(`{ ${slotSummary} }`)}` : ''}`);
     }
   }
 

@@ -6,7 +6,7 @@ category: cli
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-03-16
+updated: 2026-04-06
 qa_tier: 2
 ---
 
@@ -103,16 +103,38 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, and `guard-context-missing-arg`.
+Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, `guard-context-missing-arg`, `policy-operations-unknown-label`, `policy-authorizations-deny-unknown-tool`, and `policy-label-flow-unknown-target`.
 
 **Policy / guard validation:**
 
-`mlld validate --format json` now surfaces policy declarations, exe labels, and richer guard structure:
+`mlld validate --format json` now surfaces policy declarations, richer executable metadata, record and shelf declarations, and richer guard structure:
 
 ```json
 {
-  "executables": [{ "name": "send_email", "params": ["recipients"], "labels": ["tool:w"] }],
+  "executables": [{
+    "name": "send_email",
+    "params": ["recipients", "subject", "body"],
+    "labels": ["tool:w"],
+    "controlArgs": ["recipients"],
+    "updateArgs": ["subject"],
+    "exactPayloadArgs": ["body"],
+    "correlateControlArgs": true,
+    "outputRecord": { "kind": "static", "name": "email_result" }
+  }],
+  "records": [{ "name": "email_result", "key": "message_id", "display": "legacy" }],
+  "shelves": [{ "name": "pipeline", "slots": [{ "name": "selected", "record": "email_result", "cardinality": "singular" }] }],
   "policies": [{ "name": "task", "rules": ["no-send-to-unknown"], "operations": { "destructive": ["tool:w"] }, "locked": false }],
+  "policyCalls": [{
+    "callee": "@policy.build",
+    "location": { "line": 24, "column": 14 },
+    "status": "analyzed",
+    "intentSource": "top_level_var",
+    "toolsSource": "top_level_var",
+    "taskSource": "top_level_var",
+    "diagnostics": [
+      { "reason": "known_not_in_task", "tool": "send_email", "arg": "recipient", "message": "Known literal 'evil-recipient' not found in task text" }
+    ]
+  }],
   "guards": [{
     "name": "authSendEmail",
     "timing": "before",
@@ -120,13 +142,57 @@ Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform
     "privileged": true,
     "arms": [
       { "condition": "@mx.args.recipients ~= [\"alice@example.com\"]", "action": "allow" },
-      { "condition": "@mx.op.name == \"send_email\"", "action": "deny", "reason": "recipients not authorized" }
+      { "condition": "@mx.op.name == \"send_email\"", "action": "resume", "reason": "return valid JSON" }
     ]
   }]
 }
 ```
 
 This is useful when validating LLM-generated policies/guards before execution.
+
+`policyCalls` is JSON-only analyzer detail for statically analyzable `@policy.build(...)` and `@policy.validate(...)` callsites. Each entry is either:
+
+- `status: "analyzed"` with concrete diagnostics
+- `status: "skipped"` with a `skipReason` such as `dynamic-source-intent`, `dynamic-source-tools`, `dynamic-source-task`, `unsupported-expression`, or `unresolved-top-level-binding`
+
+Skipped entries stay out of default text output so `mlld validate` only reports actionable issues.
+
+**Executable metadata validation:**
+
+`mlld validate` now fails early for executable metadata mistakes that would otherwise fail only at runtime:
+
+- unknown `with { ... }` keys such as `contolArgs`
+- `controlArgs` / `updateArgs` / `exactPayloadArgs` entries that are not declared params
+- overlap errors such as `updateArgs` intersecting `controlArgs`
+- non-boolean `correlateControlArgs`
+
+**Record and shelf validation:**
+
+`mlld validate` now catches statically knowable record and shelf definition errors before execution:
+
+- record key fields that are missing or optional
+- impure computed record fields
+- invalid record display and `when` declarations
+- executable `=> record` references to unknown records
+- shelf references to unknown records or slots
+- invalid shelf merge/cardinality combinations
+- statically obvious `box.shelf` alias conflicts and unknown slot targets
+
+**Static policy call validation:**
+
+`mlld validate` also analyzes a conservative static subset of `@policy.build(...)` and `@policy.validate(...)` callsites when the intent, tools, and optional `task` resolve from inline literals, top-level literal vars, or static field access on those vars.
+
+It currently catches:
+
+- unknown tools and args
+- denied tools from `with { policy: ... }` overrides
+- unconstrained control-arg authorizations
+- proofless `resolved` values that should be handle-backed
+- `known` literals not present in `options.task`
+- `exactPayloadArgs` literals not present in `options.task`
+- update authorizations that omit all declared `updateArgs`
+
+Dynamic callsites are skipped rather than guessed, and are surfaced only in JSON under `policyCalls`.
 
 **Semantic guard/policy warnings:**
 
@@ -136,6 +202,9 @@ This is useful when validating LLM-generated policies/guards before execution.
 - `privileged-wildcard-allow` for `guard privileged ... when [ * => allow ]`
 - `guard-unreachable-arm` when an earlier guard arm already covers a later one
 - `privileged-guard-without-policy-operation` when a privileged `op:` guard does not match any policy operation label
+- `policy-operations-unknown-label` when `policy.operations` references labels not present in the validation context
+- `policy-authorizations-deny-unknown-tool` when `policy.authorizations.deny` names a tool that does not exist in scope
+- `policy-label-flow-unknown-target` when `policy.labels.*.allow` / `deny` targets do not match declared categories or validation-context labels
 
 These stay warnings, not errors.
 
@@ -153,6 +222,9 @@ With context, validation warns when:
 - a function filter references an exe that does not exist
 - an `op:` filter does not match any exe label in the context
 - `@mx.args.someName` references a parameter not declared on the guarded exe
+- `policy.operations` points at labels that no exe in the context carries
+- `policy.authorizations.deny` names tools missing from the context
+- `policy.labels` deny/allow targets do not match declared operation categories or context labels
 
 **Template validation (.att / .mtt):**
 
@@ -217,4 +289,4 @@ Use `--verbose` for full per-file details. Exit code 1 if any file fails.
 mlld validate module.mld --format json
 ```
 
-Returns structured data: `executables`, `exports`, `imports`, `guards`, `policies`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.
+Returns structured data: `executables`, `records`, `shelves`, `exports`, `imports`, `guards`, `policies`, `needs`, `warnings`, `redefinitions`, `antiPatterns`. For templates, includes `template` with `type`, `variables`, and `discoveredParams`.

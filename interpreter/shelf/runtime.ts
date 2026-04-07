@@ -37,6 +37,11 @@ import type { DataAliasedValue, DataValue } from '@core/types/var';
 import { isHandleWrapper } from '@core/types/handle';
 import type { RuntimeTraceScope } from '@core/types/trace';
 import { traceRecordCoerce, traceRecordSchemaFail } from '@interpreter/tracing/events';
+import {
+  validateShelfScopeBindingConflicts as collectShelfScopeBindingConflictIssues,
+  validateShelfScopeBindingTargets as collectShelfScopeBindingTargetIssues,
+  type ValidatableShelfScopeBinding
+} from '@core/validation/shelf-scope';
 
 type ShelfNamespaceMetadata = {
   security?: ReturnType<typeof serializeSecurityDescriptor>;
@@ -1376,17 +1381,27 @@ function validateScopeSlotBindingTargets(
   bindings: readonly ShelfScopeSlotBinding[],
   env: Environment
 ): void {
-  for (const binding of bindings) {
-    const shelf = env.getShelfDefinition(binding.ref.shelfName);
-    const slot = shelf?.slots[binding.ref.slotName];
-    if (!shelf || !slot) {
-      throw new MlldInterpreterError(
-        `Unknown shelf slot '@${binding.ref.shelfName}.${binding.ref.slotName}'`,
-        'box',
-        undefined,
-        { code: 'INVALID_SHELF_SCOPE' }
-      );
-    }
+  const shelves = new Map(
+    Array.from(
+      new Set(bindings.map(binding => binding.ref.shelfName))
+    ).flatMap(shelfName => {
+      const definition = env.getShelfDefinition(shelfName);
+      return definition ? [[shelfName, definition] as const] : [];
+    })
+  );
+
+  const issues = collectShelfScopeBindingTargetIssues(
+    bindings as ValidatableShelfScopeBinding[],
+    shelves
+  );
+  if (issues.length > 0) {
+    const firstIssue = issues[0];
+    throw new MlldInterpreterError(
+      firstIssue.message,
+      'box',
+      firstIssue.location,
+      { code: firstIssue.code }
+    );
   }
 }
 
@@ -1395,62 +1410,19 @@ function validateScopeSlotBindingConflicts(
   writeBindings: readonly ShelfScopeSlotBinding[],
   readAliases: Readonly<Record<string, unknown>>
 ): void {
-  const bindingByRef = new Map<string, ShelfScopeSlotBinding>();
-  const aliasRefs = new Map<string, string>();
-  const namespaceNames = new Set<string>();
-
-  for (const binding of [...readBindings, ...writeBindings]) {
-    const refKey = normalizeScopeBindingRef(binding);
-    const existing = bindingByRef.get(refKey);
-    if (existing) {
-      if ((existing.alias ?? null) !== (binding.alias ?? null)) {
-        throw new MlldInterpreterError(
-          `Shelf slot '@${binding.ref.shelfName}.${binding.ref.slotName}' cannot be exposed under multiple agent names`,
-          'box',
-          undefined,
-          { code: 'INVALID_SHELF_SCOPE' }
-        );
-      }
-    } else {
-      bindingByRef.set(refKey, binding);
-    }
-
-    if (binding.alias) {
-      const existingAliasRef = aliasRefs.get(binding.alias);
-      if (existingAliasRef && existingAliasRef !== refKey) {
-        throw new MlldInterpreterError(
-          `Shelf alias '${binding.alias}' is already bound to a different slot`,
-          'box',
-          undefined,
-          { code: 'INVALID_SHELF_SCOPE' }
-        );
-      }
-      aliasRefs.set(binding.alias, refKey);
-    } else {
-      namespaceNames.add(binding.ref.shelfName);
-    }
-  }
-
-  for (const alias of Object.keys(readAliases)) {
-    if (aliasRefs.has(alias)) {
-      throw new MlldInterpreterError(
-        `Shelf alias '${alias}' is already bound to a slot`,
-        'box',
-        undefined,
-        { code: 'INVALID_SHELF_SCOPE' }
-      );
-    }
-  }
-
-  for (const alias of [...aliasRefs.keys(), ...Object.keys(readAliases)]) {
-    if (namespaceNames.has(alias)) {
-      throw new MlldInterpreterError(
-        `Shelf alias '${alias}' conflicts with an exposed shelf namespace`,
-        'box',
-        undefined,
-        { code: 'INVALID_SHELF_SCOPE' }
-      );
-    }
+  const issues = collectShelfScopeBindingConflictIssues(
+    readBindings as ValidatableShelfScopeBinding[],
+    writeBindings as ValidatableShelfScopeBinding[],
+    readAliases
+  );
+  if (issues.length > 0) {
+    const firstIssue = issues[0];
+    throw new MlldInterpreterError(
+      firstIssue.message,
+      'box',
+      firstIssue.location,
+      { code: firstIssue.code }
+    );
   }
 }
 

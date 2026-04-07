@@ -564,6 +564,428 @@ show @taskPolicy
     expect(result.valid).toBe(true);
   });
 
+  it('reports denied tools for statically analyzable @policy.build callsites with base policy overrides', async () => {
+    const modulePath = await writeModule('analyze-policy-build-denied.mld', `exe tool:w @create_draft(subject, body) = cmd { echo "ok" } with { controlArgs: [] }
+exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+
+var tools @writeTools = {
+  create_draft: { mlld: @create_draft, expose: ["subject", "body"], controlArgs: [] },
+  delete_draft: { mlld: @delete_draft, expose: ["id"], controlArgs: ["id"] }
+}
+
+var @basePolicy = {
+  authorizations: {
+    deny: ["delete_draft"]
+  }
+}
+
+var @built = @policy.build({
+  delete_draft: {
+    id: "draft-1"
+  }
+}, @writeTools) with { policy: @basePolicy }
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      "Tool 'delete_draft' is denied by policy.authorizations.deny"
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed',
+        toolsSource: 'top_level_var',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'authorizations-denied-tool',
+            tool: 'delete_draft'
+          })
+        ])
+      })
+    ]);
+  });
+
+  it('validates task-backed known literals for statically analyzable policy builder calls', async () => {
+    const modulePath = await writeModule('analyze-policy-build-known-task.mld', `exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+
+var tools @writeTools = {
+  send_email: {
+    mlld: @send_email,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+
+var @query = "Please send an update to ada-recipient"
+var @intent = {
+  known: {
+    send_email: {
+      recipient: "evil-recipient"
+    }
+  }
+}
+
+var @built = @policy.build(@intent, @writeTools, { task: @query })
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      "Known literal 'evil-recipient' not found in task text"
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed',
+        intentSource: 'top_level_var',
+        toolsSource: 'top_level_var',
+        taskSource: 'top_level_var',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'known_not_in_task',
+            tool: 'send_email',
+            arg: 'recipient'
+          })
+        ])
+      })
+    ]);
+  });
+
+  it('reports proofless resolved values for statically analyzable policy validator calls', async () => {
+    const modulePath = await writeModule('analyze-policy-validate-resolved.mld', `exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+
+var tools @writeTools = {
+  send_email: {
+    mlld: @send_email,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+
+var @intent = {
+  resolved: {
+    send_email: {
+      recipient: "acct-1"
+    }
+  }
+}
+
+var @validated = @policy.validate(@intent, @writeTools)
+show @validated
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      "Tool 'send_email' resolved authorization for 'recipient' must use a handle-backed value"
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.validate',
+        status: 'analyzed',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'proofless_resolved_value',
+            tool: 'send_email',
+            arg: 'recipient'
+          })
+        ])
+      })
+    ]);
+  });
+
+  it('reports no_update_fields for statically analyzable policy builder calls', async () => {
+    const modulePath = await writeModule('analyze-policy-build-update-args.mld', `exe finance:w, tool:w @update_scheduled_transaction(id, recipient, amount, date, subject) = cmd { echo "ok" } with {
+  controlArgs: ["id", "recipient"],
+  updateArgs: ["amount", "date", "subject"]
+}
+
+var tools @writeTools = {
+  update_scheduled_transaction: {
+    mlld: @update_scheduled_transaction,
+    expose: ["id", "recipient", "amount", "date", "subject"],
+    controlArgs: ["id", "recipient"]
+  }
+}
+
+var @built = @policy.build({
+  update_scheduled_transaction: {
+    id: "txn-1",
+    recipient: "acct-1"
+  }
+}, @writeTools)
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      "Tool 'update_scheduled_transaction' update authorization must specify at least one update field: amount, date, subject"
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'no_update_fields',
+            tool: 'update_scheduled_transaction'
+          })
+        ])
+      })
+    ]);
+  });
+
+  it('skips policy call analysis when intent comes from a dynamic top-level binding', async () => {
+    const modulePath = await writeModule('analyze-policy-build-dynamic-skip.mld', `exe tool:w @create_draft(subject, body) = cmd { echo "ok" } with { controlArgs: [] }
+
+var tools @writeTools = {
+  create_draft: { mlld: @create_draft, expose: ["subject", "body"], controlArgs: [] }
+}
+
+var @intent_json = '{"allow":["create_draft"]}'
+var @intent = @intent_json | @parse
+
+var @built = @policy.build(@intent, @writeTools)
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toBeUndefined();
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'skipped',
+        intentSource: 'top_level_var',
+        toolsSource: 'top_level_var',
+        skipReason: 'dynamic-source-intent'
+      })
+    ]);
+  });
+
+  it('surfaces executable authorization metadata, output records, and resume guard arms', async () => {
+    const modulePath = await writeModule('analyze-exe-metadata.mld', `
+/record @contact = {
+  facts: [email: string]
+}
+/exe llm, tool:w @send_email(recipient, subject, body) = js { return "ok"; } => contact with {
+  controlArgs: ["recipient"],
+  updateArgs: ["subject"],
+  exactPayloadArgs: ["body"],
+  correlateControlArgs: true
+}
+/guard @format after op:named:send_email = when [
+  * => resume "Return valid JSON"
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.executables).toEqual([
+      expect.objectContaining({
+        name: 'send_email',
+        controlArgs: ['recipient'],
+        updateArgs: ['subject'],
+        exactPayloadArgs: ['body'],
+        correlateControlArgs: true,
+        outputRecord: {
+          kind: 'static',
+          name: 'contact'
+        }
+      })
+    ]);
+    expect(result.guards?.[0]?.arms).toEqual([
+      expect.objectContaining({
+        action: 'resume',
+        reason: 'Return valid JSON'
+      })
+    ]);
+  });
+
+  it('fails validation for unknown executable with-clause keys', async () => {
+    const modulePath = await writeModule('analyze-exe-with-typo.mld', `
+/exe @send_email(recipient) = js { return "ok"; } with {
+  contolArgs: ["recipient"]
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message)).toContain(
+      "Unknown executable with-clause field 'contolArgs'"
+    );
+  });
+
+  it('fails validation for invalid executable authorization metadata', async () => {
+    const modulePath = await writeModule('analyze-exe-invalid-metadata.mld', `
+/exe @send_email(recipient, body) = js { return "ok"; } with {
+  controlArgs: ["recipient"],
+  updateArgs: ["recipient"],
+  exactPayloadArgs: ["missing"],
+  correlateControlArgs: "yes"
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain('Executable updateArgs must be disjoint from controlArgs');
+    expect(messages).toContain("Executable exactPayloadArgs entry 'missing' is not a declared parameter");
+    expect(messages).toContain('Executable correlateControlArgs must be a boolean');
+  });
+
+  it('catches statically knowable record definition errors', async () => {
+    const modulePath = await writeModule('analyze-invalid-records.mld', `
+/record @deal = {
+  key: id,
+  facts: [id: string?]
+}
+
+/record @contact = {
+  facts: [{ recipient: @lookup() }]
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("Record '@deal' key field 'id' cannot be optional");
+    expect(messages).toContain("Record '@contact' computed field 'recipient' must be pure");
+  });
+
+  it('surfaces valid record definitions in analyze output', async () => {
+    const modulePath = await writeModule('analyze-record-info.mld', `
+/record @contact = {
+  key: email,
+  facts: [email: string],
+  data: [name: string],
+  display: [email]
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.records).toEqual([
+      expect.objectContaining({
+        name: 'contact',
+        key: 'email',
+        display: 'legacy',
+        rootMode: 'object',
+        fields: expect.arrayContaining([
+          expect.objectContaining({ name: 'email', classification: 'fact' }),
+          expect.objectContaining({ name: 'name', classification: 'data' })
+        ])
+      })
+    ]);
+  });
+
+  it('catches statically knowable output-record reference errors', async () => {
+    const modulePath = await writeModule('analyze-missing-output-record.mld', `
+/exe @send_email(recipient) = js { return "ok"; } => contact
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      "Executable '@send_email' references unknown record '@contact'"
+    );
+  });
+
+  it('catches statically knowable shelf definition errors', async () => {
+    const modulePath = await writeModule('analyze-invalid-shelf.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+
+/shelf @pipeline = {
+  recipients: { type: contact[], merge: "replace" },
+  selected: contact? from missing,
+  unknowns: missing_record[]
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("slot 'recipients' cannot use merge:'replace' on a collection");
+    expect(messages).toContain("slot 'selected' references unknown slot 'missing'");
+    expect(messages).toContain("references unknown record '@missing_record'");
+  });
+
+  it('surfaces valid shelf definitions in analyze output', async () => {
+    const modulePath = await writeModule('analyze-shelf-info.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+
+/shelf @pipeline = {
+  recipients: contact[],
+  selected: contact? from recipients
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.shelves).toEqual([
+      expect.objectContaining({
+        name: 'pipeline',
+        slots: expect.arrayContaining([
+          expect.objectContaining({ name: 'recipients', record: 'contact', cardinality: 'collection' }),
+          expect.objectContaining({ name: 'selected', record: 'contact', cardinality: 'singular', from: 'recipients' })
+        ])
+      })
+    ]);
+  });
+
+  it('catches static box shelf alias conflicts and unknown targets', async () => {
+    const modulePath = await writeModule('analyze-box-shelf-scope.mld', `
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+
+/shelf @ledger = {
+  execution_log: contact[],
+  candidates: contact[]
+}
+
+/box {
+  shelf: {
+    read: [@ledger.execution_log as slot, @ledger.candidates as slot, @missing.ghost],
+    write: [@ledger.execution_log]
+  }
+} [
+  => @input
+]
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("Shelf alias 'slot' is already bound to a different slot");
+    expect(messages).toContain("Unknown shelf slot '@missing.ghost'");
+  });
+
   it('populates needs.cmd with shell commands detected from run directives', async () => {
     const modulePath = await writeModule('analyze-needs-shell-commands.mld', `/run sh {
 curl https://example.com | jq ".ok"
