@@ -713,8 +713,12 @@ export class ModuleContentProcessor {
         ? 'markdown'
         : inferredMode;
 
-    // Parse the imported mlld content with the inferred mode
-    let parseResult = await parse(processedContent, { mode });
+    // Stamp imported AST nodes with their source path so downstream evaluators
+    // can recover correct cross-module locations.
+    let parseResult = await parse(processedContent, {
+      mode,
+      grammarSource: resolvedPath
+    });
 
     // Retry strict parsing when markdown mode was chosen but may be wrong:
     // 1. VFS defaults to markdown but the file extension indicates strict
@@ -735,7 +739,10 @@ export class ModuleContentProcessor {
       });
 
       if (!markdownHasDirectives) {
-        const strictParseResult = await parse(processedContent, { mode: 'strict' });
+        const strictParseResult = await parse(processedContent, {
+          mode: 'strict',
+          grammarSource: resolvedPath
+        });
         const strictHasStructuredNodes =
           strictParseResult.success &&
           Array.isArray(strictParseResult.ast) &&
