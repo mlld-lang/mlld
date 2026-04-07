@@ -46,6 +46,7 @@ import {
   type GuardArgName
 } from '@interpreter/utils/guard-args';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { getVariableSecurityDescriptor } from '@interpreter/eval/exec/security-descriptor';
@@ -243,6 +244,47 @@ export function stringifyExecGuardArg(value: unknown): string {
   }
 }
 
+function hasStructuredRuntimeSignals(value: unknown, seen = new Set<unknown>()): boolean {
+  if (isVariable(value)) {
+    return hasStructuredRuntimeSignals(value.value, seen);
+  }
+  if (isStructuredValue(value)) {
+    return true;
+  }
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  const carrier = value as {
+    mx?: { factsources?: readonly unknown[] };
+    metadata?: { factsources?: readonly unknown[] };
+  };
+  if (
+    (Array.isArray(carrier.mx?.factsources) && carrier.mx.factsources.length > 0)
+    || (Array.isArray(carrier.metadata?.factsources) && carrier.metadata.factsources.length > 0)
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some(entry => hasStructuredRuntimeSignals(entry, seen));
+  }
+  return Object.values(value as Record<string, unknown>).some(entry =>
+    hasStructuredRuntimeSignals(entry, seen)
+  );
+}
+
+function shouldPreserveOriginalStructuredArg(originalValue: unknown, replacementValue: unknown): boolean {
+  return (
+    hasStructuredRuntimeSignals(originalValue)
+    && !hasStructuredRuntimeSignals(replacementValue)
+    && stringifyExecGuardArg(originalValue) === stringifyExecGuardArg(replacementValue)
+  );
+}
+
 function applyGuardTransformsToExecArgs(options: {
   guardInputEntries: readonly GuardInputMappingEntry[];
   transformedInputs: readonly Variable[];
@@ -264,8 +306,11 @@ function applyGuardTransformsToExecArgs(options: {
       continue;
     }
     guardVariableCandidates[argIndex] = replacement;
-    const normalizedValue = isStructuredValue(replacement.value)
-      ? replacement.value.data
+    // Guard inputs may carry proof-bearing structured values. Preserve the
+    // wrapper so downstream executables still receive factsources/labels.
+    const originalValue = evaluatedArgs[argIndex];
+    const normalizedValue = shouldPreserveOriginalStructuredArg(originalValue, replacement.value)
+      ? originalValue
       : replacement.value;
     evaluatedArgs[argIndex] = normalizedValue;
     evaluatedArgStrings[argIndex] = stringifyExecGuardArg(normalizedValue);
@@ -295,7 +340,10 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
         || Array.isArray(evaluatedArgs[i].mx?.factsources)
       )
     ) {
-      const materialized = materializeGuardInputs([evaluatedArgs[i]], { nameHint: '__guard_input__' })[0];
+      const materialized = materializeGuardInputs([evaluatedArgs[i]], {
+        nameHint: '__guard_input__',
+        preserveStructuredScalars: true
+      })[0];
       if (materialized) {
         guardVariableCandidates[i] = materialized;
         continue;
@@ -318,7 +366,8 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     ),
     {
       nameHint: '__guard_input__',
-      argNames
+      argNames,
+      preserveStructuredScalars: true
     }
   );
 
@@ -661,7 +710,10 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
   const preHookInputs =
     userHookInputs === guardInputs
       ? guardInputs
-      : materializeGuardInputs(userHookInputs, { nameHint: '__guard_input__' });
+      : materializeGuardInputs(userHookInputs, {
+          nameHint: '__guard_input__',
+          preserveStructuredScalars: true
+        });
   let transformedGuardSet: Set<Variable> | null = null;
   if (preHookInputs !== guardInputs) {
     transformedGuardSet = new Set(preHookInputs);

@@ -3,6 +3,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { accessField } from '@interpreter/utils/field-access';
 import { fileURLToPath } from 'url';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
@@ -21,6 +22,9 @@ const callProjectedHandleFromConfigPath = fileURLToPath(
 );
 const callProjectedValueFromConfigPath = fileURLToPath(
   new URL('../../tests/support/mcp/call-projected-value-from-config.cjs', import.meta.url)
+);
+const callProjectedObjectFromConfigPath = fileURLToPath(
+  new URL('../../tests/support/mcp/call-projected-object-from-config.cjs', import.meta.url)
 );
 
 const pathService = new PathService();
@@ -1242,6 +1246,67 @@ describe('box MCP config integration', () => {
       });
 
       expect(output.trim()).toBe('sent:mark@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves projected fact handles for auto-provisioned shelve under with-policy bridge sessions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = {',
+      '  facts: [email: string],',
+      '  display: [{ ref: "email" }]',
+      '}',
+      '/shelf @outreach = {',
+      '  selected: contact?',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "alice@example.com" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/var @basePolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedObjectFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Alice"}' '{"email":"email.handle"}' shelve '{"slot_alias":"outreach.selected"}' value }`,
+      '/box {',
+      '  shelf: { write: [@outreach.selected] }',
+      '} [',
+      '  show @agent("Pick Alice", { tools: @toolList }) with { policy: @basePolicy }',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          value: 'alice@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+
+      const outreach = environment?.getVariable('outreach');
+      expect(outreach).toBeDefined();
+
+      const selected = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env: environment });
+      const email = await accessField(selected, { type: 'field', value: 'email' } as any, { env: environment });
+
+      expect((email as any).mx?.labels).toEqual(expect.arrayContaining(['fact:@contact.email']));
+      expect((email as any).mx?.factsources).toEqual([
+        expect.objectContaining({
+          ref: '@contact.email',
+          sourceRef: '@contact',
+          field: 'email'
+        })
+      ]);
     } finally {
       environment?.cleanup();
     }

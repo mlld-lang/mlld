@@ -1327,6 +1327,56 @@ print(json.dumps(value))
     expect(result.value.mx?.taint).toEqual(expect.arrayContaining(['secret']));
   });
 
+  it('preserves structured fact-bearing values through active policy guard preprocessing', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+/policy @p = { labels: { "secret": { allow: ["tool:r"] } } }
+/exe @fakeSearch() = js {
+  return [{ email: "alice@example.com", name: "Alice" }];
+} => contact
+/exe secret @markSecret(value) = @value
+/exe tool:r @inspect(value) = [
+  => {
+    labels: @value.keepStructured.mx.labels,
+    factsources: @value.keepStructured.mx.factsources,
+    value: @value
+  }
+]
+/var @inspected = @inspect(@markSecret(@fakeSearch().0.email))
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const inspected = env.getVariable('inspected')?.value;
+    expect(isStructuredValue(inspected)).toBe(true);
+
+    const labels = await accessField(inspected, { type: 'field', value: 'labels' } as any);
+    const factsources = await accessField(inspected, { type: 'field', value: 'factsources' } as any);
+    const value = await accessField(inspected, { type: 'field', value: 'value' } as any);
+    const resolvedLabels = (labels as any)?.data ?? labels;
+    const resolvedFactsources = (factsources as any)?.data ?? factsources;
+
+    expect(isStructuredValue(value)).toBe(true);
+    expect(asText(value)).toBe('alice@example.com');
+    expect((value as any).mx?.labels).toEqual(
+      expect.arrayContaining(['fact:@contact.email', 'secret'])
+    );
+
+    expect(resolvedLabels).toEqual(
+      expect.arrayContaining(['fact:@contact.email', 'secret'])
+    );
+    expect(resolvedFactsources).toEqual([
+      expect.objectContaining({
+        ref: '@contact.email',
+        sourceRef: '@contact',
+        field: 'email'
+      })
+    ]);
+  });
+
   it('keeps invocation-level pipeline source retryable for exec invocations', async () => {
     const src = `
 /exe @seed() = "seed"

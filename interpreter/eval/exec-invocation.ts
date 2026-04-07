@@ -140,6 +140,7 @@ import {
   normalizeInvocationWithClause
 } from './exec/scoped-runtime-config';
 import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
+import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -2885,11 +2886,17 @@ async function evaluateExecInvocationInternal(
           hasInterpolation: false,
           isMultiLine: false
         };
-        const syntheticVar = createSimpleTextVariable(
-          '__inline_arg__',
-          evaluatedArgStrings[i] ?? '',
-          guardInputSource
-        );
+        const syntheticVar =
+          materializeGuardInputs([evaluatedArgs[i]], {
+            nameHint: '__inline_arg__',
+            preserveStructuredScalars: true
+          })[0]
+          ?? createSimpleTextVariable(
+            '__inline_arg__',
+            evaluatedArgStrings[i] ?? '',
+            guardInputSource
+          );
+        syntheticVar.source = guardInputSource;
         syntheticVar.value = evaluatedArgs[i];
         if (!syntheticVar.mx) syntheticVar.mx = {};
         updateVarMxFromDescriptor(syntheticVar.mx as VariableContext, dataDescriptor);
