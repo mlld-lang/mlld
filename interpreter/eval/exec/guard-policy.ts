@@ -98,6 +98,7 @@ export type CreateExecOperationPolicyContextOptions = {
   operationName?: string;
   toolLabels: readonly string[];
   authorizationControlArgs?: readonly string[];
+  correlateControlArgs?: boolean;
   operationTaintFacts?: boolean;
   env: Environment;
   execEnv: Environment;
@@ -424,6 +425,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {}),
+      ...(options.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
       ...(options.operationTaintFacts === true ? { taintFacts: true } : {})
     }
   };

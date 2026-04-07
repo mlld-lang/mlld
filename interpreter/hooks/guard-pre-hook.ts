@@ -11,6 +11,7 @@ import {
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
 import {
+  evaluateControlArgCorrelation,
   evaluateAuthorizationInheritedPolicyChecks,
   generatePolicyGuards
 } from '@core/policy/guards';
@@ -477,6 +478,54 @@ function createAuthorizationGuard(
   };
 }
 
+function createCorrelateControlArgsGuard(
+  operation: NonNullable<Parameters<PreHook>[3]>
+): GuardDefinition | null {
+  if (!operation.name || !isToolWriteOperation(operation)) {
+    return null;
+  }
+
+  const controlArgs = getAuthorizationControlArgs(operation);
+  if (controlArgs.length <= 1 || operation.metadata?.correlateControlArgs !== true) {
+    return null;
+  }
+
+  return {
+    id: '__correlate_control_args__',
+    name: '__correlate_control_args__',
+    filterKind: 'operation',
+    filterValue: 'tool:w',
+    scope: 'perOperation',
+    modifier: 'default',
+    block: {
+      type: 'GuardBlock',
+      nodeId: '__correlate_control_args__',
+      location: null as any,
+      modifier: 'default',
+      rules: []
+    },
+    registrationOrder: Number.MAX_SAFE_INTEGER - 1,
+    timing: 'before',
+    privileged: true,
+    policyGuardMode: 'policy',
+    policyCondition: ({ args, argDescriptors, operation: policyOperation }) => {
+      const failure = evaluateControlArgCorrelation({
+        operation: policyOperation,
+        args,
+        argDescriptors
+      });
+      if (!failure) {
+        return { decision: 'allow' };
+      }
+      return {
+        decision: 'deny',
+        reason: failure.reason,
+        rule: failure.rule
+      };
+    }
+  };
+}
+
 export const guardPreHook: PreHook = async (
   node,
   inputs,
@@ -535,9 +584,15 @@ export const guardPreHook: PreHook = async (
       runtimePolicyGuards,
       guardOverride
     );
+    const correlateControlArgsGuard = createCorrelateControlArgsGuard(operation);
     const authorizationGuard = createAuthorizationGuard(env, operation);
+    if (correlateControlArgsGuard) {
+      operationGuards.push(correlateControlArgsGuard);
+    }
     if (authorizationGuard) {
       operationGuards.push(authorizationGuard);
+    }
+    if (correlateControlArgsGuard || authorizationGuard) {
       operationGuards.sort((left, right) => left.registrationOrder - right.registrationOrder);
     }
     const policySummary = env.getPolicySummary();

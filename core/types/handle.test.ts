@@ -11,6 +11,9 @@ describe('handle types', () => {
     const handle = createFactSourceHandle({
       sourceRef: 'contact',
       field: 'email',
+      instanceKey: 'string:"ada@example.com"',
+      coercionId: 'coerce-1',
+      position: 0,
       tiers: ['internal', 'verified', 'internal']
     });
 
@@ -19,10 +22,13 @@ describe('handle types', () => {
       ref: '@contact.email',
       sourceRef: '@contact',
       field: 'email',
+      instanceKey: 'string:"ada@example.com"',
+      coercionId: 'coerce-1',
+      position: 0,
       tiers: ['internal', 'verified']
     });
     expect(JSON.stringify(handle)).toBe(
-      '{"kind":"record-field","ref":"@contact.email","sourceRef":"@contact","field":"email","tiers":["internal","verified"]}'
+      '{"kind":"record-field","ref":"@contact.email","sourceRef":"@contact","field":"email","instanceKey":"string:\\"ada@example.com\\"","coercionId":"coerce-1","position":0,"tiers":["internal","verified"]}'
     );
     expect(isFactSourceHandle(handle)).toBe(true);
   });

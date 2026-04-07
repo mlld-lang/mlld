@@ -7,6 +7,7 @@ import type {
 } from '@core/types/guard';
 import type { SourceLocation } from '@core/types';
 import type { Variable } from '@core/types/variable';
+import type { FactSourceHandle } from '@core/types/handle';
 import { normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 export type PolicyConditionResult =
@@ -24,6 +25,7 @@ export type PolicyArgDescriptor = {
   labels?: readonly string[];
   taint?: readonly string[];
   attestations?: readonly string[];
+  factsources?: readonly FactSourceHandle[];
   sources?: readonly string[];
   urls?: readonly string[];
 };

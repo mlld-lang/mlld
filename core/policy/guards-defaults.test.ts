@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateAuthorizationInheritedPolicyChecks, generatePolicyGuards } from './guards';
+import {
+  evaluateAuthorizationInheritedPolicyChecks,
+  evaluateControlArgCorrelation,
+  generatePolicyGuards
+} from './guards';
+import { createFactSourceHandle } from '@core/types/handle';
 import type { PolicyConfig } from './union';
 
 describe('generatePolicyGuards defaults rules', () => {
@@ -249,6 +254,127 @@ describe('generatePolicyGuards defaults rules', () => {
         }
       })
     ).toEqual({ decision: 'allow' });
+  });
+
+  it('allows correlated control args when they come from the same keyed record', () => {
+    expect(
+      evaluateControlArgCorrelation({
+        operation: {
+          name: 'sendPayment',
+          metadata: {
+            authorizationControlArgs: ['recipient', 'txId'],
+            correlateControlArgs: true
+          }
+        },
+        args: { recipient: 'bob@example.com', txId: 'tx_001' },
+        argDescriptors: {
+          recipient: {
+            factsources: [
+              createFactSourceHandle({
+                sourceRef: 'transaction',
+                field: 'recipient',
+                instanceKey: 'string:"tx_001"'
+              })
+            ]
+          },
+          txId: {
+            factsources: [
+              createFactSourceHandle({
+                sourceRef: 'transaction',
+                field: 'txId',
+                instanceKey: 'string:"tx_001"'
+              })
+            ]
+          }
+        }
+      })
+    ).toBeUndefined();
+  });
+
+  it('denies correlated control args when they come from different keyed records', () => {
+    expect(
+      evaluateControlArgCorrelation({
+        operation: {
+          name: 'sendPayment',
+          metadata: {
+            authorizationControlArgs: ['recipient', 'txId'],
+            correlateControlArgs: true
+          }
+        },
+        args: { recipient: 'bob@example.com', txId: 'tx_002' },
+        argDescriptors: {
+          recipient: {
+            factsources: [
+              createFactSourceHandle({
+                sourceRef: 'transaction',
+                field: 'recipient',
+                instanceKey: 'string:"tx_001"'
+              })
+            ]
+          },
+          txId: {
+            factsources: [
+              createFactSourceHandle({
+                sourceRef: 'transaction',
+                field: 'txId',
+                instanceKey: 'string:"tx_002"'
+              })
+            ]
+          }
+        }
+      })
+    ).toMatchObject({
+      rule: 'correlate-control-args',
+      reason: expect.stringContaining("recipient -> @transaction[instance=string:\"tx_001\"]")
+    });
+  });
+
+  it('denies correlated control args when a control arg lacks factsource metadata', () => {
+    expect(
+      evaluateControlArgCorrelation({
+        operation: {
+          name: 'sendPayment',
+          metadata: {
+            authorizationControlArgs: ['recipient', 'txId'],
+            correlateControlArgs: true
+          }
+        },
+        args: { recipient: 'bob@example.com', txId: 'tx_002' },
+        argDescriptors: {
+          recipient: {
+            factsources: [
+              createFactSourceHandle({
+                sourceRef: 'transaction',
+                field: 'recipient',
+                instanceKey: 'string:"tx_001"'
+              })
+            ]
+          },
+          txId: {}
+        }
+      })
+    ).toMatchObject({
+      rule: 'correlate-control-args',
+      reason: expect.stringContaining("arg 'txId' does not carry source-record provenance")
+    });
+  });
+
+  it('ignores correlation checks for single control-arg tools', () => {
+    expect(
+      evaluateControlArgCorrelation({
+        operation: {
+          name: 'sendPayment',
+          metadata: {
+            authorizationControlArgs: ['recipient'],
+            correlateControlArgs: true
+          }
+        },
+        args: { recipient: 'bob@example.com' },
+        argDescriptors: {
+          recipient: {}
+        }
+      })
+    ).toBeUndefined();
   });
 
   it('falls back to the first provided arg for non-tool exfil:send operations', () => {

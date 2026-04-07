@@ -18,6 +18,7 @@ import {
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 import { expandOperationLabels } from './label-flow';
 import { matchesLabelPattern } from './fact-labels';
+import type { FactSourceHandle } from '@core/types/handle';
 import {
   getPositiveCheckAcceptedPatterns,
   SEND_INTERNAL_PATTERNS,
@@ -125,6 +126,176 @@ function buildInheritedPositiveCheckFailure(options: {
 
 function projectedHandleSuggestion(message: string): string {
   return `${message} from an approved tool result or another approved source`;
+}
+
+function getOperationControlArgs(operation: {
+  metadata?: Record<string, unknown>;
+}): string[] {
+  const controlArgs = operation.metadata?.authorizationControlArgs;
+  if (!Array.isArray(controlArgs)) {
+    return [];
+  }
+  return controlArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+function shouldCorrelateControlArgs(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return operation.metadata?.correlateControlArgs === true;
+}
+
+function getFactSourceInstanceKey(source: FactSourceHandle): string {
+  if (source.instanceKey) {
+    return `${source.sourceRef}:instance:${source.instanceKey}`;
+  }
+  if (source.coercionId && source.position !== undefined) {
+    return `${source.sourceRef}:coercion:${source.coercionId}:${source.position}`;
+  }
+  return `unknown:${JSON.stringify(source)}`;
+}
+
+function dedupeFactSources(factsources: readonly FactSourceHandle[]): FactSourceHandle[] {
+  const unique = new Map<string, FactSourceHandle>();
+  for (const handle of factsources) {
+    if (!handle || handle.kind !== 'record-field') {
+      continue;
+    }
+    unique.set(getFactSourceInstanceKey(handle), handle);
+  }
+  return Array.from(unique.values());
+}
+
+function describeFactSourceRecord(source: FactSourceHandle): string {
+  if (source.instanceKey) {
+    return `${source.sourceRef}[instance=${source.instanceKey}]`;
+  }
+  if (source.coercionId && source.position !== undefined) {
+    return `${source.sourceRef}[coercion=${source.coercionId.slice(0, 8)},position=${source.position}]`;
+  }
+  return `${source.sourceRef}[instance=unknown]`;
+}
+
+function formatCorrelateControlArgsReason(options: {
+  operationName?: string;
+  detail: string;
+}): string {
+  const target =
+    typeof options.operationName === 'string' && options.operationName.trim().length > 0
+      ? ` on @${options.operationName.trim()}`
+      : '';
+  return `Rule 'correlate-control-args': control args${target} must come from the same source record; ${options.detail}`;
+}
+
+function sameFactSourceInstance(left: FactSourceHandle, right: FactSourceHandle): boolean {
+  if (left.sourceRef !== right.sourceRef) {
+    return false;
+  }
+  if (left.instanceKey && right.instanceKey) {
+    return left.instanceKey === right.instanceKey;
+  }
+  if (
+    left.coercionId &&
+    right.coercionId &&
+    left.position !== undefined &&
+    right.position !== undefined
+  ) {
+    return left.coercionId === right.coercionId && left.position === right.position;
+  }
+  return false;
+}
+
+function resolveControlArgFactSource(options: {
+  argName: string;
+  descriptor?: PolicyArgDescriptor;
+  operationName?: string;
+}):
+  | { ok: true; source: FactSourceHandle }
+  | { ok: false; failure: AuthorizationInheritedPolicyCheckFailure } {
+  const factsources = dedupeFactSources(options.descriptor?.factsources ?? []);
+  if (factsources.length === 0) {
+    return {
+      ok: false,
+      failure: {
+        reason: formatCorrelateControlArgsReason({
+          operationName: options.operationName,
+          detail: `arg '${options.argName}' does not carry source-record provenance`
+        }),
+        rule: 'correlate-control-args'
+      }
+    };
+  }
+  if (factsources.length > 1) {
+    return {
+      ok: false,
+      failure: {
+        reason: formatCorrelateControlArgsReason({
+          operationName: options.operationName,
+          detail: `arg '${options.argName}' carries multiple source records: ${factsources.map(describeFactSourceRecord).join(', ')}`
+        }),
+        rule: 'correlate-control-args'
+      }
+    };
+  }
+  return { ok: true, source: factsources[0]! };
+}
+
+export function evaluateControlArgCorrelation(options: {
+  operation: {
+    name?: string;
+    metadata?: Record<string, unknown>;
+  };
+  args?: Readonly<Record<string, unknown>>;
+  argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
+}): AuthorizationInheritedPolicyCheckFailure | undefined {
+  if (!shouldCorrelateControlArgs(options.operation)) {
+    return undefined;
+  }
+
+  const controlArgs = getOperationControlArgs(options.operation);
+  if (controlArgs.length <= 1) {
+    return undefined;
+  }
+
+  const providedControlArgs = controlArgs.filter(argName =>
+    Object.prototype.hasOwnProperty.call(options.args ?? {}, argName) ||
+    Object.prototype.hasOwnProperty.call(options.argDescriptors ?? {}, argName)
+  );
+  if (providedControlArgs.length <= 1) {
+    return undefined;
+  }
+
+  const resolvedSources: Array<{ argName: string; source: FactSourceHandle }> = [];
+  for (const argName of providedControlArgs) {
+    const resolved = resolveControlArgFactSource({
+      argName,
+      descriptor: options.argDescriptors?.[argName],
+      operationName: options.operation.name
+    });
+    if (!resolved.ok) {
+      return resolved.failure;
+    }
+    resolvedSources.push({ argName, source: resolved.source });
+  }
+
+  const baseline = resolvedSources[0]!;
+  for (let index = 1; index < resolvedSources.length; index += 1) {
+    const candidate = resolvedSources[index]!;
+    if (sameFactSourceInstance(baseline.source, candidate.source)) {
+      continue;
+    }
+    return {
+      reason: formatCorrelateControlArgsReason({
+        operationName: options.operation.name,
+        detail: [
+          `${baseline.argName} -> ${describeFactSourceRecord(baseline.source)}`,
+          `${candidate.argName} -> ${describeFactSourceRecord(candidate.source)}`
+        ].join(', ')
+      }),
+      rule: 'correlate-control-args'
+    };
+  }
+
+  return undefined;
 }
 
 export function evaluateAuthorizationInheritedPolicyChecks(options: {

@@ -3361,6 +3361,7 @@ async function evaluateExecInvocationInternal(
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs: policyGuardControlArgs,
+      correlateControlArgs: effectiveToolMetadata.correlateControlArgs === true,
       operationTaintFacts: effectiveOperationTaintFacts,
       env: runtimeEnv,
       execEnv,
