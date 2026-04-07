@@ -5,7 +5,12 @@
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
-import { deserializeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import {
+  deserializeSecurityDescriptor,
+  mergeDescriptors,
+  removeLabelsFromDescriptor,
+  type SecurityDescriptor
+} from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
@@ -352,6 +357,25 @@ function getFieldMetadata(
       ? payload.projection
       : undefined
   };
+}
+
+function stripFactLabelsFromDescriptor(
+  descriptor: SecurityDescriptor | undefined
+): SecurityDescriptor | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+
+  const factLabels = [
+    ...descriptor.labels.filter(label => label.startsWith('fact:')),
+    ...descriptor.taint.filter(label => label.startsWith('fact:')),
+    ...descriptor.attestations.filter(label => label.startsWith('fact:'))
+  ];
+  if (factLabels.length === 0) {
+    return descriptor;
+  }
+
+  return removeLabelsFromDescriptor(descriptor, factLabels);
 }
 
 function isIgnorableWorkspaceDiffError(error: unknown): boolean {
@@ -1110,15 +1134,30 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
 
   const provenanceSource = parentVariable ?? structuredWrapper ?? value;
-  const provenanceDescriptor = provenanceSource
-    ? extractSecurityDescriptor(provenanceSource)
+  const provenanceDescriptor = (() => {
+    if (!provenanceSource) {
+      return undefined;
+    }
+    const descriptor = extractSecurityDescriptor(provenanceSource);
+    return isStructuredValue(accessedValue)
+      ? stripFactLabelsFromDescriptor(descriptor)
+      : descriptor;
+  })();
+  const currentDescriptor = isStructuredValue(accessedValue)
+    ? extractSecurityDescriptor(accessedValue)
     : undefined;
   const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
   const fieldDescriptor = fieldMetadata?.descriptor;
   const effectiveDescriptor =
-    provenanceDescriptor && fieldDescriptor
-      ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
-      : fieldDescriptor ?? provenanceDescriptor;
+    provenanceDescriptor && currentDescriptor && fieldDescriptor
+      ? mergeDescriptors(provenanceDescriptor, currentDescriptor, fieldDescriptor)
+      : provenanceDescriptor && currentDescriptor
+        ? mergeDescriptors(provenanceDescriptor, currentDescriptor)
+        : provenanceDescriptor && fieldDescriptor
+          ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
+          : currentDescriptor && fieldDescriptor
+            ? mergeDescriptors(currentDescriptor, fieldDescriptor)
+            : fieldDescriptor ?? currentDescriptor ?? provenanceDescriptor;
 
   if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
     if (accessedValue != null && typeof accessedValue !== 'object') {

@@ -922,6 +922,48 @@ function injectLlmRuntimeResumeConfig(
   };
 }
 
+function clearLlmResumeBridgeTools(
+  config: Record<string, unknown>
+): { config: Record<string, unknown>; didUpdate: boolean } {
+  // Resume is output repair only, not "retry but cheaper". Handle aliases are
+  // minted per bridge call, so a continue:true call cannot safely expose new
+  // tools against handles mentioned in the previous transcript. Keep the
+  // explicit tool list empty here and pair it with disableAutoProvisionedShelve
+  // at bridge construction time. Loosening this is a spec change.
+  // See spec-guard-resume.md#resume-invariants.
+  if (!Object.prototype.hasOwnProperty.call(config, 'tools')) {
+    return { config, didUpdate: false };
+  }
+
+  if (Array.isArray(config.tools) && config.tools.length === 0) {
+    return { config, didUpdate: false };
+  }
+
+  return {
+    config: {
+      ...config,
+      tools: []
+    },
+    didUpdate: true
+  };
+}
+
+function assertLlmResumeBridgeToolsEmpty(tools: unknown): void {
+  const configuredCount =
+    tools === undefined
+      ? 0
+      : Array.isArray(tools)
+        ? tools.length
+        : 1;
+  if (configuredCount === 0) {
+    return;
+  }
+
+  throw new Error(
+    'Resume invariant violated: continue:true LLM calls must not expose bridge tools. See spec-guard-resume.md#resume-invariants.'
+  );
+}
+
 function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
   const candidate = isStructuredValue(value) ? asData(value) : value;
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -3029,10 +3071,9 @@ async function evaluateExecInvocationInternal(
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
         isLlmResumeContinuation = true;
-        if ('tools' in nextConfig) {
-          nextConfig.tools = [];
-          didUpdateConfigArg = true;
-        }
+        const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
+        nextConfig = normalizedResumeConfig.config;
+        didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
       } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation && !hasToolSelection) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
           sessionId: randomUUID(),
@@ -3043,10 +3084,9 @@ async function evaluateExecInvocationInternal(
       }
 
       if (pendingGuardAction?.decision === 'resume') {
-        if ('tools' in nextConfig) {
-          nextConfig.tools = [];
-          didUpdateConfigArg = true;
-        }
+        const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
+        nextConfig = normalizedResumeConfig.config;
+        didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
         if (currentLlmResumeState) {
           nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
             sessionId: currentLlmResumeState.sessionId,
@@ -3063,6 +3103,9 @@ async function evaluateExecInvocationInternal(
         // selection should seed the conversation descriptor used for policy/attestation checks.
         resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
         const toolsValue = hasToolSelection ? nextConfig.tools : [];
+        if (isLlmResumeContinuation) {
+          assertLlmResumeBridgeToolsEmpty(toolsValue);
+        }
         const dirValue = nextConfig.dir;
         const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
           ? dirValue.trim()
@@ -3073,6 +3116,10 @@ async function evaluateExecInvocationInternal(
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
           isMcpContext: true,
+          // Load-bearing resume invariant: do not auto-provision @shelve on a
+          // continue:true call. Resume must stay incapable of issuing any new
+          // tool dispatches across the bridge boundary. See
+          // spec-guard-resume.md#resume-invariants.
           disableAutoProvisionedShelve: isLlmResumeContinuation
         });
         const previousSystem = nextConfig.system;

@@ -1102,9 +1102,12 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
       await evaluateDirective(denied, env);
       throw new Error('expected correlate-control-args denial');
     } catch (error) {
-      expect(String(error)).toMatch(/correlate-control-args/i);
-      expect(String(error)).toMatch(/tx_001/);
-      expect(String(error)).toMatch(/tx_002/);
+      expect(String(error)).toContain(
+        "Rule 'correlate-control-args': control args on @sendPayment must come from the same source record;"
+      );
+      expect(String(error)).toContain('recipient -> @transaction[instance=string:"tx_001"]');
+      expect(String(error)).toContain('txId -> @transaction[instance=string:"tx_002"]');
+      expect(String(error)).not.toContain('@send_payment');
     }
   });
 

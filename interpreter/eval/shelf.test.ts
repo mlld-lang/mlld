@@ -49,6 +49,8 @@ describe('shelf runtime', () => {
     const beforeEmail = await accessField(beforeRecord, { type: 'field', value: 'email' } as any, { env });
     const afterEmail = await accessField(afterRecord, { type: 'field', value: 'email' } as any, { env });
 
+    expect((beforeEmail as any).mx?.labels).toEqual(['fact:@contact.email']);
+    expect((afterEmail as any).mx?.labels).toEqual((beforeEmail as any).mx?.labels);
     expect((beforeEmail as any).mx?.factsources).toEqual([
       expect.objectContaining({
         sourceRef: '@contact',
@@ -57,6 +59,7 @@ describe('shelf runtime', () => {
       })
     ]);
     expect((afterEmail as any).mx?.factsources).toEqual((beforeEmail as any).mx?.factsources);
+    expect(((afterRecord as any).mx?.labels ?? []).some((label: string) => label.startsWith('fact:'))).toBe(false);
   });
 
   it('writes and upserts keyed collection slots through @shelve', async () => {

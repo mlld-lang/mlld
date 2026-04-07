@@ -582,10 +582,11 @@ async function validateShelfRecordValue(options: {
   });
   const rootDescriptor = stripKnownDescriptor(
     mergeDescriptors(
-      extractSecurityDescriptor(options.value, {
-        recursive: true,
-        mergeArrayElements: true
-      }),
+      // Keep root-level security plus slot provenance without re-attaching every
+      // child fact label to the record wrapper. Field metadata carries the
+      // per-field fact proof; making the root recursive here smears sibling fact
+      // labels back onto individual fields after a shelf round-trip.
+      extractSecurityDescriptor(options.value),
       slotDescriptor
     )
   );

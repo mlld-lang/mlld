@@ -591,6 +591,58 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('disables auto-provisioned @shelve during llm resume continuations', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @agent_result = {',
+      '  data: [ok: boolean, tools: array],',
+      '  validate: "demote"',
+      '}',
+      '/exe @check_result(value) = @value => agent_result',
+      '/shelf @state = {',
+      '  selected: agent_result?',
+      '}',
+      '/exe llm @agent(prompt, config) = js {',
+      '  const resume = config?._mlld?.resume;',
+      '  return {',
+      '    value: { ok: resume?.continue ? true : "bad", tools: (mx.tools.available ?? []).map(tool => tool.name) },',
+      '    _mlld: { sessionId: resume?.sessionId ?? "resume-session", provider: "fake" }',
+      '  };',
+      '}',
+      '/guard after for op:named:agent = when [',
+      '  @check_result(@output).mx.schema.valid == false && @mx.guard.try < 2 => resume "Return valid JSON only"',
+      '  @check_result(@output).mx.schema.valid == false => deny "still invalid"',
+      '  * => allow',
+      ']',
+      '/box {',
+      '  shelf: { write: [@state.selected] }',
+      '} [',
+      '  let @result = @agent("start")',
+      '  show @result | @json',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        ok: true,
+        tools: []
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('allows a later pre-guard on the same exe llm to switch from retry to resume', async () => {
     const fileSystem = new MemoryFileSystem();
     const promptKey = '__mlldGuardResumePrePrompt';

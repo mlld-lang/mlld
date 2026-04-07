@@ -109,13 +109,14 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const operationName = this.resolveOperationName(execVar, toolKey);
       const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
       const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
         resolvedArgs,
-        toolKey,
+        operationName,
         definition.labels,
         this.shouldUseObjectArgs(execVar),
         invocationSecurity.inputSecurityDescriptor,
@@ -141,12 +142,13 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const operationName = this.resolveOperationName(execVar, toolKey);
       const invocationSecurity = this.buildInvocationSecurity(execVar, args, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
         args,
-        toolName,
+        operationName,
         undefined,
         this.shouldUseObjectArgs(execVar),
         invocationSecurity.inputSecurityDescriptor,
@@ -196,6 +198,18 @@ export class FunctionRouter {
         ?? mcpNameToMlldName(toolName);
     }
     return mcpNameToMlldName(toolName);
+  }
+
+  private resolveOperationName(
+    execVar: ExecutableVariable,
+    fallback: string
+  ): string {
+    const executableDef = (execVar.internal?.executableDef ?? execVar.value) as { name?: unknown };
+    const declaredName =
+      typeof executableDef?.name === 'string' && executableDef.name.trim().length > 0
+        ? executableDef.name.trim()
+        : undefined;
+    return declaredName ?? fallback;
   }
 
   private buildToolKeyMap(collection: ToolCollection): Map<string, string> {
