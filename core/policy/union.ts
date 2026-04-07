@@ -1204,13 +1204,20 @@ function mergeAllowShapes(a: AllowShape, b: AllowShape): AllowShape {
 
   const entries = new Map<string, CapabilityEntry>();
   for (const [key, aEntry] of a.entries.entries()) {
-    const bEntry = b.entries.get(key);
-    if (!bEntry) {
+    entries.set(key, cloneEntry(aEntry));
+  }
+
+  for (const [key, bEntry] of b.entries.entries()) {
+    const existing = entries.get(key);
+    if (!existing) {
+      entries.set(key, cloneEntry(bEntry));
       continue;
     }
-    const merged = mergeAllowEntry(aEntry, bEntry);
+    const merged = mergeAllowEntry(existing, bEntry);
     if (merged) {
       entries.set(key, merged);
+    } else {
+      entries.delete(key);
     }
   }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { parseSync } from '@grammar/parser';
 import type { DirectiveNode } from '@core/types';
 import type { PolicyDirectiveNode } from '@core/types/policy';
@@ -15,6 +15,18 @@ const objectSource: VariableSource = {
   hasInterpolation: false,
   isMultiLine: false
 };
+
+async function evaluateSource(source: string, env: Environment): Promise<void> {
+  for (const directive of (parseSync(source) as any[]).filter(
+    node => node && typeof node === 'object' && node.type === 'Directive'
+  ) as DirectiveNode[]) {
+    await evaluateDirective(directive, env);
+  }
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('/policy directive', () => {
   it('merges referenced policy configs and records context', async () => {
@@ -147,5 +159,78 @@ describe('/policy directive', () => {
 
     expect(importedValue?.allow?.cmd ?? []).toEqual([]);
     expect(env.getPolicyContext()).toEqual(baseContext);
+  });
+
+  it('preserves active command capabilities when with-clause policy adds risk rules', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCurrentFilePath('/policy.mld');
+    const executeSpy = vi.spyOn(Environment.prototype, 'executeCommand').mockResolvedValue('safe');
+
+    await evaluateSource(
+      [
+        '/policy @base = { capabilities: { allow: ["cmd:echo:*"] } }',
+        '/var @narrow = { defaults: { rules: ["no-secret-exfil"] }, operations: { exfil: ["op:cmd"] } }',
+        '/exe @echoSafe() = run cmd { echo safe }',
+        '/var @result = @echoSafe() with { policy: @narrow }'
+      ].join('\n'),
+      env
+    );
+
+    const resultVar = env.getVariable('result');
+    const resultValue = resultVar ? await extractVariableValue(resultVar, env) : null;
+
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(String(executeSpy.mock.calls[0]?.[0] ?? '')).toContain('echo safe');
+    expect((resultValue as any)?.text ?? (resultValue as any)?.data ?? resultValue).toBe('safe');
+  });
+
+  it('applies with-clause rules without dropping active command capabilities', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCurrentFilePath('/policy.mld');
+    const executeSpy = vi.spyOn(Environment.prototype, 'executeCommand').mockResolvedValue('should-not-run');
+
+    await expect(
+      evaluateSource(
+        [
+          '/policy @base = { capabilities: { allow: ["cmd:echo:*"] } }',
+          '/var @narrow = { defaults: { rules: ["no-secret-exfil"] }, operations: { exfil: ["op:cmd"] } }',
+          '/var secret @token = "sk-123"',
+          '/exe @leak() = run cmd { echo "@token" }',
+          '/var @result = @leak() with { policy: @narrow }'
+        ].join('\n'),
+        env
+      )
+    ).rejects.toThrow(/no-secret-exfil/i);
+
+    expect(executeSpy).not.toHaveBeenCalled();
+  });
+
+  it('supports replace: true for full policy replacement on dispatch', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    env.setCurrentFilePath('/policy.mld');
+    const executeSpy = vi.spyOn(Environment.prototype, 'executeCommand').mockResolvedValue('leaked');
+
+    await evaluateSource(
+      [
+        '/policy @base = {',
+        '  locked: true,',
+        '  defaults: { rules: ["no-secret-exfil"] },',
+        '  operations: { exfil: ["op:cmd"] },',
+        '  capabilities: { allow: ["cmd:echo:*"] }',
+        '}',
+        '/var @replacement = { capabilities: { allow: ["cmd:echo:*"] } }',
+        '/var secret @token = "sk-123"',
+        '/exe @leak() = run cmd { echo "@token" }',
+        '/var @result = @leak() with { policy: @replacement, replace: true }'
+      ].join('\n'),
+      env
+    );
+
+    const resultVar = env.getVariable('result');
+    const resultValue = resultVar ? await extractVariableValue(resultVar, env) : null;
+
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(String(executeSpy.mock.calls[0]?.[0] ?? '')).toContain('echo');
+    expect((resultValue as any)?.text ?? (resultValue as any)?.data ?? resultValue).toBe('leaked');
   });
 });

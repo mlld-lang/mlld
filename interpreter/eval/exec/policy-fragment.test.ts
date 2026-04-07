@@ -3,6 +3,7 @@ import { createHandleWrapper, createFactSourceHandle } from '@core/types/handle'
 import { makeSecurityDescriptor } from '@core/types/security';
 import { createObjectVariable } from '@core/types/variable';
 import { parseSync } from '@grammar/parser';
+import { mergePolicyConfigs, normalizePolicyConfig } from '@core/policy/union';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
@@ -10,8 +11,10 @@ import { isStructuredValue, wrapStructured } from '@interpreter/utils/structured
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import {
+  createInvocationPolicyScope,
   getInvocationPolicyFragmentCompileReport,
-  resolveInvocationPolicyFragment
+  resolveInvocationPolicyFragment,
+  resolveInvocationPolicyReplaceFlag
 } from './policy-fragment';
 
 function createEnv(): Environment {
@@ -955,6 +958,101 @@ describe('resolveInvocationPolicyFragment', () => {
           labels: ['fact:@contact_a.email']
         }
       ]
+    });
+  });
+
+  it('folds policy arrays the same as sequential single-policy composition', async () => {
+    const env = createEnv();
+
+    const policies = [
+      {
+        allow: {
+          cmd: ['echo', 'git'],
+          js: ['*']
+        },
+        locked: true
+      },
+      {
+        defaults: {
+          rules: ['no-secret-exfil']
+        },
+        allow: {
+          cmd: ['echo']
+        }
+      },
+      {
+        allow: {
+          filesystem: {
+            read: ['@base/tmp/**']
+          }
+        }
+      }
+    ];
+
+    const policy = await resolveInvocationPolicyFragment(policies, env);
+    const expected = policies.reduce(
+      (merged, candidate) => mergePolicyConfigs(merged, normalizePolicyConfig(candidate)),
+      undefined as ReturnType<typeof normalizePolicyConfig> | undefined
+    );
+
+    expect(policy).toEqual(expected);
+    expect((policy?.allow as { cmd?: string[] })?.cmd).toEqual(['echo']);
+    expect((policy?.allow as { js?: string[] })?.js).toEqual(['*']);
+    expect((policy?.allow as { filesystem?: { read?: string[] } })?.filesystem).toEqual({
+      read: ['@base/tmp/**']
+    });
+    expect(policy?.locked).toBe(true);
+  });
+
+  it('resolves replace flags as booleans', async () => {
+    const env = createEnv();
+
+    await expect(resolveInvocationPolicyReplaceFlag(true, env)).resolves.toBe(true);
+    await expect(resolveInvocationPolicyReplaceFlag(false, env)).resolves.toBe(false);
+    await expect(resolveInvocationPolicyReplaceFlag('yes', env)).rejects.toThrow(
+      /with \{ replace \} must be a boolean/i
+    );
+  });
+
+  it('replaces the ambient policy summary when replace mode is enabled', async () => {
+    const env = createEnv();
+    const ambient = normalizePolicyConfig({
+      locked: true,
+      defaults: {
+        rules: ['no-secret-exfil']
+      },
+      operations: {
+        exfil: ['op:cmd']
+      },
+      capabilities: {
+        allow: ['cmd:echo:*']
+      }
+    });
+    env.setPolicySummary(ambient);
+    env.setPolicyContext({
+      tier: 'base',
+      configs: ambient,
+      activePolicies: ['base']
+    });
+
+    const fragment = await resolveInvocationPolicyFragment(
+      {
+        capabilities: {
+          allow: ['cmd:echo:*']
+        }
+      },
+      env,
+      { replace: true }
+    );
+
+    expect(fragment).toBeDefined();
+
+    const scope = createInvocationPolicyScope(env, fragment!, { replace: true });
+    expect(scope.effectivePolicy).toEqual(fragment);
+    expect(scope.env.getPolicySummary()).toEqual(fragment);
+    expect(scope.env.getPolicyContext()).toMatchObject({
+      configs: fragment,
+      activePolicies: []
     });
   });
 });

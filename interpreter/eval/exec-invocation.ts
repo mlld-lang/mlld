@@ -107,6 +107,7 @@ import {
   createPolicyAuthorizationValidationError,
   createInvocationPolicyScope,
   resolveInvocationPolicyFragment,
+  resolveInvocationPolicyReplaceFlag,
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
 import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
@@ -2766,12 +2767,25 @@ async function evaluateExecInvocationInternal(
     });
     runtimeEnv = scopedEnv;
   }
+  const hasInvocationPolicy =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy');
+  const replaceInvocationPolicy =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'replace')
+      ? await resolveInvocationPolicyReplaceFlag(invocationWithClause.replace, runtimeEnv)
+      : false;
+  if (replaceInvocationPolicy && !hasInvocationPolicy) {
+    throw new MlldInterpreterError('with { replace: true } requires with { policy: ... }');
+  }
   const resolvedPolicyFragment =
-    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy')
-      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv)
+    hasInvocationPolicy
+      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv, {
+          replace: replaceInvocationPolicy
+        })
       : undefined;
   if (resolvedPolicyFragment) {
-    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment);
+    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment, {
+      replace: replaceInvocationPolicy
+    });
     runtimeEnv = policyScope.env;
   }
 
