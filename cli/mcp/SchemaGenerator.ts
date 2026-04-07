@@ -37,8 +37,16 @@ export function generateToolSchema(
     execVar.paramTypes ??
     execVar.internal?.executableDef?.paramTypes ??
     {};
+  const paramSchemas =
+    ((execVar.internal?.executableDef as { paramSchemas?: Record<string, JSONSchemaProperty> } | undefined)?.paramSchemas)
+    ?? {};
 
   for (const param of visibleParams) {
+    const explicitSchema = paramSchemas[param];
+    if (explicitSchema && typeof explicitSchema === 'object') {
+      properties[param] = explicitSchema;
+      continue;
+    }
     const rawType = typeof paramTypes[param] === 'string' ? paramTypes[param].toLowerCase() : '';
     const type = (rawType === 'number' ||
       rawType === 'boolean' ||

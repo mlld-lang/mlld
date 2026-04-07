@@ -20,6 +20,7 @@ import {
   type EffectiveToolMetadata
 } from '@interpreter/eval/exec/tool-metadata';
 import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
+import { createAutoProvisionedShelveExecutable } from '@interpreter/shelf/runtime';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -79,6 +80,7 @@ export interface CallMcpConfigOptions {
   workingDirectory?: string;
   conversationDescriptor?: SecurityDescriptor;
   isMcpContext?: boolean;
+  disableAutoProvisionedShelve?: boolean;
 }
 
 export interface AvailableToolDescriptor {
@@ -106,6 +108,7 @@ interface ResolvedFunctionToolSpec {
   readonly definition?: ToolDefinition;
   readonly metadata: EffectiveToolMetadata;
   readonly source: string;
+  readonly excludeFromToolNotes?: boolean;
 }
 
 export function normalizeToolsArg(value: unknown): unknown[] {
@@ -435,6 +438,28 @@ function buildCollectionFunctionToolSpec(
       name: mcpName
     },
     source: `tool:@${execName} as ${mcpName}`
+  };
+}
+
+function resolveAutoProvisionedShelveTool(
+  env: Environment
+): ResolvedFunctionToolSpec | undefined {
+  const executable = createAutoProvisionedShelveExecutable(env);
+  if (!executable || !isExecutableVariable(executable)) {
+    return undefined;
+  }
+
+  return {
+    mcpName: 'shelve',
+    csvName: 'shelve',
+    executable,
+    metadata: resolveEffectiveToolMetadata({
+      env,
+      executable,
+      operationName: 'shelve'
+    }),
+    source: 'shelf:auto -> shelve',
+    excludeFromToolNotes: true
   };
 }
 
@@ -785,6 +810,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     });
     functionToolMetadata.push(metadata);
   }
+  if (!options.disableAutoProvisionedShelve) {
+    const autoShelveTool = resolveAutoProvisionedShelveTool(options.env);
+    if (autoShelveTool) {
+      functionTools.push(autoShelveTool);
+    }
+  }
   const inBox = Boolean(options.env.getActiveBridge());
   const workingDirectory = options.workingDirectory ?? options.env.getExecutionDirectory();
 
@@ -804,9 +835,10 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const sessionId = randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
+  const builtinToolMetadata = buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools);
   const toolMetadata = [
-    ...buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools),
-    ...functionToolMetadata
+    ...builtinToolMetadata,
+    ...functionTools.map(tool => tool.metadata)
   ];
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
@@ -814,7 +846,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ]);
   const toolNotes = renderInjectedToolNotes({
     env: options.env,
-    entries: toolMetadata,
+    entries: [
+      ...builtinToolMetadata,
+      ...functionTools
+        .filter(tool => tool.excludeFromToolNotes !== true)
+        .map(tool => tool.metadata)
+    ],
     isMcpContext: options.isMcpContext !== false
   });
 

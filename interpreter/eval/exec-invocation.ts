@@ -115,6 +115,7 @@ import {
   appendShelfNotesToSystemPrompt,
   renderInjectedShelfNotes
 } from '@interpreter/shelf/shelf-notes';
+import { getNormalizedShelfScope } from '@interpreter/shelf/runtime';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
 import {
@@ -3022,6 +3023,7 @@ async function evaluateExecInvocationInternal(
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
       const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
+      const hasWritableShelfScope = (getNormalizedShelfScope(execEnv)?.writeSlotBindings.length ?? 0) > 0;
 
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
@@ -3054,11 +3056,12 @@ async function evaluateExecInvocationInternal(
         }
       }
 
-      if ('tools' in nextConfig) {
-        // config.tools selects capabilities for the bridge; it is not model-visible input and
-        // must not seed the conversation descriptor used for policy/attestation checks.
+      if (hasToolSelection || hasWritableShelfScope) {
+        // config.tools selects capabilities for the bridge; writable shelf scope can also
+        // force an MCP bridge so @shelve is auto-provisioned for boxed llm calls. Neither
+        // selection should seed the conversation descriptor used for policy/attestation checks.
         resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
-        const toolsValue = nextConfig.tools;
+        const toolsValue = hasToolSelection ? nextConfig.tools : [];
         const dirValue = nextConfig.dir;
         const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
           ? dirValue.trim()
@@ -3068,7 +3071,8 @@ async function evaluateExecInvocationInternal(
           env: execEnv,
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
-          isMcpContext: true
+          isMcpContext: true,
+          disableAutoProvisionedShelve: isLlmResumeContinuation
         });
         const previousSystem = nextConfig.system;
         const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);

@@ -13,6 +13,7 @@ import { createCallMcpConfig, normalizeToolsArg } from './call-mcp-config';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { accessField } from '@interpreter/utils/field-access';
+import { normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -228,6 +229,115 @@ describe('createCallMcpConfig', () => {
       if (configPath) {
         expect(await fileExists(configPath)).toBe(false);
       }
+      env.cleanup();
+    }
+  });
+
+  it('auto-provisions shelve for writable shelf scopes and constrains slot aliases', async () => {
+    const env = await createInterpretedEnv([
+      '/record @contact = {',
+      '  key: id,',
+      '  data: [id: string, email: string, name: string]',
+      '}',
+      '/shelf @outreach = {',
+      '  recipients: contact[]',
+      '}'
+    ].join('\n'));
+
+    const outreach = env.getVariable('outreach');
+    if (!outreach) {
+      env.cleanup();
+      throw new Error('Expected @outreach to be defined');
+    }
+
+    const recipientsRef = await accessField(outreach, { type: 'field', value: 'recipients' } as any, { env });
+    const scopedEnv = env.createChild();
+    const scope = await normalizeScopedShelfConfig({
+      write: [{ alias: 'things', value: recipientsRef }]
+    }, env);
+    scopedEnv.setScopedEnvironmentConfig({ shelf: scope });
+
+    const result = await createCallMcpConfig({
+      tools: [createFunctionTool('ping')],
+      env: scopedEnv
+    });
+
+    try {
+      expect(result.availableTools).toEqual([
+        { name: 'ping' },
+        { name: 'shelve' }
+      ]);
+
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 30,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{
+        name?: string;
+        description?: string;
+        inputSchema?: {
+          properties?: Record<string, { enum?: string[] }>;
+          required?: string[];
+        };
+      }>;
+      expect(tools.map(tool => tool.name)).toEqual(['ping', 'shelve']);
+
+      const shelve = tools.find(tool => tool.name === 'shelve');
+      expect(shelve?.description).toContain('things -> @outreach.recipients');
+      expect(shelve?.inputSchema?.properties?.slot_alias?.enum).toEqual(['things']);
+      expect(shelve?.inputSchema?.required ?? []).toEqual(['slot_alias', 'value']);
+
+      const called = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 31,
+        method: 'tools/call',
+        params: {
+          name: 'shelve',
+          arguments: {
+            slot_alias: 'things',
+            value: {
+              id: 'c_1',
+              email: 'ada@example.com',
+              name: 'Ada'
+            }
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      const stored = env.readShelfSlot('outreach', 'recipients');
+      const storedItems = Array.isArray(stored) ? stored : asData<any[]>(stored);
+      expect(storedItems).toHaveLength(1);
+      const firstStored = isStructuredValue(storedItems[0])
+        ? asData<Record<string, any>>(storedItems[0])
+        : storedItems[0] as Record<string, any>;
+      expect(asData(firstStored.id)).toBe('c_1');
+
+      const denied = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 32,
+        method: 'tools/call',
+        params: {
+          name: 'shelve',
+          arguments: {
+            slot_alias: 'nope',
+            value: {
+              id: 'c_2',
+              email: 'bob@example.com',
+              name: 'Bob'
+            }
+          }
+        }
+      });
+
+      expect((denied.result as any)?.isError).toBe(true);
+      expect(getToolResultText(denied)).toContain("Unknown writable slot alias 'nope'");
+    } finally {
+      await result.cleanup();
+      scopedEnv.cleanup();
       env.cleanup();
     }
   });

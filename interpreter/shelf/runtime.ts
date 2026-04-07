@@ -1336,6 +1336,132 @@ export function createShelveVariable(env: Environment): Variable {
   });
 }
 
+type WritableShelfAliasBinding = {
+  alias: string;
+  ref: ShelfScopeSlotRef;
+};
+
+function formatWritableShelfAliasBinding(
+  env: Environment,
+  binding: WritableShelfAliasBinding
+): string {
+  const slot = env.getShelfDefinition(binding.ref.shelfName)?.slots[binding.ref.slotName];
+  if (!slot) {
+    return `${binding.alias} -> @${binding.ref.shelfName}.${binding.ref.slotName}`;
+  }
+  const typeLabel = `${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''}`;
+  return `${binding.alias} -> @${binding.ref.shelfName}.${binding.ref.slotName} (${typeLabel}, ${slot.merge})`;
+}
+
+function getWritableShelfAliasBindings(env: Environment): WritableShelfAliasBinding[] {
+  const scope = getNormalizedShelfScope(env);
+  if (!scope) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const bindings: WritableShelfAliasBinding[] = [];
+  for (const binding of scope.writeSlotBindings) {
+    const alias = typeof binding.alias === 'string' && binding.alias.trim().length > 0
+      ? binding.alias.trim()
+      : `${binding.ref.shelfName}.${binding.ref.slotName}`;
+    if (seen.has(alias)) {
+      continue;
+    }
+    seen.add(alias);
+    bindings.push({ alias, ref: binding.ref });
+  }
+  return bindings;
+}
+
+function normalizeWritableShelfAliasInput(value: unknown): string | undefined {
+  let resolved = value;
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (typeof resolved !== 'string') {
+    return undefined;
+  }
+  const trimmed = resolved.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function createAutoProvisionedShelveExecutable(env: Environment): Variable | undefined {
+  const aliasBindings = getWritableShelfAliasBindings(env);
+  if (aliasBindings.length === 0) {
+    return undefined;
+  }
+
+  const aliasNames = aliasBindings.map(binding => binding.alias);
+  const aliasMap = new Map(aliasBindings.map(binding => [binding.alias, binding.ref]));
+  const description = `Write typed shelf slots by alias. Writable aliases: ${aliasBindings
+    .map(binding => formatWritableShelfAliasBinding(env, binding))
+    .join(', ')}`;
+
+  const definition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'shelve',
+    fn: async (slotAliasOrEnv?: unknown, valueOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined)
+        ?? (looksLikeEnvironment(slotAliasOrEnv) ? slotAliasOrEnv : undefined)
+        ?? env;
+      const slotAlias = boundEnv || !looksLikeEnvironment(slotAliasOrEnv) ? slotAliasOrEnv : undefined;
+      const value = boundEnv || !looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined;
+      const normalizedAlias = normalizeWritableShelfAliasInput(slotAlias);
+      const ref = normalizedAlias ? aliasMap.get(normalizedAlias) : undefined;
+      if (!ref) {
+        const detail = normalizedAlias === undefined
+          ? 'The first @shelve argument must be a writable slot alias'
+          : `Unknown writable slot alias '${String(normalizedAlias)}'`;
+        throw new MlldInterpreterError(
+          `${detail}. Allowed aliases: ${aliasNames.join(', ')}`,
+          'shelf',
+          undefined,
+          { code: 'INVALID_SHELF_REFERENCE' }
+        );
+      }
+      return writeToShelfSlot(
+        createShelfSlotReferenceValue(executionEnv, ref.shelfName, ref.slotName),
+        value,
+        executionEnv,
+        '@shelve'
+      );
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot_alias', 'value'],
+    paramTypes: {
+      slot_alias: 'string',
+      value: 'object'
+    },
+    description
+  };
+  (definition as any).paramSchemas = {
+    slot_alias: {
+      type: 'string',
+      description: 'Writable shelf slot alias from the surrounding box scope',
+      enum: aliasNames
+    },
+    value: {
+      type: 'object',
+      description: 'Record object to write to the selected shelf slot'
+    }
+  };
+
+  return createExecutableVariable('shelve', 'command', '', ['slot_alias', 'value'], undefined, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      executableDef: definition,
+      preserveStructuredArgs: true,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+}
+
 function normalizeScopeSlotRef(ref: ShelfScopeSlotRef): string {
   return `${ref.shelfName}.${ref.slotName}`;
 }

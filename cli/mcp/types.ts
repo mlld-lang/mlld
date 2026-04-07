@@ -23,6 +23,7 @@ export interface JSONRPCResponse {
 export interface JSONSchemaProperty {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description?: string;
+  enum?: string[];
   items?: JSONSchemaProperty;
   properties?: Record<string, JSONSchemaProperty>;
 }

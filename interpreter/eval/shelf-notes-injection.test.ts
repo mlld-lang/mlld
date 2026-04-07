@@ -131,4 +131,81 @@ describe('shelf notes injection', () => {
       env.cleanup();
     }
   });
+
+  it('auto-provisions an llm bridge for writable shelf scope even without config.tools', async () => {
+    const { env, effects } = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @outreach = {
+  recipients: contact[]
+}
+/exe @ping() = "pong"
+/exe llm @agent(prompt, config) = [
+  => when [
+    @mx.llm => @mx.llm.allowed
+    * => ""
+  ]
+]
+`);
+
+    try {
+      const outreach = env.getVariable('outreach');
+      if (!outreach) {
+        throw new Error('Expected @outreach to be defined');
+      }
+
+      const recipientsRef = await accessField(outreach, { type: 'field', value: 'recipients' } as any, { env });
+      const scopedEnv = env.createChild();
+      const scope = await normalizeScopedShelfConfig({
+        write: [{ alias: 'things', value: recipientsRef }]
+      }, env);
+      scopedEnv.setScopedEnvironmentConfig({ shelf: scope });
+
+      const output = await evaluateToOutput('/show @agent("Pick the recipient")', scopedEnv, effects);
+      expect(output.trim()).toBe('mcp__mlld_tools__shelve');
+
+      effects.clear();
+      const mixedOutput = await evaluateToOutput('/show @agent("Pick the recipient", { tools: [@ping] })', scopedEnv, effects);
+      expect(mixedOutput.trim()).toBe('mcp__mlld_tools__ping,mcp__mlld_tools__shelve');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('keeps read-only shelf scope unbridged when config.tools is omitted', async () => {
+    const { env, effects } = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @outreach = {
+  recipients: contact[]
+}
+/exe llm @agent(prompt, config) = [
+  => when [
+    @mx.llm => @mx.llm.allowed
+    * => ""
+  ]
+]
+`);
+
+    try {
+      const outreach = env.getVariable('outreach');
+      if (!outreach) {
+        throw new Error('Expected @outreach to be defined');
+      }
+
+      const recipientsRef = await accessField(outreach, { type: 'field', value: 'recipients' } as any, { env });
+      const scopedEnv = env.createChild();
+      const scope = await normalizeScopedShelfConfig({ read: [recipientsRef] }, env);
+      scopedEnv.setScopedEnvironmentConfig({ shelf: scope });
+
+      const output = await evaluateToOutput('/show @agent("Pick the recipient")', scopedEnv, effects);
+      expect(output.trim()).toBe('');
+    } finally {
+      env.cleanup();
+    }
+  });
 });
