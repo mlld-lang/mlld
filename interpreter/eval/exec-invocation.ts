@@ -85,6 +85,7 @@ import {
   bindExecParameterVariables,
   evaluateExecInvocationArgs
 } from './exec/args';
+import { extractExecDeniedHandlerWhenExpression } from './exec/denied-handler-when';
 import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import { executeCommandExecutable } from './exec/command-handler';
 import { executeCodeExecutable } from './exec/code-handler';
@@ -2781,15 +2782,8 @@ async function evaluateExecInvocationInternal(
   ));
 
   let whenExprNode: WhenExpressionNode | null = null;
-  if (definition.language === 'mlld-when') {
-    const candidate =
-      Array.isArray(definition.codeTemplate) && definition.codeTemplate.length > 0
-        ? (definition.codeTemplate[0] as WhenExpressionNode | undefined)
-        : undefined;
-    if (!candidate || candidate.type !== 'WhenExpression') {
-      throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
-    }
-    whenExprNode = candidate;
+  if (isCodeExecutable(definition)) {
+    whenExprNode = extractExecDeniedHandlerWhenExpression(definition);
   }
 
   let runtimeEnv = env;
