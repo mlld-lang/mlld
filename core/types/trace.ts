@@ -35,11 +35,19 @@ export type RuntimeTraceCategory =
   | 'auth'
   | 'display'
   | 'llm'
-  | 'record';
+  | 'record'
+  | 'import';
 
 type TraceRecord<T extends object> = T & Record<string, unknown>;
 
 export type RuntimeTraceEventName =
+  | 'import.resolve'
+  | 'import.cache_hit'
+  | 'import.read'
+  | 'import.parse'
+  | 'import.evaluate'
+  | 'import.exports'
+  | 'import.fail'
   | 'shelf.read'
   | 'shelf.write'
   | 'shelf.clear'
@@ -77,10 +85,61 @@ export interface RuntimeTraceScope {
   box?: string;
   guard_try?: number;
   pipeline_stage?: number;
+  file?: string;
   [key: string]: unknown;
 }
 
+type RuntimeImportTraceRecord = TraceRecord<{
+  ref: string;
+  resolvedPath?: string;
+  transport?: string;
+  importType?: string;
+  directive?: string;
+  contentType?: string;
+  resolverName?: string;
+  cacheKey?: string;
+  entryCount?: number;
+  exportCount?: number;
+  phase?: string;
+  error?: string;
+}>;
+
 export interface RuntimeTraceEventSpecMap {
+  'import.resolve': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.cache_hit': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.read': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.parse': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.evaluate': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.exports': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.fail': {
+    category: 'import';
+    level: 'effects';
+    data: RuntimeImportTraceRecord & TraceRecord<{ phase: string; error: string }>;
+  };
   'shelf.read': {
     category: 'shelf';
     level: 'verbose';

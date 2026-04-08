@@ -3831,7 +3831,8 @@ export class Environment
       guardAttempt: typeof guard?.attempt === 'number' ? guard.attempt : undefined,
       pipelineStage: typeof pipeline?.stage === 'number' ? pipeline.stage : undefined,
       boxName: typeof scopedConfig?.name === 'string' ? scopedConfig.name : undefined,
-      bridgeBox: bridge?.mcpConfigPath
+      bridgeBox: bridge?.mcpConfigPath,
+      currentFile: this.getCurrentFilePath()
     };
     return buildRuntimeTraceScope(snapshot, overrides);
   }

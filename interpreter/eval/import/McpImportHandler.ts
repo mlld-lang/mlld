@@ -9,25 +9,74 @@ import type { VariableSource, Variable } from '@core/types/variable';
 import { createObjectVariable } from '@core/types/variable/VariableFactories';
 import { McpImportService } from './McpImportService';
 import { buildMcpToolIndex, resolveMcpServerSpec, resolveMcpTool } from './McpImportResolver';
+import {
+  buildImportTraceData,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 export class McpImportHandler {
   constructor(private readonly mcpImportService: McpImportService) {}
 
   async evaluateImport(directive: DirectiveNode, env: Environment): Promise<EvalResult> {
     const importDirective = directive as ImportDirectiveNode;
+    const traceData = buildImportTraceData(directive, {
+      ref: 'mcp',
+      transport: 'mcp'
+    });
     const pathNodes = importDirective.values?.path;
     if (!pathNodes || pathNodes.length === 0) {
-      throw new MlldImportError('MCP tool import requires a server path', {
+      const error = new MlldImportError('MCP tool import requires a server path', {
         code: 'IMPORT_PATH_MISSING',
         details: { directiveType: directive.subtype }
       });
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
-    const rawSpec = await interpolate(pathNodes, env, InterpolationContext.FilePath);
-    const resolvedSpec = await resolveMcpServerSpec(rawSpec, env);
+    let rawSpec: string;
+    let resolvedSpec: string;
+    try {
+      rawSpec = await interpolate(pathNodes, env, InterpolationContext.FilePath);
+      resolvedSpec = await resolveMcpServerSpec(rawSpec, env);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
+    }
     const importDisplay = this.getImportDisplayPath(importDirective, resolvedSpec);
+    emitImportTrace(env, 'import.resolve', {
+      ...traceData,
+      ref: importDisplay,
+      resolvedPath: resolvedSpec
+    });
 
-    const tools = await env.getMcpImportManager().listTools(resolvedSpec);
+    let tools: Awaited<ReturnType<ReturnType<Environment['getMcpImportManager']>['listTools']>>;
+    try {
+      tools = await env.getMcpImportManager().listTools(resolvedSpec);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        ref: importDisplay,
+        resolvedPath: resolvedSpec,
+        phase: 'read',
+        error
+      });
+      throw error;
+    }
+    emitImportTrace(env, 'import.read', {
+      ...traceData,
+      ref: importDisplay,
+      resolvedPath: resolvedSpec,
+      entryCount: tools.length
+    });
     const toolIndex = buildMcpToolIndex(tools, importDisplay);
 
     if (directive.subtype === 'importMcpNamespace') {
@@ -35,10 +84,18 @@ export class McpImportHandler {
       const namespaceNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
       const alias = namespaceNode?.identifier ?? namespaceNode?.content ?? importDirective.values?.imports?.[0]?.alias;
       if (!alias) {
-        throw new MlldImportError('MCP tool namespace import requires an alias', {
+        const error = new MlldImportError('MCP tool namespace import requires an alias', {
           code: 'IMPORT_ALIAS_MISSING',
           details: { path: importDisplay }
         });
+        emitImportFailure(env, {
+          ...traceData,
+          ref: importDisplay,
+          resolvedPath: resolvedSpec,
+          phase: 'evaluate',
+          error
+        });
+        throw error;
       }
 
       const aliasLocationNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
@@ -53,10 +110,18 @@ export class McpImportHandler {
       for (const tool of toolIndex.tools) {
         const mlldName = toolIndex.mlldNameByMcp.get(tool.name) ?? tool.name;
         if (usedNames.has(mlldName)) {
-          throw new MlldImportError(
+          const error = new MlldImportError(
             `MCP tool name collision - '${mlldName}' appears more than once in '${importDisplay}'`,
             { code: 'IMPORT_NAME_CONFLICT' }
           );
+          emitImportFailure(env, {
+            ...traceData,
+            ref: importDisplay,
+            resolvedPath: resolvedSpec,
+            phase: 'evaluate',
+            error
+          });
+          throw error;
         }
         usedNames.add(mlldName);
         namespaceObject[mlldName] = this.mcpImportService.createMcpToolVariable({
@@ -87,16 +152,30 @@ export class McpImportHandler {
         source: importDisplay,
         location: aliasLocation
       });
+      emitImportTrace(env, 'import.exports', {
+        ...traceData,
+        ref: importDisplay,
+        resolvedPath: resolvedSpec,
+        exportCount: Object.keys(namespaceObject).length
+      });
 
       return { value: undefined, env };
     }
 
     const imports = importDirective.values?.imports ?? [];
     if (!Array.isArray(imports) || imports.length === 0) {
-      throw new MlldImportError('MCP tool import requires at least one tool name', {
+      const error = new MlldImportError('MCP tool import requires at least one tool name', {
         code: 'IMPORT_NAME_MISSING',
         details: { path: importDisplay }
       });
+      emitImportFailure(env, {
+        ...traceData,
+        ref: importDisplay,
+        resolvedPath: resolvedSpec,
+        phase: 'evaluate',
+        error
+      });
+      throw error;
     }
 
     const usedNames = new Set<string>();
@@ -109,10 +188,18 @@ export class McpImportHandler {
         : astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
 
       if (usedNames.has(alias)) {
-        throw new MlldImportError(`Import collision - '${alias}' already requested in this directive`, {
+        const error = new MlldImportError(`Import collision - '${alias}' already requested in this directive`, {
           code: 'IMPORT_NAME_CONFLICT',
           details: { variableName: alias }
         });
+        emitImportFailure(env, {
+          ...traceData,
+          ref: importDisplay,
+          resolvedPath: resolvedSpec,
+          phase: 'evaluate',
+          error
+        });
+        throw error;
       }
       usedNames.add(alias);
 
@@ -131,6 +218,13 @@ export class McpImportHandler {
         location: importLocation
       });
     }
+
+    emitImportTrace(env, 'import.exports', {
+      ...traceData,
+      ref: importDisplay,
+      resolvedPath: resolvedSpec,
+      exportCount: usedNames.size
+    });
 
     return { value: undefined, env };
   }

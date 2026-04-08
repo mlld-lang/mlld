@@ -5,6 +5,10 @@ import type { ModuleProcessingResult, ModuleContentProcessor } from './ModuleCon
 import type { ImportSecurityValidator } from './ImportSecurityValidator';
 import type { VariableImporter } from './VariableImporter';
 import { makeSecurityDescriptor } from '@core/types/security';
+import {
+  buildImportTraceData,
+  emitImportFailure
+} from './runtime-trace';
 
 type ValidateModuleResult = (
   result: ModuleProcessingResult,
@@ -33,8 +37,20 @@ export class ResolverContentImportHandler {
     resolverContent: { content: string; contentType: 'module' | 'data' | 'text'; metadata?: any; mx?: any },
     env: Environment
   ): Promise<EvalResult> {
+    const traceData = buildImportTraceData(directive, {
+      ref,
+      resolvedPath: ref,
+      transport: 'resolver-content',
+      contentType: resolverContent.contentType
+    });
     if (this.securityValidator.checkCircularImports(ref)) {
-      throw new Error(`Circular import detected: ${ref}`);
+      const error = new Error(`Circular import detected: ${ref}`);
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     try {
@@ -51,10 +67,19 @@ export class ResolverContentImportHandler {
         resolverContent.metadata?.entryPoint
       );
 
-      this.validateModuleResult(processingResult, directive, processingRef);
-
-      await this.variableImporter.importVariables(processingResult, directive, env);
-      this.applyPolicyImportContext(directive, env, processingRef);
+      try {
+        this.validateModuleResult(processingResult, directive, processingRef);
+        await this.variableImporter.importVariables(processingResult, directive, env);
+        this.applyPolicyImportContext(directive, env, processingRef);
+      } catch (error) {
+        emitImportFailure(env, {
+          ...traceData,
+          resolvedPath: processingRef,
+          phase: 'evaluate',
+          error
+        });
+        throw error;
+      }
 
       const dynamicSource = resolverContent.mx?.source;
       if (dynamicSource && typeof dynamicSource === 'string' && dynamicSource.startsWith('dynamic://')) {

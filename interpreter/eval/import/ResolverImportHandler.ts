@@ -5,6 +5,11 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import { ResolverImportDataAdapter } from './ResolverImportDataAdapter';
+import {
+  buildImportTraceData,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 type ResolverContent = {
   content: string;
@@ -29,37 +34,84 @@ export class ResolverImportHandler {
     env: Environment,
     importFromResolverContent: ResolverImportFromContent
   ): Promise<EvalResult> {
+    const traceData = buildImportTraceData(directive, {
+      ref: `@${resolverName}`,
+      resolvedPath: `@${resolverName}`,
+      transport: 'resolver',
+      resolverName
+    });
     const resolverManager = env.getResolverManager();
     if (!resolverManager) {
-      throw new Error('Resolver manager not available');
+      const error = new Error('Resolver manager not available');
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     const resolver = resolverManager.getResolver(resolverName) ||
                     resolverManager.getResolver(resolverName.toLowerCase()) ||
                     resolverManager.getResolver(resolverName.toUpperCase());
     if (!resolver) {
-      throw new Error(`Resolver '${resolverName}' not found`);
+      const error = new Error(`Resolver '${resolverName}' not found`);
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     if (resolverName.toLowerCase() === 'keychain') {
-      throw new MlldImportError(
+      const error = new MlldImportError(
         'Direct keychain imports are not available. Use policy.auth with using auth:*.',
         { code: 'KEYCHAIN_DIRECT_ACCESS_DENIED' }
       );
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     if (!resolver.capabilities.contexts.import) {
       const { ResolverError } = await import('@core/errors');
-      throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
+      const error = ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     const requestedImports = directive.subtype === 'importSelected'
       ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
       : undefined;
 
-    const resolverResult = await resolver.resolve(`@${resolverName}`, {
-      context: 'import',
-      requestedImports
+    let resolverResult: ResolverContent;
+    try {
+      resolverResult = await resolver.resolve(`@${resolverName}`, {
+        context: 'import',
+        requestedImports
+      }) as ResolverContent;
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'read',
+        error
+      });
+      throw error;
+    }
+
+    emitImportTrace(env, 'import.read', {
+      ...traceData,
+      ref: resolverResult.mx?.source ?? `@${resolverName}`,
+      resolvedPath: resolverResult.mx?.source ?? `@${resolverName}`,
+      contentType: resolverResult.contentType
     });
 
     if (resolverResult.contentType === 'module') {
@@ -79,7 +131,19 @@ export class ResolverImportHandler {
           sources: taintDescriptor.sources
         })
       );
-      return importFromResolverContent(directive, ref, resolverResult, env);
+      try {
+        return await importFromResolverContent(directive, ref, resolverResult, env);
+      } catch (error) {
+        emitImportFailure(env, {
+          ...traceData,
+          ref,
+          resolvedPath: ref,
+          contentType: resolverResult.contentType,
+          phase: 'evaluate',
+          error
+        });
+        throw error;
+      }
     }
 
     let exportData: Record<string, any> = {};
@@ -90,7 +154,22 @@ export class ResolverImportHandler {
       exportData = await this.dataAdapter.fallbackResolverData(resolver, directive, resolverName, resolverResult);
     }
 
-    await this.dataAdapter.importResolverVariables(directive, exportData, env, `@${resolverName}`);
+    try {
+      await this.dataAdapter.importResolverVariables(directive, exportData, env, `@${resolverName}`);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        contentType: resolverResult.contentType,
+        phase: 'evaluate',
+        error
+      });
+      throw error;
+    }
+    emitImportTrace(env, 'import.exports', {
+      ...traceData,
+      contentType: resolverResult.contentType,
+      exportCount: Object.keys(exportData).length
+    });
     return { value: undefined, env };
   }
 }

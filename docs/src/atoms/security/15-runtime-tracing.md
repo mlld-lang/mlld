@@ -76,7 +76,21 @@ Every trace event has this shape:
 }
 ```
 
-`scope` identifies where in execution the event occurred. `data` is category-specific. Values are summarized (strings truncated, objects reduced to `{kind, size, keys}`) and now include an approximate serialized size (`bytes`, `human`) to help spot unexpectedly large payloads without enabling a separate profiler.
+`scope` identifies where in execution the event occurred. `scope.file` is included when the runtime knows which module/file currently owns execution, which is especially useful for imported executable calls. `data` is category-specific. Values are summarized (strings truncated, objects reduced to `{kind, size, keys}`) and now include an approximate serialized size (`bytes`, `human`) to help spot unexpectedly large payloads without enabling a separate profiler.
+
+### Import
+
+| Event | Level | Data |
+|---|---|---|
+| `import.resolve` | verbose | ref, resolvedPath, transport, importType, directive |
+| `import.cache_hit` | verbose | ref, resolvedPath, cacheKey, exportCount |
+| `import.read` | verbose | ref, resolvedPath, transport, contentType |
+| `import.parse` | verbose | ref, resolvedPath, contentType |
+| `import.evaluate` | verbose | ref, resolvedPath, transport |
+| `import.exports` | verbose | ref, resolvedPath, exportCount |
+| `import.fail` | effects | phase, ref, resolvedPath, error |
+
+Import traces make the import pipeline debuggable from inside mlld: resolution, content fetch/read, parse, module evaluation, export materialization, and failure points all show up in both `traceEvents` and `--trace-file`.
 
 ### Shelf
 

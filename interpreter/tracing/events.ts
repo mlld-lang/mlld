@@ -46,6 +46,19 @@ export function traceHandleIssued(data: RuntimeTraceEventSpecMap['handle.issued'
   return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.issued', data);
 }
 
+export function traceImportEvent<K extends 'import.resolve' | 'import.cache_hit' | 'import.read' | 'import.parse' | 'import.evaluate' | 'import.exports'>(
+  event: K,
+  data: RuntimeTraceEventSpecMap[K]['data']
+): RuntimeTraceEnvelope<K> {
+  return createRuntimeTraceEnvelope('verbose', 'import', event, data);
+}
+
+export function traceImportFailure(
+  data: RuntimeTraceEventSpecMap['import.fail']['data']
+): RuntimeTraceEnvelope<'import.fail'> {
+  return createRuntimeTraceEnvelope('effects', 'import', 'import.fail', data);
+}
+
 export function traceHandleResolved(data: RuntimeTraceEventSpecMap['handle.resolved']['data']): RuntimeTraceEnvelope<'handle.resolved'> {
   return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolved', data);
 }

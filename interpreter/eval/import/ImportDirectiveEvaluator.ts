@@ -22,6 +22,12 @@ import { ImportBindingValidator } from './ImportBindingValidator';
 import { ImportRequestRouter } from './ImportRequestRouter';
 import { McpImportHandler } from './McpImportHandler';
 import { ResolverContentImportHandler } from './ResolverContentImportHandler';
+import {
+  buildImportTraceData,
+  buildImportTraceDataFromResolution,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 /**
  * Main coordinator for import directive evaluation.
@@ -112,22 +118,58 @@ export class ImportDirectiveEvaluator {
     env: Environment
   ): Promise<EvalResult> {
     if (directive.subtype === 'importMcpSelected' || directive.subtype === 'importMcpNamespace') {
-      return this.mcpImportHandler.evaluateImport(directive, env);
+      try {
+        return await this.mcpImportHandler.evaluateImport(directive, env);
+      } catch (error) {
+        emitImportFailure(env, {
+          ...buildImportTraceData(directive, {
+            ref: 'mcp'
+          }),
+          transport: 'mcp',
+          phase: 'resolve',
+          error
+        });
+        throw error;
+      }
     }
 
-    const resolution = await this.resolveImportResolution(directive as ImportDirectiveNode, env);
-    return this.importRequestRouter.routeImportRequest(
-      resolution,
-      directive,
-      env,
-      async (resolverDirective, ref, resolverContent, handlerEnv) =>
-        this.resolverContentImportHandler.importFromResolverContent(
-          resolverDirective,
-          ref,
-          resolverContent,
-          handlerEnv
-        )
-    );
+    let resolution: ImportResolution;
+    try {
+      resolution = await this.resolveImportResolution(directive as ImportDirectiveNode, env);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...buildImportTraceData(directive, {
+          ref: 'path'
+        }),
+        phase: 'resolve',
+        error
+      });
+      throw error;
+    }
+
+    emitImportTrace(env, 'import.resolve', buildImportTraceDataFromResolution(directive, resolution));
+
+    try {
+      return await this.importRequestRouter.routeImportRequest(
+        resolution,
+        directive,
+        env,
+        async (resolverDirective, ref, resolverContent, handlerEnv) =>
+          this.resolverContentImportHandler.importFromResolverContent(
+            resolverDirective,
+            ref,
+            resolverContent,
+            handlerEnv
+          )
+      );
+    } catch (error) {
+      emitImportFailure(env, {
+        ...buildImportTraceDataFromResolution(directive, resolution),
+        phase: 'evaluate',
+        error
+      });
+      throw error;
+    }
   }
 
   private async resolveImportResolution(

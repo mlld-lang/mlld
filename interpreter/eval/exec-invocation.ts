@@ -1474,6 +1474,22 @@ function shouldResolveHandlesBeforeExecutableDispatch(options: {
   return true;
 }
 
+function getImportedExecutableSourcePath(variable: Variable | undefined): string | undefined {
+  const importPath = variable?.mx?.importPath;
+  if (typeof importPath !== 'string' || importPath.trim().length === 0) {
+    return undefined;
+  }
+
+  switch (importPath) {
+    case 'let':
+    case 'exe-param':
+    case 'for-var':
+      return undefined;
+    default:
+      return importPath;
+  }
+}
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -2865,6 +2881,15 @@ async function evaluateExecInvocationInternal(
     node,
     invocationWithClause
   });
+  const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
+  if (
+    importedExecutableSourcePath
+    && runtimeEnv.getCurrentFilePath() !== importedExecutableSourcePath
+  ) {
+    const sourceScopedEnv = runtimeEnv.createChild();
+    sourceScopedEnv.setCurrentFilePath(importedExecutableSourcePath);
+    runtimeEnv = sourceScopedEnv;
+  }
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
