@@ -377,6 +377,7 @@ export async function evaluateGuardRuntime(
         timing: 'before',
         reason: policyResult.reason,
         metadata: {
+          ...(policyResult.metadata ?? {}),
           ...metadataBase,
           policyName: policyResult.policyName,
           policyRule: policyResult.rule,
@@ -398,6 +399,7 @@ export async function evaluateGuardRuntime(
       decision: 'allow',
       timing: 'before',
       metadata: {
+        ...(policyResult.metadata ?? {}),
         guardName: guard.name ?? null,
         guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
         scope,

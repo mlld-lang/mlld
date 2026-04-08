@@ -11,7 +11,7 @@ import type { FactSourceHandle } from '@core/types/handle';
 import { normalizeNamedOperationSelector } from '@core/policy/operation-labels';
 
 export type PolicyConditionResult =
-  | { decision: 'allow' }
+  | { decision: 'allow'; metadata?: Record<string, unknown> }
   | {
       decision: 'deny';
       reason: string;
@@ -19,6 +19,7 @@ export type PolicyConditionResult =
       rule?: string;
       suggestions?: string[];
       locked?: boolean;
+      metadata?: Record<string, unknown>;
     };
 
 export type PolicyArgDescriptor = {

@@ -135,8 +135,6 @@ import {
   repairSecurityRelevantValue
 } from '@interpreter/security/runtime-repair';
 import {
-  traceAuthCheck,
-  traceAuthDecision,
   traceLlmInvocation,
   traceLlmToolCall,
   traceLlmToolResult
@@ -147,6 +145,7 @@ import {
 } from './exec/scoped-runtime-config';
 import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
 import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
+import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -3429,11 +3428,6 @@ async function evaluateExecInvocationInternal(
     argSecurityDescriptors
   });
   if (shouldValidatePolicyAuthorizations) {
-    runtimeEnv.emitRuntimeTraceEvent(traceAuthCheck({
-      tool: toolOperationName ?? variable.name ?? commandName,
-      args: runtimeEnv.summarizeTraceValue(authorizationArgs),
-      controlArgs: authorizationDecisionControlArgs
-    }));
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
       throw createPolicyAuthorizationValidationError(validation);
@@ -3445,18 +3439,6 @@ async function evaluateExecInvocationInternal(
       args: authorizationArgs,
       controlArgs: authorizationDecisionControlArgs
     });
-    runtimeEnv.emitRuntimeTraceEvent(traceAuthDecision(
-      authorizationDecision.decision === 'allow' ? 'allow' : 'deny',
-      {
-        tool: toolOperationName ?? variable.name ?? commandName,
-        matched: authorizationDecision.matched,
-        code: authorizationDecision.code ?? null,
-        reason: authorizationDecision.reason ?? null,
-        matchedAttestationCount: authorizationDecision.matchedAttestations
-          ? Object.keys(authorizationDecision.matchedAttestations).length
-          : 0
-      }
-    ));
     if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
         env: runtimeEnv,
@@ -3620,6 +3602,17 @@ async function evaluateExecInvocationInternal(
       }
       operationContext.metadata = nextMetadata;
     }
+    if (shouldValidatePolicyAuthorizations) {
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+        authorizationTrace: {
+          tool: toolOperationName ?? variable.name ?? commandName,
+          args: runtimeEnv.summarizeTraceValue(authorizationArgs),
+          controlArgs: [...authorizationDecisionControlArgs]
+        }
+      };
+      operationContext.metadata = nextMetadata;
+    }
 
     const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
       runExecPostGuards({
@@ -3647,6 +3640,11 @@ async function evaluateExecInvocationInternal(
         guardVariableCandidates,
         evaluatedArgs,
         evaluatedArgStrings
+      });
+      emitResolvedAuthorizationTrace({
+        env: runtimeEnv,
+        operationContext,
+        preDecision
       });
       postHookInputs = nextPostHookInputs;
       bindExecParameterVariables({

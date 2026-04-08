@@ -444,6 +444,9 @@ function createAuthorizationGuard(
         args: args ?? {},
         controlArgs
       });
+      const matchedAttestationCount = decision.matchedAttestations
+        ? Object.keys(decision.matchedAttestations).length
+        : 0;
       if (decision.decision === 'allow') {
         const inheritedCheckFailure = evaluateAuthorizationInheritedPolicyChecks({
           policy,
@@ -454,7 +457,15 @@ function createAuthorizationGuard(
           authorizedArgFactsources: decision.matchedFactsources
         });
         if (!inheritedCheckFailure) {
-          return { decision: 'allow' };
+          return {
+            decision: 'allow',
+            metadata: {
+              authorizationMatched: decision.matched,
+              authorizationCode: decision.code ?? null,
+              authorizationReason: decision.reason ?? null,
+              authorizationMatchedAttestationCount: matchedAttestationCount
+            }
+          };
         }
         return {
           decision: 'deny',
@@ -462,7 +473,13 @@ function createAuthorizationGuard(
           policyName: getActivePolicyName(env),
           rule: inheritedCheckFailure.rule,
           suggestions: inheritedCheckFailure.suggestions,
-          locked: true
+          locked: true,
+          metadata: {
+            authorizationMatched: decision.matched,
+            authorizationCode: 'inherited_policy',
+            authorizationReason: inheritedCheckFailure.reason,
+            authorizationMatchedAttestationCount: matchedAttestationCount
+          }
         };
       }
       const failure = classifyAuthorizationFailure(
@@ -476,7 +493,13 @@ function createAuthorizationGuard(
         reason: failure.reason,
         policyName: getActivePolicyName(env),
         rule: failure.rule,
-        locked: true
+        locked: true,
+        metadata: {
+          authorizationMatched: decision.matched,
+          authorizationCode: decision.code ?? null,
+          authorizationReason: failure.reason,
+          authorizationMatchedAttestationCount: matchedAttestationCount
+        }
       };
     }
   };
