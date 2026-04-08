@@ -3290,11 +3290,21 @@ export class Environment
       trackForCleanup: true
     });
   }
+
+  private shouldMergeChildVariable(variable: Variable): boolean {
+    const importPath = variable.mx?.importPath;
+    if (importPath === 'let' || importPath === 'exe-param' || importPath === 'for-var') {
+      return false;
+    }
+    if (variable.internal?.isSystem || variable.internal?.isReserved) {
+      return false;
+    }
+    return true;
+  }
   
   mergeChild(child: Environment): void {
     for (const [name, variable] of child.variableManager.getVariables()) {
-      const importPath = variable.mx?.importPath;
-      if (importPath === 'let' || importPath === 'exe-param') {
+      if (!this.shouldMergeChildVariable(variable)) {
         continue;
       }
       this.variableManager.setVariable(name, variable);

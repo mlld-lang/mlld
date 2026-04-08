@@ -265,12 +265,23 @@ describe('Environment characterization', () => {
       const visible = createSimpleTextVariable('visible', 'yes', mockSource);
       const letScoped = createSimpleTextVariable('letScoped', 'no', mockSource);
       const paramScoped = createSimpleTextVariable('paramScoped', 'no', mockSource);
+      const forScoped = createSimpleTextVariable('forScoped', 'no', mockSource);
+      const systemScoped = createSimpleTextVariable('resume', 'no', mockSource, {
+        internal: { isSystem: true }
+      });
+      const reservedScoped = createSimpleTextVariable('reservedScoped', 'no', mockSource, {
+        internal: { isReserved: true }
+      });
       (letScoped.mx as any).importPath = 'let';
       (paramScoped.mx as any).importPath = 'exe-param';
+      (forScoped.mx as any).importPath = 'for-var';
 
       child.setVariable('visible', visible);
       child.setVariable('letScoped', letScoped);
       child.setVariable('paramScoped', paramScoped);
+      child.setVariable('forScoped', forScoped);
+      child.setVariable('resume', systemScoped);
+      child.setVariable('reservedScoped', reservedScoped);
       child.addNode({ type: 'Text', content: 'child-node' } as any);
 
       env.mergeChild(child);
@@ -278,6 +289,9 @@ describe('Environment characterization', () => {
       expect(env.getVariable('visible')?.value).toBe('yes');
       expect(env.getVariable('letScoped')).toBeUndefined();
       expect(env.getVariable('paramScoped')).toBeUndefined();
+      expect(env.getVariable('forScoped')).toBeUndefined();
+      expect(env.getVariable('resume')).toBeUndefined();
+      expect(env.getVariable('reservedScoped')).toBeUndefined();
       expect(env.getNodes().some((node: any) => node.content === 'child-node')).toBe(true);
     });
 
