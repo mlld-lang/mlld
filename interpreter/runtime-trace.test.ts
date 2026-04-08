@@ -51,6 +51,43 @@ describe('runtime trace', () => {
     );
   });
 
+  it('includes approximate size metadata on summarized traced values', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/exe @emitContact() = {
+  id: "c_1",
+  email: "ada@example.com",
+  name: "Ada"
+} => contact
+/show @shelf.write(@pipeline.selected, @emitContact())
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    const shelfWrite = result.traceEvents.find((event: any) => event.event === 'shelf.write');
+    expect(shelfWrite?.data?.value).toEqual(
+      expect.objectContaining({
+        kind: 'object',
+        bytes: expect.any(Number),
+        human: expect.stringMatching(/B$/)
+      })
+    );
+  });
+
   it('supports handle tracing via the handles alias and emits renamed handle lifecycle events', async () => {
     const env = createEnvironment();
     env.setRuntimeTrace('handles');

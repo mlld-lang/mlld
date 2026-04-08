@@ -71,12 +71,12 @@ Every trace event has this shape:
     "slot": "@outreach.recipients",
     "action": "write",
     "success": true,
-    "value": { "kind": "array", "length": 3 }
+    "value": { "kind": "array", "length": 3, "bytes": 92, "human": "92 B" }
   }
 }
 ```
 
-`scope` identifies where in execution the event occurred. `data` is category-specific. Values are summarized (strings truncated, objects reduced to `{kind, size, keys}`) to keep traces compact.
+`scope` identifies where in execution the event occurred. `data` is category-specific. Values are summarized (strings truncated, objects reduced to `{kind, size, keys}`) and now include an approximate serialized size (`bytes`, `human`) to help spot unexpectedly large payloads without enabling a separate profiler.
 
 ### Shelf
 
