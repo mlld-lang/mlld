@@ -277,6 +277,35 @@ describe('box directive', () => {
     });
   });
 
+  it('treats explicit empty box configs as no-op containers for llm bridge context', async () => {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+    const env = new Environment(fileSystem, pathService, process.cwd());
+
+    const src = `
+/exe tool:r @lookup_message(query) = "ok"
+/exe llm @agent(prompt, config) = js {
+  return JSON.stringify({
+    hasBox: Boolean(mx.box),
+    inBox: Boolean(mx.llm && mx.llm.inBox)
+  });
+}
+/var @boxState = box {} [
+  => @agent("inspect", { tools: [@lookup_message] })
+]
+`;
+
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const boxStateValue = env.getVariable('boxState')?.value;
+    const boxStateRaw = isStructuredValue(boxStateValue) ? asData(boxStateValue) : boxStateValue;
+    expect(boxStateRaw).toEqual({
+      hasBox: false,
+      inBox: false
+    });
+  });
+
   it('inherits parent scoped config when a nested box adds only shelf scope', async () => {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();

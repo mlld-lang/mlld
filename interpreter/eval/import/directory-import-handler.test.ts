@@ -44,14 +44,16 @@ function createMockEnv({
   };
 
   const childEnv = {
-    setCurrentFilePath: vi.fn()
+    setCurrentFilePath: vi.fn(),
+    emitRuntimeTraceEvent: vi.fn()
   };
 
   return {
     fsService,
     env: {
       getFileSystemService: () => fsService,
-      createChild: () => childEnv
+      createChild: () => childEnv,
+      emitRuntimeTraceEvent: vi.fn()
     },
     childEnv
   };
