@@ -11,7 +11,10 @@ import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
-import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
+import {
+  normalizeToolCollection,
+  resolveDirectToolCollection
+} from '@interpreter/eval/var/tool-scope';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import {
   resolveEffectiveToolMetadata,
@@ -350,23 +353,16 @@ function resolveToolCollectionInput(
   value: unknown,
   env: Environment
 ): ToolCollection | undefined {
+  const directCollection = resolveDirectToolCollection(value);
+  if (directCollection) {
+    return directCollection;
+  }
+
   let resolved = value;
   if (isStructuredValue(resolved)) {
     resolved = asData(resolved);
   }
-
   if (isVariable(resolved)) {
-    const directCollection =
-      resolved.internal?.isToolsCollection === true &&
-      resolved.internal.toolCollection &&
-      typeof resolved.internal.toolCollection === 'object' &&
-      !Array.isArray(resolved.internal.toolCollection)
-        ? resolved.internal.toolCollection as ToolCollection
-        : undefined;
-    if (directCollection) {
-      return directCollection;
-    }
-
     resolved = resolved.value;
     if (isStructuredValue(resolved)) {
       resolved = asData(resolved);

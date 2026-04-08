@@ -215,6 +215,42 @@ describe('tool collections', () => {
     expect((resultVar?.value as any)?.text ?? resultVar?.value).toBe('hello');
   });
 
+  it('preserves tool collection wrapper metadata when passed through exe params', async () => {
+    const output = await interpret(`
+      /exe tool:w @send_email(recipient, subject) = \`sent:@recipient:@subject\`
+        with { controlArgs: ["recipient"] }
+
+      /var tools @agentTools = {
+        send_email: {
+          mlld: @send_email,
+          expose: ["recipient", "subject"],
+          controlArgs: ["recipient"]
+        }
+      }
+
+      /exe @inspect(tools) = js {
+        return JSON.stringify({
+          isToolsCollection: mlld.getInternal(tools)?.isToolsCollection === true,
+          toolNames: Object.keys(mlld.getInternal(tools)?.toolCollection ?? {})
+        });
+      }
+
+      /show @inspect(@agentTools)
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true
+    });
+
+    expect(JSON.parse(output.trim())).toEqual({
+      isToolsCollection: true,
+      toolNames: ['send_email']
+    });
+  });
+
   it('applies tool collection labels as taint on direct box-block returns', async () => {
     const result = await interpret(`
       /exe @tcRead(id: string) = \`data:@id\`

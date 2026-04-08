@@ -856,6 +856,64 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves cross-module tool collections for llm bridge policy validation', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      `/exe llm @worker(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:node:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves ambient @mx.llm bridge context through imported llm wrappers that omit inner config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/provider.mld', [

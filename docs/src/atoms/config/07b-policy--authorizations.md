@@ -8,7 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
-updated: 2026-04-02
+updated: 2026-04-08
 ---
 
 The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
@@ -76,7 +76,7 @@ var tools @agentTools = {
 }
 ```
 
-`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge.
+`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
 
 Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
 

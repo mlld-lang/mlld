@@ -10,6 +10,8 @@ import {
 import { isStructuredValue } from '../utils/structured-value';
 import { materializeExpressionValue } from './expression-provenance';
 import { isShelfSlotRefValue } from '@core/types/shelf';
+import { getCapturedModuleEnv, sealCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
+import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 export interface ParameterFactoryOptions {
   name: string;
@@ -53,6 +55,28 @@ export function createParameterVariable(
   }
 
   const metadata = metadataFactory ? metadataFactory(preservedValue) : undefined;
+  const preservedToolCollection =
+    resolveDirectToolCollection(originalVariable) ?? resolveDirectToolCollection(preservedValue);
+  const capturedModuleEnv =
+    getCapturedModuleEnv(originalVariable?.internal)
+    ?? getCapturedModuleEnv(originalVariable)
+    ?? getCapturedModuleEnv(preservedValue);
+  const internalMetadata = {
+    ...(metadata?.internal ?? {}),
+    ...(preservedToolCollection
+      ? {
+          isToolsCollection: true,
+          toolCollection: preservedToolCollection
+        }
+      : {})
+  };
+  if (capturedModuleEnv !== undefined) {
+    sealCapturedModuleEnv(internalMetadata, capturedModuleEnv);
+  }
+  const normalizedMetadata = {
+    ...metadata,
+    internal: internalMetadata
+  };
 
   if (isStructuredValue(preservedValue)) {
     return createStructuredValueVariable(
@@ -64,7 +88,7 @@ export function createParameterVariable(
         hasInterpolation: false,
         isMultiLine: false
       },
-      metadata
+      normalizedMetadata
     );
   }
 
@@ -79,7 +103,7 @@ export function createParameterVariable(
         hasInterpolation: false,
         isMultiLine: false
       },
-      metadata
+      normalizedMetadata
     );
   }
 
@@ -98,7 +122,7 @@ export function createParameterVariable(
         hasInterpolation: false,
         isMultiLine: false
       },
-      metadata
+      normalizedMetadata
     );
   }
 
@@ -113,7 +137,7 @@ export function createParameterVariable(
         hasInterpolation: false,
         isMultiLine: false
       },
-      metadata
+      normalizedMetadata
     );
   }
 
@@ -131,7 +155,7 @@ export function createParameterVariable(
         hasInterpolation: false,
         isMultiLine: false
       },
-      metadata
+      normalizedMetadata
     );
   }
 
@@ -144,7 +168,7 @@ export function createParameterVariable(
       hasInterpolation: false,
       isMultiLine: false
     },
-    metadata
+    normalizedMetadata
   );
 }
 

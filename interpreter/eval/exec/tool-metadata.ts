@@ -10,6 +10,7 @@ import {
 } from '@core/types/tools';
 import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
+import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 export interface EffectiveToolMetadata {
   name: string;
@@ -382,11 +383,15 @@ function mergeToolDefinitionMetadata(
 }
 
 function getScopedToolCollection(env: Environment): ToolCollection | undefined {
-  const tools = env.getScopedEnvironmentConfig()?.tools;
-  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
-    return undefined;
+  const scopedTools = env.getScopedEnvironmentConfig()?.tools;
+  const direct = resolveDirectToolCollection(scopedTools);
+  if (direct) {
+    return direct;
   }
-  return tools as ToolCollection;
+
+  return isPlainObject(scopedTools)
+    ? scopedTools as ToolCollection
+    : undefined;
 }
 
 function getLlmToolSurfaceNames(env: Environment): string[] {
@@ -606,6 +611,19 @@ export function buildRuntimeAuthorizationToolContext(
 
     const direct = buildToolContextFromExecutable(name, variable);
     contexts.set(name, createAuthorizationToolContextEntry(name, direct));
+  }
+
+  const llmToolMetadata = env.getLlmToolConfig()?.toolMetadata;
+  if (Array.isArray(llmToolMetadata)) {
+    for (const entry of llmToolMetadata) {
+      if (!entry || typeof entry.name !== 'string' || entry.name.trim().length === 0) {
+        continue;
+      }
+      contexts.set(
+        entry.name,
+        createAuthorizationToolContextEntry(entry.name, entry)
+      );
+    }
   }
 
   const scopedTools = getScopedToolCollection(env);

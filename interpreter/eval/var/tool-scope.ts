@@ -1,4 +1,7 @@
-import type { ToolCollection } from '@core/types/tools';
+import {
+  getToolCollectionAuthorizationContext,
+  type ToolCollection
+} from '@core/types/tools';
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
@@ -12,6 +15,29 @@ export type ToolScopeValue = {
 };
 
 function unwrapToolScopeValue(value: unknown): unknown {
+  const directCollection = resolveDirectToolCollection(value);
+  if (directCollection) {
+    return directCollection;
+  }
+
+  let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+  }
+  return resolved;
+}
+
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function resolveDirectToolCollection(value: unknown): ToolCollection | undefined {
   let resolved = value;
   if (isStructuredValue(resolved)) {
     resolved = asData(resolved);
@@ -35,11 +61,13 @@ function unwrapToolScopeValue(value: unknown): unknown {
     }
   }
 
-  return resolved;
-}
+  if (!isPlainObject(resolved)) {
+    return undefined;
+  }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  return getToolCollectionAuthorizationContext(resolved)
+    ? resolved as ToolCollection
+    : undefined;
 }
 
 export async function resolveWithClauseToolsValue(
