@@ -162,7 +162,7 @@ export class CollectionEvaluator {
         || ((valueNode as { fields?: unknown[] }).fields?.length ?? 0) === 0)
     ) {
       const variable = env.getVariable((valueNode as { identifier: string }).identifier);
-      if (variable?.internal?.isToolsCollection === true) {
+      if (variable?.internal?.isToolsCollection === true || variable?.internal?.isShelf === true) {
         const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
         return resolveVariable(variable, env, ResolutionContext.ObjectProperty);
       }

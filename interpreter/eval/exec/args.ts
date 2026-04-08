@@ -7,6 +7,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -101,15 +102,16 @@ export function bindExecParameterVariables(options: {
     const argStringValue = evaluatedArgStrings[i];
     const originalVar = originalVariables[i];
     const guardCandidate = guardVariableCandidates[i];
+    const resolvedOriginalVar = originalVar ?? (isVariable(argValue) ? argValue : undefined);
     const isShellCode =
       definition.type === 'code' &&
       typeof definition.language === 'string' &&
       (definition.language === 'bash' || definition.language === 'sh');
     const preferGuardReplacement = transformedGuardSet?.has(guardCandidate as Variable) ?? false;
     const allowOriginalReuse =
-      !preferGuardReplacement && Boolean(originalVar) && !isShellCode && definition.type !== 'command';
+      !preferGuardReplacement && Boolean(resolvedOriginalVar) && !isShellCode && definition.type !== 'command';
 
-    if (guardCandidate && (!originalVar || !allowOriginalReuse || preferGuardReplacement)) {
+    if (guardCandidate && (!resolvedOriginalVar || !allowOriginalReuse || preferGuardReplacement)) {
       const candidateClone = cloneGuardCandidateForParameter(
         paramName,
         guardCandidate,
@@ -125,7 +127,7 @@ export function bindExecParameterVariables(options: {
         name: paramName,
         value: evaluatedArgs[i],
         stringValue: argStringValue,
-        originalVariable: originalVar,
+        originalVariable: resolvedOriginalVar,
         allowOriginalReuse,
         metadataFactory: createParameterMetadata,
         origin: 'exec-param'

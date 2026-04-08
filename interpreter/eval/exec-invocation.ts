@@ -202,6 +202,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   preserveStructuredArgs?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
+  materializedArgs?: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
   expressionSourceVariables: readonly (Variable | undefined)[];
@@ -313,6 +314,54 @@ async function materializeCollectionDispatchArg(
   return resolveCollectionBoundValue(resolved, env, options);
 }
 
+async function materializePlainObjectExecutableDispatchArg(
+  value: unknown,
+  env: Environment,
+  options?: {
+    preserveStructuredArgs?: boolean;
+  }
+): Promise<unknown> {
+  let resolved = value;
+  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+
+  if (isVariable(resolved)) {
+    if (isExecutableVariable(resolved)) {
+      return resolved;
+    }
+    resolved = await extractVariableValue(resolved, env);
+  }
+
+  if (isStructuredValue(resolved)) {
+    return options?.preserveStructuredArgs ? resolved : asData(resolved);
+  }
+
+  if (
+    resolved
+    && typeof resolved === 'object'
+    && (
+      (
+        (resolved as { type?: unknown }).type === 'object'
+        && (
+          Array.isArray((resolved as { entries?: unknown[] }).entries)
+          || isPlainObject((resolved as { properties?: unknown }).properties)
+        )
+      )
+      || (
+        (resolved as { type?: unknown }).type === 'array'
+        && (
+          Array.isArray((resolved as { items?: unknown[] }).items)
+          || Array.isArray((resolved as { elements?: unknown[] }).elements)
+        )
+      )
+    )
+  ) {
+    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+    resolved = await evaluateDataValue(resolved as any, env);
+  }
+
+  return resolved;
+}
+
 async function normalizeCollectionDispatchArguments(options: {
   env: Environment;
   executableParamNames: readonly string[];
@@ -357,14 +406,33 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   const {
     executableParamNames,
     optionalParamNames,
-    ...rest
+    env,
+    preserveStructuredArgs,
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSourceNames
   } = options;
 
+  const materializedArgs = await Promise.all(
+    evaluatedArgs.map(arg =>
+      materializePlainObjectExecutableDispatchArg(arg, env, { preserveStructuredArgs })
+    )
+  );
+
   return normalizeExecutableDispatchArguments({
-    ...rest,
+    env,
     executableParamNames,
     visibleParamNames: executableParamNames,
-    optionalParamNames
+    optionalParamNames,
+    preserveStructuredArgs,
+    evaluatedArgs: materializedArgs,
+    materializedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSourceNames
   });
 }
 
@@ -378,6 +446,7 @@ async function normalizeExecutableDispatchArguments(
     optionalParamNames,
     bind,
     evaluatedArgs,
+    materializedArgs,
     originalVariables,
     guardVariableCandidates,
     expressionSourceVariables,
@@ -403,20 +472,22 @@ async function normalizeExecutableDispatchArguments(
   );
   const visibleSet = new Set(visibleParamNames);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
-  const materializedArgs = await Promise.all(
-    evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
-  );
+  const normalizedMaterializedArgs = materializedArgs
+    ? [...materializedArgs]
+    : await Promise.all(
+        evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
+      );
 
   const shouldSpreadNamedObject =
-    materializedArgs.length === 1
-    && isPlainObject(materializedArgs[0])
-    && Object.keys(materializedArgs[0]).every(key => visibleSet.has(key))
+    normalizedMaterializedArgs.length === 1
+    && isPlainObject(normalizedMaterializedArgs[0])
+    && Object.keys(normalizedMaterializedArgs[0]).every(key => visibleSet.has(key))
     && visibleParamNames
       .filter(param => !optionalSet.has(param))
-      .every(param => Object.prototype.hasOwnProperty.call(materializedArgs[0], param));
+      .every(param => Object.prototype.hasOwnProperty.call(normalizedMaterializedArgs[0], param));
 
   if (shouldSpreadNamedObject) {
-    const objectArg = materializedArgs[0] as Record<string, unknown>;
+    const objectArg = normalizedMaterializedArgs[0] as Record<string, unknown>;
     for (const paramName of visibleParamNames) {
       if (!Object.prototype.hasOwnProperty.call(objectArg, paramName)) {
         continue;
@@ -429,12 +500,12 @@ async function normalizeExecutableDispatchArguments(
       });
     }
   } else {
-    const providedCount = Math.min(materializedArgs.length, visibleParamNames.length);
+    const providedCount = Math.min(normalizedMaterializedArgs.length, visibleParamNames.length);
     for (let index = 0; index < providedCount; index += 1) {
       const paramName = visibleParamNames[index];
       normalizedEntries.set(paramName, {
-        value: materializedArgs[index],
-        stringValue: stringifyExecGuardArg(materializedArgs[index]),
+        value: normalizedMaterializedArgs[index],
+        stringValue: stringifyExecGuardArg(normalizedMaterializedArgs[index]),
         originalVariable: originalVariables[index],
         guardVariableCandidate: guardVariableCandidates[index],
         expressionSourceVariable: expressionSourceVariables[index],

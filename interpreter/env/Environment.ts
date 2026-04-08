@@ -2009,15 +2009,40 @@ export class Environment
     this.variableManager.updateVariable(name, variable);
   }
 
+  private getBuiltinShadowingVariable(name: string): Variable | undefined {
+    let current: Environment | undefined = this;
+
+    while (current) {
+      const localVariable = current.variableManager.getCurrentVariables().get(name);
+      if (localVariable) {
+        return localVariable;
+      }
+
+      const capturedVariable = current.capturedModuleEnv?.get(name);
+      if (capturedVariable) {
+        return capturedVariable;
+      }
+
+      current = current.parent;
+    }
+
+    return undefined;
+  }
+
   getVariable(name: string): Variable | undefined {
+    const shadowingVariable =
+      name === 'fyi' || name === 'shelf' || name === 'shelve'
+        ? this.getBuiltinShadowingVariable(name)
+        : undefined;
     const variable =
-      name === 'fyi'
+      shadowingVariable ??
+      (name === 'fyi'
         ? createFyiVariable(this)
         : name === 'shelf'
           ? (this.isShelfBuiltinAvailable() ? createShelfBuiltinVariable(this) : undefined)
         : name === 'shelve'
           ? (this.isShelfBuiltinAvailable() ? createShelveVariable(this) : undefined)
-        : this.variableManager.getVariable(name);
+        : this.variableManager.getVariable(name));
     if (this.hasSDKEmitter()) {
       const provenance = this.getVariableProvenance(variable);
       this.emitSDKEvent({
@@ -2110,7 +2135,7 @@ export class Environment
       return true;
     }
     if (name === 'shelf' || name === 'shelve') {
-      return this.isShelfBuiltinAvailable();
+      return Boolean(this.getBuiltinShadowingVariable(name)) || this.isShelfBuiltinAvailable();
     }
     return this.variableManager.hasVariable(name);
   }

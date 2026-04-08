@@ -282,6 +282,60 @@ function readStringProperty(value: unknown, key: string): string | undefined {
     : undefined;
 }
 
+async function resolveDeferredObjectFieldValue(
+  value: unknown,
+  env: Environment,
+  sourceLocation?: SourceLocation
+): Promise<unknown> {
+  if (!value || typeof value !== 'object' || !('type' in value)) {
+    return value;
+  }
+
+  const node = value as Record<string, unknown>;
+  const refNode =
+    node.type === 'VariableReferenceWithTail' && node.variable && typeof node.variable === 'object'
+      ? node.variable as Record<string, unknown>
+      : node;
+
+  if (refNode.type !== 'VariableReference' || typeof refNode.identifier !== 'string') {
+    return value;
+  }
+
+  const variable = env.getVariable(refNode.identifier);
+  if (!variable) {
+    throw new Error(`Variable not found: ${refNode.identifier}`);
+  }
+
+  const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+  const hasFields = Array.isArray(refNode.fields) && refNode.fields.length > 0;
+
+  if (!hasFields) {
+    if (node.type === 'VariableReference' && variable.internal?.isShelf === true) {
+      const { resolveVariable, ResolutionContext } = await import('./variable-resolution');
+      return resolveVariable(variable, env, ResolutionContext.ObjectProperty);
+    }
+    return evaluateDataValue(value as DataObjectValue, env);
+  }
+
+  const { resolveVariable, ResolutionContext } = await import('./variable-resolution');
+  const resolved = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+  const fieldResult = await accessFields(
+    resolved,
+    refNode.fields as FieldAccessNode[],
+    {
+      preserveContext: true,
+      env,
+      sourceLocation
+    }
+  ) as FieldAccessResult;
+
+  if (isVariable(fieldResult.value) && fieldResult.value.internal?.isShelf === true) {
+    return fieldResult.value;
+  }
+
+  return evaluateDataValue(value as DataObjectValue, env);
+}
+
 function deriveWorkspaceMxContext(mx: unknown, data: unknown): WorkspaceMxContext | undefined {
   const workspace = isWorkspaceValue(data) ? data : undefined;
   const path = readStringProperty(mx, 'path') ?? readStringProperty(data, 'path');
@@ -899,6 +953,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         accessedValue = getObjectField(rawValue, name);
+        if (options?.env) {
+          accessedValue = await resolveDeferredObjectFieldValue(
+            accessedValue,
+            options.env,
+            options?.sourceLocation
+          );
+        }
         break;
       }
 

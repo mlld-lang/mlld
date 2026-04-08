@@ -8,6 +8,7 @@ import { PathService } from '@services/fs/PathService';
 import { accessField } from '@interpreter/utils/field-access';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractShelfSlotRef, normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
+import { interpret } from '@interpreter/index';
 
 async function createEnvironment(source: string, filePath = '/main.mld'): Promise<Environment> {
   const fs = new MemoryFileSystem();
@@ -426,6 +427,239 @@ describe('shelf runtime', () => {
       shelfName: 'planner',
       slotName: 'trusted_email'
     });
+  });
+
+  it('lets executable params named shelf shadow the builtin @shelf helper', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @planner = {
+  trusted_email: contact?,
+  trusted_calendar: contact?,
+  selected: contact?
+}
+/exe @probe(shelf) = [
+  => {
+    slots: @shelf.mx.slots,
+    slotEntries: @shelf.mx.slotEntries,
+    trusted: @shelf.trusted_email
+  }
+]
+/var @result = @probe(@planner)
+`);
+
+    const result = env.getVariable('result')?.value;
+    if (!result) {
+      throw new Error('Expected @result to be defined');
+    }
+
+    const slots = await accessField(result, { type: 'field', value: 'slots' } as any, { env });
+    const slotEntries = await accessField(result, { type: 'field', value: 'slotEntries' } as any, { env });
+    const trustedRef = await accessField(result, { type: 'field', value: 'trusted' } as any, { env });
+
+    expect(slots).toEqual(['trusted_email', 'trusted_calendar', 'selected']);
+    expect(Array.isArray(slotEntries)).toBe(true);
+
+    const firstEntry = await accessField(slotEntries, { type: 'arrayIndex', value: 0 } as any, { env });
+    const firstName = await accessField(firstEntry, { type: 'field', value: 'name' } as any, { env });
+    const firstRef = await accessField(firstEntry, { type: 'field', value: 'ref' } as any, { env });
+
+    expect(asData(firstName)).toBe('trusted_email');
+    expect(extractShelfSlotRef(firstRef)).toEqual({
+      shelfName: 'planner',
+      slotName: 'trusted_email'
+    });
+    expect(extractShelfSlotRef(trustedRef)).toEqual({
+      shelfName: 'planner',
+      slotName: 'trusted_email'
+    });
+  });
+
+  it('preserves shelf introspection through object fields, rebinding, and exe params', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @planner = {
+  trusted_email: contact?,
+  trusted_calendar: contact?,
+  selected: contact?
+}
+/var @agent = { shelf: @planner }
+/var @fieldSlots = @agent.shelf.mx.slots
+/var @fieldEntries = @agent.shelf.mx.slotEntries
+/var @fromField = @agent.shelf
+/var @reboundSlots = @fromField.mx.slots
+/exe @probe(scope) = [
+  => @scope.mx.slots
+]
+/var @paramSlots = @probe(@agent.shelf)
+`);
+
+    expect(env.getVariable('fieldSlots')?.value).toEqual([
+      'trusted_email',
+      'trusted_calendar',
+      'selected'
+    ]);
+    expect(env.getVariable('reboundSlots')?.value).toEqual([
+      'trusted_email',
+      'trusted_calendar',
+      'selected'
+    ]);
+    expect(env.getVariable('fromField')?.internal?.isShelf).toBe(true);
+    expect(asData(env.getVariable('paramSlots')?.value)).toEqual([
+      'trusted_email',
+      'trusted_calendar',
+      'selected'
+    ]);
+
+    const fieldEntries = env.getVariable('fieldEntries')?.value;
+    if (!fieldEntries) {
+      throw new Error('Expected @fieldEntries to be defined');
+    }
+
+    const firstEntry = await accessField(fieldEntries, { type: 'arrayIndex', value: 0 } as any, { env });
+    const firstName = await accessField(firstEntry, { type: 'field', value: 'name' } as any, { env });
+    const firstRef = await accessField(firstEntry, { type: 'field', value: 'ref' } as any, { env });
+
+    expect(firstName).toBe('trusted_email');
+    expect(extractShelfSlotRef(firstRef)).toEqual({
+      shelfName: 'planner',
+      slotName: 'trusted_email'
+    });
+  });
+
+  it('preserves inline object args through imported namespace executable calls', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+
+    await fileSystem.writeFile('/provider.mld', `
+/exe @build(config) = [
+  => {
+    suite: @config.suite,
+    shelfSlots: @config.shelf.mx.slots,
+    shelfType: @typeof(@config.shelf),
+    configType: @typeof(@config)
+  }
+]
+/export { @build }
+`);
+
+    const output = await interpret(`
+/import "./provider.mld" as @rig
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+/shelf @planner = {
+  trusted_email: contact?,
+  trusted_calendar: contact?,
+  selected: contact?
+}
+/var @cfg = { suite: "bound", shelf: @planner }
+/var @bound = @rig.build(@cfg)
+/var @inline = @rig.build({ suite: "inline", shelf: @planner })
+/show @bound
+/show @inline
+`, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      format: 'markdown'
+    });
+
+    expect(output).toContain('bound');
+    expect(output).toContain('inline');
+    expect(output).toContain('trusted_email');
+  });
+
+  it('preserves inline object args when an imported executable forwards config to another imported executable', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+
+    await fileSystem.writeFile('/validator.mld', `
+/exe @validateConfig(config) = [
+  if !@config.suite.isDefined() [
+    => { error: "missing_suite" }
+  ]
+  => { ok: true }
+]
+/export { @validateConfig }
+`);
+
+    await fileSystem.writeFile('/provider.mld', `
+/import { @validateConfig } from "./validator.mld"
+/exe @build(config) = [
+  let @configType = @typeof(@config)
+  let @suiteType = @typeof(@config.suite)
+  let @before = @typeof(@config.shelf.mx.slots)
+  let @validation = @validateConfig(@config)
+  let @after = @typeof(@config.shelf.mx.slots)
+  if @validation.error.isDefined() [ => @validation ]
+  => {
+    configType: @configType,
+    suiteType: @suiteType,
+    before: @before,
+    after: @after,
+    suite: @config.suite,
+    shelf: @config.shelf
+  }
+]
+/var @rig = { build: @build }
+/export { @rig }
+`);
+
+    const output = await interpret(`
+/import { @rig } from "./provider.mld"
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+/shelf @planner = {
+  trusted_email: contact?,
+  trusted_calendar: contact?,
+  selected: contact?
+}
+/var @cfg = { suite: "bound", shelf: @planner }
+/var @bound = @rig.build(@cfg)
+/show @bound.configType
+/show @bound.suiteType
+/show @bound.before
+/show @bound.after
+/show @typeof(@bound.shelf.mx.slots)
+/var @inline = @rig.build({ suite: "inline", shelf: @planner })
+/show @inline.configType
+/show @inline.suiteType
+/show @inline.before
+/show @inline.after
+/show @typeof(@inline.shelf.mx.slots)
+`, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      format: 'markdown'
+    });
+
+    const lines = output
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(lines).toEqual([
+      'object',
+      'string',
+      'array',
+      'array',
+      'array',
+      'object',
+      'string',
+      'array',
+      'array',
+      'array'
+    ]);
   });
 
   it('normalizes runtime shelf scope values from alias objects and object maps', async () => {
