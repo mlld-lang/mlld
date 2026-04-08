@@ -1597,6 +1597,80 @@ describe('@policy builtin', () => {
     }
   });
 
+  it('preserves explicit basePolicy passed through parameter-bound field access', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /policy @scriptPolicy = {
+          defaults: { rules: ["script-rule"] },
+          operations: { destructive: ["tool:w"] },
+          authorizations: {
+            deny: ["sendEmail"]
+          }
+        }
+
+        /import { @dispatch } from "./framework.mld"
+
+        /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+        /var tools @writeTools = {
+          sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+        }
+
+        /var @basePolicy = {
+          defaults: { rules: ["explicit-rule"] },
+          operations: { "exfil:send": ["tool:w"] },
+          authorizations: {
+            deny: []
+          }
+        }
+
+        /var @agent = {
+          basePolicy: @basePolicy,
+          toolsCollection: @writeTools
+        }
+
+        /var @intent = {
+          sendEmail: {
+            recipient: { eq: "ada@example.com", attestations: ["known"] }
+          }
+        }
+
+        /var @result = @dispatch(@agent, @intent)
+      `,
+      {
+        '/framework.mld': `
+          /exe @dispatch(agent, intent) = [
+            let @builtDirect = @policy.build(
+              @intent,
+              @agent.toolsCollection,
+              { basePolicy: @agent.basePolicy }
+            )
+            let @bpClone = { ...@agent.basePolicy }
+            let @builtClone = @policy.build(
+              @intent,
+              @agent.toolsCollection,
+              { basePolicy: @bpClone }
+            )
+
+            => {
+              direct: @builtDirect.policy.defaults.rules,
+              clone: @builtClone.policy.defaults.rules
+            }
+          ]
+
+          /export { @dispatch }
+        `
+      }
+    );
+
+    const result = await extractBuiltinResult(env, 'result');
+
+    expect(result).toEqual({
+      direct: ['explicit-rule'],
+      clone: ['explicit-rule']
+    });
+  });
+
   it('validate accepts canonical, structured, and planner-display resolved handle forms', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
