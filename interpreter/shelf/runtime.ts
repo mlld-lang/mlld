@@ -1617,6 +1617,106 @@ async function normalizeScopeEntryValue(value: unknown, env: Environment): Promi
   return value;
 }
 
+type ScopeAliasEntry = {
+  alias: string;
+  value: unknown;
+};
+
+function isNameRefScopeEntry(value: unknown): value is { name: string; ref: unknown } {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  return (
+    keys.length === 2 &&
+    keys.includes('name') &&
+    keys.includes('ref') &&
+    typeof value.name === 'string'
+  );
+}
+
+function extractNamedScopeEntries(value: unknown): ScopeAliasEntry[] | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  if (typeof value.alias === 'string' && 'value' in value) {
+    return [{ alias: value.alias, value: value.value }];
+  }
+
+  if (isNameRefScopeEntry(value)) {
+    return [{ alias: value.name, value: value.ref }];
+  }
+
+  return Object.keys(value).map(alias => ({
+    alias,
+    value: value[alias]
+  }));
+}
+
+function applyNamedScopeEntry(
+  entry: ScopeAliasEntry,
+  label: 'read' | 'write',
+  refs: ShelfScopeSlotRef[],
+  bindings: ShelfScopeSlotBinding[],
+  aliases: Record<string, unknown>
+): void {
+  const alias = entry.alias.trim();
+  if (!alias) {
+    throw new MlldInterpreterError(`box.shelf.${label} aliases must be non-empty`, 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  const ref = extractShelfSlotRef(entry.value);
+  if (ref) {
+    refs.push(ref);
+    bindings.push({ ref, alias });
+    return;
+  }
+
+  if (label === 'write') {
+    throw new MlldInterpreterError(
+      'box.shelf.write aliases must resolve to shelf slot references',
+      'box',
+      undefined,
+      { code: 'INVALID_SHELF_SCOPE' }
+    );
+  }
+
+  aliases[alias] = entry.value;
+}
+
+function applyScopeEntry(
+  entry: unknown,
+  label: 'read' | 'write',
+  refs: ShelfScopeSlotRef[],
+  bindings: ShelfScopeSlotBinding[],
+  aliases: Record<string, unknown>
+): void {
+  const namedEntries = extractNamedScopeEntries(entry);
+  if (namedEntries) {
+    for (const namedEntry of namedEntries) {
+      applyNamedScopeEntry(namedEntry, label, refs, bindings, aliases);
+    }
+    return;
+  }
+
+  const ref = extractShelfSlotRef(entry);
+  if (!ref) {
+    throw new MlldInterpreterError(
+      `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ', alias objects, or aliased values' : ' or alias objects'}`,
+      'box',
+      undefined,
+      { code: 'INVALID_SHELF_SCOPE' }
+    );
+  }
+
+  refs.push(ref);
+  bindings.push({ ref });
+}
+
 async function normalizeScopeSlotEntries(
   entries: unknown,
   env: Environment,
@@ -1625,50 +1725,27 @@ async function normalizeScopeSlotEntries(
   if (entries === undefined) {
     return { refs: [], bindings: [], aliases: {} };
   }
-  if (!Array.isArray(entries)) {
-    throw new MlldInterpreterError(`box.shelf.${label} must be an array`, 'box', undefined, {
-      code: 'INVALID_SHELF_SCOPE'
-    });
-  }
 
   const refs: ShelfScopeSlotRef[] = [];
   const bindings: ShelfScopeSlotBinding[] = [];
   const aliases: Record<string, unknown> = {};
 
-  for (const entry of entries) {
-    const normalized = await normalizeScopeEntryValue(entry, env);
-    if (isPlainObject(normalized) && typeof normalized.alias === 'string' && 'value' in normalized) {
-      const alias = normalized.alias.trim();
-      const ref = extractShelfSlotRef(normalized.value);
-      if (ref) {
-        refs.push(ref);
-        bindings.push({ ref, alias });
-        continue;
-      }
-      if (label === 'write') {
-        throw new MlldInterpreterError(
-          'box.shelf.write aliases must resolve to shelf slot references',
-          'box',
-          undefined,
-          { code: 'INVALID_SHELF_SCOPE' }
-        );
-      }
-      aliases[alias] = normalized.value;
-      continue;
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      const normalized = await normalizeScopeEntryValue(entry, env);
+      applyScopeEntry(normalized, label, refs, bindings, aliases);
     }
-    const ref = extractShelfSlotRef(normalized);
-    if (!ref) {
-      throw new MlldInterpreterError(
-        `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ' or aliased values' : ''}`,
-        'box',
-        undefined,
-        { code: 'INVALID_SHELF_SCOPE' }
-      );
-    }
-    refs.push(ref);
-    bindings.push({ ref });
+    return { refs, bindings, aliases };
   }
 
+  const normalized = await normalizeScopeEntryValue(entries, env);
+  if (!isPlainObject(normalized)) {
+    throw new MlldInterpreterError(`box.shelf.${label} must be an array or object`, 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  applyScopeEntry(normalized, label, refs, bindings, aliases);
   return { refs, bindings, aliases };
 }
 

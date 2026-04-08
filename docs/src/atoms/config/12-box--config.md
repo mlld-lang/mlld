@@ -6,9 +6,9 @@ brief: Configure filesystem, network, limits, and credentials for box execution
 category: config
 parent: box
 tags: [box, configuration, isolation, credentials, limits, mcp]
-related: [box-overview, box-directive, security-policies, mcp-security, mcp-policy, mcp-guards]
+related: [box-overview, box-directive, shelf-slots, security-policies, mcp-security, mcp-policy, mcp-guards]
 related-code: [interpreter/eval/box.ts, interpreter/env/Environment.ts, interpreter/eval/env-mcp-config.test.ts]
-updated: 2026-03-04
+updated: 2026-04-07
 ---
 
 Box configuration objects control isolation, credentials, and resource limits.
@@ -59,6 +59,7 @@ VFS defaults apply when the box has a workspace (anonymous `box [...]`, `box @wo
 | `auth` | `"credential-name"` | Auth reference from policy |
 | `tools` | `["Read", "Write", "Bash", "Glob", "Grep"]` | Runtime tool allowlist for commands and MCP tools |
 | `mcps` | `[]`, `[server-config]` | Runtime MCP server allowlist |
+| `shelf` | `{ read, write }`, `@scope` | Scoped shelf read/write surface for llm calls and auto-provisioned `shelve` |
 
 **Important:** `tools` and `mcps` enforce runtime access inside `box` blocks.
 
@@ -73,6 +74,27 @@ VFS defaults apply when the box has a workspace (anonymous `box [...]`, `box @wo
 - Include `Bash` in `tools` to allow `run cmd`, `run sh`, and shell-backed command executables.
 - Set `mcps: []` to block all MCP tool calls, or list servers to allow specific MCP sources.
 - Use `capabilities.deny` for command-pattern policy rules (for example `cmd:git:push`).
+
+**Shelf scope as a value:**
+
+The `shelf` config field can be composed like any other box value:
+
+```mlld
+var @plannerScope = {
+  read: @pipeline.mx.slotEntries,
+  write: {
+    selected: @pipeline.selected
+  }
+}
+
+box {
+  shelf: @plannerScope
+} [
+  => @claude(...)
+]
+```
+
+`read` and `write` accept the runtime shapes described in `shelf-slots`: arrays of slot refs, aliased entries, `{ name, ref }` pairs, or object maps whose keys become aliases. The older inline literal form still works.
 
 **Advanced: MCP configuration via `@mcpConfig()`:**
 

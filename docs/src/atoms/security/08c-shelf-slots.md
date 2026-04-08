@@ -86,6 +86,50 @@ box {
 
 Write implies read.
 
+### Composable scope values
+
+The `shelf` field can be an inline object or a regular value:
+
+```mlld
+var @plannerScope = {
+  read: @outreach.mx.slotEntries,
+  write: {
+    selected: @outreach.selected
+  }
+}
+
+box {
+  shelf: @plannerScope
+} [...]
+```
+
+This is useful for framework code that receives an arbitrary shelf and needs to build a scope dynamically instead of hardcoding every slot at the call site.
+
+Accepted runtime shapes:
+
+- `read` and `write` may be arrays or objects
+- Array entries may be bare slot refs, aliased values (`@slotRef as alias`), single-key alias objects (`{ selected: @s.selected }`), or `{ name, ref }` pairs
+- Object-map form uses the object key as the alias
+- The original literal-array form remains supported
+
+When you want a flat agent-facing alias surface from computed data, prefer alias objects or `@someShelf.mx.slotEntries`. Bare slot refs without an explicit alias keep the normal shelf namespace shape.
+
+### Shelf introspection
+
+Shelf values expose type-specific `.mx` helpers:
+
+- `@someShelf.mx.slots` returns the declared slot names
+- `@someShelf.mx.slotEntries` returns `{ name, ref }` pairs
+
+`slotEntries` is designed to compose directly with computed `box.shelf.read` values:
+
+```mlld
+var @scope = {
+  read: @pipeline.mx.slotEntries,
+  write: { selected: @pipeline.selected }
+}
+```
+
 ## The two read surfaces
 
 Slot contents are reachable two ways. Use the right one for the context:
@@ -216,11 +260,11 @@ show @planAndExecute(
 
 Inside the box, the agent only sees `@fyi.shelf.candidates`, `@fyi.shelf.selected`, and `@fyi.shelf.execution_log` — the wrapper's role names. The same wrapper can be reused with any shelf that has compatible slot types. Aliases become the agent-facing API and decouple the agent's view from the developer's shelf structure.
 
-When using a variable slot ref, `as <alias>` is required — the agent should never see the variable name. Static slot refs without `as` keep the slot's existing path as the implicit alias. Aliases that target different slots are rejected, and write aliases must resolve to real shelf slot refs.
+In the direct array form, `as <alias>` is the explicit way to rename a slot for the agent. In the value form, the alias can also come from an object key (`{ selected: @slotRef }`) or a `{ name, ref }` entry. Aliases that target different slots are rejected, and write aliases must resolve to real shelf slot refs.
 
 `<shelf_notes>` renders the alias names, not the concrete shelf paths, so the agent's view of the surface stays consistent across different invocations of the wrapper.
 
-Slot refs are first-class runtime values. Pass them around as exe parameters, store them in objects, dispatch them through collection lookups — anywhere a static slot ref would work, a variable holding a slot ref also works.
+Slot refs are first-class runtime values. Pass them around as exe parameters, store them in objects, dispatch them through collection lookups — anywhere a static slot ref would work, a variable holding a slot ref also works. For whole-shelf wrappers, use `@someShelf.mx.slots` or `@someShelf.mx.slotEntries` to inspect the declared surface and build the box scope value programmatically.
 
 ## Agent system notes
 

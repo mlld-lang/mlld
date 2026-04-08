@@ -177,12 +177,25 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
 function createObjectUtilityMxView(
   mx: unknown,
   data: unknown,
-  structured?: StructuredValue
+  structured?: StructuredValue,
+  parentVariable?: Variable
 ): unknown {
   const workspaceContext = deriveWorkspaceMxContext(mx, data);
   const hasMxObject = Boolean(mx && typeof mx === 'object');
   const hasObjectUtilityData = isPlainObjectValue(data);
-  if (!structured && !hasObjectUtilityData && !workspaceContext) {
+  const shelfDefinition =
+    parentVariable?.internal?.isShelf === true &&
+    parentVariable.internal &&
+    typeof parentVariable.internal === 'object' &&
+    'shelfDefinition' in parentVariable.internal
+      ? (parentVariable.internal as Record<string, unknown>).shelfDefinition as
+          | { slots?: Record<string, unknown> }
+          | undefined
+      : undefined;
+  const shelfSlotNames = shelfDefinition?.slots ? Object.keys(shelfDefinition.slots) : [];
+  const hasShelfMxAccessors = shelfSlotNames.length > 0;
+
+  if (!structured && !hasObjectUtilityData && !workspaceContext && !hasShelfMxAccessors) {
     return mx;
   }
 
@@ -218,6 +231,25 @@ function createObjectUtilityMxView(
     });
     Object.defineProperty(view, 'entries', {
       value: keys.map(key => [key, obj[key]]),
+      enumerable: true,
+      configurable: true
+    });
+  }
+
+  if (hasShelfMxAccessors) {
+    const shelfValue = data && typeof data === 'object'
+      ? data as Record<string, unknown>
+      : undefined;
+    Object.defineProperty(view, 'slots', {
+      value: shelfSlotNames,
+      enumerable: true,
+      configurable: true
+    });
+    Object.defineProperty(view, 'slotEntries', {
+      value: shelfSlotNames.map(name => ({
+        name,
+        ref: shelfValue?.[name]
+      })),
       enumerable: true,
       configurable: true
     });
@@ -603,7 +635,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
           (value as any).mx;
 
-        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper);
+        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper, value);
       })();
 
       if (options?.preserveContext) {
@@ -710,7 +742,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'mx') {
-          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
+          accessedValue = createObjectUtilityMxView(
+            structuredWrapper.mx,
+            rawValue,
+            structuredWrapper,
+            parentVariable
+          );
           break;
         }
       }
@@ -726,7 +763,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         if (syntheticMx) {
           updateVarMxFromDescriptor(syntheticMx as any, descriptor);
         }
-        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue);
+        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue, undefined, parentVariable);
         break;
       }
       if (typeof rawValue === 'string') {
