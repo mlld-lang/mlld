@@ -5,6 +5,10 @@ import {
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
@@ -39,11 +43,15 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 
 export function resolveDirectToolCollection(value: unknown): ToolCollection | undefined {
   let resolved = value;
+  let capturedModuleEnv: unknown;
   if (isStructuredValue(resolved)) {
     resolved = asData(resolved);
   }
 
   if (isVariable(resolved)) {
+    capturedModuleEnv =
+      getCapturedModuleEnv(resolved.internal)
+      ?? getCapturedModuleEnv(resolved);
     const directCollection =
       resolved.internal?.isToolsCollection === true &&
       resolved.internal.toolCollection &&
@@ -52,6 +60,9 @@ export function resolveDirectToolCollection(value: unknown): ToolCollection | un
         ? resolved.internal.toolCollection as ToolCollection
         : undefined;
     if (directCollection) {
+      if (capturedModuleEnv !== undefined) {
+        sealCapturedModuleEnv(directCollection, capturedModuleEnv);
+      }
       return directCollection;
     }
 
@@ -65,9 +76,15 @@ export function resolveDirectToolCollection(value: unknown): ToolCollection | un
     return undefined;
   }
 
-  return getToolCollectionAuthorizationContext(resolved)
-    ? resolved as ToolCollection
-    : undefined;
+  if (!getToolCollectionAuthorizationContext(resolved)) {
+    return undefined;
+  }
+
+  if (capturedModuleEnv !== undefined) {
+    sealCapturedModuleEnv(resolved, capturedModuleEnv);
+  }
+
+  return resolved as ToolCollection;
 }
 
 export async function resolveWithClauseToolsValue(

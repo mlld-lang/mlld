@@ -914,6 +914,60 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported tool collections across multiple exe param layers on the llm bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/tools.mld', [
+      '/exe exfil:send, tool:w @send_email(recipient, subject) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @writeTools = {',
+      '  send_email: {',
+      '    mlld: @send_email,',
+      '    expose: ["recipient", "subject"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/export { @writeTools }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @writeTools } from "/tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi"}' }`,
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:node:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe @layer3(tools) = @agent("Send the email", { tools: @tools }) with { policy: @taskPolicy }',
+      '/exe @layer2(tools) = @layer3(@tools)',
+      '/exe @layer1(tools) = @layer2(@tools)',
+      '/show @layer1(@writeTools)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves ambient @mx.llm bridge context through imported llm wrappers that omit inner config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/provider.mld', [
@@ -982,6 +1036,57 @@ describe('box MCP config integration', () => {
     } finally {
       environment?.cleanup();
     }
+  });
+
+  it('does not emit auth.deny noise for imported llm wrapper helpers under control-arg tool surfaces', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm @provider(prompt, config) = [',
+      '  let @dis = @mx.llm && @mx.llm.hasTools ? @computeDisallowed(@mx.llm.native, "A,B") : ""',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:provider:*", "cmd:node:*", "cmd:computeDisallowed:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @provider("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    expect(result.output).toContain('sent:approved@example.com:hi');
+
+    const noisyAuthDenies = result.traceEvents.filter((event: any) =>
+      event?.event === 'auth.deny'
+      && (
+        event?.data?.tool === 'provider'
+        || event?.data?.tool === 'computeDisallowed'
+      )
+    );
+    expect(noisyAuthDenies).toEqual([]);
   });
 
   it('preserves record coercion for imported MCP-backed wrapper exes on the llm tool bridge', async () => {

@@ -8,6 +8,10 @@ import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -312,6 +316,7 @@ export async function evaluateExecInvocationArgs(options: {
             }
 
             let value = variable.value;
+            let preserveVariableAsArgument = false;
             if (
               isWholeVariableReference &&
               variable.internal?.isToolsCollection === true &&
@@ -319,7 +324,14 @@ export async function evaluateExecInvocationArgs(options: {
               typeof variable.internal.toolCollection === 'object' &&
               !Array.isArray(variable.internal.toolCollection)
             ) {
+              const capturedModuleEnv =
+                getCapturedModuleEnv(variable.internal)
+                ?? getCapturedModuleEnv(variable);
+              if (capturedModuleEnv !== undefined) {
+                sealCapturedModuleEnv(variable.internal.toolCollection, capturedModuleEnv);
+              }
               value = variable.internal.toolCollection;
+              preserveVariableAsArgument = true;
             }
             const { isTemplate } = await import('@core/types/variable');
             if (varRef.fields && varRef.fields.length > 0) {
@@ -348,10 +360,10 @@ export async function evaluateExecInvocationArgs(options: {
             }
 
             if (isStructuredValue(value)) {
-              argValueAny = value;
+              argValueAny = preserveVariableAsArgument ? variable : value;
               argValue = asText(value);
             } else {
-              argValueAny = value;
+              argValueAny = preserveVariableAsArgument ? variable : value;
               if (value === undefined) {
                 argValue = 'undefined';
               } else if (typeof value === 'object' && value !== null) {

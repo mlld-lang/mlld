@@ -37,6 +37,14 @@ export function createParameterVariable(
   } = options;
 
   if (originalVariable && allowOriginalReuse) {
+    const preservedToolCollection = resolveDirectToolCollection(originalVariable);
+    const capturedModuleEnv =
+      getCapturedModuleEnv(originalVariable.internal)
+      ?? getCapturedModuleEnv(originalVariable);
+    if (preservedToolCollection && capturedModuleEnv !== undefined) {
+      sealCapturedModuleEnv(preservedToolCollection, capturedModuleEnv);
+    }
+
     return {
       ...originalVariable,
       name,
@@ -72,6 +80,9 @@ export function createParameterVariable(
   };
   if (capturedModuleEnv !== undefined) {
     sealCapturedModuleEnv(internalMetadata, capturedModuleEnv);
+    if (preservedToolCollection) {
+      sealCapturedModuleEnv(preservedToolCollection, capturedModuleEnv);
+    }
   }
   const normalizedMetadata = {
     ...metadata,

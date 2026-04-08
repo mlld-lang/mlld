@@ -25,6 +25,7 @@ import {
 import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
 import { createAutoProvisionedShelveExecutable } from '@interpreter/shelf/runtime';
 import { traceHandleReleased } from '@interpreter/tracing/events';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -376,6 +377,94 @@ function resolveToolCollectionInput(
   return normalizeToolCollection(resolved, env);
 }
 
+function normalizeToolCollectionStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+}
+
+function buildToolCollectionMatchSignature(rawTools: unknown): string | undefined {
+  if (!isPlainObject(rawTools)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(rawTools).map(([toolName, entry]) => {
+    if (!isPlainObject(entry)) {
+      return undefined;
+    }
+
+    const bind =
+      isPlainObject(entry.bind)
+        ? Object.fromEntries(
+            Object.entries(entry.bind)
+              .filter(([key]) => typeof key === 'string' && key.trim().length > 0)
+              .sort(([left], [right]) => left.localeCompare(right))
+          )
+        : undefined;
+
+    return [
+      toolName,
+      {
+        mlld: typeof entry.mlld === 'string' ? entry.mlld : '',
+        expose: normalizeToolCollectionStringList(entry.expose),
+        optional: normalizeToolCollectionStringList(entry.optional),
+        controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+        updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
+        exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
+        labels: normalizeToolCollectionStringList(entry.labels),
+        ...(typeof entry.description === 'string' && entry.description.trim().length > 0
+          ? { description: entry.description.trim() }
+          : {}),
+        ...(bind ? { bind } : {})
+      }
+    ] as const;
+  });
+
+  if (entries.some(entry => entry === undefined)) {
+    return undefined;
+  }
+
+  return JSON.stringify(
+    (entries as Array<readonly [string, Record<string, unknown>]>)
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function resolveMatchingToolCollectionExecutable(
+  env: Environment,
+  collection: ToolCollection,
+  execName: string
+): ExecutableVariable | undefined {
+  const signature = buildToolCollectionMatchSignature(collection);
+  if (!signature) {
+    return undefined;
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    const candidate =
+      variable.internal?.isToolsCollection === true &&
+      variable.internal.toolCollection &&
+      isPlainObject(variable.internal.toolCollection)
+        ? variable.internal.toolCollection as ToolCollection
+        : undefined;
+    if (!candidate || buildToolCollectionMatchSignature(candidate) !== signature) {
+      continue;
+    }
+
+    return (
+      resolveCapturedCollectionExecutable(variable.internal, execName)
+      ?? resolveCapturedCollectionExecutable(variable, execName)
+      ?? resolveCapturedCollectionExecutable(candidate, execName)
+    );
+  }
+
+  return undefined;
+}
+
 function buildDirectFunctionToolSpec(
   env: Environment,
   executable: ExecutableVariable
@@ -414,8 +503,15 @@ function buildCollectionFunctionToolSpec(
     throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
   }
 
-  const executable = env.getVariable(execName);
-  if (!executable || !isExecutableVariable(executable)) {
+  const executable =
+    env.getVariable(execName)
+    ?? resolveCapturedCollectionExecutable(collection, execName)
+    ?? resolveCapturedCollectionExecutable(definition, execName);
+  const matchedExecutable =
+    executable && isExecutableVariable(executable)
+      ? executable
+      : resolveMatchingToolCollectionExecutable(env, collection, execName);
+  if (!matchedExecutable) {
     throw new Error(`Tool '${toolName}' references non-executable '@${execName}'`);
   }
 
@@ -428,7 +524,7 @@ function buildCollectionFunctionToolSpec(
   return {
     mcpName,
     csvName: toolName,
-    executable,
+    executable: matchedExecutable,
     definition,
     metadata: {
       ...metadata,
@@ -436,6 +532,28 @@ function buildCollectionFunctionToolSpec(
     },
     source: `tool:@${execName} as ${mcpName}`
   };
+}
+
+function resolveCapturedCollectionExecutable(
+  target: unknown,
+  execName: string
+): ExecutableVariable | undefined {
+  const captured = getCapturedModuleEnv(target);
+  if (captured instanceof Map) {
+    const variable = captured.get(execName);
+    return variable && isExecutableVariable(variable)
+      ? variable
+      : undefined;
+  }
+
+  if (!captured || typeof captured !== 'object' || Array.isArray(captured)) {
+    return undefined;
+  }
+
+  const variable = (captured as Record<string, unknown>)[execName];
+  return variable && isExecutableVariable(variable)
+    ? variable
+    : undefined;
 }
 
 function resolveAutoProvisionedShelveTool(
