@@ -240,7 +240,7 @@ exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, rec
   }
 ```
 
-`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: ["toolName"]` when `updateArgs` is declared (issue: `no_update_fields`).
+`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: { "toolName": true }` when `updateArgs` is declared (issue: `no_update_fields`).
 
 `updateArgs` must be disjoint from `controlArgs`.
 
@@ -375,7 +375,7 @@ var @base = {
   authorizations: { deny: ["delete_draft"] }
 }
 
-var @built = @policy.build({ allow: ["create_draft"] }, @writeTools) with {
+var @built = @policy.build({ allow: { create_draft: true } }, @writeTools) with {
   policy: @base
 }
 
@@ -398,12 +398,15 @@ What the builder checks:
 - Denied tools → dropped (`denied_by_policy`)
 - Unknown tools → dropped (`unknown_tool`)
 - Bucketed intent from influenced sources → rejected (`bucketed_intent_from_influenced_source`)
-- `true` for tools with `controlArgs` → dropped (`requires_control_args`)
+- `true` for tools with `controlArgs` in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
+- `allow: { tool: true }` in bucketed intent → explicit tool-level authorization
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
 - `known` literals missing from the provided task text → dropped (`known_not_in_task`)
 - Handle wrappers in `known` while task validation is enabled → dropped (`known_contains_handle`)
 - `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
+- Mixed flat + bucketed top-level fields → rejected (`invalid_authorization`)
+- Unrecognized bucketed top-level fields → rejected (`invalid_authorization`)
 - Non-control args → silently stripped
 
 Builder and validator results are additive:
@@ -444,15 +447,17 @@ The planner structures its authorization output by proof source:
       }
     }
   },
-  "allow": ["create_file"]
+  "allow": {
+    "create_file": true
+  }
 }
 ```
 
 Three buckets:
 
-- **`resolved`** — values from tool results. Every non-empty control arg value must be a resolvable handle. Bare literals are rejected — handles are the only proof a value came from a tool.
+- **`resolved`** — values from tool results. Every non-empty control arg value must be either a resolvable handle or a direct fact-bearing value carrying `fact:*` proof. Bare proofless literals are rejected.
 - **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
-- **`allow`** — tools needing no argument constraints. Validated against `controlArgs` metadata.
+- **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has `controlArgs`, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
 
 The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
@@ -465,6 +470,8 @@ The builder also accepts flat and nested intent shapes for backward compatibilit
 ```json
 { "send_email": { "recipients": "h_2l5r36" }, "create_file": true }
 ```
+
+Flat and bucketed intent must not be mixed in the same object. The builder rejects mixed shapes loudly instead of silently dropping top-level tool entries.
 
 For array control args, proof is checked per element. Proofless elements are dropped individually. If the same tool+arg appears in both `resolved` and `known`, `resolved` wins and an issue is emitted.
 
@@ -482,7 +489,7 @@ guard after @validateAuth for op:named:plan = when [
 ]
 ```
 
-The planner prompt is: "Put handle values from tool results in `resolved`. Put values the user explicitly provided in `known`. Put tools that need no arguments in `allow`."
+The planner prompt is: "Put handle values or direct fact-bearing tool results in `resolved`. Put values the user explicitly provided in `known`. Put tool-level authorizations in `allow`."
 
 ## Direct planner use
 

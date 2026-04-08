@@ -177,7 +177,7 @@ When `=> record` coercion runs on tool output, the resulting value carries fact 
 - shelf I/O (`@shelf.write` / `@shelf.read` / `@fyi.shelf`)
 - the LLM bridge (writes through `@shelve`, reads through display projection)
 
-What the planner emits as bucketed intent is consumed by `@policy.build`, which resolves the planner's `resolved` handle strings against the planner's own mint table immediately, before that mint table is gone. The builder upgrades the planner's authorized values from handle strings to live values, and stores them in the compiled policy as **value claims**, not handle strings.
+What the planner emits as bucketed intent is consumed by `@policy.build`. For `resolved`, the builder either resolves handle strings against the planner's own mint table immediately, before that mint table is gone, or preserves direct fact-bearing values already carrying `fact:*` proof. In both cases it upgrades the planner's authorized values into live compiled **value claims**, not handle strings.
 
 When the worker dispatches a tool, the runtime checks the worker's tool args against those compiled value claims using the value-keyed proof claims registry — which matches by the underlying value plus its factsources, not by handle string. The worker's call mints fresh handles for the same values, and those fresh handles resolve correctly because they all point to the same underlying live value.
 

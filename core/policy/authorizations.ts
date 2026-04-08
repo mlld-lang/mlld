@@ -6,6 +6,7 @@ export type AuthorizationConstraintClause =
   | { oneOf: unknown[]; oneOfAttestations?: readonly (readonly string[])[] };
 
 export type AuthorizationEntry =
+  | { kind: 'tool' }
   | { kind: 'unconstrained' }
   | {
       kind: 'constrained';
@@ -172,6 +173,9 @@ function cloneConstraintClause(clause: AuthorizationConstraintClause): Authoriza
 }
 
 function cloneAuthorizationEntry(entry: AuthorizationEntry): AuthorizationEntry {
+  if (entry.kind === 'tool') {
+    return { kind: 'tool' };
+  }
   if (entry.kind === 'unconstrained') {
     return { kind: 'unconstrained' };
   }
@@ -188,7 +192,7 @@ function stripEntryToDeclaredControlArgs(
   tool?: AuthorizationToolContext
 ): AuthorizationEntry {
   const cloned = cloneAuthorizationEntry(entry);
-  if (!tool?.hasControlArgsMetadata || cloned.kind === 'unconstrained') {
+  if (!tool?.hasControlArgsMetadata || cloned.kind !== 'constrained') {
     return cloned;
   }
 
@@ -311,6 +315,10 @@ function isNormalizedConstraintClause(value: unknown): value is AuthorizationCon
 function isNormalizedAuthorizationEntry(value: unknown): value is AuthorizationEntry {
   if (!isPlainObject(value) || typeof value.kind !== 'string') {
     return false;
+  }
+
+  if (value.kind === 'tool') {
+    return Object.keys(value).length === 1;
   }
 
   if (value.kind === 'unconstrained') {
@@ -633,6 +641,19 @@ export function mergePolicyAuthorizations(
       const left = base.allow[toolName];
       const right = incoming.allow[toolName];
 
+      if (left.kind === 'tool' && right.kind === 'tool') {
+        allow[toolName] = { kind: 'tool' };
+        continue;
+      }
+
+      if (
+        (left.kind === 'tool' && right.kind === 'unconstrained')
+        || (left.kind === 'unconstrained' && right.kind === 'tool')
+      ) {
+        allow[toolName] = { kind: 'tool' };
+        continue;
+      }
+
       if (left.kind === 'unconstrained' && right.kind === 'unconstrained') {
         allow[toolName] = { kind: 'unconstrained' };
         continue;
@@ -764,6 +785,10 @@ function validateNormalizedPolicyAuthorizationsInto(
 
     const effectiveControlArgs = getEffectiveControlArgs(tool);
 
+    if (entry.kind === 'tool') {
+      continue;
+    }
+
     if (entry.kind === 'unconstrained') {
       if (effectiveControlArgs.size > 0) {
         addIssue(errors, {
@@ -854,6 +879,10 @@ export function evaluatePolicyAuthorizationDecision(params: {
       code: 'unlisted',
       reason: 'operation not authorized by policy.authorizations'
     };
+  }
+
+  if (entry.kind === 'tool') {
+    return { decision: 'allow', matched: true };
   }
 
   if (entry.kind === 'unconstrained') {

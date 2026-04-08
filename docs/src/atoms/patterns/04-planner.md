@@ -115,13 +115,15 @@ The planner produces a bucketed authorization intent, organized by proof source:
       }
     }
   },
-  "allow": ["create_file"]
+  "allow": {
+    "create_file": true
+  }
 }
 ```
 
-- `resolved` — handle values from tool results
+- `resolved` — handle values or direct fact-bearing tool results
 - `known` — values the user explicitly provided in their task
-- `allow` — tools needing no argument constraints
+- `allow` — explicit tool-level authorization in object form
 
 The orchestrator validates it through the policy builder:
 
@@ -311,7 +313,7 @@ Collection-key invocation (`@writeTools["send_email"](@args)`) matches policy ag
 Allow-only steps can use `@policy.build(...).policy` directly, even when the base policy contributes defaults, operation groups, or a deny list:
 
 ```mlld
-var @stepAuth = @policy.build({ allow: ["create_file"] }, @writeTools) with {
+var @stepAuth = @policy.build({ allow: { create_file: true } }, @writeTools) with {
   policy: @base
 }
 
