@@ -955,8 +955,14 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'ada@example.com',
-        name: 'Ada Lovelace'
+        email: {
+          value: 'ada@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        },
+        name: {
+          value: 'Ada Lovelace',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();
@@ -1078,8 +1084,14 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'mark@example.com',
-        name: 'Mark Davies'
+        email: {
+          value: 'mark@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        },
+        name: {
+          value: 'Mark Davies',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();
@@ -1271,6 +1283,63 @@ describe('box MCP config integration', () => {
       '  shelf: { write: [@outreach.selected] }',
       '} [',
       '  show @agent("Pick Alice", { tools: @toolList }) with { policy: @basePolicy }',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          value: 'alice@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+
+      const outreach = environment?.getVariable('outreach');
+      expect(outreach).toBeDefined();
+
+      const selected = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env: environment });
+      const email = await accessField(selected, { type: 'field', value: 'email' } as any, { env: environment });
+
+      expect((email as any).mx?.labels).toEqual(expect.arrayContaining(['fact:@contact.email']));
+      expect((email as any).mx?.factsources).toEqual([
+        expect.objectContaining({
+          ref: '@contact.email',
+          sourceRef: '@contact',
+          field: 'email'
+        })
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves omitted-display fact refs for auto-provisioned shelve bridge sessions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = {',
+      '  facts: [email: string]',
+      '}',
+      '/shelf @outreach = {',
+      '  selected: contact?',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "alice@example.com" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedObjectFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Alice"}' '{"email":"email"}' shelve '{"slot_alias":"outreach.selected"}' value }`,
+      '/box {',
+      '  shelf: { write: [@outreach.selected] }',
+      '} [',
+      '  show @agent("Pick Alice", { tools: @toolList })',
       ']'
     ].join('\n');
 
@@ -1699,7 +1768,10 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'mark@example.com'
+        email: {
+          value: 'mark@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();

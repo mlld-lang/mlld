@@ -27,4 +27,13 @@ describe('resolveValueHandles', () => {
     expect((resolved as any).data).toEqual({ recipient: resolvedValue });
     expect((resolved as any).text).toBe('{"recipient":{"handle":"' + handle.handle + '"}}');
   });
+
+  it('preserves projected ref-style objects during ordinary handle resolution', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const projected = { value: 'ada@example.com', handle: 'h_abc123' };
+
+    await expect(
+      resolveValueHandles(projected, env)
+    ).resolves.toEqual(projected);
+  });
 });

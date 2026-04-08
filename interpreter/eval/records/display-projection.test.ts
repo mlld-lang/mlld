@@ -83,7 +83,7 @@ describe('renderDisplayProjection', () => {
     });
   });
 
-  it('keeps omitted display records fully bare', async () => {
+  it('projects omitted-display fact fields as refs while leaving data fields bare', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
 /record @contact = {
@@ -103,8 +103,14 @@ describe('renderDisplayProjection', () => {
     });
 
     expect(await renderDisplayProjection(output, env)).toEqual({
-      email: 'ada@example.com',
-      name: 'Ada Lovelace',
+      email: {
+        value: 'ada@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      name: {
+        value: 'Ada Lovelace',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
       notes: 'Visible'
     });
   });

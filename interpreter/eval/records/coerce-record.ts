@@ -43,6 +43,7 @@ import {
   encodeDisplayInstanceKey
 } from '@interpreter/security/canonical-value';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
+import { extractProjectedHandleToken } from '@interpreter/utils/handle-resolution';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
 type NamespaceFieldMetadata = {
@@ -388,8 +389,14 @@ function resolveHandleTypedFieldValue(
     handle = extracted.trim();
   } else if (isHandleWrapper(extracted)) {
     handle = extracted.handle.trim();
-  } else if (isHandleToken(asText(value).trim())) {
-    handle = asText(value).trim();
+  } else {
+    handle = extractProjectedHandleToken(extracted);
+    if (!handle) {
+      handle = asText(value).trim();
+      if (!isHandleToken(handle)) {
+        handle = undefined;
+      }
+    }
   }
 
   if (!handle) {

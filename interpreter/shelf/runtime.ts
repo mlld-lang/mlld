@@ -22,7 +22,10 @@ import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
 import { renderDisplayProjectionSync } from '@interpreter/eval/records/display-projection';
 import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
-import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
+import {
+  extractProjectedHandleToken,
+  resolveValueHandles
+} from '@interpreter/utils/handle-resolution';
 import {
   applySecurityDescriptorToStructuredValue,
   asData,
@@ -237,6 +240,8 @@ function resolveHandleTypedFieldValue(
     handle = extracted.trim();
   } else if (isHandleWrapper(extracted)) {
     handle = extracted.handle.trim();
+  } else {
+    handle = extractProjectedHandleToken(extracted);
   }
 
   if (!handle) {
@@ -248,6 +253,52 @@ function resolveHandleTypedFieldValue(
   } catch {
     return { ok: false, actual: 'unknown-handle' };
   }
+}
+
+async function resolveShelfFactInputHandles(value: unknown, env: Environment): Promise<unknown> {
+  const extracted = extractRecordInputValue(value);
+  const directHandle = extractProjectedHandleToken(extracted);
+  if (directHandle) {
+    return env.resolveHandle(directHandle);
+  }
+
+  if (isVariable(value)) {
+    return resolveShelfFactInputHandles(value.value, env);
+  }
+
+  if (isStructuredValue(value)) {
+    if (value.type !== 'object' && value.type !== 'array') {
+      return value;
+    }
+    const resolvedData = await resolveShelfFactInputHandles(value.data, env);
+    if (resolvedData === value.data) {
+      return value;
+    }
+    const resolved = wrapStructured(
+      resolvedData as any,
+      value.type,
+      value.text,
+      value.metadata ? { ...value.metadata } : undefined
+    );
+    if (value.internal) {
+      resolved.internal = { ...value.internal };
+    }
+    return resolved;
+  }
+
+  if (Array.isArray(value)) {
+    return Promise.all(value.map(item => resolveShelfFactInputHandles(item, env)));
+  }
+
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await resolveShelfFactInputHandles(entry, env);
+    }
+    return result;
+  }
+
+  return resolveValueHandles(value, env);
 }
 
 function coerceFieldValue(
@@ -353,7 +404,7 @@ function isAcceptedAgentFactInput(value: unknown): boolean {
   if (isStructuredValue(value)) {
     return fieldCarriesFactProof(value);
   }
-  if (isHandleWrapper(value) || isHandleToken(value)) {
+  if (isHandleWrapper(value) || isHandleToken(value) || extractProjectedHandleToken(value)) {
     return true;
   }
   if (Array.isArray(value)) {
@@ -500,7 +551,7 @@ async function validateShelfRecordValue(options: {
     }
 
     if (field.classification === 'fact' || field.valueType === 'handle') {
-      rawFieldValue = await resolveValueHandles(rawFieldValue, options.env);
+      rawFieldValue = await resolveShelfFactInputHandles(rawFieldValue, options.env);
     }
 
     const coerced = coerceFieldValue(field, rawFieldValue, options.env);
@@ -1047,7 +1098,7 @@ async function removeFromShelfSlot(
 
   const traceScope = { exe: callLabel };
   const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName, { traceScope }));
-  const resolvedRef = await resolveValueHandles(refValue, env);
+  const resolvedRef = await resolveShelfFactInputHandles(refValue, env);
   let next = current;
 
   if (recordDefinition.key) {

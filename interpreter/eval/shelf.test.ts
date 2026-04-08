@@ -931,11 +931,14 @@ describe('shelf runtime', () => {
   }
 } [
   => @fyi.shelf.candidates[0].id
-]
+    ]
 `);
 
     const firstCandidateId = env.getVariable('firstCandidateId')?.value;
-    expect(isStructuredValue(firstCandidateId) ? asData(firstCandidateId) : firstCandidateId).toBe('c_1');
+    expect(isStructuredValue(firstCandidateId) ? asData(firstCandidateId) : firstCandidateId).toEqual({
+      value: 'c_1',
+      handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+    });
   });
 
   it('rejects conflicting slot aliases in box shelf config', async () => {
