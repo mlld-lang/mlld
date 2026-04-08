@@ -15,6 +15,7 @@ import {
 } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
+import { getCapturedModuleEnv } from './variable-importer/executable/CapturedModuleEnvKeychain';
 
 const SOURCE = {
   directive: 'var' as const,
@@ -228,6 +229,26 @@ describe('VariableImporter characterization', () => {
     const restoredCapturedEnv = importer.deserializeModuleEnv((restored as any).internal?.capturedModuleEnv);
     expect(restoredCapturedEnv instanceof Map).toBe(true);
     expect(restoredCapturedEnv.get('dep')?.value).toBe('ok');
+  });
+
+  it('shares one serialized captured env across direct executable exports from the same module', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const childVars = new Map<string, any>([
+      ['dep', createSimpleTextVariable('dep', 'ok', SOURCE)],
+      ['t1', createExecutableVariable('t1', 'command', 'echo 1', [], 'sh', SOURCE)],
+      ['t2', createExecutableVariable('t2', 'command', 'echo 2', [], 'sh', SOURCE)],
+      ['t3', createExecutableVariable('t3', 'command', 'echo 3', [], 'sh', SOURCE)]
+    ]);
+
+    const { moduleObject } = importer.processModuleExports(childVars, {}, false, null);
+    const env1 = getCapturedModuleEnv((moduleObject.t1 as any).internal);
+    const env2 = getCapturedModuleEnv((moduleObject.t2 as any).internal);
+    const env3 = getCapturedModuleEnv((moduleObject.t3 as any).internal);
+
+    expect(env1).toBeDefined();
+    expect(env1).toBe(env2);
+    expect(env1).toBe(env3);
+    expect((env1 as Record<string, unknown>).dep).toBe('ok');
   });
 
   it('rehydrates top-level record exports as record variables and registers their definitions', () => {

@@ -119,4 +119,41 @@ describe('ObjectReferenceResolver string resolution', () => {
     expect(serializedWrapperEnv.fn?.__executable).toBe(true);
     expect(serializedFnEnv.helper?.__executable).toBe(true);
   });
+
+  it('shares one serialized captured env across executable references in arrays', () => {
+    const resolver = new ObjectReferenceResolver();
+
+    const helper = createSimpleTextVariable('helper', 'ok', source);
+    const t1 = createExecutableVariable('t1', 'command', 'echo 1', [], 'sh', source);
+    const t2 = createExecutableVariable('t2', 'command', 'echo 2', [], 'sh', source);
+    const t3 = createExecutableVariable('t3', 'command', 'echo 3', [], 'sh', source);
+    const sharedModuleEnv = new Map<string, any>([
+      ['helper', helper],
+      ['t1', t1],
+      ['t2', t2],
+      ['t3', t3]
+    ]);
+
+    for (const executable of [t1, t2, t3]) {
+      sealCapturedModuleEnv(executable.internal, sharedModuleEnv);
+    }
+
+    const result = resolver.resolveObjectReferences(
+      ['@t1', '@t2', '@t3'],
+      new Map<string, any>([
+        ['t1', t1],
+        ['t2', t2],
+        ['t3', t3]
+      ])
+    ) as Array<{ internal?: Record<string, unknown> }>;
+
+    const env1 = getCapturedModuleEnv(result[0].internal);
+    const env2 = getCapturedModuleEnv(result[1].internal);
+    const env3 = getCapturedModuleEnv(result[2].internal);
+
+    expect(env1).toBeDefined();
+    expect(env1).toBe(env2);
+    expect(env1).toBe(env3);
+    expect((env1 as Record<string, unknown>).helper).toBe('ok');
+  });
 });

@@ -32,6 +32,7 @@ interface ModuleExportSerializationContext {
   shouldSerializeModuleEnv: boolean;
   currentSerializationTarget?: Map<string, Variable>;
   serializingEnvs?: WeakSet<object>;
+  serializedModuleEnvCache: WeakMap<object, unknown>;
   getModuleEnvSnapshot: () => Map<string, Variable>;
   serializeShadowEnvs: (envs: any) => any;
   serializeModuleEnv: (moduleEnv: Map<string, Variable>, seen?: WeakSet<object>) => any;
@@ -45,6 +46,7 @@ export interface ModuleExportSerializationRequest {
   skipModuleEnvSerialization?: boolean;
   currentSerializationTarget?: Map<string, Variable>;
   serializingEnvs?: WeakSet<object>;
+  serializedModuleEnvCache?: WeakMap<object, unknown>;
   isLegitimateVariableForExport: (variable: Variable) => boolean;
   serializeShadowEnvs: (envs: any) => any;
   serializeModuleEnv: (moduleEnv: Map<string, Variable>, seen?: WeakSet<object>) => any;
@@ -61,6 +63,7 @@ export class ModuleExportSerializer {
     const moduleObject: Record<string, any> = {};
     const serializedMetadataMap: Record<string, SerializedMetadata> = {};
     const shouldSerializeModuleEnv = !request.skipModuleEnvSerialization;
+    const serializedModuleEnvCache = request.serializedModuleEnvCache ?? new WeakMap<object, unknown>();
     let moduleEnvSnapshot: Map<string, Variable> | null = null;
     const getModuleEnvSnapshot = (): Map<string, Variable> => {
       if (!moduleEnvSnapshot) {
@@ -78,6 +81,7 @@ export class ModuleExportSerializer {
       shouldSerializeModuleEnv,
       currentSerializationTarget: request.currentSerializationTarget,
       serializingEnvs: request.serializingEnvs,
+      serializedModuleEnvCache,
       getModuleEnvSnapshot,
       serializeShadowEnvs: request.serializeShadowEnvs,
       serializeModuleEnv: request.serializeModuleEnv
@@ -177,7 +181,9 @@ export class ModuleExportSerializer {
         context.childVars,
         {
           resolveStrings: context.options?.resolveStrings,
-          resolveVariable: name => context.childEnv?.getVariable(name)
+          resolveVariable: name => context.childEnv?.getVariable(name),
+          serializingEnvs: context.serializingEnvs,
+          serializedModuleEnvCache: context.serializedModuleEnvCache
         }
       );
       if (variable.internal?.isNamespace && resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
@@ -211,7 +217,9 @@ export class ModuleExportSerializer {
         context.childVars,
         {
           resolveStrings: context.options?.resolveStrings,
-          resolveVariable: name => context.childEnv?.getVariable(name)
+          resolveVariable: name => context.childEnv?.getVariable(name),
+          serializingEnvs: context.serializingEnvs,
+          serializedModuleEnvCache: context.serializedModuleEnvCache
         }
       );
     }
@@ -229,7 +237,9 @@ export class ModuleExportSerializer {
         context.childVars,
         {
           resolveStrings: context.options?.resolveStrings,
-          resolveVariable: name => context.childEnv?.getVariable(name)
+          resolveVariable: name => context.childEnv?.getVariable(name),
+          serializingEnvs: context.serializingEnvs,
+          serializedModuleEnvCache: context.serializedModuleEnvCache
         }
       );
     }
@@ -270,7 +280,9 @@ export class ModuleExportSerializer {
         context.childVars,
         {
           resolveStrings: true,
-          resolveVariable: name => context.childEnv?.getVariable(name)
+          resolveVariable: name => context.childEnv?.getVariable(name),
+          serializingEnvs: context.serializingEnvs,
+          serializedModuleEnvCache: context.serializedModuleEnvCache
         }
       );
       if (

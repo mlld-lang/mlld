@@ -19,21 +19,34 @@ export class ObjectReferenceResolver {
   resolveObjectReferences(
     value: any,
     variableMap: Map<string, Variable>,
-    options?: { resolveStrings?: boolean; resolveVariable?: (name: string) => Variable | undefined }
+    options?: {
+      resolveStrings?: boolean;
+      resolveVariable?: (name: string) => Variable | undefined;
+      serializingEnvs?: WeakSet<object>;
+      serializedModuleEnvCache?: WeakMap<object, unknown>;
+    }
   ): any {
     const resolveStrings = options?.resolveStrings !== false;
     const stringRefPattern = /^@[A-Za-z0-9_.-]+$/;
+    const serializingEnvs = options?.serializingEnvs ?? new WeakSet<object>();
+    const serializedModuleEnvCache = options?.serializedModuleEnvCache ?? new WeakMap<object, unknown>();
     
     if (value === null || value === undefined) {
       return value;
     }
     
     if (Array.isArray(value)) {
-      return value.map(item => this.resolveObjectReferences(item, variableMap, options));
+      return value.map(item =>
+        this.resolveObjectReferences(item, variableMap, {
+          ...options,
+          serializingEnvs,
+          serializedModuleEnvCache
+        })
+      );
     }
 
     if (this.isVariableLike(value)) {
-      return this.resolveExecutableReference(value as Variable);
+      return this.resolveExecutableReference(value as Variable, serializingEnvs, serializedModuleEnvCache);
     }
     
     // Check if this is a VariableReference AST node
@@ -70,7 +83,7 @@ export class ObjectReferenceResolver {
       }
 
       if (referencedVar) {
-        return this.resolveExecutableReference(referencedVar);
+        return this.resolveExecutableReference(referencedVar, serializingEnvs, serializedModuleEnvCache);
       }
 
       // String looked like a variable but no binding exists; treat as literal
@@ -87,12 +100,19 @@ export class ObjectReferenceResolver {
     varName: string,
     variableMap: Map<string, Variable>,
     fields?: any[],
-    options?: { resolveStrings?: boolean; resolveVariable?: (name: string) => Variable | undefined }
+    options?: {
+      resolveStrings?: boolean;
+      resolveVariable?: (name: string) => Variable | undefined;
+      serializingEnvs?: WeakSet<object>;
+      serializedModuleEnvCache?: WeakMap<object, unknown>;
+    }
   ): any {
     const referencedVar = variableMap.get(varName) ?? options?.resolveVariable?.(varName);
+    const serializingEnvs = options?.serializingEnvs ?? new WeakSet<object>();
+    const serializedModuleEnvCache = options?.serializedModuleEnvCache ?? new WeakMap<object, unknown>();
 
     if (referencedVar) {
-      let result = this.resolveExecutableReference(referencedVar);
+      let result = this.resolveExecutableReference(referencedVar, serializingEnvs, serializedModuleEnvCache);
 
       // Apply field access if present (e.g., @fm.id -> access 'id' field on frontmatter)
       if (fields && fields.length > 0 && result && typeof result === 'object') {
@@ -144,7 +164,8 @@ export class ObjectReferenceResolver {
    */
   private resolveExecutableReference(
     referencedVar: Variable,
-    serializingEnvs: WeakSet<object> = new WeakSet<object>()
+    serializingEnvs: WeakSet<object> = new WeakSet<object>(),
+    serializedModuleEnvCache: WeakMap<object, unknown> = new WeakMap<object, unknown>()
   ): any {
     // For executables, we need to export them with the proper structure
     if (referencedVar.type === 'executable') {
@@ -167,7 +188,11 @@ export class ObjectReferenceResolver {
       if (capturedModuleEnv instanceof Map) {
         sealCapturedModuleEnv(
           serializedInternal,
-          this.serializeCapturedModuleEnv(capturedModuleEnv, serializingEnvs)
+          this.serializeCapturedModuleEnv(
+            capturedModuleEnv,
+            serializingEnvs,
+            serializedModuleEnvCache
+          )
         );
       } else if (capturedModuleEnv !== undefined) {
         sealCapturedModuleEnv(serializedInternal, capturedModuleEnv);
@@ -202,15 +227,26 @@ export class ObjectReferenceResolver {
    */
   private serializeCapturedModuleEnv(
     moduleEnv: Map<string, Variable>,
-    serializingEnvs: WeakSet<object>
+    serializingEnvs: WeakSet<object>,
+    serializedModuleEnvCache: WeakMap<object, unknown>
   ): unknown {
+    if (serializedModuleEnvCache.has(moduleEnv)) {
+      return serializedModuleEnvCache.get(moduleEnv);
+    }
+
     if (serializingEnvs.has(moduleEnv)) {
       return undefined;
     }
 
     serializingEnvs.add(moduleEnv);
     try {
-      return this.serializeModuleEnv(moduleEnv, serializingEnvs);
+      const serialized = this.serializeModuleEnv(
+        moduleEnv,
+        serializingEnvs,
+        serializedModuleEnvCache
+      );
+      serializedModuleEnvCache.set(moduleEnv, serialized);
+      return serialized;
     } finally {
       serializingEnvs.delete(moduleEnv);
     }
@@ -218,12 +254,17 @@ export class ObjectReferenceResolver {
 
   private serializeModuleEnv(
     moduleEnv: Map<string, Variable>,
-    serializingEnvs: WeakSet<object> = new WeakSet<object>()
+    serializingEnvs: WeakSet<object> = new WeakSet<object>(),
+    serializedModuleEnvCache: WeakMap<object, unknown> = new WeakMap<object, unknown>()
   ): any {
     const result: Record<string, any> = {};
     for (const [name, variable] of moduleEnv) {
       if (variable.type === 'executable' || variable.type === 'record') {
-        result[name] = this.resolveExecutableReference(variable, serializingEnvs);
+        result[name] = this.resolveExecutableReference(
+          variable,
+          serializingEnvs,
+          serializedModuleEnvCache
+        );
       } else {
         // For other variables, export the value directly
         result[name] = variable.value;
