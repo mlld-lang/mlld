@@ -7,6 +7,7 @@ import {
 import {
   createExecutableVariable,
   createObjectVariable,
+  isExecutableVariable,
   type VariableSource
 } from '@core/types/variable';
 import { mergePolicyConfigs, type PolicyConfig } from '@core/policy/union';
@@ -17,7 +18,7 @@ import {
 } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
-import { isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { tracePolicyEvent } from '@interpreter/tracing/events';
 
@@ -220,6 +221,48 @@ function findMatchingToolCollectionInEnv(
   return undefined;
 }
 
+function unwrapToolCollectionInput(value: unknown): unknown {
+  return isStructuredValue(value) ? asData(value) : value;
+}
+
+function normalizeExecutableArrayToolCollection(
+  rawTools: unknown,
+  executionEnv: Environment
+): ToolCollection | undefined {
+  const resolvedTools = unwrapToolCollectionInput(rawTools);
+  if (!Array.isArray(resolvedTools)) {
+    return undefined;
+  }
+
+  const normalized: ToolCollection = {};
+  for (const entry of resolvedTools) {
+    let resolvedEntry = unwrapToolCollectionInput(entry);
+    if (isVariable(resolvedEntry) && !isExecutableVariable(resolvedEntry)) {
+      resolvedEntry = unwrapToolCollectionInput(resolvedEntry.value);
+    }
+    if (!isExecutableVariable(resolvedEntry)) {
+      return undefined;
+    }
+
+    const executableName =
+      typeof resolvedEntry.name === 'string'
+        ? resolvedEntry.name.trim()
+        : '';
+    if (!executableName) {
+      return undefined;
+    }
+    if (!normalized[executableName]) {
+      normalized[executableName] = { mlld: executableName };
+    }
+  }
+
+  try {
+    return normalizeToolCollection(normalized, executionEnv);
+  } catch {
+    return undefined;
+  }
+}
+
 function createPolicyBuilderResult(
   compilation: Awaited<ReturnType<typeof compilePolicyAuthorizations>>,
   basePolicy: PolicyConfig | undefined
@@ -251,7 +294,12 @@ function resolveToolCollection(
     return undefined;
   }
 
-  if (!rawTools || typeof rawTools !== 'object' || Array.isArray(rawTools)) {
+  const normalizedArrayCollection = normalizeExecutableArrayToolCollection(rawTools, executionEnv);
+  if (normalizedArrayCollection) {
+    return normalizedArrayCollection;
+  }
+
+  if (!rawTools || typeof rawTools !== 'object') {
     return undefined;
   }
 
@@ -268,7 +316,11 @@ function resolveToolCollection(
       return directCollection;
     }
 
-    const rawValue = variableTools.value;
+    const rawValue = unwrapToolCollectionInput(variableTools.value);
+    const arrayCollection = normalizeExecutableArrayToolCollection(rawValue, executionEnv);
+    if (arrayCollection) {
+      return arrayCollection;
+    }
     if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
       if (getToolCollectionAuthorizationContext(rawValue)) {
         return rawValue as ToolCollection;
@@ -280,6 +332,11 @@ function resolveToolCollection(
       }
     }
 
+    return undefined;
+  }
+
+  rawTools = unwrapToolCollectionInput(rawTools);
+  if (!rawTools || typeof rawTools !== 'object' || Array.isArray(rawTools)) {
     return undefined;
   }
 

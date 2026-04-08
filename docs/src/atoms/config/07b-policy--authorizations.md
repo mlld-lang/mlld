@@ -382,7 +382,7 @@ var @built = @policy.build({ allow: { create_draft: true } }, @writeTools) with 
 show @writeTools["create_draft"](@step.args) with { policy: @built.policy }
 ```
 
-Imported `var tools` collections are valid inputs here. The builder uses the collection's stored authorization metadata first, so callers do not need to redundantly import every underlying executable just to build or validate auth.
+Imported `var tools` collections are valid inputs here. Plain arrays of executable refs are also accepted and auto-normalized by executable name. The builder uses stored authorization metadata first when it exists, so callers do not need to redundantly import every underlying executable just to build or validate auth.
 
 The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues, report }`:
 

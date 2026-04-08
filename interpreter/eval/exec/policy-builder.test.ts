@@ -675,6 +675,33 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('accepts plain arrays of executable refs for build and validate', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: [] }
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with {
+        controlArgs: ["recipient"]
+      }
+
+      /var @writeTools = [@createDraft, @sendEmail]
+      /var @intent = { allow: ["createDraft"] }
+
+      /var @built = @policy.build(@intent, @writeTools)
+      /var @validated = @policy.validate(@intent, @writeTools)
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const validated = await extractBuiltinResult(env, 'validated');
+
+    for (const result of [built, validated]) {
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.policy.authorizations.allow.createDraft).toEqual({
+        kind: 'unconstrained'
+      });
+      expect(result.policy.authorizations.allow).not.toHaveProperty('sendEmail');
+    }
+  });
+
   it('builds bucketed intent, prefers resolved entries, and preserves unconstrained allow tools', async () => {
     const env = await interpretWithEnv(`
       /record @contact = { facts: [email: string], data: [name: string] }
