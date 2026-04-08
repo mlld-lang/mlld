@@ -389,6 +389,41 @@ function getScopedToolCollection(env: Environment): ToolCollection | undefined {
   return tools as ToolCollection;
 }
 
+function getLlmToolSurfaceNames(env: Environment): string[] {
+  const llmToolConfig = env.getLlmToolConfig();
+  return mergeStringLists(
+    llmToolConfig?.toolMetadata?.map(entry => entry.name),
+    llmToolConfig?.availableTools?.map(entry => entry.name)
+  );
+}
+
+export function getRuntimeAuthorizationSurfaceNames(env: Environment): string[] {
+  const scopedTools = getScopedToolCollection(env);
+  return mergeStringLists(
+    scopedTools ? Object.keys(scopedTools) : undefined,
+    getLlmToolSurfaceNames(env)
+  );
+}
+
+export function hasRuntimeAuthorizationSurface(env: Environment): boolean {
+  return getRuntimeAuthorizationSurfaceNames(env).length > 0;
+}
+
+export function isRuntimeAuthorizationSurfaceOperation(
+  env: Environment,
+  operationName: string | undefined
+): boolean {
+  const normalizedOperationName = normalizeTrimmedString(operationName);
+  if (!normalizedOperationName) {
+    return false;
+  }
+
+  const loweredOperationName = normalizedOperationName.toLowerCase();
+  return getRuntimeAuthorizationSurfaceNames(env).some(
+    candidate => candidate.trim().toLowerCase() === loweredOperationName
+  );
+}
+
 function createAuthorizationToolContextEntry(
   toolName: string,
   metadata: Pick<

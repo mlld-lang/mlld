@@ -84,6 +84,8 @@ Planner-pinned values can also carry attestation requirements. If a planner pins
 
 Keys under `authorizations.allow` are exact operation names matching `@mx.op.name`. For MCP-backed tools, use the mlld-side canonical name, not the provider's raw tool name.
 
+At runtime, this allowlist applies only to the active surfaced tool set from `tools:` or tool-collection dispatch. LLM/provider wrappers and internal substrate helpers such as `@claude` internals are not agent-visible tool names, so they are not checked against `authorizations.allow`.
+
 | Form | Meaning |
 |---|---|
 | Omitted (but in scope) | Denied. Default-deny for unlisted `tool:w` operations. |

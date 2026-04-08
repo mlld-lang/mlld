@@ -50,6 +50,10 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { getVariableSecurityDescriptor } from '@interpreter/eval/exec/security-descriptor';
+import {
+  hasRuntimeAuthorizationSurface,
+  isRuntimeAuthorizationSurfaceOperation
+} from '@interpreter/eval/exec/tool-metadata';
 
 type ResolvedStdinInput = {
   text: string;
@@ -491,6 +495,10 @@ export async function createExecOperationContextAndEnforcePolicy(
   const policySummary = env.getPolicySummary();
   const deferManagedLabelFlow = hasManagedPolicyLabelFlow(policySummary);
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
+  const authorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
+    execEnv,
+    operationName ?? commandName
+  ) || !hasRuntimeAuthorizationSurface(execEnv);
   const operationContext: OperationContext = {
     type: 'exe',
     named: resolveCanonicalOperationRef({
@@ -504,6 +512,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       executableType: definition.type,
       command: commandName,
       sourceRetryable: true,
+      ...(authorizationSurfaceOperation ? { authorizationSurfaceOperation: true } : {}),
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {}),

@@ -414,6 +414,9 @@ function createAuthorizationGuard(
   if (!operation.name || !isToolWriteOperation(operation)) {
     return null;
   }
+  if (operation.metadata?.authorizationSurfaceOperation !== true) {
+    return null;
+  }
 
   const controlArgs = getAuthorizationControlArgs(operation);
   return {

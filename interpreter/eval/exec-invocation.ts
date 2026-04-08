@@ -111,7 +111,11 @@ import {
   resolveInvocationPolicyReplaceFlag,
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
-import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
+import {
+  hasRuntimeAuthorizationSurface,
+  isRuntimeAuthorizationSurfaceOperation,
+  resolveEffectiveToolMetadata
+} from './exec/tool-metadata';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
 import { appendToolNotesToSystemPrompt } from '@interpreter/fyi/tool-docs';
 import {
@@ -3406,7 +3410,14 @@ async function evaluateExecInvocationInternal(
       : effectiveToolMetadata.params;
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
-    isToolWriteLabelSet(toolLabels);
+    isToolWriteLabelSet(toolLabels) &&
+    (
+      !hasRuntimeAuthorizationSurface(execEnv) ||
+      isRuntimeAuthorizationSurfaceOperation(
+        execEnv,
+        toolOperationName ?? variable.name ?? commandName
+      )
+    );
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
   enforceUpdateToolArguments({
     metadata: effectiveToolMetadata,

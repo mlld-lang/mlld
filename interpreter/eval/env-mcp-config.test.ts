@@ -1946,6 +1946,92 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('scopes policy authorizations.allow to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes policy authorizations.allow to surfaced llm tools instead of tool:w substrate helpers', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('lets authorization guards override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
