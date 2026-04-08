@@ -1525,6 +1525,78 @@ describe('@policy builtin', () => {
     }
   });
 
+  it('accepts an explicit basePolicy option for build and validate', async () => {
+    const env = await interpretWithEnv(`
+      /policy @scriptPolicy = {
+        defaults: { rules: ["no-untrusted-destructive"] },
+        operations: { destructive: ["tool:w"] },
+        authorizations: {
+          deny: ["sendEmail"]
+        }
+      }
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+
+      /var @explicitBasePolicy = {
+        defaults: { rules: ["no-send-to-unknown"] },
+        operations: { "exfil:send": ["tool:w"] },
+        authorizations: {
+          deny: []
+        }
+      }
+
+      /var @intent = {
+        sendEmail: {
+          recipient: { eq: "ada@example.com", attestations: ["known"] }
+        }
+      }
+
+      /var @builtDefault = @policy.build(@intent, @writeTools)
+      /var @builtExplicit = @policy.build(@intent, @writeTools, { basePolicy: @explicitBasePolicy })
+      /var @validatedExplicit = @policy.validate(@intent, @writeTools, { basePolicy: @explicitBasePolicy })
+    `);
+
+    const builtDefault = await extractBuiltinResult(env, 'builtDefault');
+    const builtExplicit = await extractBuiltinResult(env, 'builtExplicit');
+    const validatedExplicit = await extractBuiltinResult(env, 'validatedExplicit');
+
+    expect(builtDefault.valid).toBe(false);
+    expect(builtDefault.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'denied_by_policy',
+          tool: 'sendEmail'
+        })
+      ])
+    );
+    expect(builtDefault.policy.defaults?.rules).toEqual(['no-untrusted-destructive']);
+    expect(builtDefault.policy.operations).toEqual({ destructive: ['tool:w'] });
+    expect(builtDefault.policy.authorizations.allow).toEqual({});
+
+    for (const result of [builtExplicit, validatedExplicit]) {
+      expect(result.valid).toBe(true);
+      expect(result.issues).toEqual([]);
+      expect(result.policy.defaults?.rules).toEqual(['no-send-to-unknown']);
+      expect(result.policy.operations).toEqual({ 'exfil:send': ['tool:w'] });
+      expect(result.policy.authorizations.allow.sendEmail).toEqual({
+        kind: 'constrained',
+        args: {
+          recipient: [
+            {
+              eq: 'ada@example.com',
+              attestations: ['known']
+            }
+          ]
+        }
+      });
+      expect(result.policy.authorizations.deny || []).not.toContain('sendEmail');
+    }
+  });
+
   it('validate accepts canonical, structured, and planner-display resolved handle forms', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }

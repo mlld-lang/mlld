@@ -102,10 +102,53 @@ async function resolvePolicyTaskText(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  if (isPlainObject(value.policy)) {
+    return value.policy as PolicyConfig;
+  }
+  if (isPlainObject(value.config)) {
+    return value.config as PolicyConfig;
+  }
+  return value as PolicyConfig;
+}
+
+async function resolvePolicyBuilderBasePolicy(
+  value: unknown,
+  env: Environment
+): Promise<PolicyConfig | undefined> {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (isVariable(value)) {
+    return resolvePolicyBuilderBasePolicy(await extractVariableValue(value, env), env);
+  }
+
+  if (
+    value
+    && typeof value === 'object'
+    && 'type' in (value as Record<string, unknown>)
+    && !isStructuredValue(value)
+  ) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    return resolvePolicyBuilderBasePolicy(result.value, env);
+  }
+
+  const resolved =
+    isStructuredValue(value) && (value.type === 'object' || value.type === 'array')
+      ? value.data
+      : value;
+  return resolvePolicyConfigSource(resolved);
+}
+
 async function resolvePolicyBuilderOptions(
   rawOptions: unknown,
   env: Environment
-): Promise<{ taskText?: string }> {
+): Promise<{ taskText?: string; basePolicy?: PolicyConfig }> {
   if (rawOptions === null || rawOptions === undefined) {
     return {};
   }
@@ -134,7 +177,11 @@ async function resolvePolicyBuilderOptions(
   }
 
   const taskText = await resolvePolicyTaskText(value.task, env);
-  return taskText ? { taskText } : {};
+  const basePolicy = await resolvePolicyBuilderBasePolicy(value.basePolicy, env);
+  return {
+    ...(taskText ? { taskText } : {}),
+    ...(basePolicy ? { basePolicy } : {})
+  };
 }
 
 function normalizeToolCollectionStringList(value: unknown): string[] {
@@ -394,14 +441,14 @@ async function buildPolicyAuthorizations(
   const rawAuthorizations = await normalizeIntentContainer(intent, executionEnv);
   const builderOptions = await resolvePolicyBuilderOptions(options, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
-  const activePolicy = executionEnv.getPolicySummary();
+  const basePolicy = builderOptions.basePolicy ?? executionEnv.getPolicySummary();
   const compilation = await compilePolicyAuthorizations({
     rawAuthorizations,
     rawSource: intent,
     env: executionEnv,
     toolContext,
-    policy: activePolicy,
-    ambientDeniedTools: activePolicy?.authorizations?.deny,
+    policy: basePolicy,
+    ambientDeniedTools: basePolicy?.authorizations?.deny,
     taskText: builderOptions.taskText,
     mode: 'builder'
   });
@@ -436,7 +483,7 @@ async function buildPolicyAuthorizations(
     }));
   }
 
-  return createPolicyBuilderResult(compilation, activePolicy);
+  return createPolicyBuilderResult(compilation, basePolicy);
 }
 
 function createPolicyMethod(

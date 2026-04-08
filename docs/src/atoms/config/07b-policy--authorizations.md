@@ -368,7 +368,16 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools, { task: @t
 var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
-For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves the active policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
+By default, the builder reads its base policy scaffold from the active environment. Pass `basePolicy` in `@options` when framework code needs to build against an explicit policy object instead of the current env scope:
+
+```mlld
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools, {
+  task: @task,
+  basePolicy: @agent.basePolicy
+})
+```
+
+For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves that base policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
 
 ```mlld
 var @base = {
