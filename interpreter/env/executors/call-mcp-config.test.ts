@@ -286,7 +286,9 @@ describe('createCallMcpConfig', () => {
       expect(tools.map(tool => tool.name)).toEqual(['ping', 'shelve']);
 
       const shelve = tools.find(tool => tool.name === 'shelve');
-      expect(shelve?.description).toContain('things -> @outreach.recipients');
+      expect(shelve?.description).toContain('Writable aliases: things');
+      expect(shelve?.description).not.toContain('@outreach.recipients');
+      expect(shelve?.description).not.toContain('->');
       expect(shelve?.inputSchema?.properties?.slot_alias?.enum).toEqual(['things']);
       expect(shelve?.inputSchema?.required ?? []).toEqual(['slot_alias', 'value']);
 

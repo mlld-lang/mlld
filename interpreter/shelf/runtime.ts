@@ -1359,18 +1359,6 @@ type WritableShelfAliasBinding = {
   ref: ShelfScopeSlotRef;
 };
 
-function formatWritableShelfAliasBinding(
-  env: Environment,
-  binding: WritableShelfAliasBinding
-): string {
-  const slot = env.getShelfDefinition(binding.ref.shelfName)?.slots[binding.ref.slotName];
-  if (!slot) {
-    return `${binding.alias} -> @${binding.ref.shelfName}.${binding.ref.slotName}`;
-  }
-  const typeLabel = `${slot.record}${slot.cardinality === 'collection' ? '[]' : slot.optional ? '?' : ''}`;
-  return `${binding.alias} -> @${binding.ref.shelfName}.${binding.ref.slotName} (${typeLabel}, ${slot.merge})`;
-}
-
 function getWritableShelfAliasBindings(env: Environment): WritableShelfAliasBinding[] {
   const scope = getNormalizedShelfScope(env);
   if (!scope) {
@@ -1415,9 +1403,7 @@ export function createAutoProvisionedShelveExecutable(env: Environment): Variabl
 
   const aliasNames = aliasBindings.map(binding => binding.alias);
   const aliasMap = new Map(aliasBindings.map(binding => [binding.alias, binding.ref]));
-  const description = `Write typed shelf slots by alias. Writable aliases: ${aliasBindings
-    .map(binding => formatWritableShelfAliasBinding(env, binding))
-    .join(', ')}`;
+  const description = `Write typed shelf slots by alias. Writable aliases: ${aliasNames.join(', ')}`;
 
   const definition: NodeFunctionExecutable = {
     type: 'nodeFunction',
