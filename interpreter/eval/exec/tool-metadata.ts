@@ -466,16 +466,20 @@ export function resolveAuthorizationSurfaceOperation(options: {
     return false;
   }
 
-  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
-    return false;
-  }
-
   if (hasRuntimeAuthorizationSurface(env)) {
     return false;
   }
 
   // Bare llm exes like @claude are dispatch substrate, not the visible tool surface.
-  return !hasExecutableLabel(executableLabels, 'llm');
+  if (hasExecutableLabel(executableLabels, 'llm')) {
+    return false;
+  }
+
+  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
+    return inheritedAuthorizationSurfaceOperation;
+  }
+
+  return true;
 }
 
 function createAuthorizationToolContextEntry(
