@@ -102,6 +102,12 @@ export interface VariableMetrics {
   source?: TokenMetricSource;
 }
 
+export interface ExecutableMxParam {
+  name: string;
+  type?: string;
+  optional?: boolean;
+}
+
 export interface VariableContext {
   name?: string;
   type?: VariableTypeDiscriminator;
@@ -134,6 +140,11 @@ export interface VariableContext {
   domain?: string;
   title?: string;
   description?: string;
+  params?: readonly ExecutableMxParam[] | null;
+  controlArgs?: readonly string[] | null;
+  updateArgs?: readonly string[] | null;
+  exactPayloadArgs?: readonly string[] | null;
+  correlateControlArgs?: boolean | null;
   source?: string;
   retries?: number;
   fm?: unknown;
