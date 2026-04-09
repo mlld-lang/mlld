@@ -140,7 +140,7 @@
         },
         {
           "name": "keyword.operator.arrow.mlld",
-          "match": "=>"
+          "match": "(?:=->|=>|->)"
         },
         {
           "name": "keyword.operator.ternary.mlld",

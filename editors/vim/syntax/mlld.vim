@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2026-04-06T23:45:28.128Z
+" Latest Revision: 2026-04-09T22:48:29.206Z
 
 if exists("b:current_syntax")
   finish
@@ -35,8 +35,8 @@ syn match mlldLogicalOp "&&\|||\|!"
 syn match mlldComparisonOp "==\|!=\|<=\|>=\|<\|>"
 " Ternary operators
 syn match mlldTernaryOp "[?:]"
-" Arrow operator
-syn match mlldArrowOp "=>"
+" Arrow operators
+syn match mlldArrowOp "=->\|=>\|->"
 " Pipe operator
 syn match mlldPipeOp "|"
 " Assignment operator

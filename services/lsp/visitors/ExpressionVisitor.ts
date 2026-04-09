@@ -696,27 +696,15 @@ export class ExpressionVisitor extends BaseVisitor {
   }
 
   private visitExeReturn(node: LspAstNode, context: VisitorContext): void {
-    // Tokenize => operator
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-    const arrowIndex = nodeText.indexOf('=>');
+    const sigilMatch = nodeText.match(/^(=->|=>|->)/);
 
-    if (arrowIndex !== -1) {
+    if (sigilMatch?.index !== undefined) {
       this.operatorHelper.addOperatorToken(
-        node.location.start.offset + arrowIndex,
-        2 // => is 2 characters
+        node.location.start.offset + sigilMatch.index,
+        sigilMatch[0].length
       );
-    }
-
-    // Visit the return value
-    if (node.value) {
-      if (Array.isArray(node.value)) {
-        for (const valueNode of node.value) {
-          this.mainVisitor.visitNode(valueNode, context);
-        }
-      } else {
-        this.mainVisitor.visitNode(node.value, context);
-      }
     }
   }
 }

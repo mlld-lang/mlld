@@ -766,7 +766,7 @@ export class ASTSemanticVisitor {
   }
 
   /**
-   * Visit an ExeReturn node (=> value)
+   * Visit an ExeReturn node (=> / -> / =-> value)
    */
   private visitExeReturn(node: ASTNode, context: VisitorContext): void {
     if (!node.location) return;
@@ -774,14 +774,13 @@ export class ASTSemanticVisitor {
     const sourceText = this.document.getText();
     const returnText = sourceText.substring(node.location.start.offset, node.location.end.offset);
 
-    // Tokenize '=>' operator
-    const arrowMatch = returnText.match(/^=>/);
+    const arrowMatch = returnText.match(/^(=->|=>|->)/);
     if (arrowMatch) {
       const arrowPos = this.document.positionAt(node.location.start.offset);
       this.tokenBuilder.addToken({
         line: arrowPos.line,
         char: arrowPos.character,
-        length: 2,
+        length: arrowMatch[0].length,
         tokenType: 'operator',
         modifiers: []
       });

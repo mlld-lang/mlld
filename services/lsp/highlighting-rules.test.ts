@@ -147,7 +147,9 @@ describe('Highlighting Rules', () => {
     it('should have other operators', () => {
       expect(HIGHLIGHTING_RULES.operators.pipe).toContain('|');
       expect(HIGHLIGHTING_RULES.operators.assignment).toContain('=');
+      expect(HIGHLIGHTING_RULES.operators.arrow).toContain('=->');
       expect(HIGHLIGHTING_RULES.operators.arrow).toContain('=>');
+      expect(HIGHLIGHTING_RULES.operators.arrow).toContain('->');
       expect(HIGHLIGHTING_RULES.operators.nullish).toContain('??');
     });
   });

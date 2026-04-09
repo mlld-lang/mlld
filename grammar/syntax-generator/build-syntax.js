@@ -46,7 +46,7 @@ class MlldSyntaxGenerator {
       ternaryColon: ':',
       // When expression syntax
       whenKeyword: 'when\\s*:',
-      whenArrow: '=>',
+      arrowOperator: '(?:=->|=>|->)',
       directiveForms: '\\b(loop|while)\\b(?=\\s*\\()|\\bif\\b(?=\\s*[@\\[(])|\\bbox\\b(?=\\s*(with\\b|\\[|@))|\\b(file|files)\\b(?=\\s*(<|"|@))|\\b(needs|profiles)\\b(?=\\s*\\{)|\\bauth\\b(?=\\s+@)',
       controlKeywords: '\\b(until|endless|else)\\b',
       // Enhanced operators list
@@ -151,9 +151,9 @@ Prism.languages.mlld = {
       'punctuation': /<|>/
     }
   },
-  // Arrow operator MUST come before comparison/assignment to match => as one token
+  // Arrow operators MUST come before comparison/assignment to match =-> / => / -> as one token
   'arrow-operator': {
-    pattern: /${this.patterns.whenArrow}/,
+    pattern: /${this.patterns.arrowOperator}/,
     alias: 'operator'
   },
   'logical-operator': {
@@ -530,7 +530,7 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
       {
         // Arrow operator
         name: 'keyword.operator.arrow.mlld',
-        match: this.patterns.whenArrow
+        match: this.patterns.arrowOperator
       },
       {
         // Ternary operators
@@ -956,8 +956,8 @@ syn match mlldLogicalOp "&&\\|||\\|!"
 syn match mlldComparisonOp "==\\|!=\\|<=\\|>=\\|<\\|>"
 " Ternary operators
 syn match mlldTernaryOp "[?:]"
-" Arrow operator
-syn match mlldArrowOp "=>"
+" Arrow operators
+syn match mlldArrowOp "=->\\|=>\\|->"
 " Pipe operator
 syn match mlldPipeOp "|"
 " Assignment operator
@@ -1099,7 +1099,7 @@ syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
 syn match mlldLogicalOp "&&\\|||\\|!"
 syn match mlldComparisonOp "==\\|!=\\|<=\\|>=\\|<\\|>"
 syn match mlldTernaryOp "[?:]"
-syn match mlldArrowOp "=>"
+syn match mlldArrowOp "=->\\|=>\\|->"
 syn match mlldWhenKeyword "when\\s*:"
 syn match mlldReserved "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\|now\\|NOW\\|base\\)\\>"
 syn match mlldReserved "@\\."

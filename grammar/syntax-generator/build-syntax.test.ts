@@ -22,6 +22,9 @@ describe('MlldSyntaxGenerator', () => {
     expect(generator.patterns.guardFilter).toContain('named:');
     expect(generator.patterns.guardFilter).toContain('log');
     expect(generator.patterns.guardFilter).toContain('stream');
+    expect(generator.patterns.arrowOperator).toContain('=->');
+    expect(generator.patterns.arrowOperator).toContain('=>');
+    expect(generator.patterns.arrowOperator).toContain('->');
     expect(generator.patterns.operators).toContain('tools');
     expect(generator.patterns.operators).toContain('mcp');
     expect(generator.patterns.operators).toContain('using');

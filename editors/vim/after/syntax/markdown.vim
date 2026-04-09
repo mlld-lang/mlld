@@ -17,7 +17,7 @@ syn match mlldDirective "^/\(var\|record\|shelf\|show\|stream\|run\|exe\|import\
 syn match mlldLogicalOp "&&\|||\|!"
 syn match mlldComparisonOp "==\|!=\|<=\|>=\|<\|>"
 syn match mlldTernaryOp "[?:]"
-syn match mlldArrowOp "=>"
+syn match mlldArrowOp "=->\|=>\|->"
 syn match mlldWhenKeyword "when\s*:"
 syn match mlldReserved "@\(INPUT\|TIME\|PROJECTPATH\|STDIN\|input\|time\|projectpath\|stdin\|now\|NOW\|base\)\>"
 syn match mlldReserved "@\."

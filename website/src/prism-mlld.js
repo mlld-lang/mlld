@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2026-04-06T23:45:28.128Z
+// Generated from grammar at 2026-04-09T22:48:29.205Z
 
 const Prism = require('prismjs');
 
@@ -37,9 +37,9 @@ Prism.languages.mlld = {
       'punctuation': /<|>/
     }
   },
-  // Arrow operator MUST come before comparison/assignment to match => as one token
+  // Arrow operators MUST come before comparison/assignment to match =-> / => / -> as one token
   'arrow-operator': {
-    pattern: /=>/,
+    pattern: /(?:=->|=>|->)/,
     alias: 'operator'
   },
   'logical-operator': {

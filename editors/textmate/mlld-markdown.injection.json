@@ -69,7 +69,7 @@
             },
             {
               "name": "keyword.operator.arrow.mlld",
-              "match": "=>"
+              "match": "(?:=->|=>|->)"
             },
             {
               "name": "keyword.operator.ternary.mlld",
@@ -548,7 +548,7 @@
         },
         {
           "name": "keyword.operator.arrow.mlld",
-          "match": "=>"
+          "match": "(?:=->|=>|->)"
         },
         {
           "name": "keyword.operator.ternary.mlld",

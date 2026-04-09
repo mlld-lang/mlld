@@ -77,7 +77,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
     ternary: ['?', ':'],
     pipe: ['|'],
     assignment: ['='],
-    arrow: ['=>']
+    arrow: ['=->', '=>', '->']
   },
   
   directives: {

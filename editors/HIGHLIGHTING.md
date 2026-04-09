@@ -34,7 +34,7 @@ Canonical highlighting rules for mlld. Used by both LSP semantic tokens and rege
 | `@variable` | `variable` | `variable` |
 | `@var.field` | `variable` + `property` | `variable` + `field-access` |
 | `let`, `done`, `continue` | `keyword` | `block-keyword` |
-| `=>` | `operator` | `arrow-operator` |
+| `=>`, `->`, `=->` | `operator` | `arrow-operator` |
 | `\|`, `\|\|` | `operator` | `pipe-operator` |
 | `<file.md>` | `string` | `alligator` |
 | `>> comment` | `comment` | `comment` |
@@ -75,3 +75,4 @@ Language-specific blocks (`js`, `python`, `sh`) use native language highlighting
 - Double quotes ALWAYS interpolate (not just in commands)
 - `{{var}}` ONLY works in triple-colon `:::`
 - In triple-colon, `<file.md>` becomes XML, not alligator
+- `->` and `=->` are exe-local return-channel operators; regex highlighters color the sigils globally, while the LSP only emits them where the AST accepts `ExeReturn`
