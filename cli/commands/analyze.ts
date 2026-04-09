@@ -64,6 +64,10 @@ import {
   validateShelfScopeBindingTargets,
   type ValidatableShelfScopeBinding
 } from '@core/validation/shelf-scope';
+import {
+  analyzeReturnChannels,
+  type ReturnChannelAnalysis
+} from '@core/validation/return-channels';
 
 export interface AnalyzeOptions {
   format?: 'json' | 'text';
@@ -235,7 +239,10 @@ export type AntiPatternWarningCode =
   | 'policy-authorizations-deny-unknown-tool'
   | 'policy-label-flow-unknown-target'
   | 'policy-authorizations-empty-entry'
-  | 'policy-authorizations-unconstrained-tool';
+  | 'policy-authorizations-unconstrained-tool'
+  | 'thin-arrow-exe-not-surfaced'
+  | 'strict-tool-return-without-record'
+  | 'mixed-tool-return-for-scope';
 
 export interface AntiPatternWarning {
   code: AntiPatternWarningCode;
@@ -2469,6 +2476,140 @@ function collectExecutableOutputRecordDiagnostics(
   });
 
   return errors;
+}
+
+/**
+ * Collect the set of exe names that are statically wired as toolbridge
+ * wrappers through `var tools @name = { foo: { mlld: @exe } }` collections.
+ * These are the exes whose strict tool-return channel (`->` / `=->`) will
+ * actually be consumed by the runtime (see exec-invocation `isToolbridgeWrapper`).
+ */
+function collectSurfacedToolExeNames(ast: MlldNode[]): Set<string> {
+  const surfaced = new Set<string>();
+
+  walkAST(ast, node => {
+    const directiveNode = node as any;
+    if (
+      directiveNode.type !== 'Directive' ||
+      directiveNode.kind !== 'var' ||
+      directiveNode.meta?.isToolsCollection !== true
+    ) {
+      return;
+    }
+
+    const toolObjectNode = Array.isArray(directiveNode.values?.value)
+      ? directiveNode.values.value[0]
+      : undefined;
+    if (
+      !toolObjectNode ||
+      typeof toolObjectNode !== 'object' ||
+      (toolObjectNode as any).type !== 'object'
+    ) {
+      return;
+    }
+
+    const entries = (toolObjectNode as any).entries as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(entries)) {
+      return;
+    }
+
+    for (const entry of entries) {
+      if ((entry.type !== 'pair' && entry.type !== 'conditionalPair')) {
+        continue;
+      }
+
+      const mlldValue = extractStaticValue(getObjectEntryValue(entry.value, 'mlld'));
+      if (typeof mlldValue !== 'string') {
+        continue;
+      }
+      const execName = mlldValue.trim().replace(/^@/, '');
+      if (execName) {
+        surfaced.add(execName);
+      }
+    }
+  });
+
+  return surfaced;
+}
+
+/**
+ * Warn on statically suspicious uses of thin-arrow exe return channels
+ * (`->` writes tool-only results; `=->` writes both canonical and tool
+ * results). Three checks:
+ *
+ * 1. `thin-arrow-exe-not-surfaced` — an exe emits a tool-return channel
+ *    but is never wired as a toolbridge wrapper via `var tools`, so the
+ *    runtime will never select the tool slot.
+ * 2. `strict-tool-return-without-record` — an exe enters strict tool-return
+ *    mode but declares no static `=> record` coercion, so tool output
+ *    bypasses schema-based trust-tier classification.
+ * 3. `mixed-tool-return-for-scope` — an exe has tool-return sites both
+ *    inside and outside a `for` body, so the empty-result resolution to
+ *    `null`/`[]` (which only fires when every tool reach is inside a
+ *    `for` body) silently will not apply.
+ */
+function detectThinArrowReturnAntiPatterns(
+  ast: MlldNode[],
+  surfacedExeNames: ReadonlySet<string>
+): AntiPatternWarning[] {
+  const warnings: AntiPatternWarning[] = [];
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || (node as any).kind !== 'exe') {
+      return;
+    }
+
+    const exeNode = node as any;
+    const exeName: string | undefined = exeNode.values?.identifier?.[0]?.identifier;
+    if (!exeName) {
+      return;
+    }
+
+    const analysis: ReturnChannelAnalysis = analyzeReturnChannels(exeNode.values);
+    if (!analysis.strict) {
+      return;
+    }
+
+    const firstToolSite = analysis.toolSites[0];
+    const line = firstToolSite?.location?.line ?? exeNode.location?.start?.line;
+    const column = firstToolSite?.location?.column ?? exeNode.location?.start?.column;
+
+    if (!surfacedExeNames.has(exeName)) {
+      warnings.push({
+        code: 'thin-arrow-exe-not-surfaced',
+        message: `Executable @${exeName}() uses a tool-return channel (-> or =->) but is not statically wired as a toolbridge wrapper, so the runtime will never read the tool slot.`,
+        line,
+        column,
+        suggestion: `Surface @${exeName} through a 'var tools' collection (e.g. { ${exeName}: { mlld: @${exeName}, ... } }), drop the thin-arrow returns in favor of '=>', or add "validate.suppressWarnings": ["thin-arrow-exe-not-surfaced"] if this exe is wrapped by an external caller.`
+      });
+    }
+
+    const outputRecord = extractExecutableOutputRecordInfo(exeNode);
+    if (!outputRecord || (outputRecord.kind === 'static' && !outputRecord.name)) {
+      warnings.push({
+        code: 'strict-tool-return-without-record',
+        message: `Executable @${exeName}() emits tool-return channels but has no static '=> record @schema' coercion, so tool output bypasses field-level trust classification.`,
+        line,
+        column,
+        suggestion: `Declare an output record (e.g. 'exe @${exeName}(...) = ... => record @${exeName}Result') so strict tool returns carry fact/data labels.`
+      });
+    }
+
+    const toolSitesInFor = analysis.toolSites.filter(site => site.inForBody);
+    const toolSitesOutsideFor = analysis.toolSites.filter(site => !site.inForBody);
+    if (toolSitesInFor.length > 0 && toolSitesOutsideFor.length > 0) {
+      const mixedSite = toolSitesOutsideFor[0];
+      warnings.push({
+        code: 'mixed-tool-return-for-scope',
+        message: `Executable @${exeName}() has tool-return channels both inside and outside a 'for' body. The runtime only resolves empty strict-mode tool results to null/[] when every tool reach is inside a 'for' body, so that fallback will not apply here.`,
+        line: mixedSite?.location?.line ?? line,
+        column: mixedSite?.location?.column ?? column,
+        suggestion: `Move every tool-return ('->' or '=->') inside the 'for' body, or drop the for-scoped tool returns in favor of canonical '=>' returns.`
+      });
+    }
+  });
+
+  return warnings;
 }
 
 function extractDirectShelfSlotRef(
@@ -5814,6 +5955,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         }
       }
 
+      const surfacedToolExeNames = collectSurfacedToolExeNames(ast);
       const antiPatterns = dedupeAntiPatternWarnings([
         ...detectDeprecatedJsonTransformAntiPatterns(ast),
         ...detectExeParameterShadowingWarnings(ast),
@@ -5826,6 +5968,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ...detectPrivilegedGuardWithoutPolicyOperationWarnings(ast, policies),
         ...detectPolicyDeclarationWarnings(ast, policies, contextExecutables),
         ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : []),
+        ...detectThinArrowReturnAntiPatterns(ast, surfacedToolExeNames),
         ...policyAuthorizationDiagnostics.warnings
       ]).filter(warning => !suppressedWarningCodes.has(warning.code));
       if (antiPatterns.length > 0) {
