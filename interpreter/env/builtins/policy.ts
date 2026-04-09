@@ -115,6 +115,52 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
+async function materializePolicyConfigValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (isVariable(value)) {
+    return materializePolicyConfigValue(await extractVariableValue(value, env), env);
+  }
+
+  if (
+    value
+    && typeof value === 'object'
+    && 'type' in (value as Record<string, unknown>)
+    && !isStructuredValue(value)
+  ) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as any, env, { isExpression: true });
+    return materializePolicyConfigValue(result.value, env);
+  }
+
+  if (isStructuredValue(value)) {
+    return materializePolicyConfigValue(value.data, env);
+  }
+
+  if (Array.isArray(value)) {
+    const items: unknown[] = [];
+    for (const item of value) {
+      items.push(await materializePolicyConfigValue(item, env));
+    }
+    return items;
+  }
+
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await materializePolicyConfigValue(entry, env);
+    }
+    return result;
+  }
+
+  return value;
+}
+
 async function resolvePolicyBuilderBasePolicy(
   value: unknown,
   env: Environment
@@ -138,10 +184,7 @@ async function resolvePolicyBuilderBasePolicy(
     return resolvePolicyBuilderBasePolicy(result.value, env);
   }
 
-  const resolved =
-    isStructuredValue(value) && (value.type === 'object' || value.type === 'array')
-      ? value.data
-      : value;
+  const resolved = await materializePolicyConfigValue(value, env);
   return resolvePolicyConfigSource(resolved);
 }
 

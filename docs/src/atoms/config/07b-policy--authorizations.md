@@ -377,6 +377,8 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools, {
 })
 ```
 
+`basePolicy` may come from literals, field access, or exe-returned objects. The builder materializes nested structured arrays and objects before normalizing the policy scaffold, so values like exe-returned rule lists are accepted directly.
+
 For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves that base policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
 
 ```mlld

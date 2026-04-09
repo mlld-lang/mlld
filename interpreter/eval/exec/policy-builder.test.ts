@@ -1671,6 +1671,70 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('preserves explicit basePolicy when defaults.rules comes from an exe-returned array', async () => {
+    const env = await interpretWithEnv(`
+      /exe @buildRules() = [
+        => ["no-send-to-unknown", "no-untrusted-destructive"]
+      ]
+
+      /exe @buildBasePolicy() = [
+        let @rules = @buildRules()
+        => {
+          defaults: { rules: @rules },
+          operations: { "exfil:send": ["tool:w"] },
+          authorizations: {
+            deny: []
+          }
+        }
+      ]
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+
+      /var tools @writeTools = {
+        sendEmail: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] }
+      }
+
+      /exe @dispatch(agent, intent) = [
+        let @builtDirect = @policy.build(
+          @intent,
+          @agent.toolsCollection,
+          { basePolicy: @agent.basePolicy }
+        )
+        let @bpClone = { ...@agent.basePolicy }
+        let @builtClone = @policy.build(
+          @intent,
+          @agent.toolsCollection,
+          { basePolicy: @bpClone }
+        )
+
+        => {
+          direct: @builtDirect.policy.defaults.rules,
+          clone: @builtClone.policy.defaults.rules
+        }
+      ]
+
+      /var @agent = {
+        basePolicy: @buildBasePolicy(),
+        toolsCollection: @writeTools
+      }
+
+      /var @intent = {
+        sendEmail: {
+          recipient: { eq: "ada@example.com", attestations: ["known"] }
+        }
+      }
+
+      /var @result = @dispatch(@agent, @intent)
+    `);
+
+    const result = await extractBuiltinResult(env, 'result');
+
+    expect(result).toEqual({
+      direct: ['no-send-to-unknown', 'no-untrusted-destructive'],
+      clone: ['no-send-to-unknown', 'no-untrusted-destructive']
+    });
+  });
+
   it('validate accepts canonical, structured, and planner-display resolved handle forms', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
