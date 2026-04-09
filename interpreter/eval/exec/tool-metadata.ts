@@ -14,6 +14,7 @@ import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 export interface EffectiveToolMetadata {
   name: string;
+  displayName?: string;
   params: string[];
   optionalParams?: string[];
   labels: string[];

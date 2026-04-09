@@ -338,6 +338,29 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function withDisplayName(
+  metadata: EffectiveToolMetadata,
+  displayName?: string
+): EffectiveToolMetadata {
+  const normalized = typeof displayName === 'string' ? displayName.trim() : '';
+  if (!normalized || normalized === metadata.name) {
+    return metadata;
+  }
+
+  return {
+    ...metadata,
+    displayName: normalized
+  };
+}
+
+function toFunctionToolDisplayName(mcpName: string): string {
+  return `mcp__${FUNCTION_MCP_SERVER_NAME}__${mcpName}`;
+}
+
+function toVfsToolDisplayName(toolName: string): string {
+  return `mcp__${VFS_MCP_SERVER_NAME}__${toolName}`;
+}
+
 function looksLikeToolCollection(value: unknown): value is ToolCollection {
   if (!isPlainObject(value)) {
     return false;
@@ -949,10 +972,15 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const sessionId = randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
-  const builtinToolMetadata = buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools);
+  const builtinToolMetadata = buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools).map(metadata =>
+    withDisplayName(metadata, inBox ? toVfsToolDisplayName(metadata.name) : metadata.name)
+  );
+  const surfacedFunctionToolMetadata = functionTools.map(tool =>
+    withDisplayName(tool.metadata, toFunctionToolDisplayName(tool.mcpName))
+  );
   const toolMetadata = [
     ...builtinToolMetadata,
-    ...functionTools.map(tool => tool.metadata)
+    ...surfacedFunctionToolMetadata
   ];
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
@@ -964,7 +992,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       ...builtinToolMetadata,
       ...functionTools
         .filter(tool => tool.excludeFromToolNotes !== true)
-        .map(tool => tool.metadata)
+        .map(tool => withDisplayName(tool.metadata, toFunctionToolDisplayName(tool.mcpName)))
     ],
     isMcpContext: options.isMcpContext !== false
   });

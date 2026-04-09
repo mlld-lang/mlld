@@ -153,7 +153,7 @@ describe('shelf notes injection', () => {
       expect(output).toContain('</tool_notes>\n\n<shelf_notes>');
       expect(output.indexOf('<tool_notes>')).toBeGreaterThan(output.indexOf('User system prompt'));
       expect(output.indexOf('<shelf_notes>')).toBeGreaterThan(output.indexOf('<tool_notes>'));
-      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
       expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
     } finally {

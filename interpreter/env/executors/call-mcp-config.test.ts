@@ -387,9 +387,9 @@ describe('createCallMcpConfig', () => {
       ]);
       expect(result.toolNotes).toContain('<tool_notes>');
       expect(result.toolNotes).toContain('| Tool | Control Args | Discover Targets |');
-      expect(result.toolNotes).toContain('| outbound_email | recipient | @fyi.known("outbound_email") |');
+      expect(result.toolNotes).toContain('| mcp__mlld_tools__outbound_email | recipient | @fyi.known("outbound_email") |');
       expect(result.toolNotes).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(result.toolNotes).toContain('Read tools: search_contacts_by_name');
+      expect(result.toolNotes).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
       expect(result.toolNotes).toContain('Denied: (none)');
       expect(result.toolNotes).not.toContain('Send an outbound email');
       expect(result.toolNotes).not.toContain('| Tool | Description |');

@@ -2728,13 +2728,49 @@ describe('box MCP config integration', () => {
 
       expect(output).toContain('<tool_notes>');
       expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
       expect(output).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(output).toContain('Read tools: search_contacts_by_name');
+      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
       expect(output).toContain('Denied: (none)');
       expect(output).not.toContain('Send an outbound email');
       expect(output).not.toContain('| Tool | Description |');
       expect(output).not.toContain('Search contacts by name');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('injects prefixed tool notes for executable arrays selected from a tool map', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe resolve:r @searchFiles(query) = "ok"',
+      '/exe resolve:r @listFiles() = "ok"',
+      '/var @toolMap = { "search_files": @searchFiles, "list_files": @listFiles }',
+      '/var @toolNames = ["search_files"]',
+      '/exe @select(config) = [',
+      '  let @cfg = @config ?? {}',
+      '  let @selected = for @name in @cfg.toolNames => @cfg.toolMap[@name]',
+      '  => @selected',
+      ']',
+      '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
+      '/show @agent("Search the workspace", { tools: @select({ toolMap: @toolMap, toolNames: @toolNames }) })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('Read tools: mcp__mlld_tools__search_files');
+      expect(output).not.toContain('Read tools: search_files');
     } finally {
       environment?.cleanup();
     }
@@ -2774,8 +2810,8 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('User system prompt\n\n<tool_notes>');
-      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('Read tools: search_contacts_by_name');
+      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
       expect(output).not.toContain('Send an outbound email');
       expect(output).not.toContain('Search contacts by name');
     } finally {
@@ -2819,8 +2855,8 @@ describe('box MCP config integration', () => {
 
       expect(output).toContain('<tool_notes>');
       expect(output).toContain('| Tool | Control Args |');
-      expect(output).toContain('| update_password | recipient |');
-      expect(output).toContain('Read tools: search_contacts_by_name');
+      expect(output).toContain('| mcp__mlld_tools__update_password | recipient |');
+      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
       expect(output).toContain('Denied: update_password');
       expect(output).toContain('Authorization intent:');
       expect(output).toContain('resolved: { tool: { arg: "handle" } }');
@@ -2855,7 +2891,7 @@ describe('box MCP config integration', () => {
 
       expect(output).toContain('<tool_notes>');
       expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| create_draft | (none) |  |');
+      expect(output).toContain('| mcp__mlld_tools__create_draft | (none) |  |');
       expect(output).toContain('Denied: (none)');
       expect(output).not.toContain('Use @fyi.known("toolName")');
     } finally {

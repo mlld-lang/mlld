@@ -222,6 +222,7 @@ function normalizeRenderContext(raw?: FyiToolsRenderContext) {
 function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetadata {
   return {
     ...metadata,
+    ...(metadata.displayName ? { displayName: metadata.displayName } : {}),
     params: [...metadata.params],
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
     labels: [...metadata.labels],
@@ -434,6 +435,11 @@ function formatTableCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
+function getRenderedToolName(entry: EffectiveToolMetadata): string {
+  const displayName = typeof entry.displayName === 'string' ? entry.displayName.trim() : '';
+  return displayName.length > 0 ? displayName : entry.name;
+}
+
 function formatControlArgsCell(entry: EffectiveToolMetadata): string {
   const controlArgs = entry.controlArgs ?? [];
   const base = formatArgList(controlArgs);
@@ -563,7 +569,7 @@ function buildToolTableLines(options: {
   ];
 
   for (const entry of writeEntries) {
-    const cells = [formatTableCell(entry.name)];
+    const cells = [formatTableCell(getRenderedToolName(entry))];
 
     if (!isMcpContext) {
       cells.push(formatTableCell(entry.description ?? ''));
@@ -593,7 +599,7 @@ function buildToolTableLines(options: {
 }
 
 function buildReadToolNameList(readEntries: readonly EffectiveToolMetadata[]): string {
-  return `Read tools: ${readEntries.map(entry => entry.name).join(', ')}`;
+  return `Read tools: ${readEntries.map(entry => getRenderedToolName(entry)).join(', ')}`;
 }
 
 function buildReadToolTableLines(readEntries: readonly EffectiveToolMetadata[]): string[] {
@@ -603,7 +609,7 @@ function buildReadToolTableLines(readEntries: readonly EffectiveToolMetadata[]):
   ];
 
   for (const entry of readEntries) {
-    lines.push(`| ${formatTableCell(entry.name)} | ${formatTableCell(entry.description ?? '')} |`);
+    lines.push(`| ${formatTableCell(getRenderedToolName(entry))} | ${formatTableCell(entry.description ?? '')} |`);
   }
 
   return lines;
@@ -619,8 +625,8 @@ function buildExplicitPlannerWriteToolContractLines(
       lines.push('');
     }
 
-    lines.push(
-      entry.name,
+      lines.push(
+      getRenderedToolName(entry),
       `  description: ${entry.description ?? 'No description provided.'}`,
       `  args: ${formatArgList(entry.params)}`,
       `  control_args: ${formatControlArgsCell(entry)}`,
