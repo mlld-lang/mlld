@@ -182,6 +182,18 @@ boundary.plainData(value)                      // Explicit recursive unwrap/mate
 - Use `boundary.identity(...)` for tool collections, captured module envs, and live shelf refs that would lose meaning if treated as plain objects.
 - Use `.keep` / `.keepStructured` only for embedded-language boundaries (`js`, `node`, `py`, `sh`). They are not the mlld-to-mlld preservation mechanism.
 
+### Boundary Taxonomy
+
+Use the boundary helpers by contract, not by convenience:
+
+- `field`: wrapper-preserving reads. Use when caller-visible field semantics, `.mx`, factsources, or projection metadata must survive.
+- `identity`: identity-preserving transport. Use for tool collections, captured module envs, shelf refs, and other capability-bearing values where object shape is not enough.
+- `config`: env-aware config materialization. Use when the input may still contain AST-like nodes, variable references, or imported structured values and the consumer needs plain JS config data.
+- `plainData`: explicit recursive materialization. Use when the value is already resolved and the boundary intentionally wants plain arrays/objects/primitives.
+- `display`: final output rendering. Use for document/output/show-style text emission after the read/materialization step is done.
+- `interpolate`: template and shell string boundaries. Use when escaping rules are part of the contract.
+- `serialize`: module/import/export vocabulary only. This remains a separate boundary family; do not treat it as a generic unwrap path.
+
 ### Where Values Flow
 
 **Pipelines**
