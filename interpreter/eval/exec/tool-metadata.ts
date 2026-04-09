@@ -16,6 +16,7 @@ export interface EffectiveToolMetadata {
   name: string;
   displayName?: string;
   params: string[];
+  paramEntries: EffectiveToolParam[];
   optionalParams?: string[];
   labels: string[];
   description?: string;
@@ -26,6 +27,12 @@ export interface EffectiveToolMetadata {
   exactPayloadArgs?: string[];
   correlateControlArgs: boolean;
   taintFacts: boolean;
+}
+
+export interface EffectiveToolParam {
+  name: string;
+  type?: string;
+  optional?: boolean;
 }
 
 function normalizeStringList(values: readonly unknown[] | undefined): string[] {
@@ -108,6 +115,71 @@ function getExecutableParamNames(executable: ExecutableVariable): string[] {
     : [];
 }
 
+function buildEffectiveToolParam(
+  name: string,
+  options?: { type?: string; optional?: boolean }
+): EffectiveToolParam {
+  return {
+    name,
+    ...(normalizeTrimmedString(options?.type) ? { type: normalizeTrimmedString(options?.type) } : {}),
+    ...(options?.optional === true ? { optional: true } : {})
+  };
+}
+
+function buildEffectiveToolParams(
+  params: readonly string[],
+  paramTypes?: Record<string, string>,
+  optionalParams?: readonly string[]
+): EffectiveToolParam[] {
+  const optional = new Set(normalizeStringList(optionalParams));
+  return params.map(name =>
+    buildEffectiveToolParam(name, {
+      type: paramTypes?.[name],
+      optional: optional.has(name)
+    })
+  );
+}
+
+function normalizeExecutableMxParamEntries(value: unknown): EffectiveToolParam[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: EffectiveToolParam[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const name = normalizeTrimmedString(entry);
+      if (!name || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      normalized.push(buildEffectiveToolParam(name));
+      continue;
+    }
+
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+
+    const name = normalizeTrimmedString((entry as { name?: unknown }).name);
+    if (!name || seen.has(name)) {
+      continue;
+    }
+
+    seen.add(name);
+    normalized.push(
+      buildEffectiveToolParam(name, {
+        type: normalizeTrimmedString((entry as { type?: unknown }).type),
+        optional: (entry as { optional?: unknown }).optional === true
+      })
+    );
+  }
+
+  return normalized;
+}
+
 function getExecutableOptionalParamNames(executable: ExecutableVariable): string[] | undefined {
   const executableDef = executable.internal?.executableDef ?? executable.value;
   const optionalParams = (executableDef as { optionalParams?: unknown }).optionalParams;
@@ -158,8 +230,21 @@ function buildToolContextFromExecutable(
   name: string,
   executable: ExecutableVariable
 ): EffectiveToolMetadata {
-  const params = getExecutableParamNames(executable);
-  const optionalParams = getExecutableOptionalParamNames(executable)?.filter(param => params.includes(param));
+  const fallbackParams = getExecutableParamNames(executable);
+  const fallbackOptionalParams = getExecutableOptionalParamNames(executable)?.filter(
+    param => fallbackParams.includes(param)
+  );
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const paramEntries = normalizeExecutableMxParamEntries(executable.mx?.params)
+    ?? buildEffectiveToolParams(
+      fallbackParams,
+      executable.paramTypes ?? executableDef?.paramTypes,
+      fallbackOptionalParams
+    );
+  const params = paramEntries.map(entry => entry.name);
+  const optionalParams = paramEntries
+    .filter(entry => entry.optional === true)
+    .map(entry => entry.name);
   const controlArgs = getExecutableControlArgs(executable);
   const updateArgs = getExecutableUpdateArgs(executable);
   const exactPayloadArgs = getExecutableExactPayloadArgs(executable);
@@ -167,6 +252,7 @@ function buildToolContextFromExecutable(
   return {
     name,
     params,
+    paramEntries,
     ...(optionalParams && optionalParams.length > 0 ? { optionalParams } : {}),
     labels: getExecutableLabels(executable),
     ...(description ? { description } : {}),
@@ -527,6 +613,7 @@ function buildToolContextFromStoredEntry(
 ): EffectiveToolMetadata {
   const params = normalizeStringList(entry.params);
   const optionalParams = getEffectiveToolOptionalParams(params, undefined, definition);
+  const paramEntries = buildEffectiveToolParams(params, undefined, optionalParams);
   const labels = mergeStringLists(entry.labels, definition?.labels);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
@@ -550,6 +637,7 @@ function buildToolContextFromStoredEntry(
   return {
     name: toolName,
     params,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -707,16 +795,38 @@ export function expandToolLabels(
 
 export function isWriteToolMetadata(
   env: Environment,
-  metadata: Pick<EffectiveToolMetadata, 'labels'>
+  metadata: Pick<EffectiveToolMetadata, 'name' | 'labels' | 'controlArgs'>
 ): boolean {
-  return expandToolLabels(env, metadata.labels).some(
-    label => label === 'tool:w' || label.startsWith('tool:w:')
+  if ((metadata.controlArgs?.length ?? 0) > 0) {
+    return true;
+  }
+
+  const policy = env.getPolicySummary();
+  const operationCategories = new Set(
+    Object.keys(policy?.operations ?? {})
+      .map(label => label.trim())
+      .filter(label => label.length > 0)
   );
+
+  if (
+    operationCategories.size > 0
+    && expandToolLabels(env, metadata.labels).some(label => operationCategories.has(label))
+  ) {
+    return true;
+  }
+
+  const toolName = metadata.name.trim().toLowerCase();
+  if (!toolName) {
+    return false;
+  }
+
+  return Array.isArray(policy?.authorizations?.deny)
+    && policy.authorizations.deny.some(entry => entry.trim().toLowerCase() === toolName);
 }
 
 export function shouldAutoExposeFyiKnown(
   env: Environment,
-  toolMetadata: readonly Pick<EffectiveToolMetadata, 'labels' | 'controlArgs'>[]
+  toolMetadata: readonly Pick<EffectiveToolMetadata, 'name' | 'labels' | 'controlArgs'>[]
 ): boolean {
   return toolMetadata.some(metadata =>
     (metadata.controlArgs?.length ?? 0) > 0 && isWriteToolMetadata(env, metadata)
@@ -770,6 +880,7 @@ export function resolveToolCollectionEntryMetadata(
   return {
     name: toolName,
     params,
+    paramEntries: buildEffectiveToolParams(params, undefined, optionalParams),
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels: normalizeStringList(definition.labels),
     ...(description ? { description } : {}),

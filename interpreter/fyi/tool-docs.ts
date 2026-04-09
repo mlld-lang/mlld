@@ -6,7 +6,8 @@ import {
   resolveEffectiveToolMetadata,
   resolveToolCollectionMetadataEntries,
   shouldAutoExposeFyiKnown,
-  type EffectiveToolMetadata
+  type EffectiveToolMetadata,
+  type EffectiveToolParam
 } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
@@ -224,6 +225,7 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     ...metadata,
     ...(metadata.displayName ? { displayName: metadata.displayName } : {}),
     params: [...metadata.params],
+    paramEntries: metadata.paramEntries.map(entry => ({ ...entry })),
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
     labels: [...metadata.labels],
     ...(metadata.description ? { description: metadata.description } : {}),
@@ -255,6 +257,7 @@ function buildNameOnlyMetadata(name: string): EffectiveToolMetadata {
   return {
     name,
     params: [],
+    paramEntries: [],
     labels: [],
     hasControlArgsMetadata: false,
     hasUpdateArgsMetadata: false,
@@ -481,11 +484,60 @@ function buildDeniedLine(denied: readonly string[]): string {
 
 function buildPlannerIntentLines(): string[] {
   return [
-    'Authorization intent:',
-    '  resolved: { tool: { arg: "handle" } } - from your lookups',
-    '  known: { tool: { arg: { value: "literal", source: "reason" } } } - from user task',
-    '  allow: ["tool"] - no control args'
+    'Authorization intent shape:',
+    '  resolved: { tool: { arg: "<handle>" } } - from your lookups in this same call',
+    '  known: { tool: { arg: "<value>" } } - from prior phases, shelf state, or user task text',
+    '  allow: { tool: true } - no per-arg constraints'
   ];
+}
+
+function getRenderedToolParamEntries(entry: EffectiveToolMetadata): EffectiveToolParam[] {
+  if (entry.paramEntries.length > 0) {
+    return entry.paramEntries;
+  }
+
+  const optionalParams = new Set(entry.optionalParams ?? []);
+  return entry.params.map(name => ({
+    name,
+    ...(optionalParams.has(name) ? { optional: true } : {})
+  }));
+}
+
+function buildToolArgLine(
+  entry: EffectiveToolMetadata,
+  param: EffectiveToolParam
+): string {
+  const annotations = [param.type ?? 'string'];
+  if ((entry.controlArgs ?? []).includes(param.name)) {
+    annotations.push('**control arg**');
+  }
+  return `- \`${param.name}\` (${annotations.join(', ')})`;
+}
+
+function buildToolSectionLines(
+  heading: string,
+  entries: readonly EffectiveToolMetadata[]
+): string[] {
+  const lines: string[] = [`${heading}:`, ''];
+
+  for (const [index, entry] of entries.entries()) {
+    if (index > 0) {
+      lines.push('');
+    }
+
+    lines.push(`### ${getRenderedToolName(entry)}`, 'Args:');
+    const params = getRenderedToolParamEntries(entry);
+    if (params.length === 0) {
+      lines.push('- (none)');
+      continue;
+    }
+
+    for (const param of params) {
+      lines.push(buildToolArgLine(entry, param));
+    }
+  }
+
+  return lines;
 }
 
 function buildWorkerHelperLine(
@@ -650,7 +702,7 @@ function buildTextLines(options: {
   helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
 }): string[] {
-  const { env, audience, includeHelpers, isMcpContext, denied, helperStatus, entries } = options;
+  const { env, audience, entries } = options;
   const writeEntries = resolveWriteEntries(env, entries);
   const readEntries = resolveReadEntries(env, entries);
   if (writeEntries.length === 0 && readEntries.length === 0) {
@@ -660,57 +712,18 @@ function buildTextLines(options: {
   const lines: string[] = [];
 
   if (writeEntries.length > 0) {
-    if (audience === 'planner' && !isMcpContext) {
-      lines.push(
-        'Write tools and argument contracts:',
-        '',
-        ...buildExplicitPlannerWriteToolContractLines(writeEntries)
-      );
-    } else {
-      lines.push(
-        'Write tools and control args:',
-        '',
-        ...buildToolTableLines({
-          audience,
-          isMcpContext,
-          writeEntries,
-          helperStatus,
-          includeHelpers
-        })
-      );
-    }
-
-    if (audience === 'worker') {
-      const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
-      if (helperLine) {
-        lines.push('', helperLine);
-      }
-    }
+    lines.push(...buildToolSectionLines('Write tools (require authorization)', writeEntries));
   }
 
   if (readEntries.length > 0) {
     if (lines.length > 0) {
       lines.push('');
     }
-    if (isMcpContext) {
-      lines.push(buildReadToolNameList(readEntries));
-    } else {
-      lines.push(
-        'Read tools:',
-        '',
-        ...buildReadToolTableLines(readEntries)
-      );
-    }
+    lines.push(...buildToolSectionLines('Read tools', readEntries));
   }
 
   if (audience === 'planner') {
-    lines.push('', buildDeniedLine(denied), '', ...buildPlannerIntentLines());
-    return lines;
-  }
-
-  if (audience === 'worker') {
-    lines.push('', buildDeniedLine(denied));
-    return lines;
+    lines.push('', ...buildPlannerIntentLines());
   }
 
   return lines;
