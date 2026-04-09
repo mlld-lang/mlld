@@ -199,7 +199,7 @@ export async function evaluateDirective(
   const operationContext = buildOperationContext(directive, traceInfo);
   const parentOperationContext = env.getContextManager().peekOperation();
   const inheritedAuthorizationSurfaceOperation = parentOperationContext?.metadata?.authorizationSurfaceOperation;
-  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
+  if (inheritedAuthorizationSurfaceOperation === false) {
     operationContext.metadata = {
       ...(operationContext.metadata ?? {}),
       authorizationSurfaceOperation: inheritedAuthorizationSurfaceOperation

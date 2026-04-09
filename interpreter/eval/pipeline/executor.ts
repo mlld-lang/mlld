@@ -340,7 +340,7 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
         stageIndex: stageIndex + 1,
         totalStages: stageContext.totalStages,
         streaming: this.streamingLifecycle.isEnabled(),
-        ...(typeof inheritedAuthorizationSurfaceOperation === 'boolean'
+        ...(inheritedAuthorizationSurfaceOperation === false
           ? { authorizationSurfaceOperation: inheritedAuthorizationSurfaceOperation }
           : {})
       }

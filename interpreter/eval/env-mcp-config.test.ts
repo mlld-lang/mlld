@@ -2542,6 +2542,107 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('scopes surface-scoped label-flow rules away from llm substrate calls with no runtime tool surface', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/var untrusted @prompt = "Plan the next step"',
+      '/var untrusted @cfg = { model: "haiku" }',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/exe llm, exfil:send, destructive:targeted, privileged @claude(prompt, config) = "ok"',
+      '/show @claude(@prompt, @cfg) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes imported llm substrate wrappers away from surfaced tool-wrapper policy rules', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe llm, exfil:send, destructive:targeted, privileged @provider(prompt, config) = "ok"',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/var untrusted @query = "Use the wrapped tool"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/exe tool:r @wrapped(prompt) = @provider(@prompt, { model: "haiku" })',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" wrapped '{"prompt":"nested-call"}' }`,
+      '/show @agent(@query, { tools: [@wrapped] }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes imported llm substrate calls away from surface-scoped label-flow rules when no tools are selected', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe llm, exfil:send, destructive:targeted, privileged @provider(prompt, config) = "ok"',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/var untrusted @prompt = "Plan the next step"',
+      '/var untrusted @cfg = { model: "haiku" }',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/show @provider(@prompt, @cfg) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('lets authorization guards override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

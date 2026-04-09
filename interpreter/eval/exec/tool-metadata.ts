@@ -429,6 +429,54 @@ export function isRuntimeAuthorizationSurfaceOperation(
   );
 }
 
+function hasExecutableLabel(
+  labels: readonly string[] | undefined,
+  target: string
+): boolean {
+  if (!Array.isArray(labels) || labels.length === 0) {
+    return false;
+  }
+
+  const loweredTarget = target.trim().toLowerCase();
+  return labels.some(label => (
+    typeof label === 'string'
+    && label.trim().toLowerCase() === loweredTarget
+  ));
+}
+
+export function resolveAuthorizationSurfaceOperation(options: {
+  env: Environment;
+  operationName: string | undefined;
+  executableLabels?: readonly string[];
+  inheritedAuthorizationSurfaceOperation?: boolean;
+}): boolean {
+  const {
+    env,
+    operationName,
+    executableLabels,
+    inheritedAuthorizationSurfaceOperation
+  } = options;
+
+  if (isRuntimeAuthorizationSurfaceOperation(env, operationName)) {
+    return true;
+  }
+
+  if (inheritedAuthorizationSurfaceOperation === false) {
+    return false;
+  }
+
+  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
+    return false;
+  }
+
+  if (hasRuntimeAuthorizationSurface(env)) {
+    return false;
+  }
+
+  // Bare llm exes like @claude are dispatch substrate, not the visible tool surface.
+  return !hasExecutableLabel(executableLabels, 'llm');
+}
+
 function createAuthorizationToolContextEntry(
   toolName: string,
   metadata: Pick<

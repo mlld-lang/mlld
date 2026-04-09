@@ -115,6 +115,7 @@ import {
 import {
   hasRuntimeAuthorizationSurface,
   isRuntimeAuthorizationSurfaceOperation,
+  resolveAuthorizationSurfaceOperation,
   resolveEffectiveToolMetadata
 } from './exec/tool-metadata';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
@@ -3407,17 +3408,16 @@ async function evaluateExecInvocationInternal(
       : effectiveToolMetadata.params;
   const inheritedAuthorizationSurfaceOperation =
     runtimeEnv.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
-  const currentAuthorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
-    execEnv,
-    toolOperationName ?? variable.name ?? commandName
-  );
+  const authorizationSurfaceOperation = resolveAuthorizationSurfaceOperation({
+    env: execEnv,
+    operationName: toolOperationName ?? variable.name ?? commandName,
+    executableLabels: toolLabels,
+    inheritedAuthorizationSurfaceOperation
+  });
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels) &&
-    (
-      currentAuthorizationSurfaceOperation ||
-      (!hasRuntimeAuthorizationSurface(execEnv) && inheritedAuthorizationSurfaceOperation !== false)
-    );
+    authorizationSurfaceOperation;
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
   enforceUpdateToolArguments({
     metadata: effectiveToolMetadata,

@@ -56,7 +56,8 @@ import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/gua
 import { getVariableSecurityDescriptor } from '@interpreter/eval/exec/security-descriptor';
 import {
   hasRuntimeAuthorizationSurface,
-  isRuntimeAuthorizationSurfaceOperation
+  isRuntimeAuthorizationSurfaceOperation,
+  resolveAuthorizationSurfaceOperation
 } from '@interpreter/eval/exec/tool-metadata';
 
 type ResolvedStdinInput = {
@@ -501,13 +502,12 @@ export async function createExecOperationContextAndEnforcePolicy(
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
   const inheritedAuthorizationSurfaceOperation =
     env.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
-  const currentAuthorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
-    execEnv,
-    operationName ?? commandName
-  );
-  const authorizationSurfaceOperation =
-    currentAuthorizationSurfaceOperation ||
-    (!hasRuntimeAuthorizationSurface(execEnv) && inheritedAuthorizationSurfaceOperation !== false);
+  const authorizationSurfaceOperation = resolveAuthorizationSurfaceOperation({
+    env: execEnv,
+    operationName: operationName ?? commandName,
+    executableLabels: operationLabels,
+    inheritedAuthorizationSurfaceOperation
+  });
   const operationContext: OperationContext = {
     type: 'exe',
     named: resolveCanonicalOperationRef({
