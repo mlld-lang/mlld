@@ -7,7 +7,11 @@ import {
 } from '@core/types/executable';
 import { MlldSecurityError } from '@core/errors';
 import { GuardError } from '@core/errors/GuardError';
-import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
+import {
+  evaluateCapabilityAccess,
+  evaluateCommandAccess,
+  shouldApplySurfaceScopedPolicyToOperation
+} from '@core/policy/guards';
 import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import {
   getOperationLabels,
@@ -512,7 +516,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       executableType: definition.type,
       command: commandName,
       sourceRetryable: true,
-      ...(authorizationSurfaceOperation ? { authorizationSurfaceOperation: true } : {}),
+      authorizationSurfaceOperation,
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {}),
@@ -521,6 +525,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     }
   };
   operationContext.metadata = mergeGuardArgNamesIntoMetadata(operationContext.metadata, guardArgNames);
+  const shouldApplySurfaceScopedPolicy = shouldApplySurfaceScopedPolicyToOperation(operationContext);
 
   if (isCommandExecutable(definition)) {
     const commandPreview = await services.interpolateWithResultDescriptor(
@@ -548,7 +553,9 @@ export async function createExecOperationContextAndEnforcePolicy(
     metadata.commandPreview = commandPreview;
     operationContext.metadata = metadata;
     if (policySummary) {
-      const decision = evaluateCommandAccess(policySummary, commandPreview);
+      const decision = evaluateCommandAccess(policySummary, commandPreview, {
+        enforceAllowList: authorizationSurfaceOperation
+      });
       if (!decision.allowed) {
         throw new MlldSecurityError(
           decision.reason ?? `Command '${decision.commandName}' denied by policy`,
@@ -575,7 +582,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       metadata.policyInputTaint = inputTaint;
       operationContext.metadata = metadata;
     }
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -590,7 +597,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     if (definition.withClause && 'stdin' in definition.withClause) {
       const resolvedStdin = await services.resolveStdinInput(definition.withClause.stdin, execEnv);
       const stdinTaint = descriptorToInputTaint(resolvedStdin.descriptor);
-      if (stdinTaint.length > 0 && !deferManagedLabelFlow) {
+      if (stdinTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
         policyEnforcer.checkLabelFlow(
           {
             inputTaint: stdinTaint,
@@ -617,7 +624,9 @@ export async function createExecOperationContextAndEnforcePolicy(
     }
     if (opType) {
       if (policySummary) {
-        const decision = evaluateCapabilityAccess(policySummary, opType);
+        const decision = evaluateCapabilityAccess(policySummary, opType, {
+          enforceAllowList: authorizationSurfaceOperation
+        });
         if (!decision.allowed) {
           throw new MlldSecurityError(
             decision.reason ?? `Capability '${opType}' denied by policy`,
@@ -633,7 +642,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -653,7 +662,9 @@ export async function createExecOperationContextAndEnforcePolicy(
       );
     }
     if (policySummary) {
-      const decision = evaluateCapabilityAccess(policySummary, 'node');
+      const decision = evaluateCapabilityAccess(policySummary, 'node', {
+        enforceAllowList: authorizationSurfaceOperation
+      });
       if (!decision.allowed) {
         throw new MlldSecurityError(
           decision.reason ?? "Capability 'node' denied by policy",
@@ -668,7 +679,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -683,7 +694,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,

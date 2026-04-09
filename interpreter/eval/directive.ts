@@ -197,6 +197,14 @@ export async function evaluateDirective(
 
   const hookManager = env.getHookManager();
   const operationContext = buildOperationContext(directive, traceInfo);
+  const parentOperationContext = env.getContextManager().peekOperation();
+  const inheritedAuthorizationSurfaceOperation = parentOperationContext?.metadata?.authorizationSurfaceOperation;
+  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
+    operationContext.metadata = {
+      ...(operationContext.metadata ?? {}),
+      authorizationSurfaceOperation: inheritedAuthorizationSurfaceOperation
+    };
+  }
 
   try {
     const executeOnce = async (): Promise<EvalResult> => {

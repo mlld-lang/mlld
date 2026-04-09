@@ -7,7 +7,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { extractSecurityDescriptor, applySecurityDescriptorToStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { setExpressionProvenance } from '@interpreter/utils/expression-provenance';
 import { parseCommand, getOperationLabels } from '@core/policy/operation-labels';
-import { evaluateCommandAccess } from '@core/policy/guards';
+import { evaluateCommandAccess, shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
 import { MlldSecurityError } from '@core/errors';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -79,7 +79,11 @@ export class PipelineInlineStageExecutor {
       stageEnv.updateOpContext({ command: commandText, opLabels });
       const policySummary = stageEnv.getPolicySummary();
       if (policySummary) {
-        const decision = evaluateCommandAccess(policySummary, commandText);
+        const decision = evaluateCommandAccess(policySummary, commandText, {
+          enforceAllowList: operationContext
+            ? shouldApplySurfaceScopedPolicyToOperation(operationContext)
+            : true
+        });
         if (!decision.allowed) {
           throw new MlldSecurityError(
             decision.reason ?? `Command '${decision.commandName}' denied by policy`,
@@ -102,7 +106,10 @@ export class PipelineInlineStageExecutor {
           ? stageEnv.mergeSecurityDescriptors(commandDescriptor, stdinDescriptor)
           : commandDescriptor ?? stdinDescriptor;
       const inputTaint = descriptorToInputTaint(inputDescriptor);
-      if (inputTaint.length > 0) {
+      if (
+        inputTaint.length > 0 &&
+        (!operationContext || shouldApplySurfaceScopedPolicyToOperation(operationContext))
+      ) {
         const policyEnforcer = new PolicyEnforcer(stageEnv.getPolicySummary());
         policyEnforcer.checkLabelFlow(
           {

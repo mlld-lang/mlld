@@ -14,7 +14,8 @@ import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
   checkRunInputLabelFlow,
-  enforceRunCapabilityPolicy
+  enforceRunCapabilityPolicy,
+  shouldEnforceRunAllowList
 } from './run-policy-context';
 import {
   dedentCommonIndent,
@@ -124,7 +125,10 @@ export async function executeRunCode(
       env.getPolicySummary(),
       opType,
       env,
-      directive.location ?? undefined
+      directive.location ?? undefined,
+      {
+        enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+      }
     );
   }
 
@@ -134,6 +138,7 @@ export async function executeRunCode(
     descriptor: inputDescriptor,
     policyEnforcer,
     policyChecksEnabled: policyChecksEnabled && Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels: Array.from(env.getEnclosingExeLabels()),
     flowChannel: 'arg',
@@ -146,6 +151,7 @@ export async function executeRunCode(
     descriptor: usingParts.descriptor,
     policyEnforcer,
     policyChecksEnabled: Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels: Array.from(env.getEnclosingExeLabels()),
     flowChannel: 'using',

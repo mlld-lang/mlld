@@ -5,6 +5,7 @@ import type { NodeFunctionExecutable } from '@core/types/executable';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { CommandExecutable } from '@core/types/executable';
 import { MlldCommandExecutionError } from '@core/errors';
+import { shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
 import { PersistentContentStore } from '@disreguard/sig';
 import { createSigContextForEnv, normalizeContentVerifyResult } from '@core/security/sig-adapter';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -212,7 +213,7 @@ export async function executeCommandExecutable(
   const envAuthDescriptor = buildAuthDescriptor(resolvedEnvConfig?.auth);
   const envInputDescriptor = mergeInputDescriptors(usingParts.descriptor, envAuthDescriptor);
   const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(envInputDescriptor));
-  if (envInputTaint.length > 0) {
+  if (envInputTaint.length > 0 && shouldApplySurfaceScopedPolicyToOperation(operationContext)) {
     policyEnforcer.checkLabelFlow(
       {
         inputTaint: envInputTaint,

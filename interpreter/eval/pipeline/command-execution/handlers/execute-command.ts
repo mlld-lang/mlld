@@ -1,7 +1,9 @@
 import type { SourceLocation } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
+import { shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
 import type { Environment } from '@interpreter/env/Environment';
 import type { CommandExecutionContext } from '@interpreter/env/ErrorUtils';
+import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { HookDecision } from '@interpreter/hooks/HookManager';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { getOperationLabels, parseCommand } from '@core/policy/operation-labels';
@@ -37,6 +39,7 @@ export interface ExecuteCommandHandlerOptions {
   commandVar: any;
   stdinInput?: string;
   workingDirectory?: string;
+  operationContext?: OperationContext;
   executionContext?: CommandExecutionContext;
   preDecision?: HookDecision;
   outputPolicyDescriptor?: SecurityDescriptor;
@@ -60,6 +63,7 @@ export async function executeCommandHandler(
     commandVar,
     stdinInput,
     workingDirectory,
+    operationContext,
     executionContext,
     preDecision,
     outputPolicyDescriptor,
@@ -108,7 +112,10 @@ export async function executeCommandHandler(
   const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
   const localLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
   const exeLabels = localLabels.length > 0 ? localLabels : (executionContext?.exeLabels ?? []);
-  if (envInputTaint.length > 0) {
+  if (
+    envInputTaint.length > 0 &&
+    (!operationContext || shouldApplySurfaceScopedPolicyToOperation(operationContext))
+  ) {
     const parsedCommand = parseCommand(command);
     const opLabels = getOperationLabels({
       type: 'cmd',

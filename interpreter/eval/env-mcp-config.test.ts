@@ -914,6 +914,218 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('ignores capability allowlist default-deny for non-surfaced llm substrate commands built via policy.build', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      '/exe llm @worker(prompt, config) = [',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      ']',
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:git:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('ignores capability allowlist default-deny for non-surfaced llm substrate pipeline stages', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      '/exe llm @worker(prompt, config) = [',
+      `  => @prompt | cmd { env -u HOME node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      ']',
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:git:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-send-to-unknown away from nested llm substrate pipeline commands', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      `  => @prompt | cmd { env -u HOME node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves substrate exemption through let/when frames around nested llm pipeline commands', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @cfg = @config ? @config : {}',
+      '  let @dir = @root',
+      '  let @raw = when [',
+      '    @cfg.tools => @prompt | cmd:@dir { env -u HOME node "' + callToolFromConfigPath + '" "@mx.llm.config" send_email \'{"recipient":"approved@example.com","subject":"hi","body":"test"}\' }',
+      '    * => "missing tools"',
+      '  ]',
+      '  => @raw',
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves imported tool collections across multiple exe param layers on the llm bridge', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/tools.mld', [
@@ -2190,6 +2402,97 @@ describe('box MCP config integration', () => {
       });
 
       expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-send-to-unknown to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-untrusted-destructive to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe destructive:targeted, tool:w @delete_doc(id) = `deleted:@id`',
+      '  with { controlArgs: ["id"] }',
+      '/var @toolList = [@delete_doc]',
+      '/var untrusted @prompt = "Delete doc-1"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive"] },',
+      '  operations: { destructive: ["tool:w"], "destructive:targeted": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      delete_doc: {',
+      '        args: {',
+      '          id: { eq: "doc-1", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" delete_doc '{"id":"doc-1"}' }`,
+      ']',
+      '/show @claude(@prompt, { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('deleted:doc-1');
     } finally {
       environment?.cleanup();
     }

@@ -1,5 +1,6 @@
 import type { ExecInvocation } from '@core/types';
 import { MlldInterpreterError } from '@core/errors';
+import { shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
 import { logger } from '@core/utils/logger';
 import type { CodeExecutable } from '@core/types/executable';
 import type { SecurityDescriptor } from '@core/types/security';
@@ -373,7 +374,7 @@ export async function executeCodeExecutable(
       node.withClause
     );
     const envInputTaint = descriptorToInputTaint(mergePolicyInputDescriptor(usingParts.descriptor));
-    if (envInputTaint.length > 0) {
+    if (envInputTaint.length > 0 && shouldApplySurfaceScopedPolicyToOperation(operationContext)) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint: envInputTaint,

@@ -1,7 +1,11 @@
 import type { SourceLocation } from '@core/types';
 import { MlldSecurityError } from '@core/errors';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
-import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
+import {
+  evaluateCapabilityAccess,
+  evaluateCommandAccess,
+  shouldApplySurfaceScopedPolicyToOperation
+} from '@core/policy/guards';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { Environment } from '@interpreter/env/Environment';
@@ -11,6 +15,21 @@ import type { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 
 export type RunLabelFlowChannel = 'arg' | 'stdin' | 'using';
+export type RunPolicyAccessOptions = {
+  enforceAllowList?: boolean;
+};
+
+export function shouldEnforceRunAllowList(
+  operationContext?: Pick<OperationContext, 'metadata'> | null
+): boolean {
+  return operationContext ? shouldApplySurfaceScopedPolicyToOperation(operationContext) : true;
+}
+
+export function shouldApplyRunLabelFlow(
+  operationContext?: Pick<OperationContext, 'metadata'> | null
+): boolean {
+  return operationContext ? shouldApplySurfaceScopedPolicyToOperation(operationContext) : true;
+}
 
 export function applyRunOperationContext(
   env: Environment,
@@ -77,13 +96,16 @@ export function enforceRunCommandPolicy(
   policySummary: PolicyConfig | undefined,
   command: string,
   env: Environment,
-  sourceLocation?: SourceLocation
+  sourceLocation?: SourceLocation,
+  options?: RunPolicyAccessOptions
 ): void {
   if (!policySummary) {
     return;
   }
 
-  const decision = evaluateCommandAccess(policySummary, command);
+  const decision = evaluateCommandAccess(policySummary, command, {
+    enforceAllowList: options?.enforceAllowList
+  });
   if (decision.allowed) {
     return;
   }
@@ -102,13 +124,16 @@ export function enforceRunCapabilityPolicy(
   policySummary: PolicyConfig | undefined,
   capability: string,
   env: Environment,
-  sourceLocation?: SourceLocation
+  sourceLocation?: SourceLocation,
+  options?: RunPolicyAccessOptions
 ): void {
   if (!policySummary) {
     return;
   }
 
-  const decision = evaluateCapabilityAccess(policySummary, capability);
+  const decision = evaluateCapabilityAccess(policySummary, capability, {
+    enforceAllowList: options?.enforceAllowList
+  });
   if (decision.allowed) {
     return;
   }
@@ -127,6 +152,7 @@ export function checkRunInputLabelFlow(params: {
   descriptor?: SecurityDescriptor;
   policyEnforcer: PolicyEnforcer;
   policyChecksEnabled: boolean;
+  operationContext?: Pick<OperationContext, 'metadata'> | null;
   opLabels: readonly string[];
   exeLabels: readonly string[];
   flowChannel: RunLabelFlowChannel;
@@ -135,7 +161,11 @@ export function checkRunInputLabelFlow(params: {
   command?: string;
 }): readonly DataLabel[] {
   const inputTaint = descriptorToInputTaint(params.descriptor);
-  if (!params.policyChecksEnabled || inputTaint.length === 0) {
+  if (
+    !params.policyChecksEnabled ||
+    inputTaint.length === 0 ||
+    !shouldApplyRunLabelFlow(params.operationContext)
+  ) {
     return inputTaint;
   }
 

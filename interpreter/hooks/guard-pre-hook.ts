@@ -13,7 +13,8 @@ import {
 import {
   evaluateControlArgCorrelation,
   evaluateAuthorizationInheritedPolicyChecks,
-  generatePolicyGuards
+  generatePolicyGuards,
+  shouldApplySurfaceScopedPolicyToOperation
 } from '@core/policy/guards';
 import { guardSnapshotDescriptor } from './guard-utils';
 import { isVariable } from '../utils/variable-resolution';
@@ -112,6 +113,10 @@ function buildLabelPolicyGuardResult(options: {
   index: number;
   locked: boolean;
 }): GuardResult | null {
+  if (!shouldApplySurfaceScopedPolicyToOperation(options.operation)) {
+    return null;
+  }
+
   const inputDescriptor = options.input.mx ? varMxToSecurityDescriptor(options.input.mx) : undefined;
   const inputTaint = descriptorToInputTaint(inputDescriptor);
   if (inputTaint.length === 0) {
@@ -163,6 +168,10 @@ function buildInterpolatedPolicyGuardResult(options: {
   inputTaint: readonly string[];
   locked: boolean;
 }): GuardResult | null {
+  if (!shouldApplySurfaceScopedPolicyToOperation(options.operation)) {
+    return null;
+  }
+
   const policy = options.env.getPolicySummary();
   const hasControlArgsMetadata = Array.isArray(options.operation.metadata?.authorizationControlArgs);
   const result = checkLabelFlow(

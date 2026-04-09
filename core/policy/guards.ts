@@ -63,6 +63,16 @@ export type CapabilityAccessDecision = {
   reason?: string;
 };
 
+type CapabilityAccessOptions = {
+  enforceAllowList?: boolean;
+};
+
+export function shouldApplySurfaceScopedPolicyToOperation(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return operation.metadata?.authorizationSurfaceOperation !== false;
+}
+
 function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
   return normalizeList([
     ...(descriptor?.labels ?? []),
@@ -722,7 +732,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     privileged: true,
     policyCondition: ({ operation }) => {
       const commandText = getOperationCommandText(operation);
-      const decision = evaluateCommandAccess(policy, commandText);
+      const decision = evaluateCommandAccess(policy, commandText, {
+        enforceAllowList: shouldApplySurfaceScopedPolicyToOperation(operation)
+      });
       if (decision.allowed) {
         return { decision: 'allow' };
       }
@@ -1071,15 +1083,21 @@ function isNetworkCommand(commandTokens: string[]): boolean {
   return networkCommands.includes(firstWord);
 }
 
-export function evaluateCommandAccess(policy: PolicyConfig, commandText: string): CommandAccessDecision {
+export function evaluateCommandAccess(
+  policy: PolicyConfig,
+  commandText: string,
+  options?: CapabilityAccessOptions
+): CommandAccessDecision {
   const commandTokens = getCommandTokens(commandText);
   const commandName = getCommandName(commandTokens, commandText);
 
   const allow = policy.allow;
   const deny = policy.deny;
-  const allowListActive = allow !== undefined && allow !== true;
+  const enforceAllowList = options?.enforceAllowList !== false;
+  const allowConfigured = allow !== undefined && allow !== true;
+  const allowListActive = allowConfigured && enforceAllowList;
   const allowMap =
-    allowListActive && allow && typeof allow === 'object' && !Array.isArray(allow)
+    allowConfigured && allow && typeof allow === 'object' && !Array.isArray(allow)
       ? allow
       : undefined;
   if (deny === true) {
@@ -1104,7 +1122,7 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       ? deny
       : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
-  const allowPatterns = allowListActive
+  const allowPatterns = allowConfigured
     ? extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined)
     : undefined;
   const denyMatch = denyPatterns
@@ -1152,10 +1170,15 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
   return { allowed: true, commandName };
 }
 
-export function evaluateCapabilityAccess(policy: PolicyConfig, capability: string): CapabilityAccessDecision {
+export function evaluateCapabilityAccess(
+  policy: PolicyConfig,
+  capability: string,
+  options?: CapabilityAccessOptions
+): CapabilityAccessDecision {
   const allow = policy.allow;
   const deny = policy.deny;
-  const allowListActive = allow !== undefined && allow !== true;
+  const allowConfigured = allow !== undefined && allow !== true;
+  const allowListActive = allowConfigured && options?.enforceAllowList !== false;
 
   if (deny === true) {
     return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
@@ -1315,6 +1338,10 @@ function makeDataRuleGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, argName }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
@@ -1363,6 +1390,10 @@ function makeNamedArgAttestationGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, args, argDescriptors }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       if (typeof operation.name !== 'string' || operation.name.length === 0) {
         return { decision: 'allow' };
       }
@@ -1432,6 +1463,10 @@ function makeSensitiveExfilGuard(
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, input }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])

@@ -50,7 +50,8 @@ import {
   checkRunInputLabelFlow,
   deriveRunOutputPolicyDescriptor,
   enforceRunCapabilityPolicy,
-  enforceRunCommandPolicy
+  enforceRunCommandPolicy,
+  shouldEnforceRunAllowList
 } from './run-policy-context';
 import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 
@@ -395,7 +396,10 @@ async function handleCommandDefinition(
     env.getPolicySummary(),
     command,
     env,
-    directive.location ?? undefined
+    directive.location ?? undefined,
+    {
+      enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+    }
   );
 
   const inputDescriptor =
@@ -404,6 +408,7 @@ async function handleCommandDefinition(
     descriptor: inputDescriptor,
     policyEnforcer,
     policyChecksEnabled,
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'arg',
@@ -471,6 +476,7 @@ async function handleCommandDefinition(
     descriptor: envInputDescriptor,
     policyEnforcer,
     policyChecksEnabled,
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'using',
@@ -786,7 +792,10 @@ async function handleCodeDefinition(
       env.getPolicySummary(),
       opType,
       env,
-      directive.location ?? undefined
+      directive.location ?? undefined,
+      {
+        enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+      }
     );
   }
   const allArgDescriptors =
@@ -799,6 +808,7 @@ async function handleCodeDefinition(
     descriptor: inputDescriptor,
     policyEnforcer,
     policyChecksEnabled: policyChecksEnabled && Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'arg',
@@ -922,6 +932,7 @@ async function handleCodeDefinition(
     descriptor: envInputDescriptor,
     policyEnforcer,
     policyChecksEnabled: Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'using',

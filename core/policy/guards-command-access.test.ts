@@ -37,6 +37,32 @@ describe('evaluateCommandAccess', () => {
     expect(denied.reason).toContain("Command 'curl' denied by policy");
   });
 
+  it('can bypass allow-list default deny for non-surfaced substrate commands', () => {
+    const policy: PolicyConfig = {
+      allow: ['cmd:git:*']
+    };
+
+    const allowed = evaluateCommandAccess(policy, 'node tool.js', {
+      enforceAllowList: false
+    });
+
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it('still honors explicit command denies when allow-list default deny is bypassed', () => {
+    const policy: PolicyConfig = {
+      allow: ['cmd:git:*'],
+      deny: ['cmd:node:*']
+    };
+
+    const denied = evaluateCommandAccess(policy, 'node tool.js', {
+      enforceAllowList: false
+    });
+
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toContain("Command 'node' denied by policy");
+  });
+
   it('does not implicitly allow mlld verify when autoverify is enabled', () => {
     const policy: PolicyConfig = {
       defaults: { autoverify: true },
