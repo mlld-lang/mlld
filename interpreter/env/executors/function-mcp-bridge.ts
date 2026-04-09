@@ -54,7 +54,8 @@ function cloneExecutableForToolBridge(
     ...(executable.internal ?? {}),
     executableDef,
     importPath: 'let',
-    isSystem: true
+    isSystem: true,
+    isToolbridgeWrapper: true
   };
 
   if (capturedModuleEnv !== undefined) {

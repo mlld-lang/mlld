@@ -7,7 +7,11 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { extractSecurityDescriptor, applySecurityDescriptorToStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { setExpressionProvenance } from '@interpreter/utils/expression-provenance';
 import { parseCommand, getOperationLabels } from '@core/policy/operation-labels';
-import { evaluateCommandAccess, shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
+import {
+  evaluateCommandAccess,
+  shouldEnforceCommandAllowListForOperation,
+  shouldApplySurfaceScopedPolicyToOperation
+} from '@core/policy/guards';
 import { MlldSecurityError } from '@core/errors';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
@@ -81,7 +85,7 @@ export class PipelineInlineStageExecutor {
       if (policySummary) {
         const decision = evaluateCommandAccess(policySummary, commandText, {
           enforceAllowList: operationContext
-            ? shouldApplySurfaceScopedPolicyToOperation(operationContext)
+            ? shouldEnforceCommandAllowListForOperation(operationContext)
             : true
         });
         if (!decision.allowed) {

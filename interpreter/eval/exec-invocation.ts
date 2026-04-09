@@ -3576,6 +3576,7 @@ async function evaluateExecInvocationInternal(
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs: policyGuardControlArgs,
+      commandAccessSubstrate: (variable.internal as any)?.isToolbridgeWrapper === true,
       correlateControlArgs: effectiveToolMetadata.correlateControlArgs === true,
       operationTaintFacts: effectiveOperationTaintFacts,
       env: runtimeEnv,

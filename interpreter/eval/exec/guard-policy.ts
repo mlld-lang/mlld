@@ -10,6 +10,7 @@ import { GuardError } from '@core/errors/GuardError';
 import {
   evaluateCapabilityAccess,
   evaluateCommandAccess,
+  shouldEnforceCommandAllowListForOperation,
   shouldApplySurfaceScopedPolicyToOperation
 } from '@core/policy/guards';
 import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
@@ -110,6 +111,7 @@ export type CreateExecOperationPolicyContextOptions = {
   operationName?: string;
   toolLabels: readonly string[];
   authorizationControlArgs?: readonly string[];
+  commandAccessSubstrate?: boolean;
   correlateControlArgs?: boolean;
   operationTaintFacts?: boolean;
   env: Environment;
@@ -522,6 +524,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       command: commandName,
       sourceRetryable: true,
       authorizationSurfaceOperation,
+      ...(options.commandAccessSubstrate === true ? { commandAccessSubstrate: true } : {}),
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {}),
@@ -559,7 +562,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     operationContext.metadata = metadata;
     if (policySummary) {
       const decision = evaluateCommandAccess(policySummary, commandPreview, {
-        enforceAllowList: authorizationSurfaceOperation
+        enforceAllowList: shouldEnforceCommandAllowListForOperation(operationContext)
       });
       if (!decision.allowed) {
         throw new MlldSecurityError(

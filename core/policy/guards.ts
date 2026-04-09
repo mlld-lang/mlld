@@ -73,6 +73,15 @@ export function shouldApplySurfaceScopedPolicyToOperation(operation: {
   return operation.metadata?.authorizationSurfaceOperation !== false;
 }
 
+export function shouldEnforceCommandAllowListForOperation(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return (
+    shouldApplySurfaceScopedPolicyToOperation(operation)
+    && operation.metadata?.commandAccessSubstrate !== true
+  );
+}
+
 function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
   return normalizeList([
     ...(descriptor?.labels ?? []),
@@ -733,7 +742,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     policyCondition: ({ operation }) => {
       const commandText = getOperationCommandText(operation);
       const decision = evaluateCommandAccess(policy, commandText, {
-        enforceAllowList: shouldApplySurfaceScopedPolicyToOperation(operation)
+        enforceAllowList: shouldEnforceCommandAllowListForOperation(operation)
       });
       if (decision.allowed) {
         return { decision: 'allow' };

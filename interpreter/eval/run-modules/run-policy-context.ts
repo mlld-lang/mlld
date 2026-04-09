@@ -4,6 +4,7 @@ import type { DataLabel, SecurityDescriptor } from '@core/types/security';
 import {
   evaluateCapabilityAccess,
   evaluateCommandAccess,
+  shouldEnforceCommandAllowListForOperation,
   shouldApplySurfaceScopedPolicyToOperation
 } from '@core/policy/guards';
 import { getOperationLabels, getOperationSources, parseCommand } from '@core/policy/operation-labels';
@@ -22,7 +23,7 @@ export type RunPolicyAccessOptions = {
 export function shouldEnforceRunAllowList(
   operationContext?: Pick<OperationContext, 'metadata'> | null
 ): boolean {
-  return operationContext ? shouldApplySurfaceScopedPolicyToOperation(operationContext) : true;
+  return operationContext ? shouldEnforceCommandAllowListForOperation(operationContext) : true;
 }
 
 export function shouldApplyRunLabelFlow(

@@ -62,7 +62,7 @@ import {
 } from '@core/policy/union';
 import {
   findDeniedShellCommand,
-  shouldApplySurfaceScopedPolicyToOperation
+  shouldEnforceCommandAllowListForOperation
 } from '@core/policy/guards';
 import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
@@ -3064,7 +3064,7 @@ export class Environment
       const policySummary = this.getPolicySummary();
       if (policySummary) {
         const deniedShellCommand = findDeniedShellCommand(policySummary, code, {
-          enforceAllowList: shouldApplySurfaceScopedPolicyToOperation(
+          enforceAllowList: shouldEnforceCommandAllowListForOperation(
             this.getContextManager().peekOperation() ?? { metadata: {} }
           )
         });
