@@ -787,17 +787,23 @@ ExeBlockAction
   / ExeForeachPattern
   / ExeDataPattern
 
+ExeReturnSigil
+  = sigil:("=->" / "->" / "=>") {
+      return sigil === '=>'
+        ? 'canonical'
+        : sigil === '->'
+          ? 'tool'
+          : 'dual';
+    }
+
 ExeReturnStatement "exe return statement"
+  = kind:ExeReturnSigil _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode(kind, value, text(), location());
+    }
+
+CanonicalExeReturnStatement "canonical exe return statement"
   = "=>" _ value:ExeReturnValue? noise:BlockComments* {
-      const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
-      return helpers.createNode('ExeReturn', {
-        values: normalized,
-        raw: text(),
-        meta: {
-          hasValue: normalized.length > 0
-        },
-        location: location()
-      });
+      return helpers.createExeReturnNode('canonical', value, text(), location());
     }
 
 ExeReturnValue

@@ -6,7 +6,14 @@ import { evaluate } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
 import { evaluateCondition, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
 import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
-import { createExeReturnControl, isExeReturnControl, resolveExeReturnValue } from './exe-return';
+import {
+  appendExeToolReturnValue,
+  createExeReturnControl,
+  getExeReturnKind,
+  isExeReturnControl,
+  resolveExeReturnValue,
+  type ExeExecutionContext
+} from './exe-return';
 import {
   applySecurityDescriptorToCurrentVariables,
   attachSecurityDescriptorToValue
@@ -17,7 +24,7 @@ export async function evaluateIf(
   env: Environment
 ): Promise<EvalResult> {
   const hasReturn = node.meta?.hasReturn === true;
-  const exeContext = env.getExecutionContext('exe');
+  const exeContext = env.getExecutionContext<ExeExecutionContext>('exe');
   if (!exeContext && hasReturn) {
     throw new MlldDirectiveError(
       'Return statements are only allowed inside exe blocks.',
@@ -64,10 +71,19 @@ export async function evaluateIf(
       const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
       blockEnv = returnResult.env;
       applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
+      const returnValue = attachSecurityDescriptorToValue(returnResult.value, conditionDescriptor);
+      const returnKind = getExeReturnKind(stmt as ExeReturnNode);
+      if (returnKind === 'tool' || returnKind === 'dual') {
+        appendExeToolReturnValue(blockEnv, returnValue);
+      }
+      if (returnKind === 'tool') {
+        lastValue = undefined;
+        continue;
+      }
       env.mergeChild(blockEnv);
       return {
         value: createExeReturnControl(
-          attachSecurityDescriptorToValue(returnResult.value, conditionDescriptor)
+          returnValue
         ),
         env
       };

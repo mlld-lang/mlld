@@ -18,6 +18,16 @@ function createText(content: string): any {
   };
 }
 
+function createReturn(value: string, kind: 'canonical' | 'tool' | 'dual' = 'canonical'): any {
+  return {
+    type: 'ExeReturn',
+    kind,
+    nodeId: `return-${kind}-${value}`,
+    values: [createText(value)],
+    meta: { hasValue: true }
+  };
+}
+
 function createDirective(
   identifier: string,
   subtype: string,
@@ -57,6 +67,10 @@ describe('exe control-flow definition builders', () => {
         assertDef: (def: any) => {
           expect(def.type).toBe('code');
           expect(def.language).toBe('mlld-when');
+          expect(def.toolReturnMode).toEqual({
+            strict: false,
+            allToolSigilsInForBodies: false
+          });
         }
       },
       {
@@ -77,6 +91,10 @@ describe('exe control-flow definition builders', () => {
         assertDef: (def: any) => {
           expect(def.type).toBe('code');
           expect(def.language).toBe('mlld-for');
+          expect(def.toolReturnMode).toEqual({
+            strict: false,
+            allToolSigilsInForBodies: false
+          });
         }
       },
       {
@@ -103,6 +121,10 @@ describe('exe control-flow definition builders', () => {
           expect(def.type).toBe('code');
           expect(def.language).toBe('mlld-exe-block');
           expect(def.codeTemplate?.[0]?.type).toBe('ExeBlock');
+          expect(def.toolReturnMode).toEqual({
+            strict: false,
+            allToolSigilsInForBodies: false
+          });
         }
       }
     ] as const;
@@ -167,5 +189,126 @@ describe('exe control-flow definition builders', () => {
     );
 
     expect(definition).toBeNull();
+  });
+
+  it('derives strict-mode return metadata from control-flow executable bodies', () => {
+    const blockDefinition = buildControlFlowExecutableDefinition(
+      createDirective(
+        'strictBlockExec',
+        'exeBlock',
+        {
+          statements: [createReturn('planner-status', 'tool'), createReturn('canonical', 'canonical')]
+        },
+        { statementCount: 2, hasReturn: false }
+      ),
+      'strictBlockExec'
+    ) as any;
+
+    expect(blockDefinition.toolReturnMode).toEqual({
+      strict: true,
+      allToolSigilsInForBodies: false
+    });
+
+    const forDefinition = buildControlFlowExecutableDefinition(
+      createDirective('strictForExec', 'exeFor', {
+        content: [{
+          type: 'ForExpression',
+          nodeId: 'for-expr-strict',
+          variable: { identifier: 'item' },
+          source: [createText('items')],
+          expression: [createReturn('iteration-status', 'tool')],
+          meta: { isForExpression: true }
+        }]
+      }),
+      'strictForExec'
+    ) as any;
+
+    expect(forDefinition.toolReturnMode).toEqual({
+      strict: true,
+      allToolSigilsInForBodies: true
+    });
+
+    const whenDefinition = buildControlFlowExecutableDefinition(
+      createDirective('strictWhenExec', 'exeWhen', {
+        content: [{
+          type: 'WhenExpression',
+          nodeId: 'when-expr-strict',
+          conditions: [
+            {
+              condition: [createText('cond')],
+              action: [createReturn('branch-status', 'dual')]
+            }
+          ],
+          meta: {
+            conditionCount: 1,
+            isValueReturning: true,
+            evaluationType: 'expression',
+            hasTailModifiers: false
+          }
+        }]
+      }),
+      'strictWhenExec'
+    ) as any;
+
+    expect(whenDefinition.toolReturnMode).toEqual({
+      strict: true,
+      allToolSigilsInForBodies: false
+    });
+
+    const nestedForDefinition = buildControlFlowExecutableDefinition(
+      createDirective('strictNestedForExec', 'exeFor', {
+        content: [{
+          type: 'ForExpression',
+          nodeId: 'for-expr-nested-strict',
+          variable: { identifier: 'item' },
+          source: [createText('items')],
+          expression: [{
+            type: 'Directive',
+            kind: 'if',
+            nodeId: 'if-in-for',
+            values: {
+              condition: [createText('cond')],
+              then: [createReturn('nested-iteration-status', 'tool')]
+            },
+            raw: {},
+            meta: { hasElse: false, hasReturn: true }
+          }],
+          meta: { isForExpression: true }
+        }]
+      }),
+      'strictNestedForExec'
+    ) as any;
+
+    expect(nestedForDefinition.toolReturnMode).toEqual({
+      strict: true,
+      allToolSigilsInForBodies: true
+    });
+
+    const nestedTopLevelIfDefinition = buildControlFlowExecutableDefinition(
+      createDirective(
+        'strictTopLevelIfExec',
+        'exeBlock',
+        {
+          statements: [{
+            type: 'Directive',
+            kind: 'if',
+            nodeId: 'if-top-level',
+            values: {
+              condition: [createText('cond')],
+              then: [createReturn('top-level-status', 'tool')]
+            },
+            raw: {},
+            meta: { hasElse: false, hasReturn: true }
+          }]
+        },
+        { statementCount: 1, hasReturn: false }
+      ),
+      'strictTopLevelIfExec'
+    ) as any;
+
+    expect(nestedTopLevelIfDefinition.toolReturnMode).toEqual({
+      strict: true,
+      allToolSigilsInForBodies: false
+    });
   });
 });

@@ -12,6 +12,13 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import { prepareValueForShadow } from '@interpreter/env/variable-proxy';
 import { evaluateExeBlock } from '@interpreter/eval/exe';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
+import {
+  createExeToolReturnState,
+  finalizeExeToolReturn,
+  isExeReturnControl,
+  unwrapExeReturnControl,
+  type ExeExecutionContext
+} from '@interpreter/eval/exe-return';
 import { applyWithClause } from '@interpreter/eval/with-clause';
 import { handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
@@ -58,6 +65,7 @@ export type CodeExecutableHandlerResult =
   | {
       kind: 'continue';
       result: unknown;
+      toolResult?: unknown;
       execEnv: Environment;
       outputRecordEnv?: Environment;
     }
@@ -91,82 +99,101 @@ export async function executeCodeExecutable(
   let execEnv = options.execEnv;
   let outputRecordEnv: Environment | undefined;
   let result: unknown;
+  const isMlldExecutable =
+    typeof definition.language === 'string' && definition.language.startsWith('mlld-');
+  const toolReturnState = createExeToolReturnState(definition.toolReturnMode);
+  const rootExeContext: ExeExecutionContext | undefined = isMlldExecutable
+    ? {
+        allowReturn: true,
+        scope: 'function',
+        hasFunctionBoundary: true,
+        ...(toolReturnState ? { toolReturnState } : {})
+      }
+    : undefined;
+  const rootExeContextEnv = execEnv;
 
   if (exeLabels.length > 0) {
     execEnv.setExeLabels(exeLabels);
   }
 
-  if (definition.language === 'mlld-when') {
-    const activeWhenExpr = whenExprNode;
-    if (!activeWhenExpr) {
-      throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
-    }
+  if (rootExeContext) {
+    rootExeContextEnv.pushExecutionContext('exe', rootExeContext);
+  }
 
-    const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
-    let whenResult: EvalResult;
-    try {
-      whenResult = await evaluateWhenExpression(activeWhenExpr, execEnv);
-    } catch (error) {
-      const handled = await handleExecGuardDenial(error, {
-        execEnv,
-        env,
-        whenExprNode: activeWhenExpr
-      });
-      if (handled) {
-        return {
-          kind: 'return',
-          evalResult: await services.finalizeResult(handled)
-        };
+  try {
+    if (definition.language === 'mlld-when') {
+      const activeWhenExpr = whenExprNode;
+      if (!activeWhenExpr) {
+        throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
       }
-      throw error;
-    }
 
-    const normalization = normalizeWhenShowEffect(whenResult.value);
-    result = normalization.normalized;
-    execEnv = whenResult.env;
-  } else if (definition.language === 'mlld-foreach') {
-    const foreachNode = definition.codeTemplate[0];
-    const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
-    result = await evaluateForeachCommand(foreachNode, execEnv);
-  } else if (definition.language === 'mlld-for') {
-    const forExprNode = definition.codeTemplate[0];
-    if (!forExprNode || forExprNode.type !== 'ForExpression') {
-      throw new MlldInterpreterError('mlld-for executable missing ForExpression node');
-    }
-    const { evaluateForExpression } = await import('@interpreter/eval/for');
-    result = await evaluateForExpression(forExprNode, execEnv);
-  } else if (definition.language === 'mlld-loop') {
-    const loopExprNode = definition.codeTemplate[0];
-    if (!loopExprNode || loopExprNode.type !== 'LoopExpression') {
-      throw new MlldInterpreterError('mlld-loop executable missing LoopExpression node');
-    }
-    const { evaluateLoopExpression } = await import('@interpreter/eval/loop');
-    result = await evaluateLoopExpression(loopExprNode, execEnv);
-  } else if (definition.language === 'mlld-exe-block') {
-    const blockNode = Array.isArray(definition.codeTemplate)
-      ? (definition.codeTemplate[0] as any)
-      : undefined;
-    if (!blockNode || !blockNode.values) {
-      throw new MlldInterpreterError('mlld-exe-block executable missing block content');
-    }
+      const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
+      let whenResult: EvalResult;
+      try {
+        whenResult = await evaluateWhenExpression(activeWhenExpr, execEnv);
+      } catch (error) {
+        const handled = await handleExecGuardDenial(error, {
+          execEnv,
+          env,
+          whenExprNode: activeWhenExpr
+        });
+        if (handled) {
+          return {
+            kind: 'return',
+            evalResult: await services.finalizeResult(handled)
+          };
+        }
+        throw error;
+      }
 
-    const blockResult = await evaluateExeBlock(blockNode, execEnv);
-    result = blockResult.value;
-    execEnv = blockResult.env;
-    outputRecordEnv = (blockResult.metadata?.blockEnv as Environment | undefined) ?? execEnv;
-  } else if (definition.language === 'mlld-box') {
-    const envDirectiveNode = Array.isArray(definition.codeTemplate)
-      ? (definition.codeTemplate[0] as any)
-      : undefined;
-    if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
-      throw new MlldInterpreterError('mlld-box executable missing box directive');
-    }
+      const normalizedWhenValue = unwrapExeReturnControl(whenResult.value);
+      const normalization = normalizeWhenShowEffect(normalizedWhenValue);
+      result = normalization.normalized;
+      execEnv = whenResult.env;
+    } else if (definition.language === 'mlld-foreach') {
+      const foreachNode = definition.codeTemplate[0];
+      const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
+      result = await evaluateForeachCommand(foreachNode, execEnv);
+    } else if (definition.language === 'mlld-for') {
+      const forExprNode = definition.codeTemplate[0];
+      if (!forExprNode || forExprNode.type !== 'ForExpression') {
+        throw new MlldInterpreterError('mlld-for executable missing ForExpression node');
+      }
+      const { evaluateForExpression } = await import('@interpreter/eval/for');
+      result = await evaluateForExpression(forExprNode, execEnv);
+      result = unwrapExeReturnControl(result);
+    } else if (definition.language === 'mlld-loop') {
+      const loopExprNode = definition.codeTemplate[0];
+      if (!loopExprNode || loopExprNode.type !== 'LoopExpression') {
+        throw new MlldInterpreterError('mlld-loop executable missing LoopExpression node');
+      }
+      const { evaluateLoopExpression } = await import('@interpreter/eval/loop');
+      result = await evaluateLoopExpression(loopExprNode, execEnv);
+    } else if (definition.language === 'mlld-exe-block') {
+      const blockNode = Array.isArray(definition.codeTemplate)
+        ? (definition.codeTemplate[0] as any)
+        : undefined;
+      if (!blockNode || !blockNode.values) {
+        throw new MlldInterpreterError('mlld-exe-block executable missing block content');
+      }
 
-    const { evaluateBox } = await import('@interpreter/eval/box');
-    const boxResult = await evaluateBox(envDirectiveNode, execEnv);
-    result = boxResult.value;
-    execEnv = boxResult.env;
-  } else {
+      const blockResult = await evaluateExeBlock(blockNode, execEnv);
+      result = unwrapExeReturnControl(blockResult.value);
+      execEnv = blockResult.env;
+      outputRecordEnv = (blockResult.metadata?.blockEnv as Environment | undefined) ?? execEnv;
+    } else if (definition.language === 'mlld-box') {
+      const envDirectiveNode = Array.isArray(definition.codeTemplate)
+        ? (definition.codeTemplate[0] as any)
+        : undefined;
+      if (!envDirectiveNode || envDirectiveNode.type !== 'Directive' || envDirectiveNode.kind !== 'box') {
+        throw new MlldInterpreterError('mlld-box executable missing box directive');
+      }
+
+      const { evaluateBox } = await import('@interpreter/eval/box');
+      const boxResult = await evaluateBox(envDirectiveNode, execEnv);
+      result = unwrapExeReturnControl(boxResult.value);
+      execEnv = boxResult.env;
+    } else {
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {
       if (Array.isArray(definition.codeTemplate)) {
@@ -473,14 +500,20 @@ export async function executeCodeExecutable(
       env.recordSecurityDescriptor(mergedInputDescriptor);
       services.mergeResultDescriptor(mergedInputDescriptor);
     }
-  }
+    }
 
-  return {
-    kind: 'continue',
-    result,
-    execEnv,
-    outputRecordEnv
-  };
+    return {
+      kind: 'continue',
+      result,
+      ...(toolReturnState ? { toolResult: finalizeExeToolReturn(toolReturnState) } : {}),
+      execEnv,
+      outputRecordEnv
+    };
+  } finally {
+    if (rootExeContext) {
+      rootExeContextEnv.popExecutionContext('exe');
+    }
+  }
 }
 
 function isShadowLanguage(language: string): boolean {

@@ -21,8 +21,11 @@ export interface DynamicOutputRecordNode extends BaseMlldNode {
 
 export type ExeOutputRecordNode = StaticOutputRecordNode | DynamicOutputRecordNode;
 
+export type ExeReturnKind = 'canonical' | 'tool' | 'dual';
+
 export interface ExeReturnNode extends BaseMlldNode {
   type: 'ExeReturn';
+  kind: ExeReturnKind;
   values: BaseMlldNode[];
   raw?: string;
   meta?: {

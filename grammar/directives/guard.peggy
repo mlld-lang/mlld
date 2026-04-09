@@ -7,6 +7,11 @@ GuardKeyword
 SlashGuard
   = DirectiveContext GuardKeyword _ privilegedPrefix:GuardPrivilegedPrefix? _ nameTiming:(name:GuardDirectiveName __ { return { name }; })? timing:GuardTiming __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause privilegedClause:GuardDirectivePrivilegedClause? ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (new syntax - timing required)', { name: nameTiming?.name, timing, filter, guardBody });
+      helpers.assertOnlyCanonicalExeReturns(
+        guardBody.node,
+        'Guard bodies do not support thin-arrow returns.',
+        location()
+      );
       const guardTiming = timing;
       const privileged = Boolean(privilegedPrefix || privilegedClause?.privileged);
 
@@ -59,6 +64,11 @@ SlashGuard
     }
   / DirectiveContext GuardKeyword _ privilegedPrefix:GuardPrivilegedPrefix? _ timing:GuardTiming? _ name:GuardDirectiveName? _ "for" __ filter:GuardFilterClause _ "=" _ guardBody:GuardWhenClause privilegedClause:GuardDirectivePrivilegedClause? ending:CommentedDirectiveEnding? {
       helpers.debug('SlashGuard matched (old syntax with for)', { timing, name, filter, guardBody });
+      helpers.assertOnlyCanonicalExeReturns(
+        guardBody.node,
+        'Guard bodies do not support thin-arrow returns.',
+        location()
+      );
       const guardTiming = timing ?? 'before';
       const privileged = Boolean(privilegedPrefix || privilegedClause?.privileged);
 

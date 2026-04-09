@@ -762,9 +762,8 @@ WhenActionBlockBody "when action block body"
 
 // Return statement for when action blocks
 WhenActionBlockReturnStatement "when block return statement"
-  = "=>" _ value:WhenRHSAction noise:BlockComments* {
-      const normalized = Array.isArray(value) ? value.flat() : [value];
-      return normalized;
+  = kind:ExeReturnSigil _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode(kind, value, text(), location());
     }
 
 // Statement list for when action blocks
@@ -842,8 +841,8 @@ WhenActionBlockContent
   = body:WhenActionBlockBody {
       const statements = body.statements || [];
       const returnStmt = body.returnStmt;
-      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
-      return hasReturn ? [...statements, ...returnStmt] : statements;
+      const hasReturn = !!returnStmt;
+      return hasReturn ? [...statements, returnStmt] : statements;
     }
 
 // Single action within a when block - supports both implicit and explicit

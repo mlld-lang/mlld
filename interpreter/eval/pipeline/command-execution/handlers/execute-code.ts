@@ -8,6 +8,7 @@ import {
   shouldAutoParsePipelineInput,
   wrapJsonLikeString
 } from '@interpreter/eval/pipeline/command-execution/structured-input';
+import { isExeReturnControl, unwrapExeReturnControl } from '@interpreter/eval/exe-return';
 
 export type FinalizeResult = (
   value: unknown,
@@ -61,12 +62,19 @@ export async function executeCodeHandler(
     const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
 
     let resultValue = whenResult.value;
-    if (resultValue && typeof resultValue === 'object' && resultValue.value === 'retry') {
+    if (
+      resultValue &&
+      typeof resultValue === 'object' &&
+      !isExeReturnControl(resultValue) &&
+      resultValue.value === 'retry'
+    ) {
       return resultValue;
     }
     if (resultValue === 'retry') {
       return 'retry';
     }
+
+    resultValue = unwrapExeReturnControl(resultValue);
 
     const normalized = normalizeWhenShowEffect(resultValue);
     resultValue = normalized.normalized;
@@ -145,7 +153,7 @@ export async function executeCodeHandler(
     }
     const { evaluateExeBlock } = await import('@interpreter/eval/exe');
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
-    return finalizeResult(blockResult.value);
+    return finalizeResult(unwrapExeReturnControl(blockResult.value));
   }
 
   if (execDef.language === 'mlld-box') {
@@ -155,7 +163,7 @@ export async function executeCodeHandler(
     }
     const { evaluateBox } = await import('@interpreter/eval/box');
     const boxResult = await evaluateBox(envDirectiveNode, execEnv);
-    return finalizeResult(boxResult.value);
+    return finalizeResult(unwrapExeReturnControl(boxResult.value));
   }
 
   const { interpolate } = await import('@interpreter/core/interpreter');

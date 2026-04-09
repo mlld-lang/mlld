@@ -367,6 +367,55 @@ export const helpers = {
         }
         return this.createNode(NodeType.VariableReference, { valueType, ...data, location });
     },
+    createExeReturnNode(kind, value, rawText, loc) {
+        const normalized = typeof value === 'undefined'
+            ? []
+            : (Array.isArray(value) ? value.flat() : [value]);
+        return this.createNode('ExeReturn', {
+            kind,
+            values: normalized,
+            raw: rawText,
+            meta: {
+                hasValue: normalized.length > 0
+            },
+            location: loc
+        });
+    },
+    findFirstNonCanonicalExeReturn(node) {
+        if (!node) {
+            return null;
+        }
+        if (Array.isArray(node)) {
+            for (const item of node) {
+                const found = this.findFirstNonCanonicalExeReturn(item);
+                if (found) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        if (typeof node !== 'object') {
+            return null;
+        }
+        if (node.type === 'ExeReturn' && node.kind && node.kind !== 'canonical') {
+            return node;
+        }
+        for (const value of Object.values(node)) {
+            const found = this.findFirstNonCanonicalExeReturn(value);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    },
+    assertOnlyCanonicalExeReturns(node, message, fallbackLoc) {
+        const invalid = this.findFirstNonCanonicalExeReturn(node);
+        if (!invalid) {
+            return;
+        }
+        const sigil = invalid.kind === 'tool' ? '->' : '=->';
+        this.mlldError(`${sigil} is not allowed here. ${message}`, '=>', invalid.location || fallbackLoc);
+    },
     recordFieldSourceName(source) {
         if (!source || typeof source !== 'object') {
             return 'value';

@@ -7,6 +7,7 @@ import type { OperationContext } from '../env/ContextManager';
 import type { Environment } from '../env/Environment';
 import { evaluateWhenExpression } from '../eval/when-expression';
 import { VariableImporter } from '../eval/import/VariableImporter';
+import { isExeReturnControl, unwrapExeReturnControl } from '../eval/exe-return';
 import { asText, isStructuredValue } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { HookDefinition } from './HookRegistry';
@@ -255,43 +256,55 @@ function createHookEnvironment(
 }
 
 async function executeHookBody(body: HookBodyNode, hookEnv: Environment): Promise<HookExecutionOutcome> {
-  if (body.type === 'WhenExpression') {
-    const evaluated = await evaluateWhenExpression(body as any, hookEnv);
-    const hasReturn = (body as any)?.meta?.hasReturn === true;
-    if (!hasReturn) {
+  hookEnv.pushExecutionContext('exe', {
+    allowReturn: true,
+    scope: 'function',
+    hasFunctionBoundary: true
+  });
+  try {
+    if (body.type === 'WhenExpression') {
+      const evaluated = await evaluateWhenExpression(body as any, hookEnv);
+      const hasReturn = (body as any)?.meta?.hasReturn === true;
+      if (!hasReturn) {
+        return {
+          transformed: false
+        };
+      }
+      return {
+        transformed: true,
+        value: unwrapExeReturnControl(evaluated.value)
+      };
+    }
+
+    if (body.type === 'HookBlock') {
+      let lastStatementResult: EvalResult | undefined;
+      for (const statement of body.statements ?? []) {
+        lastStatementResult = await evaluate(statement as any, hookEnv);
+        if (isExeReturnControl(lastStatementResult.value)) {
+          break;
+        }
+      }
+
+      if (body.meta?.hasReturn === true) {
+        return {
+          transformed: true,
+          value: unwrapExeReturnControl(lastStatementResult?.value)
+        };
+      }
+
       return {
         transformed: false
       };
     }
+
+    const evaluated = await evaluate(body as any, hookEnv);
     return {
       transformed: true,
-      value: evaluated.value
+      value: unwrapExeReturnControl(evaluated.value)
     };
+  } finally {
+    hookEnv.popExecutionContext('exe');
   }
-
-  if (body.type === 'HookBlock') {
-    let lastStatementResult: EvalResult | undefined;
-    for (const statement of body.statements ?? []) {
-      lastStatementResult = await evaluate(statement as any, hookEnv);
-    }
-
-    if (body.meta?.hasReturn === true) {
-      return {
-        transformed: true,
-        value: lastStatementResult?.value
-      };
-    }
-
-    return {
-      transformed: false
-    };
-  }
-
-  const evaluated = await evaluate(body as any, hookEnv);
-  return {
-    transformed: true,
-    value: evaluated.value
-  };
 }
 
 function applyBeforeHookTransform(_currentInputs: readonly unknown[], value: unknown): readonly unknown[] {

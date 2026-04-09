@@ -376,9 +376,8 @@ LoopBlockStatement "loop block statement"
   / ForSingleAction
 
 ForBlockReturnStatement "for block return statement"
-  = "=>" _ value:WhenRHSAction noise:BlockComments* {
-      const normalized = Array.isArray(value) ? value.flat() : [value];
-      return normalized;
+  = kind:ExeReturnSigil _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode(kind, value, text(), location());
     }
 
 ForBlockBody "for block body"
@@ -432,8 +431,8 @@ ForBlockAction "for block action"
   = "[" _ body:ForBlockBody _ "]" {
       const statements = body.statements || [];
       const returnStmt = body.returnStmt;
-      const hasReturn = Array.isArray(returnStmt) ? returnStmt.length > 0 : !!returnStmt;
-      const mergedStatements = hasReturn ? [...statements, ...returnStmt] : statements;
+      const hasReturn = !!returnStmt;
+      const mergedStatements = hasReturn ? [...statements, returnStmt] : statements;
       return {
         type: 'ForBlock',
         statements: mergedStatements,

@@ -428,6 +428,69 @@ export const helpers = {
     return this.createNode(NodeType.VariableReference, { valueType, ...data, location });
   },
 
+  createExeReturnNode(kind: 'canonical' | 'tool' | 'dual', value: any, rawText: string, loc: any) {
+    const normalized = typeof value === 'undefined'
+      ? []
+      : (Array.isArray(value) ? value.flat() : [value]);
+
+    return this.createNode('ExeReturn' as NodeTypeKey, {
+      kind,
+      values: normalized,
+      raw: rawText,
+      meta: {
+        hasValue: normalized.length > 0
+      },
+      location: loc
+    });
+  },
+
+  findFirstNonCanonicalExeReturn(node: any): any | null {
+    if (!node) {
+      return null;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = this.findFirstNonCanonicalExeReturn(item);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    }
+
+    if (typeof node !== 'object') {
+      return null;
+    }
+
+    if (node.type === 'ExeReturn' && node.kind && node.kind !== 'canonical') {
+      return node;
+    }
+
+    for (const value of Object.values(node)) {
+      const found = this.findFirstNonCanonicalExeReturn(value);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
+  },
+
+  assertOnlyCanonicalExeReturns(node: any, message: string, fallbackLoc?: any) {
+    const invalid = this.findFirstNonCanonicalExeReturn(node);
+    if (!invalid) {
+      return;
+    }
+
+    const sigil = invalid.kind === 'tool' ? '->' : '=->';
+    this.mlldError(
+      `${sigil} is not allowed here. ${message}`,
+      '=>',
+      invalid.location || fallbackLoc
+    );
+  },
+
   recordFieldSourceName(source: any): string {
     if (!source || typeof source !== 'object') {
       return 'value';

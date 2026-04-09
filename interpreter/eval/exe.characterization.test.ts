@@ -786,6 +786,7 @@ describe('exe evaluator characterization', () => {
         statements: [
           {
             type: 'ExeReturn',
+            kind: 'canonical',
             nodeId: 'exe-return',
             values: [createText('done')],
             meta: { hasValue: true }

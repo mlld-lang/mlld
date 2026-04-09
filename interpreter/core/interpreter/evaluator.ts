@@ -6,7 +6,12 @@ import type { OperationContext } from '@interpreter/env/ContextManager';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
-import { createExeReturnControl, resolveExeReturnValue } from '@interpreter/eval/exe-return';
+import {
+  appendExeToolReturnValue,
+  createExeReturnControl,
+  getExeReturnKind,
+  resolveExeReturnValue
+} from '@interpreter/eval/exe-return';
 import type { VarAssignmentResult } from '@interpreter/eval/var';
 import { parseFrontmatter } from '@interpreter/utils/frontmatter-parser';
 import type { InterpolationNode } from '@interpreter/utils/interpolation';
@@ -397,6 +402,16 @@ export async function evaluateCore({
       );
     }
     const returnResult = await resolveExeReturnValue(node as ExeReturnNode, env);
+    const returnKind = getExeReturnKind(node as ExeReturnNode);
+    if (returnKind === 'tool' || returnKind === 'dual') {
+      appendExeToolReturnValue(returnResult.env || env, returnResult.value);
+    }
+    if (returnKind === 'tool') {
+      return {
+        value: undefined,
+        env: returnResult.env || env
+      };
+    }
     return {
       value: createExeReturnControl(returnResult.value),
       env: returnResult.env || env

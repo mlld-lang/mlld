@@ -271,7 +271,7 @@ Directive
     ) { return dir; }
 
 SlashExeReturn
-  = "/"? ret:ExeReturnStatement { return ret; }
+  = "/"? ret:CanonicalExeReturnStatement { return ret; }
 
 // -------------------------------------------------------------------------
 // STRICT MODE LINE HANDLING

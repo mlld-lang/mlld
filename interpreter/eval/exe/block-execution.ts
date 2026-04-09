@@ -3,10 +3,20 @@ import { isAugmentedAssignment, isLetAssignment } from '@core/types/when';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { evaluate } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
-import { createExeReturnControl, isExeReturnControl, resolveExeReturnValue } from '@interpreter/eval/exe-return';
+import {
+  appendExeToolReturnValue,
+  createExeReturnControl,
+  createExeToolReturnState,
+  finalizeExeToolReturn,
+  getExeReturnKind,
+  isExeReturnControl,
+  resolveExeReturnValue,
+  type ExeExecutionContext
+} from '@interpreter/eval/exe-return';
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from '@interpreter/eval/when';
 import { isLoopControlValue } from './definition-helpers';
+import { analyzeReturnChannels } from './return-channel-analysis';
 
 export interface ExeBlockOptions {
   scope?: 'function' | 'block';
@@ -20,20 +30,26 @@ export async function evaluateExeBlock(
 ): Promise<EvalResult> {
   const scope = options.scope ?? 'function';
   const parentExeContext = env.getExecutionContext('exe') as
-    | { scope?: 'function' | 'block'; hasFunctionBoundary?: boolean }
+    | ExeExecutionContext
     | undefined;
   const hasFunctionBoundary =
     scope === 'function'
       ? true
       : Boolean(parentExeContext?.hasFunctionBoundary || parentExeContext?.scope === 'function');
   const shouldBubbleReturn = scope === 'block' && hasFunctionBoundary;
+  const localToolReturnState = parentExeContext?.toolReturnState ?? (
+    scope === 'function' ? createExeToolReturnState(analyzeReturnChannels(block)) : undefined
+  );
 
   let blockEnv = env.createChild();
   const createBlockResult = (value: unknown, targetEnv: Environment): EvalResult => ({
     value,
     env: targetEnv,
     metadata: {
-      blockEnv
+      blockEnv,
+      ...(scope === 'function' && !parentExeContext?.toolReturnState
+        ? { toolReturn: finalizeExeToolReturn(localToolReturnState) }
+        : {})
     }
   });
 
@@ -51,7 +67,12 @@ export async function evaluateExeBlock(
     }
   }
 
-  blockEnv.pushExecutionContext('exe', { allowReturn: true, scope, hasFunctionBoundary });
+  blockEnv.pushExecutionContext('exe', {
+    allowReturn: true,
+    scope,
+    hasFunctionBoundary,
+    ...(localToolReturnState ? { toolReturnState: localToolReturnState } : {})
+  });
   try {
     const statements = block.values?.statements ?? [];
     const hasTrailingReturn = Boolean(block.values?.return);
@@ -67,6 +88,13 @@ export async function evaluateExeBlock(
       if (stmt.type === 'ExeReturn') {
         const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
         blockEnv = returnResult.env;
+        const returnKind = getExeReturnKind(stmt as ExeReturnNode);
+        if (returnKind === 'tool' || returnKind === 'dual') {
+          appendExeToolReturnValue(blockEnv, returnResult.value);
+        }
+        if (returnKind === 'tool') {
+          continue;
+        }
         env.mergeChild(blockEnv);
         if (shouldBubbleReturn) {
           return createBlockResult(createExeReturnControl(returnResult.value), env);
@@ -143,11 +171,17 @@ export async function evaluateExeBlock(
     const returnNode = block.values?.return;
     if (returnNode) {
       const returnResult = await resolveExeReturnValue(returnNode, blockEnv);
-      returnValue = returnResult.value;
       blockEnv = returnResult.env;
-      if (shouldBubbleReturn) {
-        env.mergeChild(blockEnv);
-        return createBlockResult(createExeReturnControl(returnValue), env);
+      const returnKind = getExeReturnKind(returnNode);
+      if (returnKind === 'tool' || returnKind === 'dual') {
+        appendExeToolReturnValue(blockEnv, returnResult.value);
+      }
+      if (returnKind !== 'tool') {
+        returnValue = returnResult.value;
+        if (shouldBubbleReturn) {
+          env.mergeChild(blockEnv);
+          return createBlockResult(createExeReturnControl(returnValue), env);
+        }
       }
     }
 

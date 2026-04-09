@@ -159,16 +159,8 @@ IfActionBlockBody "if action block body"
     }
 
 IfActionBlockReturnStatement "if block return statement"
-  = "=>" _ value:ExeReturnValue? noise:BlockComments* {
-      const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
-      return helpers.createNode('ExeReturn', {
-        values: normalized,
-        raw: text(),
-        meta: {
-          hasValue: normalized.length > 0
-        },
-        location: location()
-      });
+  = kind:ExeReturnSigil _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode(kind, value, text(), location());
     }
 
 IfActionBlockStatementList "if action block statement list"

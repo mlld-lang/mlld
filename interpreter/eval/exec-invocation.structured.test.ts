@@ -60,6 +60,23 @@ function buildObjectMethodInvocation(
   };
 }
 
+function createPipelineStage(identifier: string) {
+  return {
+    rawIdentifier: identifier,
+    identifier: [
+      {
+        type: 'VariableReference',
+        nodeId: `${identifier}-stage`,
+        identifier,
+        fields: []
+      } as any
+    ],
+    args: [],
+    fields: [],
+    rawArgs: []
+  };
+}
+
 async function parseSingleInvocation(source: string): Promise<ExecInvocation> {
   const { ast } = await parse(source);
   const directive = ast[0] as {
@@ -260,6 +277,192 @@ describe('evaluateExecInvocation (structured)', () => {
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
     expect(isStructuredValue(display)).toBe(true);
     expect(display.text).toBe('Ada Lovelace');
+  });
+
+  it('uses null instead of canonical fallback for strict bridge wrappers with no tool reach', async () => {
+    const src = `
+/exe @maybe(flag) = [
+  if @flag [-> "tool-hit"]
+  => "canonical"
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'maybe-no-tool-hit',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'maybe-no-tool-hit-ref',
+        identifier: 'maybe',
+        args: [false as any]
+      }
+    };
+
+    const directResult = await evaluateExecInvocation(invocation, env);
+    expect(directResult.value.type).toBe('text');
+    expect(directResult.value.data).toBe('canonical');
+
+    const maybeVar = env.getVariable('maybe');
+    expect(maybeVar).toBeDefined();
+    maybeVar!.internal = {
+      ...(maybeVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const strictMissResult = await evaluateExecInvocation(invocation, env);
+    expect(strictMissResult.value.type).toBe('null');
+    expect(strictMissResult.value.data).toBeNull();
+    expect(strictMissResult.value.text).toBe('null');
+
+    const strictHitResult = await evaluateExecInvocation(
+      {
+        ...invocation,
+        nodeId: 'maybe-tool-hit',
+        commandRef: {
+          ...invocation.commandRef,
+          nodeId: 'maybe-tool-hit-ref',
+          args: [true as any]
+        }
+      },
+      env
+    );
+    expect(strictHitResult.value.type).toBe('text');
+    expect(strictHitResult.value.data).toBe('tool-hit');
+  });
+
+  it('counts tool reaches from runtime execution, not source occurrence count', async () => {
+    const src = `
+/exe @branch(first, second) = [
+  if @first [-> "a"]
+  if @second [-> "b"]
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const branchVar = env.getVariable('branch');
+    expect(branchVar).toBeDefined();
+    branchVar!.internal = {
+      ...(branchVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const singleReachResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'branch-single-reach',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'branch-single-reach-ref',
+          identifier: 'branch',
+          args: [false as any, true as any]
+        }
+      },
+      env
+    );
+    expect(singleReachResult.value.type).toBe('text');
+    expect(singleReachResult.value.data).toBe('b');
+
+    const doubleReachResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'branch-double-reach',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'branch-double-reach-ref',
+          identifier: 'branch',
+          args: [true as any, true as any]
+        }
+      },
+      env
+    );
+    expect(doubleReachResult.value.type).toBe('array');
+    expect(doubleReachResult.value.data).toEqual(['a', 'b']);
+  });
+
+  it('selects dual-return bridge output before record coercion and invocation pipelines while preserving labels', async () => {
+    const src = `
+/record @contact = {
+  facts: [email: string, name: string]
+}
+/exe src:mcp @lookup() = [
+  let @payload = { email: "ada@example.com", name: "Ada Lovelace" }
+  =-> @payload
+] => contact
+/exe @pipeLabel(value) = js {
+  return "PIPE:" + value.email;
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const directInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'lookup-direct',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'lookup-direct-ref',
+        identifier: 'lookup',
+        args: []
+      }
+    };
+
+    const directResult = await evaluateExecInvocation(directInvocation, env);
+    expect(directResult.value.type).toBe('object');
+    expect(directResult.value.data).toEqual({
+      email: 'ada@example.com',
+      name: 'Ada Lovelace'
+    });
+    expect(getRecordProjectionMetadata(directResult.value)).toEqual({
+      kind: 'record',
+      recordName: 'contact',
+      display: { kind: 'open' },
+      fields: {
+        email: { classification: 'fact' },
+        name: { classification: 'fact' }
+      }
+    });
+    expect(directResult.value.mx.labels).toContain('src:mcp');
+
+    const pipedDirectResult = await evaluateExecInvocation(
+      {
+        ...directInvocation,
+        nodeId: 'lookup-piped-direct',
+        withClause: {
+          pipeline: [createPipelineStage('pipeLabel')]
+        }
+      },
+      env
+    );
+    expect(pipedDirectResult.value.type).toBe('text');
+    expect(pipedDirectResult.value.data).toBe('PIPE:ada@example.com');
+
+    const lookupVar = env.getVariable('lookup');
+    expect(lookupVar).toBeDefined();
+    lookupVar!.internal = {
+      ...(lookupVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const strictBridgeResult = await evaluateExecInvocation(
+      {
+        ...directInvocation,
+        nodeId: 'lookup-piped-strict',
+        withClause: {
+          pipeline: [createPipelineStage('pipeLabel')]
+        }
+      },
+      env
+    );
+    expect(strictBridgeResult.value.type).toBe('object');
+    expect(strictBridgeResult.value.data).toEqual({
+      email: 'ada@example.com',
+      name: 'Ada Lovelace'
+    });
+    expect(getRecordProjectionMetadata(strictBridgeResult.value)).toBeUndefined();
+    expect(strictBridgeResult.value.mx.labels).toContain('src:mcp');
   });
 
   it('refines inherited untrusted record output at field level while preserving other labels', async () => {

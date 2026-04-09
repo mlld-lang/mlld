@@ -43,6 +43,7 @@ import {
 } from '@interpreter/env/environment-provider';
 import { mergeAuthUsing, resolveRunCodeOpType } from './run-pure-helpers';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
+import { unwrapExeReturnControl } from '@interpreter/eval/exe-return';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -844,7 +845,7 @@ async function handleCodeDefinition(
 
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
     const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-    const normalized = normalizeWhenShowEffect(whenResult.value);
+    const normalized = normalizeWhenShowEffect(unwrapExeReturnControl(whenResult.value));
 
     return {
       value: normalized.normalized,
@@ -876,7 +877,7 @@ async function handleCodeDefinition(
     const { evaluateExeBlock } = await import('@interpreter/eval/exe');
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     return {
-      value: blockResult.value,
+      value: unwrapExeReturnControl(blockResult.value),
       outputDescriptors,
       callStack
     };
@@ -905,7 +906,7 @@ async function handleCodeDefinition(
     const { evaluateBox } = await import('@interpreter/eval/box');
     const boxResult = await evaluateBox(envDirectiveNode, execEnv);
     return {
-      value: boxResult.value,
+      value: unwrapExeReturnControl(boxResult.value),
       outputDescriptors,
       callStack
     };

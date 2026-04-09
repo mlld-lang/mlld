@@ -84,4 +84,14 @@ describe('Hook directive', () => {
   test('rejects unquoted named-operation argument filters', () => {
     expect(() => parseSync('/hook before op:named:audit(test) = [ show "x" ]')).toThrow();
   });
+
+  test('rejects thin-arrow returns in hook block bodies', () => {
+    expect(() => parseSync('/hook before op:exe = [ -> @input ]')).toThrow(/not allowed here/i);
+    expect(() => parseSync('/hook before op:exe = [ =-> @input ]')).toThrow(/not allowed here/i);
+  });
+
+  test('rejects thin-arrow returns in hook when bodies', () => {
+    expect(() => parseSync('/hook before op:exe = when [ * => [ -> @input ] ]')).toThrow(/not allowed here/i);
+    expect(() => parseSync('/hook before op:exe = when [ * => [ =-> @input ] ]')).toThrow(/not allowed here/i);
+  });
 });

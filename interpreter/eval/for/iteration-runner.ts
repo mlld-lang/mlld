@@ -9,6 +9,7 @@ import { accessFields } from '@interpreter/utils/field-access';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import type { ExeExecutionContext } from '@interpreter/eval/exe-return';
 import type { ForParallelOptions } from './parallel-options';
 import {
   ensureVariable,
@@ -186,7 +187,13 @@ export function popForIterationContext(env: Environment): void {
 }
 
 export function pushExpressionIterationContext(env: Environment): void {
-  env.pushExecutionContext('exe', { allowReturn: true, scope: 'for-expression' });
+  const parentExeContext = env.getExecutionContext<ExeExecutionContext>('exe');
+  env.pushExecutionContext('exe', {
+    allowReturn: true,
+    scope: 'for-expression',
+    hasFunctionBoundary: parentExeContext?.hasFunctionBoundary,
+    ...(parentExeContext?.toolReturnState ? { toolReturnState: parentExeContext.toolReturnState } : {})
+  });
 }
 
 export function popExpressionIterationContexts(env: Environment): void {

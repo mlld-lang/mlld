@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.keep` / `.keepStructured` are now strictly embedded-language escape hatches. `bind` values and `state://` writes materialize plain data instead of storing live wrappers.
 
 ### Added
+- Executable thin-arrow return channels: `->` writes a tool-only return, `=->` writes both canonical and tool returns, surfaced tool dispatch switches to strict tool-return mode when either form appears in source, and empty strict-mode tool results resolve to `null` or `[]` when all tool reaches are inside `for` bodies.
 - `record` declarations for structured tool output with field-level trust classification. `facts` fields carry `fact:@record.field` proof labels and clear inherited exe `untrusted`; `data` fields are informational content that preserves taint. `exe @fn(...) = ... => record` coerces tool output through the record schema. Supports field remapping (`@input.dealname as name`), computed fields, conditional trust tiers via `when` clauses, typed validation modes (`demote`, `strict`, `drop`), array fact fields with per-element proof, and automatic LLM output parsing.
 - Inline dynamic record coercion via `@value as record @schema`. Uses the same runtime/schema metadata path as `=> record @schema` and works in expression positions, object/array literals, pipeline terminals, and grouped field access.
 - Display projections control record field visibility at the LLM boundary. Five modes: `bare` (full value, no handle), `ref` (full value + handle), `masked` (type-aware preview + handle), `handle` (handle only), `omitted` (invisible). Configured per-record: `display: [name, { mask: "email" }, { handle: "phone" }]`.
@@ -52,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool collection metadata overrides are now restrict-only for `controlArgs`, `updateArgs`, and `exactPayloadArgs`. Collections can tighten but never widen these fields.
 
 ### Fixed
+- Internal exe return control wrappers no longer leak through exe/box execution, tool collection dispatch, hooks, or fixture-visible output paths. Hook and guard bodies continue to accept canonical `=>` returns only.
 - Non-final standalone bracketed `when [ ... ]` expressions inside exe blocks no longer terminate the block implicitly. Their values are now discarded unless the `when` is the last statement, explicit returns inside `when` branches still bubble normally, inline/bound guard forms keep their established early-return behavior, and the parser warns on non-final bracketed `when [ ... ]` statements in exe blocks.
 - Block-bodied executables now route managed guard and policy denials through terminal `when` handlers, so `denied =>` fallbacks keep working after refactoring direct `when` bodies into `[...]` blocks.
 - Final structured results sent over the live stdio transport no longer truncate large output strings. This fixes successful runs returning malformed JSON text when `StructuredResult.output` itself contains long JSON, which in turn broke downstream parsers and benchmark result envelopes.

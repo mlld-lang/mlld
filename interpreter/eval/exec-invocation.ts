@@ -3729,6 +3729,7 @@ async function evaluateExecInvocationInternal(
       }
 
       let result: unknown;
+      let strictToolResult: unknown;
       let recordTrustRefinementApplied = false;
       let outputRecordEnv = execEnv;
       let workingDirectory: string | undefined;
@@ -3847,6 +3848,7 @@ async function evaluateExecInvocationInternal(
       return codeResult.evalResult;
     }
     result = codeResult.result;
+    strictToolResult = codeResult.toolResult;
     execEnv = codeResult.execEnv;
     outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
   } else {
@@ -3867,16 +3869,19 @@ async function evaluateExecInvocationInternal(
       runtimeEnv.updateOpContext({ metadata: nextMetadata });
     }
   }
-  
-      if (definition.outputRecord) {
-        const recordDefinition = await resolveConfiguredOutputRecordDefinition({
-          outputRecord: definition.outputRecord,
-          variable,
-          commandName,
-          runtimeEnv,
-          execEnv: outputRecordEnv,
-          nodeSourceLocation
-        });
+  const useStrictToolResult =
+    (variable.internal as any)?.isToolbridgeWrapper === true &&
+    definition.toolReturnMode?.strict === true;
+
+  if (!useStrictToolResult && definition.outputRecord) {
+    const recordDefinition = await resolveConfiguredOutputRecordDefinition({
+      outputRecord: definition.outputRecord,
+      variable,
+      commandName,
+      runtimeEnv,
+      execEnv: outputRecordEnv,
+      nodeSourceLocation
+    });
     const rawRecordDescriptor = extractSecurityDescriptor(result, {
       recursive: true,
       mergeArrayElements: true
@@ -3894,6 +3899,10 @@ async function evaluateExecInvocationInternal(
     });
     recordTrustRefinementApplied =
       isStructuredValue(result) && result.type !== 'text';
+  }
+
+  if (useStrictToolResult) {
+    result = strictToolResult;
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
@@ -3982,7 +3991,7 @@ async function evaluateExecInvocationInternal(
   endResolutionTrackingIfNeeded();
 
   // Apply withClause transformations if present
-  if (invocationWithClause && !isLlmResumeContinuation) {
+  if (!useStrictToolResult && invocationWithClause && !isLlmResumeContinuation) {
     if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
