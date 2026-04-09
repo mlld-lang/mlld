@@ -723,24 +723,16 @@ WhenActionBlock
 // Block body for when action blocks - supports full statement list like ForBlockBody
 WhenActionBlockBody "when action block body"
   = statements:WhenActionBlockStatementList firstReturn:(
-      BlockStatementSeparator ret:WhenActionBlockReturnStatement { return ret; }
-    / _ ret:WhenActionBlockReturnStatement { return ret; }
+      BlockStatementSeparator ret:WhenActionBlockTerminatingReturnStatement { return ret; }
+    / _ ret:WhenActionBlockTerminatingReturnStatement { return ret; }
     )
-    extraReturn:(BlockStatementSeparator WhenActionBlockReturnStatement { return true; })?
-    trailing:(BlockStatementSeparator WhenActionBlockStatement { return true; })? {
+    extraReturn:(BlockStatementSeparator ret:WhenActionBlockReturnStatement { return ret; })?
+    trailing:(BlockStatementSeparator stmt:WhenActionBlockStatement { return stmt; })? {
       if (extraReturn) {
-        helpers.mlldError(
-          'Multiple return statements in when block. Only one return allowed as last statement.',
-          'single return',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('when block', firstReturn, extraReturn, location());
       }
       if (trailing) {
-        helpers.mlldError(
-          'Return must be the last statement in a block.',
-          'end of block',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('when block', firstReturn, trailing, location());
       }
       return {
         statements,
@@ -753,7 +745,15 @@ WhenActionBlockBody "when action block body"
         returnStmt: null
       };
     }
-  / leadingComments:LeadingBlockComment* _ ret:WhenActionBlockReturnStatement {
+  / leadingComments:LeadingBlockComment* _ ret:WhenActionBlockTerminatingReturnStatement
+    extraReturn:(BlockStatementSeparator next:WhenActionBlockReturnStatement { return next; })?
+    trailing:(BlockStatementSeparator stmt:WhenActionBlockStatement { return stmt; })? {
+      if (extraReturn) {
+        helpers.raiseUnreachableReturnError('when block', ret, extraReturn, location());
+      }
+      if (trailing) {
+        helpers.raiseUnreachableReturnError('when block', ret, trailing, location());
+      }
       return {
         statements: [],
         returnStmt: ret
@@ -764,6 +764,21 @@ WhenActionBlockBody "when action block body"
 WhenActionBlockReturnStatement "when block return statement"
   = kind:ExeReturnSigil _ value:WhenRHSAction noise:BlockComments* {
       return helpers.createExeReturnNode(kind, value, text(), location());
+    }
+
+WhenActionBlockTerminatingReturnStatement "terminating when block return statement"
+  = kind:("=->" / "=>") _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode(
+        kind === '=->' ? 'dual' : 'canonical',
+        value,
+        text(),
+        location()
+      );
+    }
+
+WhenActionBlockPassiveToolReturnStatement "passive when block tool return statement"
+  = "->" _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode('tool', value, text(), location());
     }
 
 // Statement list for when action blocks
@@ -795,6 +810,7 @@ WhenActionBlockStatement "when action block statement"
   = WhenVarInActionBlockError
   / LetAssignment
   / AugmentedAssignment
+  / WhenActionBlockPassiveToolReturnStatement
   / WhenCheckpointActionInBlock
   / WhenExpressionAny
   / SlashIf

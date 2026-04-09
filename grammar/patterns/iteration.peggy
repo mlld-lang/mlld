@@ -317,6 +317,7 @@ ForBlockStatement "for block statement"
   = ForVarInBlockError
   / LetAssignment
   / AugmentedAssignment
+  / ForBlockPassiveToolReturnStatement
   / WhenExpressionAny
   / SlashIf
   / SlashBail
@@ -380,26 +381,33 @@ ForBlockReturnStatement "for block return statement"
       return helpers.createExeReturnNode(kind, value, text(), location());
     }
 
+ForBlockTerminatingReturnStatement "terminating for block return statement"
+  = kind:("=->" / "=>") _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode(
+        kind === '=->' ? 'dual' : 'canonical',
+        value,
+        text(),
+        location()
+      );
+    }
+
+ForBlockPassiveToolReturnStatement "passive for block tool return statement"
+  = "->" _ value:WhenRHSAction noise:BlockComments* {
+      return helpers.createExeReturnNode('tool', value, text(), location());
+    }
+
 ForBlockBody "for block body"
   = statements:ForBlockStatementList firstReturn:(
-      BlockStatementSeparator ret:ForBlockReturnStatement { return ret; }
-    / _ ret:ForBlockReturnStatement { return ret; }
+      BlockStatementSeparator ret:ForBlockTerminatingReturnStatement { return ret; }
+    / _ ret:ForBlockTerminatingReturnStatement { return ret; }
     )
-    extraReturn:(BlockStatementSeparator ForBlockReturnStatement { return true; })?
-    trailing:(BlockStatementSeparator ForBlockStatement { return true; })? {
+    extraReturn:(BlockStatementSeparator ret:ForBlockReturnStatement { return ret; })?
+    trailing:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })? {
       if (extraReturn) {
-        helpers.mlldError(
-          'Multiple return statements in for block. Only one return allowed as last statement.',
-          'single return',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('for block', firstReturn, extraReturn, location());
       }
       if (trailing) {
-        helpers.mlldError(
-          'Return must be the last statement in a block.',
-          'end of block',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('for block', firstReturn, trailing, location());
       }
       return {
         statements,
@@ -412,7 +420,15 @@ ForBlockBody "for block body"
         returnStmt: null
       };
     }
-  / leadingComments:LeadingBlockComment* _ ret:ForBlockReturnStatement {
+  / leadingComments:LeadingBlockComment* _ ret:ForBlockTerminatingReturnStatement
+    extraReturn:(BlockStatementSeparator next:ForBlockReturnStatement { return next; })?
+    trailing:(BlockStatementSeparator stmt:ForBlockStatement { return stmt; })? {
+      if (extraReturn) {
+        helpers.raiseUnreachableReturnError('for block', ret, extraReturn, location());
+      }
+      if (trailing) {
+        helpers.raiseUnreachableReturnError('for block', ret, trailing, location());
+      }
       return {
         statements: [],
         returnStmt: ret

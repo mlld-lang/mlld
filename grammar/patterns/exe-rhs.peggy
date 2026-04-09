@@ -697,25 +697,17 @@ ExeStatementBlock "exe statement block"
 
 ExeBlockBody
   = statements:ExeBlockStatementList firstReturn:(
-      BlockStatementSeparator ret:ExeReturnStatement { return ret; }
-    / _ ret:ExeReturnStatement { return ret; }
+      BlockStatementSeparator ret:ExeTerminatingReturnStatement { return ret; }
+    / _ ret:ExeTerminatingReturnStatement { return ret; }
     )
-    extraReturn:(BlockStatementSeparator ExeReturnStatement { return true; })?
-    trailing:(BlockStatementSeparator ExeBlockStatement { return true; })? {
+    extraReturn:(BlockStatementSeparator ret:ExeReturnStatement { return ret; })?
+    trailing:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })? {
       helpers.warnOnNonFinalValueReturningWhenStatements(statements, { hasTrailingReturn: true }, location());
       if (extraReturn) {
-        helpers.mlldError(
-          'Multiple return statements in exe block. Only one return allowed as last statement.',
-          'single return',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('exe block', firstReturn, extraReturn, location());
       }
       if (trailing) {
-        helpers.mlldError(
-          'Return must be the last statement in a block.',
-          'end of block',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('exe block', firstReturn, trailing, location());
       }
       return {
         statements,
@@ -729,7 +721,15 @@ ExeBlockBody
         returnStmt: null
       };
     }
-  / leadingComments:LeadingBlockComment* _ ret:ExeReturnStatement {
+  / leadingComments:LeadingBlockComment* _ ret:ExeTerminatingReturnStatement
+    extraReturn:(BlockStatementSeparator next:ExeReturnStatement { return next; })?
+    trailing:(BlockStatementSeparator stmt:ExeBlockStatement { return stmt; })? {
+      if (extraReturn) {
+        helpers.raiseUnreachableReturnError('exe block', ret, extraReturn, location());
+      }
+      if (trailing) {
+        helpers.raiseUnreachableReturnError('exe block', ret, trailing, location());
+      }
       return {
         statements: [],
         returnStmt: ret
@@ -762,6 +762,7 @@ ExeBlockStatementList
 ExeBlockStatement
   = LetAssignment
   / AugmentedAssignment
+  / ExePassiveToolReturnStatement
   / WhenExpressionAny
   / ForNestedDirective
   / SlashBox
@@ -799,6 +800,21 @@ ExeReturnSigil
 ExeReturnStatement "exe return statement"
   = kind:ExeReturnSigil _ value:ExeReturnValue? noise:BlockComments* {
       return helpers.createExeReturnNode(kind, value, text(), location());
+    }
+
+ExeTerminatingReturnStatement "terminating exe return statement"
+  = kind:("=->" / "=>") _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode(
+        kind === '=->' ? 'dual' : 'canonical',
+        value,
+        text(),
+        location()
+      );
+    }
+
+ExePassiveToolReturnStatement "passive tool return statement"
+  = "->" _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode('tool', value, text(), location());
     }
 
 CanonicalExeReturnStatement "canonical exe return statement"

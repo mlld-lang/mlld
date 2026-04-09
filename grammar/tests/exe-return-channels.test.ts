@@ -26,6 +26,7 @@ describe('exe return channels grammar', () => {
   it('parses tool and dual return channels inside exe-local blocks', () => {
     const ast = parseSync(
       `/exe @route(task) = [
+  -> "tool-slot"
   if @task.blocked [-> "blocked"]
   when @task.mode == "fast" => [=-> "fast"]
   => "slow"
@@ -33,17 +34,43 @@ describe('exe return channels grammar', () => {
     );
 
     const returns = findNodes(ast, (node) => node.type === 'ExeReturn');
-    expect(returns.map(node => node.kind)).toEqual(['tool', 'dual', 'canonical']);
+    expect(returns.map(node => node.kind)).toEqual(['tool', 'tool', 'dual', 'canonical']);
   });
 
   it('parses tool return channels inside exe-for expressions', () => {
     const ast = parseSync(
-      `/exe @sendBatch(emails) = for @email in @emails => [-> "sent"]`
+      `/exe @sendBatch(emails) = for @email in @emails => [
+  -> "sent"
+  => "done"
+]`
     );
 
     const returns = findNodes(ast, (node) => node.type === 'ExeReturn');
-    expect(returns).toHaveLength(1);
+    expect(returns).toHaveLength(2);
     expect(returns[0]?.kind).toBe('tool');
+    expect(returns[1]?.kind).toBe('canonical');
+  });
+
+  it('rejects unreachable tool returns after canonical returns with a targeted error', () => {
+    expect(() =>
+      parseSync(
+        `/exe @route() = [
+  => "canonical"
+  -> "tool"
+]`
+      )
+    ).toThrow(/Unreachable tool return in exe block/);
+  });
+
+  it('rejects unreachable statements after terminating dual returns with a targeted error', () => {
+    expect(() =>
+      parseSync(
+        `/exe @route() = [
+  =-> "both"
+  show "later"
+]`
+      )
+    ).toThrow(/Unreachable statement in exe block/);
   });
 
   it('rejects thin-arrow returns at top level in strict mode', () => {

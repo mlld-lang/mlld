@@ -381,6 +381,28 @@ export const helpers = {
             location: loc
         });
     },
+    formatExeReturnSigil(kind) {
+        if (kind === 'tool')
+            return '->';
+        if (kind === 'dual')
+            return '=->';
+        return '=>';
+    },
+    raiseUnreachableReturnError(scopeLabel, firstReturn, followingNode, fallbackLoc) {
+        const firstSigil = this.formatExeReturnSigil(firstReturn?.kind);
+        const nextSigil = this.formatExeReturnSigil(followingNode?.kind);
+        const location = followingNode?.location || fallbackLoc;
+        if (followingNode?.type === 'ExeReturn') {
+            if (followingNode?.kind === 'tool' && firstReturn?.kind === 'canonical') {
+                throw this.mlldError(`Unreachable tool return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} terminates the block. Move ${nextSigil} before ${firstSigil}, or use =-> if you want the same value in both channels.`, 'reachable return order', location);
+            }
+            if (followingNode?.kind === 'tool' && firstReturn?.kind === 'dual') {
+                throw this.mlldError(`Unreachable tool return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} already writes both channels and terminates the block.`, 'reachable return order', location);
+            }
+            throw this.mlldError(`Unreachable return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} terminates the block.`, 'reachable return order', location);
+        }
+        throw this.mlldError(`Unreachable statement in ${scopeLabel}. ${firstSigil} terminates the block, so nothing can appear after it.`, 'end of block', location);
+    },
     findFirstNonCanonicalExeReturn(node) {
         if (!node) {
             return null;

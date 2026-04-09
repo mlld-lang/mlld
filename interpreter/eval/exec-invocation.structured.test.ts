@@ -332,6 +332,53 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(strictHitResult.value.data).toBe('tool-hit');
   });
 
+  it('lets passive tool returns precede canonical returns in multiline exe blocks', async () => {
+    const src = `
+/exe @splitChannel() = [
+  -> "tool-slot-value"
+  => "canonical-value"
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'split-channel-direct',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'split-channel-direct-ref',
+        identifier: 'splitChannel',
+        args: []
+      }
+    };
+
+    const directResult = await evaluateExecInvocation(invocation, env);
+    expect(directResult.value.type).toBe('text');
+    expect(directResult.value.data).toBe('canonical-value');
+
+    const splitVar = env.getVariable('splitChannel');
+    expect(splitVar).toBeDefined();
+    splitVar!.internal = {
+      ...(splitVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const bridgeResult = await evaluateExecInvocation(
+      {
+        ...invocation,
+        nodeId: 'split-channel-bridge',
+        commandRef: {
+          ...invocation.commandRef,
+          nodeId: 'split-channel-bridge-ref'
+        }
+      },
+      env
+    );
+    expect(bridgeResult.value.type).toBe('text');
+    expect(bridgeResult.value.data).toBe('tool-slot-value');
+  });
+
   it('counts tool reaches from runtime execution, not source occurrence count', async () => {
     const src = `
 /exe @branch(first, second) = [
