@@ -5,6 +5,11 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import type { ImportResolution } from './ImportPathResolver';
+import {
+  buildImportTraceDataFromResolution,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 const MODULE_SOURCE_EXTENSIONS = ['.mld.md', '.mld', '.md', '.mlld.md', '.mlld'] as const;
 
@@ -34,14 +39,21 @@ export class ModuleImportHandler {
     env: Environment,
     importFromResolverContent: ImportFromResolverContent
   ): Promise<EvalResult> {
+    const traceData = buildImportTraceDataFromResolution(directive, resolution);
     if (resolution.preferLocal) {
       const resolverManager = env.getResolverManager();
       if (!resolverManager || !resolverManager.hasLocalModule(resolution.resolvedPath)) {
-        throw new MlldImportError(`Local module not found for ${resolution.resolvedPath}`, {
+        const error = new MlldImportError(`Local module not found for ${resolution.resolvedPath}`, {
           code: 'LOCAL_MODULE_NOT_FOUND',
           severity: ErrorSeverity.Fatal,
           details: { reference: resolution.resolvedPath }
         });
+        emitImportFailure(env, {
+          ...traceData,
+          phase: 'resolve',
+          error
+        });
+        throw error;
       }
     }
 
@@ -51,6 +63,11 @@ export class ModuleImportHandler {
     for (const candidate of candidates) {
       try {
         const resolverContent = (await env.resolveModule(candidate, 'import')) as ResolverModuleContent;
+        emitImportTrace(env, 'import.read', {
+          ...traceData,
+          resolvedPath: candidate,
+          contentType: resolverContent.contentType
+        });
         if (resolverContent.resolverName) {
           resolution.resolverName = resolverContent.resolverName;
         }
@@ -80,7 +97,7 @@ export class ModuleImportHandler {
         );
 
         await this.validateLockFileVersion(resolverContent, env);
-        return importFromResolverContent(directive, candidate, resolverContent, env);
+        return await importFromResolverContent(directive, candidate, resolverContent, env);
       } catch (error) {
         if ((error as any)?.code === 'IMPORT_NO_EXPORTS') {
           lastError = error;
@@ -91,10 +108,21 @@ export class ModuleImportHandler {
     }
 
     if (lastError) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'resolve',
+        error: lastError
+      });
       throw lastError;
     }
 
-    throw new Error(`Unable to resolve module import: ${resolution.resolvedPath}`);
+    const error = new Error(`Unable to resolve module import: ${resolution.resolvedPath}`);
+    emitImportFailure(env, {
+      ...traceData,
+      phase: 'resolve',
+      error
+    });
+    throw error;
   }
 
   private buildModuleCandidates(resolution: ImportResolution): string[] {

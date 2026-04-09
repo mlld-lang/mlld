@@ -3,7 +3,7 @@ id: security
 title: Security
 brief: Guards, labels, policies, records, shelf slots, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-03-24
+updated: 2026-04-07
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -154,7 +154,7 @@ var @result = @agent(@prompt) with { policy: @taskPolicy }
 
 **Argument constraints:** Literal values use tolerant comparison (`~=`), `eq` for explicit matching, `oneOf` for multiple candidates.
 
-**Control-arg enforcement:** Write executables declare security-relevant args with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. If trusted control-arg metadata is missing for a `tool:w` executable, every declared parameter is treated as a control arg. `true` (unconstrained) is only valid for tools with no effective control args.
+**Control-arg enforcement:** Write executables declare security-relevant args with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. If trusted control-arg metadata is missing for a `tool:w` executable, every declared parameter is treated as a control arg. Raw `tool: true` / flat `authorizations.allow.tool = true` is only valid for tools with no effective control args; builder bucketed `allow: { tool: true }` is explicit whole-tool authorization.
 
 **Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. Planner-pinned approved values can carry `known` attestations into that override path; raw literals cannot. `locked: true` still prevents all overrides.
 
@@ -188,7 +188,7 @@ Fact fields require handle-bearing input on writes — stricter than tool call a
 
 Slots do not mint facts. `known` does not persist in slots. Authority flows from records and `=> record` coercion. Stored values get `src:shelf:` provenance labels for tracking.
 
-Box config grants per-slot read and write access. `@shelf` is automatically provided to agents with write access, with `@shelve(...)` kept as write sugar and compatibility aliases for `read`, `clear`, and `remove`. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read` (unprojected). Dynamic aliasing lets generic wrappers expose slots under stable role names: `shelf: { read: [@logSlot as execution_log] }`. When running inside a shelf-scoped box, `exe llm` calls receive automatic `<shelf_notes>` in the system prompt describing the available slots by their agent-visible names.
+Box config grants per-slot read and write access. `@shelf` is automatically provided to agents with write access, with `@shelve(...)` kept as write sugar and compatibility aliases for `read`, `clear`, and `remove`. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read` (unprojected). Dynamic aliasing and shelf introspection (`@someShelf.mx.slots`, `@someShelf.mx.slotEntries`) let framework code build `box { shelf: @scope }` values over arbitrary shelves. When running inside a shelf-scoped box, `exe llm` calls receive automatic `<shelf_notes>` in the system prompt describing the available slots by their agent-visible names.
 
 **Atoms:** `shelf-slots`
 

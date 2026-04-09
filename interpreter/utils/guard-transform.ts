@@ -1,9 +1,14 @@
 import type { SecurityDescriptor } from '@core/types/security';
-import { makeSecurityDescriptor } from '@core/types/security';
+import { makeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
 import type { Variable, VariableSource } from '@core/types/variable';
-import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { updateVarMxFromDescriptor, varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { createComputedVariable } from '@core/types/variable/VariableFactories';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
+import {
+  applySecurityDescriptorToStructuredValue,
+  extractSecurityDescriptor,
+  isStructuredValue
+} from '@interpreter/utils/structured-value';
 
 const GUARD_TRANSFORM_SOURCE: VariableSource = {
   directive: 'guard',
@@ -35,6 +40,12 @@ export function materializeGuardTransform(
       { mx: {} }
     );
 
+  const mergedDescriptor = mergeDescriptors(
+    materialized.mx ? varMxToSecurityDescriptor(materialized.mx) : undefined,
+    isStructuredValue(materialized.value) ? extractSecurityDescriptor(materialized.value) : undefined,
+    descriptor
+  );
+
   const mx = (materialized.mx ??
     {
       labels: [],
@@ -43,7 +54,11 @@ export function materializeGuardTransform(
       policy: null
     }) as any;
   materialized.mx = mx;
-  updateVarMxFromDescriptor(mx, descriptor);
+  updateVarMxFromDescriptor(mx, mergedDescriptor);
+
+  if (isStructuredValue(materialized.value)) {
+    applySecurityDescriptorToStructuredValue(materialized.value, mergedDescriptor);
+  }
 
   return materialized;
 }

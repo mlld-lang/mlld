@@ -337,6 +337,7 @@ describe('when evaluator characterization', () => {
 
     const returnNode: ExeReturnNode = {
       type: 'ExeReturn',
+      kind: 'canonical',
       nodeId: 'return',
       values: [{ type: 'Text', nodeId: 'return-value', content: 'done' }],
       meta: { hasValue: true }

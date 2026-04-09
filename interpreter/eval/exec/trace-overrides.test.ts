@@ -21,7 +21,7 @@ ${body}
   `.trim();
 }
 
-async function interpretStructured(source: string, trace: 'off' | 'effects' | 'verbose' = 'off') {
+async function interpretStructured(source: string, trace: 'off' | 'effects' | 'handle' | 'handles' | 'verbose' = 'off') {
   return interpret(source, {
     fileSystem: new MemoryFileSystem(),
     pathService: new PathService(),
@@ -65,6 +65,6 @@ describe('exec trace overrides', () => {
 /exe @writeSelected() = @shelf.write(@pipeline.selected, @emitContact())
 /show @writeSelected() with { trace: "loud" }
       `), 'effects')
-    ).rejects.toThrow('trace must be one of: off, effects, verbose.');
+    ).rejects.toThrow('trace must be one of: off, effects, handle, handles, verbose.');
   });
 });

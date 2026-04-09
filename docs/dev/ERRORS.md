@@ -56,6 +56,7 @@ Both generated files contain:
 - Everything compiles at build time for performance
 - Convention-over-configuration for auto-registration
 - Add patterns on-demand based on user feedback (YAGNI approach)
+- Prefer `helpers.mlldError(...)` in the grammar when the parser already knows the structural mistake. Use parse-error patterns for fallback enhancement, not for cases the grammar can reject directly. Example: unreachable `->` after terminating `=>` / `=->` in block bodies should throw from the grammar with a targeted message.
 
 ## Architecture
 

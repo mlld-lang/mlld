@@ -67,4 +67,36 @@ describe('AS Modifier Tokenization', () => {
     const fieldTokens = tokens.filter(t => t.text === 'fm' || t.text === 'title');
     expect(fieldTokens).toHaveLength(2);
   });
+
+  it('should tokenize inline record coercion keywords', async () => {
+    const code = '/var @result = @value as record @schema';
+    const tokens = await getSemanticTokens(code);
+
+    const asToken = tokens.find(t => t.text === 'as' && t.char > code.indexOf('@value'));
+    expect(asToken).toBeDefined();
+    expect(asToken?.tokenType).toBe('keyword');
+
+    const recordToken = tokens.find(t => t.text === 'record' && t.char > asToken!.char);
+    expect(recordToken).toBeDefined();
+    expect(recordToken?.tokenType).toBe('keyword');
+
+    const schemaToken = tokens.find(t => t.text === '@schema');
+    expect(schemaToken).toBeDefined();
+    expect(schemaToken?.tokenType).toBe('variable');
+  });
+
+  it('should tokenize grouped inline record coercion before metadata access', async () => {
+    const code = '/var @valid = (@value as record @schema).mx.schema.valid';
+    const tokens = await getSemanticTokens(code);
+
+    const recordToken = tokens.find(t => t.text === 'record');
+    expect(recordToken).toBeDefined();
+    expect(recordToken?.tokenType).toBe('keyword');
+
+    const propertyTokens = tokens.filter(t => ['mx', 'schema', 'valid'].includes(t.text ?? ''));
+    expect(propertyTokens).toHaveLength(3);
+    for (const token of propertyTokens) {
+      expect(token.tokenType).toBe('property');
+    }
+  });
 });

@@ -8,7 +8,7 @@ aliases: [guard]
 tags: [security, guards, labels, policies]
 related: [labels-overview, labels-attestations, security-guard-composition, security-denied-handlers]
 related-code: [interpreter/eval/guard.ts, core/security/Guard.ts]
-updated: 2026-03-24
+updated: 2026-04-07
 qa_tier: 2
 ---
 
@@ -164,7 +164,7 @@ After guards validate or transform operation output. Four actions:
 | `allow` | Proceed with the output |
 | `deny` | Block the operation |
 | `retry` | Re-execute the entire exe from scratch |
-| `resume` | Append a message to the LLM conversation, get a new response (no tool re-execution) |
+| `resume` | Append a message to the LLM conversation, get a new response (no tool re-execution or new tool calls) |
 
 ```mlld
 guard @validateJson after op:exe = when [
@@ -173,7 +173,7 @@ guard @validateJson after op:exe = when [
 ]
 ```
 
-`resume` is for LLM exes that called write tools and then produced malformed output. Unlike `retry`, `resume` continues the existing conversation — the LLM sees its prior tool calls and results, plus the correction message. No tools re-fire.
+`resume` is for LLM exes that called write tools and then produced malformed output. Unlike `retry`, `resume` continues the existing conversation — the LLM sees its prior tool calls and results, plus the correction message. No tools re-fire, no new tools are exposed, and auto-provisioned `@shelve` is disabled for the resumed call. That makes resume final-output repair only, not a chance to redo tool work. See the [resume invariants](#resume-invariants) section below.
 
 ```mlld
 guard after @fixShape for op:named:myWorker = when [
@@ -183,6 +183,27 @@ guard after @fixShape for op:named:myWorker = when [
   * => allow
 ]
 ```
+
+### Resume invariants
+
+A resumed call runs with two structural restrictions:
+
+- **`tools = []`** — the user-supplied tool list is forced empty for the resumed turn.
+- **`disableAutoProvisionedShelve: true`** — the auto-provisioned shelve tool from writable shelf scope is also dropped from the resumed call.
+
+Both are load-bearing for handle safety, not just convenience. Handles are minted per call: each LLM invocation has its own mint table that dies when the call ends. The conversation history that resume replays still contains handle strings from the prior turn, but those handles are dead by the time the resume runs — their mint table belongs to the original call.
+
+If the resumed call could fire tools or shelve writes, the LLM might paste a handle from the prior turn into a fresh tool call. That handle would not resolve, and the dispatch would either deny outright or — worse, if any path were lenient — match a different value than the LLM intended. Forcing `tools = []` and disabling auto-provisioned shelve eliminates the failure mode at the structural level.
+
+What this means semantically: **resume fixes the LLM's text or JSON output, not its tool calls.** Use it when the model called the right tools but produced malformed final text. If you want the LLM to take more actions, that is a new step in the orchestration loop — not a resume. Use `retry` (which starts a fresh call with a fresh mint table) if you want to re-attempt the entire operation, but be careful: `retry` re-fires write tools, so it is dangerous for exes that send email, create issues, or otherwise have side effects.
+
+To inspect resume state from a guard or post-call code, read `@mx.llm.resume`. It returns `null` outside a resumed call and a structured object (`{ sessionId, provider, continuationOf, attempt }`) when the current call is a resume continuation. Useful for guards that need to behave differently on the second pass, or for tests that verify a resume actually fired the expected number of times. See `builtins-ambient-mx`.
+
+| Situation | Action |
+|---|---|
+| Read-only exe with malformed output | `retry` is fine |
+| Write-tool exe with malformed final text | `resume` |
+| Write-tool exe needs to re-attempt the writes themselves | Not a guard concern — restart the orchestration step |
 
 When multiple guards disagree: `deny > resume > retry > allow`.
 

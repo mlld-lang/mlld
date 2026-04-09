@@ -6,7 +6,7 @@ category: patterns
 tags: [patterns, records, guards, schema, validation, retry, llm, agents]
 related: [records-basics, security-guards-basics, exe-simple, facts-and-handles]
 related-code: [interpreter/eval/records/coerce-record.ts, interpreter/hooks/guard-post-hook.ts]
-updated: 2026-04-04
+updated: 2026-04-07
 ---
 
 LLM exes produce unpredictable output. Records validate the shape. Guards retry on failure with the actual schema errors as feedback.
@@ -37,9 +37,18 @@ Three pieces:
 2. **`=> record`** on the exe applies coercion automatically on every call
 3. **Guard** checks `@output.mx.schema.valid` and retries with `@output.mx.schema.errors`
 
+The same coercion engine is also available inline for ordinary values:
+
+```mlld
+var @checked = @raw as record @task_result
+show @checked.mx.schema.valid
+```
+
+Use `=> record` when the coercion belongs to the exe's return contract. Use `as record @schema` when you need to validate or re-coerce a value inside a larger expression.
+
 ### `resume` vs `retry` for tool-calling exes
 
-If the exe calls write tools, use `resume` instead of `retry`. `retry` re-executes the entire exe — including tool calls. That means double-sending emails, double-creating events. `resume` continues the existing LLM conversation without re-executing tools:
+If the exe calls write tools, use `resume` instead of `retry`. `retry` re-executes the entire exe — including tool calls. That means double-sending emails, double-creating events. `resume` continues the existing LLM conversation without re-executing tools or exposing new ones:
 
 ```mlld
 guard after @fixShape for op:named:executeWorker = when [
@@ -50,7 +59,7 @@ guard after @fixShape for op:named:executeWorker = when [
 ]
 ```
 
-The LLM sees its prior tool calls and results, plus the correction message. It reformats. `=> record` coercion runs on the new response. No tools re-fire.
+The LLM sees its prior tool calls and results, plus the correction message. It reformats. `=> record` coercion runs on the new response. No tools re-fire, the bridge tool list is forced empty, and auto-provisioned `@shelve` stays off. See `security-guards-basics` for the full resume invariants discussion.
 
 Use `retry` for exes without side effects (read-only tools, template exes, JS exes). Use `resume` for exes with write tools.
 
@@ -107,6 +116,8 @@ guard after @check for op:named:myExe = when [
 ```
 
 The retry message includes the actual errors. The LLM sees "missing required field: count" not "return valid JSON."
+
+Inline `as record @schema` attaches the same `mx.schema` metadata, so grouped expressions like `(@value as record @schema).mx.schema.errors` work the same way.
 
 ## Nested output validation
 

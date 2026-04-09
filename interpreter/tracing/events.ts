@@ -42,16 +42,33 @@ function createRuntimeTraceEnvelope<K extends RuntimeTraceEventName>(
   };
 }
 
-export function traceHandleMint(data: RuntimeTraceEventSpecMap['handle.mint']['data']): RuntimeTraceEnvelope<'handle.mint'> {
-  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.mint', data);
+export function traceHandleIssued(data: RuntimeTraceEventSpecMap['handle.issued']['data']): RuntimeTraceEnvelope<'handle.issued'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.issued', data);
 }
 
-export function traceHandleResolve(data: RuntimeTraceEventSpecMap['handle.resolve']['data']): RuntimeTraceEnvelope<'handle.resolve'> {
-  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolve', data);
+export function traceImportEvent<K extends 'import.resolve' | 'import.cache_hit' | 'import.read' | 'import.parse' | 'import.evaluate' | 'import.exports'>(
+  event: K,
+  data: RuntimeTraceEventSpecMap[K]['data']
+): RuntimeTraceEnvelope<K> {
+  return createRuntimeTraceEnvelope('verbose', 'import', event, data);
 }
 
-export function traceHandleResolveFail(data: RuntimeTraceEventSpecMap['handle.resolve_fail']['data']): RuntimeTraceEnvelope<'handle.resolve_fail'> {
-  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolve_fail', data);
+export function traceImportFailure(
+  data: RuntimeTraceEventSpecMap['import.fail']['data']
+): RuntimeTraceEnvelope<'import.fail'> {
+  return createRuntimeTraceEnvelope('effects', 'import', 'import.fail', data);
+}
+
+export function traceHandleResolved(data: RuntimeTraceEventSpecMap['handle.resolved']['data']): RuntimeTraceEnvelope<'handle.resolved'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolved', data);
+}
+
+export function traceHandleResolveFailed(data: RuntimeTraceEventSpecMap['handle.resolve_failed']['data']): RuntimeTraceEnvelope<'handle.resolve_failed'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.resolve_failed', data);
+}
+
+export function traceHandleReleased(data: RuntimeTraceEventSpecMap['handle.released']['data']): RuntimeTraceEnvelope<'handle.released'> {
+  return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.released', data);
 }
 
 export function traceShelfRead(data: RuntimeTraceEventSpecMap['shelf.read']['data']): RuntimeTraceEnvelope<'shelf.read'> {

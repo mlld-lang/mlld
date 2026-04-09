@@ -141,4 +141,37 @@ describe('ModuleImportHandler', () => {
       )
     ).rejects.toThrow(/Locked version mismatch for @scope\/pkg/);
   });
+
+  it('emits resolve-phase runtime trace failures when no module candidate resolves', async () => {
+    const env = createEnv();
+    env.setRuntimeTrace('verbose');
+    const handler = new ModuleImportHandler();
+    vi.spyOn(env, 'resolveModule').mockRejectedValue(new Error('not found'));
+
+    await expect(
+      handler.evaluateModuleImport(
+        {
+          type: 'module',
+          resolvedPath: '@scope/pkg',
+          importType: 'module'
+        } as any,
+        { subtype: 'importSelected', values: {} } as any,
+        env,
+        vi.fn()
+      )
+    ).rejects.toThrow(/not found/);
+
+    expect(env.getRuntimeTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'import',
+          event: 'import.fail',
+          data: expect.objectContaining({
+            phase: 'resolve',
+            resolvedPath: '@scope/pkg'
+          })
+        })
+      ])
+    );
+  });
 });

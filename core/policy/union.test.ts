@@ -179,6 +179,55 @@ describe('PolicyConfig capabilities', () => {
     expect(filesystem.read).toEqual(expect.arrayContaining(['@base/tmp/**', '@base/dist/**']));
     expect(filesystem.write).toEqual(expect.arrayContaining(['@base/dist/**']));
   });
+
+  it('preserves base-only allow families while intersecting shared entries', () => {
+    const merged = mergePolicyConfigs(
+      {
+        allow: {
+          cmd: ['echo', 'git'],
+          js: ['*']
+        }
+      },
+      {
+        allow: {
+          cmd: ['echo'],
+          filesystem: {
+            read: ['@base/tmp/**']
+          }
+        }
+      }
+    );
+
+    expect((merged.allow as { cmd?: string[] })?.cmd).toEqual(['echo']);
+    expect((merged.allow as { js?: string[] })?.js).toEqual(['*']);
+    expect((merged.allow as { filesystem?: { read?: string[] } })?.filesystem).toEqual({
+      read: ['@base/tmp/**']
+    });
+  });
+
+  it('unions deny families across composed policies', () => {
+    const merged = mergePolicyConfigs(
+      {
+        deny: {
+          cmd: ['curl']
+        }
+      },
+      {
+        deny: {
+          cmd: ['git'],
+          filesystem: {
+            write: ['@base/tmp/**']
+          }
+        }
+      }
+    );
+
+    expect(((merged.deny as { cmd?: string[] })?.cmd ?? []).sort()).toEqual(['curl', 'git']);
+    expect((merged.deny as { filesystem?: { read?: string[]; write?: string[] } })?.filesystem).toEqual({
+      read: ['@base/tmp/**'],
+      write: ['@base/tmp/**']
+    });
+  });
 });
 
 describe('PolicyConfig env', () => {

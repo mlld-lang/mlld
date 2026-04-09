@@ -13,6 +13,7 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import type { VariableSource } from '@core/types/variable';
 import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 
 function createEnv(): {
   env: Environment;
@@ -34,6 +35,16 @@ function parseWhenExpression(source: string): WhenExpressionNode {
     throw new Error('Expected WhenExpression in directive content');
   }
   return whenExpr;
+}
+
+function valueToText(value: unknown): string {
+  if (typeof (value as any)?.text === 'string') {
+    return (value as any).text;
+  }
+  if (typeof (value as any)?.data === 'string') {
+    return (value as any).data;
+  }
+  return String(value ?? '');
 }
 
 describe('handleExecGuardDenial', () => {
@@ -289,6 +300,52 @@ describe('handleExecGuardDenial', () => {
       '[Guard Warning] Guard for op:show prevented operation due to policy violation'
     );
     expect(formatGuardWarning('Blocked', undefined, undefined)).toBe('[Guard Warning] Blocked');
+  });
+
+  it('routes label-flow denials through terminal when handlers inside exe blocks', async () => {
+    const { env, effects } = createEnv();
+    const directives = parseSync(`
+/policy @base = { defaults: { rules: ["no-influenced-advice"] } }
+/var influenced @query = "travel"
+/exe advice @directAdvice(value) = when [
+  denied => "direct:@value"
+  * => "ok"
+]
+/exe advice @returnedAdvice(value) = [
+  let @marker = "seen:@value"
+  => when [
+    denied => "returned:@value"
+    * => "ok"
+  ]
+]
+/exe advice @finalAdvice(value) = [
+  let @marker = "seen:@value"
+  when [
+    denied => "final:@value"
+    * => "ok"
+  ]
+]
+/var @directResult = @directAdvice(@query)
+/var @returnedResult = @returnedAdvice(@query)
+/var @finalResult = @finalAdvice(@query)
+    `).filter(node => (node as DirectiveNode)?.type === 'Directive') as DirectiveNode[];
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const directResultVar = env.getVariable('directResult');
+    const returnedResultVar = env.getVariable('returnedResult');
+    const finalResultVar = env.getVariable('finalResult');
+
+    const directResult = directResultVar ? await extractVariableValue(directResultVar, env) : undefined;
+    const returnedResult = returnedResultVar ? await extractVariableValue(returnedResultVar, env) : undefined;
+    const finalResult = finalResultVar ? await extractVariableValue(finalResultVar, env) : undefined;
+
+    expect(valueToText(directResult)).toBe('direct:travel');
+    expect(valueToText(returnedResult)).toBe('returned:travel');
+    expect(valueToText(finalResult)).toBe('final:travel');
+    expect(effects.getErrors()).toContain('no-influenced-advice');
   });
 
   it('keeps denied handler fallback values consistent inside for directives', async () => {

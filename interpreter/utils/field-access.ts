@@ -5,7 +5,12 @@
 import { FieldAccessNode } from '@core/types/primitives';
 import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
-import { deserializeSecurityDescriptor, mergeDescriptors } from '@core/types/security';
+import {
+  deserializeSecurityDescriptor,
+  mergeDescriptors,
+  removeLabelsFromDescriptor,
+  type SecurityDescriptor
+} from '@core/types/security';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
@@ -58,6 +63,7 @@ const COMMON_FILE_EXTENSION_FIELDS = new Set([
 ]);
 
 const WORKSPACE_MX_CONTEXT = Symbol('mlld.workspace-mx-context');
+const OBJECT_UTILITY_MX_VIEW = Symbol('mlld.object-utility-mx-view');
 
 interface WorkspaceMxContext {
   workspace?: WorkspaceValue;
@@ -134,6 +140,9 @@ function isObjectAST(value: any): boolean {
   if (!value || typeof value !== 'object' || value.type !== 'object') {
     return false;
   }
+  if ((value as Record<PropertyKey, unknown>)[OBJECT_UTILITY_MX_VIEW] === true) {
+    return false;
+  }
 
   if (Array.isArray(value.entries)) {
     return value.entries.every(
@@ -168,12 +177,25 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
 function createObjectUtilityMxView(
   mx: unknown,
   data: unknown,
-  structured?: StructuredValue
+  structured?: StructuredValue,
+  parentVariable?: Variable
 ): unknown {
   const workspaceContext = deriveWorkspaceMxContext(mx, data);
   const hasMxObject = Boolean(mx && typeof mx === 'object');
   const hasObjectUtilityData = isPlainObjectValue(data);
-  if (!structured && !hasObjectUtilityData && !workspaceContext) {
+  const shelfDefinition =
+    parentVariable?.internal?.isShelf === true &&
+    parentVariable.internal &&
+    typeof parentVariable.internal === 'object' &&
+    'shelfDefinition' in parentVariable.internal
+      ? (parentVariable.internal as Record<string, unknown>).shelfDefinition as
+          | { slots?: Record<string, unknown> }
+          | undefined
+      : undefined;
+  const shelfSlotNames = shelfDefinition?.slots ? Object.keys(shelfDefinition.slots) : [];
+  const hasShelfMxAccessors = shelfSlotNames.length > 0;
+
+  if (!structured && !hasObjectUtilityData && !workspaceContext && !hasShelfMxAccessors) {
     return mx;
   }
 
@@ -214,6 +236,25 @@ function createObjectUtilityMxView(
     });
   }
 
+  if (hasShelfMxAccessors) {
+    const shelfValue = data && typeof data === 'object'
+      ? data as Record<string, unknown>
+      : undefined;
+    Object.defineProperty(view, 'slots', {
+      value: shelfSlotNames,
+      enumerable: true,
+      configurable: true
+    });
+    Object.defineProperty(view, 'slotEntries', {
+      value: shelfSlotNames.map(name => ({
+        name,
+        ref: shelfValue?.[name]
+      })),
+      enumerable: true,
+      configurable: true
+    });
+  }
+
   if (workspaceContext) {
     Object.defineProperty(view, WORKSPACE_MX_CONTEXT, {
       value: workspaceContext,
@@ -221,6 +262,12 @@ function createObjectUtilityMxView(
       configurable: true
     });
   }
+
+  Object.defineProperty(view, OBJECT_UTILITY_MX_VIEW, {
+    value: true,
+    enumerable: false,
+    configurable: true
+  });
 
   return view;
 }
@@ -233,6 +280,60 @@ function readStringProperty(value: unknown, key: string): string | undefined {
   return typeof candidate === 'string' && candidate.length > 0
     ? candidate
     : undefined;
+}
+
+async function resolveDeferredObjectFieldValue(
+  value: unknown,
+  env: Environment,
+  sourceLocation?: SourceLocation
+): Promise<unknown> {
+  if (!value || typeof value !== 'object' || !('type' in value)) {
+    return value;
+  }
+
+  const node = value as Record<string, unknown>;
+  const refNode =
+    node.type === 'VariableReferenceWithTail' && node.variable && typeof node.variable === 'object'
+      ? node.variable as Record<string, unknown>
+      : node;
+
+  if (refNode.type !== 'VariableReference' || typeof refNode.identifier !== 'string') {
+    return value;
+  }
+
+  const variable = env.getVariable(refNode.identifier);
+  if (!variable) {
+    throw new Error(`Variable not found: ${refNode.identifier}`);
+  }
+
+  const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+  const hasFields = Array.isArray(refNode.fields) && refNode.fields.length > 0;
+
+  if (!hasFields) {
+    if (node.type === 'VariableReference' && variable.internal?.isShelf === true) {
+      const { resolveVariable, ResolutionContext } = await import('./variable-resolution');
+      return resolveVariable(variable, env, ResolutionContext.ObjectProperty);
+    }
+    return evaluateDataValue(value as DataObjectValue, env);
+  }
+
+  const { resolveVariable, ResolutionContext } = await import('./variable-resolution');
+  const resolved = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+  const fieldResult = await accessFields(
+    resolved,
+    refNode.fields as FieldAccessNode[],
+    {
+      preserveContext: true,
+      env,
+      sourceLocation
+    }
+  ) as FieldAccessResult;
+
+  if (isVariable(fieldResult.value) && fieldResult.value.internal?.isShelf === true) {
+    return fieldResult.value;
+  }
+
+  return evaluateDataValue(value as DataObjectValue, env);
 }
 
 function deriveWorkspaceMxContext(mx: unknown, data: unknown): WorkspaceMxContext | undefined {
@@ -342,6 +443,25 @@ function getFieldMetadata(
       ? payload.projection
       : undefined
   };
+}
+
+function stripFactLabelsFromDescriptor(
+  descriptor: SecurityDescriptor | undefined
+): SecurityDescriptor | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+
+  const factLabels = [
+    ...descriptor.labels.filter(label => label.startsWith('fact:')),
+    ...descriptor.taint.filter(label => label.startsWith('fact:')),
+    ...descriptor.attestations.filter(label => label.startsWith('fact:'))
+  ];
+  if (factLabels.length === 0) {
+    return descriptor;
+  }
+
+  return removeLabelsFromDescriptor(descriptor, factLabels);
 }
 
 function isIgnorableWorkspaceDiffError(error: unknown): boolean {
@@ -569,7 +689,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
           (value as any).mx;
 
-        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper);
+        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper, value);
       })();
 
       if (options?.preserveContext) {
@@ -676,7 +796,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'mx') {
-          accessedValue = createObjectUtilityMxView(structuredWrapper.mx, rawValue, structuredWrapper);
+          accessedValue = createObjectUtilityMxView(
+            structuredWrapper.mx,
+            rawValue,
+            structuredWrapper,
+            parentVariable
+          );
           break;
         }
       }
@@ -692,7 +817,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         if (syntheticMx) {
           updateVarMxFromDescriptor(syntheticMx as any, descriptor);
         }
-        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue);
+        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue, undefined, parentVariable);
         break;
       }
       if (typeof rawValue === 'string') {
@@ -828,6 +953,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         accessedValue = getObjectField(rawValue, name);
+        if (options?.env) {
+          accessedValue = await resolveDeferredObjectFieldValue(
+            accessedValue,
+            options.env,
+            options?.sourceLocation
+          );
+        }
         break;
       }
 
@@ -1100,15 +1232,30 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   }
 
   const provenanceSource = parentVariable ?? structuredWrapper ?? value;
-  const provenanceDescriptor = provenanceSource
-    ? extractSecurityDescriptor(provenanceSource)
+  const provenanceDescriptor = (() => {
+    if (!provenanceSource) {
+      return undefined;
+    }
+    const descriptor = extractSecurityDescriptor(provenanceSource);
+    return isStructuredValue(accessedValue)
+      ? stripFactLabelsFromDescriptor(descriptor)
+      : descriptor;
+  })();
+  const currentDescriptor = isStructuredValue(accessedValue)
+    ? extractSecurityDescriptor(accessedValue)
     : undefined;
   const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
   const fieldDescriptor = fieldMetadata?.descriptor;
   const effectiveDescriptor =
-    provenanceDescriptor && fieldDescriptor
-      ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
-      : fieldDescriptor ?? provenanceDescriptor;
+    provenanceDescriptor && currentDescriptor && fieldDescriptor
+      ? mergeDescriptors(provenanceDescriptor, currentDescriptor, fieldDescriptor)
+      : provenanceDescriptor && currentDescriptor
+        ? mergeDescriptors(provenanceDescriptor, currentDescriptor)
+        : provenanceDescriptor && fieldDescriptor
+          ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
+          : currentDescriptor && fieldDescriptor
+            ? mergeDescriptors(currentDescriptor, fieldDescriptor)
+            : fieldDescriptor ?? currentDescriptor ?? provenanceDescriptor;
 
   if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
     if (accessedValue != null && typeof accessedValue !== 'object') {

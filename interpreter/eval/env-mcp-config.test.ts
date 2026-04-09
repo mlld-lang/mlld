@@ -3,6 +3,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { accessField } from '@interpreter/utils/field-access';
 import { fileURLToPath } from 'url';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
@@ -21,6 +22,9 @@ const callProjectedHandleFromConfigPath = fileURLToPath(
 );
 const callProjectedValueFromConfigPath = fileURLToPath(
   new URL('../../tests/support/mcp/call-projected-value-from-config.cjs', import.meta.url)
+);
+const callProjectedObjectFromConfigPath = fileURLToPath(
+  new URL('../../tests/support/mcp/call-projected-object-from-config.cjs', import.meta.url)
 );
 
 const pathService = new PathService();
@@ -591,6 +595,58 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('disables auto-provisioned @shelve during llm resume continuations', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @agent_result = {',
+      '  data: [ok: boolean, tools: array],',
+      '  validate: "demote"',
+      '}',
+      '/exe @check_result(value) = @value => agent_result',
+      '/shelf @state = {',
+      '  selected: agent_result?',
+      '}',
+      '/exe llm @agent(prompt, config) = js {',
+      '  const resume = config?._mlld?.resume;',
+      '  return {',
+      '    value: { ok: resume?.continue ? true : "bad", tools: (mx.tools.available ?? []).map(tool => tool.name) },',
+      '    _mlld: { sessionId: resume?.sessionId ?? "resume-session", provider: "fake" }',
+      '  };',
+      '}',
+      '/guard after for op:named:agent = when [',
+      '  @check_result(@output).mx.schema.valid == false && @mx.guard.try < 2 => resume "Return valid JSON only"',
+      '  @check_result(@output).mx.schema.valid == false => deny "still invalid"',
+      '  * => allow',
+      ']',
+      '/box {',
+      '  shelf: { write: [@state.selected] }',
+      '} [',
+      '  let @result = @agent("start")',
+      '  show @result | @json',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        ok: true,
+        tools: []
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('allows a later pre-guard on the same exe llm to switch from retry to resume', async () => {
     const fileSystem = new MemoryFileSystem();
     const promptKey = '__mlldGuardResumePrePrompt';
@@ -800,6 +856,374 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves cross-module tool collections for llm bridge policy validation', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      `/exe llm @worker(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:node:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('ignores capability allowlist default-deny for non-surfaced llm substrate commands built via policy.build', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      '/exe llm @worker(prompt, config) = [',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      ']',
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:git:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('ignores capability allowlist default-deny for non-surfaced llm substrate pipeline stages', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/framework.mld', [
+      '/exe llm @worker(prompt, config) = [',
+      `  => @prompt | cmd { env -u HOME node "${callToolFromConfigPath}" "@mx.llm.config" schedule_transaction '{"recipient":"approved@example.com","amount":"10"}' }`,
+      ']',
+      '/var @bridgePolicy = { capabilities: { allow: ["cmd:git:*"] } }',
+      '/exe @dispatchAgainst(agentConfig, decision) = [',
+      '  let @auth = @policy.build(@decision.authorizations, @agentConfig.toolsCollection, { basePolicy: @bridgePolicy })',
+      '  => box {} [',
+      '    => @worker("Schedule the transaction", { tools: @agentConfig.toolsCollection }) with { policy: @auth.policy }',
+      '  ]',
+      ']',
+      '/export { @dispatchAgainst }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @dispatchAgainst } from "/framework.mld"',
+      '/exe exfil:send, tool:w @schedule_transaction(recipient, amount) = `scheduled:@recipient:@amount`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @myTools = {',
+      '  schedule_transaction: {',
+      '    mlld: @schedule_transaction,',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @agent = { toolsCollection: @myTools }',
+      '/var @decision = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      schedule_transaction: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @dispatchAgainst(@agent, @decision)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('scheduled:approved@example.com:10');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-send-to-unknown away from nested llm substrate pipeline commands', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      `  => @prompt | cmd { env -u HOME node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves substrate exemption through let/when frames around nested llm pipeline commands', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @cfg = @config ? @config : {}',
+      '  let @dir = @root',
+      '  let @raw = when [',
+      '    @cfg.tools => @prompt | cmd:@dir { env -u HOME node "' + callToolFromConfigPath + '" "@mx.llm.config" send_email \'{"recipient":"approved@example.com","subject":"hi","body":"test"}\' }',
+      '    * => "missing tools"',
+      '  ]',
+      '  => @raw',
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('ignores capability allowlist default-deny for nested llm helper exes', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:git:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe @claudeResume(config) = sh { env -u HOME printf "" }',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @resume = @claudeResume(@config)',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves imported tool collections across multiple exe param layers on the llm bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/tools.mld', [
+      '/exe exfil:send, tool:w @send_email(recipient, subject) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @writeTools = {',
+      '  send_email: {',
+      '    mlld: @send_email,',
+      '    expose: ["recipient", "subject"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/export { @writeTools }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @writeTools } from "/tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi"}' }`,
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:node:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe @layer3(tools) = @agent("Send the email", { tools: @tools }) with { policy: @taskPolicy }',
+      '/exe @layer2(tools) = @layer3(@tools)',
+      '/exe @layer1(tools) = @layer2(@tools)',
+      '/show @layer1(@writeTools)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves ambient @mx.llm bridge context through imported llm wrappers that omit inner config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/provider.mld', [
@@ -870,6 +1294,57 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('does not emit auth.deny noise for imported llm wrapper helpers under control-arg tool surfaces', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm @provider(prompt, config) = [',
+      '  let @dis = @mx.llm && @mx.llm.hasTools ? @computeDisallowed(@mx.llm.native, "A,B") : ""',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:provider:*", "cmd:node:*", "cmd:computeDisallowed:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @provider("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    expect(result.output).toContain('sent:approved@example.com:hi');
+
+    const noisyAuthDenies = result.traceEvents.filter((event: any) =>
+      event?.event === 'auth.deny'
+      && (
+        event?.data?.tool === 'provider'
+        || event?.data?.tool === 'computeDisallowed'
+      )
+    );
+    expect(noisyAuthDenies).toEqual([]);
+  });
+
   it('preserves record coercion for imported MCP-backed wrapper exes on the llm tool bridge', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
@@ -899,8 +1374,14 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'ada@example.com',
-        name: 'Ada Lovelace'
+        email: {
+          value: 'ada@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        },
+        name: {
+          value: 'Ada Lovelace',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();
@@ -1022,8 +1503,14 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'mark@example.com',
-        name: 'Mark Davies'
+        email: {
+          value: 'mark@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        },
+        name: {
+          value: 'Mark Davies',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();
@@ -1190,6 +1677,124 @@ describe('box MCP config integration', () => {
       });
 
       expect(output.trim()).toBe('sent:mark@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves projected fact handles for auto-provisioned shelve under with-policy bridge sessions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = {',
+      '  facts: [email: string],',
+      '  display: [{ ref: "email" }]',
+      '}',
+      '/shelf @outreach = {',
+      '  selected: contact?',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "alice@example.com" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      '/var @basePolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] }',
+      '}',
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedObjectFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Alice"}' '{"email":"email.handle"}' shelve '{"slot_alias":"outreach.selected"}' value }`,
+      '/box {',
+      '  shelf: { write: [@outreach.selected] }',
+      '} [',
+      '  show @agent("Pick Alice", { tools: @toolList }) with { policy: @basePolicy }',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          value: 'alice@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+
+      const outreach = environment?.getVariable('outreach');
+      expect(outreach).toBeDefined();
+
+      const selected = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env: environment });
+      const email = await accessField(selected, { type: 'field', value: 'email' } as any, { env: environment });
+
+      expect((email as any).mx?.labels).toEqual(expect.arrayContaining(['fact:@contact.email']));
+      expect((email as any).mx?.factsources).toEqual([
+        expect.objectContaining({
+          ref: '@contact.email',
+          sourceRef: '@contact',
+          field: 'email'
+        })
+      ]);
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves omitted-display fact refs for auto-provisioned shelve bridge sessions', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = {',
+      '  facts: [email: string]',
+      '}',
+      '/shelf @outreach = {',
+      '  selected: contact?',
+      '}',
+      '/exe @search_contacts(query) = js { return { email: "alice@example.com" }; } => contact',
+      '/var @toolList = [@search_contacts]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callProjectedObjectFromConfigPath}" "@mx.llm.config" search_contacts '{"query":"Alice"}' '{"email":"email"}' shelve '{"slot_alias":"outreach.selected"}' value }`,
+      '/box {',
+      '  shelf: { write: [@outreach.selected] }',
+      '} [',
+      '  show @agent("Pick Alice", { tools: @toolList })',
+      ']'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        email: {
+          value: 'alice@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
+      });
+
+      const outreach = environment?.getVariable('outreach');
+      expect(outreach).toBeDefined();
+
+      const selected = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env: environment });
+      const email = await accessField(selected, { type: 'field', value: 'email' } as any, { env: environment });
+
+      expect((email as any).mx?.labels).toEqual(expect.arrayContaining(['fact:@contact.email']));
+      expect((email as any).mx?.factsources).toEqual([
+        expect.objectContaining({
+          ref: '@contact.email',
+          sourceRef: '@contact',
+          field: 'email'
+        })
+      ]);
     } finally {
       environment?.cleanup();
     }
@@ -1582,7 +2187,10 @@ describe('box MCP config integration', () => {
       });
 
       expect(JSON.parse(output.trim())).toEqual({
-        email: 'mark@example.com'
+        email: {
+          value: 'mark@example.com',
+          handle: expect.stringMatching(HANDLE_RE)
+        }
       });
     } finally {
       environment?.cleanup();
@@ -1757,6 +2365,284 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('scopes policy authorizations.allow to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes policy authorizations.allow to surfaced llm tools instead of tool:w substrate helpers', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-send-to-unknown to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-send-to-unknown"] },',
+      '  operations: { "exfil:send": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes no-untrusted-destructive to surfaced llm tools instead of a tool:w substrate wrapper', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe destructive:targeted, tool:w @delete_doc(id) = `deleted:@id`',
+      '  with { controlArgs: ["id"] }',
+      '/var @toolList = [@delete_doc]',
+      '/var untrusted @prompt = "Delete doc-1"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive"] },',
+      '  operations: { destructive: ["tool:w"], "destructive:targeted": ["tool:w"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      delete_doc: {',
+      '        args: {',
+      '          id: { eq: "doc-1", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe tool:w @computeDisallowed(native, all) = ""',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @dis = @computeDisallowed("", "")',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" delete_doc '{"id":"doc-1"}' }`,
+      ']',
+      '/show @claude(@prompt, { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('deleted:doc-1');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes surface-scoped label-flow rules away from llm substrate calls with no runtime tool surface', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/var untrusted @prompt = "Plan the next step"',
+      '/var untrusted @cfg = { model: "haiku" }',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/exe llm, exfil:send, destructive:targeted, privileged @claude(prompt, config) = "ok"',
+      '/show @claude(@prompt, @cfg) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes imported llm substrate wrappers away from surfaced tool-wrapper policy rules', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe llm, exfil:send, destructive:targeted, privileged @provider(prompt, config) = "ok"',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/var untrusted @query = "Use the wrapped tool"',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/exe tool:r @wrapped(prompt) = @provider(@prompt, { model: "haiku" })',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" wrapped '{"prompt":"nested-call"}' }`,
+      '/show @agent(@query, { tools: [@wrapped] }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('scopes imported llm substrate calls away from surface-scoped label-flow rules when no tools are selected', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe llm, exfil:send, destructive:targeted, privileged @provider(prompt, config) = "ok"',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/var untrusted @prompt = "Plan the next step"',
+      '/var untrusted @cfg = { model: "haiku" }',
+      '/var @taskPolicy = {',
+      '  defaults: { rules: ["no-untrusted-destructive", "no-untrusted-privileged", "no-send-to-unknown"] }',
+      '}',
+      '/show @provider(@prompt, @cfg) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('ok');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('lets authorization guards override unlocked no-untrusted-destructive denials on the llm bridge path', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;
@@ -1807,7 +2693,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('creates config.system with worker tool notes when the user did not provide one', async () => {
+  it('creates config.system with canonical injected tool notes when the user did not provide one', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
@@ -1841,20 +2727,61 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(output).toContain('Read tools: search_contacts_by_name');
-      expect(output).toContain('Denied: (none)');
+      expect(output).toContain('Write tools (require authorization):');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('- `subject` (string)');
+      expect(output).toContain('- `body` (string)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(output).toContain('- `query` (string)');
       expect(output).not.toContain('Send an outbound email');
-      expect(output).not.toContain('| Tool | Description |');
       expect(output).not.toContain('Search contacts by name');
+      expect(output).not.toContain('@fyi.known("send_email")');
     } finally {
       environment?.cleanup();
     }
   });
 
-  it('appends worker tool notes after user-authored config.system content', async () => {
+  it('injects prefixed tool notes for executable arrays selected from a tool map', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe resolve:r @searchFiles(query) = "ok"',
+      '/exe resolve:r @listFiles() = "ok"',
+      '/var @toolMap = { "search_files": @searchFiles, "list_files": @listFiles }',
+      '/var @toolNames = ["search_files"]',
+      '/exe @select(config) = [',
+      '  let @cfg = @config ?? {}',
+      '  let @selected = for @name in @cfg.toolNames => @cfg.toolMap[@name]',
+      '  => @selected',
+      ']',
+      '/exe llm @agent(prompt, config) = js { return config.system ?? ""; }',
+      '/show @agent("Search the workspace", { tools: @select({ toolMap: @toolMap, toolNames: @toolNames }) })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_files');
+      expect(output).toContain('- `query` (string)');
+      expect(output).not.toContain('### search_files');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('appends canonical injected tool notes after user-authored config.system content', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
@@ -1888,8 +2815,10 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('User system prompt\n\n<tool_notes>');
-      expect(output).toContain('| send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('Read tools: search_contacts_by_name');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
       expect(output).not.toContain('Send an outbound email');
       expect(output).not.toContain('Search contacts by name');
     } finally {
@@ -1897,7 +2826,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('injects planner tool notes with deny-list and authorization shape guidance', async () => {
+  it('keeps injected tool notes canonical even when the llm exe display is planner', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @updatePassword(recipient, password) = "ok" with { controlArgs: ["recipient"] }',
@@ -1932,13 +2861,15 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args |');
-      expect(output).toContain('| update_password | recipient |');
-      expect(output).toContain('Read tools: search_contacts_by_name');
-      expect(output).toContain('Denied: update_password');
-      expect(output).toContain('Authorization intent:');
-      expect(output).toContain('resolved: { tool: { arg: "handle" } }');
-      expect(output).not.toContain('Use @fyi.known("toolName")');
+      expect(output).toContain('Write tools (require authorization):');
+      expect(output).toContain('### mcp__mlld_tools__update_password');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('- `password` (string)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(output).toContain('- `query` (string)');
+      expect(output).not.toContain('Authorization intent shape:');
+      expect(output).not.toContain('Denied:');
       expect(output).not.toContain('Update account password');
       expect(output).not.toContain('Search contacts by name');
     } finally {
@@ -1946,7 +2877,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('creates config.system with a write-tool table even when tools have no control args', async () => {
+  it('classifies tools without control args as read in injected tool notes when policy does not mark them authorization-relevant', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @createDraft(subject, body) = "draft" with { controlArgs: [] }',
@@ -1968,10 +2899,12 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| create_draft | (none) |  |');
-      expect(output).toContain('Denied: (none)');
-      expect(output).not.toContain('Use @fyi.known("toolName")');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__create_draft');
+      expect(output).toContain('- `subject` (string)');
+      expect(output).toContain('- `body` (string)');
+      expect(output).not.toContain('Write tools (require authorization):');
+      expect(output).not.toContain('**control arg**');
     } finally {
       environment?.cleanup();
     }

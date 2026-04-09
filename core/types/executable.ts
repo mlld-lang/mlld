@@ -19,6 +19,11 @@ export interface DynamicExecutableOutputRecord {
 
 export type ExecutableOutputRecord = string | DynamicExecutableOutputRecord;
 
+export interface ToolReturnMode {
+  strict: boolean;
+  allToolSigilsInForBodies: boolean;
+}
+
 /**
  * Base executable definition that can be invoked with parameters
  */
@@ -43,6 +48,8 @@ export interface BaseExecutable {
   description?: string;
   /** Optional record definition applied to executable output */
   outputRecord?: ExecutableOutputRecord;
+  /** Static return-channel metadata for strict-mode tool result selection */
+  toolReturnMode?: ToolReturnMode;
   /** Original directive type this came from (exec or text) */
   sourceDirective: 'exec' | 'text';
 }

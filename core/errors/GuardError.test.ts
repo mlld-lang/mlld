@@ -69,7 +69,7 @@ describe('GuardError', () => {
       policyRule: 'capabilities.allow',
       policySuggestions: [
         "Add 'cmd:npm:*' to capabilities.allow",
-        'Review active policies with @mx.policy.activePolicies'
+        'Review active policies with @mx.policy.active'
       ]
     });
 

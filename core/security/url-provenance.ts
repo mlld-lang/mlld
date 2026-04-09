@@ -158,10 +158,20 @@ function extractUrlsFromValueInternal(
     return;
   }
 
-  for (const [key, entry] of Object.entries(record)) {
-    if (SKIPPED_OBJECT_KEYS.has(key) || typeof entry === 'function') {
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(record))) {
+    if (!descriptor.enumerable || SKIPPED_OBJECT_KEYS.has(key)) {
       continue;
     }
+
+    if ('get' in descriptor || 'set' in descriptor) {
+      continue;
+    }
+
+    const entry = descriptor.value;
+    if (typeof entry === 'function') {
+      continue;
+    }
+
     extractUrlsFromValueInternal(entry, seenObjects, urls, seenUrls);
   }
 }

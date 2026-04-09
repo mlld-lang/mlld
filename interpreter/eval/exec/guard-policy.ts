@@ -7,7 +7,12 @@ import {
 } from '@core/types/executable';
 import { MlldSecurityError } from '@core/errors';
 import { GuardError } from '@core/errors/GuardError';
-import { evaluateCapabilityAccess, evaluateCommandAccess } from '@core/policy/guards';
+import {
+  evaluateCapabilityAccess,
+  evaluateCommandAccess,
+  shouldEnforceCommandAllowListForOperation,
+  shouldApplySurfaceScopedPolicyToOperation
+} from '@core/policy/guards';
 import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import {
   getOperationLabels,
@@ -15,6 +20,7 @@ import {
   resolveCanonicalOperationRef,
   parseCommand
 } from '@core/policy/operation-labels';
+import type { FactSourceHandle } from '@core/types/handle';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable';
 import type { Variable, VariableContext, VariableSource } from '@core/types/variable';
@@ -44,10 +50,16 @@ import {
   mergeGuardArgNamesIntoMetadata,
   type GuardArgName
 } from '@interpreter/utils/guard-args';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
 import { getVariableSecurityDescriptor } from '@interpreter/eval/exec/security-descriptor';
+import {
+  hasRuntimeAuthorizationSurface,
+  isRuntimeAuthorizationSurfaceOperation,
+  resolveAuthorizationSurfaceOperation
+} from '@interpreter/eval/exec/tool-metadata';
 
 type ResolvedStdinInput = {
   text: string;
@@ -82,6 +94,7 @@ export type PrepareExecGuardInputsOptions = {
   expressionSourceVariables: (Variable | undefined)[];
   inputSecurityDescriptor?: SecurityDescriptor;
   argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+  argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
   mcpSecurityDescriptor?: SecurityDescriptor;
   argNames?: readonly GuardArgName[];
 };
@@ -98,6 +111,8 @@ export type CreateExecOperationPolicyContextOptions = {
   operationName?: string;
   toolLabels: readonly string[];
   authorizationControlArgs?: readonly string[];
+  commandAccessSubstrate?: boolean;
+  correlateControlArgs?: boolean;
   operationTaintFacts?: boolean;
   env: Environment;
   execEnv: Environment;
@@ -240,6 +255,47 @@ export function stringifyExecGuardArg(value: unknown): string {
   }
 }
 
+function hasStructuredRuntimeSignals(value: unknown, seen = new Set<unknown>()): boolean {
+  if (isVariable(value)) {
+    return hasStructuredRuntimeSignals(value.value, seen);
+  }
+  if (isStructuredValue(value)) {
+    return true;
+  }
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  const carrier = value as {
+    mx?: { factsources?: readonly unknown[] };
+    metadata?: { factsources?: readonly unknown[] };
+  };
+  if (
+    (Array.isArray(carrier.mx?.factsources) && carrier.mx.factsources.length > 0)
+    || (Array.isArray(carrier.metadata?.factsources) && carrier.metadata.factsources.length > 0)
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some(entry => hasStructuredRuntimeSignals(entry, seen));
+  }
+  return Object.values(value as Record<string, unknown>).some(entry =>
+    hasStructuredRuntimeSignals(entry, seen)
+  );
+}
+
+function shouldPreserveOriginalStructuredArg(originalValue: unknown, replacementValue: unknown): boolean {
+  return (
+    hasStructuredRuntimeSignals(originalValue)
+    && !hasStructuredRuntimeSignals(replacementValue)
+    && stringifyExecGuardArg(originalValue) === stringifyExecGuardArg(replacementValue)
+  );
+}
+
 function applyGuardTransformsToExecArgs(options: {
   guardInputEntries: readonly GuardInputMappingEntry[];
   transformedInputs: readonly Variable[];
@@ -261,8 +317,11 @@ function applyGuardTransformsToExecArgs(options: {
       continue;
     }
     guardVariableCandidates[argIndex] = replacement;
-    const normalizedValue = isStructuredValue(replacement.value)
-      ? replacement.value.data
+    // Guard inputs may carry proof-bearing structured values. Preserve the
+    // wrapper so downstream executables still receive factsources/labels.
+    const originalValue = evaluatedArgs[argIndex];
+    const normalizedValue = shouldPreserveOriginalStructuredArg(originalValue, replacement.value)
+      ? originalValue
       : replacement.value;
     evaluatedArgs[argIndex] = normalizedValue;
     evaluatedArgStrings[argIndex] = stringifyExecGuardArg(normalizedValue);
@@ -278,11 +337,29 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     expressionSourceVariables,
     inputSecurityDescriptor,
     argSecurityDescriptors,
+    argFactSourceDescriptors,
     mcpSecurityDescriptor,
     argNames
   } = options;
 
   for (let i = 0; i < guardVariableCandidates.length; i++) {
+    if (
+      !guardVariableCandidates[i] &&
+      isStructuredValue(evaluatedArgs[i]) &&
+      (
+        Boolean(extractSecurityDescriptor(evaluatedArgs[i], { recursive: true, mergeArrayElements: true }))
+        || Array.isArray(evaluatedArgs[i].mx?.factsources)
+      )
+    ) {
+      const materialized = materializeGuardInputs([evaluatedArgs[i]], {
+        nameHint: '__guard_input__',
+        preserveStructuredScalars: true
+      })[0];
+      if (materialized) {
+        guardVariableCandidates[i] = materialized;
+        continue;
+      }
+    }
     if (!guardVariableCandidates[i] && expressionSourceVariables[i]) {
       const source = expressionSourceVariables[i]!;
       const cloned = cloneExecVariableWithNewValue(
@@ -300,12 +377,20 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     ),
     {
       nameHint: '__guard_input__',
-      argNames
+      argNames,
+      preserveStructuredScalars: true
     }
   );
 
   const hasPerArgOverrides = Array.isArray(argSecurityDescriptors) && argSecurityDescriptors.some(Boolean);
-  const hasAnyOverride = hasPerArgOverrides || Boolean(inputSecurityDescriptor) || Boolean(mcpSecurityDescriptor);
+  const hasPerArgFactsourceOverrides =
+    Array.isArray(argFactSourceDescriptors)
+    && argFactSourceDescriptors.some(entry => Array.isArray(entry) && entry.length > 0);
+  const hasAnyOverride =
+    hasPerArgOverrides
+    || hasPerArgFactsourceOverrides
+    || Boolean(inputSecurityDescriptor)
+    || Boolean(mcpSecurityDescriptor);
 
   if (hasAnyOverride) {
     if (guardInputsWithMapping.length === 0) {
@@ -347,20 +432,29 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
           : descriptorOverrides.length === 1
             ? descriptorOverrides[0]
             : env.mergeSecurityDescriptors(...descriptorOverrides);
-      if (!mergedOverrideDescriptor && !baseDescriptor) {
+      const factsourceOverride =
+        entry.index >= 0 && Array.isArray(argFactSourceDescriptors)
+          ? argFactSourceDescriptors[entry.index]
+          : undefined;
+      if (!mergedOverrideDescriptor && !baseDescriptor && (!factsourceOverride || factsourceOverride.length === 0)) {
         continue;
       }
       const mergedDescriptor = baseDescriptor && mergedOverrideDescriptor
         ? env.mergeSecurityDescriptors(baseDescriptor, mergedOverrideDescriptor)
         : baseDescriptor ?? mergedOverrideDescriptor;
-      if (!mergedDescriptor) {
+      if (!mergedDescriptor && (!factsourceOverride || factsourceOverride.length === 0)) {
         continue;
       }
       const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
       if (!cloned.mx) {
         cloned.mx = {};
       }
-      updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
+      if (mergedDescriptor) {
+        updateVarMxFromDescriptor(cloned.mx as VariableContext, mergedDescriptor);
+      }
+      if (Array.isArray(factsourceOverride) && factsourceOverride.length > 0) {
+        cloned.mx.factsources = [...factsourceOverride];
+      }
       if ((cloned.mx as any).mxCache) {
         delete (cloned.mx as any).mxCache;
       }
@@ -408,6 +502,14 @@ export async function createExecOperationContextAndEnforcePolicy(
   const policySummary = env.getPolicySummary();
   const deferManagedLabelFlow = hasManagedPolicyLabelFlow(policySummary);
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
+  const inheritedAuthorizationSurfaceOperation =
+    env.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
+  const authorizationSurfaceOperation = resolveAuthorizationSurfaceOperation({
+    env: execEnv,
+    operationName: operationName ?? commandName,
+    executableLabels: operationLabels,
+    inheritedAuthorizationSurfaceOperation
+  });
   const operationContext: OperationContext = {
     type: 'exe',
     named: resolveCanonicalOperationRef({
@@ -421,13 +523,17 @@ export async function createExecOperationContextAndEnforcePolicy(
       executableType: definition.type,
       command: commandName,
       sourceRetryable: true,
+      authorizationSurfaceOperation,
+      ...(options.commandAccessSubstrate === true ? { commandAccessSubstrate: true } : {}),
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
         : {}),
+      ...(options.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
       ...(options.operationTaintFacts === true ? { taintFacts: true } : {})
     }
   };
   operationContext.metadata = mergeGuardArgNamesIntoMetadata(operationContext.metadata, guardArgNames);
+  const shouldApplySurfaceScopedPolicy = shouldApplySurfaceScopedPolicyToOperation(operationContext);
 
   if (isCommandExecutable(definition)) {
     const commandPreview = await services.interpolateWithResultDescriptor(
@@ -455,7 +561,9 @@ export async function createExecOperationContextAndEnforcePolicy(
     metadata.commandPreview = commandPreview;
     operationContext.metadata = metadata;
     if (policySummary) {
-      const decision = evaluateCommandAccess(policySummary, commandPreview);
+      const decision = evaluateCommandAccess(policySummary, commandPreview, {
+        enforceAllowList: shouldEnforceCommandAllowListForOperation(operationContext)
+      });
       if (!decision.allowed) {
         throw new MlldSecurityError(
           decision.reason ?? `Command '${decision.commandName}' denied by policy`,
@@ -482,7 +590,7 @@ export async function createExecOperationContextAndEnforcePolicy(
       metadata.policyInputTaint = inputTaint;
       operationContext.metadata = metadata;
     }
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -497,7 +605,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     if (definition.withClause && 'stdin' in definition.withClause) {
       const resolvedStdin = await services.resolveStdinInput(definition.withClause.stdin, execEnv);
       const stdinTaint = descriptorToInputTaint(resolvedStdin.descriptor);
-      if (stdinTaint.length > 0 && !deferManagedLabelFlow) {
+      if (stdinTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
         policyEnforcer.checkLabelFlow(
           {
             inputTaint: stdinTaint,
@@ -524,7 +632,9 @@ export async function createExecOperationContextAndEnforcePolicy(
     }
     if (opType) {
       if (policySummary) {
-        const decision = evaluateCapabilityAccess(policySummary, opType);
+        const decision = evaluateCapabilityAccess(policySummary, opType, {
+          enforceAllowList: authorizationSurfaceOperation
+        });
         if (!decision.allowed) {
           throw new MlldSecurityError(
             decision.reason ?? `Capability '${opType}' denied by policy`,
@@ -540,7 +650,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -560,7 +670,9 @@ export async function createExecOperationContextAndEnforcePolicy(
       );
     }
     if (policySummary) {
-      const decision = evaluateCapabilityAccess(policySummary, 'node');
+      const decision = evaluateCapabilityAccess(policySummary, 'node', {
+        enforceAllowList: authorizationSurfaceOperation
+      });
       if (!decision.allowed) {
         throw new MlldSecurityError(
           decision.reason ?? "Capability 'node' denied by policy",
@@ -575,7 +687,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -590,7 +702,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     const inputTaint = descriptorToInputTaint(
       mergePolicyInputDescriptor(services.getResultSecurityDescriptor())
     );
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -626,7 +738,10 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
   const preHookInputs =
     userHookInputs === guardInputs
       ? guardInputs
-      : materializeGuardInputs(userHookInputs, { nameHint: '__guard_input__' });
+      : materializeGuardInputs(userHookInputs, {
+          nameHint: '__guard_input__',
+          preserveStructuredScalars: true
+        });
   let transformedGuardSet: Set<Variable> | null = null;
   if (preHookInputs !== guardInputs) {
     transformedGuardSet = new Set(preHookInputs);

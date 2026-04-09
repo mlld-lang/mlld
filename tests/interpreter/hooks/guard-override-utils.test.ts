@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GuardDefinition } from '@interpreter/guards';
+import { parseSync } from '@grammar/parser';
 import {
   applyGuardOverrideFilter,
   extractGuardOverride,
@@ -77,6 +78,16 @@ describe('guard override utilities', () => {
 
       expect(resolveWithClause(node)).toEqual({ guards: { only: ['@metaGuard'] } });
       expect(extractGuardOverride(node)).toEqual({ only: ['@metaGuard'] });
+    });
+
+    it('resolves withClause from parsed loop directives', () => {
+      const node = parseSync('/loop(1) [ show "ok" ] with { guards: false }', {
+        mode: 'markdown'
+      })[0] as any;
+
+      expect(node.kind).toBe('loop');
+      expect(resolveWithClause(node)).toEqual({ guards: false });
+      expect(extractGuardOverride(node)).toBe(false);
     });
   });
 

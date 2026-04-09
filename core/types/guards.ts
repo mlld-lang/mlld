@@ -19,6 +19,7 @@ import type {
   TernaryExpression,
   UnaryExpression,
   NewExpression,
+  CoerceExpression,
   FieldAccessNode,
   ArraySliceNode,
   ArrayFilterNode,
@@ -182,6 +183,10 @@ export function isUnaryExpression(node: any): node is UnaryExpression {
 
 export function isNewExpression(node: any): node is NewExpression {
   return node?.type === 'NewExpression';
+}
+
+export function isCoerceExpression(node: any): node is CoerceExpression {
+  return node?.type === 'CoerceExpression';
 }
 
 /**

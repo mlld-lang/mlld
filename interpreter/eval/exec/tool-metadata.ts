@@ -10,10 +10,13 @@ import {
 } from '@core/types/tools';
 import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
+import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 export interface EffectiveToolMetadata {
   name: string;
+  displayName?: string;
   params: string[];
+  paramEntries: EffectiveToolParam[];
   optionalParams?: string[];
   labels: string[];
   description?: string;
@@ -24,6 +27,12 @@ export interface EffectiveToolMetadata {
   exactPayloadArgs?: string[];
   correlateControlArgs: boolean;
   taintFacts: boolean;
+}
+
+export interface EffectiveToolParam {
+  name: string;
+  type?: string;
+  optional?: boolean;
 }
 
 function normalizeStringList(values: readonly unknown[] | undefined): string[] {
@@ -74,7 +83,7 @@ function resolveExecutableVariable(
   name: string
 ): ExecutableVariable | undefined {
   const variable = env.getVariable(name);
-  return variable && isExecutableVariable(variable) ? variable : undefined;
+  return variable && isExecutableVariable(variable) ? variable as ExecutableVariable : undefined;
 }
 
 function resolveExecutableVariableCaseInsensitive(
@@ -93,7 +102,7 @@ function resolveExecutableVariableCaseInsensitive(
 
   for (const [candidateName, variable] of env.getAllVariables()) {
     if (candidateName.trim().toLowerCase() === lowered && isExecutableVariable(variable)) {
-      return variable;
+      return variable as ExecutableVariable;
     }
   }
 
@@ -104,6 +113,84 @@ function getExecutableParamNames(executable: ExecutableVariable): string[] {
   return Array.isArray(executable.paramNames)
     ? executable.paramNames.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
     : [];
+}
+
+function buildEffectiveToolParam(
+  name: string,
+  options?: { type?: string; optional?: boolean }
+): EffectiveToolParam {
+  return {
+    name,
+    ...(normalizeTrimmedString(options?.type) ? { type: normalizeTrimmedString(options?.type) } : {}),
+    ...(options?.optional === true ? { optional: true } : {})
+  };
+}
+
+function buildEffectiveToolParams(
+  params: readonly string[],
+  paramTypes?: Record<string, string>,
+  optionalParams?: readonly string[]
+): EffectiveToolParam[] {
+  const optional = new Set(normalizeStringList(optionalParams));
+  return params.map(name =>
+    buildEffectiveToolParam(name, {
+      type: paramTypes?.[name],
+      optional: optional.has(name)
+    })
+  );
+}
+
+function buildEffectiveParamEntries(
+  params: readonly string[],
+  baseParamEntries: readonly EffectiveToolParam[],
+  optionalParams?: readonly string[]
+): EffectiveToolParam[] {
+  const paramTypes = Object.fromEntries(
+    baseParamEntries
+      .filter(entry => typeof entry.name === 'string' && entry.name.trim().length > 0 && typeof entry.type === 'string')
+      .map(entry => [entry.name, entry.type as string])
+  );
+  return buildEffectiveToolParams(params, paramTypes, optionalParams);
+}
+
+function normalizeExecutableMxParamEntries(value: unknown): EffectiveToolParam[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: EffectiveToolParam[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const name = normalizeTrimmedString(entry);
+      if (!name || seen.has(name)) {
+        continue;
+      }
+      seen.add(name);
+      normalized.push(buildEffectiveToolParam(name));
+      continue;
+    }
+
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+
+    const name = normalizeTrimmedString((entry as { name?: unknown }).name);
+    if (!name || seen.has(name)) {
+      continue;
+    }
+
+    seen.add(name);
+    normalized.push(
+      buildEffectiveToolParam(name, {
+        type: normalizeTrimmedString((entry as { type?: unknown }).type),
+        optional: (entry as { optional?: unknown }).optional === true
+      })
+    );
+  }
+
+  return normalized;
 }
 
 function getExecutableOptionalParamNames(executable: ExecutableVariable): string[] | undefined {
@@ -156,8 +243,23 @@ function buildToolContextFromExecutable(
   name: string,
   executable: ExecutableVariable
 ): EffectiveToolMetadata {
-  const params = getExecutableParamNames(executable);
-  const optionalParams = getExecutableOptionalParamNames(executable)?.filter(param => params.includes(param));
+  const fallbackParams = getExecutableParamNames(executable);
+  const fallbackOptionalParams = getExecutableOptionalParamNames(executable)?.filter(
+    param => fallbackParams.includes(param)
+  );
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const executableParamTypes = executable.paramTypes
+    ?? (executableDef as { paramTypes?: Record<string, string> }).paramTypes;
+  const paramEntries = normalizeExecutableMxParamEntries(executable.mx?.params)
+    ?? buildEffectiveToolParams(
+      fallbackParams,
+      executableParamTypes,
+      fallbackOptionalParams
+    );
+  const params = paramEntries.map(entry => entry.name);
+  const optionalParams = paramEntries
+    .filter(entry => entry.optional === true)
+    .map(entry => entry.name);
   const controlArgs = getExecutableControlArgs(executable);
   const updateArgs = getExecutableUpdateArgs(executable);
   const exactPayloadArgs = getExecutableExactPayloadArgs(executable);
@@ -165,6 +267,7 @@ function buildToolContextFromExecutable(
   return {
     name,
     params,
+    paramEntries,
     ...(optionalParams && optionalParams.length > 0 ? { optionalParams } : {}),
     labels: getExecutableLabels(executable),
     ...(description ? { description } : {}),
@@ -314,6 +417,7 @@ function applyToolDefinitionAuthMetadata(
   const labels = mergeStringLists(base.labels, definition.labels);
   const params = getEffectiveToolParams(base.params, definition);
   const optionalParams = getEffectiveToolOptionalParams(params, base.optionalParams, definition);
+  const paramEntries = buildEffectiveParamEntries(params, base.paramEntries, optionalParams);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
     baseControlArgs: base.controlArgs,
@@ -336,6 +440,7 @@ function applyToolDefinitionAuthMetadata(
   return {
     ...base,
     params,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -361,6 +466,7 @@ function mergeToolDefinitionMetadata(
   const mergedUpdateArgs = mergeStringLists(base.updateArgs, definition.updateArgs);
   const mergedExactPayloadArgs = mergeStringLists(base.exactPayloadArgs, definition.exactPayloadArgs);
   const optionalParams = getEffectiveToolOptionalParams(base.params, base.optionalParams, definition);
+  const paramEntries = buildEffectiveParamEntries(base.params, base.paramEntries, optionalParams);
   const hasControlArgsMetadata =
     base.hasControlArgsMetadata || Array.isArray(definition.controlArgs);
   const hasUpdateArgsMetadata =
@@ -369,6 +475,7 @@ function mergeToolDefinitionMetadata(
 
   return {
     ...base,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -382,11 +489,102 @@ function mergeToolDefinitionMetadata(
 }
 
 function getScopedToolCollection(env: Environment): ToolCollection | undefined {
-  const tools = env.getScopedEnvironmentConfig()?.tools;
-  if (!tools || typeof tools !== 'object' || Array.isArray(tools)) {
-    return undefined;
+  const scopedTools = env.getScopedEnvironmentConfig()?.tools;
+  const direct = resolveDirectToolCollection(scopedTools);
+  if (direct) {
+    return direct;
   }
-  return tools as ToolCollection;
+
+  return isPlainObject(scopedTools)
+    ? scopedTools as ToolCollection
+    : undefined;
+}
+
+function getLlmToolSurfaceNames(env: Environment): string[] {
+  const llmToolConfig = env.getLlmToolConfig();
+  return mergeStringLists(
+    llmToolConfig?.toolMetadata?.map(entry => entry.name),
+    llmToolConfig?.availableTools?.map(entry => entry.name)
+  );
+}
+
+export function getRuntimeAuthorizationSurfaceNames(env: Environment): string[] {
+  const scopedTools = getScopedToolCollection(env);
+  return mergeStringLists(
+    scopedTools ? Object.keys(scopedTools) : undefined,
+    getLlmToolSurfaceNames(env)
+  );
+}
+
+export function hasRuntimeAuthorizationSurface(env: Environment): boolean {
+  return getRuntimeAuthorizationSurfaceNames(env).length > 0;
+}
+
+export function isRuntimeAuthorizationSurfaceOperation(
+  env: Environment,
+  operationName: string | undefined
+): boolean {
+  const normalizedOperationName = normalizeTrimmedString(operationName);
+  if (!normalizedOperationName) {
+    return false;
+  }
+
+  const loweredOperationName = normalizedOperationName.toLowerCase();
+  return getRuntimeAuthorizationSurfaceNames(env).some(
+    candidate => candidate.trim().toLowerCase() === loweredOperationName
+  );
+}
+
+function hasExecutableLabel(
+  labels: readonly string[] | undefined,
+  target: string
+): boolean {
+  if (!Array.isArray(labels) || labels.length === 0) {
+    return false;
+  }
+
+  const loweredTarget = target.trim().toLowerCase();
+  return labels.some(label => (
+    typeof label === 'string'
+    && label.trim().toLowerCase() === loweredTarget
+  ));
+}
+
+export function resolveAuthorizationSurfaceOperation(options: {
+  env: Environment;
+  operationName: string | undefined;
+  executableLabels?: readonly string[];
+  inheritedAuthorizationSurfaceOperation?: boolean;
+}): boolean {
+  const {
+    env,
+    operationName,
+    executableLabels,
+    inheritedAuthorizationSurfaceOperation
+  } = options;
+
+  if (isRuntimeAuthorizationSurfaceOperation(env, operationName)) {
+    return true;
+  }
+
+  if (inheritedAuthorizationSurfaceOperation === false) {
+    return false;
+  }
+
+  if (hasRuntimeAuthorizationSurface(env)) {
+    return false;
+  }
+
+  // Bare llm exes like @claude are dispatch substrate, not the visible tool surface.
+  if (hasExecutableLabel(executableLabels, 'llm')) {
+    return false;
+  }
+
+  if (typeof inheritedAuthorizationSurfaceOperation === 'boolean') {
+    return inheritedAuthorizationSurfaceOperation;
+  }
+
+  return true;
 }
 
 function createAuthorizationToolContextEntry(
@@ -434,6 +632,7 @@ function buildToolContextFromStoredEntry(
 ): EffectiveToolMetadata {
   const params = normalizeStringList(entry.params);
   const optionalParams = getEffectiveToolOptionalParams(params, undefined, definition);
+  const paramEntries = buildEffectiveToolParams(params, undefined, optionalParams);
   const labels = mergeStringLists(entry.labels, definition?.labels);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
@@ -457,6 +656,7 @@ function buildToolContextFromStoredEntry(
   return {
     name: toolName,
     params,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -569,8 +769,21 @@ export function buildRuntimeAuthorizationToolContext(
       continue;
     }
 
-    const direct = buildToolContextFromExecutable(name, variable);
+    const direct = buildToolContextFromExecutable(name, variable as ExecutableVariable);
     contexts.set(name, createAuthorizationToolContextEntry(name, direct));
+  }
+
+  const llmToolMetadata = env.getLlmToolConfig()?.toolMetadata;
+  if (Array.isArray(llmToolMetadata)) {
+    for (const entry of llmToolMetadata) {
+      if (!entry || typeof entry.name !== 'string' || entry.name.trim().length === 0) {
+        continue;
+      }
+      contexts.set(
+        entry.name,
+        createAuthorizationToolContextEntry(entry.name, entry)
+      );
+    }
   }
 
   const scopedTools = getScopedToolCollection(env);
@@ -601,16 +814,38 @@ export function expandToolLabels(
 
 export function isWriteToolMetadata(
   env: Environment,
-  metadata: Pick<EffectiveToolMetadata, 'labels'>
+  metadata: Pick<EffectiveToolMetadata, 'name' | 'labels' | 'controlArgs'>
 ): boolean {
-  return expandToolLabels(env, metadata.labels).some(
-    label => label === 'tool:w' || label.startsWith('tool:w:')
+  if ((metadata.controlArgs?.length ?? 0) > 0) {
+    return true;
+  }
+
+  const policy = env.getPolicySummary();
+  const operationCategories = new Set(
+    Object.keys(policy?.operations ?? {})
+      .map(label => label.trim())
+      .filter(label => label.length > 0)
   );
+
+  if (
+    operationCategories.size > 0
+    && expandToolLabels(env, metadata.labels).some(label => operationCategories.has(label))
+  ) {
+    return true;
+  }
+
+  const toolName = metadata.name.trim().toLowerCase();
+  if (!toolName) {
+    return false;
+  }
+
+  return Array.isArray(policy?.authorizations?.deny)
+    && policy.authorizations.deny.some(entry => entry.trim().toLowerCase() === toolName);
 }
 
 export function shouldAutoExposeFyiKnown(
   env: Environment,
-  toolMetadata: readonly Pick<EffectiveToolMetadata, 'labels' | 'controlArgs'>[]
+  toolMetadata: readonly Pick<EffectiveToolMetadata, 'name' | 'labels' | 'controlArgs'>[]
 ): boolean {
   return toolMetadata.some(metadata =>
     (metadata.controlArgs?.length ?? 0) > 0 && isWriteToolMetadata(env, metadata)
@@ -664,6 +899,7 @@ export function resolveToolCollectionEntryMetadata(
   return {
     name: toolName,
     params,
+    paramEntries: buildEffectiveToolParams(params, undefined, optionalParams),
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels: normalizeStringList(definition.labels),
     ...(description ? { description } : {}),

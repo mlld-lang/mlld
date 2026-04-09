@@ -69,6 +69,19 @@ describe('exe block return structured metadata', () => {
     expect(readVariableData(env, 'schemaCode')).toBe('required');
   });
 
+  it('preserves schema metadata through bare template exe passthroughs', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/exe @id(item) = @item',
+      '/var @result = @id({ name: "No Email" } as record @contact)',
+      '/var @schemaValid = @result.mx.schema.valid',
+      '/var @schemaCode = @result.mx.schema.errors[0].code'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'schemaValid')).toBe(false);
+    expect(readVariableData(env, 'schemaCode')).toBe('required');
+  });
+
   it('preserves schema metadata through let-bound object wrappers returned from exe blocks', async () => {
     const env = await evaluateSource([
       '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',

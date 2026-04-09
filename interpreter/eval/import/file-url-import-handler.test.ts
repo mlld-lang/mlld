@@ -27,7 +27,7 @@ describe('FileUrlImportHandler', () => {
       applyPolicyImportContext
     );
 
-    const env = {} as any;
+    const env = { emitRuntimeTraceEvent: vi.fn() } as any;
     const directive = { subtype: 'importNamespace', values: {} } as any;
     const resolution = { type: 'file', resolvedPath: '/project/agents' } as any;
 
@@ -64,7 +64,7 @@ describe('FileUrlImportHandler', () => {
       applyPolicyImportContext
     );
 
-    const env = {} as any;
+    const env = { emitRuntimeTraceEvent: vi.fn() } as any;
     const directive = { subtype: 'importNamespace', values: {} } as any;
     const resolution = { type: 'file', resolvedPath: '/project/agents.mld' } as any;
 
@@ -118,7 +118,7 @@ describe('FileUrlImportHandler', () => {
       handler.evaluateFileImport(
         { type: 'file', resolvedPath: '/project/policies.mld' } as any,
         directive,
-        {} as any
+        { emitRuntimeTraceEvent: vi.fn() } as any
       )
     ).rejects.toBe(collisionError);
     expect(validateModuleResult).toHaveBeenCalledWith(fileResult, directive, '/project/policies.mld');

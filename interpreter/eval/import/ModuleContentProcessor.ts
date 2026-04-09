@@ -22,6 +22,12 @@ import type { NeedsDeclaration, ProfilesDeclaration } from '@core/policy/needs';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { inferMlldMode } from '@core/utils/mode';
 import { isExeReturnControl } from '../exe-return';
+import {
+  buildImportTraceData,
+  buildImportTraceDataFromResolution,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 // Use a truly global import stack via globalThis to survive module reloading
 // This is necessary because child environments may have different import resolvers
@@ -61,10 +67,19 @@ export class ModuleContentProcessor {
     const { resolvedPath } = resolution;
     const isURL = resolution.type === 'url';
     const cacheKey = this.buildFileImportCacheKey(resolution, directive);
+    const traceData = buildImportTraceDataFromResolution(directive, resolution, {
+      cacheKey
+    });
 
     // Check for circular imports using global stack
     if (globalImportStack.has(resolvedPath)) {
-      throw new Error(`Circular import detected: ${resolvedPath}`);
+      const error = new Error(`Circular import detected: ${resolvedPath}`);
+      emitImportFailure(this.env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
 
     const snapshot = this.env.getSecuritySnapshot();
@@ -106,6 +121,10 @@ export class ModuleContentProcessor {
 
     const cachedResult = this.getCachedModuleResult(cacheKey);
     if (cachedResult) {
+      emitImportTrace(this.env, 'import.cache_hit', {
+        ...traceData,
+        exportCount: Object.keys(cachedResult.moduleObject ?? {}).length
+      });
       return cachedResult;
     }
 
@@ -114,7 +133,21 @@ export class ModuleContentProcessor {
     this.securityValidator.beginImport(resolvedPath);
     try {
       if (resolution.importType === 'templates') {
-        const result = await this.processTemplateCollection(resolution, directive);
+        let result: ModuleProcessingResult;
+        try {
+          result = await this.processTemplateCollection(resolution, directive);
+        } catch (error) {
+          emitImportFailure(this.env, {
+            ...traceData,
+            phase: 'evaluate',
+            error
+          });
+          throw error;
+        }
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
@@ -132,7 +165,7 @@ export class ModuleContentProcessor {
         } catch {}
         const example = `/exe @${suggestedName}(param1, param2) = template "${resolvedPath}"
 /show @${suggestedName}("value1", "value2")`;
-        throw new MlldImportError(
+        const error = new MlldImportError(
           `Template files cannot be imported: ${resolvedPath}. Use an executable template instead.`,
           {
             code: 'TEMPLATE_IMPORT_NOT_ALLOWED',
@@ -143,43 +176,113 @@ export class ModuleContentProcessor {
             details: { filePath: resolvedPath }
           }
         );
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'read',
+          error
+        });
+        throw error;
       }
 
       // Read content from source
-      const content = await this.readContentFromSource(resolution);
+      let content: string;
+      try {
+        content = await this.readContentFromSource(resolution);
+      } catch (error) {
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'read',
+          error
+        });
+        throw error;
+      }
+
+      emitImportTrace(this.env, 'import.read', {
+        ...traceData,
+        contentType: resolution.type === 'url' ? 'text' : 'module'
+      });
 
       // Cache the source content for error reporting
       this.env.cacheSource(resolvedPath, content);
 
       // Validate security (including hash validation, but NOT circular imports since we're tracking now)
-      await this.securityValidator.validateContentSecurity(resolution, content);
+      try {
+        await this.securityValidator.validateContentSecurity(resolution, content);
+      } catch (error) {
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'read',
+          error
+        });
+        throw error;
+      }
 
       // Parse content based on type and capture processed content
-      const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
-        content,
-        resolvedPath,
-        directive
-      );
+      let parsedContent:
+        | { parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' };
+      try {
+        parsedContent = await this.parseContentByType(
+          content,
+          resolvedPath,
+          directive
+        );
+      } catch (error) {
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'parse',
+          error
+        });
+        throw error;
+      }
+      const { parsed, processedContent, isPlainText, templateSyntax } = parsedContent;
+      emitImportTrace(this.env, 'import.parse', {
+        ...traceData,
+        contentType: resolvedPath.endsWith('.json')
+          ? 'data'
+          : isPlainText
+            ? 'text'
+            : 'module'
+      });
       // Check if this is a JSON file (special handling)
       if (resolvedPath.endsWith('.json')) {
         const result = await this.processJSONContent(parsed, directive, resolvedPath);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          contentType: 'data',
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
         const result = await this.processPlainTextContent(resolvedPath);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          contentType: 'text',
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
         const result = await this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
-      const result = await this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
+      const result = await this.processMLLDContent(
+        parsed,
+        processedContent,
+        resolvedPath,
+        isURL,
+        traceData
+      );
       return this.cacheAndReturnModuleResult(cacheKey, result);
     } finally {
       // End import tracking (both global and security validator)
@@ -200,10 +303,23 @@ export class ModuleContentProcessor {
     entryPoint?: string
   ): Promise<ModuleProcessingResult> {
     const cacheKey = this.buildResolverImportCacheKey(ref, contentType, directive);
+    const traceData = buildImportTraceData(directive, {
+      ref,
+      resolvedPath: ref,
+      transport: 'resolver-content',
+      contentType,
+      cacheKey
+    });
 
     // Check for circular imports using global stack
     if (globalImportStack.has(ref)) {
-      throw new Error(`Circular import detected: ${ref}`);
+      const error = new Error(`Circular import detected: ${ref}`);
+      emitImportFailure(this.env, {
+        ...traceData,
+        phase: 'resolve',
+        error
+      });
+      throw error;
     }
     const snapshot = this.env.getSecuritySnapshot();
     const importDescriptor = mergeDescriptors(
@@ -246,6 +362,10 @@ export class ModuleContentProcessor {
 
     const cachedResult = this.getCachedModuleResult(cacheKey);
     if (cachedResult) {
+      emitImportTrace(this.env, 'import.cache_hit', {
+        ...traceData,
+        exportCount: Object.keys(cachedResult.moduleObject ?? {}).length
+      });
       return cachedResult;
     }
 
@@ -266,7 +386,7 @@ export class ModuleContentProcessor {
         } catch {}
         const example = `/exe @${suggestedName}(param1, param2) = template "${ref}"
 /show @${suggestedName}("value1", "value2")`;
-        throw new MlldImportError(
+        const error = new MlldImportError(
           `Template files cannot be imported: ${ref}. Use an executable template instead.`,
           {
             code: 'TEMPLATE_IMPORT_NOT_ALLOWED',
@@ -277,44 +397,93 @@ export class ModuleContentProcessor {
             details: { filePath: ref }
           }
         );
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'read',
+          error
+        });
+        throw error;
       }
 
       // Cache the source content for error reporting
       this.env.cacheSource(ref, content);
+      emitImportTrace(this.env, 'import.read', {
+        ...traceData
+      });
 
       // Check if this is a dynamic module (has 'src:dynamic' label)
       const isDynamicModule = labels?.includes('src:dynamic') ?? false;
 
       // Parse content based on type
-      const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
-        content,
-        ref,
-        directive,
-        contentType,
-        isDynamicModule,
-        entryPoint
-      );
+      let parsedContent:
+        | { parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' };
+      try {
+        parsedContent = await this.parseContentByType(
+          content,
+          ref,
+          directive,
+          contentType,
+          isDynamicModule,
+          entryPoint
+        );
+      } catch (error) {
+        emitImportFailure(this.env, {
+          ...traceData,
+          phase: 'parse',
+          error
+        });
+        throw error;
+      }
+      const { parsed, processedContent, isPlainText, templateSyntax } = parsedContent;
+      emitImportTrace(this.env, 'import.parse', {
+        ...traceData,
+        contentType: ref.endsWith('.json')
+          ? 'data'
+          : isPlainText
+            ? 'text'
+            : contentType ?? 'module'
+      });
 
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
         const result = await this.processJSONContent(parsed, directive, ref);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          contentType: 'data',
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Check if this is plain text content (not mlld)
       if (isPlainText) {
         const result = await this.processPlainTextContent(ref);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          contentType: 'text',
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Handle raw template files (.att for @var, .mtt for mustache)
       if (!parsed && templateSyntax) {
         const result = await this.processRawTemplate(processedContent, templateSyntax, ref);
+        emitImportTrace(this.env, 'import.exports', {
+          ...traceData,
+          exportCount: Object.keys(result.moduleObject ?? {}).length
+        });
         return this.cacheAndReturnModuleResult(cacheKey, result);
       }
 
       // Process mlld content - IMPORTANT: await here so finally runs AFTER processing completes
-      const result = await this.processMLLDContent(parsed, processedContent, ref, false);
+      const result = await this.processMLLDContent(
+        parsed,
+        processedContent,
+        ref,
+        false,
+        traceData
+      );
       return this.cacheAndReturnModuleResult(cacheKey, result);
     } finally {
       // End import tracking (both global and security validator)
@@ -713,8 +882,12 @@ export class ModuleContentProcessor {
         ? 'markdown'
         : inferredMode;
 
-    // Parse the imported mlld content with the inferred mode
-    let parseResult = await parse(processedContent, { mode });
+    // Stamp imported AST nodes with their source path so downstream evaluators
+    // can recover correct cross-module locations.
+    let parseResult = await parse(processedContent, {
+      mode,
+      grammarSource: resolvedPath
+    });
 
     // Retry strict parsing when markdown mode was chosen but may be wrong:
     // 1. VFS defaults to markdown but the file extension indicates strict
@@ -735,7 +908,10 @@ export class ModuleContentProcessor {
       });
 
       if (!markdownHasDirectives) {
-        const strictParseResult = await parse(processedContent, { mode: 'strict' });
+        const strictParseResult = await parse(processedContent, {
+          mode: 'strict',
+          grammarSource: resolvedPath
+        });
         const strictHasStructuredNodes =
           strictParseResult.success &&
           Array.isArray(strictParseResult.ast) &&
@@ -851,7 +1027,8 @@ export class ModuleContentProcessor {
     parseResult: any,
     sourceContent: string,
     resolvedPath: string,
-    isURL: boolean
+    isURL: boolean,
+    traceData: ReturnType<typeof buildImportTraceData>
   ): Promise<ModuleProcessingResult> {
     const ast = parseResult.ast;
 
@@ -876,7 +1053,20 @@ export class ModuleContentProcessor {
     }
 
     // Evaluate AST in child environment
-    const evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
+    let evalResult: any;
+    try {
+      evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
+    } catch (error) {
+      emitImportFailure(this.env, {
+        ...traceData,
+        phase: 'evaluate',
+        error
+      });
+      throw error;
+    }
+    emitImportTrace(this.env, 'import.evaluate', {
+      ...traceData
+    });
     const scriptReturnValue = isExeReturnControl(evalResult?.value) ? evalResult.value.value : undefined;
 
     // Process module exports
@@ -942,6 +1132,11 @@ export class ModuleContentProcessor {
     const moduleNeeds = childEnv.getModuleNeeds();
     const moduleProfiles = childEnv.getModuleProfiles();
     const policyContext = childEnv.getPolicyContext() ?? null;
+
+    emitImportTrace(this.env, 'import.exports', {
+      ...traceData,
+      exportCount: Object.keys(moduleObject ?? {}).length
+    });
 
     return {
       moduleObject,

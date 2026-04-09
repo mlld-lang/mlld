@@ -439,12 +439,20 @@ export interface NewExpression extends BaseMlldNode {
   args: BaseMlldNode[];
 }
 
+export interface CoerceExpression extends BaseMlldNode {
+  type: 'CoerceExpression';
+  value: unknown;
+  schema: unknown;
+  fields?: FieldAccessNode[];
+}
+
 // Union type for all expression nodes
 export type Expression =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
   | NewExpression
+  | CoerceExpression
   | VariableReferenceNode
   | VariableReferenceWithTailNode
   | LiteralNode

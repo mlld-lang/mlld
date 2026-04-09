@@ -6,6 +6,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { accessField } from '@interpreter/utils/field-access';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -886,5 +887,65 @@ describe('FunctionRouter', () => {
     expect((toolsSnapshot.results as any).verify).toMatchObject({ allPassed: false, status: 'bad' });
 
     await expect(router.executeFunction('verify', { status: 'ok' })).rejects.toThrow('verify failed');
+  });
+
+  it('preserves factsources for correlateControlArgs enforcement on bridge-dispatched calls', async () => {
+    const environment = await createEnvironment(`
+      /record @transaction = {
+        key: id,
+        facts: [id: string, recipient: string],
+        data: [memo: string]
+      }
+
+      /exe @fakeFetch() = js {
+        return [
+          { id: "tx_001", recipient: "bob@example.com", memo: "rent" },
+          { id: "tx_002", recipient: "bob@example.com", memo: "utilities" }
+        ];
+      } => transaction
+
+      /exe exfil:send @sendPayment(recipient, txId, body) = \`ok:@txId:@body\` with {
+        controlArgs: ["recipient", "txId"],
+        correlateControlArgs: true
+      }
+
+      /policy @p = {
+        defaults: { rules: ["no-send-to-unknown"] },
+        operations: { "exfil:send": ["exfil:send"] }
+      }
+
+      /var @txs = @fakeFetch()
+      /export { @sendPayment }
+    `);
+
+    const router = new FunctionRouter({ environment });
+    const txs = environment.getVariable('txs')?.value;
+    if (!txs) {
+      throw new Error('Expected @txs to be defined');
+    }
+
+    const tx0 = await accessField(txs, { type: 'arrayIndex', value: 0 } as any, { env: environment });
+    const tx1 = await accessField(txs, { type: 'arrayIndex', value: 1 } as any, { env: environment });
+    const tx0Recipient = await accessField(tx0, { type: 'field', value: 'recipient' } as any, { env: environment });
+    const tx0Id = await accessField(tx0, { type: 'field', value: 'id' } as any, { env: environment });
+    const tx1Id = await accessField(tx1, { type: 'field', value: 'id' } as any, { env: environment });
+
+    await expect(
+      router.executeFunction('send_payment', {
+        recipient: tx0Recipient,
+        txId: tx0Id,
+        body: 'same'
+      })
+    ).resolves.toContain('tx_001');
+
+    await expect(
+      router.executeFunction('send_payment', {
+        recipient: tx0Recipient,
+        txId: tx1Id,
+        body: 'cross'
+      })
+    ).rejects.toThrow(
+      /Rule 'correlate-control-args': control args on @sendPayment must come from the same source record; recipient -> @transaction\[instance=tx_001\], txId -> @transaction\[instance=tx_002\]/
+    );
   });
 });

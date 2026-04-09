@@ -22,7 +22,10 @@ import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
 import { renderDisplayProjectionSync } from '@interpreter/eval/records/display-projection';
 import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
-import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
+import {
+  extractProjectedHandleToken,
+  resolveValueHandles
+} from '@interpreter/utils/handle-resolution';
 import {
   applySecurityDescriptorToStructuredValue,
   asData,
@@ -32,6 +35,7 @@ import {
   wrapStructured,
   type StructuredValue
 } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import type { DataAliasedValue, DataValue } from '@core/types/var';
 import { isHandleWrapper } from '@core/types/handle';
@@ -87,6 +91,22 @@ function createStructuredSnapshot(value: unknown): StructuredValue {
     return wrapStructured([...value], 'array');
   }
   return wrapStructured(value as any);
+}
+
+function preserveStructuredScalarValue<T extends string | number | boolean>(
+  original: unknown,
+  nextValue: T
+): unknown {
+  if (!isStructuredValue(original)) {
+    return nextValue;
+  }
+
+  const clone = cloneStructuredValue(original);
+  clone.data = nextValue as any;
+  clone.text = String(nextValue);
+  clone.mx.text = clone.text;
+  clone.mx.data = nextValue;
+  return clone;
 }
 
 function stripKnownDescriptor(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
@@ -226,6 +246,8 @@ function resolveHandleTypedFieldValue(
     handle = extracted.trim();
   } else if (isHandleWrapper(extracted)) {
     handle = extracted.handle.trim();
+  } else {
+    handle = extractProjectedHandleToken(extracted);
   }
 
   if (!handle) {
@@ -237,6 +259,52 @@ function resolveHandleTypedFieldValue(
   } catch {
     return { ok: false, actual: 'unknown-handle' };
   }
+}
+
+async function resolveShelfFactInputHandles(value: unknown, env: Environment): Promise<unknown> {
+  const extracted = extractRecordInputValue(value);
+  const directHandle = extractProjectedHandleToken(extracted);
+  if (directHandle) {
+    return env.resolveHandle(directHandle);
+  }
+
+  if (isVariable(value)) {
+    return resolveShelfFactInputHandles(value.value, env);
+  }
+
+  if (isStructuredValue(value)) {
+    if (value.type !== 'object' && value.type !== 'array') {
+      return value;
+    }
+    const resolvedData = await resolveShelfFactInputHandles(value.data, env);
+    if (resolvedData === value.data) {
+      return value;
+    }
+    const resolved = wrapStructured(
+      resolvedData as any,
+      value.type,
+      value.text,
+      value.metadata ? { ...value.metadata } : undefined
+    );
+    if (value.internal) {
+      resolved.internal = { ...value.internal };
+    }
+    return resolved;
+  }
+
+  if (Array.isArray(value)) {
+    return Promise.all(value.map(item => resolveShelfFactInputHandles(item, env)));
+  }
+
+  if (isPlainObject(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      result[key] = await resolveShelfFactInputHandles(entry, env);
+    }
+    return result;
+  }
+
+  return resolveValueHandles(value, env);
 }
 
 function coerceFieldValue(
@@ -260,20 +328,21 @@ function coerceFieldValue(
     if (extracted === null || extracted === undefined) {
       return { ok: false, actual: String(extracted) };
     }
+    const normalized = typeof extracted === 'string' ? extracted.trim() : String(extracted);
     return {
       ok: true,
-      value: typeof extracted === 'string' ? extracted.trim() : String(extracted)
+      value: preserveStructuredScalarValue(value, normalized)
     };
   }
 
   if (field.valueType === 'number') {
     if (typeof extracted === 'number' && Number.isFinite(extracted)) {
-      return { ok: true, value: extracted };
+      return { ok: true, value: preserveStructuredScalarValue(value, extracted) };
     }
     if (typeof extracted === 'string' && extracted.trim().length > 0) {
       const parsed = Number(extracted.trim());
       if (Number.isFinite(parsed)) {
-        return { ok: true, value: parsed };
+        return { ok: true, value: preserveStructuredScalarValue(value, parsed) };
       }
     }
     return { ok: false, actual: describeRecordValueType(value) };
@@ -281,15 +350,15 @@ function coerceFieldValue(
 
   if (field.valueType === 'boolean') {
     if (typeof extracted === 'boolean') {
-      return { ok: true, value: extracted };
+      return { ok: true, value: preserveStructuredScalarValue(value, extracted) };
     }
     if (typeof extracted === 'string') {
       const normalized = extracted.trim().toLowerCase();
       if (normalized === 'true') {
-        return { ok: true, value: true };
+        return { ok: true, value: preserveStructuredScalarValue(value, true) };
       }
       if (normalized === 'false') {
-        return { ok: true, value: false };
+        return { ok: true, value: preserveStructuredScalarValue(value, false) };
       }
     }
     return { ok: false, actual: describeRecordValueType(value) };
@@ -341,7 +410,7 @@ function isAcceptedAgentFactInput(value: unknown): boolean {
   if (isStructuredValue(value)) {
     return fieldCarriesFactProof(value);
   }
-  if (isHandleWrapper(value) || isHandleToken(value)) {
+  if (isHandleWrapper(value) || isHandleToken(value) || extractProjectedHandleToken(value)) {
     return true;
   }
   if (Array.isArray(value)) {
@@ -488,7 +557,7 @@ async function validateShelfRecordValue(options: {
     }
 
     if (field.classification === 'fact' || field.valueType === 'handle') {
-      rawFieldValue = await resolveValueHandles(rawFieldValue, options.env);
+      rawFieldValue = await resolveShelfFactInputHandles(rawFieldValue, options.env);
     }
 
     const coerced = coerceFieldValue(field, rawFieldValue, options.env);
@@ -570,10 +639,11 @@ async function validateShelfRecordValue(options: {
   });
   const rootDescriptor = stripKnownDescriptor(
     mergeDescriptors(
-      extractSecurityDescriptor(options.value, {
-        recursive: true,
-        mergeArrayElements: true
-      }),
+      // Keep root-level security plus slot provenance without re-attaching every
+      // child fact label to the record wrapper. Field metadata carries the
+      // per-field fact proof; making the root recursive here smears sibling fact
+      // labels back onto individual fields after a shelf round-trip.
+      extractSecurityDescriptor(options.value),
       slotDescriptor
     )
   );
@@ -1034,7 +1104,7 @@ async function removeFromShelfSlot(
 
   const traceScope = { exe: callLabel };
   const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName, { traceScope }));
-  const resolvedRef = await resolveValueHandles(refValue, env);
+  const resolvedRef = await resolveShelfFactInputHandles(refValue, env);
   let next = current;
 
   if (recordDefinition.key) {
@@ -1341,6 +1411,112 @@ export function createShelveVariable(env: Environment): Variable {
   });
 }
 
+type WritableShelfAliasBinding = {
+  alias: string;
+  ref: ShelfScopeSlotRef;
+};
+
+function getWritableShelfAliasBindings(env: Environment): WritableShelfAliasBinding[] {
+  const scope = getNormalizedShelfScope(env);
+  if (!scope) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const bindings: WritableShelfAliasBinding[] = [];
+  for (const binding of scope.writeSlotBindings) {
+    const alias = typeof binding.alias === 'string' && binding.alias.trim().length > 0
+      ? binding.alias.trim()
+      : `${binding.ref.shelfName}.${binding.ref.slotName}`;
+    if (seen.has(alias)) {
+      continue;
+    }
+    seen.add(alias);
+    bindings.push({ alias, ref: binding.ref });
+  }
+  return bindings;
+}
+
+function normalizeWritableShelfAliasInput(value: unknown): string | undefined {
+  const resolved = boundary.plainData(value);
+  if (typeof resolved !== 'string') {
+    return undefined;
+  }
+  const trimmed = resolved.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function createAutoProvisionedShelveExecutable(env: Environment): Variable | undefined {
+  const aliasBindings = getWritableShelfAliasBindings(env);
+  if (aliasBindings.length === 0) {
+    return undefined;
+  }
+
+  const aliasNames = aliasBindings.map(binding => binding.alias);
+  const aliasMap = new Map(aliasBindings.map(binding => [binding.alias, binding.ref]));
+  const description = `Write typed shelf slots by alias. Writable aliases: ${aliasNames.join(', ')}`;
+
+  const definition: NodeFunctionExecutable = {
+    type: 'nodeFunction',
+    name: 'shelve',
+    fn: async (slotAliasOrEnv?: unknown, valueOrEnv?: unknown, boundEnv?: Environment) => {
+      const executionEnv = boundEnv
+        ?? (looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined)
+        ?? (looksLikeEnvironment(slotAliasOrEnv) ? slotAliasOrEnv : undefined)
+        ?? env;
+      const slotAlias = boundEnv || !looksLikeEnvironment(slotAliasOrEnv) ? slotAliasOrEnv : undefined;
+      const value = boundEnv || !looksLikeEnvironment(valueOrEnv) ? valueOrEnv : undefined;
+      const normalizedAlias = normalizeWritableShelfAliasInput(slotAlias);
+      const ref = normalizedAlias ? aliasMap.get(normalizedAlias) : undefined;
+      if (!ref) {
+        const detail = normalizedAlias === undefined
+          ? 'The first @shelve argument must be a writable slot alias'
+          : `Unknown writable slot alias '${String(normalizedAlias)}'`;
+        throw new MlldInterpreterError(
+          `${detail}. Allowed aliases: ${aliasNames.join(', ')}`,
+          'shelf',
+          undefined,
+          { code: 'INVALID_SHELF_REFERENCE' }
+        );
+      }
+      return writeToShelfSlot(
+        createShelfSlotReferenceValue(executionEnv, ref.shelfName, ref.slotName),
+        value,
+        executionEnv,
+        '@shelve'
+      );
+    },
+    bindExecutionEnv: true,
+    sourceDirective: 'exec',
+    paramNames: ['slot_alias', 'value'],
+    paramTypes: {
+      slot_alias: 'string',
+      value: 'object'
+    },
+    description
+  };
+  (definition as any).paramSchemas = {
+    slot_alias: {
+      type: 'string',
+      description: 'Writable shelf slot alias from the surrounding box scope',
+      enum: aliasNames
+    },
+    value: {
+      type: 'object',
+      description: 'Record object to write to the selected shelf slot'
+    }
+  };
+
+  return createExecutableVariable('shelve', 'command', '', ['slot_alias', 'value'], undefined, SHELF_VARIABLE_SOURCE, {
+    internal: {
+      executableDef: definition,
+      preserveStructuredArgs: true,
+      isReserved: true,
+      isSystem: true
+    }
+  });
+}
+
 function normalizeScopeSlotRef(ref: ShelfScopeSlotRef): string {
   return `${ref.shelfName}.${ref.slotName}`;
 }
@@ -1459,6 +1635,106 @@ async function normalizeScopeEntryValue(value: unknown, env: Environment): Promi
   return value;
 }
 
+type ScopeAliasEntry = {
+  alias: string;
+  value: unknown;
+};
+
+function isNameRefScopeEntry(value: unknown): value is { name: string; ref: unknown } {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  return (
+    keys.length === 2 &&
+    keys.includes('name') &&
+    keys.includes('ref') &&
+    typeof value.name === 'string'
+  );
+}
+
+function extractNamedScopeEntries(value: unknown): ScopeAliasEntry[] | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  if (typeof value.alias === 'string' && 'value' in value) {
+    return [{ alias: value.alias, value: value.value }];
+  }
+
+  if (isNameRefScopeEntry(value)) {
+    return [{ alias: value.name, value: value.ref }];
+  }
+
+  return Object.keys(value).map(alias => ({
+    alias,
+    value: value[alias]
+  }));
+}
+
+function applyNamedScopeEntry(
+  entry: ScopeAliasEntry,
+  label: 'read' | 'write',
+  refs: ShelfScopeSlotRef[],
+  bindings: ShelfScopeSlotBinding[],
+  aliases: Record<string, unknown>
+): void {
+  const alias = entry.alias.trim();
+  if (!alias) {
+    throw new MlldInterpreterError(`box.shelf.${label} aliases must be non-empty`, 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  const ref = extractShelfSlotRef(entry.value);
+  if (ref) {
+    refs.push(ref);
+    bindings.push({ ref, alias });
+    return;
+  }
+
+  if (label === 'write') {
+    throw new MlldInterpreterError(
+      'box.shelf.write aliases must resolve to shelf slot references',
+      'box',
+      undefined,
+      { code: 'INVALID_SHELF_SCOPE' }
+    );
+  }
+
+  aliases[alias] = entry.value;
+}
+
+function applyScopeEntry(
+  entry: unknown,
+  label: 'read' | 'write',
+  refs: ShelfScopeSlotRef[],
+  bindings: ShelfScopeSlotBinding[],
+  aliases: Record<string, unknown>
+): void {
+  const namedEntries = extractNamedScopeEntries(entry);
+  if (namedEntries) {
+    for (const namedEntry of namedEntries) {
+      applyNamedScopeEntry(namedEntry, label, refs, bindings, aliases);
+    }
+    return;
+  }
+
+  const ref = extractShelfSlotRef(entry);
+  if (!ref) {
+    throw new MlldInterpreterError(
+      `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ', alias objects, or aliased values' : ' or alias objects'}`,
+      'box',
+      undefined,
+      { code: 'INVALID_SHELF_SCOPE' }
+    );
+  }
+
+  refs.push(ref);
+  bindings.push({ ref });
+}
+
 async function normalizeScopeSlotEntries(
   entries: unknown,
   env: Environment,
@@ -1467,50 +1743,27 @@ async function normalizeScopeSlotEntries(
   if (entries === undefined) {
     return { refs: [], bindings: [], aliases: {} };
   }
-  if (!Array.isArray(entries)) {
-    throw new MlldInterpreterError(`box.shelf.${label} must be an array`, 'box', undefined, {
-      code: 'INVALID_SHELF_SCOPE'
-    });
-  }
 
   const refs: ShelfScopeSlotRef[] = [];
   const bindings: ShelfScopeSlotBinding[] = [];
   const aliases: Record<string, unknown> = {};
 
-  for (const entry of entries) {
-    const normalized = await normalizeScopeEntryValue(entry, env);
-    if (isPlainObject(normalized) && typeof normalized.alias === 'string' && 'value' in normalized) {
-      const alias = normalized.alias.trim();
-      const ref = extractShelfSlotRef(normalized.value);
-      if (ref) {
-        refs.push(ref);
-        bindings.push({ ref, alias });
-        continue;
-      }
-      if (label === 'write') {
-        throw new MlldInterpreterError(
-          'box.shelf.write aliases must resolve to shelf slot references',
-          'box',
-          undefined,
-          { code: 'INVALID_SHELF_SCOPE' }
-        );
-      }
-      aliases[alias] = normalized.value;
-      continue;
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      const normalized = await normalizeScopeEntryValue(entry, env);
+      applyScopeEntry(normalized, label, refs, bindings, aliases);
     }
-    const ref = extractShelfSlotRef(normalized);
-    if (!ref) {
-      throw new MlldInterpreterError(
-        `box.shelf.${label} entries must be shelf slot references${label === 'read' ? ' or aliased values' : ''}`,
-        'box',
-        undefined,
-        { code: 'INVALID_SHELF_SCOPE' }
-      );
-    }
-    refs.push(ref);
-    bindings.push({ ref });
+    return { refs, bindings, aliases };
   }
 
+  const normalized = await normalizeScopeEntryValue(entries, env);
+  if (!isPlainObject(normalized)) {
+    throw new MlldInterpreterError(`box.shelf.${label} must be an array or object`, 'box', undefined, {
+      code: 'INVALID_SHELF_SCOPE'
+    });
+  }
+
+  applyScopeEntry(normalized, label, refs, bindings, aliases);
   return { refs, bindings, aliases };
 }
 

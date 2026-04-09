@@ -7,7 +7,7 @@ parent: mcp
 tags: [tools, mcp, bind, expose, parameters]
 related: [mcp-tool-gateway, mcp-export, exe-metadata, exe-simple]
 related-code: [cli/mcp/FunctionRouter.ts, cli/mcp/SchemaGenerator.ts]
-updated: 2026-02-11
+updated: 2026-04-08
 qa_tier: 2
 ---
 
@@ -65,6 +65,8 @@ var tools @agentTools = {
 ```
 
 Variables are resolved when the tool collection is defined, not when called.
+
+`bind` is a config/materialization boundary: bound values are stored as plain config data for the surfaced tool definition. If a value's wrapper metadata must survive until dispatch time, pass it as a normal argument instead of baking it into `bind`.
 
 **Nested objects in bind:**
 

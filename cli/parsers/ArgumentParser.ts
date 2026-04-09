@@ -218,7 +218,7 @@ export class ArgumentParser {
         case '--trace': {
           const traceLevel = args[++i];
           if (!isRuntimeTraceLevel(traceLevel)) {
-            throw new Error('--trace must be one of: off, effects, verbose');
+            throw new Error('--trace must be one of: off, effects, handle, handles, verbose');
           }
           options.trace = traceLevel;
           break;

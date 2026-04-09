@@ -10,7 +10,7 @@ For the best experience, use Neovim with the LSP server (see below).
 - Variable highlighting (`@name`, `@data.field`)
 - Template syntax (backticks, `::`, `:::`)
 - Comment highlighting (`>>` and `<<`)
-- Operators (`=>`, `|`, `||`, `&&`, `==`, etc.)
+- Operators (`=>`, `->`, `=->`, `|`, `||`, `&&`, `==`, etc.)
 - File references (`<file.md>`, `<*.ts>`)
 - Embedded code blocks (`js { }`, `python { }`, `sh { }`)
 

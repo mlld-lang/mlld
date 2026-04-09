@@ -13,6 +13,7 @@ const EXPRESSION_NODE_TYPES = new Set([
   'BinaryExpression',
   'TernaryExpression',
   'UnaryExpression',
+  'CoerceExpression',
   'ArrayFilterExpression',
   'ArraySliceExpression'
 ]);

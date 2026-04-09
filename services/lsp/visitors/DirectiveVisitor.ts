@@ -3276,31 +3276,8 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     }
 
-    // Process return statement: => expression
     if (values.return && values.return.type === 'ExeReturn') {
-      // Find and tokenize '=>' operator
-      const returnRaw = values.return.raw;
-      if (returnRaw && returnRaw.startsWith('=>')) {
-        const arrowMatch = directiveText.match(/=>/);
-          if (arrowMatch && arrowMatch.index !== undefined) {
-            const arrowOffset = directive.location.start.offset + arrowMatch.index;
-            const arrowPosition = this.document.positionAt(arrowOffset);
-            this.tokenBuilder.addToken({
-              line: arrowPosition.line,
-              char: arrowPosition.character,
-              length: 2,
-              tokenType: 'operator',
-              modifiers: []
-            });
-          }
-        }
-
-      // Process return value expressions
-      if (values.return.values && Array.isArray(values.return.values)) {
-        for (const returnValue of values.return.values) {
-          this.mainVisitor.visitNode(returnValue, context);
-        }
-      }
+      this.mainVisitor.visitNode(values.return, context);
     }
 
     // Find and tokenize closing bracket ']'

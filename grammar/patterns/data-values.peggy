@@ -63,8 +63,22 @@ DataObjectPair
 // 1. Uses DataObjectLiteral instead of ObjectLiteral (for typing)
 // 2. Uses StringLiteral directly instead of TemplateStyleInterpolation (for unwrapping)
 DataPropertyValue "data context property value"
+  = value:DataPropertyValueBase coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return value;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+DataPropertyValueBase "data context property value"
   = RunCommandValue              // run {command} - preserve as-is
   / CodeExecutionValue           // js {code} - preserve as-is
+  / GroupedCoerceExpressionAccess
   / DataObjectLiteral            // Nested objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression          // File loading: <file.md> - always loading!
@@ -76,6 +90,7 @@ DataPropertyValue "data context property value"
   / DataStringValue              // Plain strings (unwrapped) - before expressions to avoid ! matching
   / DataAliasedValue             // @var as alias - preserve for config normalization
   / ExpressionWithOperator       // Expressions with operators (ternary, comparison, etc.)
+  / GroupedUnifiedExpression
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / PrimitiveValue               // Numbers, booleans, null - AST Literal nodes
 
@@ -123,11 +138,26 @@ DataArrayContent
 
 // DATA ARRAY VALUE - Similar to ArrayValue but uses data context patterns
 DataArrayValue
+  = value:DataArrayValueBase coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return value;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+DataArrayValueBase
   = RunCommandValue              // run {command} - preserve as-is
   / CodeExecutionValue           // js {code} - preserve as-is
+  / GroupedCoerceExpressionAccess
   / DataObjectLiteral            // Objects get typed
   / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
   / ExpressionWithOperator       // Operator expressions (ternary, comparison, etc.)
+  / GroupedUnifiedExpression
   / AlligatorExpression          // File loading: <file.md> - always loading!
   / ExecResultMethodCall         // @func(args).method(args) - chained method calls
   / FieldAccessExecPattern       // @obj.method(args) - method calls on variables

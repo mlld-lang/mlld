@@ -1068,6 +1068,77 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     expect(effects.getOutput().trim()).toBe('sent:5');
   });
 
+  it('enforces correlateControlArgs at runtime for mixed-source control args', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @transaction = { key: txId, facts: [recipient: string, txId: string], data: [memo: string?] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe @emitTxA() = js { return { recipient: "bob@example.com", txId: "tx_001", memo: "rent" }; } => transaction')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe @emitTxB() = js { return { recipient: "bob@example.com", txId: "tx_002", memo: "utilities" }; } => transaction')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe exfil:send, tool:w @sendPayment(recipient, txId, memo) = `recipient:@recipient txId:@txId memo:@memo` with { controlArgs: ["recipient", "txId"], correlateControlArgs: true }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @txA = @emitTxA()')[0] as DirectiveNode, env);
+    await evaluateDirective(parseSync('/var @txB = @emitTxB()')[0] as DirectiveNode, env);
+
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['tool:w'] }
+    })!);
+
+    const allowed = parseSync('/show @sendPayment(@txA.recipient, @txA.txId, "A")')[0] as DirectiveNode;
+    await expect(evaluateDirective(allowed, env)).resolves.toBeDefined();
+
+    const denied = parseSync('/show @sendPayment(@txA.recipient, @txB.txId, "B")')[0] as DirectiveNode;
+    try {
+      await evaluateDirective(denied, env);
+      throw new Error('expected correlate-control-args denial');
+    } catch (error) {
+      expect(String(error)).toContain(
+        "Rule 'correlate-control-args': control args on @sendPayment must come from the same source record;"
+      );
+      expect(String(error)).toContain('recipient -> @transaction[instance=tx_001]');
+      expect(String(error)).toContain('txId -> @transaction[instance=tx_002]');
+      expect(String(error)).not.toContain('@send_payment');
+    }
+  });
+
+  it('enforces correlateControlArgs for array-projected control args on exfil dispatches', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @transaction = { facts: [recipient: string, txId: string], data: [memo: string] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe @fakeFetchTransactions() = js { return [ { recipient: "bob@example.com", txId: "tx_001", memo: "rent" }, { recipient: "bob@example.com", txId: "tx_002", memo: "utilities" } ]; } => transaction')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe exfil:send @sendPayment(recipient, txId, memo) = `recipient:@recipient txId:@txId memo:@memo` with { controlArgs: ["recipient", "txId"], correlateControlArgs: true }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @txs = @fakeFetchTransactions()')[0] as DirectiveNode, env);
+
+    env.setPolicySummary(normalizePolicyConfig({
+      defaults: { rules: ['no-send-to-unknown'] },
+      operations: { 'exfil:send': ['exfil:send'] }
+    })!);
+
+    const allowed = parseSync('/show @sendPayment(@txs.0.recipient, @txs.0.txId, "A")')[0] as DirectiveNode;
+    await expect(evaluateDirective(allowed, env)).resolves.toBeDefined();
+
+    const denied = parseSync('/show @sendPayment(@txs.0.recipient, @txs.1.txId, "B")')[0] as DirectiveNode;
+    await expect(evaluateDirective(denied, env)).rejects.toThrow(/correlate-control-args/i);
+  });
+
   it('carries planner-time known attestations through with { policy } authorizations', async () => {
     const env = createEnv();
     await evaluateDirective(parseSync('/var known @approvedRecipient = "acct-1"')[0] as DirectiveNode, env);

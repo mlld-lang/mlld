@@ -46,6 +46,26 @@ describe('url provenance utilities', () => {
     ]);
   });
 
+  it('does not invoke object getters while scanning for URLs', () => {
+    let getterReads = 0;
+    const value = {
+      body: 'look at https://example.com/a'
+    } as Record<string, unknown>;
+
+    Object.defineProperty(value, 'lazy', {
+      enumerable: true,
+      get() {
+        getterReads += 1;
+        throw new Error('getter should not run during URL extraction');
+      }
+    });
+
+    expect(extractUrlsFromValue(value)).toEqual([
+      'https://example.com/a'
+    ]);
+    expect(getterReads).toBe(0);
+  });
+
   it('matches exact-domain and wildcard construction allowlists', () => {
     expect(
       isUrlAllowedByConstruction('https://www.google.com/search?q=ada', ['google.com'])

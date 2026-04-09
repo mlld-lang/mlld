@@ -27,6 +27,7 @@ describe('interpreter dispatch routing', () => {
     expect(getDispatchTarget(node('NewExpression'))).toBe('newExpression');
     expect(getDispatchTarget(node('LabelModification'))).toBe('labelModification');
     expect(getDispatchTarget(node('BinaryExpression'))).toBe('unifiedExpression');
+    expect(getDispatchTarget(node('CoerceExpression'))).toBe('unifiedExpression');
     expect(getDispatchTarget(node('WhenExpression'))).toBe('whenExpression');
     expect(getDispatchTarget(node('ExeBlock'))).toBe('exeBlock');
     expect(getDispatchTarget(node('ExeReturn', { values: [] }))).toBe('exeReturn');

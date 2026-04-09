@@ -941,6 +941,24 @@ describe('Semantic Tokens', () => {
       expect(returnArrow).toBeDefined();
     });
 
+    it('should highlight thin-arrow exe return channels', async () => {
+      const toolCode = `/exe @route() = [
+  -> "tool-slot"
+  => "canonical"
+]`;
+      const toolTokens = await getSemanticTokens(toolCode);
+
+      expect(toolTokens.find(t => t.tokenType === 'operator' && t.text === '->')).toBeDefined();
+      expect(toolTokens.find(t => t.tokenType === 'operator' && t.text === '=>')).toBeDefined();
+
+      const dualCode = `/exe @route() = [
+  =-> "both"
+]`;
+      const dualTokens = await getSemanticTokens(dualCode);
+
+      expect(dualTokens.find(t => t.tokenType === 'operator' && t.text === '=->')).toBeDefined();
+    });
+
     it('should highlight let with += operator', async () => {
       const code = '/exe @counter() = [let @count = 0; let @count += 1; => @count]';
       const tokens = await getSemanticTokens(code);

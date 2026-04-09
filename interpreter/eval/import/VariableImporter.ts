@@ -106,8 +106,13 @@ export class VariableImporter {
   private serializeModuleEnv(
     moduleEnv: Map<string, Variable>,
     seen?: WeakSet<object>,
-    childEnv?: Environment
+    childEnv?: Environment,
+    serializedModuleEnvCache?: WeakMap<object, unknown>
   ): any {
+    if (serializedModuleEnvCache?.has(moduleEnv)) {
+      return serializedModuleEnvCache.get(moduleEnv);
+    }
+
     // Track Maps currently being serialized to detect circular references.
     // captureModuleEnvironment() creates new Map instances each time, so identity
     // checks (===) miss circularity between Maps holding the same module's variables.
@@ -128,9 +133,12 @@ export class VariableImporter {
       childEnv,
       undefined,
       moduleEnv,
-      seenSet
+      seenSet,
+      serializedModuleEnvCache
     );
-    return tempResult.moduleObject;
+    const serialized = tempResult.moduleObject;
+    serializedModuleEnvCache?.set(moduleEnv, serialized);
+    return serialized;
   }
 
   /**
@@ -199,7 +207,8 @@ export class VariableImporter {
     childEnv?: Environment,
     options?: { resolveStrings?: boolean },
     currentSerializationTarget?: Map<string, Variable>,
-    _serializingEnvs?: WeakSet<object>
+    _serializingEnvs?: WeakSet<object>,
+    _serializedModuleEnvCache?: WeakMap<object, unknown>
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null; guards: SerializedGuardDefinition[] } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
@@ -210,6 +219,7 @@ export class VariableImporter {
     );
     this.guardExportChecker.validateGuardExports(guardNames, childEnv, manifest);
     
+    const serializedModuleEnvCache = _serializedModuleEnvCache ?? new WeakMap<object, unknown>();
     const { moduleObject } = this.moduleExportSerializer.serialize({
       childVars,
       explicitExports,
@@ -218,9 +228,16 @@ export class VariableImporter {
       skipModuleEnvSerialization,
       currentSerializationTarget,
       serializingEnvs: _serializingEnvs,
+      serializedModuleEnvCache,
       isLegitimateVariableForExport: variable => this.importUtilities.isLegitimateVariableForExport(variable),
       serializeShadowEnvs: envs => serializeShadowEnvironmentMaps(envs),
-      serializeModuleEnv: (moduleEnv, seen) => this.serializeModuleEnv(moduleEnv, seen, childEnv)
+      serializeModuleEnv: (moduleEnv, seen) =>
+        this.serializeModuleEnv(
+          moduleEnv,
+          seen,
+          childEnv,
+          serializedModuleEnvCache
+        )
     });
 
     const guards = this.guardExportChecker.serializeGuardsByName(guardNames, childEnv);

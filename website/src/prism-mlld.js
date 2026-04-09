@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2026-04-05T06:55:55.087Z
+// Generated from grammar at 2026-04-09T22:48:29.205Z
 
 const Prism = require('prismjs');
 
@@ -37,9 +37,9 @@ Prism.languages.mlld = {
       'punctuation': /<|>/
     }
   },
-  // Arrow operator MUST come before comparison/assignment to match => as one token
+  // Arrow operators MUST come before comparison/assignment to match =-> / => / -> as one token
   'arrow-operator': {
-    pattern: /=>/,
+    pattern: /(?:=->|=>|->)/,
     alias: 'operator'
   },
   'logical-operator': {
@@ -171,7 +171,7 @@ Prism.languages.mlld = {
     pattern: /\.([A-Za-z_][A-Za-z0-9_-]*|\d+)/,
     alias: 'property'
   },
-  'operator': /\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\b/,
+  'operator': /\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\b/,
   'pipe-operator': {
     pattern: /\|/,
     alias: 'operator'

@@ -1,6 +1,7 @@
 import type { DirectiveNode, ExeBlockNode } from '@core/types';
 import type { ExecutableDefinition, CodeExecutable } from '@core/types/executable';
 import { extractParamNames } from './definition-helpers';
+import { analyzeReturnChannels } from './return-channel-analysis';
 
 export function buildControlFlowExecutableDefinition(
   directive: DirectiveNode,
@@ -19,12 +20,14 @@ export function buildControlFlowExecutableDefinition(
 
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    const toolReturnMode = analyzeReturnChannels(whenExprNode);
 
     return {
       type: 'code',
       codeTemplate: contentNodes,
       language: 'mlld-when',
       paramNames,
+      toolReturnMode,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
   }
@@ -68,12 +71,14 @@ export function buildControlFlowExecutableDefinition(
 
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    const toolReturnMode = analyzeReturnChannels(forExprNode);
 
     return {
       type: 'code',
       codeTemplate: contentNodes,
       language: 'mlld-for',
       paramNames,
+      toolReturnMode,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
   }
@@ -179,6 +184,7 @@ export function buildControlFlowExecutableDefinition(
       codeTemplate: [blockNode],
       language: 'mlld-exe-block',
       paramNames,
+      toolReturnMode: analyzeReturnChannels(blockNode),
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
   }

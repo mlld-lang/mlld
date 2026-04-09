@@ -121,24 +121,16 @@ IfActionBlock
 
 IfActionBlockBody "if action block body"
   = statements:IfActionBlockStatementList firstReturn:(
-      BlockStatementSeparator ret:IfActionBlockReturnStatement { return ret; }
-    / _ ret:IfActionBlockReturnStatement { return ret; }
+      BlockStatementSeparator ret:IfActionBlockTerminatingReturnStatement { return ret; }
+    / _ ret:IfActionBlockTerminatingReturnStatement { return ret; }
     )
-    extraReturn:(BlockStatementSeparator IfActionBlockReturnStatement { return true; })?
-    trailing:(BlockStatementSeparator IfActionBlockStatement { return true; })? {
+    extraReturn:(BlockStatementSeparator ret:IfActionBlockReturnStatement { return ret; })?
+    trailing:(BlockStatementSeparator stmt:IfActionBlockStatement { return stmt; })? {
       if (extraReturn) {
-        helpers.mlldError(
-          'Multiple return statements in if block. Only one return is allowed as the last statement.',
-          'single return',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('if block', firstReturn, extraReturn, location());
       }
       if (trailing) {
-        helpers.mlldError(
-          'Return is the last statement in an if block.',
-          'end of block',
-          location()
-        );
+        helpers.raiseUnreachableReturnError('if block', firstReturn, trailing, location());
       }
       return {
         statements,
@@ -151,7 +143,15 @@ IfActionBlockBody "if action block body"
         returnStmt: null
       };
     }
-  / leadingComments:LeadingBlockComment* _ ret:IfActionBlockReturnStatement {
+  / leadingComments:LeadingBlockComment* _ ret:IfActionBlockTerminatingReturnStatement
+    extraReturn:(BlockStatementSeparator next:IfActionBlockReturnStatement { return next; })?
+    trailing:(BlockStatementSeparator stmt:IfActionBlockStatement { return stmt; })? {
+      if (extraReturn) {
+        helpers.raiseUnreachableReturnError('if block', ret, extraReturn, location());
+      }
+      if (trailing) {
+        helpers.raiseUnreachableReturnError('if block', ret, trailing, location());
+      }
       return {
         statements: [],
         returnStmt: ret
@@ -159,16 +159,23 @@ IfActionBlockBody "if action block body"
     }
 
 IfActionBlockReturnStatement "if block return statement"
-  = "=>" _ value:ExeReturnValue? noise:BlockComments* {
-      const normalized = typeof value === 'undefined' ? [] : (Array.isArray(value) ? value.flat() : [value]);
-      return helpers.createNode('ExeReturn', {
-        values: normalized,
-        raw: text(),
-        meta: {
-          hasValue: normalized.length > 0
-        },
-        location: location()
-      });
+  = kind:ExeReturnSigil _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode(kind, value, text(), location());
+    }
+
+IfActionBlockTerminatingReturnStatement "terminating if block return statement"
+  = kind:("=->" / "=>") _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode(
+        kind === '=->' ? 'dual' : 'canonical',
+        value,
+        text(),
+        location()
+      );
+    }
+
+IfActionBlockPassiveToolReturnStatement "passive if block tool return statement"
+  = "->" _ value:ExeReturnValue? noise:BlockComments* {
+      return helpers.createExeReturnNode('tool', value, text(), location());
     }
 
 IfActionBlockStatementList "if action block statement list"
@@ -197,6 +204,7 @@ IfActionBlockStatement "if action block statement"
   = IfVarInBlockError
   / LetAssignment
   / AugmentedAssignment
+  / IfActionBlockPassiveToolReturnStatement
   / WhenExpressionAny
   / ForNestedDirective
   / SlashLoop

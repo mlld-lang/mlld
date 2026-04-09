@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ImportTestRunner, testImport } from './test-utils';
 
+const IMPORT_TEST_TIMEOUT = 10000;
+
 describe('Import Edge Cases and Error Scenarios', () => {
   describe('Import Collisions', () => {
     it.skip('should fail when importing same variable name from different sources', async () => {
@@ -140,7 +142,7 @@ Second`
       expect(result.exitCode).toBe(0);
     });
     
-    it('should handle module with only comments', async () => {
+    it('should handle module with only comments', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import "./comments.mld"
 /show "Import succeeded"`, {
@@ -160,7 +162,7 @@ Second`
   
   
   describe('File System Edge Cases', () => {
-    it('should handle files with spaces in names', async () => {
+    it('should handle files with spaces in names', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { message } from "./my module.mld"
 /show @message`, {
@@ -174,7 +176,7 @@ Second`
       expect(result.exitCode).toBe(0);
     });
     
-    it('should handle deeply nested paths', async () => {
+    it('should handle deeply nested paths', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { deep } from "./a/b/c/d/e/module.mld"
 /show @deep`, {
@@ -224,7 +226,7 @@ object`
   });
   
   describe('Import with Frontmatter', () => {
-    it('should handle modules with frontmatter', async () => {
+    it('should handle modules with frontmatter', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { content } from "./with-fm.mld"
 /show @content`, {

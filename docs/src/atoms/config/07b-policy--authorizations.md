@@ -8,7 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
-updated: 2026-04-02
+updated: 2026-04-08
 ---
 
 The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
@@ -43,6 +43,7 @@ var @result = @worker(@prompt) with { policy: @taskPolicy }
 ```
 
 The `with { policy }` merge combines `@taskPolicy` with the ambient `@base` policy. The merged config activates authorization enforcement for the call chain.
+Policy compilation preserves proof-bearing structured leaves while normalizing the policy. That includes policy fragments coming from variables, field access, imported modules, and `{ ...@basePolicy }` object-spread composition.
 
 ## Tool Metadata
 
@@ -76,13 +77,15 @@ var tools @agentTools = {
 }
 ```
 
-`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge.
+`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
 
 Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
 
 ## Entries
 
 Keys under `authorizations.allow` are exact operation names matching `@mx.op.name`. For MCP-backed tools, use the mlld-side canonical name, not the provider's raw tool name.
+
+At runtime, this allowlist applies only to the active surfaced tool set from `tools:` or tool-collection dispatch. LLM/provider wrappers and internal substrate helpers such as `@claude` internals are not agent-visible tool names, so they are not checked against `authorizations.allow`.
 
 | Form | Meaning |
 |---|---|
@@ -173,6 +176,57 @@ Tools declare which arguments are security-relevant (control args) via `controlA
 - Arguments not declared as control args are unconstrained data args — the worker fills them freely.
 - If the planner includes data args in the authorization (title, description, etc.), the runtime strips them at compilation time. Only declared control args are compiled into constraints. The planner doesn't need to know which args are control args vs data args.
 
+## Cross-Arg Correlation: `correlateControlArgs`
+
+When a write tool has more than one control arg, the runtime can require that all of them came from the same source record. This blocks an attack class where the planner mixes a fact-bearing arg from one record with a fact-bearing arg from a different record — both args have proof, but together they target the wrong thing.
+
+```mlld
+exe tool:w @updateScheduledTransaction(id, recipient, amount, date) = [...]
+  with {
+    controlArgs: ["id", "recipient"],
+    correlateControlArgs: true
+  }
+```
+
+When `correlateControlArgs: true` is set on a tool with multiple `controlArgs`, the runtime checks at dispatch time that every control arg value's `factsources` provenance points to the **same source record instance**. If they don't, the dispatch is denied with `Rule 'correlate-control-args': control args on @<tool> must come from the same source record`.
+
+**The attack this defends against:**
+
+```
+User has two scheduled transactions in their account:
+  A: pay $500 to landlord on the 15th    (legitimate)
+  B: pay $200 to attacker@evil.com       (planted, but real in the bank)
+
+User says "update transaction A's amount to $600."
+
+Without correlateControlArgs:
+  Planner authorizes update_scheduled_transaction(A.id, B.recipient, 600)
+  Both args have fact proof — A.id and B.recipient are real fact-bearing values
+  no-send-to-unknown sees proof on both, allows the call
+  Bank updates transaction A's recipient to attacker@evil.com
+
+With correlateControlArgs: true:
+  Same dispatch attempted
+  Runtime checks A.id and B.recipient — different source record instances
+  Rule 'correlate-control-args' fires: DENIED
+```
+
+**How instance identity is determined.** Each fact-bearing value carries a `factsources` entry with up to three identity fields:
+
+- `instanceKey` — the value of the record's declared `key:` field, when the record has one. For string keys the runtime stores the bare value (`tx_001`). For non-string keys it keeps the canonical typed encoding (`number:42`, `object:{...}`) so different key types stay distinguishable.
+- `coercionId` — a UUID stamped at `=> record` coercion time, identifying the specific tool call that produced the value.
+- `position` — the array position of the value within its coercion's result, distinguishing siblings from the same call when the record has no `key`.
+
+The comparator prefers `instanceKey` when available, falling back to `(coercionId, position)` for keyless records. This means **re-fetching the same record from a separate tool call still correlates correctly** — two `@getTransactionById("tx_001")` calls produce values with different `coercionId`s but the same `instanceKey`, and dispatching control args mixed across the two fetches is allowed because they refer to the same logical record.
+
+**When to use it.** Set `correlateControlArgs: true` on any write tool whose control args together identify a single logical target. Account updates, transaction modifications, message replies, file moves — anywhere multiple args must agree on which entity they're operating on. The framework default for multi-`controlArg` tools should be `true`; opt out only when the tool genuinely takes unrelated control args.
+
+**What the rule does NOT defend against.** Single-control-arg tools are unaffected (one arg has nothing to correlate against). Tools with `correlateControlArgs: false` (or unset) skip the check entirely. Values without `factsources` (constructed via mlld code without going through `=> record` coercion) cannot be correlated and the dispatch will be denied with a "missing factsource" reason.
+
+The runtime check fires on both dispatch paths: orchestrator-side direct exec calls and LLM-bridge dispatched tool calls. There is no path that bypasses it.
+
+The factsource identity behavior described here is covered in the record coercion test matrix for `js`, `cmd`, `sh`, `node`, `py`, inline `as record`, and imported MCP-backed wrapper exes.
+
 ## Update and Payload Arg Enforcement
 
 Two additional exe metadata fields refine write tool contracts:
@@ -189,7 +243,7 @@ exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, rec
   }
 ```
 
-`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: ["toolName"]` when `updateArgs` is declared (issue: `no_update_fields`).
+`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: { "toolName": true }` when `updateArgs` is declared (issue: `no_update_fields`).
 
 `updateArgs` must be disjoint from `controlArgs`.
 
@@ -269,6 +323,8 @@ Authorization denial reasons distinguish the cause:
 
 When an array control arg has one ambiguous element, only that element is dropped — the rest of the array and the tool entry are preserved. Ambiguous matches that resolve to the same canonical value are treated as equivalent and kept.
 
+When debugging "why was this dispatch denied," the policy denial hint includes a pointer to `@mx.policy.active` — the ambient accessor that returns structured descriptors for the policies active in the current execution context (`{ name, locked, source }` per active policy). Use this from a guard, a probe, or a test to verify which policies are actually layered into the current dispatch and which one (or several) issued the denial. See `builtins-ambient-mx`.
+
 ## Deny list
 
 `authorizations.deny` prevents specific tools from ever being planner-authorized:
@@ -313,7 +369,18 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools, { task: @t
 var @result = @worker(@task) with { policy: @auth.policy }
 ```
 
-For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves the active policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
+By default, the builder reads its base policy scaffold from the active environment. Pass `basePolicy` in `@options` when framework code needs to build against an explicit policy object instead of the current env scope:
+
+```mlld
+var @auth = @policy.build(@plannerResult.authorizations, @writeTools, {
+  task: @task,
+  basePolicy: @agent.basePolicy
+})
+```
+
+`basePolicy` may come from literals, field access, exe-returned objects, imported module values, or variable-held policy fragments composed with object spread. The builder materializes nested arrays/objects before normalizing the policy scaffold, while preserving proof-bearing leaves used by `authorizations`, so values like exe-returned rule lists or fact-bearing recipient lists are accepted directly.
+
+For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves that base policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
 
 ```mlld
 var @base = {
@@ -322,14 +389,14 @@ var @base = {
   authorizations: { deny: ["delete_draft"] }
 }
 
-var @built = @policy.build({ allow: ["create_draft"] }, @writeTools) with {
+var @built = @policy.build({ allow: { create_draft: true } }, @writeTools) with {
   policy: @base
 }
 
 show @writeTools["create_draft"](@step.args) with { policy: @built.policy }
 ```
 
-Imported `var tools` collections are valid inputs here. The builder uses the collection's stored authorization metadata first, so callers do not need to redundantly import every underlying executable just to build or validate auth.
+Imported `var tools` collections are valid inputs here. Plain arrays of executable refs are also accepted and auto-normalized by executable name. The builder uses stored authorization metadata first when it exists, so callers do not need to redundantly import every underlying executable just to build or validate auth.
 
 The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues, report }`:
 
@@ -345,12 +412,15 @@ What the builder checks:
 - Denied tools → dropped (`denied_by_policy`)
 - Unknown tools → dropped (`unknown_tool`)
 - Bucketed intent from influenced sources → rejected (`bucketed_intent_from_influenced_source`)
-- `true` for tools with `controlArgs` → dropped (`requires_control_args`)
+- `true` for tools with `controlArgs` in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
+- `allow: { tool: true }` in bucketed intent → explicit tool-level authorization
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
 - `known` literals missing from the provided task text → dropped (`known_not_in_task`)
 - Handle wrappers in `known` while task validation is enabled → dropped (`known_contains_handle`)
 - `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
+- Mixed flat + bucketed top-level fields → rejected (`invalid_authorization`)
+- Unrecognized bucketed top-level fields → rejected (`invalid_authorization`)
 - Non-control args → silently stripped
 
 Builder and validator results are additive:
@@ -391,15 +461,17 @@ The planner structures its authorization output by proof source:
       }
     }
   },
-  "allow": ["create_file"]
+  "allow": {
+    "create_file": true
+  }
 }
 ```
 
 Three buckets:
 
-- **`resolved`** — values from tool results. Every non-empty control arg value must be a resolvable handle. Bare literals are rejected — handles are the only proof a value came from a tool.
+- **`resolved`** — values from tool results. Every non-empty control arg value must be either a resolvable handle or a direct fact-bearing value carrying `fact:*` proof. Bare proofless literals are rejected.
 - **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
-- **`allow`** — tools needing no argument constraints. Validated against `controlArgs` metadata.
+- **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has `controlArgs`, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
 
 The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
@@ -412,6 +484,8 @@ The builder also accepts flat and nested intent shapes for backward compatibilit
 ```json
 { "send_email": { "recipients": "h_2l5r36" }, "create_file": true }
 ```
+
+Flat and bucketed intent must not be mixed in the same object. The builder rejects mixed shapes loudly instead of silently dropping top-level tool entries.
 
 For array control args, proof is checked per element. Proofless elements are dropped individually. If the same tool+arg appears in both `resolved` and `known`, `resolved` wins and an issue is emitted.
 
@@ -429,7 +503,7 @@ guard after @validateAuth for op:named:plan = when [
 ]
 ```
 
-The planner prompt is: "Put handle values from tool results in `resolved`. Put values the user explicitly provided in `known`. Put tools that need no arguments in `allow`."
+The planner prompt is: "Put handle values or direct fact-bearing tool results in `resolved`. Put values the user explicitly provided in `known`. Put tool-level authorizations in `allow`."
 
 ## Direct planner use
 

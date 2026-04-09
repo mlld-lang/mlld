@@ -213,8 +213,8 @@ SlashVar "var directive"
         processedValue = [value];
         metaInfo.inferredType = 'mcpToolSource';
       }
-      // Handle expressions (BinaryExpression, TernaryExpression, UnaryExpression)
-      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression')) {
+      // Handle expressions (BinaryExpression, TernaryExpression, UnaryExpression, CoerceExpression)
+      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression' || value.type === 'CoerceExpression')) {
         processedValue = [value];
         metaInfo.inferredType = 'expression';
         metaInfo.expressionType = value.type;

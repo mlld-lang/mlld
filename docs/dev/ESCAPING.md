@@ -1,5 +1,5 @@
 ---
-updated: 2025-10-10
+updated: 2026-04-08
 tags: #arch, #security, #interpreter
 related-docs: docs/dev/DATA.md, docs/security.md, docs/slash/var.md, docs/slash/run.md
 related-code: interpreter/core/interpolation-context.ts, interpreter/utils/shell-value.ts, interpreter/eval/run.ts, interpreter/utils/structured-value.ts
@@ -16,6 +16,7 @@ mlld uses context-aware escaping during interpolation. Variables store raw value
 - **Context determines strategy**: `InterpolationContext.ShellCommand` vs `Template` vs `Default`
 - **StructuredValue unwrapping**: `asText()` extracts `.text` before classification
 - **Shell value classification**: Simple, array-simple, or complex → different serialization
+- **Interpolation and display are different boundaries**: `boundary.interpolate(...)` is for template/shell strings; `boundary.display(...)` is for output/document rendering
 - **Use stdin for raw payloads**: `/run cmd { command } with { stdin: @data }` and `/run @data | { cmd }` send unescaped content via `asText()`
 
 ## Principles
@@ -24,6 +25,7 @@ mlld uses context-aware escaping during interpolation. Variables store raw value
 - **Single source of truth**: Variables store raw, unescaped values
 - **Escape at usage**: `interpolate()` applies context-appropriate escaping
 - **No double escaping**: Each context gets exactly what it needs
+- **Display is not shell escaping**: Reusing output/display helpers for command interpolation is a contract violation
 
 ## Details
 
@@ -66,6 +68,12 @@ Shell value classification (`interpreter/utils/shell-value.ts`):
 - **Simple**: Primitives, single-line strings → direct interpolation
 - **Array-simple**: Arrays of simple values → space-separated
 - **Complex**: Multi-line strings, objects, nested arrays → JSON stringify
+
+### Display vs Interpolate
+
+- `boundary.display(value)` returns `{ text, descriptor }` for `/show`, `/output`, `/append`, and document emission.
+- `boundary.interpolate(value, "template" | "shell" | "plain")` returns a string and is the only boundary that should decide shell escaping.
+- `.keep` has no effect on these string-producing boundaries beyond the usual wrapper-to-text conversion; keep/identity only matter before the value reaches the text boundary.
 
 ### Shell Escaping Implementation
 

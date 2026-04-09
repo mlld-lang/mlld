@@ -9,6 +9,7 @@ export interface RuntimeTraceScopeSnapshot {
   pipelineStage?: number;
   boxName?: string;
   bridgeBox?: string;
+  currentFile?: string;
 }
 
 export function buildRuntimeTraceScope(
@@ -47,6 +48,10 @@ export function buildRuntimeTraceScope(
       : snapshot.bridgeBox;
   if (boxName) {
     scope.box = boxName;
+  }
+
+  if (typeof snapshot.currentFile === 'string' && snapshot.currentFile.trim().length > 0) {
+    scope.file = snapshot.currentFile;
   }
 
   return {

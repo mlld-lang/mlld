@@ -147,7 +147,9 @@ describe('Highlighting Rules', () => {
     it('should have other operators', () => {
       expect(HIGHLIGHTING_RULES.operators.pipe).toContain('|');
       expect(HIGHLIGHTING_RULES.operators.assignment).toContain('=');
+      expect(HIGHLIGHTING_RULES.operators.arrow).toContain('=->');
       expect(HIGHLIGHTING_RULES.operators.arrow).toContain('=>');
+      expect(HIGHLIGHTING_RULES.operators.arrow).toContain('->');
       expect(HIGHLIGHTING_RULES.operators.nullish).toContain('??');
     });
   });
@@ -177,6 +179,7 @@ describe('Highlighting Rules', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('foreach');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('from');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('as');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('record');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('known');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('trusted');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('resolved');

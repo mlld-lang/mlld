@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
 import { sanitizeSerializableValue } from '@core/errors/errorSerialization';
 import {
+  normalizeRuntimeTraceLevel,
   shouldEmitRuntimeTrace,
   type RuntimeTraceEvent,
   type RuntimeTraceLevel,
@@ -39,7 +40,7 @@ export class RuntimeTraceManager {
   }
 
   configure(level: RuntimeTraceLevel, options: RuntimeTraceOptions = {}): void {
-    this.root.level = level;
+    this.root.level = normalizeRuntimeTraceLevel(level);
     this.root.filePath = options.filePath ? path.resolve(options.filePath) : undefined;
     this.root.stderr = options.stderr === true;
     if (level === 'off') {
@@ -49,7 +50,7 @@ export class RuntimeTraceManager {
   }
 
   setOverride(level?: RuntimeTraceLevel): void {
-    this.overrideLevel = level;
+    this.overrideLevel = level === undefined ? undefined : normalizeRuntimeTraceLevel(level);
   }
 
   getLevel(): RuntimeTraceLevel {
@@ -64,7 +65,7 @@ export class RuntimeTraceManager {
   }
 
   emitTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): void {
-    if (!shouldEmitRuntimeTrace(this.getLevel(), trace.requiredLevel)) {
+    if (!shouldEmitRuntimeTrace(this.getLevel(), trace.requiredLevel, trace.category)) {
       return;
     }
 

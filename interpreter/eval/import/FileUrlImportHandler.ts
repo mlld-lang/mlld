@@ -5,6 +5,10 @@ import { VariableImporter } from './VariableImporter';
 import { DirectoryImportHandler } from './DirectoryImportHandler';
 import type { ModuleProcessingResult } from './ModuleContentProcessor';
 import type { ImportResolution } from './ImportPathResolver';
+import {
+  buildImportTraceDataFromResolution,
+  emitImportFailure
+} from './runtime-trace';
 
 type ValidateModuleResult = (
   result: ModuleProcessingResult,
@@ -37,18 +41,28 @@ export class FileUrlImportHandler {
     directive: DirectiveNode,
     env: Environment
   ): Promise<EvalResult> {
-    const directoryResult = await this.directoryImportHandler.maybeProcessDirectoryImport(
-      resolution,
-      directive,
-      env
-    );
-    const processingResult =
-      directoryResult ?? (await this.processModuleContent(resolution, directive));
+    const traceData = buildImportTraceDataFromResolution(directive, resolution);
+    try {
+      const directoryResult = await this.directoryImportHandler.maybeProcessDirectoryImport(
+        resolution,
+        directive,
+        env
+      );
+      const processingResult =
+        directoryResult ?? (await this.processModuleContent(resolution, directive));
 
-    this.validateModuleResult(processingResult, directive, resolution.resolvedPath);
-    await this.variableImporter.importVariables(processingResult, directive, env);
-    this.applyPolicyImportContext(directive, env, resolution.resolvedPath);
+      this.validateModuleResult(processingResult, directive, resolution.resolvedPath);
+      await this.variableImporter.importVariables(processingResult, directive, env);
+      this.applyPolicyImportContext(directive, env, resolution.resolvedPath);
 
-    return { value: undefined, env };
+      return { value: undefined, env };
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'evaluate',
+        error
+      });
+      throw error;
+    }
   }
 }

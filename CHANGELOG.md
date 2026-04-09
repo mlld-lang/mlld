@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0]
 
+### Changed
+- `/show`, `/output`, and `/append` now keep field-level labels and proofs through field access, then render only at the final text/JSON boundary.
+- `with { policy }`, `@policy.build(...)`, and `@policy.validate(...)` now accept policy fragments composed through variables, field access, imports, and object spread while preserving proof-bearing leaves used for authorization matching.
+- Tool collections now preserve surfaced metadata and identity across imports, exports, exe parameters, and box/tool APIs. Direct keyed collection calls authorize against the surfaced collection key.
+- Object spread is now consistently a plain-data boundary. `{ ...@value }` drops wrapper metadata and identity, and spreading `.keep` / `.keepStructured` warns before materializing plain data.
+- `.keep` / `.keepStructured` are now strictly embedded-language escape hatches. `bind` values and `state://` writes materialize plain data instead of storing live wrappers.
+
 ### Added
+- Executable thin-arrow return channels: `->` writes a tool-only return, `=->` writes both canonical and tool returns, surfaced tool dispatch switches to strict tool-return mode when either form appears in source, and empty strict-mode tool results resolve to `null` or `[]` when all tool reaches are inside `for` bodies.
 - `record` declarations for structured tool output with field-level trust classification. `facts` fields carry `fact:@record.field` proof labels and clear inherited exe `untrusted`; `data` fields are informational content that preserves taint. `exe @fn(...) = ... => record` coerces tool output through the record schema. Supports field remapping (`@input.dealname as name`), computed fields, conditional trust tiers via `when` clauses, typed validation modes (`demote`, `strict`, `drop`), array fact fields with per-element proof, and automatic LLM output parsing.
+- Inline dynamic record coercion via `@value as record @schema`. Uses the same runtime/schema metadata path as `=> record @schema` and works in expression positions, object/array literals, pipeline terminals, and grouped field access.
 - Display projections control record field visibility at the LLM boundary. Five modes: `bare` (full value, no handle), `ref` (full value + handle), `masked` (type-aware preview + handle), `handle` (handle only), `omitted` (invisible). Configured per-record: `display: [name, { mask: "email" }, { handle: "phone" }]`.
 - Named display modes provide per-agent visibility: `display: { worker: [subject, body, { mask: "from" }], planner: [{ ref: "from" }, { ref: "message_id" }] }`. Different agent phases receive different field projections — workers see content they act on, planners see only authorization-relevant references.
 - Handles provide opaque cross-phase identity for record values. LLMs receive handles (e.g. `h_x9k2`) instead of copyable literals for masked and handle-only fields. The runtime resolves handles back to live values with proof labels at the tool-call boundary. Handles are root-scoped and survive across agent phases, enabling secure data flow from read-phase through planning to write-phase.
@@ -44,7 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld validate` / `mlld analyze` now statically validate record declarations, shelf declarations, executable metadata (`controlArgs`, `updateArgs`, `exactPayloadArgs`, `correlateControlArgs`, output records), `resume` guard arms, and statically obvious `box.shelf` binding conflicts before runtime.
 
 ### Fixed
+- Internal exe return control wrappers no longer leak through exe/box execution, tool collection dispatch, hooks, or fixture-visible output paths. Hook and guard bodies continue to accept canonical `=>` returns only.
 - Non-final standalone bracketed `when [ ... ]` expressions inside exe blocks no longer terminate the block implicitly. Their values are now discarded unless the `when` is the last statement, explicit returns inside `when` branches still bubble normally, inline/bound guard forms keep their established early-return behavior, and the parser warns on non-final bracketed `when [ ... ]` statements in exe blocks.
+- Block-bodied executables now route managed guard and policy denials through terminal `when` handlers, so `denied =>` fallbacks keep working after refactoring direct `when` bodies into `[...]` blocks.
 - Final structured results sent over the live stdio transport no longer truncate large output strings. This fixes successful runs returning malformed JSON text when `StructuredResult.output` itself contains long JSON, which in turn broke downstream parsers and benchmark result envelopes.
 - Imported and rebound `var tools` collections now preserve shaped auth metadata and executable bindings across export/import, `let` aliases, and `exe` params, so `@policy.build(...)`, `@policy.validate(...)`, and direct `@tools[@name](@args)` dispatch keep working. Plain object executable maps now also spread matching single-object args by parameter name during dynamic keyed calls, including nested object and array values.
 - Function-tool MCP bridges now stay restartable briefly during per-invocation cleanup, preventing intermittent `mlld_tools` disconnects when Claude respawns the bridge proxy after an initial successful tool call.

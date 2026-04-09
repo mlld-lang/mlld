@@ -1,5 +1,5 @@
 ---
-updated: 2026-02-19
+updated: 2026-04-06
 tags: #arch, #lsp, #tooling
 related-docs: docs/dev/GRAMMAR.md
 related-code: cli/commands/language-server.ts, cli/commands/language-server-impl.ts, cli/execution/CommandDispatcher.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/visitors/*.ts, services/lsp/utils/*.ts, tests/utils/token-validator/*.ts, services/lsp/*.test.ts
@@ -13,6 +13,7 @@ related-types: cli/commands/language-server { MlldLanguageServerConfig, Document
 - Start the server with `mlld language-server` (alias: `mlld lsp`).
 - `vscode-languageserver` is a runtime dependency (`package.json` `dependencies`), not a dev-only dependency.
 - Semantic highlighting is AST-driven via `ASTSemanticVisitor` + specialized visitors.
+- Inline coercion `@value as record @schema` is highlighted explicitly as a terminal postfix expression: `ExpressionVisitor` emits `as` and `record` keyword tokens, while the child value/schema nodes keep their normal semantic tokens.
 - Embedded tree-sitter WASM parsing is enabled for JavaScript, Python, and Bash code blocks.
 - Semantic token validation is also AST-driven and now documented here as canonical architecture.
 
@@ -56,6 +57,10 @@ Current directive keyword grouping in `DirectiveVisitor`:
 - `directiveAction`: `run`, `show`, `output`, `append`, `log`, `stream`, `sign`, `verify`
 
 Record field keys such as `facts`, `data`, `display`, and nested `mask` entries are highlighted through the ordinary object-key/property token path. Keep semantic-token tests for record syntax aligned with the record grammar whenever those keys or projection forms change.
+Inline coercion keywords are split across two systems and both must stay aligned:
+
+- LSP semantic tokens: `services/lsp/ASTSemanticVisitor.ts` + `services/lsp/visitors/ExpressionVisitor.ts`
+- Regex-based syntax grammars: `grammar/syntax-generator/build-syntax.js` and the generated files under `editors/`
 
 Pass-through entries currently include:
 

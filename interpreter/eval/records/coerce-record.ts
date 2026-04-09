@@ -1,4 +1,5 @@
 import * as yaml from 'js-yaml';
+import { randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
 import {
   createStructuredValueVariable,
@@ -37,7 +38,12 @@ import {
   wrapStructured,
   type StructuredValue
 } from '@interpreter/utils/structured-value';
+import {
+  encodeCanonicalValue,
+  encodeDisplayInstanceKey
+} from '@interpreter/security/canonical-value';
 import { evaluateDataValue } from '@interpreter/eval/data-value-evaluator';
+import { extractProjectedHandleToken } from '@interpreter/utils/handle-resolution';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
 type NamespaceFieldMetadata = {
@@ -56,6 +62,11 @@ type RecordRootContext = {
   input: unknown;
   key?: unknown;
   value?: unknown;
+};
+
+type RecordCoercionIdentity = {
+  coercionId: string;
+  position: number;
 };
 
 type ResolvedRecordWhen = {
@@ -121,6 +132,16 @@ function setStructuredMetadata(
   };
   value.mx.schema = schema;
   value.mx.factsources = deduped;
+}
+
+function getRecordInstanceKey(
+  definition: RecordDefinition,
+  shaped: Readonly<Record<string, unknown>>
+): string | undefined {
+  if (!definition.key || !Object.prototype.hasOwnProperty.call(shaped, definition.key)) {
+    return undefined;
+  }
+  return encodeDisplayInstanceKey(shaped[definition.key]);
 }
 
 function hasDescriptorLabel(
@@ -368,8 +389,14 @@ function resolveHandleTypedFieldValue(
     handle = extracted.trim();
   } else if (isHandleWrapper(extracted)) {
     handle = extracted.handle.trim();
-  } else if (isHandleToken(asText(value).trim())) {
-    handle = asText(value).trim();
+  } else {
+    handle = extractProjectedHandleToken(extracted);
+    if (!handle) {
+      handle = asText(value).trim();
+      if (!isHandleToken(handle)) {
+        handle = undefined;
+      }
+    }
   }
 
   if (!handle) {
@@ -718,6 +745,7 @@ async function coerceRecordEntry(
   context: RecordRootContext,
   definition: RecordDefinition,
   env: Environment,
+  identity: RecordCoercionIdentity,
   pathPrefix = '',
   inheritedDescriptor?: SecurityDescriptor
 ): Promise<RecordObjectResult> {
@@ -785,6 +813,7 @@ async function coerceRecordEntry(
   const allData = validationDemoted || whenResult.demote;
   const factsources: FactSourceHandle[] = [];
   const wrapperSecurity = sanitizeRecordWrapperDescriptor(inheritedDescriptor);
+  const instanceKey = getRecordInstanceKey(definition, shaped);
 
   for (const field of definition.fields) {
     if (!Object.prototype.hasOwnProperty.call(shaped, field.name)) {
@@ -795,6 +824,9 @@ async function coerceRecordEntry(
       createFactSourceHandle({
         sourceRef: definition.name,
         field: field.name,
+        ...(instanceKey ? { instanceKey } : {}),
+        coercionId: identity.coercionId,
+        position: identity.position,
         tiers: whenResult.tiers
       })
     ];
@@ -977,12 +1009,15 @@ export async function coerceRecordOutput(options: {
     const items: StructuredValue<Record<string, unknown>>[] = [];
     const errors: RecordValidationError[] = [...mapEntries.errors];
     const factsources: FactSourceHandle[] = [];
+    const coercionId = randomUUID();
 
-    for (const entry of mapEntries.entries) {
+    for (let index = 0; index < mapEntries.entries.length; index += 1) {
+      const entry = mapEntries.entries[index]!;
       const item = await coerceRecordEntry(
         entry.context,
         options.definition,
         options.env,
+        { coercionId, position: index },
         entry.pathPrefix,
         options.inheritedDescriptor
       );
@@ -1008,12 +1043,14 @@ export async function coerceRecordOutput(options: {
     const items: StructuredValue<Record<string, unknown>>[] = [];
     const errors: RecordValidationError[] = [];
     const factsources: FactSourceHandle[] = [];
+    const coercionId = randomUUID();
 
     for (let index = 0; index < parsed.length; index += 1) {
       const item = await coerceRecordEntry(
         { input: parsed[index] },
         options.definition,
         options.env,
+        { coercionId, position: index },
         `[${index}]`,
         options.inheritedDescriptor
       );
@@ -1039,6 +1076,7 @@ export async function coerceRecordOutput(options: {
     { input: parsed },
     options.definition,
     options.env,
+    { coercionId: randomUUID(), position: 0 },
     '',
     options.inheritedDescriptor
   );

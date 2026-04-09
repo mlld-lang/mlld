@@ -240,6 +240,7 @@ export enum NodeType {
   TERNARY_EXPRESSION = 'TernaryExpression',
   UNARY_EXPRESSION = 'UnaryExpression',
   NEW_EXPRESSION = 'NewExpression',
+  COERCE_EXPRESSION = 'CoerceExpression',
   NEGATION = 'Negation',
   EXEC_INVOCATION = 'ExecInvocation',
   FILE_REFERENCE = 'FileReference',

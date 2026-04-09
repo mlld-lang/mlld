@@ -1,6 +1,7 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../../env/Environment';
 import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import { resolveInvocationPolicyFragment } from '../exec/policy-fragment';
 
 export class PolicyImportContextManager {
   async withPolicyOverride<T>(
@@ -14,9 +15,10 @@ export class PolicyImportContextManager {
     }
 
     const previousContext = env.getPolicyContext();
+    const resolvedOverride = await resolveInvocationPolicyFragment(overrideConfig, env);
     const mergedConfig = mergePolicyConfigs(
       previousContext?.configs as PolicyConfig | undefined,
-      normalizePolicyConfig(overrideConfig)
+      normalizePolicyConfig(resolvedOverride)
     );
     const nextContext = {
       tier: previousContext?.tier ?? null,

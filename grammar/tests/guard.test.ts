@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parse } from '@grammar/parser';
+import { parse, parseSync } from '@grammar/parser';
 import { isGuardDirective } from '@core/types/guards';
 import type { GuardDirectiveNode } from '@core/types/guard';
 
@@ -147,5 +147,10 @@ describe('Guard directive', () => {
     expect(clearerAction.decision).toBe('allow');
     expect(clearerAction.clearLabels).toBe(true);
     expect(clearerAction.value).toBeDefined();
+  });
+
+  test('rejects thin-arrow forms in guard bodies', () => {
+    expect(() => parseSync('/guard before op:exe = when [ * -> allow ]')).toThrow();
+    expect(() => parseSync('/guard before op:exe = when [ * =-> allow ]')).toThrow();
   });
 });

@@ -25,6 +25,7 @@ export const NodeType = {
   BinaryExpression: 'BinaryExpression',
   TernaryExpression: 'TernaryExpression',
   UnaryExpression: 'UnaryExpression',
+  CoerceExpression: 'CoerceExpression',
   WhenExpression: 'WhenExpression',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
@@ -425,6 +426,111 @@ export const helpers = {
       throw new Error(`Location is required for createVariableReferenceNode (valueType: ${valueType}, identifier: ${data.identifier || 'unknown'})`);
     }
     return this.createNode(NodeType.VariableReference, { valueType, ...data, location });
+  },
+
+  createExeReturnNode(kind: 'canonical' | 'tool' | 'dual', value: any, rawText: string, loc: any) {
+    const normalized = typeof value === 'undefined'
+      ? []
+      : (Array.isArray(value) ? value.flat() : [value]);
+
+    return this.createNode('ExeReturn' as NodeTypeKey, {
+      kind,
+      values: normalized,
+      raw: rawText,
+      meta: {
+        hasValue: normalized.length > 0
+      },
+      location: loc
+    });
+  },
+
+  formatExeReturnSigil(kind: 'canonical' | 'tool' | 'dual' | undefined | null): string {
+    if (kind === 'tool') return '->';
+    if (kind === 'dual') return '=->';
+    return '=>';
+  },
+
+  raiseUnreachableReturnError(scopeLabel: string, firstReturn: any, followingNode: any, fallbackLoc?: any): never {
+    const firstSigil = this.formatExeReturnSigil(firstReturn?.kind);
+    const nextSigil = this.formatExeReturnSigil(followingNode?.kind);
+    const location = followingNode?.location || fallbackLoc;
+
+    if (followingNode?.type === 'ExeReturn') {
+      if (followingNode?.kind === 'tool' && firstReturn?.kind === 'canonical') {
+        throw this.mlldError(
+          `Unreachable tool return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} terminates the block. Move ${nextSigil} before ${firstSigil}, or use =-> if you want the same value in both channels.`,
+          'reachable return order',
+          location
+        );
+      }
+
+      if (followingNode?.kind === 'tool' && firstReturn?.kind === 'dual') {
+        throw this.mlldError(
+          `Unreachable tool return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} already writes both channels and terminates the block.`,
+          'reachable return order',
+          location
+        );
+      }
+
+      throw this.mlldError(
+        `Unreachable return in ${scopeLabel}. ${nextSigil} after ${firstSigil} never runs because ${firstSigil} terminates the block.`,
+        'reachable return order',
+        location
+      );
+    }
+
+    throw this.mlldError(
+      `Unreachable statement in ${scopeLabel}. ${firstSigil} terminates the block, so nothing can appear after it.`,
+      'end of block',
+      location
+    );
+  },
+
+  findFirstNonCanonicalExeReturn(node: any): any | null {
+    if (!node) {
+      return null;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const found = this.findFirstNonCanonicalExeReturn(item);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    }
+
+    if (typeof node !== 'object') {
+      return null;
+    }
+
+    if (node.type === 'ExeReturn' && node.kind && node.kind !== 'canonical') {
+      return node;
+    }
+
+    for (const value of Object.values(node)) {
+      const found = this.findFirstNonCanonicalExeReturn(value);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
+  },
+
+  assertOnlyCanonicalExeReturns(node: any, message: string, fallbackLoc?: any) {
+    const invalid = this.findFirstNonCanonicalExeReturn(node);
+    if (!invalid) {
+      return;
+    }
+
+    const sigil = invalid.kind === 'tool' ? '->' : '=->';
+    this.mlldError(
+      `${sigil} is not allowed here. ${message}`,
+      '=>',
+      invalid.location || fallbackLoc
+    );
   },
 
   recordFieldSourceName(source: any): string {

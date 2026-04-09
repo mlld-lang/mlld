@@ -5,9 +5,9 @@ brief: Explicit script return with =>
 category: core
 parent: exe
 tags: [return, modules, script-level, default-export]
-related: [if, when-value-returning, exe-blocks]
+related: [if, when-value-returning, exe-blocks, exe-tool-return]
 related-code: [interpreter/eval/exe-return.ts, interpreter/core/interpreter/traversal.ts, interpreter/eval/import/ModuleContentProcessor.ts]
-updated: 2026-02-16
+updated: 2026-04-09
 qa_tier: 2
 ---
 
@@ -72,3 +72,7 @@ exe @validate(input) = [
   => { ok: @input }
 ]
 ```
+
+**Returning different values to mlld code vs. LLM tool callers:**
+
+An exe can split its return into two channels — the `=>` canonical return (for mlld code) and a `->` tool return (for an LLM that called it as a tool). See `exe-tool-return` for the `->` and `=->` sigils, strict mode semantics, and the multi-reach polymorphism rule. Exes without any `->` or `=->` are in classic mode — the `=>` value is used for both consumers as before.

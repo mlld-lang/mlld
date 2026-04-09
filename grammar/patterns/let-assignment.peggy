@@ -150,7 +150,7 @@ LetAssignment "let assignment"
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
-      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression')) {
+      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression' || value.type === 'CoerceExpression')) {
         processedValue = [value];
         metaInfo.inferredType = 'expression';
         metaInfo.expressionType = value.type;
@@ -338,7 +338,7 @@ AugmentedAssignment "augmented assignment"
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
-      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression')) {
+      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression' || value.type === 'CoerceExpression')) {
         processedValue = [value];
         metaInfo.inferredType = 'expression';
         metaInfo.expressionType = value.type;

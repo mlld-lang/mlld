@@ -43,6 +43,7 @@ import {
 } from '@interpreter/env/environment-provider';
 import { mergeAuthUsing, resolveRunCodeOpType } from './run-pure-helpers';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
+import { unwrapExeReturnControl } from '@interpreter/eval/exe-return';
 import {
   applyRunOperationContext,
   buildRunCapabilityOperationUpdate,
@@ -50,7 +51,8 @@ import {
   checkRunInputLabelFlow,
   deriveRunOutputPolicyDescriptor,
   enforceRunCapabilityPolicy,
-  enforceRunCommandPolicy
+  enforceRunCommandPolicy,
+  shouldEnforceRunAllowList
 } from './run-policy-context';
 import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 
@@ -395,7 +397,10 @@ async function handleCommandDefinition(
     env.getPolicySummary(),
     command,
     env,
-    directive.location ?? undefined
+    directive.location ?? undefined,
+    {
+      enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+    }
   );
 
   const inputDescriptor =
@@ -404,6 +409,7 @@ async function handleCommandDefinition(
     descriptor: inputDescriptor,
     policyEnforcer,
     policyChecksEnabled,
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'arg',
@@ -471,6 +477,7 @@ async function handleCommandDefinition(
     descriptor: envInputDescriptor,
     policyEnforcer,
     policyChecksEnabled,
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'using',
@@ -786,7 +793,10 @@ async function handleCodeDefinition(
       env.getPolicySummary(),
       opType,
       env,
-      directive.location ?? undefined
+      directive.location ?? undefined,
+      {
+        enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+      }
     );
   }
   const allArgDescriptors =
@@ -799,6 +809,7 @@ async function handleCodeDefinition(
     descriptor: inputDescriptor,
     policyEnforcer,
     policyChecksEnabled: policyChecksEnabled && Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'arg',
@@ -834,7 +845,7 @@ async function handleCodeDefinition(
 
     const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
     const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-    const normalized = normalizeWhenShowEffect(whenResult.value);
+    const normalized = normalizeWhenShowEffect(unwrapExeReturnControl(whenResult.value));
 
     return {
       value: normalized.normalized,
@@ -866,7 +877,7 @@ async function handleCodeDefinition(
     const { evaluateExeBlock } = await import('@interpreter/eval/exe');
     const blockResult = await evaluateExeBlock(blockNode, execEnv);
     return {
-      value: blockResult.value,
+      value: unwrapExeReturnControl(blockResult.value),
       outputDescriptors,
       callStack
     };
@@ -895,7 +906,7 @@ async function handleCodeDefinition(
     const { evaluateBox } = await import('@interpreter/eval/box');
     const boxResult = await evaluateBox(envDirectiveNode, execEnv);
     return {
-      value: boxResult.value,
+      value: unwrapExeReturnControl(boxResult.value),
       outputDescriptors,
       callStack
     };
@@ -922,6 +933,7 @@ async function handleCodeDefinition(
     descriptor: envInputDescriptor,
     policyEnforcer,
     policyChecksEnabled: Boolean(opType),
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'using',

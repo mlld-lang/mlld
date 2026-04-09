@@ -638,7 +638,7 @@ function isShelfOnlyBoxConfig(
   });
 
   if (explicitKeys.length === 0) {
-    return false;
+    return true;
   }
 
   return explicitKeys.every(key => key === 'shelf' || key === 'display' || key === 'profile');

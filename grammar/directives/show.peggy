@@ -26,12 +26,20 @@ ShowKeyword
 // Primary /show directive with all variants
 SlashShow
   // Error: Multiple arguments - must come FIRST to catch before successful parse
-  = DirectiveContext ShowKeyword (HWS DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* _ "@" {
-      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
+  = DirectiveContext ShowKeyword (HWS DataLabelList)? _ "@" id:BaseIdentifier fields:("." BaseIdentifier)* [ \t\r\u200B\u200C\u200D]+ secondArgStart:("" { return peg$currPos; }) "@" {
+      helpers.mlldError(
+        "show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`",
+        "single argument",
+        peg$computeLocation(secondArgStart, peg$currPos)
+      );
     }
   // Error: Multiple quoted strings
-  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ (UnifiedDoubleQuote / UnifiedSingleQuote) _ ("\"" / "'" / "@") {
-      helpers.mlldError("show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`", "single argument", location());
+  / DirectiveContext ShowKeyword (HWS DataLabelList)? _ (UnifiedDoubleQuote / UnifiedSingleQuote) [ \t\r\u200B\u200C\u200D]+ secondArgStart:("" { return peg$currPos; }) ("\"" / "'" / "@") {
+      helpers.mlldError(
+        "show accepts only a single argument. To display multiple values, use a template: show `@var1 @var2`",
+        "single argument",
+        peg$computeLocation(secondArgStart, peg$currPos)
+      );
     }
   // Error: /show { ... } command execution is removed
   / DirectiveContext ShowKeyword (HWS DataLabelList)? _ UnifiedCommandBrackets TailModifiers? StandardDirectiveEnding {

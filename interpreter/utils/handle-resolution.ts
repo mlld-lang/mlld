@@ -28,6 +28,26 @@ function isBareHandleToken(value: string): boolean {
   return /^h_[a-z0-9]+$/.test(value.trim());
 }
 
+export function extractProjectedHandleToken(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const handle = value.trim();
+    return isBareHandleToken(handle) ? handle : undefined;
+  }
+
+  if (!isPlainObject(value) || typeof value.handle !== 'string') {
+    return undefined;
+  }
+
+  const handle = value.handle.trim();
+  if (!isBareHandleToken(handle)) {
+    return undefined;
+  }
+
+  const keys = Object.keys(value);
+  const allowedKeys = new Set(['handle', 'value', 'preview']);
+  return keys.every(key => allowedKeys.has(key)) ? handle : undefined;
+}
+
 export async function resolveValueHandles(value: unknown, env: Environment): Promise<unknown> {
   if (isHandleWrapper(value)) {
     return env.resolveHandle(value.handle);

@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2026-04-05T06:55:55.088Z
+" Latest Revision: 2026-04-09T22:48:29.206Z
 
 if exists("b:current_syntax")
   finish
@@ -35,8 +35,8 @@ syn match mlldLogicalOp "&&\|||\|!"
 syn match mlldComparisonOp "==\|!=\|<=\|>=\|<\|>"
 " Ternary operators
 syn match mlldTernaryOp "[?:]"
-" Arrow operator
-syn match mlldArrowOp "=>"
+" Arrow operators
+syn match mlldArrowOp "=->\|=>\|->"
 " Pipe operator
 syn match mlldPipeOp "|"
 " Assignment operator
@@ -101,7 +101,7 @@ syn region mlldPath start="\[" end="\]" contains=mlldURL,mlldVariable,mlldReserv
 syn match mlldURL "https\?://[^\]>]*" contained
 
 " Keywords
-syn keyword mlldKeyword from as foreach with to tools mcp git using
+syn keyword mlldKeyword from as record foreach with to tools mcp git using
 
 " Numbers
 syn match mlldNumber "\<\d\+\(\.\d\+\)\?\>"

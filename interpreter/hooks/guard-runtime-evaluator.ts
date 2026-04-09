@@ -157,6 +157,9 @@ function snapshotPolicyArgDescriptors(
       variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined,
       runtimeDescriptor
     );
+    const factsources = Array.isArray(variable.mx?.factsources) && variable.mx.factsources.length > 0
+      ? Object.freeze([...variable.mx.factsources])
+      : undefined;
 
     descriptors[name] = Object.freeze({
       labels: mergedDescriptor.labels.length > 0 ? Object.freeze([...mergedDescriptor.labels]) : undefined,
@@ -164,6 +167,7 @@ function snapshotPolicyArgDescriptors(
       attestations: mergedDescriptor.attestations.length > 0
         ? Object.freeze([...mergedDescriptor.attestations])
         : undefined,
+      factsources,
       sources: mergedDescriptor.sources.length > 0 ? Object.freeze([...mergedDescriptor.sources]) : undefined,
       urls: (mergedDescriptor.urls?.length ?? 0) > 0 ? Object.freeze([...(mergedDescriptor.urls ?? [])]) : undefined
     });
@@ -373,6 +377,7 @@ export async function evaluateGuardRuntime(
         timing: 'before',
         reason: policyResult.reason,
         metadata: {
+          ...(policyResult.metadata ?? {}),
           ...metadataBase,
           policyName: policyResult.policyName,
           policyRule: policyResult.rule,
@@ -394,6 +399,7 @@ export async function evaluateGuardRuntime(
       decision: 'allow',
       timing: 'before',
       metadata: {
+        ...(policyResult.metadata ?? {}),
         guardName: guard.name ?? null,
         guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
         scope,

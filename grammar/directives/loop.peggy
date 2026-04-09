@@ -10,6 +10,12 @@ SlashLoop "loop directive"
       const rateMs = header ? header.rateMs : null;
       const until = untilClause || null;
       const statements = block.statements || [];
+      const withClause = ending?.tail
+        ? {
+            ...ending.tail,
+            ...(ending.parallel || {})
+          }
+        : null;
 
       const hasLimit = header !== null && header !== undefined;
       const hasRate = header ? header.hasRate : false;
@@ -19,19 +25,22 @@ SlashLoop "loop directive"
         ...(hasLimit ? { limit } : {}),
         ...(rateMs !== null ? { rateMs } : {}),
         ...(hasUntil ? { until } : {}),
+        ...(withClause ? { withClause } : {}),
         block: statements
       };
 
       const raw = {
         ...(hasLimit ? { limit: header.rawLimit } : {}),
         ...(rateMs !== null ? { rateMs } : {}),
-        ...(hasUntil ? { until: helpers.reconstructRawString(until) } : {})
+        ...(hasUntil ? { until: helpers.reconstructRawString(until) } : {}),
+        ...(withClause ? { withClause } : {})
       };
 
       const meta = {
         hasLimit,
         hasRate: !!hasRate,
         hasUntil,
+        ...(withClause ? { withClause } : {}),
         ...(block.meta ? { statementCount: block.meta.statementCount } : {})
       };
 

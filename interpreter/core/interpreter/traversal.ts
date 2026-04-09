@@ -11,7 +11,7 @@ import type {
 import { interpreterLogger as logger } from '@core/utils/logger';
 import type { Environment } from '@interpreter/env/Environment';
 import { isExeReturnControl } from '@interpreter/eval/exe-return';
-import { materializeDisplayValue } from '@interpreter/utils/display-materialization';
+import { boundary } from '@interpreter/utils/boundary';
 import { parseFrontmatter } from '@interpreter/utils/frontmatter-parser';
 
 type FrontmatterData = Record<string, unknown> | null;
@@ -113,7 +113,7 @@ function emitNonDirectiveIntents(
         });
       }
     } else {
-      const materialized = materializeDisplayValue(node.content, undefined, node.content);
+      const materialized = boundary.display(node.content);
       env.emitIntent({
         type: 'content',
         value: materialized.text,
@@ -140,7 +140,7 @@ function emitNonDirectiveIntents(
   }
 
   if (isCodeFence(node)) {
-    const materialized = materializeDisplayValue(node.content, undefined, node.content);
+    const materialized = boundary.display(node.content);
     env.emitIntent({
       type: 'content',
       value: materialized.text,

@@ -69,7 +69,7 @@
             },
             {
               "name": "keyword.operator.arrow.mlld",
-              "match": "=>"
+              "match": "(?:=->|=>|->)"
             },
             {
               "name": "keyword.operator.ternary.mlld",
@@ -462,7 +462,7 @@
             },
             {
               "name": "keyword.operator.mlld",
-              "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
+              "match": "\\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
             },
             {
               "name": "support.type.guard-filter.mlld",
@@ -548,7 +548,7 @@
         },
         {
           "name": "keyword.operator.arrow.mlld",
-          "match": "=>"
+          "match": "(?:=->|=>|->)"
         },
         {
           "name": "keyword.operator.ternary.mlld",
@@ -941,7 +941,7 @@
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
+          "match": "\\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",

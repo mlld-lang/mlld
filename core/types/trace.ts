@@ -21,10 +21,11 @@ export interface DirectiveTrace {
   errorMessage?: string;
 }
 
-export const RUNTIME_TRACE_LEVELS = ['off', 'effects', 'verbose'] as const;
+export const RUNTIME_TRACE_LEVELS = ['off', 'effects', 'handle', 'handles', 'verbose'] as const;
 
 export type RuntimeTraceLevel = (typeof RUNTIME_TRACE_LEVELS)[number];
-export type RuntimeTraceEmissionLevel = Exclude<RuntimeTraceLevel, 'off'>;
+export type RuntimeTraceNormalizedLevel = Exclude<RuntimeTraceLevel, 'handles'>;
+export type RuntimeTraceEmissionLevel = 'effects' | 'verbose';
 
 export type RuntimeTraceCategory =
   | 'shelf'
@@ -34,11 +35,19 @@ export type RuntimeTraceCategory =
   | 'auth'
   | 'display'
   | 'llm'
-  | 'record';
+  | 'record'
+  | 'import';
 
 type TraceRecord<T extends object> = T & Record<string, unknown>;
 
 export type RuntimeTraceEventName =
+  | 'import.resolve'
+  | 'import.cache_hit'
+  | 'import.read'
+  | 'import.parse'
+  | 'import.evaluate'
+  | 'import.exports'
+  | 'import.fail'
   | 'shelf.read'
   | 'shelf.write'
   | 'shelf.clear'
@@ -51,9 +60,10 @@ export type RuntimeTraceEventName =
   | 'guard.resume'
   | 'guard.env'
   | 'guard.crash'
-  | 'handle.mint'
-  | 'handle.resolve'
-  | 'handle.resolve_fail'
+  | 'handle.issued'
+  | 'handle.resolved'
+  | 'handle.resolve_failed'
+  | 'handle.released'
   | 'policy.build'
   | 'policy.validate'
   | 'policy.compile_drop'
@@ -75,10 +85,61 @@ export interface RuntimeTraceScope {
   box?: string;
   guard_try?: number;
   pipeline_stage?: number;
+  file?: string;
   [key: string]: unknown;
 }
 
+type RuntimeImportTraceRecord = TraceRecord<{
+  ref: string;
+  resolvedPath?: string;
+  transport?: string;
+  importType?: string;
+  directive?: string;
+  contentType?: string;
+  resolverName?: string;
+  cacheKey?: string;
+  entryCount?: number;
+  exportCount?: number;
+  phase?: string;
+  error?: string;
+}>;
+
 export interface RuntimeTraceEventSpecMap {
+  'import.resolve': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.cache_hit': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.read': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.parse': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.evaluate': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.exports': {
+    category: 'import';
+    level: 'verbose';
+    data: RuntimeImportTraceRecord;
+  };
+  'import.fail': {
+    category: 'import';
+    level: 'effects';
+    data: RuntimeImportTraceRecord & TraceRecord<{ phase: string; error: string }>;
+  };
   'shelf.read': {
     category: 'shelf';
     level: 'verbose';
@@ -129,20 +190,25 @@ export interface RuntimeTraceEventSpecMap {
   'guard.resume': RuntimeTraceEventSpecMap['guard.evaluate'];
   'guard.env': RuntimeTraceEventSpecMap['guard.evaluate'];
   'guard.crash': RuntimeTraceEventSpecMap['guard.evaluate'];
-  'handle.mint': {
+  'handle.issued': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; value?: unknown }>;
+    data: TraceRecord<{ handle: string; valuePreview?: unknown; factsourceRef?: string; sessionId?: string }>;
   };
-  'handle.resolve': {
+  'handle.resolved': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; value?: unknown }>;
+    data: TraceRecord<{ handle: string; valuePreview?: unknown; sessionId?: string }>;
   };
-  'handle.resolve_fail': {
+  'handle.resolve_failed': {
     category: 'handle';
     level: 'verbose';
-    data: TraceRecord<{ handle: string; reason?: string }>;
+    data: TraceRecord<{ handle: string; reason?: string; sessionId?: string }>;
+  };
+  'handle.released': {
+    category: 'handle';
+    level: 'verbose';
+    data: TraceRecord<{ sessionId: string; handleCount: number }>;
   };
   'policy.build': {
     category: 'policy';
@@ -256,15 +322,24 @@ export function isRuntimeTraceLevel(value: unknown): value is RuntimeTraceLevel 
   return typeof value === 'string' && (RUNTIME_TRACE_LEVELS as readonly string[]).includes(value);
 }
 
+export function normalizeRuntimeTraceLevel(level: RuntimeTraceLevel): RuntimeTraceNormalizedLevel {
+  return level === 'handles' ? 'handle' : level;
+}
+
 export function shouldEmitRuntimeTrace(
   current: RuntimeTraceLevel,
-  required: RuntimeTraceEmissionLevel
+  required: RuntimeTraceEmissionLevel,
+  category: RuntimeTraceCategory
 ): boolean {
-  if (current === 'off') {
+  const normalized = normalizeRuntimeTraceLevel(current);
+  if (normalized === 'off') {
     return false;
   }
-  if (current === 'verbose') {
+  if (normalized === 'verbose') {
     return true;
+  }
+  if (normalized === 'handle') {
+    return category === 'handle';
   }
   return required === 'effects';
 }

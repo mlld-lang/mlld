@@ -328,6 +328,9 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
     stageContext: StageContext
   ): OperationContext {
     const labels = (command as any)?.securityLabels as DataLabel[] | undefined;
+    const parentOperationContext = this.env.getContextManager().peekOperation();
+    const inheritedAuthorizationSurfaceOperation =
+      parentOperationContext?.metadata?.authorizationSurfaceOperation;
     return {
       type: 'pipeline-stage',
       subtype: command.rawIdentifier,
@@ -336,7 +339,10 @@ export class PipelineExecutor implements PipelineCommandExecutionContextFactory 
       metadata: {
         stageIndex: stageIndex + 1,
         totalStages: stageContext.totalStages,
-        streaming: this.streamingLifecycle.isEnabled()
+        streaming: this.streamingLifecycle.isEnabled(),
+        ...(inheritedAuthorizationSurfaceOperation === false
+          ? { authorizationSurfaceOperation: inheritedAuthorizationSurfaceOperation }
+          : {})
       }
     };
   }

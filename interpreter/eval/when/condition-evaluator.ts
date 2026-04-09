@@ -52,7 +52,12 @@ export async function evaluateCondition(
 
   if (condition.length === 1) {
     const node = condition[0];
-    if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
+    if (
+      node.type === 'BinaryExpression'
+      || node.type === 'TernaryExpression'
+      || node.type === 'UnaryExpression'
+      || node.type === 'CoerceExpression'
+    ) {
       return evaluateUnifiedExpressionCondition(node, env, runtime);
     }
   }

@@ -4,6 +4,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
+import { interpret } from '@interpreter/index';
 import { evaluateShow } from './show';
 import { asText, isStructuredValue } from '../utils/structured-value';
 import { createObjectVariable } from '@core/types/variable';
@@ -112,5 +113,40 @@ describe('evaluateShow (structured)', () => {
     const result = await evaluateShow(showNode, env);
     expect(isStructuredValue(result.value)).toBe(true);
     expect(asText(result.value)).toBe(expectedText);
+  });
+
+  it('renders structured record arrays from invocations as object arrays', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/record @contact = {
+  facts: [email: string, id: string],
+  data: [name: string]
+}
+/shelf @s = {
+  things: contact[]
+}
+/exe @search() = js {
+  return [{ email: "alice@example.com", id: "c1", name: "Alice" }];
+} => contact
+/var @found = @search()
+@shelf.write(@s.things, @found.0)
+/show @shelf.read(@s.things)
+`;
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      format: 'markdown'
+    });
+
+    expect(JSON.parse(output.trim())).toEqual([
+      {
+        email: 'alice@example.com',
+        id: 'c1',
+        name: 'Alice'
+      }
+    ]);
   });
 });

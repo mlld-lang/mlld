@@ -494,7 +494,9 @@ function resolveEffectiveDisplayMode(
 
   const display = fieldProjection.display;
   if (display.kind === 'open') {
-    return { omitted: false, mode: 'bare' };
+    return fieldProjection.classification === 'fact'
+      ? { omitted: false, mode: 'ref' }
+      : { omitted: false, mode: 'bare' };
   }
 
   if (display.kind === 'legacy') {

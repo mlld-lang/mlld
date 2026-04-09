@@ -13,6 +13,7 @@ import { createCallMcpConfig, normalizeToolsArg } from './call-mcp-config';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { accessField } from '@interpreter/utils/field-access';
+import { normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
 
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
@@ -232,6 +233,117 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('auto-provisions shelve for writable shelf scopes and constrains slot aliases', async () => {
+    const env = await createInterpretedEnv([
+      '/record @contact = {',
+      '  key: id,',
+      '  data: [id: string, email: string, name: string]',
+      '}',
+      '/shelf @outreach = {',
+      '  recipients: contact[]',
+      '}'
+    ].join('\n'));
+
+    const outreach = env.getVariable('outreach');
+    if (!outreach) {
+      env.cleanup();
+      throw new Error('Expected @outreach to be defined');
+    }
+
+    const recipientsRef = await accessField(outreach, { type: 'field', value: 'recipients' } as any, { env });
+    const scopedEnv = env.createChild();
+    const scope = await normalizeScopedShelfConfig({
+      write: [{ alias: 'things', value: recipientsRef }]
+    }, env);
+    scopedEnv.setScopedEnvironmentConfig({ shelf: scope });
+
+    const result = await createCallMcpConfig({
+      tools: [createFunctionTool('ping')],
+      env: scopedEnv
+    });
+
+    try {
+      expect(result.availableTools).toEqual([
+        { name: 'ping' },
+        { name: 'shelve' }
+      ]);
+
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 30,
+        method: 'tools/list',
+        params: {}
+      });
+      const tools = ((listed.result as any)?.tools ?? []) as Array<{
+        name?: string;
+        description?: string;
+        inputSchema?: {
+          properties?: Record<string, { enum?: string[] }>;
+          required?: string[];
+        };
+      }>;
+      expect(tools.map(tool => tool.name)).toEqual(['ping', 'shelve']);
+
+      const shelve = tools.find(tool => tool.name === 'shelve');
+      expect(shelve?.description).toContain('Writable aliases: things');
+      expect(shelve?.description).not.toContain('@outreach.recipients');
+      expect(shelve?.description).not.toContain('->');
+      expect(shelve?.inputSchema?.properties?.slot_alias?.enum).toEqual(['things']);
+      expect(shelve?.inputSchema?.required ?? []).toEqual(['slot_alias', 'value']);
+
+      const called = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 31,
+        method: 'tools/call',
+        params: {
+          name: 'shelve',
+          arguments: {
+            slot_alias: 'things',
+            value: {
+              id: 'c_1',
+              email: 'ada@example.com',
+              name: 'Ada'
+            }
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      const stored = env.readShelfSlot('outreach', 'recipients');
+      const storedItems = Array.isArray(stored) ? stored : asData<any[]>(stored);
+      expect(storedItems).toHaveLength(1);
+      const firstStored = isStructuredValue(storedItems[0])
+        ? asData<Record<string, any>>(storedItems[0])
+        : storedItems[0] as Record<string, any>;
+      expect(asData(firstStored.id)).toBe('c_1');
+
+      const denied = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 32,
+        method: 'tools/call',
+        params: {
+          name: 'shelve',
+          arguments: {
+            slot_alias: 'nope',
+            value: {
+              id: 'c_2',
+              email: 'bob@example.com',
+              name: 'Bob'
+            }
+          }
+        }
+      });
+
+      expect((denied.result as any)?.isError).toBe(true);
+      expect(getToolResultText(denied)).toContain("Unknown writable slot alias 'nope'");
+    } finally {
+      await result.cleanup();
+      scopedEnv.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('accepts tool collections and carries shaped schemas plus injected tool notes', async () => {
     const env = await createInterpretedEnv([
       '/exe tool:w @sendEmail(owner, recipient, subject, body) = "sent" with {',
@@ -274,14 +386,17 @@ describe('createCallMcpConfig', () => {
         { name: 'known' }
       ]);
       expect(result.toolNotes).toContain('<tool_notes>');
-      expect(result.toolNotes).toContain('| Tool | Control Args | Discover Targets |');
-      expect(result.toolNotes).toContain('| outbound_email | recipient | @fyi.known("outbound_email") |');
-      expect(result.toolNotes).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(result.toolNotes).toContain('Read tools: search_contacts_by_name');
-      expect(result.toolNotes).toContain('Denied: (none)');
+      expect(result.toolNotes).toContain('Write tools (require authorization):');
+      expect(result.toolNotes).toContain('### mcp__mlld_tools__outbound_email');
+      expect(result.toolNotes).toContain('- `recipient` (string, **control arg**)');
+      expect(result.toolNotes).toContain('- `subject` (string)');
+      expect(result.toolNotes).toContain('- `body` (string)');
+      expect(result.toolNotes).toContain('Read tools:');
+      expect(result.toolNotes).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(result.toolNotes).toContain('- `query` (string)');
       expect(result.toolNotes).not.toContain('Send an outbound email');
-      expect(result.toolNotes).not.toContain('| Tool | Description |');
       expect(result.toolNotes).not.toContain('Search contacts by name');
+      expect(result.toolNotes).not.toContain('@fyi.known("outbound_email")');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
       const listed = await sendJsonRpc(socketPath, {

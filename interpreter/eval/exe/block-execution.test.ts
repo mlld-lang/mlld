@@ -22,6 +22,7 @@ function createText(content: string): any {
 function createReturn(value: string): any {
   return {
     type: 'ExeReturn',
+    kind: 'canonical',
     nodeId: `return-${value}`,
     values: [createText(value)],
     meta: { hasValue: true }

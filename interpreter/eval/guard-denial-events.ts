@@ -3,7 +3,7 @@ import { MlldDenialError } from '@core/errors/denial';
 import type { DenialContext } from '@core/errors/denial';
 import type { GuardContextSnapshot, OperationContext } from '@interpreter/env/ContextManager';
 import type { GuardArgsSnapshot } from '@interpreter/utils/guard-args';
-import { resolveNestedValue } from '@interpreter/utils/display-materialization';
+import { boundary } from '@interpreter/utils/boundary';
 import type { SDKGuardDenial } from '@sdk/types';
 
 function stripPrefix(value?: string | null, prefix = '@'): string | null {
@@ -67,7 +67,7 @@ function collectLabels(
 }
 
 function toSerializableArgValue(value: unknown): unknown {
-  const resolved = resolveNestedValue(value);
+  const resolved = boundary.plainData(value, { preserveProvenance: true });
   return resolved === undefined ? null : resolved;
 }
 

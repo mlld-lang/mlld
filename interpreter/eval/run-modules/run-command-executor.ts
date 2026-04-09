@@ -29,7 +29,8 @@ import {
   applyRunOperationContext,
   buildRunCommandOperationUpdate,
   checkRunInputLabelFlow,
-  enforceRunCommandPolicy
+  enforceRunCommandPolicy,
+  shouldEnforceRunAllowList
 } from './run-policy-context';
 import {
   getPreExtractedRunCommand,
@@ -312,7 +313,10 @@ export async function executeRunCommand(
     env.getPolicySummary(),
     command,
     env,
-    directive.location ?? undefined
+    directive.location ?? undefined,
+    {
+      enforceAllowList: shouldEnforceRunAllowList(context?.operationContext)
+    }
   );
 
   const runArgDescriptor =
@@ -326,6 +330,7 @@ export async function executeRunCommand(
     descriptor: commandInputDescriptor,
     policyEnforcer,
     policyChecksEnabled,
+    operationContext: context?.operationContext,
     opLabels,
     exeLabels,
     flowChannel: 'arg',
@@ -385,6 +390,7 @@ export async function executeRunCommand(
         descriptor: stdinDescriptor,
         policyEnforcer,
         policyChecksEnabled,
+        operationContext: context?.operationContext,
         opLabels,
         exeLabels,
         flowChannel: 'stdin',
@@ -406,6 +412,7 @@ export async function executeRunCommand(
         descriptor: envInputDescriptor,
         policyEnforcer,
         policyChecksEnabled,
+        operationContext: context?.operationContext,
         opLabels,
         exeLabels,
         flowChannel: 'using',

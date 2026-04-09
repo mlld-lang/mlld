@@ -18,6 +18,7 @@ import {
 import { isDangerAllowedForCommand, isDangerousCommand, normalizeDangerEntries } from './danger';
 import { expandOperationLabels } from './label-flow';
 import { matchesLabelPattern } from './fact-labels';
+import type { FactSourceHandle } from '@core/types/handle';
 import {
   getPositiveCheckAcceptedPatterns,
   SEND_INTERNAL_PATTERNS,
@@ -62,6 +63,25 @@ export type CapabilityAccessDecision = {
   reason?: string;
 };
 
+type CapabilityAccessOptions = {
+  enforceAllowList?: boolean;
+};
+
+export function shouldApplySurfaceScopedPolicyToOperation(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return operation.metadata?.authorizationSurfaceOperation !== false;
+}
+
+export function shouldEnforceCommandAllowListForOperation(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return (
+    shouldApplySurfaceScopedPolicyToOperation(operation)
+    && operation.metadata?.commandAccessSubstrate !== true
+  );
+}
+
 function collectDescriptorLabels(descriptor?: PolicyArgDescriptor): string[] {
   return normalizeList([
     ...(descriptor?.labels ?? []),
@@ -82,6 +102,14 @@ function collectAuthorizedAttestations(
 ): string[] {
   const labels = authorizedArgAttestations?.[argName];
   return normalizeList(Array.isArray(labels) ? [...labels] : []);
+}
+
+function collectAuthorizedFactsources(
+  authorizedArgFactsources: Readonly<Record<string, readonly FactSourceHandle[]>> | undefined,
+  argName: string
+): FactSourceHandle[] {
+  const factsources = authorizedArgFactsources?.[argName];
+  return Array.isArray(factsources) ? dedupeFactSources(factsources) : [];
 }
 
 function getExpandedPolicyOperationLabels(
@@ -118,7 +146,7 @@ function buildInheritedPositiveCheckFailure(options: {
     rule: options.rule,
     suggestions: [
       options.missingLabelSuggestion,
-      'Review active policies with @mx.policy.activePolicies'
+      'Review active policies with @mx.policy.active'
     ]
   };
 }
@@ -127,15 +155,188 @@ function projectedHandleSuggestion(message: string): string {
   return `${message} from an approved tool result or another approved source`;
 }
 
+function getOperationControlArgs(operation: {
+  metadata?: Record<string, unknown>;
+}): string[] {
+  const controlArgs = operation.metadata?.authorizationControlArgs;
+  if (!Array.isArray(controlArgs)) {
+    return [];
+  }
+  return controlArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+function shouldCorrelateControlArgs(operation: {
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return operation.metadata?.correlateControlArgs === true;
+}
+
+function getFactSourceInstanceKey(source: FactSourceHandle): string {
+  if (source.instanceKey !== undefined) {
+    return `${source.sourceRef}:instance:${source.instanceKey}`;
+  }
+  if (source.coercionId && source.position !== undefined) {
+    return `${source.sourceRef}:coercion:${source.coercionId}:${source.position}`;
+  }
+  return `unknown:${JSON.stringify(source)}`;
+}
+
+function dedupeFactSources(factsources: readonly FactSourceHandle[]): FactSourceHandle[] {
+  const unique = new Map<string, FactSourceHandle>();
+  for (const handle of factsources) {
+    if (!handle || handle.kind !== 'record-field') {
+      continue;
+    }
+    unique.set(getFactSourceInstanceKey(handle), handle);
+  }
+  return Array.from(unique.values());
+}
+
+function describeFactSourceRecord(source: FactSourceHandle): string {
+  if (source.instanceKey !== undefined) {
+    return `${source.sourceRef}[instance=${source.instanceKey}]`;
+  }
+  if (source.coercionId && source.position !== undefined) {
+    return `${source.sourceRef}[coercion=${source.coercionId.slice(0, 8)},position=${source.position}]`;
+  }
+  return `${source.sourceRef}[instance=unknown]`;
+}
+
+function formatCorrelateControlArgsReason(options: {
+  operationName?: string;
+  detail: string;
+}): string {
+  const target =
+    typeof options.operationName === 'string' && options.operationName.trim().length > 0
+      ? ` on @${options.operationName.trim()}`
+      : '';
+  return `Rule 'correlate-control-args': control args${target} must come from the same source record; ${options.detail}`;
+}
+
+function sameFactSourceInstance(left: FactSourceHandle, right: FactSourceHandle): boolean {
+  if (left.sourceRef !== right.sourceRef) {
+    return false;
+  }
+  if (left.instanceKey !== undefined && right.instanceKey !== undefined) {
+    return left.instanceKey === right.instanceKey;
+  }
+  if (
+    left.coercionId &&
+    right.coercionId &&
+    left.position !== undefined &&
+    right.position !== undefined
+  ) {
+    return left.coercionId === right.coercionId && left.position === right.position;
+  }
+  return false;
+}
+
+function resolveControlArgFactSource(options: {
+  argName: string;
+  descriptor?: PolicyArgDescriptor;
+  operationName?: string;
+}):
+  | { ok: true; source: FactSourceHandle }
+  | { ok: false; failure: AuthorizationInheritedPolicyCheckFailure } {
+  const factsources = dedupeFactSources(options.descriptor?.factsources ?? []);
+  if (factsources.length === 0) {
+    return {
+      ok: false,
+      failure: {
+        reason: formatCorrelateControlArgsReason({
+          operationName: options.operationName,
+          detail: `arg '${options.argName}' does not carry source-record provenance`
+        }),
+        rule: 'correlate-control-args'
+      }
+    };
+  }
+  if (factsources.length > 1) {
+    return {
+      ok: false,
+      failure: {
+        reason: formatCorrelateControlArgsReason({
+          operationName: options.operationName,
+          detail: `arg '${options.argName}' carries multiple source records: ${factsources.map(describeFactSourceRecord).join(', ')}`
+        }),
+        rule: 'correlate-control-args'
+      }
+    };
+  }
+  return { ok: true, source: factsources[0]! };
+}
+
+export function evaluateControlArgCorrelation(options: {
+  operation: {
+    name?: string;
+    metadata?: Record<string, unknown>;
+  };
+  args?: Readonly<Record<string, unknown>>;
+  argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
+}): AuthorizationInheritedPolicyCheckFailure | undefined {
+  if (!shouldCorrelateControlArgs(options.operation)) {
+    return undefined;
+  }
+
+  const controlArgs = getOperationControlArgs(options.operation);
+  if (controlArgs.length <= 1) {
+    return undefined;
+  }
+
+  const providedControlArgs = controlArgs.filter(argName =>
+    Object.prototype.hasOwnProperty.call(options.args ?? {}, argName) ||
+    Object.prototype.hasOwnProperty.call(options.argDescriptors ?? {}, argName)
+  );
+  if (providedControlArgs.length <= 1) {
+    return undefined;
+  }
+
+  const resolvedSources: Array<{ argName: string; source: FactSourceHandle }> = [];
+  for (const argName of providedControlArgs) {
+    const resolved = resolveControlArgFactSource({
+      argName,
+      descriptor: options.argDescriptors?.[argName],
+      operationName: options.operation.name
+    });
+    if (!resolved.ok) {
+      return resolved.failure;
+    }
+    resolvedSources.push({ argName, source: resolved.source });
+  }
+
+  const baseline = resolvedSources[0]!;
+  for (let index = 1; index < resolvedSources.length; index += 1) {
+    const candidate = resolvedSources[index]!;
+    if (sameFactSourceInstance(baseline.source, candidate.source)) {
+      continue;
+    }
+    return {
+      reason: formatCorrelateControlArgsReason({
+        operationName: options.operation.name,
+        detail: [
+          `${baseline.argName} -> ${describeFactSourceRecord(baseline.source)}`,
+          `${candidate.argName} -> ${describeFactSourceRecord(candidate.source)}`
+        ].join(', ')
+      }),
+      rule: 'correlate-control-args'
+    };
+  }
+
+  return undefined;
+}
+
 export function evaluateAuthorizationInheritedPolicyChecks(options: {
   policy: PolicyConfig;
   operation: {
+    name?: string;
+    metadata?: Record<string, unknown>;
     opLabels?: readonly string[];
     labels?: readonly string[];
   };
   args?: Readonly<Record<string, unknown>>;
   argDescriptors?: Readonly<Record<string, PolicyArgDescriptor>>;
   authorizedArgAttestations?: Readonly<Record<string, readonly string[]>>;
+  authorizedArgFactsources?: Readonly<Record<string, readonly FactSourceHandle[]>>;
 }): AuthorizationInheritedPolicyCheckFailure | undefined {
   const enabledRules = resolvePolicyDefaultRuleOptions(options.policy.defaults?.rules).filter(entry =>
     isBuiltinPolicyRuleName(entry.rule)
@@ -148,7 +349,8 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
   const declarativeEntries = collectDeclarativeFactRequirementEntries(options.policy).filter(
     entry => entry.opRef === normalizedOperationRef
   );
-  if (enabledRules.length === 0 && declarativeEntries.length === 0) {
+  const shouldCheckControlArgCorrelation = shouldCorrelateControlArgs(options.operation);
+  if (enabledRules.length === 0 && declarativeEntries.length === 0 && !shouldCheckControlArgCorrelation) {
     return undefined;
   }
 
@@ -288,7 +490,7 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
           reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
           rule: 'policy.defaults.rules.no-untrusted-privileged',
           suggestions: [
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -322,6 +524,31 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
         });
       }
     }
+  }
+
+  if (shouldCheckControlArgCorrelation) {
+    const effectiveArgDescriptors: Record<string, PolicyArgDescriptor> = {
+      ...(options.argDescriptors ?? {})
+    };
+    for (const [argName, factsources] of Object.entries(options.authorizedArgFactsources ?? {})) {
+      const authorizedFactsources = collectAuthorizedFactsources(options.authorizedArgFactsources, argName);
+      if (authorizedFactsources.length === 0) {
+        continue;
+      }
+      const existingDescriptor = effectiveArgDescriptors[argName];
+      effectiveArgDescriptors[argName] = {
+        ...(existingDescriptor ?? {}),
+        factsources: dedupeFactSources([
+          ...(existingDescriptor?.factsources ?? []),
+          ...authorizedFactsources
+        ])
+      };
+    }
+    return evaluateControlArgCorrelation({
+      operation: options.operation,
+      args: options.args,
+      argDescriptors: effectiveArgDescriptors
+    });
   }
 
   return undefined;
@@ -496,7 +723,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         rule: 'deny',
         locked: policyLocked,
         suggestions: [
-          'Review active policies with @mx.policy.activePolicies'
+          'Review active policies with @mx.policy.active'
         ]
       })
     });
@@ -514,7 +741,9 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     privileged: true,
     policyCondition: ({ operation }) => {
       const commandText = getOperationCommandText(operation);
-      const decision = evaluateCommandAccess(policy, commandText);
+      const decision = evaluateCommandAccess(policy, commandText, {
+        enforceAllowList: shouldEnforceCommandAllowListForOperation(operation)
+      });
       if (decision.allowed) {
         return { decision: 'allow' };
       }
@@ -550,7 +779,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
           locked: policyLocked,
           suggestions: [
             'Remove sh from deny list to allow shell access',
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -578,7 +807,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
             locked: policyLocked,
             suggestions: [
               'Remove network from deny list to allow network commands',
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -629,7 +858,7 @@ function makeDeclarativeFactRequirementGuard(options: {
             projectedHandleSuggestion(
               `Use a projected handle for '${options.argName}'`
             ),
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -647,7 +876,7 @@ function makeDeclarativeFactRequirementGuard(options: {
               projectedHandleSuggestion(
                 `Use a projected handle for '${options.argName}'`
               ),
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -697,7 +926,7 @@ function buildCommandDenialSuggestions(commandName: string, rule: string): strin
   } else {
     suggestions.push(`Add 'cmd:${commandName}:*' to capabilities.allow`);
   }
-  suggestions.push('Review active policies with @mx.policy.activePolicies');
+  suggestions.push('Review active policies with @mx.policy.active');
   return suggestions;
 }
 
@@ -863,15 +1092,21 @@ function isNetworkCommand(commandTokens: string[]): boolean {
   return networkCommands.includes(firstWord);
 }
 
-export function evaluateCommandAccess(policy: PolicyConfig, commandText: string): CommandAccessDecision {
+export function evaluateCommandAccess(
+  policy: PolicyConfig,
+  commandText: string,
+  options?: CapabilityAccessOptions
+): CommandAccessDecision {
   const commandTokens = getCommandTokens(commandText);
   const commandName = getCommandName(commandTokens, commandText);
 
   const allow = policy.allow;
   const deny = policy.deny;
-  const allowListActive = allow !== undefined && allow !== true;
+  const enforceAllowList = options?.enforceAllowList !== false;
+  const allowConfigured = allow !== undefined && allow !== true;
+  const allowListActive = allowConfigured && enforceAllowList;
   const allowMap =
-    allowListActive && allow && typeof allow === 'object' && !Array.isArray(allow)
+    allowConfigured && allow && typeof allow === 'object' && !Array.isArray(allow)
       ? allow
       : undefined;
   if (deny === true) {
@@ -896,7 +1131,7 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
       ? deny
       : undefined;
   const denyPatterns = extractCommandPatterns(deny) ?? (denyMap?.cmd !== undefined ? normalizeCommandPatternList(denyMap.cmd) : undefined);
-  const allowPatterns = allowListActive
+  const allowPatterns = allowConfigured
     ? extractCommandPatterns(allow) ?? (allowMap?.cmd !== undefined ? normalizeCommandPatternList(allowMap.cmd) : undefined)
     : undefined;
   const denyMatch = denyPatterns
@@ -944,10 +1179,15 @@ export function evaluateCommandAccess(policy: PolicyConfig, commandText: string)
   return { allowed: true, commandName };
 }
 
-export function evaluateCapabilityAccess(policy: PolicyConfig, capability: string): CapabilityAccessDecision {
+export function evaluateCapabilityAccess(
+  policy: PolicyConfig,
+  capability: string,
+  options?: CapabilityAccessOptions
+): CapabilityAccessDecision {
   const allow = policy.allow;
   const deny = policy.deny;
-  const allowListActive = allow !== undefined && allow !== true;
+  const allowConfigured = allow !== undefined && allow !== true;
+  const allowListActive = allowConfigured && options?.enforceAllowList !== false;
 
   if (deny === true) {
     return { allowed: false, reason: formatCapabilityDeniedReason(capability) };
@@ -992,7 +1232,8 @@ export function evaluateCapabilityAccess(policy: PolicyConfig, capability: strin
 
 export function findDeniedShellCommand(
   policy: PolicyConfig,
-  shellCode: string
+  shellCode: string,
+  options?: CapabilityAccessOptions
 ): ShellCommandDenyMatch | null {
   if (typeof shellCode !== 'string' || shellCode.trim().length === 0) {
     return null;
@@ -1004,7 +1245,7 @@ export function findDeniedShellCommand(
   const denyOnlyPolicy: PolicyConfig = { deny: normalizedPolicy.deny };
   const candidates = extractShellCommandCandidates(shellCode);
   for (const commandText of candidates) {
-    const decision = evaluateCommandAccess(denyOnlyPolicy, commandText);
+    const decision = evaluateCommandAccess(denyOnlyPolicy, commandText, options);
     if (decision.allowed) {
       continue;
     }
@@ -1107,6 +1348,10 @@ function makeDataRuleGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, argName }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
@@ -1155,6 +1400,10 @@ function makeNamedArgAttestationGuard(options: {
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, args, argDescriptors }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       if (typeof operation.name !== 'string' || operation.name.length === 0) {
         return { decision: 'allow' };
       }
@@ -1180,7 +1429,7 @@ function makeNamedArgAttestationGuard(options: {
           locked: options.locked === true,
           suggestions: [
             options.missingLabelSuggestion,
-            'Review active policies with @mx.policy.activePolicies'
+            'Review active policies with @mx.policy.active'
           ]
         };
       }
@@ -1199,7 +1448,7 @@ function makeNamedArgAttestationGuard(options: {
             locked: options.locked === true,
             suggestions: [
               options.missingLabelSuggestion,
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }
@@ -1224,6 +1473,10 @@ function makeSensitiveExfilGuard(
     timing: 'before',
     privileged: true,
     policyCondition: ({ operation, input }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
       const rawOpLabels = [
         ...(operation.opLabels ?? []),
         ...(operation.labels ?? [])
@@ -1279,7 +1532,7 @@ function makeNoNovelUrlsGuard(
             locked: locked === true,
             suggestions: [
               'Pass through a URL that was read from external input, or add the domain to policy.urls.allowConstruction',
-              'Review active policies with @mx.policy.activePolicies'
+              'Review active policies with @mx.policy.active'
             ]
           };
         }

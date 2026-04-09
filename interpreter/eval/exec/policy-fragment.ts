@@ -1,4 +1,5 @@
 import {
+  mergePolicyAuthorizations,
   normalizePolicyAuthorizations,
   validateNormalizedPolicyAuthorizations,
   type PolicyAuthorizationValidationResult
@@ -10,9 +11,10 @@ import {
   clonePolicyAuthorizationCompileReport,
   compilePolicyAuthorizations,
   hasPolicyAuthorizationCompileActivity,
+  materializePolicySourceValue,
   type PolicyAuthorizationCompileReport
 } from '@interpreter/policy/authorization-compiler';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
@@ -31,7 +33,67 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
+function resolvePolicyConfigSources(value: unknown): PolicyConfig[] | undefined {
+  if (Array.isArray(value)) {
+    const candidates: PolicyConfig[] = [];
+    for (const entry of value) {
+      const candidate = resolvePolicyConfigSource(entry);
+      if (!candidate) {
+        return undefined;
+      }
+      candidates.push(candidate);
+    }
+    return candidates;
+  }
+
+  const candidate = resolvePolicyConfigSource(value);
+  return candidate ? [candidate] : undefined;
+}
+
+function mergeCompileReports(
+  base: PolicyAuthorizationCompileReport,
+  incoming: PolicyAuthorizationCompileReport
+): PolicyAuthorizationCompileReport {
+  return {
+    strippedArgs: [...base.strippedArgs, ...incoming.strippedArgs],
+    repairedArgs: [...base.repairedArgs, ...incoming.repairedArgs],
+    droppedEntries: [...base.droppedEntries, ...incoming.droppedEntries],
+    droppedArrayElements: [...base.droppedArrayElements, ...incoming.droppedArrayElements],
+    ambiguousValues: [...base.ambiguousValues, ...incoming.ambiguousValues],
+    compiledProofs: [...base.compiledProofs, ...incoming.compiledProofs]
+  };
+}
+
 const policyAuthorizationCompileReports = new WeakMap<PolicyConfig, PolicyAuthorizationCompileReport>();
+
+async function resolveInvocationPolicyOptionValue(
+  rawValue: unknown,
+  env: Environment
+): Promise<unknown> {
+  let value = await boundary.config(rawValue, env);
+  value = await resolveValueHandles(value, env);
+  return value;
+}
+
+function reattachRawAuthorizations(
+  candidates: PolicyConfig[],
+  rawSources: PolicyConfig[] | undefined
+): PolicyConfig[] {
+  if (!rawSources || rawSources.length !== candidates.length) {
+    return candidates;
+  }
+
+  return candidates.map((candidate, index) => {
+    const rawSource = rawSources[index];
+    if (!rawSource || rawSource.authorizations === undefined) {
+      return candidate;
+    }
+    return {
+      ...candidate,
+      authorizations: rawSource.authorizations
+    };
+  });
+}
 
 export function getInvocationPolicyFragmentCompileReport(
   policy: PolicyConfig | undefined
@@ -45,7 +107,8 @@ export function getInvocationPolicyFragmentCompileReport(
 
 export async function resolveInvocationPolicyFragment(
   rawPolicy: unknown,
-  env: Environment
+  env: Environment,
+  options: { replace?: boolean } = {}
 ): Promise<PolicyConfig | undefined> {
   if (rawPolicy === undefined || rawPolicy === null) {
     return undefined;
@@ -79,51 +142,95 @@ export async function resolveInvocationPolicyFragment(
     attestationSource = value;
   }
   const rawResolvedValue = attestationSource;
+  value = await boundary.config(value, env);
   value = await resolveValueHandles(value, env);
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
 
-  const candidate = resolvePolicyConfigSource(value);
-  if (!candidate) {
+  const candidates = resolvePolicyConfigSources(value);
+  if (!candidates || candidates.length === 0) {
     throw new MlldSecurityError('with { policy } expects a policy object', {
       code: 'POLICY_FRAGMENT_INVALID',
       details: { policy: value }
     });
   }
+  const rawPolicySource = await materializePolicySourceValue(rawResolvedValue, env);
+  const policySources = resolvePolicyConfigSources(rawPolicySource);
+  const compiledCandidates = reattachRawAuthorizations(candidates, policySources);
 
-  const normalized = normalizePolicyConfig(candidate);
-  if (candidate.authorizations !== undefined) {
+  const normalized = compiledCandidates.reduce<PolicyConfig | undefined>(
+    (merged, candidate) => mergePolicyConfigs(merged, normalizePolicyConfig(candidate)),
+    undefined
+  ) ?? {};
+
+  let combinedCompileReport: PolicyAuthorizationCompileReport | undefined;
+  let compiledAuthorizations = normalized.authorizations;
+  const rawAuthorizationCandidates =
+    compiledCandidates.filter(candidate => candidate.authorizations !== undefined);
+  if (rawAuthorizationCandidates.length > 0) {
     const toolContext = buildRuntimeAuthorizationToolContext(env);
-    const compilation = await compilePolicyAuthorizations({
-      rawAuthorizations: candidate.authorizations,
-      rawSource: rawResolvedValue,
-      env,
-      toolContext,
-      policy: mergePolicyConfigs(env.getPolicySummary(), candidate),
-      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
-      mode: 'runtime'
-    });
+    compiledAuthorizations = undefined;
 
-    if (compilation.authorizations) {
-      normalized.authorizations = compilation.authorizations;
+    for (const candidate of rawAuthorizationCandidates) {
+      const compilation = await compilePolicyAuthorizations({
+        rawAuthorizations: candidate.authorizations,
+        rawSource: rawResolvedValue,
+        env,
+        toolContext,
+        policy: options.replace ? normalized : mergePolicyConfigs(env.getPolicySummary(), normalized),
+        ambientDeniedTools: options.replace ? undefined : env.getPolicySummary()?.authorizations?.deny,
+        mode: 'runtime'
+      });
+
+      if (compilation.authorizations) {
+        compiledAuthorizations = mergePolicyAuthorizations(
+          compiledAuthorizations,
+          compilation.authorizations
+        );
+      }
+      combinedCompileReport = combinedCompileReport
+        ? mergeCompileReports(combinedCompileReport, compilation.report)
+        : clonePolicyAuthorizationCompileReport(compilation.report);
     }
-    if (hasPolicyAuthorizationCompileActivity(compilation.report)) {
+  }
+
+  if (compiledAuthorizations !== undefined) {
+    normalized.authorizations = compiledAuthorizations;
+  }
+
+  if (combinedCompileReport && hasPolicyAuthorizationCompileActivity(combinedCompileReport)) {
       policyAuthorizationCompileReports.set(
         normalized,
-        clonePolicyAuthorizationCompileReport(compilation.report)
+        clonePolicyAuthorizationCompileReport(combinedCompileReport)
       );
-    }
   }
 
   return normalized;
 }
 
+export async function resolveInvocationPolicyReplaceFlag(
+  rawReplace: unknown,
+  env: Environment
+): Promise<boolean> {
+  if (rawReplace === undefined || rawReplace === null) {
+    return false;
+  }
+
+  const value = await resolveInvocationPolicyOptionValue(rawReplace, env);
+  if (typeof value !== 'boolean') {
+    throw new MlldSecurityError('with { replace } must be a boolean', {
+      code: 'POLICY_FRAGMENT_INVALID',
+      details: { replace: value }
+    });
+  }
+
+  return value;
+}
+
 export function createInvocationPolicyScope(
   env: Environment,
-  policyFragment: PolicyConfig
+  policyFragment: PolicyConfig,
+  options: { replace?: boolean } = {}
 ): { env: Environment; effectivePolicy: PolicyConfig } {
-  const effectivePolicy = mergePolicyConfigs(env.getPolicySummary(), policyFragment);
+  const effectivePolicy = options.replace ? policyFragment : mergePolicyConfigs(env.getPolicySummary(), policyFragment);
   const child = env.createChild();
   child.setPolicySummary(effectivePolicy);
 
@@ -132,9 +239,11 @@ export function createInvocationPolicyScope(
   child.setPolicyContext({
     tier: (existing as any).tier ?? null,
     configs: effectivePolicy ?? {},
-    activePolicies: Array.isArray((existing as any).activePolicies)
-      ? [...(existing as any).activePolicies]
-      : [],
+    activePolicies: options.replace
+      ? []
+      : Array.isArray((existing as any).activePolicies)
+        ? [...(existing as any).activePolicies]
+        : [],
     ...(compileReport ? { authorizationsCompile: compileReport } : {}),
     ...((existing as any).environment ? { environment: (existing as any).environment } : {})
   });

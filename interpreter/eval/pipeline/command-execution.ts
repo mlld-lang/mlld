@@ -175,6 +175,7 @@ export async function executeCommandVariable(
           commandVar,
           stdinInput,
           workingDirectory,
+          operationContext,
           executionContext,
           preDecision,
           outputPolicyDescriptor,

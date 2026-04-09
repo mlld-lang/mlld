@@ -38,6 +38,7 @@ import {
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
@@ -48,6 +49,7 @@ import {
   type SecurityDescriptor,
   type ToolProvenance
 } from '@core/types/security';
+import type { FactSourceHandle } from '@core/types/handle';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -84,6 +86,7 @@ import {
   bindExecParameterVariables,
   evaluateExecInvocationArgs
 } from './exec/args';
+import { extractExecDeniedHandlerWhenExpression } from './exec/denied-handler-when';
 import { executeNonCommandExecutable } from './exec/non-command-handlers';
 import { executeCommandExecutable } from './exec/command-handler';
 import { executeCodeExecutable } from './exec/code-handler';
@@ -106,20 +109,25 @@ import {
   createPolicyAuthorizationValidationError,
   createInvocationPolicyScope,
   resolveInvocationPolicyFragment,
+  resolveInvocationPolicyReplaceFlag,
   validateRuntimePolicyAuthorizations
 } from './exec/policy-fragment';
-import { resolveEffectiveToolMetadata } from './exec/tool-metadata';
+import {
+  hasRuntimeAuthorizationSurface,
+  isRuntimeAuthorizationSurfaceOperation,
+  resolveAuthorizationSurfaceOperation,
+  resolveEffectiveToolMetadata
+} from './exec/tool-metadata';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
 import { appendToolNotesToSystemPrompt } from '@interpreter/fyi/tool-docs';
 import {
   appendShelfNotesToSystemPrompt,
   renderInjectedShelfNotes
 } from '@interpreter/shelf/shelf-notes';
+import { getNormalizedShelfScope } from '@interpreter/shelf/runtime';
 import { logToolCallEvent } from '@interpreter/utils/audit-log';
 import { coerceRecordOutput } from './records/coerce-record';
 import {
-  isSerializedRecordDefinition,
-  isSerializedRecordVariable,
   type RecordDefinition
 } from '@core/types/record';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
@@ -129,8 +137,6 @@ import {
   repairSecurityRelevantValue
 } from '@interpreter/security/runtime-repair';
 import {
-  traceAuthCheck,
-  traceAuthDecision,
   traceLlmInvocation,
   traceLlmToolCall,
   traceLlmToolResult
@@ -139,6 +145,9 @@ import {
   applyInvocationScopedRuntimeConfig,
   normalizeInvocationWithClause
 } from './exec/scoped-runtime-config';
+import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
+import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
+import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -198,6 +207,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   preserveStructuredArgs?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
+  materializedArgs?: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
   expressionSourceVariables: readonly (Variable | undefined)[];
@@ -207,6 +217,8 @@ type ExecutableDispatchArgNormalizationOptions = {
 interface LlmResumeState {
   sessionId: string;
   provider: string;
+  continuationOf?: string;
+  attempt?: number;
 }
 
 interface LlmRuntimeResumeConfig extends LlmResumeState {
@@ -270,7 +282,7 @@ async function resolveCollectionBoundValue(
     return resolveCollectionBoundValue(extracted, env, options);
   }
   if (isStructuredValue(value)) {
-    return options?.preserveStructuredArgs ? value : asData(value);
+    return options?.preserveStructuredArgs ? value : boundary.plainData(value);
   }
   if (Array.isArray(value)) {
     return Promise.all(value.map(item => resolveCollectionBoundValue(item, env, options)));
@@ -305,6 +317,54 @@ async function materializeCollectionDispatchArg(
   }
 
   return resolveCollectionBoundValue(resolved, env, options);
+}
+
+async function materializePlainObjectExecutableDispatchArg(
+  value: unknown,
+  env: Environment,
+  options?: {
+    preserveStructuredArgs?: boolean;
+  }
+): Promise<unknown> {
+  let resolved = value;
+  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+
+  if (isVariable(resolved)) {
+    if (isExecutableVariable(resolved)) {
+      return resolved;
+    }
+    resolved = await extractVariableValue(resolved, env);
+  }
+
+  if (isStructuredValue(resolved)) {
+    return options?.preserveStructuredArgs ? resolved : boundary.plainData(resolved);
+  }
+
+  if (
+    resolved
+    && typeof resolved === 'object'
+    && (
+      (
+        (resolved as { type?: unknown }).type === 'object'
+        && (
+          Array.isArray((resolved as { entries?: unknown[] }).entries)
+          || isPlainObject((resolved as { properties?: unknown }).properties)
+        )
+      )
+      || (
+        (resolved as { type?: unknown }).type === 'array'
+        && (
+          Array.isArray((resolved as { items?: unknown[] }).items)
+          || Array.isArray((resolved as { elements?: unknown[] }).elements)
+        )
+      )
+    )
+  ) {
+    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+    resolved = await evaluateDataValue(resolved as any, env);
+  }
+
+  return resolved;
 }
 
 async function normalizeCollectionDispatchArguments(options: {
@@ -351,14 +411,33 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   const {
     executableParamNames,
     optionalParamNames,
-    ...rest
+    env,
+    preserveStructuredArgs,
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSourceNames
   } = options;
 
+  const materializedArgs = await Promise.all(
+    evaluatedArgs.map(arg =>
+      materializePlainObjectExecutableDispatchArg(arg, env, { preserveStructuredArgs })
+    )
+  );
+
   return normalizeExecutableDispatchArguments({
-    ...rest,
+    env,
     executableParamNames,
     visibleParamNames: executableParamNames,
-    optionalParamNames
+    optionalParamNames,
+    preserveStructuredArgs,
+    evaluatedArgs: materializedArgs,
+    materializedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSourceNames
   });
 }
 
@@ -372,6 +451,7 @@ async function normalizeExecutableDispatchArguments(
     optionalParamNames,
     bind,
     evaluatedArgs,
+    materializedArgs,
     originalVariables,
     guardVariableCandidates,
     expressionSourceVariables,
@@ -397,20 +477,22 @@ async function normalizeExecutableDispatchArguments(
   );
   const visibleSet = new Set(visibleParamNames);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
-  const materializedArgs = await Promise.all(
-    evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
-  );
+  const normalizedMaterializedArgs = materializedArgs
+    ? [...materializedArgs]
+    : await Promise.all(
+        evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
+      );
 
   const shouldSpreadNamedObject =
-    materializedArgs.length === 1
-    && isPlainObject(materializedArgs[0])
-    && Object.keys(materializedArgs[0]).every(key => visibleSet.has(key))
+    normalizedMaterializedArgs.length === 1
+    && isPlainObject(normalizedMaterializedArgs[0])
+    && Object.keys(normalizedMaterializedArgs[0]).every(key => visibleSet.has(key))
     && visibleParamNames
       .filter(param => !optionalSet.has(param))
-      .every(param => Object.prototype.hasOwnProperty.call(materializedArgs[0], param));
+      .every(param => Object.prototype.hasOwnProperty.call(normalizedMaterializedArgs[0], param));
 
   if (shouldSpreadNamedObject) {
-    const objectArg = materializedArgs[0] as Record<string, unknown>;
+    const objectArg = normalizedMaterializedArgs[0] as Record<string, unknown>;
     for (const paramName of visibleParamNames) {
       if (!Object.prototype.hasOwnProperty.call(objectArg, paramName)) {
         continue;
@@ -423,12 +505,12 @@ async function normalizeExecutableDispatchArguments(
       });
     }
   } else {
-    const providedCount = Math.min(materializedArgs.length, visibleParamNames.length);
+    const providedCount = Math.min(normalizedMaterializedArgs.length, visibleParamNames.length);
     for (let index = 0; index < providedCount; index += 1) {
       const paramName = visibleParamNames[index];
       normalizedEntries.set(paramName, {
-        value: materializedArgs[index],
-        stringValue: stringifyExecGuardArg(materializedArgs[index]),
+        value: normalizedMaterializedArgs[index],
+        stringValue: stringifyExecGuardArg(normalizedMaterializedArgs[index]),
         originalVariable: originalVariables[index],
         guardVariableCandidate: guardVariableCandidates[index],
         expressionSourceVariable: expressionSourceVariables[index],
@@ -847,10 +929,7 @@ function collectConversationInputDescriptor(value: unknown): SecurityDescriptor 
 }
 
 function sanitizeLlmConfigSecurityInput(config: unknown): unknown {
-  let candidate = config;
-  if (isStructuredValue(candidate)) {
-    candidate = asData(candidate);
-  }
+  const candidate = boundary.plainData(config);
 
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return candidate;
@@ -902,6 +981,44 @@ function readLlmRuntimeResumeConfig(config: unknown): LlmRuntimeResumeConfig | n
   };
 }
 
+function normalizeLlmResumeState(state: LlmResumeState): LlmResumeState {
+  const continuationOf =
+    typeof state.continuationOf === 'string' && state.continuationOf.trim().length > 0
+      ? state.continuationOf.trim()
+      : state.sessionId;
+  const attempt =
+    typeof state.attempt === 'number' && Number.isFinite(state.attempt)
+      ? Math.max(0, Math.trunc(state.attempt))
+      : 0;
+  return {
+    sessionId: state.sessionId,
+    provider: state.provider,
+    continuationOf,
+    attempt
+  };
+}
+
+function activateLlmResumeState(state: LlmResumeState): LlmResumeState {
+  const normalized = normalizeLlmResumeState(state);
+  return {
+    ...normalized,
+    attempt: (normalized.attempt ?? 0) + 1
+  };
+}
+
+function mergeReturnedLlmResumeState(
+  previous: LlmResumeState | undefined,
+  next: LlmResumeState
+): LlmResumeState {
+  const normalizedNext = normalizeLlmResumeState(next);
+  const normalizedPrevious = previous ? normalizeLlmResumeState(previous) : undefined;
+  return {
+    ...normalizedNext,
+    continuationOf: normalizedPrevious?.continuationOf ?? normalizedNext.continuationOf,
+    attempt: normalizedPrevious?.attempt ?? normalizedNext.attempt
+  };
+}
+
 function injectLlmRuntimeResumeConfig(
   config: Record<string, unknown>,
   resumeConfig: LlmRuntimeResumeConfig
@@ -921,8 +1038,50 @@ function injectLlmRuntimeResumeConfig(
   };
 }
 
+function clearLlmResumeBridgeTools(
+  config: Record<string, unknown>
+): { config: Record<string, unknown>; didUpdate: boolean } {
+  // Resume is output repair only, not "retry but cheaper". Handle aliases are
+  // minted per bridge call, so a continue:true call cannot safely expose new
+  // tools against handles mentioned in the previous transcript. Keep the
+  // explicit tool list empty here and pair it with disableAutoProvisionedShelve
+  // at bridge construction time. Loosening this is a spec change.
+  // See spec-guard-resume.md#resume-invariants.
+  if (!Object.prototype.hasOwnProperty.call(config, 'tools')) {
+    return { config, didUpdate: false };
+  }
+
+  if (Array.isArray(config.tools) && config.tools.length === 0) {
+    return { config, didUpdate: false };
+  }
+
+  return {
+    config: {
+      ...config,
+      tools: []
+    },
+    didUpdate: true
+  };
+}
+
+function assertLlmResumeBridgeToolsEmpty(tools: unknown): void {
+  const configuredCount =
+    tools === undefined
+      ? 0
+      : Array.isArray(tools)
+        ? tools.length
+        : 1;
+  if (configuredCount === 0) {
+    return;
+  }
+
+  throw new Error(
+    'Resume invariant violated: continue:true LLM calls must not expose bridge tools. See spec-guard-resume.md#resume-invariants.'
+  );
+}
+
 function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
-  const candidate = isStructuredValue(value) ? asData(value) : value;
+  const candidate = boundary.plainData(value);
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return null;
   }
@@ -938,6 +1097,8 @@ function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
 
   const sessionId = runtimeRecord.sessionId;
   const provider = runtimeRecord.provider;
+  const continuationOf = runtimeRecord.continuationOf;
+  const attempt = runtimeRecord.attempt;
   const valueField =
     Object.prototype.hasOwnProperty.call(record, 'value')
       ? record.value
@@ -957,7 +1118,13 @@ function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
     provider.trim().length > 0
       ? {
           sessionId: sessionId.trim(),
-          provider: provider.trim()
+          provider: provider.trim(),
+          ...(typeof continuationOf === 'string' && continuationOf.trim().length > 0
+            ? { continuationOf: continuationOf.trim() }
+            : {}),
+          ...(typeof attempt === 'number' && Number.isFinite(attempt)
+            ? { attempt: Math.max(0, Math.trunc(attempt)) }
+            : {})
         }
       : undefined;
 
@@ -989,6 +1156,8 @@ function readLlmResumeStateFromGuardDetails(details: unknown): LlmResumeState | 
 
   const sessionId = (resumeState as Record<string, unknown>).sessionId;
   const provider = (resumeState as Record<string, unknown>).provider;
+  const continuationOf = (resumeState as Record<string, unknown>).continuationOf;
+  const attempt = (resumeState as Record<string, unknown>).attempt;
   if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
     return null;
   }
@@ -998,7 +1167,13 @@ function readLlmResumeStateFromGuardDetails(details: unknown): LlmResumeState | 
 
   return {
     sessionId: sessionId.trim(),
-    provider: provider.trim()
+    provider: provider.trim(),
+    ...(typeof continuationOf === 'string' && continuationOf.trim().length > 0
+      ? { continuationOf: continuationOf.trim() }
+      : {}),
+    ...(typeof attempt === 'number' && Number.isFinite(attempt)
+      ? { attempt: Math.max(0, Math.trunc(attempt)) }
+      : {})
   };
 }
 
@@ -1299,6 +1474,22 @@ function shouldResolveHandlesBeforeExecutableDispatch(options: {
   }
 
   return true;
+}
+
+function getImportedExecutableSourcePath(variable: Variable | undefined): string | undefined {
+  const importPath = variable?.mx?.importPath;
+  if (typeof importPath !== 'string' || importPath.trim().length === 0) {
+    return undefined;
+  }
+
+  switch (importPath) {
+    case 'let':
+    case 'exe-param':
+    case 'for-var':
+      return undefined;
+    default:
+      return importPath;
+  }
 }
 
 /**
@@ -1738,7 +1929,7 @@ async function evaluateExecInvocationInternal(
           if (typeof objectValue === 'object' && objectValue !== null) {
             const toolCollection =
               (fieldVariable.internal?.isToolsCollection === true
-                ? fieldVariable.internal.toolCollection as ToolCollection | undefined
+                ? boundary.identity<ToolCollection | undefined>(fieldVariable)
                 : undefined)
               ?? getToolCollectionFromValue(objectValue);
             if (toolCollection) {
@@ -1827,7 +2018,7 @@ async function evaluateExecInvocationInternal(
         if (typeof objectValue === 'object' && objectValue !== null) {
           const toolCollection =
             (objectVar.internal?.isToolsCollection === true
-              ? objectVar.internal.toolCollection as ToolCollection | undefined
+              ? boundary.identity<ToolCollection | undefined>(objectVar)
               : undefined)
             ?? getToolCollectionFromValue(objectValue);
           if (toolCollection) {
@@ -2680,22 +2871,33 @@ async function evaluateExecInvocationInternal(
   ));
 
   let whenExprNode: WhenExpressionNode | null = null;
-  if (definition.language === 'mlld-when') {
-    const candidate =
-      Array.isArray(definition.codeTemplate) && definition.codeTemplate.length > 0
-        ? (definition.codeTemplate[0] as WhenExpressionNode | undefined)
-        : undefined;
-    if (!candidate || candidate.type !== 'WhenExpression') {
-      throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
-    }
-    whenExprNode = candidate;
+  if (isCodeExecutable(definition)) {
+    whenExprNode = extractExecDeniedHandlerWhenExpression(definition);
+  }
+
+  let runtimeEnv = env;
+  runtimeEnv = await applyInvocationScopedRuntimeConfig({
+    runtimeEnv,
+    env,
+    definition,
+    node,
+    invocationWithClause
+  });
+  const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
+  if (
+    importedExecutableSourcePath
+    && runtimeEnv.getCurrentFilePath() !== importedExecutableSourcePath
+  ) {
+    const sourceScopedEnv = runtimeEnv.createChild();
+    sourceScopedEnv.setCurrentFilePath(importedExecutableSourcePath);
+    runtimeEnv = sourceScopedEnv;
   }
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
   let { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
     args,
-    env,
+    env: runtimeEnv,
     commandName,
     services: {
       interpolate: interpolateWithResultDescriptor,
@@ -2704,32 +2906,36 @@ async function evaluateExecInvocationInternal(
     }
   });
 
-  let runtimeEnv = env;
   if (collectionDispatchContext) {
-    const scopedConfig = env.getScopedEnvironmentConfig();
-    const scopedEnv = env.createChild();
+    const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
+    const scopedEnv = runtimeEnv.createChild();
     scopedEnv.setScopedEnvironmentConfig({
       ...(scopedConfig ?? {}),
       tools: collectionDispatchContext.collection
     });
     runtimeEnv = scopedEnv;
   }
+  const hasInvocationPolicy =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy');
+  const replaceInvocationPolicy =
+    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'replace')
+      ? await resolveInvocationPolicyReplaceFlag(invocationWithClause.replace, runtimeEnv)
+      : false;
+  if (replaceInvocationPolicy && !hasInvocationPolicy) {
+    throw new MlldInterpreterError('with { replace: true } requires with { policy: ... }');
+  }
   const resolvedPolicyFragment =
-    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy')
-      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv)
+    hasInvocationPolicy
+      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv, {
+          replace: replaceInvocationPolicy
+        })
       : undefined;
   if (resolvedPolicyFragment) {
-    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment);
+    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment, {
+      replace: replaceInvocationPolicy
+    });
     runtimeEnv = policyScope.env;
   }
-
-  runtimeEnv = await applyInvocationScopedRuntimeConfig({
-    runtimeEnv,
-    env,
-    definition,
-    node,
-    invocationWithClause
-  });
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
@@ -2842,11 +3048,17 @@ async function evaluateExecInvocationInternal(
           hasInterpolation: false,
           isMultiLine: false
         };
-        const syntheticVar = createSimpleTextVariable(
-          '__inline_arg__',
-          evaluatedArgStrings[i] ?? '',
-          guardInputSource
-        );
+        const syntheticVar =
+          materializeGuardInputs([evaluatedArgs[i]], {
+            nameHint: '__inline_arg__',
+            preserveStructuredScalars: true
+          })[0]
+          ?? createSimpleTextVariable(
+            '__inline_arg__',
+            evaluatedArgStrings[i] ?? '',
+            guardInputSource
+          );
+        syntheticVar.source = guardInputSource;
         syntheticVar.value = evaluatedArgs[i];
         if (!syntheticVar.mx) syntheticVar.mx = {};
         updateVarMxFromDescriptor(syntheticVar.mx as VariableContext, dataDescriptor);
@@ -3023,14 +3235,14 @@ async function evaluateExecInvocationInternal(
       let didUpdateConfigArg = false;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
       const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
+      const hasWritableShelfScope = (getNormalizedShelfScope(execEnv)?.writeSlotBindings.length ?? 0) > 0;
 
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
         isLlmResumeContinuation = true;
-        if ('tools' in nextConfig) {
-          nextConfig.tools = [];
-          didUpdateConfigArg = true;
-        }
+        const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
+        nextConfig = normalizedResumeConfig.config;
+        didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
       } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation && !hasToolSelection) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
           sessionId: randomUUID(),
@@ -3041,11 +3253,11 @@ async function evaluateExecInvocationInternal(
       }
 
       if (pendingGuardAction?.decision === 'resume') {
-        if ('tools' in nextConfig) {
-          nextConfig.tools = [];
-          didUpdateConfigArg = true;
-        }
+        const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
+        nextConfig = normalizedResumeConfig.config;
+        didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
         if (currentLlmResumeState) {
+          currentLlmResumeState = activateLlmResumeState(currentLlmResumeState);
           nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
             sessionId: currentLlmResumeState.sessionId,
             provider: currentLlmResumeState.provider,
@@ -3055,11 +3267,15 @@ async function evaluateExecInvocationInternal(
         }
       }
 
-      if ('tools' in nextConfig) {
-        // config.tools selects capabilities for the bridge; it is not model-visible input and
-        // must not seed the conversation descriptor used for policy/attestation checks.
+      if (hasToolSelection || hasWritableShelfScope) {
+        // config.tools selects capabilities for the bridge; writable shelf scope can also
+        // force an MCP bridge so @shelve is auto-provisioned for boxed llm calls. Neither
+        // selection should seed the conversation descriptor used for policy/attestation checks.
         resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
-        const toolsValue = nextConfig.tools;
+        const toolsValue = hasToolSelection ? nextConfig.tools : [];
+        if (isLlmResumeContinuation) {
+          assertLlmResumeBridgeToolsEmpty(toolsValue);
+        }
         const dirValue = nextConfig.dir;
         const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
           ? dirValue.trim()
@@ -3069,7 +3285,12 @@ async function evaluateExecInvocationInternal(
           env: execEnv,
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
-          isMcpContext: true
+          isMcpContext: true,
+          // Load-bearing resume invariant: do not auto-provision @shelve on a
+          // continue:true call. Resume must stay incapable of issuing any new
+          // tool dispatches across the bridge boundary. See
+          // spec-guard-resume.md#resume-invariants.
+          disableAutoProvisionedShelve: isLlmResumeContinuation
         });
         const previousSystem = nextConfig.system;
         const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
@@ -3135,6 +3356,10 @@ async function evaluateExecInvocationInternal(
     ? ((node as any).meta.argSecurityDescriptors as Array<SecurityDescriptor | undefined>)
         .map(descriptor => normalizeSecurityDescriptor(descriptor))
     : undefined;
+  const argFactSourceDescriptors = Array.isArray((node as any).meta?.argFactSourceDescriptors)
+    ? ((node as any).meta.argFactSourceDescriptors as Array<readonly FactSourceHandle[] | undefined>)
+        .map(entry => Array.isArray(entry) && entry.length > 0 ? [...entry] : undefined)
+    : undefined;
   const effectiveOperationTaintFacts = false;
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,
@@ -3181,9 +3406,18 @@ async function evaluateExecInvocationInternal(
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
       : effectiveToolMetadata.params;
+  const inheritedAuthorizationSurfaceOperation =
+    runtimeEnv.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
+  const authorizationSurfaceOperation = resolveAuthorizationSurfaceOperation({
+    env: execEnv,
+    operationName: toolOperationName ?? variable.name ?? commandName,
+    executableLabels: toolLabels,
+    inheritedAuthorizationSurfaceOperation
+  });
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
-    isToolWriteLabelSet(toolLabels);
+    isToolWriteLabelSet(toolLabels) &&
+    authorizationSurfaceOperation;
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
   enforceUpdateToolArguments({
     metadata: effectiveToolMetadata,
@@ -3195,11 +3429,6 @@ async function evaluateExecInvocationInternal(
     argSecurityDescriptors
   });
   if (shouldValidatePolicyAuthorizations) {
-    runtimeEnv.emitRuntimeTraceEvent(traceAuthCheck({
-      tool: toolOperationName ?? variable.name ?? commandName,
-      args: runtimeEnv.summarizeTraceValue(authorizationArgs),
-      controlArgs: authorizationDecisionControlArgs
-    }));
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
     if (validation && validation.errors.length > 0) {
       throw createPolicyAuthorizationValidationError(validation);
@@ -3211,18 +3440,6 @@ async function evaluateExecInvocationInternal(
       args: authorizationArgs,
       controlArgs: authorizationDecisionControlArgs
     });
-    runtimeEnv.emitRuntimeTraceEvent(traceAuthDecision(
-      authorizationDecision.decision === 'allow' ? 'allow' : 'deny',
-      {
-        tool: toolOperationName ?? variable.name ?? commandName,
-        matched: authorizationDecision.matched,
-        code: authorizationDecision.code ?? null,
-        reason: authorizationDecision.reason ?? null,
-        matchedAttestationCount: authorizationDecision.matchedAttestations
-          ? Object.keys(authorizationDecision.matchedAttestations).length
-          : 0
-      }
-    ));
     if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
         env: runtimeEnv,
@@ -3337,6 +3554,7 @@ async function evaluateExecInvocationInternal(
       expressionSourceVariables,
       inputSecurityDescriptor,
       argSecurityDescriptors: effectiveArgSecurityDescriptors,
+      argFactSourceDescriptors,
       mcpSecurityDescriptor,
       argNames: params
     });
@@ -3358,6 +3576,8 @@ async function evaluateExecInvocationInternal(
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs: policyGuardControlArgs,
+      commandAccessSubstrate: (variable.internal as any)?.isToolbridgeWrapper === true,
+      correlateControlArgs: effectiveToolMetadata.correlateControlArgs === true,
       operationTaintFacts: effectiveOperationTaintFacts,
       env: runtimeEnv,
       execEnv,
@@ -3382,6 +3602,17 @@ async function evaluateExecInvocationInternal(
       if (currentLlmResumeState) {
         nextMetadata.llmResumeState = { ...currentLlmResumeState };
       }
+      operationContext.metadata = nextMetadata;
+    }
+    if (shouldValidatePolicyAuthorizations) {
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+        authorizationTrace: {
+          tool: toolOperationName ?? variable.name ?? commandName,
+          args: runtimeEnv.summarizeTraceValue(authorizationArgs),
+          controlArgs: [...authorizationDecisionControlArgs]
+        }
+      };
       operationContext.metadata = nextMetadata;
     }
 
@@ -3411,6 +3642,11 @@ async function evaluateExecInvocationInternal(
         guardVariableCandidates,
         evaluatedArgs,
         evaluatedArgStrings
+      });
+      emitResolvedAuthorizationTrace({
+        env: runtimeEnv,
+        operationContext,
+        preDecision
       });
       postHookInputs = nextPostHookInputs;
       bindExecParameterVariables({
@@ -3493,6 +3729,7 @@ async function evaluateExecInvocationInternal(
       }
 
       let result: unknown;
+      let strictToolResult: unknown;
       let recordTrustRefinementApplied = false;
       let outputRecordEnv = execEnv;
       let workingDirectory: string | undefined;
@@ -3607,21 +3844,22 @@ async function evaluateExecInvocationInternal(
         }
       })
     );
-        if (codeResult.kind === 'return') {
-          return codeResult.evalResult;
-        }
-        result = codeResult.result;
-        execEnv = codeResult.execEnv;
-        outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
-      } else {
-        throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
-      }
+    if (codeResult.kind === 'return') {
+      return codeResult.evalResult;
+    }
+    result = codeResult.result;
+    strictToolResult = codeResult.toolResult;
+    execEnv = codeResult.execEnv;
+    outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
+  } else {
+    throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
+  }
 
   const resumeEnvelope = tryExtractLlmResumeEnvelope(result);
   if (resumeEnvelope) {
     result = resumeEnvelope.value;
     if (resumeEnvelope.resumeState) {
-      currentLlmResumeState = resumeEnvelope.resumeState;
+      currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, resumeEnvelope.resumeState);
       const nextMetadata: Record<string, unknown> = {
         ...((operationContext.metadata ?? {}) as Record<string, unknown>),
         ...(llmResumeEligible ? { llmResumeEligible: true } : {}),
@@ -3631,16 +3869,19 @@ async function evaluateExecInvocationInternal(
       runtimeEnv.updateOpContext({ metadata: nextMetadata });
     }
   }
-  
-      if (definition.outputRecord) {
-        const recordDefinition = await resolveConfiguredOutputRecordDefinition({
-          outputRecord: definition.outputRecord,
-          variable,
-          commandName,
-          runtimeEnv,
-          execEnv: outputRecordEnv,
-          nodeSourceLocation
-        });
+  const useStrictToolResult =
+    (variable.internal as any)?.isToolbridgeWrapper === true &&
+    definition.toolReturnMode?.strict === true;
+
+  if (!useStrictToolResult && definition.outputRecord) {
+    const recordDefinition = await resolveConfiguredOutputRecordDefinition({
+      outputRecord: definition.outputRecord,
+      variable,
+      commandName,
+      runtimeEnv,
+      execEnv: outputRecordEnv,
+      nodeSourceLocation
+    });
     const rawRecordDescriptor = extractSecurityDescriptor(result, {
       recursive: true,
       mergeArrayElements: true
@@ -3658,6 +3899,10 @@ async function evaluateExecInvocationInternal(
     });
     recordTrustRefinementApplied =
       isStructuredValue(result) && result.type !== 'text';
+  }
+
+  if (useStrictToolResult) {
+    result = strictToolResult;
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
@@ -3746,7 +3991,7 @@ async function evaluateExecInvocationInternal(
   endResolutionTrackingIfNeeded();
 
   // Apply withClause transformations if present
-  if (invocationWithClause && !isLlmResumeContinuation) {
+  if (!useStrictToolResult && invocationWithClause && !isLlmResumeContinuation) {
     if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
@@ -3908,153 +4153,4 @@ async function evaluateExecInvocationInternal(
 
     finalizeExecInvocationStreaming(env, streamingManager);
   }
-}
-
-function readEmbeddedRecordDefinition(
-  variable: { internal?: Record<string, unknown> } | undefined,
-  recordName: string
-): RecordDefinition | undefined {
-  const container = variable?.internal?.recordDefinitions;
-  if (!container || typeof container !== 'object' || Array.isArray(container)) {
-    return undefined;
-  }
-  const embedded = (container as Record<string, unknown>)[recordName];
-  if (!embedded || typeof embedded !== 'object' || Array.isArray(embedded)) {
-    return undefined;
-  }
-  return embedded as RecordDefinition;
-}
-
-async function resolveConfiguredOutputRecordDefinition(options: {
-  outputRecord: ExecutableDefinition['outputRecord'];
-  variable: { name?: string; internal?: Record<string, unknown> } | undefined;
-  commandName: string;
-  runtimeEnv: Environment;
-  execEnv: Environment;
-  nodeSourceLocation: ReturnType<typeof astLocationToSourceLocation> | null | undefined;
-}): Promise<RecordDefinition> {
-  const { outputRecord, variable, commandName, runtimeEnv, execEnv, nodeSourceLocation } = options;
-
-  if (typeof outputRecord === 'string') {
-    const recordDefinition =
-      runtimeEnv.getRecordDefinition(outputRecord) ??
-      readEmbeddedRecordDefinition(variable, outputRecord);
-    if (recordDefinition) {
-      return recordDefinition;
-    }
-
-    throw new MlldInterpreterError(
-      `Executable '@${variable?.name ?? commandName}' references unknown record '@${outputRecord}'`,
-      'exec',
-      nodeSourceLocation,
-      { code: 'RECORD_NOT_FOUND' }
-    );
-  }
-
-  const displayRef = formatDynamicRecordReference(outputRecord?.ref);
-  try {
-    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
-    const resolved = await evaluateDataValue(outputRecord.ref as any, execEnv);
-    const recordDefinition = normalizeResolvedRecordDefinition(resolved);
-    if (recordDefinition) {
-      return recordDefinition;
-    }
-  } catch (error) {
-    if (error instanceof MlldInterpreterError) {
-      throw error;
-    }
-    if (error instanceof Error && /Variable not found:/i.test(error.message)) {
-      throw new MlldInterpreterError(
-        `Dynamic output record reference '${displayRef}' is not defined`,
-        'exec',
-        nodeSourceLocation,
-        { code: 'RECORD_NOT_FOUND' }
-      );
-    }
-    throw error;
-  }
-
-  throw new MlldInterpreterError(
-    `Dynamic output record reference '${displayRef}' did not resolve to a record`,
-    'exec',
-    nodeSourceLocation,
-    { code: 'INVALID_RECORD_REFERENCE' }
-  );
-}
-
-function normalizeResolvedRecordDefinition(value: unknown): RecordDefinition | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  if (isRecordVariable(value as Variable)) {
-    return (value as Variable & { type: 'record'; value: RecordDefinition }).value;
-  }
-
-  if (isSerializedRecordVariable(value)) {
-    return value.definition;
-  }
-
-  if (isSerializedRecordDefinition(value)) {
-    return value.definition;
-  }
-
-  if (isVariableLikeRecordWrapper(value)) {
-    return normalizeResolvedRecordDefinition((value as { value: unknown }).value);
-  }
-
-  if (looksLikeRecordDefinition(value)) {
-    return value as RecordDefinition;
-  }
-
-  return undefined;
-}
-
-function isVariableLikeRecordWrapper(value: unknown): value is { type: string; value: unknown } {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof (value as { type?: unknown }).type === 'string' &&
-    'value' in (value as Record<string, unknown>)
-  );
-}
-
-function looksLikeRecordDefinition(value: unknown): value is RecordDefinition {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    typeof (value as RecordDefinition).name === 'string' &&
-    Array.isArray((value as RecordDefinition).fields) &&
-    typeof (value as RecordDefinition).rootMode === 'string' &&
-    typeof (value as RecordDefinition).validate === 'string'
-  );
-}
-
-function formatDynamicRecordReference(ref: { identifier?: string; fields?: any[] } | undefined): string {
-  if (!ref?.identifier) {
-    return '@<unknown>';
-  }
-
-  const suffix = (ref.fields ?? [])
-    .map(field => {
-      if (field?.type === 'field' && typeof field.value === 'string') {
-        return `.${field.value}`;
-      }
-      if (field?.type === 'numericField' && typeof field.value === 'number') {
-        return `.${field.value}`;
-      }
-      if (field?.type === 'arrayIndex' && typeof field.value === 'number') {
-        return `[${field.value}]`;
-      }
-      if (field?.type === 'bracketAccess') {
-        return `[${JSON.stringify(field.value)}]`;
-      }
-      if (field?.type === 'variableIndex') {
-        return `[@${field.value}]`;
-      }
-      return '';
-    })
-    .join('');
-
-  return `@${ref.identifier}${suffix}`;
 }

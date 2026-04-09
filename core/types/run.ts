@@ -39,6 +39,8 @@ export interface WithClause {
   guards?: GuardOverrideOptions | false;
   stream?: boolean;
   streamFormat?: any;
+  policy?: unknown;
+  replace?: unknown;
   [key: string]: any; // For other with clause properties
 }
 

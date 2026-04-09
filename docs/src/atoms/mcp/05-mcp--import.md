@@ -7,7 +7,7 @@ parent: mcp
 tags: [mcp, import, tools]
 related: [mcp, mcp-export, mcp-security, mcp-guards]
 related-code: [interpreter/eval/import/ImportDirectiveEvaluator.ts, interpreter/mcp/McpImportManager.ts]
-updated: 2026-03-23
+updated: 2026-04-08
 qa_tier: 2
 ---
 
@@ -69,5 +69,7 @@ Each `execute()` call gets an independent server lifecycle, enabling parallel ex
 - `import tools ...` imports callable functions or a namespace into the current scope.
 - `var tools @t = mcp @expr` builds a `ToolCollection` value from runtime discovery.
 - Use the `var tools` form when you want to hand a discovered collection to `box with { tools: @t }` or another API that expects a tool collection object.
+
+Imported tool namespaces and discovered tool collections preserve their tool metadata across module/exe handoff. Treat them as identity-bearing values; don't object-spread them if you need the collection behavior to survive.
 
 **Security:** All MCP tool outputs carry `src:mcp` taint automatically. See `mcp-security` for propagation details, `mcp-guards` for filtering, `mcp-policy` for flow restrictions.

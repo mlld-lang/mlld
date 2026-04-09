@@ -297,6 +297,113 @@ describe('record output coercion', () => {
     expect(firstEmail.mx.labels).toContain('fact:@contact.email');
   });
 
+  it('attaches keyed record instance identity to factsource handles', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @transaction = {
+  key: txId,
+  facts: [recipient: string, txId: string],
+  data: [memo: string?]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: [
+        { recipient: 'bob@example.com', txId: 'tx_001', memo: 'rent' },
+        { recipient: 'bob@example.com', txId: 'tx_002', memo: 'utilities' }
+      ],
+      env
+    });
+
+    expect(output.type).toBe('array');
+    const first = output.data[0];
+    const second = output.data[1];
+    expect(isStructuredValue(first)).toBe(true);
+    expect(isStructuredValue(second)).toBe(true);
+
+    const firstRecipient = await accessNamedField(first, 'recipient');
+    const secondRecipient = await accessNamedField(second, 'recipient');
+    expect(isStructuredValue(firstRecipient)).toBe(true);
+    expect(isStructuredValue(secondRecipient)).toBe(true);
+    expect(firstRecipient.mx.factsources?.[0]).toMatchObject({
+      ref: '@transaction.recipient',
+      instanceKey: 'tx_001'
+    });
+    expect(secondRecipient.mx.factsources?.[0]).toMatchObject({
+      ref: '@transaction.recipient',
+      instanceKey: 'tx_002'
+    });
+  });
+
+  it('keeps typed instance keys for non-string record keys', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @invoice = {
+  key: invoiceNo,
+  facts: [recipient: string, invoiceNo: number]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: [{ recipient: 'bob@example.com', invoiceNo: 42 }],
+      env
+    });
+
+    expect(output.type).toBe('array');
+    const first = output.data[0];
+    expect(isStructuredValue(first)).toBe(true);
+
+    const recipient = await accessNamedField(first, 'recipient');
+    expect(isStructuredValue(recipient)).toBe(true);
+    expect(recipient.mx.factsources?.[0]).toMatchObject({
+      ref: '@invoice.recipient',
+      instanceKey: 'number:42'
+    });
+  });
+
+  it('attaches coercion identity to keyless sibling records', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @transaction = {
+  facts: [recipient: string, txId: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: [
+        { recipient: 'bob@example.com', txId: 'tx_001' },
+        { recipient: 'bob@example.com', txId: 'tx_002' }
+      ],
+      env
+    });
+
+    const first = output.data[0];
+    const second = output.data[1];
+    expect(isStructuredValue(first)).toBe(true);
+    expect(isStructuredValue(second)).toBe(true);
+
+    const firstRecipient = await accessNamedField(first, 'recipient');
+    const secondRecipient = await accessNamedField(second, 'recipient');
+    expect(isStructuredValue(firstRecipient)).toBe(true);
+    expect(isStructuredValue(secondRecipient)).toBe(true);
+
+    const firstSource = firstRecipient.mx.factsources?.[0];
+    const secondSource = secondRecipient.mx.factsources?.[0];
+    expect(firstSource).toMatchObject({
+      ref: '@transaction.recipient',
+      position: 0
+    });
+    expect(secondSource).toMatchObject({
+      ref: '@transaction.recipient',
+      position: 1
+    });
+    expect(firstSource?.coercionId).toBeDefined();
+    expect(secondSource?.coercionId).toBe(firstSource?.coercionId);
+  });
+
   it('attaches explicit display metadata to record and field values', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

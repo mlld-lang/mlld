@@ -17,6 +17,10 @@ import {
   makeSecurityDescriptor,
   normalizeSecurityDescriptor
 } from '@core/types/security';
+import {
+  isFactSourceHandle,
+  type FactSourceHandle
+} from '@core/types/handle';
 import { isFactProofLabel } from '@interpreter/security/proof-claims';
 import { asData, asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
@@ -105,17 +109,19 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const operationName = this.resolveOperationName(execVar, toolKey);
       const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
       const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
         resolvedArgs,
-        toolKey,
+        operationName,
         definition.labels,
         this.shouldUseObjectArgs(execVar),
         invocationSecurity.inputSecurityDescriptor,
-        invocationSecurity.argSecurityDescriptors
+        invocationSecurity.argSecurityDescriptors,
+        invocationSecurity.argFactSourceDescriptors
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
       this.recordToolResultSecurity(result.value);
@@ -136,16 +142,18 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const operationName = this.resolveOperationName(execVar, toolKey);
       const invocationSecurity = this.buildInvocationSecurity(execVar, args, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
         execVar,
         args,
-        toolName,
+        operationName,
         undefined,
         this.shouldUseObjectArgs(execVar),
         invocationSecurity.inputSecurityDescriptor,
-        invocationSecurity.argSecurityDescriptors
+        invocationSecurity.argSecurityDescriptors,
+        invocationSecurity.argFactSourceDescriptors
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
       this.recordToolResultSecurity(result.value);
@@ -190,6 +198,18 @@ export class FunctionRouter {
         ?? mcpNameToMlldName(toolName);
     }
     return mcpNameToMlldName(toolName);
+  }
+
+  private resolveOperationName(
+    execVar: ExecutableVariable,
+    fallback: string
+  ): string {
+    const executableDef = (execVar.internal?.executableDef ?? execVar.value) as { name?: unknown };
+    const declaredName =
+      typeof executableDef?.name === 'string' && executableDef.name.trim().length > 0
+        ? executableDef.name.trim()
+        : undefined;
+    return declaredName ?? fallback;
   }
 
   private buildToolKeyMap(collection: ToolCollection): Map<string, string> {
@@ -287,7 +307,8 @@ export class FunctionRouter {
     toolLabels?: string[],
     argsAsObject?: boolean,
     inputSecurityDescriptor?: SecurityDescriptor,
-    argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[]
+    argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[],
+    argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[]
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
@@ -314,7 +335,10 @@ export class FunctionRouter {
         toolOperationName: operationName,
         ...(toolLabels && toolLabels.length > 0 ? { mcpToolLabels: toolLabels } : {}),
         ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {}),
-        ...(argSecurityDescriptors?.some(Boolean) ? { argSecurityDescriptors } : {})
+        ...(argSecurityDescriptors?.some(Boolean) ? { argSecurityDescriptors } : {}),
+        ...(argFactSourceDescriptors?.some(entry => Array.isArray(entry) && entry.length > 0)
+          ? { argFactSourceDescriptors }
+          : {})
       }
     } as ExecInvocation;
   }
@@ -371,11 +395,15 @@ export class FunctionRouter {
   ): {
     inputSecurityDescriptor?: SecurityDescriptor;
     argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+    argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
   } {
     const baseDescriptor = this.buildToolCallSecurityDescriptor();
     const argSecurityDescriptors = argsAsObject
       ? [this.buildValueSecurityDescriptor(args, baseDescriptor)]
       : this.buildArgumentSecurityDescriptorList(execVar, args, baseDescriptor);
+    const argFactSourceDescriptors = argsAsObject
+      ? [this.collectValueFactsources(args)]
+      : this.buildArgumentFactSourceList(execVar, args);
     const presentDescriptors = argSecurityDescriptors.filter(
       (descriptor): descriptor is SecurityDescriptor => Boolean(descriptor)
     );
@@ -387,8 +415,116 @@ export class FunctionRouter {
           : this.environment.mergeSecurityDescriptors(...presentDescriptors);
     return {
       ...(inputSecurityDescriptor ? { inputSecurityDescriptor } : {}),
-      ...(presentDescriptors.length > 0 ? { argSecurityDescriptors } : {})
+      ...(presentDescriptors.length > 0 ? { argSecurityDescriptors } : {}),
+      ...(argFactSourceDescriptors.some(entry => Array.isArray(entry) && entry.length > 0)
+        ? { argFactSourceDescriptors }
+        : {})
     };
+  }
+
+  private buildArgumentFactSourceList(
+    execVar: ExecutableVariable,
+    args: Record<string, unknown>
+  ): Array<readonly FactSourceHandle[] | undefined> {
+    const params = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    if (params.length === 0) {
+      return [];
+    }
+
+    let lastProvidedIndex = -1;
+    for (let i = params.length - 1; i >= 0; i -= 1) {
+      if (Object.prototype.hasOwnProperty.call(args, params[i])) {
+        lastProvidedIndex = i;
+        break;
+      }
+    }
+    if (lastProvidedIndex === -1) {
+      return [];
+    }
+
+    const factsources: Array<readonly FactSourceHandle[] | undefined> = [];
+    for (let index = 0; index <= lastProvidedIndex; index += 1) {
+      factsources.push(this.collectValueFactsources(args[params[index]]));
+    }
+    return factsources;
+  }
+
+  private collectValueFactsources(
+    value: unknown,
+    seen = new Set<unknown>()
+  ): readonly FactSourceHandle[] | undefined {
+    const collected: FactSourceHandle[] = [];
+    const pushFactsources = (candidate: unknown): void => {
+      if (!Array.isArray(candidate)) {
+        return;
+      }
+      for (const handle of candidate) {
+        if (isFactSourceHandle(handle)) {
+          collected.push({
+            ...handle,
+            ...(Array.isArray(handle.tiers) ? { tiers: Object.freeze([...handle.tiers]) } : {})
+          });
+        }
+      }
+    };
+
+    const visit = (candidate: unknown): void => {
+      if (!candidate || typeof candidate !== 'object') {
+        return;
+      }
+      if (seen.has(candidate)) {
+        return;
+      }
+      seen.add(candidate);
+
+      if (isVariable(candidate)) {
+        pushFactsources(candidate.mx?.factsources);
+      }
+
+      if (isStructuredValue(candidate)) {
+        pushFactsources(candidate.metadata?.factsources);
+        pushFactsources(candidate.mx?.factsources);
+        visit(candidate.data);
+        return;
+      }
+
+      const carrier = candidate as {
+        mx?: { factsources?: readonly unknown[] };
+        metadata?: { factsources?: readonly unknown[] };
+      };
+      pushFactsources(carrier.mx?.factsources);
+      pushFactsources(carrier.metadata?.factsources);
+
+      if (Array.isArray(candidate)) {
+        for (const item of candidate) {
+          visit(item);
+        }
+        return;
+      }
+
+      if (this.isPlainObject(candidate)) {
+        for (const entry of Object.values(candidate)) {
+          visit(entry);
+        }
+      }
+    };
+
+    visit(value);
+    if (collected.length === 0) {
+      return undefined;
+    }
+
+    const unique = new Map<string, FactSourceHandle>();
+    for (const handle of collected) {
+      const key =
+        handle.instanceKey
+          ? `${handle.sourceRef}:instance:${handle.instanceKey}`
+          : handle.coercionId && handle.position !== undefined
+            ? `${handle.sourceRef}:coercion:${handle.coercionId}:${handle.position}`
+            : `${handle.ref}:unknown`;
+      unique.set(key, handle);
+    }
+    return Array.from(unique.values());
   }
 
   private buildArgumentSecurityDescriptorList(

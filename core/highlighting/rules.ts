@@ -77,7 +77,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
     ternary: ['?', ':'],
     pipe: ['|'],
     assignment: ['='],
-    arrow: ['=>']
+    arrow: ['=->', '=>', '->']
   },
   
   directives: {
@@ -88,7 +88,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   keywords: {
     commands: ['run', 'sh', 'cmd'],
     languages: ['js', 'node', 'nodejs', 'python', 'py', 'bash', 'sh', 'zsh'],
-    special: ['when', 'if', 'else', 'until', 'endless', 'done', 'continue', 'first', 'all', 'any', 'foreach', 'from', 'as', 'to', 'with', 'new', 'node', 'tools', 'mcp', 'git', 'using', 'env', 'known', 'trusted', 'untrusted', 'resolved', 'privileged', 'resume']
+    special: ['when', 'if', 'else', 'until', 'endless', 'done', 'continue', 'first', 'all', 'any', 'foreach', 'from', 'as', 'record', 'to', 'with', 'new', 'node', 'tools', 'mcp', 'git', 'using', 'env', 'known', 'trusted', 'untrusted', 'resolved', 'privileged', 'resume']
   }
 } as const;
 
@@ -180,6 +180,7 @@ export function getSemanticTokenType(
     'FileReference': context.templateType === 'tripleColon' ? 'xmlTag' : 'alligator',
     'BinaryExpression': 'operator',
     'UnaryExpression': 'operator',
+    'CoerceExpression': 'operator',
     'NewExpression': 'keyword',
     'Literal': 'literal'
   };

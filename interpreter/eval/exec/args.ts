@@ -6,7 +6,9 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -101,15 +103,16 @@ export function bindExecParameterVariables(options: {
     const argStringValue = evaluatedArgStrings[i];
     const originalVar = originalVariables[i];
     const guardCandidate = guardVariableCandidates[i];
+    const resolvedOriginalVar = originalVar ?? (isVariable(argValue) ? argValue : undefined);
     const isShellCode =
       definition.type === 'code' &&
       typeof definition.language === 'string' &&
       (definition.language === 'bash' || definition.language === 'sh');
     const preferGuardReplacement = transformedGuardSet?.has(guardCandidate as Variable) ?? false;
     const allowOriginalReuse =
-      !preferGuardReplacement && Boolean(originalVar) && !isShellCode && definition.type !== 'command';
+      !preferGuardReplacement && Boolean(resolvedOriginalVar) && !isShellCode && definition.type !== 'command';
 
-    if (guardCandidate && (!originalVar || !allowOriginalReuse || preferGuardReplacement)) {
+    if (guardCandidate && (!resolvedOriginalVar || !allowOriginalReuse || preferGuardReplacement)) {
       const candidateClone = cloneGuardCandidateForParameter(
         paramName,
         guardCandidate,
@@ -125,7 +128,7 @@ export function bindExecParameterVariables(options: {
         name: paramName,
         value: evaluatedArgs[i],
         stringValue: argStringValue,
-        originalVariable: originalVar,
+        originalVariable: resolvedOriginalVar,
         allowOriginalReuse,
         metadataFactory: createParameterMetadata,
         origin: 'exec-param'
@@ -193,6 +196,7 @@ export async function evaluateExecInvocationArgs(options: {
         case 'BinaryExpression':
         case 'TernaryExpression':
         case 'UnaryExpression':
+        case 'CoerceExpression':
         case 'ArrayFilterExpression':
         case 'ArraySliceExpression': {
           const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
@@ -309,6 +313,7 @@ export async function evaluateExecInvocationArgs(options: {
             }
 
             let value = variable.value;
+            let preserveVariableAsArgument = false;
             if (
               isWholeVariableReference &&
               variable.internal?.isToolsCollection === true &&
@@ -316,7 +321,8 @@ export async function evaluateExecInvocationArgs(options: {
               typeof variable.internal.toolCollection === 'object' &&
               !Array.isArray(variable.internal.toolCollection)
             ) {
-              value = variable.internal.toolCollection;
+              value = boundary.identity(variable);
+              preserveVariableAsArgument = true;
             }
             const { isTemplate } = await import('@core/types/variable');
             if (varRef.fields && varRef.fields.length > 0) {
@@ -345,10 +351,10 @@ export async function evaluateExecInvocationArgs(options: {
             }
 
             if (isStructuredValue(value)) {
-              argValueAny = value;
+              argValueAny = preserveVariableAsArgument ? variable : value;
               argValue = asText(value);
             } else {
-              argValueAny = value;
+              argValueAny = preserveVariableAsArgument ? variable : value;
               if (value === undefined) {
                 argValue = 'undefined';
               } else if (typeof value === 'object' && value !== null) {

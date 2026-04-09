@@ -77,6 +77,7 @@ import {
   TernaryExpression,
   UnaryExpression,
   NewExpression,
+  CoerceExpression,
   TemplateForBlockNode,
   TemplateInlineShowNode,
   EscapedAngleBracketExpressionNode,
@@ -126,6 +127,7 @@ export type MlldNode =
   | TernaryExpression
   | UnaryExpression
   | NewExpression
+  | CoerceExpression
   | TemplateForBlockNode
   | TemplateInlineShowNode
   | EscapedAngleBracketExpressionNode

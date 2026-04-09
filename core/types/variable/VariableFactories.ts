@@ -30,6 +30,7 @@ import {
   VariableInternalMetadata
 } from './VariableTypes';
 import type { RecordDefinition } from '@core/types/record';
+import type { ExecutableDefinition } from '@core/types/executable';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
 import { legacyMetadataToVarMx, legacyMetadataToInternal } from './VarMxHelpers';
@@ -178,6 +179,58 @@ function isFactoryInitOptions(value: unknown): value is VariableFactoryInitOptio
     return false;
   }
   return 'mx' in value || 'internal' in value || 'metadata' in value;
+}
+
+function normalizeExecutableMxStringList(values: unknown): string[] | null {
+  if (!Array.isArray(values)) {
+    return null;
+  }
+
+  const normalized: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+    const trimmed = entry.trim();
+    if (trimmed.length > 0 && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+
+  return normalized;
+}
+
+function buildExecutableMxMetadata(
+  paramNames: readonly string[],
+  executableDef?: ExecutableDefinition
+): Pick<
+  VariableContext,
+  'params' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'correlateControlArgs'
+> {
+  const paramTypes =
+    executableDef?.paramTypes && typeof executableDef.paramTypes === 'object'
+      ? executableDef.paramTypes
+      : undefined;
+  const optionalParams = new Set(normalizeExecutableMxStringList(executableDef?.optionalParams) ?? []);
+
+  return {
+    params: paramNames
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      .map(name => ({
+        name,
+        ...(typeof paramTypes?.[name] === 'string' && paramTypes[name].trim().length > 0
+          ? { type: paramTypes[name].trim() }
+          : {}),
+        ...(optionalParams.has(name) ? { optional: true } : {})
+      })),
+    controlArgs: normalizeExecutableMxStringList(executableDef?.controlArgs),
+    updateArgs: normalizeExecutableMxStringList(executableDef?.updateArgs),
+    exactPayloadArgs: normalizeExecutableMxStringList(executableDef?.exactPayloadArgs),
+    correlateControlArgs:
+      executableDef?.correlateControlArgs === true
+        ? true
+        : null
+  };
 }
 
 // =========================================================================
@@ -811,10 +864,15 @@ export class VariableFactory {
     metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ExecutableVariable {
     const init = normalizeFactoryOptions(metadataOrOptions);
+    const explicitExecutableDef = init.internal?.executableDef as ExecutableDefinition | undefined;
     const executableDefinition = {
       type,
       template,
       language
+    };
+    const mx = {
+      ...init.mx,
+      ...buildExecutableMxMetadata(paramNames, explicitExecutableDef)
     };
     const variable = finalizeVariable({
       type: 'executable',
@@ -824,7 +882,7 @@ export class VariableFactory {
       source,
       createdAt: Date.now(),
       modifiedAt: Date.now(),
-      mx: init.mx,
+      mx,
       internal: init.internal
     });
     if (init.internal?.executableDef === undefined) {

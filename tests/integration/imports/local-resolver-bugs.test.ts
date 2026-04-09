@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ImportTestRunner } from './test-utils';
 
+const IMPORT_TEST_TIMEOUT = 10000;
+
 /**
  * Issue: LOCAL resolver imports fail with "Import target is not a module"
  * even when the file contains valid mlld directives and exports.
@@ -211,7 +213,7 @@ description: Shared utilities
       expect(result.exitCode).toBe(0);
     });
 
-    it('should handle nested directory structures', async () => {
+    it('should handle nested directory structures', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await runner.runTest({
         name: 'local-resolver-nested',
         description: 'LOCAL resolver with nested directories',

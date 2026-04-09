@@ -1,5 +1,7 @@
 import {
   normalizePolicyAuthorizations,
+  setAuthorizationConstraintClauseEqFactsources,
+  setAuthorizationConstraintClauseOneOfFactsources,
   validateNormalizedPolicyAuthorizations,
   validatePolicyAuthorizations,
   type AuthorizationConstraintClause,
@@ -8,7 +10,12 @@ import {
   type PolicyAuthorizationValidationResult,
   type PolicyAuthorizations
 } from '@core/policy/authorizations';
-import { isHandleWrapper } from '@core/types/handle';
+import type { MlldNode, VariableReferenceNode } from '@core/types';
+import {
+  isFactSourceHandle,
+  isHandleWrapper,
+  type FactSourceHandle
+} from '@core/types/handle';
 import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
@@ -17,6 +24,7 @@ import { MlldSecurityError } from '@core/errors';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
 import { proofStrengthForValue } from '@interpreter/security/proof-claims';
+import { encodeCanonicalValue } from '@interpreter/security/canonical-value';
 import {
   collectSecurityRelevantArgNamesForOperation,
   repairSecurityRelevantValue,
@@ -27,10 +35,12 @@ import {
   asData,
   asText,
   applySecurityDescriptorToStructuredValue,
+  ensureStructuredValue,
   extractSecurityDescriptor,
   isStructuredValue,
   wrapStructured
 } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
@@ -248,7 +258,10 @@ function findAuthorizationIntentSourceDescriptor(
   return undefined;
 }
 
-function hasBucketedAuthorizationIntent(raw: unknown): boolean {
+function hasBucketedAuthorizationIntent(
+  raw: unknown,
+  options: { allowToolObjectBucket?: boolean } = {}
+): boolean {
   const container = unwrapAuthorizationIntentContainer(raw);
   if (!isPlainObject(container)) {
     return false;
@@ -257,6 +270,12 @@ function hasBucketedAuthorizationIntent(raw: unknown): boolean {
     hasOwnProperty(container, 'resolved')
     || hasOwnProperty(container, 'known')
     || Array.isArray(container.allow)
+    || (
+      options.allowToolObjectBucket === true
+      && !hasOwnProperty(container, 'deny')
+      && isPlainObject(container.allow)
+      && Object.values(container.allow).every(entry => entry === true)
+    )
   );
 }
 
@@ -522,7 +541,7 @@ function createKnownHandleValue(value: unknown): unknown {
   const wrapped =
     isStructuredValue(value)
       ? wrapStructured(value.data, value.type, value.text, value.metadata)
-      : wrapStructured(value as any);
+      : ensureStructuredValue(value);
   if (isStructuredValue(value) && value.internal) {
     wrapped.internal = { ...value.internal };
   }
@@ -628,7 +647,7 @@ async function normalizeResolvedHandleCandidate(
     return undefined;
   }
 
-  const wrappedHandle = extractHandleTokenCandidate((value as Record<string, unknown>).handle);
+  const wrappedHandle = extractHandleTokenCandidate((value as { handle?: unknown }).handle);
   if (!wrappedHandle) {
     return undefined;
   }
@@ -642,6 +661,7 @@ async function normalizeResolvedControlArgValue(options: {
   argName: string;
   value: unknown;
   env: Environment;
+  mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<unknown | undefined> {
   const materialized = await materializePolicySourceValue(options.value, options.env);
@@ -666,6 +686,20 @@ async function normalizeResolvedControlArgValue(options: {
         continue;
       }
 
+      if (entryHasFactProof(materialized[index])) {
+        retained.push(materialized[index]);
+        continue;
+      }
+
+      const liftedMatch =
+        options.mode === 'builder'
+          ? await findUniqueFactBackedValueMatch(options.env, materialized[index])
+          : undefined;
+      if (liftedMatch !== undefined) {
+        retained.push(liftedMatch);
+        continue;
+      }
+
       pushCompilerIssue(options.issues, {
         reason: 'proofless_resolved_value',
         message: buildProoflessResolvedValueMessage(options.toolName, options.argName, index),
@@ -685,6 +719,18 @@ async function normalizeResolvedControlArgValue(options: {
     return normalizedValue;
   }
 
+  if (entryHasFactProof(materialized)) {
+    return materialized;
+  }
+
+  const liftedMatch =
+    options.mode === 'builder'
+      ? await findUniqueFactBackedValueMatch(options.env, materialized)
+      : undefined;
+  if (liftedMatch !== undefined) {
+    return liftedMatch;
+  }
+
   pushCompilerIssue(options.issues, {
     reason: 'proofless_resolved_value',
     message: buildProoflessResolvedValueMessage(options.toolName, options.argName),
@@ -698,6 +744,7 @@ async function normalizeResolvedBucketToolEntry(options: {
   toolName: string;
   entry: unknown;
   env: Environment;
+  mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<{ entry: unknown; resolvedArgNames: string[] } | undefined> {
@@ -736,6 +783,7 @@ async function normalizeResolvedBucketToolEntry(options: {
       argName,
       value: rawArgValue,
       env: options.env,
+      mode: options.mode,
       issues: options.issues
     });
     if (normalizedValue === undefined) {
@@ -764,19 +812,38 @@ async function normalizeResolvedBucketToolEntry(options: {
   };
 }
 
+type NormalizedAuthorizationIntentSource = {
+  rawAuthorizations: unknown;
+  rawSource: unknown;
+  toolLevelAllowTools: Set<string>;
+};
+
+async function materializeAuthorizationIntentSourceValue(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (isVariable(value) && extractSecurityDescriptor(value)) {
+    return value;
+  }
+
+  return materializePolicySourceValue(value, env);
+}
+
 async function normalizeBucketedAuthorizationIntentSource(options: {
   raw: unknown;
   rawSource: unknown;
   env: Environment;
+  mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
-}): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
+}): Promise<NormalizedAuthorizationIntentSource> {
   const container = unwrapAuthorizationIntentContainer(options.raw);
   if (!isPlainObject(container)) {
     return {
       rawAuthorizations: container,
-      rawSource: options.rawSource
+      rawSource: options.rawSource,
+      toolLevelAllowTools: new Set<string>()
     };
   }
 
@@ -788,23 +855,62 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
     });
     return {
       rawAuthorizations: undefined,
-      rawSource: source
+      rawSource: source,
+      toolLevelAllowTools: new Set<string>()
+    };
+  }
+
+  const topLevelFields = Object.keys(container).filter(
+    key => key !== 'resolved' && key !== 'known' && key !== 'allow' && key !== 'deny'
+  );
+  if (topLevelFields.length > 0) {
+    const mixedToolEntries = topLevelFields.filter(field => options.toolContext?.has(field));
+    const unrecognizedFields = topLevelFields.filter(field => !options.toolContext?.has(field));
+
+    if (mixedToolEntries.length > 0) {
+      pushCompilerIssue(options.issues, {
+        reason: 'invalid_authorization',
+        message:
+          `Cannot mix flat tool entries with bucketed authorization fields; found top-level tool entries: ${mixedToolEntries.join(', ')}`
+      });
+    }
+
+    for (const field of unrecognizedFields) {
+      pushCompilerIssue(options.issues, {
+        reason: 'invalid_authorization',
+        message:
+          `Unrecognized authorization field '${field}'; expected one of: resolved, known, allow, or a tool name`
+      });
+    }
+
+    return {
+      rawAuthorizations: {
+        allow: {}
+      },
+      rawSource: {
+        allow: {}
+      },
+      toolLevelAllowTools: new Set<string>()
     };
   }
 
   const nextAllow: Record<string, unknown> = {};
   const resolvedArgKeys = new Set<string>();
+  const toolLevelAllowTools = new Set<string>();
   const normalizedTaskText =
     typeof options.taskText === 'string' && options.taskText.trim().length > 0
       ? options.taskText.trim().toLowerCase()
       : undefined;
 
   if (isPlainObject(container.allow)) {
-    const explicitAllow = cloneRawAllowEntries(container.allow);
-    if (isPlainObject(explicitAllow)) {
-      for (const [toolName, entry] of Object.entries(explicitAllow)) {
-        nextAllow[toolName] = cloneRawAuthorizationEntry(entry);
+    for (const [toolName, entry] of Object.entries(container.allow)) {
+      if (entry === true) {
+        nextAllow[toolName] = true;
+        toolLevelAllowTools.add(toolName);
+        continue;
       }
+
+      nextAllow[toolName] = cloneRawAuthorizationEntry(entry);
     }
   }
 
@@ -822,6 +928,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
             toolName,
             entry,
             env: options.env,
+            mode: options.mode,
             toolContext: options.toolContext,
             issues: options.issues
           });
@@ -833,6 +940,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
             nextAllow[toolName],
             normalizedEntry.entry
           );
+          toolLevelAllowTools.delete(toolName);
           for (const argName of normalizedEntry.resolvedArgNames) {
             resolvedArgKeys.add(`${toolName}.${argName}`);
           }
@@ -933,6 +1041,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
           const upgradedHandle = findUniqueFactBackedHandleMatch(options.env, materializedValue);
           if (upgradedHandle) {
             const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
+            toolLevelAllowTools.delete(toolName);
             if (!hasOwnProperty(args, argName)) {
               args[argName] = {
                 eq: { handle: upgradedHandle }
@@ -957,6 +1066,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
           }
 
           const args = getOrCreateRawAuthorizationArgs(nextAllow, toolName);
+          toolLevelAllowTools.delete(toolName);
           if (!hasOwnProperty(args, argName)) {
             args[argName] = {
               eq: materializedValue,
@@ -977,7 +1087,8 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
 
   return {
     rawAuthorizations: next,
-    rawSource: next
+    rawSource: next,
+    toolLevelAllowTools
   };
 }
 
@@ -985,11 +1096,18 @@ async function normalizeAuthorizationIntentSource(options: {
   raw: unknown;
   rawSource: unknown;
   env: Environment;
+  mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
-}): Promise<{ rawAuthorizations: unknown; rawSource: unknown }> {
-  if (hasBucketedAuthorizationIntent(options.raw) || hasBucketedAuthorizationIntent(options.rawSource)) {
+}): Promise<NormalizedAuthorizationIntentSource> {
+  const bucketDetectionOptions = {
+    allowToolObjectBucket: options.mode === 'builder'
+  };
+  if (
+    hasBucketedAuthorizationIntent(options.raw, bucketDetectionOptions)
+    || hasBucketedAuthorizationIntent(options.rawSource, bucketDetectionOptions)
+  ) {
     return await normalizeBucketedAuthorizationIntentSource(options);
   }
 
@@ -997,7 +1115,11 @@ async function normalizeAuthorizationIntentSource(options: {
   if (!isPlainObject(raw)) {
     return {
       rawAuthorizations: raw,
-      rawSource: options.rawSource
+      rawSource:
+        options.mode === 'builder'
+          ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
+          : options.rawSource,
+      toolLevelAllowTools: new Set<string>()
     };
   }
 
@@ -1015,7 +1137,11 @@ async function normalizeAuthorizationIntentSource(options: {
     }
     return {
       rawAuthorizations: next,
-      rawSource: options.rawSource
+      rawSource:
+        options.mode === 'builder'
+          ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
+          : options.rawSource,
+      toolLevelAllowTools: new Set<string>()
     };
   }
 
@@ -1023,7 +1149,11 @@ async function normalizeAuthorizationIntentSource(options: {
     rawAuthorizations: {
       allow: cloneRawAllowEntries(container)
     },
-    rawSource: options.rawSource
+    rawSource:
+      options.mode === 'builder'
+        ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
+        : options.rawSource,
+    toolLevelAllowTools: new Set<string>()
   };
 }
 
@@ -1303,6 +1433,37 @@ function isAstArrayNode(value: unknown): value is {
   );
 }
 
+function isAstLikePolicySourceValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (isStructuredValue(value) || isVariable(value)) {
+    return false;
+  }
+  if (isAstObjectNode(value) || isAstArrayNode(value)) {
+    return true;
+  }
+
+  const candidate = value as {
+    wrapperType?: unknown;
+    content?: unknown;
+    type?: unknown;
+    nodeId?: unknown;
+    location?: unknown;
+  };
+  if (candidate.wrapperType !== undefined && Array.isArray(candidate.content)) {
+    return true;
+  }
+
+  return (
+    typeof candidate.type === 'string'
+    && (
+      Object.prototype.hasOwnProperty.call(candidate, 'nodeId')
+      || Object.prototype.hasOwnProperty.call(candidate, 'location')
+    )
+  );
+}
+
 function getAstObjectEntryValue(node: unknown, key: string): unknown {
   if (!isAstObjectNode(node)) {
     return undefined;
@@ -1329,7 +1490,7 @@ async function unwrapResolvedConstraintValue(
     return items;
   }
   if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
+    const result: { [key: string]: unknown } = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = await unwrapResolvedConstraintValue(entry, env);
     }
@@ -1338,36 +1499,69 @@ async function unwrapResolvedConstraintValue(
   return value;
 }
 
-async function materializePolicySourceValue(
+export async function materializePolicySourceValue(
   value: unknown,
   env: Environment
 ): Promise<unknown> {
-  if (isVariable(value)) {
-    if (extractSecurityDescriptor(value)) {
-      return value;
-    }
-    const extracted = await extractVariableValue(value, env);
-    return materializePolicySourceValue(extracted, env);
-  }
-
-  if (isStructuredValue(value)) {
-    if (value.type === 'array' && Array.isArray(value.data)) {
-      const items: unknown[] = [];
-      for (const item of value.data) {
-        items.push(await materializePolicySourceValue(item, env));
-      }
-      return items;
-    }
-    if (value.type === 'object' && isPlainObject(value.data)) {
-      const result: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value.data)) {
-        result[key] = await materializePolicySourceValue(entry, env);
-      }
-      return result;
-    }
+  if (isVariable(value) && extractSecurityDescriptor(value)) {
     return value;
   }
-
+  if (isVariable(value)) {
+    return materializePolicySourceValue(await extractVariableValue(value, env), env);
+  }
+  if (isAstArrayNode(value)) {
+    const items: unknown[] = [];
+    for (const item of value.items ?? []) {
+      items.push(await materializePolicySourceValue(item, env));
+    }
+    return items;
+  }
+  if (isAstObjectNode(value)) {
+    const result: { [key: string]: unknown } = {};
+    for (const entry of value.entries ?? []) {
+      if (!entry || typeof entry !== 'object') {
+        continue;
+      }
+      if (
+        (entry as { type?: unknown }).type === 'pair'
+        && typeof (entry as { key?: unknown }).key === 'string'
+      ) {
+        result[(entry as { key: string }).key] = await materializePolicySourceValue(
+          (entry as { value?: unknown }).value,
+          env
+        );
+        continue;
+      }
+      if (
+        (entry as { type?: unknown }).type === 'spread'
+        && Array.isArray((entry as { value?: unknown[] }).value)
+      ) {
+        for (const spreadNode of (entry as { value: unknown[] }).value) {
+          const spreadValue = await materializePolicySourceValue(spreadNode, env);
+          if (isPlainObject(spreadValue)) {
+            Object.assign(result, spreadValue);
+          }
+        }
+      }
+    }
+    return result;
+  }
+  if (isAstLikePolicySourceValue(value)) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as MlldNode | MlldNode[], env, { isExpression: true });
+    return materializePolicySourceValue(result.value, env);
+  }
+  if (
+    isStructuredValue(value)
+    && value.type !== 'object'
+    && value.type !== 'array'
+    && extractSecurityDescriptor(value)
+  ) {
+    return value;
+  }
+  if (isStructuredValue(value)) {
+    return materializePolicySourceValue(value.data, env);
+  }
   if (Array.isArray(value)) {
     const items: unknown[] = [];
     for (const item of value) {
@@ -1375,16 +1569,14 @@ async function materializePolicySourceValue(
     }
     return items;
   }
-
   if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
+    const result: { [key: string]: unknown } = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = await materializePolicySourceValue(entry, env);
     }
     return result;
   }
-
-  return value;
+  return boundary.config(value, env);
 }
 
 async function resolveConstraintSourceValue(
@@ -1392,23 +1584,40 @@ async function resolveConstraintSourceValue(
   env: Environment
 ): Promise<unknown> {
   if (value && typeof value === 'object') {
-    const candidate = value as Record<string, unknown>;
-    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
-      const variable = env.getVariable(candidate.identifier);
+    const candidate = value as { type?: unknown };
+    if (candidate.type === 'VariableReference') {
+      const reference = value as VariableReferenceNode;
+      const variable = env.getVariable(reference.identifier);
       if (!variable) {
         return (
           await repairSecurityRelevantValue({
-            value: candidate,
+            value: reference,
             env,
             matchScope: 'session',
             includeSessionProofMatches: true,
-            dropAmbiguousArrayElements: isArrayLikeConstraintValue(candidate),
+            dropAmbiguousArrayElements: isArrayLikeConstraintValue(reference),
             collapseEquivalentProjectedMatches: true
           })
         ).value;
       }
-      const resolved = await resolveValueHandles(variable, env);
-      const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
+      const hasFieldAccess =
+        Array.isArray(reference.fields)
+        && reference.fields.length > 0;
+      const hasPipes =
+        Array.isArray(reference.pipes)
+        && reference.pipes.length > 0;
+      const resolved =
+        hasFieldAccess || hasPipes
+          ? (
+              await (await import('@interpreter/core/interpreter')).evaluate(
+                value as MlldNode | MlldNode[],
+                env,
+                { isExpression: true }
+              )
+            ).value
+          : await resolveValueHandles(variable, env);
+      const handleResolved = await resolveValueHandles(resolved, env);
+      const unwrapped = await unwrapResolvedConstraintValue(handleResolved, env);
       return (
         await repairSecurityRelevantValue({
           value: unwrapped,
@@ -1437,7 +1646,7 @@ async function resolveConstraintSourceValue(
       ).value;
     }
     if (isAstObjectNode(value)) {
-      const result: Record<string, unknown> = {};
+      const result: { [key: string]: unknown } = {};
       for (const entry of value.entries ?? []) {
         if (typeof entry?.key !== 'string') {
           continue;
@@ -1458,11 +1667,11 @@ async function resolveConstraintSourceValue(
   if (
     value &&
     typeof value === 'object' &&
-    'type' in (value as Record<string, unknown>) &&
+    'type' in (value as { type?: unknown }) &&
     !isStructuredValue(value)
   ) {
     const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
+    const result = await evaluate(value as MlldNode | MlldNode[], env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
     const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
     return (
@@ -1514,6 +1723,233 @@ async function extractConstraintAttestationsSafe(
     }
     throw error;
   }
+}
+
+function getConstraintFactSourceKey(handle: FactSourceHandle): string {
+  if (handle.instanceKey !== undefined) {
+    return `${handle.sourceRef}:instance:${handle.instanceKey}`;
+  }
+  if (handle.coercionId && handle.position !== undefined) {
+    return `${handle.sourceRef}:coercion:${handle.coercionId}:${handle.position}`;
+  }
+  return `${handle.ref}:unknown`;
+}
+
+function cloneConstraintFactSourceHandle(handle: FactSourceHandle): FactSourceHandle {
+  return {
+    ...handle,
+    ...(Array.isArray(handle.tiers) ? { tiers: Object.freeze([...handle.tiers]) } : {})
+  };
+}
+
+function dedupeConstraintFactsources(
+  factsources: readonly FactSourceHandle[]
+): FactSourceHandle[] {
+  const unique = new Map<string, FactSourceHandle>();
+  for (const handle of factsources) {
+    if (!isFactSourceHandle(handle)) {
+      continue;
+    }
+    unique.set(getConstraintFactSourceKey(handle), cloneConstraintFactSourceHandle(handle));
+  }
+  return Array.from(unique.values());
+}
+
+function collectConstraintFactsources(
+  value: unknown,
+  seen = new Set<unknown>()
+): FactSourceHandle[] {
+  const collected: FactSourceHandle[] = [];
+
+  const pushFactsources = (candidate: unknown): void => {
+    if (!Array.isArray(candidate)) {
+      return;
+    }
+    for (const handle of candidate) {
+      if (isFactSourceHandle(handle)) {
+        collected.push(handle);
+      }
+    }
+  };
+
+  const visit = (candidate: unknown): void => {
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+    if (seen.has(candidate)) {
+      return;
+    }
+    seen.add(candidate);
+
+    if (isVariable(candidate)) {
+      pushFactsources(candidate.mx?.factsources);
+    }
+
+    if (isStructuredValue(candidate)) {
+      pushFactsources(candidate.metadata?.factsources);
+      pushFactsources(candidate.mx?.factsources);
+      visit(candidate.data);
+      return;
+    }
+
+    const recordCandidate = candidate as {
+      mx?: { factsources?: readonly unknown[] };
+      metadata?: { factsources?: readonly unknown[] };
+    };
+    pushFactsources(recordCandidate.mx?.factsources);
+    pushFactsources(recordCandidate.metadata?.factsources);
+
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) {
+        visit(item);
+      }
+      return;
+    }
+
+    if (isPlainObject(candidate)) {
+      for (const entry of Object.values(candidate)) {
+        visit(entry);
+      }
+    }
+  };
+
+  visit(value);
+  return dedupeConstraintFactsources(collected);
+}
+
+async function extractConstraintFactsources(
+  value: unknown,
+  env: Environment
+): Promise<FactSourceHandle[]> {
+  const resolvedValue = await resolveConstraintSourceValue(value, env);
+  return collectConstraintFactsources(resolvedValue);
+}
+
+async function extractConstraintFactsourcesSafe(
+  value: unknown,
+  env: Environment
+): Promise<FactSourceHandle[]> {
+  try {
+    return await extractConstraintFactsources(value, env);
+  } catch (error) {
+    if (isAmbiguousProjectedValueError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+function collectFactBackedCanonicalMatches(options: {
+  value: unknown;
+  targetKey: string;
+  matches: Map<string, unknown>;
+  seen?: Set<unknown>;
+}): void {
+  const seen = options.seen ?? new Set<unknown>();
+  const candidate = options.value;
+  if (candidate === null || candidate === undefined) {
+    return;
+  }
+
+  if (typeof candidate === 'object') {
+    if (seen.has(candidate)) {
+      return;
+    }
+    seen.add(candidate);
+  }
+
+  if (entryHasFactProof(candidate) && encodeCanonicalValue(candidate) === options.targetKey) {
+    const labels = collectValueProofLabels(candidate).sort().join('|');
+    const factsourceKey = collectConstraintFactsources(candidate)
+      .map(getConstraintFactSourceKey)
+      .sort()
+      .join('|');
+    options.matches.set(`${labels}::${factsourceKey}`, candidate);
+  }
+
+  if (isVariable(candidate)) {
+    collectFactBackedCanonicalMatches({
+      ...options,
+      value: candidate.value,
+      seen
+    });
+    return;
+  }
+
+  if (isStructuredValue(candidate)) {
+    collectFactBackedCanonicalMatches({
+      ...options,
+      value: candidate.data,
+      seen
+    });
+    return;
+  }
+
+  if (Array.isArray(candidate)) {
+    for (const entry of candidate) {
+      collectFactBackedCanonicalMatches({
+        ...options,
+        value: entry,
+        seen
+      });
+    }
+    return;
+  }
+
+  if (isPlainObject(candidate)) {
+    for (const entry of Object.values(candidate)) {
+      collectFactBackedCanonicalMatches({
+        ...options,
+        value: entry,
+        seen
+      });
+    }
+  }
+}
+
+async function findUniqueFactBackedValueMatch(
+  env: Environment,
+  value: unknown
+): Promise<unknown | undefined> {
+  const targetKey = encodeCanonicalValue(value);
+  if (!targetKey) {
+    return undefined;
+  }
+
+  const matches = new Map<string, unknown>();
+  for (const entry of env.findIssuedHandlesByCanonicalValue(value)) {
+    if (!entryHasFactProof(entry.value)) {
+      continue;
+    }
+    const labels = collectValueProofLabels(entry.value).sort().join('|');
+    const factsourceKey = collectConstraintFactsources(entry.value)
+      .map(getConstraintFactSourceKey)
+      .sort()
+      .join('|');
+    matches.set(`${labels}::${factsourceKey}`, entry.value);
+  }
+  if (matches.size > 1) {
+    return undefined;
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    let resolved: unknown;
+    try {
+      resolved = await extractVariableValue(variable, env);
+    } catch {
+      continue;
+    }
+    collectFactBackedCanonicalMatches({
+      value: resolved,
+      targetKey,
+      matches
+    });
+    if (matches.size > 1) {
+      return undefined;
+    }
+  }
+
+  return matches.size === 1 ? [...matches.values()][0] : undefined;
 }
 
 function getRawAuthorizationAllowObject(source: unknown): Record<string, unknown> | undefined {
@@ -1626,18 +2062,46 @@ async function compileAuthorizationAttestations(
                     )
                   : await extractConstraintAttestationsSafe(clause.eq, env);
             }
-            if (compiledAttestations.length === 0) {
-              return clause;
+            let compiledFactsources =
+              Array.isArray(rawEqValue)
+                ? dedupeConstraintFactsources(
+                    (
+                      await Promise.all(
+                        rawEqValue.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+                      )
+                    ).flat()
+                  )
+                : await extractConstraintFactsourcesSafe(rawEqValue, env);
+            if (compiledFactsources.length === 0) {
+              compiledFactsources =
+                Array.isArray(clause.eq)
+                  ? dedupeConstraintFactsources(
+                      (
+                        await Promise.all(
+                          clause.eq.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+                        )
+                      ).flat()
+                    )
+                  : await extractConstraintFactsourcesSafe(clause.eq, env);
             }
-            report.compiledProofs.push({
-              tool: toolName,
-              arg: argName,
-              labels: [...compiledAttestations]
-            });
-            return {
-              ...clause,
-              attestations: compiledAttestations
-            };
+            const nextClause =
+              compiledAttestations.length > 0
+                ? {
+                    ...clause,
+                    attestations: compiledAttestations
+                  }
+                : clause;
+            if (compiledAttestations.length > 0) {
+              report.compiledProofs.push({
+                tool: toolName,
+                arg: argName,
+                labels: [...compiledAttestations]
+              });
+            }
+            if (compiledFactsources.length > 0) {
+              setAuthorizationConstraintClauseEqFactsources(nextClause, compiledFactsources);
+            }
+            return nextClause;
           }
 
           const rawOneOfCandidates =
@@ -1655,17 +2119,40 @@ async function compileAuthorizationAttestations(
             );
           }
           if (!oneOfAttestations.some(entry => entry.length > 0)) {
+            let fallbackOneOfFactsources = await Promise.all(
+              rawOneOfCandidates.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+            );
+            if (!fallbackOneOfFactsources.some(entry => entry.length > 0)) {
+              fallbackOneOfFactsources = await Promise.all(
+                clause.oneOf.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+              );
+            }
+            if (fallbackOneOfFactsources.some(entry => entry.length > 0)) {
+              setAuthorizationConstraintClauseOneOfFactsources(clause, fallbackOneOfFactsources);
+            }
             return clause;
+          }
+          let oneOfFactsources = await Promise.all(
+            rawOneOfCandidates.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+          );
+          if (!oneOfFactsources.some(entry => entry.length > 0)) {
+            oneOfFactsources = await Promise.all(
+              clause.oneOf.map(candidate => extractConstraintFactsourcesSafe(candidate, env))
+            );
           }
           report.compiledProofs.push({
             tool: toolName,
             arg: argName,
             labels: Array.from(new Set(oneOfAttestations.flatMap(entry => entry)))
           });
-          return {
+          const nextClause = {
             ...clause,
             oneOfAttestations
           };
+          if (oneOfFactsources.some(entry => entry.length > 0)) {
+            setAuthorizationConstraintClauseOneOfFactsources(nextClause, oneOfFactsources);
+          }
+          return nextClause;
         }));
       }
     } catch (error) {
@@ -1899,21 +2386,38 @@ async function enforceEqClauseProof(options: {
     })
   ).value;
 
-  if (hasAcceptedProofLabels(collectDirectValueProofLabels(repairedEq))) {
+  const repairedDirectLabels = collectDirectValueProofLabels(repairedEq);
+  if (hasAcceptedProofLabels(repairedDirectLabels)) {
     return {
       ...options.clause,
-      eq: repairedEq
+      eq: repairedEq,
+      ...(!Array.isArray(options.clause.attestations) || options.clause.attestations.length === 0
+        ? { attestations: repairedDirectLabels }
+        : {})
     };
   }
-  if (!Array.isArray(repairedEq) && hasAcceptedProofLabels(collectValueProofLabels(repairedEq))) {
+  const repairedValueLabels =
+    !Array.isArray(repairedEq)
+      ? collectValueProofLabels(repairedEq)
+      : [];
+  if (!Array.isArray(repairedEq) && hasAcceptedProofLabels(repairedValueLabels)) {
     return {
       ...options.clause,
-      eq: repairedEq
+      eq: repairedEq,
+      ...(!Array.isArray(options.clause.attestations) || options.clause.attestations.length === 0
+        ? { attestations: repairedValueLabels }
+        : {})
     };
   }
 
-  if (hasAcceptedProofLabels(collectDirectValueProofLabels(options.clause.eq))) {
-    return options.clause;
+  const directLabels = collectDirectValueProofLabels(options.clause.eq);
+  if (hasAcceptedProofLabels(directLabels)) {
+    return {
+      ...options.clause,
+      ...(!Array.isArray(options.clause.attestations) || options.clause.attestations.length === 0
+        ? { attestations: directLabels }
+        : {})
+    };
   }
 
   if (Array.isArray(repairedEq)) {
@@ -1923,6 +2427,18 @@ async function enforceEqClauseProof(options: {
       const element = repairedEq[index];
       if (hasAcceptedProofLabels(collectElementProofLabels(element))) {
         retained.push(element);
+        continue;
+      }
+
+      const liftedMatch =
+        options.mode === 'builder'
+          ? await findUniqueFactBackedValueMatch(options.env, element)
+          : undefined;
+      if (
+        liftedMatch !== undefined
+        && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch))
+      ) {
+        retained.push(liftedMatch);
         continue;
       }
 
@@ -1949,6 +2465,21 @@ async function enforceEqClauseProof(options: {
       ...options.clause,
       eq: retained
     };
+  }
+
+  const liftedMatch =
+    options.mode === 'builder'
+      ? await findUniqueFactBackedValueMatch(options.env, repairedEq)
+      : undefined;
+  if (liftedMatch !== undefined) {
+    const liftedLabels = collectValueProofLabels(liftedMatch);
+    if (hasAcceptedProofLabels(liftedLabels)) {
+      return {
+        ...options.clause,
+        eq: liftedMatch,
+        attestations: liftedLabels
+      };
+    }
   }
 
   pushCompilerIssue(options.issues, {
@@ -2120,11 +2651,13 @@ export async function compilePolicyAuthorizations(
     raw: options.rawAuthorizations,
     rawSource: options.rawSource ?? options.rawAuthorizations,
     env: options.env,
+    mode: options.mode,
     toolContext: options.toolContext,
     taskText: options.taskText,
     issues
   });
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
+  const toolLevelAllowTools = normalizedIntent.toolLevelAllowTools;
   if (rawAuthorizations === undefined || rawAuthorizations === null) {
     return { authorizations: undefined, issues, report };
   }
@@ -2161,6 +2694,12 @@ export async function compilePolicyAuthorizations(
     }
     filterBuilderValidationErrors(undefined, validation, issues);
     return { authorizations: undefined, issues, report };
+  }
+
+  for (const toolName of toolLevelAllowTools) {
+    if (normalized.allow?.[toolName]?.kind === 'unconstrained') {
+      normalized.allow[toolName] = { kind: 'tool' };
+    }
   }
 
   const validation = validateNormalizedPolicyAuthorizations(

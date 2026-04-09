@@ -505,6 +505,55 @@ describe('createFunctionMcpBridge', () => {
     }
   });
 
+  it('ignores capability allowlist default-deny for toolbridge wrappers around MCP-backed write tools', async () => {
+    const env = await createInterpretedEnv([
+      `/import tools from mcp "${process.execPath} ${fakeServerPath}" as @mcp`,
+      '/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = [',
+      '  => @mcp.sendEmail([@recipient], @subject, @body, [], [], [])',
+      '] with { controlArgs: ["recipient"] }'
+    ].join('\n'));
+    env.setPolicySummary(normalizePolicyConfig({
+      capabilities: { allow: ['cmd:git:*'] },
+      authorizations: {
+        allow: {
+          send_email: {
+            args: {
+              recipient: { eq: 'approved@example.com', attestations: ['known'] }
+            }
+          }
+        }
+      }
+    })!);
+
+    const functionTool = env.getVariable('sendEmail') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['send_email', functionTool]])
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: {
+          name: 'send_email',
+          arguments: {
+            recipient: 'approved@example.com',
+            subject: 'hi',
+            body: 'test'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toContain('recipients=["approved@example.com"]');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('keeps the proxy restartable during the cleanup grace window', async () => {
     const env = createEnv();
     const functionTool = createFunctionTool('sayHi');

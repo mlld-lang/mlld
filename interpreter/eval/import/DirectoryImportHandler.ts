@@ -8,6 +8,11 @@ import type { ModuleProcessingResult } from './ModuleContentProcessor';
 import type { ImportResolution } from './ImportPathResolver';
 import { minimatch } from 'minimatch';
 import * as path from 'path';
+import {
+  buildImportTraceDataFromResolution,
+  emitImportFailure,
+  emitImportTrace
+} from './runtime-trace';
 
 const DIRECTORY_INDEX_FILENAME = 'index.mld';
 const DEFAULT_DIRECTORY_IMPORT_SKIP_DIRS = ['_*', '.*'] as const;
@@ -30,6 +35,9 @@ export class DirectoryImportHandler {
     directive: DirectiveNode,
     env: Environment
   ): Promise<ModuleProcessingResult | null> {
+    const traceData = buildImportTraceDataFromResolution(directive, resolution, {
+      transport: 'directory'
+    });
     if (resolution.type !== 'file') {
       return null;
     }
@@ -44,7 +52,17 @@ export class DirectoryImportHandler {
     }
 
     const baseDir = resolution.resolvedPath;
-    const isDir = await fsService.isDirectory(baseDir);
+    let isDir: boolean;
+    try {
+      isDir = await fsService.isDirectory(baseDir);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'read',
+        error
+      });
+      throw error;
+    }
     if (!isDir) {
       return null;
     }
@@ -61,7 +79,16 @@ export class DirectoryImportHandler {
       }
     }
 
-    return this.processDirectoryImport(fsService, baseDir, resolution, directive, env);
+    try {
+      return await this.processDirectoryImport(fsService, baseDir, resolution, directive, env);
+    } catch (error) {
+      emitImportFailure(env, {
+        ...traceData,
+        phase: 'evaluate',
+        error
+      });
+      throw error;
+    }
   }
 
   private async tryProcessDirectoryIndex(
@@ -113,6 +140,14 @@ export class DirectoryImportHandler {
     const guardDefinitions: SerializedGuardDefinition[] = [];
 
     const entries = await fsService.readdir(baseDir);
+    emitImportTrace(env, 'import.read', {
+      ...buildImportTraceDataFromResolution(directive, resolution, {
+        ref: baseDir,
+        resolvedPath: baseDir,
+        transport: 'directory',
+        entryCount: entries.length
+      })
+    });
     for (const entry of entries) {
       const fullPath = path.join(baseDir, entry);
       const stat = await fsService
@@ -171,6 +206,16 @@ export class DirectoryImportHandler {
 
     const childEnv = env.createChild(baseDir);
     childEnv.setCurrentFilePath(baseDir);
+
+    emitImportTrace(env, 'import.exports', {
+      ...buildImportTraceDataFromResolution(directive, resolution, {
+        ref: baseDir,
+        resolvedPath: baseDir,
+        transport: 'directory',
+        exportCount: Object.keys(moduleObject).length,
+        entryCount: Object.keys(moduleObject).length
+      })
+    });
 
     return {
       moduleObject,

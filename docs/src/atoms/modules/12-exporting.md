@@ -6,7 +6,7 @@ category: modules
 tags: [modules, exports, encapsulation, api]
 related: [modules-creating, modules-importing-registry, box-overview, policy-auth]
 related-code: [interpreter/eval/export.ts, grammar/patterns/export.peggy]
-updated: 2026-02-09
+updated: 2026-04-08
 qa_tier: 2
 ---
 
@@ -48,3 +48,5 @@ export { @spawn }
 - Exported executables do not expose captured module internals through field access
 - Guards can be exported alongside variables
 - Without an `export` directive, all module-level items are auto-exported
+- Exported tool collections preserve their surfaced tool metadata when imported elsewhere; treat them as values, not as objects to spread
+- Object spread over an exported value materializes plain data and drops wrapper metadata/identity

@@ -5,7 +5,7 @@ brief: Progressive levels of engagement from zero-config to full custom security
 category: security
 tags: [security, onboarding, policy, guards, needs, environments, getting-started]
 related: [security-policies, policy-capabilities, security-needs-declaration, security-guards-basics, box-overview, labels-overview, policy-authorizations, facts-and-handles, pattern-planner, security-url-exfiltration]
-updated: 2026-03-24
+updated: 2026-04-07
 qa_tier: 2
 ---
 
@@ -218,7 +218,7 @@ Each slot is backed by a record. Fact fields require handle-bearing input from a
 
 `from candidates` means the selected value must reference an entity that exists in the candidates slot, checked by record key at write time. An agent can't select a "winner" that was never a candidate.
 
-Agents with write access automatically receive `@shelf`, `@shelve(...)` sugar, and `<shelf_notes>` in their system prompt. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read(@slotRef)` (unprojected, full structured values). For generic wrappers, dynamic aliasing exposes slots under stable role names: `shelf: { read: [@logSlot as execution_log] }`.
+Agents with write access automatically receive `@shelf`, `@shelve(...)` sugar, and `<shelf_notes>` in their system prompt. Agents read via `@fyi.shelf` (display-projected). Orchestrator code reads via `@shelf.read(@slotRef)` (unprojected, full structured values). For generic wrappers, dynamic aliasing exposes slots under stable role names, and shelf values expose `@someShelf.mx.slots` / `@someShelf.mx.slotEntries` so framework code can build `box { shelf: @scope }` values dynamically.
 
 See `shelf-slots` for the full model including the slot API, dynamic aliasing, removal, trust rules, and source tracking.
 

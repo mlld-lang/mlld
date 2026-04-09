@@ -4,8 +4,21 @@
 // Used by: when directive conditions, var assignments, array filters, etc.
 // Precedence (lowest to highest): Ternary → Nullish → OR → AND → Comparison → Unary → Primary
 
-// Top-level unified expression with ternary operator (lowest precedence)
 UnifiedExpression
+  = expr:UnifiedExpressionCore coercion:InlineRecordCoercionSuffix? {
+      if (!coercion) {
+        return expr;
+      }
+
+      return helpers.createNode('CoerceExpression', {
+        value: expr,
+        schema: coercion,
+        location: location()
+      });
+    }
+
+// Top-level unified expression with ternary operator (lowest precedence)
+UnifiedExpressionCore
   = condition:UnifiedNullish _ "?" _ trueBranch:TernaryBranch _ ":" _ falseBranch:TernaryBranch {
       return helpers.createNode('TernaryExpression', {
         condition,
@@ -15,6 +28,15 @@ UnifiedExpression
       });
     }
   / UnifiedNullish
+
+InlineRecordCoercionSuffix
+  = _ "as" __ "record" __ schema:InlineRecordSchemaReference {
+      return schema;
+    }
+
+InlineRecordSchemaReference
+  = ref:UnifiedVariableNoTail { return ref; }
+  / "(" _ expr:UnifiedExpressionCore _ ")" { return expr; }
 
 // Ternary branch can be a template, code execution, or a regular expression
 // Templates and code execution must be tried first to avoid expression parsing issues
@@ -105,9 +127,28 @@ UnifiedMultiplicative
 
 // Primary expressions (highest precedence)
 UnifiedPrimary
-  = "(" _ expr:UnifiedExpression _ ")" { return expr; }
+  = GroupedCoerceExpressionAccess
+  / GroupedUnifiedExpression
   / UnifiedUnaryExpression
   / UnifiedAtomicExpression
+
+GroupedUnifiedExpression
+  = "(" _ expr:UnifiedExpression _ ")" {
+      return expr;
+    }
+
+GroupedCoerceExpressionAccess
+  = "(" _ expr:UnifiedExpression _ ")" post:PostFieldAccess+ {
+      if (!expr || expr.type !== 'CoerceExpression') {
+        helpers.mlldError(
+          'Field access after grouped expressions is only supported for `as record` results.',
+          '.',
+          location()
+        );
+      }
+
+      return helpers.attachPostFields(expr, post);
+    }
 
 // Unary expressions
 UnifiedUnaryExpression

@@ -6,22 +6,23 @@ import {
   resolveEffectiveToolMetadata,
   resolveToolCollectionMetadataEntries,
   shouldAutoExposeFyiKnown,
-  type EffectiveToolMetadata
+  type EffectiveToolMetadata,
+  type EffectiveToolParam
 } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
-import { isExecutableVariable } from '@core/types/variable';
+import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 
-type FyiToolsAudience = 'planner' | 'worker' | 'generic';
 type FyiToolsFormat = 'text' | 'json';
 type FyiToolsIncludeHelpers = 'auto' | 'none' | 'all';
 
 type FyiToolsOptions = {
-  audience?: FyiToolsAudience;
+  audience?: string;
   format?: FyiToolsFormat;
   includeHelpers?: FyiToolsIncludeHelpers;
   includeOperationLabels?: boolean;
+  includeAuthIntentShape?: boolean;
 };
 
 type FyiToolsRenderContext = {
@@ -145,7 +146,13 @@ function isOptionsCandidate(value: unknown): value is FyiToolsOptions {
     return true;
   }
 
-  const allowed = new Set(['audience', 'format', 'includeHelpers', 'includeOperationLabels']);
+  const allowed = new Set([
+    'audience',
+    'format',
+    'includeHelpers',
+    'includeOperationLabels',
+    'includeAuthIntentShape'
+  ]);
   return keys.every(key => allowed.has(key));
 }
 
@@ -183,19 +190,6 @@ async function normalizeArgs(
   };
 }
 
-function normalizeAudience(value: unknown, env: Environment): FyiToolsAudience {
-  if (value === 'planner' || value === 'worker' || value === 'generic') {
-    return value;
-  }
-
-  const scopedDisplay = env.getScopedEnvironmentConfig()?.display;
-  if (scopedDisplay === 'planner' || scopedDisplay === 'worker' || scopedDisplay === 'generic') {
-    return scopedDisplay;
-  }
-
-  return 'worker';
-}
-
 function normalizeFormat(value: unknown): FyiToolsFormat {
   return value === 'json' ? 'json' : 'text';
 }
@@ -204,27 +198,28 @@ function normalizeIncludeHelpers(value: unknown): FyiToolsIncludeHelpers {
   return value === 'none' || value === 'all' ? value : 'auto';
 }
 
-function normalizeOptions(raw: FyiToolsOptions, env: Environment) {
+function normalizeOptions(raw: FyiToolsOptions) {
   return {
-    audience: normalizeAudience(raw.audience, env),
     format: normalizeFormat(raw.format),
     includeHelpers: normalizeIncludeHelpers(raw.includeHelpers),
-    includeOperationLabels: raw.includeOperationLabels === true
-  };
-}
-
-function normalizeRenderContext(raw?: FyiToolsRenderContext) {
-  return {
-    isMcpContext: raw?.isMcpContext === true
+    includeOperationLabels: raw.includeOperationLabels === true,
+    includeAuthIntentShape: raw.includeAuthIntentShape === true
   };
 }
 
 function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetadata {
+  const params = Array.isArray(metadata.params) ? [...metadata.params] : [];
+  const paramEntries = Array.isArray(metadata.paramEntries)
+    ? metadata.paramEntries.map(entry => ({ ...entry }))
+    : [];
+  const labels = Array.isArray(metadata.labels) ? [...metadata.labels] : [];
   return {
     ...metadata,
-    params: [...metadata.params],
+    ...(metadata.displayName ? { displayName: metadata.displayName } : {}),
+    params,
+    paramEntries,
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
-    labels: [...metadata.labels],
+    labels,
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {}),
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
@@ -254,6 +249,7 @@ function buildNameOnlyMetadata(name: string): EffectiveToolMetadata {
   return {
     name,
     params: [],
+    paramEntries: [],
     labels: [],
     hasControlArgsMetadata: false,
     hasUpdateArgsMetadata: false,
@@ -302,12 +298,13 @@ function resolveExecutableArrayMetadata(
       continue;
     }
 
-    if (isExecutableVariable(entry)) {
+    if (isVariable(entry) && isExecutableVariable(entry)) {
+      const executable = entry as ExecutableVariable;
       resolved.push(
         resolveEffectiveToolMetadata({
           env,
-          executable: entry,
-          operationName: mlldNameToMCPName(entry.name)
+          executable,
+          operationName: mlldNameToMCPName(executable.name)
         })
       );
       continue;
@@ -384,12 +381,13 @@ async function resolveToolMetadataInput(
     return trimmed ? [buildNameOnlyMetadata(trimmed)] : [];
   }
 
-  if (isExecutableVariable(unwrapped)) {
+  if (isVariable(unwrapped) && isExecutableVariable(unwrapped)) {
+    const executable = unwrapped as ExecutableVariable;
     return [
       resolveEffectiveToolMetadata({
         env,
-        executable: unwrapped,
-        operationName: mlldNameToMCPName(unwrapped.name)
+        executable,
+        operationName: mlldNameToMCPName(executable.name)
       })
     ];
   }
@@ -430,8 +428,9 @@ function formatArgList(args: readonly string[]): string {
   return args.length > 0 ? args.join(', ') : '(none)';
 }
 
-function formatTableCell(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+function getRenderedToolName(entry: EffectiveToolMetadata): string {
+  const displayName = typeof entry.displayName === 'string' ? entry.displayName.trim() : '';
+  return displayName.length > 0 ? displayName : entry.name;
 }
 
 function formatControlArgsCell(entry: EffectiveToolMetadata): string {
@@ -443,62 +442,62 @@ function formatControlArgsCell(entry: EffectiveToolMetadata): string {
   return base;
 }
 
-function formatOptionalArgsCell(entry: EffectiveToolMetadata): string {
-  return formatArgList(entry.optionalParams ?? []);
-}
-
-function formatRequiredArgsCell(entry: EffectiveToolMetadata): string {
-  const optional = new Set(entry.optionalParams ?? []);
-  return formatArgList(entry.params.filter(param => !optional.has(param)));
-}
-
-function formatPayloadArgsCell(entry: EffectiveToolMetadata): string {
-  const reservedArgs = new Set([
-    ...(entry.controlArgs ?? []),
-    ...(entry.updateArgs ?? []),
-    ...(entry.exactPayloadArgs ?? [])
-  ]);
-  return formatArgList(entry.params.filter(param => !reservedArgs.has(param)));
-}
-
-function formatUpdateArgsCell(entry: EffectiveToolMetadata): string {
-  if (!entry.hasUpdateArgsMetadata) {
-    return '';
-  }
-
-  return formatArgList(entry.updateArgs ?? []);
-}
-
-function buildDeniedLine(denied: readonly string[]): string {
-  return `Denied: ${denied.length > 0 ? denied.join(', ') : '(none)'}`;
-}
-
-function buildPlannerIntentLines(): string[] {
+function buildAuthIntentShapeLines(): string[] {
   return [
-    'Authorization intent:',
-    '  resolved: { tool: { arg: "handle" } } - from your lookups',
-    '  known: { tool: { arg: { value: "literal", source: "reason" } } } - from user task',
-    '  allow: ["tool"] - no control args'
+    'Authorization intent shape:',
+    '  resolved: { tool: { arg: "<handle>" } } - from your lookups in this same call',
+    '  known: { tool: { arg: "<value>" } } - from prior phases, shelf state, or user task text',
+    '  allow: { tool: true } - no per-arg constraints'
   ];
 }
 
-function buildWorkerHelperLine(
-  includeHelpers: FyiToolsIncludeHelpers,
-  helperStatus: FyiKnownHelperStatus
-): string | undefined {
-  if (includeHelpers === 'none') {
-    return undefined;
+function getRenderedToolParamEntries(entry: EffectiveToolMetadata): EffectiveToolParam[] {
+  if (entry.paramEntries.length > 0) {
+    return entry.paramEntries;
   }
 
-  if (helperStatus.available) {
-    return 'Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.';
+  const optionalParams = new Set(entry.optionalParams ?? []);
+  return entry.params.map(name => ({
+    name,
+    ...(optionalParams.has(name) ? { optional: true } : {})
+  }));
+}
+
+function buildToolArgLine(
+  entry: EffectiveToolMetadata,
+  param: EffectiveToolParam
+): string {
+  const annotations = [param.type ?? 'string'];
+  if ((entry.controlArgs ?? []).includes(param.name)) {
+    annotations.push('**control arg**');
+  }
+  return `- \`${param.name}\` (${annotations.join(', ')})`;
+}
+
+function buildToolSectionLines(
+  heading: string,
+  entries: readonly EffectiveToolMetadata[]
+): string[] {
+  const lines: string[] = [`${heading}:`, ''];
+
+  for (const [index, entry] of entries.entries()) {
+    if (index > 0) {
+      lines.push('');
+    }
+
+    lines.push(`### ${getRenderedToolName(entry)}`, 'Args:');
+    const params = getRenderedToolParamEntries(entry);
+    if (params.length === 0) {
+      lines.push('- (none)');
+      continue;
+    }
+
+    for (const param of params) {
+      lines.push(buildToolArgLine(entry, param));
+    }
   }
 
-  if (includeHelpers === 'all') {
-    return '@fyi.known() is not available for this phase.';
-  }
-
-  return undefined;
+  return lines;
 }
 
 function resolveWriteEntries(
@@ -519,132 +518,12 @@ function resolveReadEntries(
   );
 }
 
-function buildToolTableLines(options: {
-  audience: FyiToolsAudience;
-  isMcpContext: boolean;
-  writeEntries: readonly EffectiveToolMetadata[];
-  helperStatus: FyiKnownHelperStatus;
-  includeHelpers: FyiToolsIncludeHelpers;
-}): string[] {
-  const { audience, isMcpContext, writeEntries, helperStatus, includeHelpers } = options;
-  const includeDiscoveryColumn = audience === 'worker';
-  const includeUpdateColumn = writeEntries.some(entry => entry.hasUpdateArgsMetadata);
-  const lines = [
-    isMcpContext
-      ? (includeDiscoveryColumn
-          ? (includeUpdateColumn
-              ? '| Tool | Control Args | Update Args | Discover Targets |'
-              : '| Tool | Control Args | Discover Targets |')
-          : (includeUpdateColumn
-              ? '| Tool | Control Args | Update Args |'
-              : '| Tool | Control Args |'))
-      : (includeDiscoveryColumn
-          ? (includeUpdateColumn
-              ? '| Tool | Description | Control Args | Update Args | Discover Targets |'
-              : '| Tool | Description | Control Args | Discover Targets |')
-          : (includeUpdateColumn
-              ? '| Tool | Description | Control Args | Update Args |'
-              : '| Tool | Description | Control Args |')),
-    isMcpContext
-      ? (includeDiscoveryColumn
-          ? (includeUpdateColumn
-              ? '|------|-------------|-------------|------------------|'
-              : '|------|-------------|------------------|')
-          : (includeUpdateColumn
-              ? '|------|-------------|-------------|'
-              : '|------|-------------|'))
-      : (includeDiscoveryColumn
-          ? (includeUpdateColumn
-              ? '|------|-------------|-------------|-------------|------------------|'
-              : '|------|-------------|-------------|------------------|')
-          : (includeUpdateColumn
-              ? '|------|-------------|-------------|-------------|'
-              : '|------|-------------|-------------|'))
-  ];
-
-  for (const entry of writeEntries) {
-    const cells = [formatTableCell(entry.name)];
-
-    if (!isMcpContext) {
-      cells.push(formatTableCell(entry.description ?? ''));
-    }
-
-    cells.push(formatTableCell(formatControlArgsCell(entry)));
-
-    if (includeUpdateColumn) {
-      cells.push(formatTableCell(formatUpdateArgsCell(entry)));
-    }
-
-    if (includeDiscoveryColumn) {
-      const controlArgs = entry.controlArgs ?? [];
-      const discoveryCall =
-        helperStatus.available
-        && includeHelpers !== 'none'
-        && controlArgs.length > 0
-          ? `@fyi.known("${entry.name}")`
-          : '';
-      cells.push(formatTableCell(discoveryCall));
-    }
-
-    lines.push(`| ${cells.join(' | ')} |`);
-  }
-
-  return lines;
-}
-
-function buildReadToolNameList(readEntries: readonly EffectiveToolMetadata[]): string {
-  return `Read tools: ${readEntries.map(entry => entry.name).join(', ')}`;
-}
-
-function buildReadToolTableLines(readEntries: readonly EffectiveToolMetadata[]): string[] {
-  const lines = [
-    '| Tool | Description |',
-    '|------|-------------|'
-  ];
-
-  for (const entry of readEntries) {
-    lines.push(`| ${formatTableCell(entry.name)} | ${formatTableCell(entry.description ?? '')} |`);
-  }
-
-  return lines;
-}
-
-function buildExplicitPlannerWriteToolContractLines(
-  writeEntries: readonly EffectiveToolMetadata[]
-): string[] {
-  const lines: string[] = [];
-
-  for (const entry of writeEntries) {
-    if (lines.length > 0) {
-      lines.push('');
-    }
-
-    lines.push(
-      entry.name,
-      `  description: ${entry.description ?? 'No description provided.'}`,
-      `  args: ${formatArgList(entry.params)}`,
-      `  control_args: ${formatControlArgsCell(entry)}`,
-      `  update_args: ${entry.hasUpdateArgsMetadata ? formatArgList(entry.updateArgs ?? []) : '(none)'}`,
-      `  exact_payload_args: ${formatArgList(entry.exactPayloadArgs ?? [])}`,
-      `  payload_args: ${formatPayloadArgsCell(entry)}`,
-      `  optional_args: ${formatOptionalArgsCell(entry)}`,
-      `  required_args: ${formatRequiredArgsCell(entry)}`
-    );
-  }
-
-  return lines;
-}
-
 function buildTextLines(options: {
   env: Environment;
-  audience: FyiToolsAudience;
-  includeHelpers: FyiToolsIncludeHelpers;
-  isMcpContext: boolean;
-  denied: readonly string[];
-  helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
+  includeAuthIntentShape: boolean;
 }): string[] {
-  const { env, audience, includeHelpers, isMcpContext, denied, helperStatus, entries } = options;
+  const { env, entries, includeAuthIntentShape } = options;
   const writeEntries = resolveWriteEntries(env, entries);
   const readEntries = resolveReadEntries(env, entries);
   if (writeEntries.length === 0 && readEntries.length === 0) {
@@ -654,57 +533,18 @@ function buildTextLines(options: {
   const lines: string[] = [];
 
   if (writeEntries.length > 0) {
-    if (audience === 'planner' && !isMcpContext) {
-      lines.push(
-        'Write tools and argument contracts:',
-        '',
-        ...buildExplicitPlannerWriteToolContractLines(writeEntries)
-      );
-    } else {
-      lines.push(
-        'Write tools and control args:',
-        '',
-        ...buildToolTableLines({
-          audience,
-          isMcpContext,
-          writeEntries,
-          helperStatus,
-          includeHelpers
-        })
-      );
-    }
-
-    if (audience === 'worker') {
-      const helperLine = buildWorkerHelperLine(includeHelpers, helperStatus);
-      if (helperLine) {
-        lines.push('', helperLine);
-      }
-    }
+    lines.push(...buildToolSectionLines('Write tools (require authorization)', writeEntries));
   }
 
   if (readEntries.length > 0) {
     if (lines.length > 0) {
       lines.push('');
     }
-    if (isMcpContext) {
-      lines.push(buildReadToolNameList(readEntries));
-    } else {
-      lines.push(
-        'Read tools:',
-        '',
-        ...buildReadToolTableLines(readEntries)
-      );
-    }
+    lines.push(...buildToolSectionLines('Read tools', readEntries));
   }
 
-  if (audience === 'planner') {
-    lines.push('', buildDeniedLine(denied), '', ...buildPlannerIntentLines());
-    return lines;
-  }
-
-  if (audience === 'worker') {
-    lines.push('', buildDeniedLine(denied));
-    return lines;
+  if (includeAuthIntentShape) {
+    lines.push('', ...buildAuthIntentShapeLines());
   }
 
   return lines;
@@ -770,12 +610,8 @@ function buildToolDescriptionAnnotationLines(entry: EffectiveToolMetadata): stri
 
 function renderText(options: {
   env: Environment;
-  audience: FyiToolsAudience;
-  includeHelpers: FyiToolsIncludeHelpers;
-  isMcpContext: boolean;
-  denied: readonly string[];
-  helperStatus: FyiKnownHelperStatus;
   entries: readonly EffectiveToolMetadata[];
+  includeAuthIntentShape: boolean;
 }): string {
   return buildTextLines(options).join('\n').trim();
 }
@@ -837,8 +673,8 @@ export async function evaluateFyiTools(
   renderContext?: FyiToolsRenderContext
 ): Promise<StructuredValue<string | ReturnType<typeof renderJson>>> {
   const { toolsArg, options: rawResolvedOptions } = await normalizeArgs(rawToolsOrOptions, rawOptions, env);
-  const options = normalizeOptions(rawResolvedOptions, env);
-  const context = normalizeRenderContext(renderContext);
+  const options = normalizeOptions(rawResolvedOptions);
+  void renderContext;
   const entries = dedupeToolMetadata(await resolveToolMetadataInput(toolsArg, env));
   const helperStatus = resolveKnownHelperStatus(env, entries);
   const denied = resolveDeniedToolNames(env, entries);
@@ -859,12 +695,8 @@ export async function evaluateFyiTools(
   return wrapStructured(
     renderText({
       env,
-      audience: options.audience,
-      includeHelpers: options.includeHelpers,
-      isMcpContext: context.isMcpContext,
-      denied,
-      helperStatus,
-      entries
+      entries,
+      includeAuthIntentShape: options.includeAuthIntentShape
     }),
     'text'
   );
@@ -873,24 +705,19 @@ export async function evaluateFyiTools(
 export function renderInjectedToolNotes(options: {
   env: Environment;
   entries: readonly EffectiveToolMetadata[];
-  audience?: FyiToolsAudience;
+  audience?: string;
   includeHelpers?: FyiToolsIncludeHelpers;
   isMcpContext?: boolean;
+  includeAuthIntentShape?: boolean;
 }): string | undefined {
+  void options.audience;
+  void options.includeHelpers;
+  void options.isMcpContext;
   const entries = dedupeToolMetadata(options.entries);
-  const audience = normalizeAudience(options.audience, options.env);
-  const includeHelpers = normalizeIncludeHelpers(options.includeHelpers);
-  const context = normalizeRenderContext({ isMcpContext: options.isMcpContext });
-  const helperStatus = resolveKnownHelperStatus(options.env, entries);
-  const denied = resolveDeniedToolNames(options.env, entries);
   const lines = buildTextLines({
     env: options.env,
-    audience,
-    includeHelpers,
-    isMcpContext: context.isMcpContext,
-    denied,
-    helperStatus,
-    entries
+    entries,
+    includeAuthIntentShape: options.includeAuthIntentShape === true
   });
   return wrapToolNotesBlock(lines);
 }
@@ -898,7 +725,7 @@ export function renderInjectedToolNotes(options: {
 export function renderToolDescriptionNotes(options: {
   env: Environment;
   entry: EffectiveToolMetadata;
-  audience?: FyiToolsAudience;
+  audience?: string;
   includeHelpers?: FyiToolsIncludeHelpers;
 }): string | undefined {
   void options.env;

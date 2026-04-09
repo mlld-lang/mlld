@@ -5,6 +5,9 @@ export interface FactSourceHandle {
   ref: string;
   sourceRef: string;
   field: string;
+  instanceKey?: string;
+  coercionId?: string;
+  position?: number;
   tiers?: readonly string[];
 }
 
@@ -40,10 +43,22 @@ function normalizeIdentifierPath(value: string, options?: { requireLeadingAt?: b
 export function createFactSourceHandle(input: {
   sourceRef: string;
   field: string;
+  instanceKey?: string;
+  coercionId?: string;
+  position?: number;
   tiers?: readonly string[];
 }): FactSourceHandle {
   const sourceRef = normalizeIdentifierPath(input.sourceRef, { requireLeadingAt: true });
   const field = normalizeIdentifierPath(input.field).toLowerCase();
+  const instanceKey = typeof input.instanceKey === 'string'
+    ? input.instanceKey
+    : undefined;
+  const coercionId = typeof input.coercionId === 'string' && input.coercionId.trim().length > 0
+    ? input.coercionId.trim()
+    : undefined;
+  const position = typeof input.position === 'number' && Number.isInteger(input.position) && input.position >= 0
+    ? input.position
+    : undefined;
   const tiers = input.tiers
     ?.map(tier => tier.trim().toLowerCase())
     .filter(Boolean)
@@ -54,6 +69,9 @@ export function createFactSourceHandle(input: {
     ref: `${sourceRef}.${field}`,
     sourceRef,
     field,
+    ...(instanceKey !== undefined ? { instanceKey } : {}),
+    ...(coercionId ? { coercionId } : {}),
+    ...(position !== undefined ? { position } : {}),
     ...(tiers && tiers.length > 0 ? { tiers: Object.freeze(Array.from(new Set(tiers))) } : {})
   };
 }
@@ -71,6 +89,19 @@ export function isFactSourceHandle(value: unknown): value is FactSourceHandle {
     typeof candidate.ref !== 'string' ||
     typeof candidate.sourceRef !== 'string' ||
     typeof candidate.field !== 'string'
+  ) {
+    return false;
+  }
+
+  if (candidate.instanceKey !== undefined && typeof candidate.instanceKey !== 'string') {
+    return false;
+  }
+  if (candidate.coercionId !== undefined && typeof candidate.coercionId !== 'string') {
+    return false;
+  }
+  if (
+    candidate.position !== undefined &&
+    (!Number.isInteger(candidate.position) || (candidate.position as number) < 0)
   ) {
     return false;
   }

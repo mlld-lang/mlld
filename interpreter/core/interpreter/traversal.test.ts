@@ -116,6 +116,7 @@ describe('interpreter traversal behavior', () => {
       const result = await evaluate([
         {
           type: 'ExeReturn',
+          kind: 'canonical',
           nodeId: 'return-node',
           values: [{ type: 'Literal', nodeId: 'return-value', value: 'done', valueType: 'string' }],
           raw: '=> "done"',

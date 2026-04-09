@@ -64,3 +64,11 @@ export function encodeCanonicalValue(value: unknown): string | undefined {
 
   return encode(raw, new WeakSet<object>());
 }
+
+export function encodeDisplayInstanceKey(value: unknown): string | undefined {
+  const raw = unwrapCanonicalValue(value);
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  return encodeCanonicalValue(raw);
+}

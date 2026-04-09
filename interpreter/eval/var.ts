@@ -86,6 +86,8 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
     baseSource.syntax = 'reference';
   } else if (valueNode.type === 'NewExpression') {
     baseSource.syntax = 'reference';
+  } else if (valueNode.type === 'CoerceExpression') {
+    baseSource.syntax = 'reference';
   } else if (directive.meta?.wrapperType) {
     // Use wrapper type from directive metadata
     baseSource.wrapperType = directive.meta.wrapperType;

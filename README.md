@@ -317,6 +317,8 @@ box @sandbox [
 ]
 ```
 
+`box {}` is a no-op container. It does not implicitly create a workspace bridge or default VFS tools unless you explicitly request workspace, tool, or MCP config.
+
 Child environments can only restrict their parent's capabilities, never extend them. Even if an LLM is tricked into executing arbitrary code, the damage is contained to the sandbox.
 
 ### Signing and Verification

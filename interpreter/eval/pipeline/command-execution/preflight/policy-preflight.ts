@@ -1,4 +1,5 @@
 import type { SecurityDescriptor } from '@core/types/security';
+import { shouldApplySurfaceScopedPolicyToOperation } from '@core/policy/guards';
 import { hasManagedPolicyLabelFlow } from '@core/policy/label-flow';
 import type { Environment } from '@interpreter/env/Environment';
 import type { CommandExecutionContext } from '@interpreter/env/ErrorUtils';
@@ -38,6 +39,9 @@ export async function runPolicyPreflight(
 
   const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
   const deferManagedLabelFlow = hasManagedPolicyLabelFlow(env.getPolicySummary());
+  const shouldApplySurfaceScopedPolicy = operationContext
+    ? shouldApplySurfaceScopedPolicyToOperation(operationContext)
+    : true;
   const execDescriptor = commandVar?.mx ? varMxToSecurityDescriptor(commandVar.mx) : undefined;
   const exeLabels = execDescriptor?.labels ? Array.from(execDescriptor.labels) : [];
   const guardDescriptor = collectInputDescriptor(guardInputs);
@@ -79,7 +83,7 @@ export async function runPolicyPreflight(
         : commandDescriptors[0];
     const inputDescriptor = mergeInputDescriptors(guardDescriptor, commandDescriptor);
     const inputTaint = descriptorToInputTaint(inputDescriptor);
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       const flowChannel = execDef.withClause?.auth || execDef.withClause?.using
         ? 'using'
         : stdinInput !== undefined
@@ -100,7 +104,7 @@ export async function runPolicyPreflight(
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     const opLabels = opType ? getOperationLabels({ type: opType }) : [];
     const inputTaint = descriptorToInputTaint(guardDescriptor);
-    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (opType && inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,
@@ -115,7 +119,7 @@ export async function runPolicyPreflight(
   } else if (execDef.type === 'nodeFunction') {
     const opLabels = getOperationLabels({ type: 'node' });
     const inputTaint = descriptorToInputTaint(guardDescriptor);
-    if (inputTaint.length > 0 && !deferManagedLabelFlow) {
+    if (inputTaint.length > 0 && !deferManagedLabelFlow && shouldApplySurfaceScopedPolicy) {
       policyEnforcer.checkLabelFlow(
         {
           inputTaint,

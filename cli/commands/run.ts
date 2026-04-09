@@ -542,8 +542,10 @@ Options:
   -h, --help              Show this help message
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
-  --trace <level>         Runtime effect tracing: off, effects, or verbose
+  --trace <level>         Runtime effect tracing: off, effects, handle/handles, or verbose
   --trace-file <path>     Write runtime trace events as JSONL
+                          Ambient debug accessors: @mx.handles, @mx.llm.sessionId/display/resume,
+                          @mx.shelf.readable/writable, @mx.policy.active
   --mlld-env <env>        Load MLLD env file or inline KEY=VALUE overrides (reserved flag)
   --no-warn               Suppress pre-flight warning output (errors still block execution)
   --checkpoint            Backward-compatible no-op (checkpointing auto-detects llm-labeled calls)
@@ -577,6 +579,7 @@ Examples:
   mlld run my-app                    # Run llm/run/my-app/index.mld
   mlld run hello --debug             # Show execution metrics
   mlld run hello --trace effects     # Trace runtime effects to stderr
+  mlld run hello --trace handle      # Trace handle issue/resolve/release events
   mlld run qa --topic variables      # Pass --topic as payload
 
 Payload:
@@ -613,7 +616,7 @@ Creating Scripts:
       }
       if (flags.trace !== undefined) {
         if (!isRuntimeTraceLevel(flags.trace)) {
-          console.error(chalk.red('Error: --trace must be one of off, effects, verbose'));
+          console.error(chalk.red('Error: --trace must be one of off, effects, handle, handles, verbose'));
           process.exit(1);
         }
         trace = flags.trace;

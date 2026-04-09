@@ -123,6 +123,7 @@ describe('evaluateIf', () => {
 
     const returnNode: ExeReturnNode = {
       type: 'ExeReturn',
+      kind: 'canonical',
       values: [{ type: 'Text', content: 'done' }],
       meta: { hasValue: true }
     };
@@ -169,6 +170,7 @@ describe('evaluateIf', () => {
         condition: [{ type: 'Text', content: 'true' }],
         then: [{
           type: 'ExeReturn',
+          kind: 'canonical',
           values: [{ type: 'Text', content: 'nope' }],
           meta: { hasValue: true }
         }]

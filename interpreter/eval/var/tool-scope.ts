@@ -1,7 +1,14 @@
-import type { ToolCollection } from '@core/types/tools';
+import {
+  getToolCollectionAuthorizationContext,
+  type ToolCollection
+} from '@core/types/tools';
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 
@@ -12,12 +19,39 @@ export type ToolScopeValue = {
 };
 
 function unwrapToolScopeValue(value: unknown): unknown {
+  const directCollection = resolveDirectToolCollection(value);
+  if (directCollection) {
+    return directCollection;
+  }
+
   let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+  }
+  return resolved;
+}
+
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function resolveDirectToolCollection(value: unknown): ToolCollection | undefined {
+  let resolved = value;
+  let capturedModuleEnv: unknown;
   if (isStructuredValue(resolved)) {
     resolved = asData(resolved);
   }
 
   if (isVariable(resolved)) {
+    capturedModuleEnv =
+      getCapturedModuleEnv(resolved.internal)
+      ?? getCapturedModuleEnv(resolved);
     const directCollection =
       resolved.internal?.isToolsCollection === true &&
       resolved.internal.toolCollection &&
@@ -26,6 +60,9 @@ function unwrapToolScopeValue(value: unknown): unknown {
         ? resolved.internal.toolCollection as ToolCollection
         : undefined;
     if (directCollection) {
+      if (capturedModuleEnv !== undefined) {
+        sealCapturedModuleEnv(directCollection, capturedModuleEnv);
+      }
       return directCollection;
     }
 
@@ -35,11 +72,19 @@ function unwrapToolScopeValue(value: unknown): unknown {
     }
   }
 
-  return resolved;
-}
+  if (!isPlainObject(resolved)) {
+    return undefined;
+  }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  if (!getToolCollectionAuthorizationContext(resolved)) {
+    return undefined;
+  }
+
+  if (capturedModuleEnv !== undefined) {
+    sealCapturedModuleEnv(resolved, capturedModuleEnv);
+  }
+
+  return resolved as ToolCollection;
 }
 
 export async function resolveWithClauseToolsValue(

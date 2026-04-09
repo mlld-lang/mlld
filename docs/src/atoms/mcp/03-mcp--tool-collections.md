@@ -7,7 +7,7 @@ parent: mcp
 tags: [mcp, tools, env, labels, collections]
 related: [mcp, mcp-export, tool-reshaping, mcp-guards, exe-metadata]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts]
-updated: 2026-03-23
+updated: 2026-04-08
 qa_tier: 2
 ---
 
@@ -44,6 +44,8 @@ box @agent with { tools: @agentTools } [
 
 The agent only sees tools in `@agentTools`. Guards check `@mx.op.labels` on each call.
 
+Tool collections are identity-bearing runtime values. Passing `@agentTools` through exe params, imports, module exports, and box/tool APIs preserves the collection metadata (`controlArgs`, surfaced names, bind/expose shaping). Object spread does not: `{ ...@agentTools }` materializes plain data and drops tool-collection identity.
+
 **Serve a collection over MCP:**
 
 ```bash
@@ -78,3 +80,11 @@ This asks the MCP server for its tool schema and builds the `ToolCollection` dir
 - Normal `var` labels still apply to the collection variable itself, as in `trusted @calendarTools`.
 
 Use `import tools from mcp "..."` when you want callable functions or a namespace in the current scope. Use `var tools @t = mcp @expr` when you want to pass a runtime-built collection into `box with { tools: @t }` or other tool-collection APIs.
+
+Direct collection dispatch also uses the surfaced collection key for policy matching:
+
+```mlld
+show @agentTools["safeRead"]({ id: "123" }) with { policy: @taskPolicy }
+```
+
+If `policy.authorizations.allow` names `safeRead`, that authorization matches even when the underlying executable has a different internal name.

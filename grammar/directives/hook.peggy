@@ -7,6 +7,11 @@ HookKeyword
 SlashHook
   = DirectiveContext HookKeyword _ nameTiming:(name:HookDirectiveName __ { return { name }; })? timing:HookTiming __ filter:HookFilterClause _ "=" _ hookBody:HookBody ending:CommentedDirectiveEnding? {
       helpers.debug('SlashHook matched', { name: nameTiming?.name, timing, filter });
+      helpers.assertOnlyCanonicalExeReturns(
+        hookBody.node,
+        'Hook bodies only support canonical => returns.',
+        location()
+      );
 
       const hookTiming = timing;
       const values = {

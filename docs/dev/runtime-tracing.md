@@ -5,7 +5,7 @@ Runtime tracing is organized around category-specific emit sites and a shared tr
 ## Where To Emit
 
 - `interpreter/env/Environment.ts`
-  Use for environment-owned effects: handle mint/resolve, shelf read/write/clear, and generic trace delegation.
+  Use for environment-owned effects: handle issue/resolve, handle release at bridge teardown, shelf read/write/clear, and generic trace delegation.
 - `interpreter/shelf/runtime.ts`
   Use for record validation/coercion and shelf operations that are higher-level than the raw environment slot mutation, such as `shelf.remove`.
 - `interpreter/hooks/guard-runtime-evaluator.ts`
@@ -29,6 +29,7 @@ Runtime tracing is organized around category-specific emit sites and a shared tr
 - Emit through `env.emitRuntimeTraceEvent(...)`, not by assembling raw envelopes inline.
 - Let `Environment` supply execution scope. Only pass `scope` overrides when the event needs extra scope fields.
 - If the event depends on shelf write/read coherence, use the shared shelf tracker through `Environment` and `RuntimeTraceManager` rather than maintaining local maps.
+- Canonical handle selector is `handle`; `handles` is accepted as an alias at the CLI and in `with { trace }`.
 
 ## What Not To Do
 

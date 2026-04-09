@@ -11,8 +11,10 @@ import {
   checkExplicitLabelFlowRules
 } from '@core/policy/label-flow';
 import {
+  evaluateControlArgCorrelation,
   evaluateAuthorizationInheritedPolicyChecks,
-  generatePolicyGuards
+  generatePolicyGuards,
+  shouldApplySurfaceScopedPolicyToOperation
 } from '@core/policy/guards';
 import { guardSnapshotDescriptor } from './guard-utils';
 import { isVariable } from '../utils/variable-resolution';
@@ -111,6 +113,10 @@ function buildLabelPolicyGuardResult(options: {
   index: number;
   locked: boolean;
 }): GuardResult | null {
+  if (!shouldApplySurfaceScopedPolicyToOperation(options.operation)) {
+    return null;
+  }
+
   const inputDescriptor = options.input.mx ? varMxToSecurityDescriptor(options.input.mx) : undefined;
   const inputTaint = descriptorToInputTaint(inputDescriptor);
   if (inputTaint.length === 0) {
@@ -162,6 +168,10 @@ function buildInterpolatedPolicyGuardResult(options: {
   inputTaint: readonly string[];
   locked: boolean;
 }): GuardResult | null {
+  if (!shouldApplySurfaceScopedPolicyToOperation(options.operation)) {
+    return null;
+  }
+
   const policy = options.env.getPolicySummary();
   const hasControlArgsMetadata = Array.isArray(options.operation.metadata?.authorizationControlArgs);
   const result = checkLabelFlow(
@@ -413,6 +423,9 @@ function createAuthorizationGuard(
   if (!operation.name || !isToolWriteOperation(operation)) {
     return null;
   }
+  if (operation.metadata?.authorizationSurfaceOperation !== true) {
+    return null;
+  }
 
   const controlArgs = getAuthorizationControlArgs(operation);
   return {
@@ -440,16 +453,28 @@ function createAuthorizationGuard(
         args: args ?? {},
         controlArgs
       });
+      const matchedAttestationCount = decision.matchedAttestations
+        ? Object.keys(decision.matchedAttestations).length
+        : 0;
       if (decision.decision === 'allow') {
         const inheritedCheckFailure = evaluateAuthorizationInheritedPolicyChecks({
           policy,
           operation: policyOperation,
           args,
           argDescriptors,
-          authorizedArgAttestations: decision.matchedAttestations
+          authorizedArgAttestations: decision.matchedAttestations,
+          authorizedArgFactsources: decision.matchedFactsources
         });
         if (!inheritedCheckFailure) {
-          return { decision: 'allow' };
+          return {
+            decision: 'allow',
+            metadata: {
+              authorizationMatched: decision.matched,
+              authorizationCode: decision.code ?? null,
+              authorizationReason: decision.reason ?? null,
+              authorizationMatchedAttestationCount: matchedAttestationCount
+            }
+          };
         }
         return {
           decision: 'deny',
@@ -457,7 +482,13 @@ function createAuthorizationGuard(
           policyName: getActivePolicyName(env),
           rule: inheritedCheckFailure.rule,
           suggestions: inheritedCheckFailure.suggestions,
-          locked: true
+          locked: true,
+          metadata: {
+            authorizationMatched: decision.matched,
+            authorizationCode: 'inherited_policy',
+            authorizationReason: inheritedCheckFailure.reason,
+            authorizationMatchedAttestationCount: matchedAttestationCount
+          }
         };
       }
       const failure = classifyAuthorizationFailure(
@@ -471,7 +502,67 @@ function createAuthorizationGuard(
         reason: failure.reason,
         policyName: getActivePolicyName(env),
         rule: failure.rule,
-        locked: true
+        locked: true,
+        metadata: {
+          authorizationMatched: decision.matched,
+          authorizationCode: decision.code ?? null,
+          authorizationReason: failure.reason,
+          authorizationMatchedAttestationCount: matchedAttestationCount
+        }
+      };
+    }
+  };
+}
+
+function createCorrelateControlArgsGuard(
+  env: Parameters<PreHook>[2],
+  operation: NonNullable<Parameters<PreHook>[3]>
+): GuardDefinition | null {
+  if (!operation.name || operation.type !== 'exe') {
+    return null;
+  }
+
+  const policy = env.getPolicySummary();
+  if (policy?.authorizations && hasToolWriteAuthorizationPolicy(policy.authorizations)) {
+    return null;
+  }
+
+  const controlArgs = getAuthorizationControlArgs(operation);
+  if (controlArgs.length <= 1 || operation.metadata?.correlateControlArgs !== true) {
+    return null;
+  }
+
+  return {
+    id: '__correlate_control_args__',
+    name: '__correlate_control_args__',
+    filterKind: 'operation',
+    filterValue: 'exe',
+    scope: 'perOperation',
+    modifier: 'default',
+    block: {
+      type: 'GuardBlock',
+      nodeId: '__correlate_control_args__',
+      location: null as any,
+      modifier: 'default',
+      rules: []
+    },
+    registrationOrder: Number.MAX_SAFE_INTEGER - 1,
+    timing: 'before',
+    privileged: true,
+    policyGuardMode: 'policy',
+    policyCondition: ({ args, argDescriptors, operation: policyOperation }) => {
+      const failure = evaluateControlArgCorrelation({
+        operation: policyOperation,
+        args,
+        argDescriptors
+      });
+      if (!failure) {
+        return { decision: 'allow' };
+      }
+      return {
+        decision: 'deny',
+        reason: failure.reason,
+        rule: failure.rule
       };
     }
   };
@@ -535,9 +626,15 @@ export const guardPreHook: PreHook = async (
       runtimePolicyGuards,
       guardOverride
     );
+    const correlateControlArgsGuard = createCorrelateControlArgsGuard(env, operation);
     const authorizationGuard = createAuthorizationGuard(env, operation);
+    if (correlateControlArgsGuard) {
+      operationGuards.push(correlateControlArgsGuard);
+    }
     if (authorizationGuard) {
       operationGuards.push(authorizationGuard);
+    }
+    if (correlateControlArgsGuard || authorizationGuard) {
       operationGuards.sort((left, right) => left.registrationOrder - right.registrationOrder);
     }
     const policySummary = env.getPolicySummary();

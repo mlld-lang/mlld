@@ -11,7 +11,11 @@ import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
-import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
+import { boundary } from '@interpreter/utils/boundary';
+import {
+  normalizeToolCollection,
+  resolveDirectToolCollection
+} from '@interpreter/eval/var/tool-scope';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import {
   resolveEffectiveToolMetadata,
@@ -20,6 +24,9 @@ import {
   type EffectiveToolMetadata
 } from '@interpreter/eval/exec/tool-metadata';
 import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
+import { createAutoProvisionedShelveExecutable } from '@interpreter/shelf/runtime';
+import { traceHandleReleased } from '@interpreter/tracing/events';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FILTERED_VFS_SOCKET_ENV = 'MLLD_FILTERED_VFS_MCP_SOCKET';
@@ -79,6 +86,7 @@ export interface CallMcpConfigOptions {
   workingDirectory?: string;
   conversationDescriptor?: SecurityDescriptor;
   isMcpContext?: boolean;
+  disableAutoProvisionedShelve?: boolean;
 }
 
 export interface AvailableToolDescriptor {
@@ -106,6 +114,7 @@ interface ResolvedFunctionToolSpec {
   readonly definition?: ToolDefinition;
   readonly metadata: EffectiveToolMetadata;
   readonly source: string;
+  readonly excludeFromToolNotes?: boolean;
 }
 
 export function normalizeToolsArg(value: unknown): unknown[] {
@@ -329,6 +338,29 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function withDisplayName(
+  metadata: EffectiveToolMetadata,
+  displayName?: string
+): EffectiveToolMetadata {
+  const normalized = typeof displayName === 'string' ? displayName.trim() : '';
+  if (!normalized || normalized === metadata.name) {
+    return metadata;
+  }
+
+  return {
+    ...metadata,
+    displayName: normalized
+  };
+}
+
+function toFunctionToolDisplayName(mcpName: string): string {
+  return `mcp__${FUNCTION_MCP_SERVER_NAME}__${mcpName}`;
+}
+
+function toVfsToolDisplayName(toolName: string): string {
+  return `mcp__${VFS_MCP_SERVER_NAME}__${toolName}`;
+}
+
 function looksLikeToolCollection(value: unknown): value is ToolCollection {
   if (!isPlainObject(value)) {
     return false;
@@ -346,23 +378,16 @@ function resolveToolCollectionInput(
   value: unknown,
   env: Environment
 ): ToolCollection | undefined {
+  const directCollection = resolveDirectToolCollection(value);
+  if (directCollection) {
+    return directCollection;
+  }
+
   let resolved = value;
   if (isStructuredValue(resolved)) {
     resolved = asData(resolved);
   }
-
   if (isVariable(resolved)) {
-    const directCollection =
-      resolved.internal?.isToolsCollection === true &&
-      resolved.internal.toolCollection &&
-      typeof resolved.internal.toolCollection === 'object' &&
-      !Array.isArray(resolved.internal.toolCollection)
-        ? resolved.internal.toolCollection as ToolCollection
-        : undefined;
-    if (directCollection) {
-      return directCollection;
-    }
-
     resolved = resolved.value;
     if (isStructuredValue(resolved)) {
       resolved = asData(resolved);
@@ -374,6 +399,92 @@ function resolveToolCollectionInput(
   }
 
   return normalizeToolCollection(resolved, env);
+}
+
+function normalizeToolCollectionStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+}
+
+function buildToolCollectionMatchSignature(rawTools: unknown): string | undefined {
+  if (!isPlainObject(rawTools)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(rawTools).map(([toolName, entry]) => {
+    if (!isPlainObject(entry)) {
+      return undefined;
+    }
+
+    const bind =
+      isPlainObject(entry.bind)
+        ? Object.fromEntries(
+            Object.entries(entry.bind)
+              .filter(([key]) => typeof key === 'string' && key.trim().length > 0)
+              .sort(([left], [right]) => left.localeCompare(right))
+          )
+        : undefined;
+
+    return [
+      toolName,
+      {
+        mlld: typeof entry.mlld === 'string' ? entry.mlld : '',
+        expose: normalizeToolCollectionStringList(entry.expose),
+        optional: normalizeToolCollectionStringList(entry.optional),
+        controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
+        updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
+        exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
+        labels: normalizeToolCollectionStringList(entry.labels),
+        ...(typeof entry.description === 'string' && entry.description.trim().length > 0
+          ? { description: entry.description.trim() }
+          : {}),
+        ...(bind ? { bind } : {})
+      }
+    ] as const;
+  });
+
+  if (entries.some(entry => entry === undefined)) {
+    return undefined;
+  }
+
+  return JSON.stringify(
+    (entries as Array<readonly [string, Record<string, unknown>]>)
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function resolveMatchingToolCollectionExecutable(
+  env: Environment,
+  collection: ToolCollection,
+  execName: string
+): ExecutableVariable | undefined {
+  const signature = buildToolCollectionMatchSignature(collection);
+  if (!signature) {
+    return undefined;
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    const candidate =
+      variable.internal?.isToolsCollection === true
+        ? boundary.identity<ToolCollection | undefined>(variable)
+        : undefined;
+    if (!candidate || buildToolCollectionMatchSignature(candidate) !== signature) {
+      continue;
+    }
+
+    return (
+      resolveCapturedCollectionExecutable(variable.internal, execName)
+      ?? resolveCapturedCollectionExecutable(variable, execName)
+      ?? resolveCapturedCollectionExecutable(candidate, execName)
+    );
+  }
+
+  return undefined;
 }
 
 function buildDirectFunctionToolSpec(
@@ -414,8 +525,15 @@ function buildCollectionFunctionToolSpec(
     throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
   }
 
-  const executable = env.getVariable(execName);
-  if (!executable || !isExecutableVariable(executable)) {
+  const executable =
+    env.getVariable(execName)
+    ?? resolveCapturedCollectionExecutable(collection, execName)
+    ?? resolveCapturedCollectionExecutable(definition, execName);
+  const matchedExecutable =
+    executable && isExecutableVariable(executable)
+      ? executable
+      : resolveMatchingToolCollectionExecutable(env, collection, execName);
+  if (!matchedExecutable) {
     throw new Error(`Tool '${toolName}' references non-executable '@${execName}'`);
   }
 
@@ -428,13 +546,57 @@ function buildCollectionFunctionToolSpec(
   return {
     mcpName,
     csvName: toolName,
-    executable,
+    executable: matchedExecutable,
     definition,
     metadata: {
       ...metadata,
       name: mcpName
     },
     source: `tool:@${execName} as ${mcpName}`
+  };
+}
+
+function resolveCapturedCollectionExecutable(
+  target: unknown,
+  execName: string
+): ExecutableVariable | undefined {
+  const captured = getCapturedModuleEnv(target);
+  if (captured instanceof Map) {
+    const variable = captured.get(execName);
+    return variable && isExecutableVariable(variable)
+      ? variable
+      : undefined;
+  }
+
+  if (!captured || typeof captured !== 'object' || Array.isArray(captured)) {
+    return undefined;
+  }
+
+  const variable = (captured as Record<string, unknown>)[execName];
+  return variable && isExecutableVariable(variable)
+    ? variable
+    : undefined;
+}
+
+function resolveAutoProvisionedShelveTool(
+  env: Environment
+): ResolvedFunctionToolSpec | undefined {
+  const executable = createAutoProvisionedShelveExecutable(env);
+  if (!executable || !isExecutableVariable(executable)) {
+    return undefined;
+  }
+
+  return {
+    mcpName: 'shelve',
+    csvName: 'shelve',
+    executable,
+    metadata: resolveEffectiveToolMetadata({
+      env,
+      executable,
+      operationName: 'shelve'
+    }),
+    source: 'shelf:auto -> shelve',
+    excludeFromToolNotes: true
   };
 }
 
@@ -785,6 +947,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     });
     functionToolMetadata.push(metadata);
   }
+  if (!options.disableAutoProvisionedShelve) {
+    const autoShelveTool = resolveAutoProvisionedShelveTool(options.env);
+    if (autoShelveTool) {
+      functionTools.push(autoShelveTool);
+    }
+  }
   const inBox = Boolean(options.env.getActiveBridge());
   const workingDirectory = options.workingDirectory ?? options.env.getExecutionDirectory();
 
@@ -804,9 +972,15 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const sessionId = randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
+  const builtinToolMetadata = buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools).map(metadata =>
+    withDisplayName(metadata, inBox ? toVfsToolDisplayName(metadata.name) : metadata.name)
+  );
+  const surfacedFunctionToolMetadata = functionTools.map(tool =>
+    withDisplayName(tool.metadata, toFunctionToolDisplayName(tool.mcpName))
+  );
   const toolMetadata = [
-    ...buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools),
-    ...functionToolMetadata
+    ...builtinToolMetadata,
+    ...surfacedFunctionToolMetadata
   ];
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
@@ -814,7 +988,12 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ]);
   const toolNotes = renderInjectedToolNotes({
     env: options.env,
-    entries: toolMetadata,
+    entries: [
+      ...builtinToolMetadata,
+      ...functionTools
+        .filter(tool => tool.excludeFromToolNotes !== true)
+        .map(tool => withDisplayName(tool.metadata, toFunctionToolDisplayName(tool.mcpName)))
+    ],
     isMcpContext: options.isMcpContext !== false
   });
 
@@ -863,12 +1042,20 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
 
   const nativeAllowedTools = inBox ? '' : builtinTools.join(',');
 
+  const emitHandleReleaseTrace = (): void => {
+    options.env.emitRuntimeTraceEvent(traceHandleReleased({
+      sessionId,
+      handleCount: options.env.getIssuedHandlesForSession(sessionId).length
+    }));
+  };
+
   if (Object.keys(mcpServers).length === 0) {
     const configPath = path.join(
       os.tmpdir(),
       `mlld-toolbridge-call-config-${process.pid}-${Date.now()}-${randomUUID()}.json`
     );
     await fs.writeFile(configPath, JSON.stringify({ mcpServers: {} }, null, 2), 'utf8');
+    let cleaned = false;
 
     return {
       sessionId,
@@ -882,6 +1069,11 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       toolNotes,
       inBox,
       async cleanup(): Promise<void> {
+        if (cleaned) {
+          return;
+        }
+        cleaned = true;
+        emitHandleReleaseTrace();
         await removeFileIfExists(configPath);
       }
     };
@@ -899,6 +1091,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       return;
     }
     cleaned = true;
+    emitHandleReleaseTrace();
     for (const fn of cleanupFns) {
       try {
         await fn();

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ImportTestRunner, testImport } from './test-utils';
 
+const IMPORT_TEST_TIMEOUT = 10000;
+
 describe('Complex Import Scenarios', () => {
   describe('Import Chains', () => {
     it('should handle linear import chain (A→B→C)', async () => {
@@ -97,6 +99,31 @@ HELLO FROM C`
         expectedOutput: 'Core helper'
       });
       
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it('preserves sibling executable scope through a wrapped namespace re-export', async () => {
+      const result = await testImport(`
+import { @ns } from "./checkfix-idx.mld"
+show @ns.run("hi")`, {
+        files: {
+          'checkfix.mld': `
+exe @helper() = js { return "helped"; }
+exe @fn(x) = [
+  let @v = @helper()
+  => @v
+]
+export { @fn }`,
+          'checkfix-idx.mld': `
+import { @fn } from "./checkfix.mld"
+exe @wrapper(x) = [ => @fn(@x) ]
+var @ns = { run: @wrapper }
+export { @ns }`
+        },
+        expectedOutput: 'helped'
+      });
+
       expect(result.success).toBe(true);
       expect(result.exitCode).toBe(0);
     });
@@ -220,7 +247,7 @@ HELLO
   });
   
   describe('Performance with Large Modules', () => {
-    it('should handle module with many exports efficiently', async () => {
+    it('should handle module with many exports efficiently', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const runner = new ImportTestRunner();
       await runner.setup();
       

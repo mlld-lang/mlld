@@ -4,9 +4,9 @@ title: Planner-Worker Authorization
 brief: Split agent execution into a planner that authorizes and a worker that executes
 category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
-related: [facts-and-handles, policy-authorizations, tool-docs, security-getting-started, labels-attestations, security-guards-basics]
+related: [facts-and-handles, policy-authorizations, tool-docs, security-getting-started, labels-attestations, security-guards-basics, exe-tool-return]
 related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/policy/authorization-compiler.ts, interpreter/env/builtins/policy.ts, interpreter/utils/handle-resolution.ts]
-updated: 2026-04-02
+updated: 2026-04-09
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -115,13 +115,15 @@ The planner produces a bucketed authorization intent, organized by proof source:
       }
     }
   },
-  "allow": ["create_file"]
+  "allow": {
+    "create_file": true
+  }
 }
 ```
 
-- `resolved` — handle values from tool results
+- `resolved` — handle values or direct fact-bearing tool results
 - `known` — values the user explicitly provided in their task
-- `allow` — tools needing no argument constraints
+- `allow` — explicit tool-level authorization in object form
 
 The orchestrator validates it through the policy builder:
 
@@ -135,10 +137,10 @@ The builder treats each bucket with the right proof level. `known` can only come
 
 ### Planner prompt assembly
 
-Explicit planner prompts should usually include generated tool docs from the same write collection the builder will validate against:
+Explicit planner prompts should usually include generated tool docs from the same write collection the builder will validate against. Pass `includeAuthIntentShape: true` so the planner sees the bucketed intent shape it should emit:
 
 ```mlld
-var @plannerToolDocs = @toolDocs(@writeTools, { audience: "planner" })
+var @plannerToolDocs = @toolDocs(@writeTools, { includeAuthIntentShape: true })
 
 var @plannerPrompt = "
 You are the planning phase.
@@ -152,7 +154,9 @@ Return JSON with:
 "
 ```
 
-`@toolDocs(..., { audience: "planner" })` is the non-MCP path. It renders descriptions, visible args, control args, payload args, and required/optional breakdowns for direct prompt assembly. That explicit output is richer than the compact `<tool_notes>` block injected when mlld bridges MCP tools automatically.
+`@toolDocs` renders each tool with its parameter list, control args flagged, and read/write classification derived from the active policy. The `includeAuthIntentShape: true` option appends a description of mlld's bucketed intent shape (`resolved` / `known` / `allow`) so the planner knows the structure `@policy.build` expects.
+
+`@toolDocs` and the `<tool_notes>` block that mlld auto-injects into `exe llm` calls share the same base rendering and classification path. Use `@toolDocs` when you're assembling a prompt template by hand and want explicit control over options such as `includeAuthIntentShape: true`; let the auto-injection handle the default text form when you're calling an `exe llm` such as `@claude(...)` with tools listed in `tools:`. The per-tool surface stays aligned, but explicit `@toolDocs` can include extra opt-in sections that injected notes do not add by default.
 
 ### Worker phase
 
@@ -311,7 +315,7 @@ Collection-key invocation (`@writeTools["send_email"](@args)`) matches policy ag
 Allow-only steps can use `@policy.build(...).policy` directly, even when the base policy contributes defaults, operation groups, or a deny list:
 
 ```mlld
-var @stepAuth = @policy.build({ allow: ["create_file"] }, @writeTools) with {
+var @stepAuth = @policy.build({ allow: { create_file: true } }, @writeTools) with {
   policy: @base
 }
 
@@ -319,5 +323,59 @@ show @writeTools["create_file"](@plannerResult.args) with { policy: @stepAuth.po
 ```
 
 If `@plannerResult.args` contains handle-bearing objects, collection dispatch preserves those wrappers through arg spreading and resolves them only at dispatch. Planner-selected collection calls therefore keep the same proof-carrying behavior as direct executable calls.
+
+## Persistent-session variant: workers as tools via `->`
+
+The stateless variant above dispatches each phase as a separate `@claude` call and threads prior-step context through orchestration code. That works, but each iteration re-pays the full prompt assembly cost and the planner has to reconstruct its situational awareness from primitives like shelf state and prior-step summaries.
+
+The **persistent-session variant** uses the `->` tool-return channel (see `exe-tool-return`) to run the planner as a single long-running `@claude` call with workers exposed directly as tools. Each worker exe declares its own `->` shape for what the planner sees; the planner's conversation history naturally accumulates progress across tool calls.
+
+```mlld
+>> Worker exes are tools the planner can call. Each worker's -> value is
+>> what the planner sees as the tool result. The => value (which may carry
+>> full untainted data, logs, or internal state) goes to mlld code that
+>> calls the worker directly — NOT to the planner.
+
+exe @searchContacts(query) = [
+  let @results = run cmd { contacts-cli search @query --format json }
+  let @parsed = @results | @parse as record @contact[]
+  -> { found: @parsed | @length, contacts: @parsed }
+  => @parsed
+]
+
+exe exfil:send @sendEmail(recipient, subject, body) = [
+  let @result = run cmd { email-cli send --to @recipient --subject @subject --body @body }
+  -> { status: "sent", recipient: @recipient }
+  => { ok: true, message_id: @result.id, full_response: @result }
+] with { controlArgs: ["recipient"] }
+
+exe @getEmailById(id) = [
+  let @email = run cmd { email-cli get @id --format json }
+  let @parsed = @email | @parse as record @email_msg
+  -> @parsed
+  => @parsed
+]
+
+>> The "planner" is a single @claude call with the workers as its tool set.
+>> Its conversation history IS the execution log — no prior-step threading
+>> needed, no stateless re-rendering, no cumulative summary primitive.
+var @agentResult = @claude(@plannerPrompt(@task), {
+  tools: [@searchContacts, @getEmailById, @sendEmail]
+}) with {
+  display: "planner",
+  policy: @base
+}
+```
+
+The planner naturally accumulates progress via its own conversation history. When it sees the `{status: "sent", recipient: ...}` tool result from `@sendEmail`, it KNOWS the email was sent and can compose a final answer without re-issuing the write. No "prior step" threading, no cumulative execution log, no separate compose dispatch step.
+
+**Which variant to use:**
+
+- **Stateless variant** — when you want deterministic per-phase authorization gates, explicit phase boundaries, or framework-level orchestration control (the rig framework at `~/mlld/rig` is the canonical example). Each phase is a separate `@claude` call with explicit state threading.
+- **Persistent-session variant** — when you want the simplest possible orchestration, natural progress accumulation via conversation history, and the shortest path from "define your tool exes" to "call `@claude(prompt, {tools})`". Works well for open-ended agent tasks where the planner decides the flow.
+
+Both variants are equally secure because the security model (`->` strict mode, consumer-side untrusted tagging, `@policy.build` validation) is identical. They differ only in orchestration shape.
+
+See `exe-tool-return` for the full `->` and `=->` semantics, strict mode, and multi-reach polymorphism rules.
 
 See `facts-and-handles` for how records, facts, projections, and handles work. See `policy-authorizations` for the full authorization syntax.
