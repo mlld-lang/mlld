@@ -11,6 +11,7 @@ import { isExecutableVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import {
   normalizeToolCollection,
   resolveDirectToolCollection
@@ -446,10 +447,8 @@ function resolveMatchingToolCollectionExecutable(
 
   for (const [, variable] of env.getAllVariables()) {
     const candidate =
-      variable.internal?.isToolsCollection === true &&
-      variable.internal.toolCollection &&
-      isPlainObject(variable.internal.toolCollection)
-        ? variable.internal.toolCollection as ToolCollection
+      variable.internal?.isToolsCollection === true
+        ? boundary.identity<ToolCollection | undefined>(variable)
         : undefined;
     if (!candidate || buildToolCollectionMatchSignature(candidate) !== signature) {
       continue;

@@ -9,7 +9,7 @@ import { JSONFormatter } from '@interpreter/core/json-formatter';
 import { getOperationLabels } from '@core/policy/operation-labels';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { descriptorToInputTaint, mergeInputDescriptors } from '@interpreter/policy/label-flow-utils';
-import { materializeDisplayValue } from '@interpreter/utils/display-materialization';
+import { boundary } from '@interpreter/utils/boundary';
 import {
   applySecurityDescriptorToStructuredValue,
   asText,
@@ -119,7 +119,11 @@ export function normalizeShowContent(content: unknown, skipJsonFormatting: boole
 }
 
 export function materializeShowDisplayValue(content: string, resultValue: unknown): ShowDisplayMaterialized {
-  return materializeDisplayValue(content, undefined, resultValue);
+  const materialized = boundary.display(resultValue);
+  return {
+    text: content,
+    descriptor: materialized.descriptor
+  };
 }
 
 export function enforceShowPolicyIfNeeded({

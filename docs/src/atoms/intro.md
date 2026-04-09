@@ -6,7 +6,7 @@ brief: What mlld is, mental model, and key concepts
 category: intro
 tags: [overview, quickstart, mental-model, gotchas]
 related: [gotchas, labels-overview, security-policies, security-guards-basics]
-updated: 2026-02-15
+updated: 2026-04-08
 ---
 
 ## Essential Commands
@@ -133,6 +133,7 @@ mlld is its own language — don't assume JS/Python syntax works. Common mistake
 
 - **No `else if`** — use `when` for multi-branch matching, or nest `if` blocks: `if @a [...] else [ if @b [...] ]`
 - **No array spread in literals** — use `.concat()`: `var @combined = @arr1.concat(@arr2)`
+- **Object spread materializes plain data** — `{ ...@value }` makes a fresh plain object and drops wrapper metadata/identity. Use field access or pass the value directly when labels, factsources, or tool-collection identity matter.
 - **No computed object keys** — use `js{}`: `exe @build(key, val) = js { return {[key]: val} }`
 - **No methods on literals** — assign first: `var @s = "hello"` then `var @up = @s.toUpperCase()`
 - **No standalone boolean flags** — use `--flag true` not `--flag` (all CLI payload flags need values)
@@ -152,6 +153,7 @@ mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` 
 - **`JSON.stringify` inside JS erases mlld metadata.** If you serialize and parse within JS, label metadata and proof are lost. Work with values as-is.
 - **Handle wrappers pass through as plain objects.** `{ handle: "h_xxx" }` enters JS as a normal object with one key. Don't special-case it. Don't resolve it. If you need handle-aware logic, do it in mlld, not JS.
 - **Need `.mx` in JS?** Use `.keep` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata (labels AND factsources) and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly. `.keep` is the canonical accessor for inspecting factsources or passing a fact-bearing value through a JS helper without losing its proof.
+- **`.keep` is only for embedded-language boundaries.** It is not the mlld-to-mlld preservation mechanism. Regular mlld reads already use wrapper-preserving field access where needed, while object spread and other plain-data boundaries intentionally materialize.
 - **Reserved identifiers can collide with your JS locals.** Names like `mx` are injected into the JS scope by the runtime. If you write `const mx = ...` in a `js {}` block you'll see `Identifier 'mx' has already been declared` — rename your local to something else.
 
 ### Returns are always explicit

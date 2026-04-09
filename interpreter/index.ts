@@ -38,7 +38,7 @@ import { StreamExecution } from '@sdk/stream-execution';
 import { evaluateDirective } from './eval/directive';
 import type { DirectiveNode } from '@core/types';
 import { isExeReturnControl } from './eval/exe-return';
-import { materializeDisplayValue } from './utils/display-materialization';
+import { boundary } from './utils/boundary';
 import { CheckpointManager } from './checkpoint/CheckpointManager';
 import { resolveCheckpointScriptName } from './checkpoint/script-name';
 import { extractLeadingResumeDirective } from '@core/checkpoint/config';
@@ -833,11 +833,7 @@ export async function interpret(
 
     // Script-level return is explicit final output. Non-return final values are ignored.
     if (isExeReturnControl(evaluationResult.value)) {
-      const materialized = materializeDisplayValue(
-        evaluationResult.value.value,
-        undefined,
-        evaluationResult.value.value
-      );
+      const materialized = boundary.display(evaluationResult.value.value);
       if (materialized.text.length > 0) {
         env.emitEffect('both', materialized.text);
       }

@@ -43,6 +43,7 @@ var @result = @worker(@prompt) with { policy: @taskPolicy }
 ```
 
 The `with { policy }` merge combines `@taskPolicy` with the ambient `@base` policy. The merged config activates authorization enforcement for the call chain.
+Policy compilation preserves proof-bearing structured leaves while normalizing the policy. That includes policy fragments coming from variables, field access, imported modules, and `{ ...@basePolicy }` object-spread composition.
 
 ## Tool Metadata
 
@@ -377,7 +378,7 @@ var @auth = @policy.build(@plannerResult.authorizations, @writeTools, {
 })
 ```
 
-`basePolicy` may come from literals, field access, or exe-returned objects. The builder materializes nested structured arrays and objects before normalizing the policy scaffold, so values like exe-returned rule lists are accepted directly.
+`basePolicy` may come from literals, field access, exe-returned objects, imported module values, or variable-held policy fragments composed with object spread. The builder materializes nested arrays/objects before normalizing the policy scaffold, while preserving proof-bearing leaves used by `authorizations`, so values like exe-returned rule lists or fact-bearing recipient lists are accepted directly.
 
 For allow-only writes, the returned `policy` is already dispatch-ready. The builder preserves that base policy scaffold (`defaults`, `operations`, existing `authorizations.deny`, and similar host-controlled sections) and adds the compiled `authorizations.allow` fragment on top. Callers do not need to reconstruct a step policy manually:
 

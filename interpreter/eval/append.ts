@@ -4,7 +4,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { evaluateOutputSource } from './output';
-import { materializeDisplayValue } from '../utils/display-materialization';
+import { boundary } from '../utils/boundary';
 import { formatJSONL } from './output-shared';
 import { MlldDirectiveError } from '@core/errors';
 import * as path from 'path';
@@ -63,19 +63,13 @@ export async function evaluateAppend(
   const sourceResult = await evaluateOutputSource(directive, env, sourceType, context);
   let content = sourceResult.text;
   const descriptorSource = sourceResult.rawValue;
-  const materialized = materializeDisplayValue(
-    descriptorSource ?? content,
-    undefined,
-    descriptorSource ?? content,
-    content
-  );
-  content = materialized.text;
-  if (materialized.descriptor) {
-    env.recordSecurityDescriptor(materialized.descriptor);
+  const materializedDisplay = boundary.display(descriptorSource ?? content);
+  if (materializedDisplay.descriptor) {
+    env.recordSecurityDescriptor(materializedDisplay.descriptor);
   }
 
   if (!context?.policyChecked) {
-    const inputTaint = descriptorToInputTaint(materialized.descriptor);
+    const inputTaint = descriptorToInputTaint(materializedDisplay.descriptor);
     if (inputTaint.length > 0) {
       const opLabels =
         context?.operationContext?.opLabels ?? getOperationLabels({ type: 'append' });
@@ -96,7 +90,7 @@ export async function evaluateAppend(
     location: directive.location,
     directiveKind: 'append',
     format,
-    descriptor: materialized.descriptor
+    descriptor: materializedDisplay.descriptor
   });
 
   (env as any).hasExplicitOutput = true;

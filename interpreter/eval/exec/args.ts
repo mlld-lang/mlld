@@ -6,12 +6,9 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
 import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
 import { isVariable } from '@interpreter/utils/variable-resolution';
-import {
-  getCapturedModuleEnv,
-  sealCapturedModuleEnv
-} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -324,13 +321,7 @@ export async function evaluateExecInvocationArgs(options: {
               typeof variable.internal.toolCollection === 'object' &&
               !Array.isArray(variable.internal.toolCollection)
             ) {
-              const capturedModuleEnv =
-                getCapturedModuleEnv(variable.internal)
-                ?? getCapturedModuleEnv(variable);
-              if (capturedModuleEnv !== undefined) {
-                sealCapturedModuleEnv(variable.internal.toolCollection, capturedModuleEnv);
-              }
-              value = variable.internal.toolCollection;
+              value = boundary.identity(variable);
               preserveVariableAsArgument = true;
             }
             const { isTemplate } = await import('@core/types/variable');

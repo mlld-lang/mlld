@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.1.0]
 
+### Changed
+- `/show`, `/output`, and `/append` now keep field-level labels and proofs through field access, then render only at the final text/JSON boundary.
+- `with { policy }`, `@policy.build(...)`, and `@policy.validate(...)` now accept policy fragments composed through variables, field access, imports, and object spread while preserving proof-bearing leaves used for authorization matching.
+- Tool collections now preserve surfaced metadata and identity across imports, exports, exe parameters, and box/tool APIs. Direct keyed collection calls authorize against the surfaced collection key.
+- Object spread is now consistently a plain-data boundary. `{ ...@value }` drops wrapper metadata and identity, and spreading `.keep` / `.keepStructured` warns before materializing plain data.
+- `.keep` / `.keepStructured` are now strictly embedded-language escape hatches. `bind` values and `state://` writes materialize plain data instead of storing live wrappers.
+
 ### Added
 - `record` declarations for structured tool output with field-level trust classification. `facts` fields carry `fact:@record.field` proof labels and clear inherited exe `untrusted`; `data` fields are informational content that preserves taint. `exe @fn(...) = ... => record` coerces tool output through the record schema. Supports field remapping (`@input.dealname as name`), computed fields, conditional trust tiers via `when` clauses, typed validation modes (`demote`, `strict`, `drop`), array fact fields with per-element proof, and automatic LLM output parsing.
 - Inline dynamic record coercion via `@value as record @schema`. Uses the same runtime/schema metadata path as `=> record @schema` and works in expression positions, object/array literals, pipeline terminals, and grouped field access.

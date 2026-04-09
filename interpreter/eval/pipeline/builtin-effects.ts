@@ -2,7 +2,7 @@ import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { appendContentToFile } from '../append';
 import type { SecurityDescriptor } from '@core/types/security';
-import { materializeDisplayValue } from '../../utils/display-materialization';
+import { boundary } from '../../utils/boundary';
 import { asText } from '../../utils/structured-value';
 import type { OperationContext } from '../../env/ContextManager';
 import { materializeGuardInputs } from '../../utils/guard-inputs';
@@ -345,13 +345,8 @@ async function executeEffect(
   switch (name) {
     case 'log':
     case 'LOG': {
-      const materialized = materializeDisplayValue(
-        descriptorSource ?? payloadText,
-        undefined,
-        descriptorSource ?? payloadText,
-        payloadText
-      );
-      let output = materialized.text;
+      const materialized = boundary.display(descriptorSource ?? payloadText);
+      let output = payloadText;
       if (!output.endsWith('\n')) output += '\n';
       if (materialized.descriptor) {
         env.recordSecurityDescriptor(materialized.descriptor);
@@ -362,13 +357,8 @@ async function executeEffect(
 
     case 'show':
     case 'SHOW': {
-      const materialized = materializeDisplayValue(
-        descriptorSource ?? payloadText,
-        undefined,
-        descriptorSource ?? payloadText,
-        payloadText
-      );
-      let output = materialized.text;
+      const materialized = boundary.display(descriptorSource ?? payloadText);
+      let output = payloadText;
       if (!output.endsWith('\n')) output += '\n';
       if (materialized.descriptor) {
         env.recordSecurityDescriptor(materialized.descriptor);
@@ -391,13 +381,7 @@ async function executeEffect(
         throw new Error('output requires a valid target (file|stream|env|resolver)');
       }
 
-      const materializedContent = materializeDisplayValue(
-        descriptorSource ?? content,
-        undefined,
-        descriptorSource ?? content,
-        content
-      );
-      content = materializedContent.text;
+      const materializedContent = boundary.display(descriptorSource ?? content);
       if (materializedContent.descriptor) {
         env.recordSecurityDescriptor(materializedContent.descriptor);
       }
@@ -503,13 +487,8 @@ async function executeEffect(
         throw new Error('append requires a file target');
       }
 
-      const materializedPayload = materializeDisplayValue(
-        descriptorSource ?? payloadText,
-        undefined,
-        descriptorSource ?? payloadText,
-        payloadText
-      );
-      const finalPayload = materializedPayload.text;
+      const materializedPayload = boundary.display(descriptorSource ?? payloadText);
+      const finalPayload = payloadText;
       if (materializedPayload.descriptor) {
         env.recordSecurityDescriptor(materializedPayload.descriptor);
       }

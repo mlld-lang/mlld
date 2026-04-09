@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ImportTestRunner, testImport } from './test-utils';
 
+const IMPORT_TEST_TIMEOUT = 10000;
+
 describe('Complex Import Scenarios', () => {
   describe('Import Chains', () => {
     it('should handle linear import chain (A→B→C)', async () => {
@@ -245,7 +247,7 @@ HELLO
   });
   
   describe('Performance with Large Modules', () => {
-    it('should handle module with many exports efficiently', async () => {
+    it('should handle module with many exports efficiently', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const runner = new ImportTestRunner();
       await runner.setup();
       

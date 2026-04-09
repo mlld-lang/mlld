@@ -1,0 +1,12 @@
+/var @basePolicy = {
+  defaults: {
+    rules: ["no-send-to-unknown"]
+  },
+  operations: {
+    "exfil:send": ["tool:w"]
+  },
+  authorizations: {
+    deny: []
+  }
+}
+/export { @basePolicy }

@@ -6,7 +6,7 @@ category: output
 tags: [output, files, streams, io]
 related: [log, append]
 related-code: [interpreter/eval/output.ts, grammar/patterns/output.peggy]
-updated: 2026-01-05
+updated: 2026-04-08
 qa_tier: 1
 ---
 
@@ -18,6 +18,10 @@ output @error to stderr
 ```
 
 Objects and arrays are automatically serialized to JSON when writing to `.json` files. For other file types, the value is converted to a string.
+
+`output` reads fields through the normal wrapper-preserving field-access path first, then renders through the display boundary. That means `@value.email` keeps label/fact metadata while it is being selected, but the final write is text (or JSON for `.json` targets).
+
+When writing to `state://...`, mlld materializes plain data instead of storing wrappers.
 
 ## See Also
 
