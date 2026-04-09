@@ -20,6 +20,7 @@ import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/ex
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { boundary } from '@interpreter/utils/boundary';
 import { tracePolicyEvent } from '@interpreter/tracing/events';
 
 const POLICY_SOURCE: VariableSource = {
@@ -64,41 +65,12 @@ async function resolvePolicyTaskText(
   value: unknown,
   env: Environment
 ): Promise<string | undefined> {
-  if (value === null || value === undefined) {
+  const resolved = await boundary.config(value, env);
+  if (typeof resolved !== 'string') {
     return undefined;
   }
 
-  if (isVariable(value)) {
-    return resolvePolicyTaskText(await extractVariableValue(value, env), env);
-  }
-
-  if (
-    value
-    && typeof value === 'object'
-    && 'type' in (value as Record<string, unknown>)
-    && !isStructuredValue(value)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    return resolvePolicyTaskText(result.value, env);
-  }
-
-  if (isStructuredValue(value)) {
-    const text = value.type === 'object' || value.type === 'array'
-      ? undefined
-      : value.text;
-    if (typeof text === 'string') {
-      const trimmed = text.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    }
-    return resolvePolicyTaskText(value.data, env);
-  }
-
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
+  const trimmed = resolved.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
@@ -115,52 +87,6 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
   return value as PolicyConfig;
 }
 
-async function materializePolicyConfigValue(
-  value: unknown,
-  env: Environment
-): Promise<unknown> {
-  if (value === null || value === undefined) {
-    return value;
-  }
-
-  if (isVariable(value)) {
-    return materializePolicyConfigValue(await extractVariableValue(value, env), env);
-  }
-
-  if (
-    value
-    && typeof value === 'object'
-    && 'type' in (value as Record<string, unknown>)
-    && !isStructuredValue(value)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    return materializePolicyConfigValue(result.value, env);
-  }
-
-  if (isStructuredValue(value)) {
-    return materializePolicyConfigValue(value.data, env);
-  }
-
-  if (Array.isArray(value)) {
-    const items: unknown[] = [];
-    for (const item of value) {
-      items.push(await materializePolicyConfigValue(item, env));
-    }
-    return items;
-  }
-
-  if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value)) {
-      result[key] = await materializePolicyConfigValue(entry, env);
-    }
-    return result;
-  }
-
-  return value;
-}
-
 async function resolvePolicyBuilderBasePolicy(
   value: unknown,
   env: Environment
@@ -169,22 +95,7 @@ async function resolvePolicyBuilderBasePolicy(
     return undefined;
   }
 
-  if (isVariable(value)) {
-    return resolvePolicyBuilderBasePolicy(await extractVariableValue(value, env), env);
-  }
-
-  if (
-    value
-    && typeof value === 'object'
-    && 'type' in (value as Record<string, unknown>)
-    && !isStructuredValue(value)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    return resolvePolicyBuilderBasePolicy(result.value, env);
-  }
-
-  const resolved = await materializePolicyConfigValue(value, env);
+  const resolved = await boundary.config(value, env);
   return resolvePolicyConfigSource(resolved);
 }
 
@@ -196,25 +107,7 @@ async function resolvePolicyBuilderOptions(
     return {};
   }
 
-  if (isVariable(rawOptions)) {
-    return resolvePolicyBuilderOptions(await extractVariableValue(rawOptions, env), env);
-  }
-
-  if (
-    rawOptions
-    && typeof rawOptions === 'object'
-    && 'type' in (rawOptions as Record<string, unknown>)
-    && !isStructuredValue(rawOptions)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(rawOptions as any, env, { isExpression: true });
-    return resolvePolicyBuilderOptions(result.value, env);
-  }
-
-  const value =
-    isStructuredValue(rawOptions) && (rawOptions.type === 'object' || rawOptions.type === 'array')
-      ? rawOptions.data
-      : rawOptions;
+  const value = await boundary.config(rawOptions, env);
   if (!isPlainObject(value)) {
     return {};
   }
@@ -295,10 +188,8 @@ function findMatchingToolCollectionInEnv(
 
   for (const [, variable] of env.getAllVariables()) {
     const candidate =
-      variable.internal?.isToolsCollection === true &&
-      variable.internal.toolCollection &&
-      isPlainObject(variable.internal.toolCollection)
-        ? variable.internal.toolCollection as ToolCollection
+      variable.internal?.isToolsCollection === true
+        ? boundary.identity<ToolCollection | undefined>(variable)
         : undefined;
     if (!candidate) {
       continue;
@@ -396,11 +287,8 @@ function resolveToolCollection(
   if (isVariable(rawTools)) {
     const variableTools = rawTools;
     const directCollection =
-      variableTools.internal?.isToolsCollection === true &&
-      variableTools.internal.toolCollection &&
-      typeof variableTools.internal.toolCollection === 'object' &&
-      !Array.isArray(variableTools.internal.toolCollection)
-        ? variableTools.internal.toolCollection as ToolCollection
+      variableTools.internal?.isToolsCollection === true
+        ? boundary.identity<ToolCollection | undefined>(variableTools)
         : undefined;
     if (directCollection) {
       return directCollection;

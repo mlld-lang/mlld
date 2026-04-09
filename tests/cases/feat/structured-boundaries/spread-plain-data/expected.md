@@ -1,0 +1,3 @@
+["fact:@contact.email"]
+
+[]

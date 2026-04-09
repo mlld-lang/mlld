@@ -12,6 +12,7 @@ import { materializeExpressionValue } from './expression-provenance';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 import { getCapturedModuleEnv, sealCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
+import { boundary } from './boundary';
 
 export interface ParameterFactoryOptions {
   name: string;
@@ -37,12 +38,15 @@ export function createParameterVariable(
   } = options;
 
   if (originalVariable && allowOriginalReuse) {
-    const preservedToolCollection = resolveDirectToolCollection(originalVariable);
-    const capturedModuleEnv =
-      getCapturedModuleEnv(originalVariable.internal)
-      ?? getCapturedModuleEnv(originalVariable);
-    if (preservedToolCollection && capturedModuleEnv !== undefined) {
-      sealCapturedModuleEnv(preservedToolCollection, capturedModuleEnv);
+    if (originalVariable.internal?.isToolsCollection === true) {
+      boundary.identity(originalVariable);
+    } else {
+      const capturedModuleEnv =
+        getCapturedModuleEnv(originalVariable.internal)
+        ?? getCapturedModuleEnv(originalVariable);
+      if (capturedModuleEnv !== undefined && originalVariable.value && typeof originalVariable.value === 'object') {
+        boundary.identity(originalVariable);
+      }
     }
 
     return {
@@ -64,7 +68,10 @@ export function createParameterVariable(
 
   const metadata = metadataFactory ? metadataFactory(preservedValue) : undefined;
   const preservedToolCollection =
-    resolveDirectToolCollection(originalVariable) ?? resolveDirectToolCollection(preservedValue);
+    (originalVariable?.internal?.isToolsCollection === true
+      ? boundary.identity(originalVariable)
+      : resolveDirectToolCollection(originalVariable))
+    ?? resolveDirectToolCollection(preservedValue);
   const capturedModuleEnv =
     getCapturedModuleEnv(originalVariable?.internal)
     ?? getCapturedModuleEnv(originalVariable)

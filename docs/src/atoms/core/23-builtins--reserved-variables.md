@@ -8,7 +8,7 @@ parent: builtins
 tags: [builtins, variables, reserved, system]
 related: [variables-basics, file-loading-frontmatter, builtins-transformers]
 related-code: [interpreter/env/Environment.ts, core/reserved-vars.ts]
-updated: 2026-03-24
+updated: 2026-04-08
 ---
 
 - `@root` / `@base` - project root path
@@ -42,3 +42,5 @@ Built-in transformer/helper names are available for `var`/`let` declarations and
 - `@keep`, `@keepStructured`
 
 `mlld validate` reports builtin shadowing as informational output.
+
+`@keep` / `@keepStructured` are embedded-language escape hatches. Use them when a value is about to cross into `js`, `node`, `py`, or `sh` and the block needs `.mx` / `.data` access. They do not preserve wrappers across ordinary mlld-to-mlld calls, and they do not survive object spread.

@@ -1,5 +1,5 @@
 ---
-updated: 2026-04-04
+updated: 2026-04-08
 tags: #arch, #data, #pipeline
 related-docs: docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
 related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/eval/pipeline/*.ts
@@ -11,6 +11,7 @@ related-types: core/types { StructuredValue, PipelineInput, ShelfSlotRefValue }
 ## tldr
 
 mlld treats structured data (arrays, objects, JSON) as first-class values via `StructuredValue` wrappers. Most pipeline stages, variables, and content loaders preserve both `.text` (string view) and `.data` (parsed structure). Templates and display automatically stringify; computations access native values. Some runtime values are capabilities or references rather than pure data, such as shelf slot refs, but they still project through the same `asText()` / `asData()` helpers.
+mlld-to-mlld boundaries are now named explicitly: `boundary.field` preserves wrappers during reads, `boundary.identity` preserves identity-bearing values such as tool collections and shelf refs, `boundary.display` renders output text, `boundary.interpolate` handles template/shell string boundaries, `boundary.config` materializes env-aware config inputs, and `boundary.plainData` is the explicit recursive unwrap/materialization boundary.
 Angle-bracket content loading (`<...>`, alligator syntax) is part of this same data model.
 
 ## Principles
@@ -20,6 +21,8 @@ Angle-bracket content loading (`<...>`, alligator syntax) is part of this same d
 - **Grammar returns AST nodes**: Parser always produces AST Literal nodes for primitives: `{type: 'Literal', value: 42}`. The interpreter wraps in StructuredValue during evaluation.
 - **Variables wrap runtime values**: Variables provide an additional metadata/context layer on top of StructuredValues and capability/reference values
 - **Dual representation is universal**: Even primitives benefit from `.text` (for display) and `.data` (for computation)
+- **Field access preserves wrappers**: Read nested values through field access when labels, factsources, record projection metadata, or tool/shelf identity must survive
+- **Object spread materializes**: `{ ...value }` is a plain-data boundary. It produces a fresh plain object and drops nested wrapper metadata/identity
 - Display boundaries (templates, CLI, `/show`) use `.text` automatically
 - Computation boundaries (foreach, JS stages, comparisons) access `.data`
 - Runtime metadata (filenames, retries, loader info, security labels) flows via `.mx`
@@ -161,7 +164,23 @@ parseAndWrapJson(text, options?)               // Parse JSON and wrap, or return
 
 // Development validation
 assertStructuredValue(value, context?)         // Throw when boundary requires StructuredValue and none provided
+
+// Boundary helpers
+boundary.field(value, path, env)               // Wrapper-preserving read
+boundary.identity(value)                       // Preserve tool/shelf/captured-env identity
+boundary.display(value)                        // Output/document rendering
+boundary.interpolate(value, context)           // Template/shell/plain string boundary
+boundary.config(value, env)                    // Env-aware config materialization
+boundary.plainData(value)                      // Explicit recursive unwrap/materialization
 ```
+
+### Boundary Rules
+
+- Use `boundary.field(...)` for reads that must preserve `.mx`, factsources, projection metadata, or identity.
+- Use `boundary.config(...)` when a policy/config consumer accepts raw mlld values and needs plain JS data after AST evaluation and variable extraction.
+- Use `boundary.plainData(...)` only when you already have the value you want and are intentionally materializing it.
+- Use `boundary.identity(...)` for tool collections, captured module envs, and live shelf refs that would lose meaning if treated as plain objects.
+- Use `.keep` / `.keepStructured` only for embedded-language boundaries (`js`, `node`, `py`, `sh`). They are not the mlld-to-mlld preservation mechanism.
 
 ### Where Values Flow
 

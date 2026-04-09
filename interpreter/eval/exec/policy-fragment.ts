@@ -11,9 +11,10 @@ import {
   clonePolicyAuthorizationCompileReport,
   compilePolicyAuthorizations,
   hasPolicyAuthorizationCompileActivity,
+  materializePolicySourceValue,
   type PolicyAuthorizationCompileReport
 } from '@interpreter/policy/authorization-compiler';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { buildRuntimeAuthorizationToolContext } from './tool-metadata';
@@ -69,24 +70,29 @@ async function resolveInvocationPolicyOptionValue(
   rawValue: unknown,
   env: Environment
 ): Promise<unknown> {
-  let value = rawValue;
-
-  if (value && typeof value === 'object' && 'type' in (value as Record<string, unknown>)) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    value = result.value;
-  }
-
-  if (isVariable(value)) {
-    value = await extractVariableValue(value, env);
-  }
-
+  let value = await boundary.config(rawValue, env);
   value = await resolveValueHandles(value, env);
-  if (isStructuredValue(value)) {
-    value = asData(value);
+  return value;
+}
+
+function reattachRawAuthorizations(
+  candidates: PolicyConfig[],
+  rawSources: PolicyConfig[] | undefined
+): PolicyConfig[] {
+  if (!rawSources || rawSources.length !== candidates.length) {
+    return candidates;
   }
 
-  return value;
+  return candidates.map((candidate, index) => {
+    const rawSource = rawSources[index];
+    if (!rawSource || rawSource.authorizations === undefined) {
+      return candidate;
+    }
+    return {
+      ...candidate,
+      authorizations: rawSource.authorizations
+    };
+  });
 }
 
 export function getInvocationPolicyFragmentCompileReport(
@@ -136,10 +142,8 @@ export async function resolveInvocationPolicyFragment(
     attestationSource = value;
   }
   const rawResolvedValue = attestationSource;
+  value = await boundary.config(value, env);
   value = await resolveValueHandles(value, env);
-  if (isStructuredValue(value)) {
-    value = asData(value);
-  }
 
   const candidates = resolvePolicyConfigSources(value);
   if (!candidates || candidates.length === 0) {
@@ -148,15 +152,19 @@ export async function resolveInvocationPolicyFragment(
       details: { policy: value }
     });
   }
+  const rawPolicySource = await materializePolicySourceValue(rawResolvedValue, env);
+  const policySources = resolvePolicyConfigSources(rawPolicySource);
+  const compiledCandidates = reattachRawAuthorizations(candidates, policySources);
 
-  const normalized = candidates.reduce<PolicyConfig | undefined>(
+  const normalized = compiledCandidates.reduce<PolicyConfig | undefined>(
     (merged, candidate) => mergePolicyConfigs(merged, normalizePolicyConfig(candidate)),
     undefined
   ) ?? {};
 
   let combinedCompileReport: PolicyAuthorizationCompileReport | undefined;
   let compiledAuthorizations = normalized.authorizations;
-  const rawAuthorizationCandidates = candidates.filter(candidate => candidate.authorizations !== undefined);
+  const rawAuthorizationCandidates =
+    compiledCandidates.filter(candidate => candidate.authorizations !== undefined);
   if (rawAuthorizationCandidates.length > 0) {
     const toolContext = buildRuntimeAuthorizationToolContext(env);
     compiledAuthorizations = undefined;

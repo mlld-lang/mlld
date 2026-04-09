@@ -12,6 +12,7 @@ mlld uses a sophisticated Variable type system that preserves type information t
 2. **Behavior Encapsulation**: Special behaviors (custom toString, array joining) are preserved in metadata
 3. **Context-Aware Resolution**: Variables can be preserved or extracted based on usage context
 4. **Type Introspection**: Shadow environments can inspect Variable types at runtime
+5. **Boundary-Specific Materialization**: wrapper-preserving reads (`boundary.field`) are distinct from explicit materialization (`boundary.plainData` / `boundary.config`)
 
 ## Variable Type Hierarchy
 
@@ -43,6 +44,16 @@ All Variables implement the `Variable` interface, which is a discriminated union
 - **PathVariable** (`path`): Resolved file paths with security metadata
 - **ImportedVariable** (`imported`): Variables imported from other files/modules
 - **PipelineInputVariable** (`pipeline-input`): Wrapped inputs for pipeline stages
+
+### Identity-Bearing Runtime Values
+
+Not every runtime value is "just data". Some values carry identity that must survive mlld-to-mlld handoff:
+
+- **Tool collections** keep trusted tool metadata (`controlArgs`, `bind`, `expose`, surfaced names)
+- **Captured module envs** keep module-local bindings used by imported executables
+- **Shelf slot refs** keep a live reference to the slot, not just the slot's current contents
+
+These values should cross mlld boundaries through `boundary.identity(...)`, not through object spread or ad hoc cloning. `{ ...value }` materializes plain data and drops identity-bearing metadata.
 
 ## Type Flow: AST to Variable
 

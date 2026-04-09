@@ -3,7 +3,6 @@ import type { Environment } from '../../env/Environment';
 import type { DataValue, DataObjectValue, DataArrayValue } from '@core/types/var';
 import { interpolate } from '../../core/interpreter';
 import {
-  asData,
   isStructuredValue,
   extractSecurityDescriptor,
   getRecordProjectionMetadata
@@ -11,6 +10,7 @@ import {
 import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
+import { boundary } from '@interpreter/utils/boundary';
 import { FieldAccessError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
@@ -242,9 +242,13 @@ export class CollectionEvaluator {
               spreadValue = (fieldResult as any).value ?? fieldResult;
             }
 
-            if (isStructuredValue(spreadValue)) {
-              spreadValue = asData(spreadValue);
+            if (isStructuredValue(spreadValue) && spreadValue.internal?.keepStructured === true) {
+              env.emitEffect(
+                'stderr',
+                'Warning: spreading a .keep/.keepStructured value materializes plain data and drops wrapper metadata.\n'
+              );
             }
+            spreadValue = boundary.plainData(spreadValue);
 
             // Validate it's an object
             if (typeof spreadValue !== 'object' || spreadValue === null || Array.isArray(spreadValue)) {

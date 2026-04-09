@@ -18,7 +18,7 @@ import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
-import { materializeDisplayValue, resolveNestedValue } from '../utils/display-materialization';
+import { boundary } from '@interpreter/utils/boundary';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 import { makeSecurityDescriptor, type DataLabel, type SecurityDescriptor } from '@core/types/security';
@@ -147,18 +147,12 @@ export async function evaluateOutput(
       content = await applyOutputFormat(content, format, env);
     }
 
-    const materializedContent = materializeDisplayValue(
-      descriptorSource ?? content,
-      undefined,
-      descriptorSource ?? content,
-      content
-    );
-    content = materializedContent.text;
-    if (materializedContent.descriptor) {
-      env.recordSecurityDescriptor(materializedContent.descriptor);
+    const materializedDisplay = boundary.display(descriptorSource ?? content);
+    if (materializedDisplay.descriptor) {
+      env.recordSecurityDescriptor(materializedDisplay.descriptor);
     }
     const snapshot = env.getSecuritySnapshot();
-    const securityDescriptor = materializedContent.descriptor ??
+    const securityDescriptor = materializedDisplay.descriptor ??
       (snapshot
         ? makeSecurityDescriptor({
             labels: snapshot.labels,
@@ -170,8 +164,8 @@ export async function evaluateOutput(
 
     const policyDescriptor =
       hasSource
-        ? materializedContent.descriptor
-        : materializedContent.descriptor ?? (snapshot
+        ? materializedDisplay.descriptor
+        : materializedDisplay.descriptor ?? (snapshot
           ? makeSecurityDescriptor({
               labels: snapshot.labels,
               taint: snapshot.taint,
@@ -225,7 +219,9 @@ export async function evaluateOutput(
           : '';
       if (rawTarget.startsWith('state://')) {
         const statePath = rawTarget.replace(/^state:\/\//, '');
-        const stateValue = resolveNestedValue(descriptorSource ?? content);
+        const stateValue = boundary.plainData(descriptorSource ?? content, {
+          preserveProvenance: true
+        });
         env.recordStateWrite({
           path: statePath,
           value: stateValue,
@@ -527,9 +523,8 @@ async function evaluateSimpleVariableSource(
     varName = directive.values.source[0].identifier;
   } else if (Array.isArray(directive.values.source) && directive.values.source[0]?.type === 'Text') {
     // Gracefully handle template-as-array passed directly
-    const parts = directive.values.source as any[];
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolateAndRecord(parts as any, env);
+    const text = await interpolateAndRecord(directive.values.source, env);
+    return { rawValue: text, text };
   } else {
     throw new MlldOutputError(
       'Invalid source structure for variable output',
@@ -565,51 +560,19 @@ async function evaluateSimpleVariableSource(
     );
   }
 
-  let structuredWrapper: any = null;
-  if (isStructuredValue(value)) {
-    structuredWrapper = value;
-    value = value.data;
-  }
-  
-  // Handle field access if present (only for standard structure)
   const sourceFields = directive.values.source.fields;
   if (sourceFields && sourceFields.length > 0) {
-    // Process field access
-    for (const field of sourceFields) {
-      if (value === null || value === undefined) {
-        throw new MlldOutputError(
-          `Cannot access field on null or undefined value`,
-          directive.location
-        );
-      }
-      
-      if (field.type === 'arrayIndex') {
-        const index = Number(field.value);
-        if (Array.isArray(value)) {
-          value = value[index];
-        } else {
-          throw new MlldOutputError(
-            `Cannot index non-array value with [${index}]`,
-            directive.location
-          );
-        }
-      } else if (field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField' || field.type === 'dot') {
-        const fieldName = String(field.value);
-        if (typeof value === 'object' && value !== null) {
-          value = value[fieldName];
-        } else {
-          throw new MlldOutputError(
-            `Cannot access property '${fieldName}' on non-object value`,
-            directive.location
-          );
-        }
-      }
-    }
+    value = await boundary.field(variable, sourceFields, env, {
+      preserveContext: false,
+      sourceLocation: directive.location
+    });
   }
 
   // Convert value to string
-  if (structuredWrapper && (!sourceFields || sourceFields.length === 0)) {
-    return { rawValue: structuredWrapper, text: structuredWrapper.text };
+  if (!sourceFields || sourceFields.length === 0) {
+    if (isStructuredValue(value)) {
+      return { rawValue: value, text: value.text };
+    }
   }
 
   const rawValue = value;

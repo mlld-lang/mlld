@@ -10,6 +10,7 @@ import {
   type PolicyAuthorizationValidationResult,
   type PolicyAuthorizations
 } from '@core/policy/authorizations';
+import type { MlldNode, VariableReferenceNode } from '@core/types';
 import {
   isFactSourceHandle,
   isHandleWrapper,
@@ -34,10 +35,12 @@ import {
   asData,
   asText,
   applySecurityDescriptorToStructuredValue,
+  ensureStructuredValue,
   extractSecurityDescriptor,
   isStructuredValue,
   wrapStructured
 } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
@@ -538,7 +541,7 @@ function createKnownHandleValue(value: unknown): unknown {
   const wrapped =
     isStructuredValue(value)
       ? wrapStructured(value.data, value.type, value.text, value.metadata)
-      : wrapStructured(value as any);
+      : ensureStructuredValue(value);
   if (isStructuredValue(value) && value.internal) {
     wrapped.internal = { ...value.internal };
   }
@@ -644,7 +647,7 @@ async function normalizeResolvedHandleCandidate(
     return undefined;
   }
 
-  const wrappedHandle = extractHandleTokenCandidate((value as Record<string, unknown>).handle);
+  const wrappedHandle = extractHandleTokenCandidate((value as { handle?: unknown }).handle);
   if (!wrappedHandle) {
     return undefined;
   }
@@ -819,19 +822,8 @@ async function materializeAuthorizationIntentSourceValue(
   value: unknown,
   env: Environment
 ): Promise<unknown> {
-  if (isVariable(value)) {
-    return materializeAuthorizationIntentSourceValue(await extractVariableValue(value, env), env);
-  }
-
-  if (
-    value
-    && typeof value === 'object'
-    && 'type' in (value as Record<string, unknown>)
-    && !isStructuredValue(value)
-  ) {
-    const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
-    return materializeAuthorizationIntentSourceValue(result.value, env);
+  if (isVariable(value) && extractSecurityDescriptor(value)) {
+    return value;
   }
 
   return materializePolicySourceValue(value, env);
@@ -1441,6 +1433,37 @@ function isAstArrayNode(value: unknown): value is {
   );
 }
 
+function isAstLikePolicySourceValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (isStructuredValue(value) || isVariable(value)) {
+    return false;
+  }
+  if (isAstObjectNode(value) || isAstArrayNode(value)) {
+    return true;
+  }
+
+  const candidate = value as {
+    wrapperType?: unknown;
+    content?: unknown;
+    type?: unknown;
+    nodeId?: unknown;
+    location?: unknown;
+  };
+  if (candidate.wrapperType !== undefined && Array.isArray(candidate.content)) {
+    return true;
+  }
+
+  return (
+    typeof candidate.type === 'string'
+    && (
+      Object.prototype.hasOwnProperty.call(candidate, 'nodeId')
+      || Object.prototype.hasOwnProperty.call(candidate, 'location')
+    )
+  );
+}
+
 function getAstObjectEntryValue(node: unknown, key: string): unknown {
   if (!isAstObjectNode(node)) {
     return undefined;
@@ -1467,7 +1490,7 @@ async function unwrapResolvedConstraintValue(
     return items;
   }
   if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
+    const result: { [key: string]: unknown } = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = await unwrapResolvedConstraintValue(entry, env);
     }
@@ -1476,36 +1499,69 @@ async function unwrapResolvedConstraintValue(
   return value;
 }
 
-async function materializePolicySourceValue(
+export async function materializePolicySourceValue(
   value: unknown,
   env: Environment
 ): Promise<unknown> {
-  if (isVariable(value)) {
-    if (extractSecurityDescriptor(value)) {
-      return value;
-    }
-    const extracted = await extractVariableValue(value, env);
-    return materializePolicySourceValue(extracted, env);
-  }
-
-  if (isStructuredValue(value)) {
-    if (value.type === 'array' && Array.isArray(value.data)) {
-      const items: unknown[] = [];
-      for (const item of value.data) {
-        items.push(await materializePolicySourceValue(item, env));
-      }
-      return items;
-    }
-    if (value.type === 'object' && isPlainObject(value.data)) {
-      const result: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value.data)) {
-        result[key] = await materializePolicySourceValue(entry, env);
-      }
-      return result;
-    }
+  if (isVariable(value) && extractSecurityDescriptor(value)) {
     return value;
   }
-
+  if (isVariable(value)) {
+    return materializePolicySourceValue(await extractVariableValue(value, env), env);
+  }
+  if (isAstArrayNode(value)) {
+    const items: unknown[] = [];
+    for (const item of value.items ?? []) {
+      items.push(await materializePolicySourceValue(item, env));
+    }
+    return items;
+  }
+  if (isAstObjectNode(value)) {
+    const result: { [key: string]: unknown } = {};
+    for (const entry of value.entries ?? []) {
+      if (!entry || typeof entry !== 'object') {
+        continue;
+      }
+      if (
+        (entry as { type?: unknown }).type === 'pair'
+        && typeof (entry as { key?: unknown }).key === 'string'
+      ) {
+        result[(entry as { key: string }).key] = await materializePolicySourceValue(
+          (entry as { value?: unknown }).value,
+          env
+        );
+        continue;
+      }
+      if (
+        (entry as { type?: unknown }).type === 'spread'
+        && Array.isArray((entry as { value?: unknown[] }).value)
+      ) {
+        for (const spreadNode of (entry as { value: unknown[] }).value) {
+          const spreadValue = await materializePolicySourceValue(spreadNode, env);
+          if (isPlainObject(spreadValue)) {
+            Object.assign(result, spreadValue);
+          }
+        }
+      }
+    }
+    return result;
+  }
+  if (isAstLikePolicySourceValue(value)) {
+    const { evaluate } = await import('@interpreter/core/interpreter');
+    const result = await evaluate(value as MlldNode | MlldNode[], env, { isExpression: true });
+    return materializePolicySourceValue(result.value, env);
+  }
+  if (
+    isStructuredValue(value)
+    && value.type !== 'object'
+    && value.type !== 'array'
+    && extractSecurityDescriptor(value)
+  ) {
+    return value;
+  }
+  if (isStructuredValue(value)) {
+    return materializePolicySourceValue(value.data, env);
+  }
   if (Array.isArray(value)) {
     const items: unknown[] = [];
     for (const item of value) {
@@ -1513,16 +1569,14 @@ async function materializePolicySourceValue(
     }
     return items;
   }
-
   if (isPlainObject(value)) {
-    const result: Record<string, unknown> = {};
+    const result: { [key: string]: unknown } = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = await materializePolicySourceValue(entry, env);
     }
     return result;
   }
-
-  return value;
+  return boundary.config(value, env);
 }
 
 async function resolveConstraintSourceValue(
@@ -1530,23 +1584,40 @@ async function resolveConstraintSourceValue(
   env: Environment
 ): Promise<unknown> {
   if (value && typeof value === 'object') {
-    const candidate = value as Record<string, unknown>;
-    if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
-      const variable = env.getVariable(candidate.identifier);
+    const candidate = value as { type?: unknown };
+    if (candidate.type === 'VariableReference') {
+      const reference = value as VariableReferenceNode;
+      const variable = env.getVariable(reference.identifier);
       if (!variable) {
         return (
           await repairSecurityRelevantValue({
-            value: candidate,
+            value: reference,
             env,
             matchScope: 'session',
             includeSessionProofMatches: true,
-            dropAmbiguousArrayElements: isArrayLikeConstraintValue(candidate),
+            dropAmbiguousArrayElements: isArrayLikeConstraintValue(reference),
             collapseEquivalentProjectedMatches: true
           })
         ).value;
       }
-      const resolved = await resolveValueHandles(variable, env);
-      const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
+      const hasFieldAccess =
+        Array.isArray(reference.fields)
+        && reference.fields.length > 0;
+      const hasPipes =
+        Array.isArray(reference.pipes)
+        && reference.pipes.length > 0;
+      const resolved =
+        hasFieldAccess || hasPipes
+          ? (
+              await (await import('@interpreter/core/interpreter')).evaluate(
+                value as MlldNode | MlldNode[],
+                env,
+                { isExpression: true }
+              )
+            ).value
+          : await resolveValueHandles(variable, env);
+      const handleResolved = await resolveValueHandles(resolved, env);
+      const unwrapped = await unwrapResolvedConstraintValue(handleResolved, env);
       return (
         await repairSecurityRelevantValue({
           value: unwrapped,
@@ -1575,7 +1646,7 @@ async function resolveConstraintSourceValue(
       ).value;
     }
     if (isAstObjectNode(value)) {
-      const result: Record<string, unknown> = {};
+      const result: { [key: string]: unknown } = {};
       for (const entry of value.entries ?? []) {
         if (typeof entry?.key !== 'string') {
           continue;
@@ -1596,11 +1667,11 @@ async function resolveConstraintSourceValue(
   if (
     value &&
     typeof value === 'object' &&
-    'type' in (value as Record<string, unknown>) &&
+    'type' in (value as { type?: unknown }) &&
     !isStructuredValue(value)
   ) {
     const { evaluate } = await import('@interpreter/core/interpreter');
-    const result = await evaluate(value as any, env, { isExpression: true });
+    const result = await evaluate(value as MlldNode | MlldNode[], env, { isExpression: true });
     const resolved = await resolveValueHandles(result.value, env);
     const unwrapped = await unwrapResolvedConstraintValue(resolved, env);
     return (

@@ -38,6 +38,7 @@ import {
   extractSecurityDescriptor,
   applySecurityDescriptorToStructuredValue
 } from '../utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
@@ -280,7 +281,7 @@ async function resolveCollectionBoundValue(
     return resolveCollectionBoundValue(extracted, env, options);
   }
   if (isStructuredValue(value)) {
-    return options?.preserveStructuredArgs ? value : asData(value);
+    return options?.preserveStructuredArgs ? value : boundary.plainData(value);
   }
   if (Array.isArray(value)) {
     return Promise.all(value.map(item => resolveCollectionBoundValue(item, env, options)));
@@ -335,7 +336,7 @@ async function materializePlainObjectExecutableDispatchArg(
   }
 
   if (isStructuredValue(resolved)) {
-    return options?.preserveStructuredArgs ? resolved : asData(resolved);
+    return options?.preserveStructuredArgs ? resolved : boundary.plainData(resolved);
   }
 
   if (
@@ -927,10 +928,7 @@ function collectConversationInputDescriptor(value: unknown): SecurityDescriptor 
 }
 
 function sanitizeLlmConfigSecurityInput(config: unknown): unknown {
-  let candidate = config;
-  if (isStructuredValue(candidate)) {
-    candidate = asData(candidate);
-  }
+  const candidate = boundary.plainData(config);
 
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return candidate;
@@ -1082,7 +1080,7 @@ function assertLlmResumeBridgeToolsEmpty(tools: unknown): void {
 }
 
 function tryExtractLlmResumeEnvelope(value: unknown): LlmResumeEnvelope | null {
-  const candidate = isStructuredValue(value) ? asData(value) : value;
+  const candidate = boundary.plainData(value);
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return null;
   }
@@ -1930,7 +1928,7 @@ async function evaluateExecInvocationInternal(
           if (typeof objectValue === 'object' && objectValue !== null) {
             const toolCollection =
               (fieldVariable.internal?.isToolsCollection === true
-                ? fieldVariable.internal.toolCollection as ToolCollection | undefined
+                ? boundary.identity<ToolCollection | undefined>(fieldVariable)
                 : undefined)
               ?? getToolCollectionFromValue(objectValue);
             if (toolCollection) {
@@ -2019,7 +2017,7 @@ async function evaluateExecInvocationInternal(
         if (typeof objectValue === 'object' && objectValue !== null) {
           const toolCollection =
             (objectVar.internal?.isToolsCollection === true
-              ? objectVar.internal.toolCollection as ToolCollection | undefined
+              ? boundary.identity<ToolCollection | undefined>(objectVar)
               : undefined)
             ?? getToolCollectionFromValue(objectValue);
           if (toolCollection) {

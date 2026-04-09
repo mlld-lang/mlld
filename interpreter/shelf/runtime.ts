@@ -35,6 +35,7 @@ import {
   wrapStructured,
   type StructuredValue
 } from '@interpreter/utils/structured-value';
+import { boundary } from '@interpreter/utils/boundary';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import type { DataAliasedValue, DataValue } from '@core/types/var';
 import { isHandleWrapper } from '@core/types/handle';
@@ -1432,13 +1433,7 @@ function getWritableShelfAliasBindings(env: Environment): WritableShelfAliasBind
 }
 
 function normalizeWritableShelfAliasInput(value: unknown): string | undefined {
-  let resolved = value;
-  if (isVariable(resolved)) {
-    resolved = resolved.value;
-  }
-  if (isStructuredValue(resolved)) {
-    resolved = asData(resolved);
-  }
+  const resolved = boundary.plainData(value);
   if (typeof resolved !== 'string') {
     return undefined;
   }

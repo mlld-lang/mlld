@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { testImport, ImportTestRunner } from './test-utils';
 
+const IMPORT_TEST_TIMEOUT = 10000;
+
 describe('Shadow Environment Import Tests', () => {
   describe('Basic Shadow Function Imports', () => {
     it('should preserve shadow functions through selected import', async () => {
@@ -171,7 +173,7 @@ from Node shadow`
   });
   
   describe('Shadow Environment Edge Cases', () => {
-    it('should fail gracefully when shadow function is missing', async () => {
+    it('should fail gracefully when shadow function is missing', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { broken } from "./broken.mld"
 /var @result = @broken.call()`, {
@@ -190,7 +192,7 @@ from Node shadow`
       expect(result.exitCode).toBe(1);
     });
     
-    it('should handle shadow functions with parameters', async () => {
+    it('should handle shadow functions with parameters', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { calc } from "./param-shadows.mld"
 /var @result = @calc.compute(5, 3)

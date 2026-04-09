@@ -8,7 +8,7 @@ import { normalizeWhenShowEffect } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 import type { Variable } from '@core/types/variable';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
-import { materializeDisplayValue } from '../utils/display-materialization';
+import { boundary } from '../utils/boundary';
 
 function extractDenialInfo(error: unknown): {
   reason: string;
@@ -92,8 +92,8 @@ export async function handleExecGuardDenial(
     return null;
   }
 
-  const materializedWarning = materializeDisplayValue(`${warning}\n`, undefined, warning);
-  options.env.emitEffect('stderr', materializedWarning.text);
+  const materializedWarning = boundary.display(warning);
+  options.env.emitEffect('stderr', `${warning}\n`);
   if (materializedWarning.descriptor) {
     options.env.recordSecurityDescriptor(materializedWarning.descriptor);
   }
