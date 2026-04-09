@@ -3405,15 +3405,18 @@ async function evaluateExecInvocationInternal(
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
       : effectiveToolMetadata.params;
+  const inheritedAuthorizationSurfaceOperation =
+    runtimeEnv.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
+  const currentAuthorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
+    execEnv,
+    toolOperationName ?? variable.name ?? commandName
+  );
   const shouldValidatePolicyAuthorizations =
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels) &&
     (
-      !hasRuntimeAuthorizationSurface(execEnv) ||
-      isRuntimeAuthorizationSurfaceOperation(
-        execEnv,
-        toolOperationName ?? variable.name ?? commandName
-      )
+      currentAuthorizationSurfaceOperation ||
+      (!hasRuntimeAuthorizationSurface(execEnv) && inheritedAuthorizationSurfaceOperation !== false)
     );
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
   enforceUpdateToolArguments({

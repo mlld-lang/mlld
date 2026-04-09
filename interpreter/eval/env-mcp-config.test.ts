@@ -1126,6 +1126,50 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('ignores capability allowlist default-deny for nested llm helper exes', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var @toolList = [@send_email]',
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:git:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe @claudeResume(config) = sh { env -u HOME printf "" }',
+      '/exe llm, tool:w @claude(prompt, config) = [',
+      '  let @resume = @claudeResume(@config)',
+      `  => cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi","body":"test"}' }`,
+      ']',
+      '/show @claude("Send the email", { tools: @toolList }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves imported tool collections across multiple exe param layers on the llm bridge', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/tools.mld', [

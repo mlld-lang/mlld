@@ -1223,7 +1223,8 @@ export function evaluateCapabilityAccess(
 
 export function findDeniedShellCommand(
   policy: PolicyConfig,
-  shellCode: string
+  shellCode: string,
+  options?: CapabilityAccessOptions
 ): ShellCommandDenyMatch | null {
   if (typeof shellCode !== 'string' || shellCode.trim().length === 0) {
     return null;
@@ -1235,7 +1236,7 @@ export function findDeniedShellCommand(
   const denyOnlyPolicy: PolicyConfig = { deny: normalizedPolicy.deny };
   const candidates = extractShellCommandCandidates(shellCode);
   for (const commandText of candidates) {
-    const decision = evaluateCommandAccess(denyOnlyPolicy, commandText);
+    const decision = evaluateCommandAccess(denyOnlyPolicy, commandText, options);
     if (decision.allowed) {
       continue;
     }

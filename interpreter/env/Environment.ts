@@ -60,7 +60,10 @@ import {
   type AuthConfig,
   type PolicyConfig
 } from '@core/policy/union';
-import { findDeniedShellCommand } from '@core/policy/guards';
+import {
+  findDeniedShellCommand,
+  shouldApplySurfaceScopedPolicyToOperation
+} from '@core/policy/guards';
 import { RegistryManager, ProjectConfig } from '@core/registry';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { astLocationToSourceLocation } from '@core/types';
@@ -3060,7 +3063,11 @@ export class Environment
       });
       const policySummary = this.getPolicySummary();
       if (policySummary) {
-        const deniedShellCommand = findDeniedShellCommand(policySummary, code);
+        const deniedShellCommand = findDeniedShellCommand(policySummary, code, {
+          enforceAllowList: shouldApplySurfaceScopedPolicyToOperation(
+            this.getContextManager().peekOperation() ?? { metadata: {} }
+          )
+        });
         if (deniedShellCommand) {
           throw new MlldSecurityError(
             `${deniedShellCommand.reason} in shell block (matched: ${deniedShellCommand.commandText})`,

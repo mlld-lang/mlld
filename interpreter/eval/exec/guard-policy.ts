@@ -499,10 +499,15 @@ export async function createExecOperationContextAndEnforcePolicy(
   const policySummary = env.getPolicySummary();
   const deferManagedLabelFlow = hasManagedPolicyLabelFlow(policySummary);
   const operationLabels = mergeLabelArrays(exeLabels, toolLabels);
-  const authorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
+  const inheritedAuthorizationSurfaceOperation =
+    env.getContextManager().peekOperation()?.metadata?.authorizationSurfaceOperation;
+  const currentAuthorizationSurfaceOperation = isRuntimeAuthorizationSurfaceOperation(
     execEnv,
     operationName ?? commandName
-  ) || !hasRuntimeAuthorizationSurface(execEnv);
+  );
+  const authorizationSurfaceOperation =
+    currentAuthorizationSurfaceOperation ||
+    (!hasRuntimeAuthorizationSurface(execEnv) && inheritedAuthorizationSurfaceOperation !== false);
   const operationContext: OperationContext = {
     type: 'exe',
     named: resolveCanonicalOperationRef({
