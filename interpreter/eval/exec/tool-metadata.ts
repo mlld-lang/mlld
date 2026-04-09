@@ -83,7 +83,7 @@ function resolveExecutableVariable(
   name: string
 ): ExecutableVariable | undefined {
   const variable = env.getVariable(name);
-  return variable && isExecutableVariable(variable) ? variable : undefined;
+  return variable && isExecutableVariable(variable) ? variable as ExecutableVariable : undefined;
 }
 
 function resolveExecutableVariableCaseInsensitive(
@@ -102,7 +102,7 @@ function resolveExecutableVariableCaseInsensitive(
 
   for (const [candidateName, variable] of env.getAllVariables()) {
     if (candidateName.trim().toLowerCase() === lowered && isExecutableVariable(variable)) {
-      return variable;
+      return variable as ExecutableVariable;
     }
   }
 
@@ -138,6 +138,19 @@ function buildEffectiveToolParams(
       optional: optional.has(name)
     })
   );
+}
+
+function buildEffectiveParamEntries(
+  params: readonly string[],
+  baseParamEntries: readonly EffectiveToolParam[],
+  optionalParams?: readonly string[]
+): EffectiveToolParam[] {
+  const paramTypes = Object.fromEntries(
+    baseParamEntries
+      .filter(entry => typeof entry.name === 'string' && entry.name.trim().length > 0 && typeof entry.type === 'string')
+      .map(entry => [entry.name, entry.type as string])
+  );
+  return buildEffectiveToolParams(params, paramTypes, optionalParams);
 }
 
 function normalizeExecutableMxParamEntries(value: unknown): EffectiveToolParam[] | undefined {
@@ -235,10 +248,12 @@ function buildToolContextFromExecutable(
     param => fallbackParams.includes(param)
   );
   const executableDef = executable.internal?.executableDef ?? executable.value;
+  const executableParamTypes = executable.paramTypes
+    ?? (executableDef as { paramTypes?: Record<string, string> }).paramTypes;
   const paramEntries = normalizeExecutableMxParamEntries(executable.mx?.params)
     ?? buildEffectiveToolParams(
       fallbackParams,
-      executable.paramTypes ?? executableDef?.paramTypes,
+      executableParamTypes,
       fallbackOptionalParams
     );
   const params = paramEntries.map(entry => entry.name);
@@ -402,6 +417,7 @@ function applyToolDefinitionAuthMetadata(
   const labels = mergeStringLists(base.labels, definition.labels);
   const params = getEffectiveToolParams(base.params, definition);
   const optionalParams = getEffectiveToolOptionalParams(params, base.optionalParams, definition);
+  const paramEntries = buildEffectiveParamEntries(params, base.paramEntries, optionalParams);
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     params,
     baseControlArgs: base.controlArgs,
@@ -424,6 +440,7 @@ function applyToolDefinitionAuthMetadata(
   return {
     ...base,
     params,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -449,6 +466,7 @@ function mergeToolDefinitionMetadata(
   const mergedUpdateArgs = mergeStringLists(base.updateArgs, definition.updateArgs);
   const mergedExactPayloadArgs = mergeStringLists(base.exactPayloadArgs, definition.exactPayloadArgs);
   const optionalParams = getEffectiveToolOptionalParams(base.params, base.optionalParams, definition);
+  const paramEntries = buildEffectiveParamEntries(base.params, base.paramEntries, optionalParams);
   const hasControlArgsMetadata =
     base.hasControlArgsMetadata || Array.isArray(definition.controlArgs);
   const hasUpdateArgsMetadata =
@@ -457,6 +475,7 @@ function mergeToolDefinitionMetadata(
 
   return {
     ...base,
+    paramEntries,
     ...(optionalParams.length > 0 ? { optionalParams } : {}),
     labels,
     ...(description ? { description } : {}),
@@ -750,7 +769,7 @@ export function buildRuntimeAuthorizationToolContext(
       continue;
     }
 
-    const direct = buildToolContextFromExecutable(name, variable);
+    const direct = buildToolContextFromExecutable(name, variable as ExecutableVariable);
     contexts.set(name, createAuthorizationToolContextEntry(name, direct));
   }
 

@@ -18,7 +18,7 @@ import {
 } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
-import { asData, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { boundary } from '@interpreter/utils/boundary';
 import { tracePolicyEvent } from '@interpreter/tracing/events';
@@ -221,13 +221,14 @@ function normalizeExecutableArrayToolCollection(
     if (isVariable(resolvedEntry) && !isExecutableVariable(resolvedEntry)) {
       resolvedEntry = unwrapToolCollectionInput(resolvedEntry.value);
     }
-    if (!isExecutableVariable(resolvedEntry)) {
+    if (!isVariable(resolvedEntry) || !isExecutableVariable(resolvedEntry)) {
       return undefined;
     }
+    const executable = resolvedEntry;
 
     const executableName =
-      typeof resolvedEntry.name === 'string'
-        ? resolvedEntry.name.trim()
+      typeof executable.name === 'string'
+        ? executable.name.trim()
         : '';
     if (!executableName) {
       return undefined;
@@ -258,7 +259,7 @@ function createPolicyBuilderResult(
       }
     }),
     valid: compilation.issues.length === 0,
-    issues: wrapStructured(compilation.issues, 'array'),
+    issues: compilation.issues,
     report: clonePolicyAuthorizationCompileReport(compilation.report)
   };
 }
@@ -425,13 +426,15 @@ function createPolicyMethod(
   const definition: NodeFunctionExecutable = {
     type: 'nodeFunction',
     name,
-    fn: async (
-      intentOrEnv?: unknown,
-      toolsOrEnv?: unknown,
-      optionsOrEnv?: unknown,
-      boundEnv?: Environment
-    ) =>
-      buildPolicyAuthorizations(name, intentOrEnv, toolsOrEnv, optionsOrEnv, boundEnv, env),
+    fn: async (...args: unknown[]) => {
+      const [intentOrEnv, toolsOrEnv, optionsOrEnv, boundEnv] = args as [
+        unknown?,
+        unknown?,
+        unknown?,
+        Environment?
+      ];
+      return buildPolicyAuthorizations(name, intentOrEnv, toolsOrEnv, optionsOrEnv, boundEnv, env);
+    },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
     paramNames: ['intent', 'tools', 'options'],

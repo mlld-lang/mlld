@@ -108,7 +108,7 @@ describe('shelf notes injection', () => {
     }
   });
 
-  it('appends shelf notes after tool notes in user-authored config.system content', async () => {
+  it('appends shelf notes after canonical injected tool notes in user-authored config.system content', async () => {
     const { env, effects } = await createEnvironment(`
 /record @contact = {
   key: id,
@@ -153,7 +153,9 @@ describe('shelf notes injection', () => {
       expect(output).toContain('</tool_notes>\n\n<shelf_notes>');
       expect(output.indexOf('<tool_notes>')).toBeGreaterThan(output.indexOf('User system prompt'));
       expect(output.indexOf('<shelf_notes>')).toBeGreaterThan(output.indexOf('<tool_notes>'));
-      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
+      expect(output).toContain('Write tools (require authorization):');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
       expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
     } finally {

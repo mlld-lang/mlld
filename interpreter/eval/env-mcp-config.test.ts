@@ -2693,7 +2693,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('creates config.system with worker tool notes when the user did not provide one', async () => {
+  it('creates config.system with canonical injected tool notes when the user did not provide one', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
@@ -2727,14 +2727,17 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
-      expect(output).toContain('Denied: (none)');
+      expect(output).toContain('Write tools (require authorization):');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('- `subject` (string)');
+      expect(output).toContain('- `body` (string)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(output).toContain('- `query` (string)');
       expect(output).not.toContain('Send an outbound email');
-      expect(output).not.toContain('| Tool | Description |');
       expect(output).not.toContain('Search contacts by name');
+      expect(output).not.toContain('@fyi.known("send_email")');
     } finally {
       environment?.cleanup();
     }
@@ -2769,14 +2772,16 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('Read tools: mcp__mlld_tools__search_files');
-      expect(output).not.toContain('Read tools: search_files');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_files');
+      expect(output).toContain('- `query` (string)');
+      expect(output).not.toContain('### search_files');
     } finally {
       environment?.cleanup();
     }
   });
 
-  it('appends worker tool notes after user-authored config.system content', async () => {
+  it('appends canonical injected tool notes after user-authored config.system content', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
@@ -2810,8 +2815,10 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('User system prompt\n\n<tool_notes>');
-      expect(output).toContain('| mcp__mlld_tools__send_email | recipient | @fyi.known("send_email") |');
-      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
       expect(output).not.toContain('Send an outbound email');
       expect(output).not.toContain('Search contacts by name');
     } finally {
@@ -2819,7 +2826,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('injects planner tool notes with deny-list and authorization shape guidance', async () => {
+  it('keeps injected tool notes canonical even when the llm exe display is planner', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @updatePassword(recipient, password) = "ok" with { controlArgs: ["recipient"] }',
@@ -2854,13 +2861,15 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args |');
-      expect(output).toContain('| mcp__mlld_tools__update_password | recipient |');
-      expect(output).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
-      expect(output).toContain('Denied: update_password');
-      expect(output).toContain('Authorization intent:');
-      expect(output).toContain('resolved: { tool: { arg: "handle" } }');
-      expect(output).not.toContain('Use @fyi.known("toolName")');
+      expect(output).toContain('Write tools (require authorization):');
+      expect(output).toContain('### mcp__mlld_tools__update_password');
+      expect(output).toContain('- `recipient` (string, **control arg**)');
+      expect(output).toContain('- `password` (string)');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(output).toContain('- `query` (string)');
+      expect(output).not.toContain('Authorization intent shape:');
+      expect(output).not.toContain('Denied:');
       expect(output).not.toContain('Update account password');
       expect(output).not.toContain('Search contacts by name');
     } finally {
@@ -2868,7 +2877,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('creates config.system with a write-tool table even when tools have no control args', async () => {
+  it('classifies tools without control args as read in injected tool notes when policy does not mark them authorization-relevant', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/exe tool:w @createDraft(subject, body) = "draft" with { controlArgs: [] }',
@@ -2890,10 +2899,12 @@ describe('box MCP config integration', () => {
       });
 
       expect(output).toContain('<tool_notes>');
-      expect(output).toContain('| Tool | Control Args | Discover Targets |');
-      expect(output).toContain('| mcp__mlld_tools__create_draft | (none) |  |');
-      expect(output).toContain('Denied: (none)');
-      expect(output).not.toContain('Use @fyi.known("toolName")');
+      expect(output).toContain('Read tools:');
+      expect(output).toContain('### mcp__mlld_tools__create_draft');
+      expect(output).toContain('- `subject` (string)');
+      expect(output).toContain('- `body` (string)');
+      expect(output).not.toContain('Write tools (require authorization):');
+      expect(output).not.toContain('**control arg**');
     } finally {
       environment?.cleanup();
     }

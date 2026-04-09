@@ -386,14 +386,17 @@ describe('createCallMcpConfig', () => {
         { name: 'known' }
       ]);
       expect(result.toolNotes).toContain('<tool_notes>');
-      expect(result.toolNotes).toContain('| Tool | Control Args | Discover Targets |');
-      expect(result.toolNotes).toContain('| mcp__mlld_tools__outbound_email | recipient | @fyi.known("outbound_email") |');
-      expect(result.toolNotes).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(result.toolNotes).toContain('Read tools: mcp__mlld_tools__search_contacts_by_name');
-      expect(result.toolNotes).toContain('Denied: (none)');
+      expect(result.toolNotes).toContain('Write tools (require authorization):');
+      expect(result.toolNotes).toContain('### mcp__mlld_tools__outbound_email');
+      expect(result.toolNotes).toContain('- `recipient` (string, **control arg**)');
+      expect(result.toolNotes).toContain('- `subject` (string)');
+      expect(result.toolNotes).toContain('- `body` (string)');
+      expect(result.toolNotes).toContain('Read tools:');
+      expect(result.toolNotes).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(result.toolNotes).toContain('- `query` (string)');
       expect(result.toolNotes).not.toContain('Send an outbound email');
-      expect(result.toolNotes).not.toContain('| Tool | Description |');
       expect(result.toolNotes).not.toContain('Search contacts by name');
+      expect(result.toolNotes).not.toContain('@fyi.known("outbound_email")');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
       const listed = await sendJsonRpc(socketPath, {

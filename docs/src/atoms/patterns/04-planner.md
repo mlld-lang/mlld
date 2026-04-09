@@ -137,10 +137,10 @@ The builder treats each bucket with the right proof level. `known` can only come
 
 ### Planner prompt assembly
 
-Explicit planner prompts should usually include generated tool docs from the same write collection the builder will validate against:
+Explicit planner prompts should usually include generated tool docs from the same write collection the builder will validate against. Pass `includeAuthIntentShape: true` so the planner sees the bucketed intent shape it should emit:
 
 ```mlld
-var @plannerToolDocs = @toolDocs(@writeTools, { audience: "planner" })
+var @plannerToolDocs = @toolDocs(@writeTools, { includeAuthIntentShape: true })
 
 var @plannerPrompt = "
 You are the planning phase.
@@ -154,7 +154,9 @@ Return JSON with:
 "
 ```
 
-`@toolDocs(..., { audience: "planner" })` is the non-MCP path. It renders descriptions, visible args, control args, payload args, and required/optional breakdowns for direct prompt assembly. That explicit output is richer than the compact `<tool_notes>` block injected when mlld bridges MCP tools automatically.
+`@toolDocs` renders each tool with its parameter list, control args flagged, and read/write classification derived from the active policy. The `includeAuthIntentShape: true` option appends a description of mlld's bucketed intent shape (`resolved` / `known` / `allow`) so the planner knows the structure `@policy.build` expects.
+
+`@toolDocs` and the `<tool_notes>` block that mlld auto-injects into `exe llm` calls share the same base rendering and classification path. Use `@toolDocs` when you're assembling a prompt template by hand and want explicit control over options such as `includeAuthIntentShape: true`; let the auto-injection handle the default text form when you're calling an `exe llm` such as `@claude(...)` with tools listed in `tools:`. The per-tool surface stays aligned, but explicit `@toolDocs` can include extra opt-in sections that injected notes do not add by default.
 
 ### Worker phase
 

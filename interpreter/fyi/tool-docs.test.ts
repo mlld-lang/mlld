@@ -105,7 +105,7 @@ describe('@fyi.tools', () => {
     }
   });
 
-  it('renders shaped tool collections with exposed names, visible params, and discovery calls', async () => {
+  it('renders canonical arg lists for shaped tool collections using exposed params only', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(owner, recipient, subject, body) = js { return subject; } with {
         controlArgs: ["owner", "recipient"]
@@ -123,19 +123,19 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('Write tools and control args:');
-      expect(docs.text).toContain('| Tool | Description | Control Args | Discover Targets |');
-      expect(docs.text).toContain('| outreach |  | recipient | @fyi.known("outreach") |');
-      expect(docs.text).toContain('Use @fyi.known("toolName") to discover approved handle-bearing targets for control args.');
-      expect(docs.text).toContain('Denied: (none)');
+      expect(docs.text).toContain('Write tools (require authorization):');
+      expect(docs.text).toContain('### outreach');
+      expect(docs.text).toContain('- `recipient` (string, **control arg**)');
+      expect(docs.text).toContain('- `subject` (string)');
+      expect(docs.text).toContain('- `body` (string)');
       expect(docs.text).not.toContain('owner');
-      expect(docs.text).not.toContain('subject, body');
+      expect(docs.text).not.toContain('@fyi.known("outreach")');
     } finally {
       env.cleanup();
     }
   });
 
-  it('only renders same-source correlation guidance when correlateControlArgs is enabled', async () => {
+  it('renders control args in the canonical per-arg form without same-source helper text', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @updateScheduledTransaction(id, recipient, amount) = js { return amount; } with {
         controlArgs: ["id", "recipient"],
@@ -159,15 +159,20 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('| update_scheduled_transaction |  | id, recipient (same source) | @fyi.known("update_scheduled_transaction") |');
-      expect(docs.text).toContain('| send_email |  | recipients, cc, bcc | @fyi.known("send_email") |');
-      expect(docs.text).not.toContain('recipients, cc, bcc (same source)');
+      expect(docs.text).toContain('### update_scheduled_transaction');
+      expect(docs.text).toContain('- `id` (string, **control arg**)');
+      expect(docs.text).toContain('- `recipient` (string, **control arg**)');
+      expect(docs.text).toContain('### send_email');
+      expect(docs.text).toContain('- `recipients` (string, **control arg**)');
+      expect(docs.text).toContain('- `cc` (string, **control arg**)');
+      expect(docs.text).toContain('- `bcc` (string, **control arg**)');
+      expect(docs.text).not.toContain('(same source)');
     } finally {
       env.cleanup();
     }
   });
 
-  it('renders descriptions for explicit @toolDocs() calls outside MCP context', async () => {
+  it('renders canonical explicit @toolDocs() sections outside MCP context', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject) = "sent" with {
         controlArgs: ["recipient"]
@@ -192,19 +197,21 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await readVarData(env, 'docs') as string;
-      expect(docs).toContain('| Tool | Description | Control Args | Discover Targets |');
-      expect(docs).toContain('| send_email | Send an outbound email | recipient | @fyi.known("send_email") |');
+      expect(docs).toContain('Write tools (require authorization):');
+      expect(docs).toContain('### send_email');
+      expect(docs).toContain('- `recipient` (string, **control arg**)');
+      expect(docs).toContain('- `subject` (string)');
       expect(docs).toContain('Read tools:');
-      expect(docs).toContain('| Tool | Description |');
-      expect(docs).toContain('| search_contacts_by_name | Search contacts by name |');
-      expect(docs).toContain('Denied: (none)');
-      expect(docs).not.toContain('[CONTROL:');
+      expect(docs).toContain('### search_contacts_by_name');
+      expect(docs).toContain('- `query` (string)');
+      expect(docs).not.toContain('Send an outbound email');
+      expect(docs).not.toContain('Search contacts by name');
     } finally {
       env.cleanup();
     }
   });
 
-  it('renders full planner argument contracts for explicit non-MCP @toolDocs() calls', async () => {
+  it('appends the auth intent shape only when explicitly requested', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
         controlArgs: ["recipient"]
@@ -219,27 +226,26 @@ describe('@fyi.tools', () => {
         }
       }
 
-      /var @docs = @toolDocs(@tools, { audience: "planner" })
+      /var @docs = @toolDocs(@tools, { includeAuthIntentShape: true })
     `);
 
     try {
       const docs = await readVarData(env, 'docs') as string;
-      expect(docs).toContain('Write tools and argument contracts:');
-      expect(docs).toContain('send_email');
-      expect(docs).toContain('description: Send an outbound email');
-      expect(docs).toContain('args: recipient, subject, body');
-      expect(docs).toContain('control_args: recipient');
-      expect(docs).toContain('payload_args: subject, body');
-      expect(docs).toContain('optional_args: body');
-      expect(docs).toContain('required_args: recipient, subject');
-      expect(docs).toContain('Authorization intent:');
-      expect(docs).not.toContain('| Tool | Description | Control Args |');
+      expect(docs).toContain('Write tools (require authorization):');
+      expect(docs).toContain('### send_email');
+      expect(docs).toContain('- `recipient` (string, **control arg**)');
+      expect(docs).toContain('- `subject` (string)');
+      expect(docs).toContain('- `body` (string)');
+      expect(docs).toContain('Authorization intent shape:');
+      expect(docs).toContain('resolved: { tool: { arg: "<handle>" } }');
+      expect(docs).toContain('known: { tool: { arg: "<value>" } }');
+      expect(docs).toContain('allow: { tool: true }');
     } finally {
       env.cleanup();
     }
   });
 
-  it('renders updateArgs and exactPayloadArgs in worker tables and planner contracts', async () => {
+  it('keeps updateArgs and exactPayloadArgs in JSON output while text stays canonical', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @updateDraft(id, subject, body) = "ok" with {
         controlArgs: ["id"],
@@ -254,18 +260,28 @@ describe('@fyi.tools', () => {
         }
       }
 
-      /var @plannerDocs = @toolDocs(@tools, { audience: "planner" })
+      /var @jsonDocs = @toolDocs(@tools, { format: "json" })
     `);
 
     try {
-      const workerDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
-      expect(workerDocs.text).toContain('| Tool | Description | Control Args | Update Args | Discover Targets |');
-      expect(workerDocs.text).toContain('| update_draft |  | id | subject, body | @fyi.known("update_draft") |');
+      const textDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(textDocs.text).toContain('### update_draft');
+      expect(textDocs.text).toContain('- `id` (string, **control arg**)');
+      expect(textDocs.text).toContain('- `subject` (string)');
+      expect(textDocs.text).toContain('- `body` (string)');
 
-      const plannerDocs = await readVarData(env, 'plannerDocs') as string;
-      expect(plannerDocs).toContain('update_args: subject, body');
-      expect(plannerDocs).toContain('exact_payload_args: subject');
-      expect(plannerDocs).toContain('payload_args: (none)');
+      const jsonDocs = await readVarData(env, 'jsonDocs') as {
+        tools: Array<Record<string, unknown>>;
+      };
+      expect(jsonDocs.tools).toEqual([
+        expect.objectContaining({
+          name: 'update_draft',
+          controlArgs: ['id'],
+          updateArgs: ['subject', 'body'],
+          exactPayloadArgs: ['subject'],
+          dataArgs: []
+        })
+      ]);
     } finally {
       env.cleanup();
     }
@@ -286,10 +302,10 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
-      expect(docs.text).not.toContain('Write tools and control args:');
+      expect(docs.text).not.toContain('Write tools (require authorization):');
       expect(docs.text).toContain('Read tools:');
-      expect(docs.text).toContain('| search_contacts_by_name | Search contacts by name |');
-      expect(docs.text).toContain('Denied: (none)');
+      expect(docs.text).toContain('### search_contacts_by_name');
+      expect(docs.text).toContain('- `query` (string)');
     } finally {
       env.cleanup();
     }
@@ -373,7 +389,7 @@ describe('@fyi.tools', () => {
     }
   });
 
-  it('uses scoped executable arrays for no-argument planner tool docs outside MCP contexts', async () => {
+  it('uses scoped executable arrays for no-argument tool docs with explicit auth intent shape', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
         controlArgs: ["recipient"]
@@ -386,18 +402,19 @@ describe('@fyi.tools', () => {
         tools: [env.getVariable('sendEmail') as any]
       } as any);
 
-      const docs = await evaluateFyiTools({ audience: 'planner' }, env);
-      expect(docs.text).toContain('Write tools and argument contracts:');
-      expect(docs.text).toContain('send_email');
-      expect(docs.text).toContain('control_args: recipient');
-      expect(docs.text).toContain('required_args: recipient, subject, body');
-      expect(docs.text).toContain('Authorization intent:');
+      const docs = await evaluateFyiTools({ includeAuthIntentShape: true }, env);
+      expect(docs.text).toContain('Write tools (require authorization):');
+      expect(docs.text).toContain('### send_email');
+      expect(docs.text).toContain('- `recipient` (string, **control arg**)');
+      expect(docs.text).toContain('- `subject` (string)');
+      expect(docs.text).toContain('- `body` (string)');
+      expect(docs.text).toContain('Authorization intent shape:');
     } finally {
       env.cleanup();
     }
   });
 
-  it('omits helper guidance when write tools have no control args', async () => {
+  it('classifies tools with no control args as read when policy does not mark them authorization-relevant', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @createFile(filename, content) = "ok" with {
         controlArgs: []
@@ -414,10 +431,12 @@ describe('@fyi.tools', () => {
 
     try {
       const docs = await evaluateFyiTools(env.getVariable('writeTools')?.value, env);
-      expect(docs.text).toContain('| create_file |  | (none) |  |');
-      expect(docs.text).toContain('Denied: (none)');
+      expect(docs.text).toContain('Read tools:');
+      expect(docs.text).toContain('### create_file');
+      expect(docs.text).toContain('- `filename` (string)');
+      expect(docs.text).toContain('- `content` (string)');
       expect(docs.text).not.toContain('@fyi.known("create_file")');
-      expect(docs.text).not.toContain('Use @fyi.known("toolName")');
+      expect(docs.text).not.toContain('**control arg**');
     } finally {
       env.cleanup();
     }

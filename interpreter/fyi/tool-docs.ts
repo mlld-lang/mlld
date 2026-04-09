@@ -12,7 +12,7 @@ import {
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
-import { isExecutableVariable } from '@core/types/variable';
+import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 
 type FyiToolsFormat = 'text' | 'json';
 type FyiToolsIncludeHelpers = 'auto' | 'none' | 'all';
@@ -208,13 +208,18 @@ function normalizeOptions(raw: FyiToolsOptions) {
 }
 
 function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetadata {
+  const params = Array.isArray(metadata.params) ? [...metadata.params] : [];
+  const paramEntries = Array.isArray(metadata.paramEntries)
+    ? metadata.paramEntries.map(entry => ({ ...entry }))
+    : [];
+  const labels = Array.isArray(metadata.labels) ? [...metadata.labels] : [];
   return {
     ...metadata,
     ...(metadata.displayName ? { displayName: metadata.displayName } : {}),
-    params: [...metadata.params],
-    paramEntries: metadata.paramEntries.map(entry => ({ ...entry })),
+    params,
+    paramEntries,
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
-    labels: [...metadata.labels],
+    labels,
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {}),
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
@@ -293,12 +298,13 @@ function resolveExecutableArrayMetadata(
       continue;
     }
 
-    if (isExecutableVariable(entry)) {
+    if (isVariable(entry) && isExecutableVariable(entry)) {
+      const executable = entry as ExecutableVariable;
       resolved.push(
         resolveEffectiveToolMetadata({
           env,
-          executable: entry,
-          operationName: mlldNameToMCPName(entry.name)
+          executable,
+          operationName: mlldNameToMCPName(executable.name)
         })
       );
       continue;
@@ -375,12 +381,13 @@ async function resolveToolMetadataInput(
     return trimmed ? [buildNameOnlyMetadata(trimmed)] : [];
   }
 
-  if (isExecutableVariable(unwrapped)) {
+  if (isVariable(unwrapped) && isExecutableVariable(unwrapped)) {
+    const executable = unwrapped as ExecutableVariable;
     return [
       resolveEffectiveToolMetadata({
         env,
-        executable: unwrapped,
-        operationName: mlldNameToMCPName(unwrapped.name)
+        executable,
+        operationName: mlldNameToMCPName(executable.name)
       })
     ];
   }
