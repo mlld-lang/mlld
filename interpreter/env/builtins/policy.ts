@@ -18,7 +18,7 @@ import {
 } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { boundary } from '@interpreter/utils/boundary';
 import { tracePolicyEvent } from '@interpreter/tracing/events';
@@ -258,7 +258,7 @@ function createPolicyBuilderResult(
       }
     }),
     valid: compilation.issues.length === 0,
-    issues: compilation.issues,
+    issues: wrapStructured(compilation.issues, 'array'),
     report: clonePolicyAuthorizationCompileReport(compilation.report)
   };
 }
