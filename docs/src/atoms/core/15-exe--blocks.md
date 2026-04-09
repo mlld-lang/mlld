@@ -5,9 +5,9 @@ brief: Multi-statement function bodies
 category: core
 parent: exe
 tags: [functions, blocks, let, accumulation]
-related: [exe-simple, exe-when, for-block]
+related: [exe-simple, exe-when, for-block, script-return, exe-tool-return]
 related-code: [interpreter/eval/exe.ts, interpreter/eval/block.ts]
-updated: 2026-01-31
+updated: 2026-04-09
 qa_tier: 2
 ---
 
@@ -34,4 +34,6 @@ Block rules:
 - Use `[...]` for multi-statement bodies
 - `let @var = value` for block-scoped variables
 - `let @var += value` for accumulation (arrays/strings/objects)
-- `=> value` required as last statement for return
+- `=> value` terminates the block and returns from the exe (see `script-return`)
+- `-> value` writes the LLM-facing tool slot without terminating; `=-> value` writes both slots and terminates (see `exe-tool-return`)
+- When using both `=>` and `->`, `->` must come before `=>` — `->` is a passive write that continues execution, `=>` terminates the block
