@@ -296,6 +296,9 @@ export class ASTSemanticVisitor {
           case 'VariableReferenceWithTail':
             this.visitVariableReferenceWithTail(node, actualContext);
             break;
+          case 'ExeOutputRecord':
+            this.visitExeOutputRecord(node, actualContext);
+            break;
           case 'ExeBlock':
             this.visitExeBlock(node, actualContext);
             break;
@@ -601,6 +604,49 @@ export class ASTSemanticVisitor {
         }
       }
     }
+  }
+
+  private visitExeOutputRecord(node: ASTNode, context: VisitorContext): void {
+    if (!node.location) return;
+
+    const sourceText = this.document.getText();
+    const outputText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+
+    if (node.kind === 'dynamic') {
+      const recordIndex = outputText.indexOf('record');
+      if (recordIndex !== -1) {
+        const recordOffset = node.location.start.offset + recordIndex;
+        const recordPos = this.document.positionAt(recordOffset);
+        this.tokenBuilder.addToken({
+          line: recordPos.line,
+          char: recordPos.character,
+          length: 'record'.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+
+      if (node.ref && typeof node.ref === 'object' && (node.ref as ASTNode).type) {
+        this.visitNode(node.ref as ASTNode, context);
+      }
+
+      return;
+    }
+
+    const staticMatch = /=>\s*(@?[A-Za-z_][A-Za-z0-9_-]*)/.exec(outputText);
+    if (!staticMatch || staticMatch.index === undefined) return;
+
+    const referenceText = staticMatch[1];
+    const referenceOffset =
+      node.location.start.offset + staticMatch.index + staticMatch[0].lastIndexOf(referenceText);
+    const referencePos = this.document.positionAt(referenceOffset);
+    this.tokenBuilder.addToken({
+      line: referencePos.line,
+      char: referencePos.character,
+      length: referenceText.length,
+      tokenType: 'variableRef',
+      modifiers: ['reference']
+    });
   }
 
   /**

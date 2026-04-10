@@ -21,6 +21,20 @@ function createEnvironment(): Environment {
   return env;
 }
 
+function setActiveLlmSession(env: Environment, sessionId: string): void {
+  env.setLlmToolConfig({
+    sessionId,
+    mcpConfigPath: '',
+    toolsCsv: '',
+    mcpAllowedTools: '',
+    nativeAllowedTools: '',
+    unifiedAllowedTools: '',
+    availableTools: [],
+    inBox: false,
+    cleanup: async () => {}
+  });
+}
+
 function parseRecord(source: string): RecordDirectiveNode {
   const directive = parseSync(source).find((node: unknown): node is RecordDirectiveNode => {
     return Boolean(node) && typeof node === 'object' && (node as RecordDirectiveNode).kind === 'record';
@@ -247,19 +261,94 @@ describe('renderDisplayProjection', () => {
     expect(asText(resolved)).toBe('ada@example.com');
   });
 
+  it('exposes stable per-value .mx.handle accessors and returns null outside an llm session', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada'
+      },
+      env
+    });
+    const email = await accessField(output, { type: 'field', value: 'email' } as any, { env });
+    const emailMx = await accessField(email, { type: 'field', value: 'mx' } as any, { env });
+
+    expect(await accessField(emailMx, { type: 'field', value: 'handle' } as any, { env })).toBeNull();
+
+    setActiveLlmSession(env, 'session-accessor');
+
+    const first = await accessField(emailMx, { type: 'field', value: 'handle' } as any, { env });
+    const second = await accessField(emailMx, { type: 'field', value: 'handle' } as any, { env });
+
+    expect(first).toMatch(HANDLE_RE);
+    expect(second).toBe(first);
+  });
+
+  it('projects .mx.handles with role-selected fields and null handles outside an llm session', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    role:planner: [subject, { ref: "from" }, { handle: "message_id" }],
+    role:worker: [{ mask: "from" }, subject, body]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        message_id: 'msg-1',
+        subject: 'Update',
+        body: 'Visible to workers'
+      },
+      env
+    });
+
+    env.setExeLabels(['llm', 'role:planner']);
+    const recordMx = await accessField(output, { type: 'field', value: 'mx' } as any, { env });
+
+    expect(await accessField(recordMx, { type: 'field', value: 'handles' } as any, { env })).toEqual({
+      subject: {
+        value: 'Update',
+        handle: null
+      },
+      from: {
+        value: 'ada@example.com',
+        handle: null
+      },
+      message_id: null
+    });
+
+    setActiveLlmSession(env, 'session-record-handles');
+
+    expect(await accessField(recordMx, { type: 'field', value: 'handles' } as any, { env })).toEqual({
+      subject: {
+        value: 'Update',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      from: {
+        value: 'ada@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      message_id: expect.stringMatching(HANDLE_RE)
+    });
+  });
+
   it('stores safe previews on issued handles for displayed fact fields', async () => {
     const env = createEnvironment();
-    env.setLlmToolConfig({
-      sessionId: 'session-projection-test',
-      mcpConfigPath: '',
-      toolsCsv: '',
-      mcpAllowedTools: '',
-      nativeAllowedTools: '',
-      unifiedAllowedTools: '',
-      availableTools: [],
-      inBox: false,
-      cleanup: async () => {}
-    });
+    setActiveLlmSession(env, 'session-projection-test');
     const definition = await registerRecord(env, `
 /record @contact = {
   facts: [email: string, name: string, phone: string?],
@@ -335,17 +424,7 @@ describe('renderDisplayProjection', () => {
 
   it('projects array fact fields element-by-element for bare, masked, and handle-only displays', async () => {
     const env = createEnvironment();
-    env.setLlmToolConfig({
-      sessionId: 'session-array-projection',
-      mcpConfigPath: '',
-      toolsCsv: '',
-      mcpAllowedTools: '',
-      nativeAllowedTools: '',
-      unifiedAllowedTools: '',
-      availableTools: [],
-      inBox: false,
-      cleanup: async () => {}
-    });
+    setActiveLlmSession(env, 'session-array-projection');
     const definition = await registerRecord(env, `
 /record @calendar_evt = {
   facts: [participants: array, recipients: array, visible: array],

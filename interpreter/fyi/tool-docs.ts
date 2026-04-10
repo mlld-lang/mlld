@@ -1,6 +1,8 @@
 import { mlldNameToMCPName } from '@core/mcp/names';
+import type { RecordDefinition } from '@core/types/record';
 import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
+import { describeRecordProjectionFields } from '@interpreter/eval/records/display-projection';
 import {
   isWriteToolMetadata,
   resolveEffectiveToolMetadata,
@@ -18,7 +20,6 @@ type FyiToolsFormat = 'text' | 'json';
 type FyiToolsIncludeHelpers = 'auto' | 'none' | 'all';
 
 type FyiToolsOptions = {
-  audience?: string;
   format?: FyiToolsFormat;
   includeHelpers?: FyiToolsIncludeHelpers;
   includeOperationLabels?: boolean;
@@ -46,6 +47,11 @@ type JsonToolDocEntry = {
   multiControlArgCorrelation: boolean;
   discoveryCall?: string;
   operationLabels?: string[];
+  output?: Array<{
+    field: string;
+    classification: 'fact' | 'data';
+    shape: 'value' | 'value+handle' | 'preview+handle' | 'handle';
+  }>;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -147,7 +153,6 @@ function isOptionsCandidate(value: unknown): value is FyiToolsOptions {
   }
 
   const allowed = new Set([
-    'audience',
     'format',
     'includeHelpers',
     'includeOperationLabels',
@@ -225,7 +230,11 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
     ...(metadata.updateArgs ? { updateArgs: [...metadata.updateArgs] } : {}),
     hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
-    ...(metadata.exactPayloadArgs ? { exactPayloadArgs: [...metadata.exactPayloadArgs] } : {})
+    ...(metadata.exactPayloadArgs ? { exactPayloadArgs: [...metadata.exactPayloadArgs] } : {}),
+    ...(metadata.outputRecord ? { outputRecord: metadata.outputRecord } : {}),
+    ...(metadata.embeddedRecordDefinitions
+      ? { embeddedRecordDefinitions: { ...metadata.embeddedRecordDefinitions } }
+      : {})
   };
 }
 
@@ -424,6 +433,53 @@ function resolveKnownHelperStatus(
   };
 }
 
+function resolveToolOutputRecordDefinition(
+  entry: EffectiveToolMetadata,
+  env: Environment
+): RecordDefinition | undefined {
+  const outputRecord = entry.outputRecord;
+  if (!outputRecord) {
+    return undefined;
+  }
+
+  if (typeof outputRecord === 'string') {
+    return env.getRecordDefinition(outputRecord) ?? entry.embeddedRecordDefinitions?.[outputRecord];
+  }
+
+  return undefined;
+}
+
+function buildToolOutputDescriptors(
+  entry: EffectiveToolMetadata,
+  env: Environment
+): Array<{
+  field: string;
+  classification: 'fact' | 'data';
+  shape: 'value' | 'value+handle' | 'preview+handle' | 'handle';
+}> {
+  const definition = resolveToolOutputRecordDefinition(entry, env);
+  if (!definition) {
+    return [];
+  }
+
+  return describeRecordProjectionFields(definition, env).map(field => ({
+    field: field.field,
+    classification: field.classification,
+    shape: field.shape
+  }));
+}
+
+function formatOutputShape(shape: 'value' | 'value+handle' | 'preview+handle' | 'handle'): string {
+  switch (shape) {
+    case 'value+handle':
+      return 'value + handle';
+    case 'preview+handle':
+      return 'preview + handle';
+    default:
+      return shape;
+  }
+}
+
 function formatArgList(args: readonly string[]): string {
   return args.length > 0 ? args.join(', ') : '(none)';
 }
@@ -475,6 +531,7 @@ function buildToolArgLine(
 }
 
 function buildToolSectionLines(
+  env: Environment,
   heading: string,
   entries: readonly EffectiveToolMetadata[]
 ): string[] {
@@ -494,6 +551,14 @@ function buildToolSectionLines(
 
     for (const param of params) {
       lines.push(buildToolArgLine(entry, param));
+    }
+
+    const outputDescriptors = buildToolOutputDescriptors(entry, env);
+    if (outputDescriptors.length > 0) {
+      lines.push('Returns:');
+      for (const output of outputDescriptors) {
+        lines.push(`- \`${output.field}\` (${formatOutputShape(output.shape)}, ${output.classification})`);
+      }
     }
   }
 
@@ -533,14 +598,14 @@ function buildTextLines(options: {
   const lines: string[] = [];
 
   if (writeEntries.length > 0) {
-    lines.push(...buildToolSectionLines('Write tools (require authorization)', writeEntries));
+    lines.push(...buildToolSectionLines(env, 'Write tools (require authorization)', writeEntries));
   }
 
   if (readEntries.length > 0) {
     if (lines.length > 0) {
       lines.push('');
     }
-    lines.push(...buildToolSectionLines('Read tools', readEntries));
+    lines.push(...buildToolSectionLines(env, 'Read tools', readEntries));
   }
 
   if (includeAuthIntentShape) {
@@ -582,7 +647,10 @@ function joinAnnotationLines(lines: readonly string[]): string | undefined {
   return normalized.join('\n');
 }
 
-function buildToolDescriptionAnnotationLines(entry: EffectiveToolMetadata): string[] {
+function buildToolDescriptionAnnotationLines(
+  env: Environment,
+  entry: EffectiveToolMetadata
+): string[] {
   if (entry.name === 'known') {
     return [];
   }
@@ -603,6 +671,13 @@ function buildToolDescriptionAnnotationLines(entry: EffectiveToolMetadata): stri
   const exactPayloadArgs = entry.exactPayloadArgs ?? [];
   if (exactPayloadArgs.length > 0) {
     lines.push(`[EXACT PAYLOAD: ${formatArgList(exactPayloadArgs)} (must appear in user task)]`);
+  }
+
+  const outputDescriptors = buildToolOutputDescriptors(entry, env);
+  if (outputDescriptors.length > 0) {
+    lines.push(
+      `[OUTPUT: ${outputDescriptors.map(output => `${output.field}=${formatOutputShape(output.shape)}`).join(', ')}]`
+    );
   }
 
   return lines;
@@ -640,7 +715,10 @@ function buildJsonToolEntry(
     ...(helperStatus.available && controlArgs.length > 0
       ? { discoveryCall: `@fyi.known("${entry.name}")` }
       : {}),
-    ...(includeOperationLabels ? { operationLabels: [...entry.labels] } : {})
+    ...(includeOperationLabels ? { operationLabels: [...entry.labels] } : {}),
+    ...(buildToolOutputDescriptors(entry, env).length > 0
+      ? { output: buildToolOutputDescriptors(entry, env) }
+      : {})
   };
 }
 
@@ -705,12 +783,10 @@ export async function evaluateFyiTools(
 export function renderInjectedToolNotes(options: {
   env: Environment;
   entries: readonly EffectiveToolMetadata[];
-  audience?: string;
   includeHelpers?: FyiToolsIncludeHelpers;
   isMcpContext?: boolean;
   includeAuthIntentShape?: boolean;
 }): string | undefined {
-  void options.audience;
   void options.includeHelpers;
   void options.isMcpContext;
   const entries = dedupeToolMetadata(options.entries);
@@ -725,13 +801,10 @@ export function renderInjectedToolNotes(options: {
 export function renderToolDescriptionNotes(options: {
   env: Environment;
   entry: EffectiveToolMetadata;
-  audience?: string;
   includeHelpers?: FyiToolsIncludeHelpers;
 }): string | undefined {
-  void options.env;
-  void options.audience;
   void options.includeHelpers;
-  return joinAnnotationLines(buildToolDescriptionAnnotationLines(options.entry));
+  return joinAnnotationLines(buildToolDescriptionAnnotationLines(options.env, options.entry));
 }
 
 export function appendToolNotesToSystemPrompt(

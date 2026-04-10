@@ -1,5 +1,6 @@
 import type { ShelfScopeSlotBinding, ShelfSlotDefinition } from '@core/types/shelf';
 import type { Environment } from '@interpreter/env/Environment';
+import { describeRecordProjectionFields } from '@interpreter/eval/records/display-projection';
 import { getNormalizedShelfScope, extractShelfSlotRef } from '@interpreter/shelf/runtime';
 import { getRecordProjectionMetadata, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
@@ -235,6 +236,73 @@ function buildUsageLines(
   return lines;
 }
 
+function formatProjectedShape(shape: 'value' | 'value+handle' | 'preview+handle' | 'handle'): string {
+  switch (shape) {
+    case 'value+handle':
+      return 'value + handle';
+    case 'preview+handle':
+      return 'preview + handle';
+    default:
+      return shape;
+  }
+}
+
+function collectVisibleShelfRecordNames(
+  env: Environment,
+  scope: NonNullable<ReturnType<typeof getNormalizedShelfScope>>
+): string[] {
+  const recordNames = new Set<string>();
+
+  for (const binding of [...scope.writeSlotBindings, ...scope.readSlotBindings]) {
+    const slot = resolveSlotDefinition(env, binding.ref);
+    if (slot?.record) {
+      recordNames.add(slot.record);
+    }
+  }
+
+  for (const value of Object.values(scope.readAliases)) {
+    const direct = findRecordName(value);
+    if (direct) {
+      recordNames.add(direct);
+      continue;
+    }
+
+    const arrayRecord = findArrayRecordName(value);
+    if (arrayRecord) {
+      recordNames.add(arrayRecord);
+    }
+  }
+
+  return Array.from(recordNames.values()).sort();
+}
+
+function buildProjectedRecordFieldLines(
+  env: Environment,
+  recordNames: readonly string[]
+): string[] {
+  const lines: string[] = [];
+
+  for (const recordName of recordNames) {
+    const definition = env.getRecordDefinition(recordName);
+    if (!definition) {
+      continue;
+    }
+
+    const projectedFields = describeRecordProjectionFields(definition, env);
+    if (projectedFields.length === 0) {
+      continue;
+    }
+
+    lines.push(
+      `- @${recordName}: ${projectedFields
+        .map(field => `${field.field} (${formatProjectedShape(field.shape)})`)
+        .join(', ')}`
+    );
+  }
+
+  return lines;
+}
+
 export function renderInjectedShelfNotes(env: Environment): string | undefined {
   const scope = getNormalizedShelfScope(env);
   if (!scope) {
@@ -278,6 +346,15 @@ export function renderInjectedShelfNotes(env: Environment): string | undefined {
   }
 
   lines.push('', ...buildUsageLines(writableRows, readableRows));
+
+  const projectedRecordFieldLines = buildProjectedRecordFieldLines(
+    env,
+    collectVisibleShelfRecordNames(env, scope)
+  );
+  if (projectedRecordFieldLines.length > 0) {
+    lines.push('', 'Visible record fields under the current display:', ...projectedRecordFieldLines);
+  }
+
   return wrapShelfNotesBlock(lines);
 }
 

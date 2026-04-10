@@ -46,6 +46,7 @@ describe('MlldSyntaxGenerator', () => {
     expect('facts: [email: string]'.match(objectKeyRegex)?.[0]).toBe('facts');
     expect('data: [notes: string?]'.match(objectKeyRegex)?.[0]).toBe('data');
     expect('display: [name, { mask: "email" }]'.match(objectKeyRegex)?.[0]).toBe('display');
+    expect('role:planner: [name, { ref: "email" }]'.match(objectKeyRegex)?.[0]).toBe('role:planner');
     expect('{ mask: "email" }'.match(objectKeyRegex)?.[0]).toBe('mask');
   });
 

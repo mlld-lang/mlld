@@ -1,6 +1,7 @@
 import { mcpNameToMlldName } from '@core/mcp/names';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
+import type { RecordDefinition } from '@core/types/record';
 import {
   getToolCollectionAuthorizationContext,
   type ToolAuthorizationContextEntry,
@@ -8,6 +9,7 @@ import {
   type ToolCollectionAuthorizationContext,
   type ToolDefinition
 } from '@core/types/tools';
+import type { ExecutableOutputRecord } from '@core/types/executable';
 import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
@@ -27,6 +29,8 @@ export interface EffectiveToolMetadata {
   exactPayloadArgs?: string[];
   correlateControlArgs: boolean;
   taintFacts: boolean;
+  outputRecord?: ExecutableOutputRecord;
+  embeddedRecordDefinitions?: Record<string, RecordDefinition>;
 }
 
 export interface EffectiveToolParam {
@@ -239,6 +243,35 @@ function getExecutableTaintFacts(executable: ExecutableVariable): boolean {
   return false;
 }
 
+function getExecutableOutputRecord(executable: ExecutableVariable): ExecutableOutputRecord | undefined {
+  const executableDef = executable.internal?.executableDef ?? executable.value;
+  const outputRecord = (executableDef as { outputRecord?: unknown }).outputRecord;
+  if (!outputRecord) {
+    return undefined;
+  }
+
+  if (typeof outputRecord === 'string') {
+    const normalized = normalizeTrimmedString(outputRecord);
+    return normalized;
+  }
+
+  return isPlainObject(outputRecord) ? outputRecord as ExecutableOutputRecord : undefined;
+}
+
+function getEmbeddedExecutableRecordDefinitions(
+  executable: ExecutableVariable
+): Record<string, RecordDefinition> | undefined {
+  const candidate = executable.internal?.recordDefinitions;
+  if (!isPlainObject(candidate)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(candidate)
+    .filter(([, definition]) => isPlainObject(definition))
+    .map(([name, definition]) => [name, definition as RecordDefinition] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 function buildToolContextFromExecutable(
   name: string,
   executable: ExecutableVariable
@@ -264,6 +297,8 @@ function buildToolContextFromExecutable(
   const updateArgs = getExecutableUpdateArgs(executable);
   const exactPayloadArgs = getExecutableExactPayloadArgs(executable);
   const description = getExecutableDescription(executable);
+  const outputRecord = getExecutableOutputRecord(executable);
+  const embeddedRecordDefinitions = getEmbeddedExecutableRecordDefinitions(executable);
   return {
     name,
     params,
@@ -277,7 +312,9 @@ function buildToolContextFromExecutable(
     hasUpdateArgsMetadata: Array.isArray(updateArgs),
     ...(Array.isArray(exactPayloadArgs) ? { exactPayloadArgs } : {}),
     correlateControlArgs: getExecutableCorrelateControlArgs(executable),
-    taintFacts: getExecutableTaintFacts(executable)
+    taintFacts: getExecutableTaintFacts(executable),
+    ...(outputRecord ? { outputRecord } : {}),
+    ...(embeddedRecordDefinitions ? { embeddedRecordDefinitions } : {})
   };
 }
 

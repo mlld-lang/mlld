@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { parseSync } from '@grammar/parser';
 import { Environment } from './Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { createFactSourceHandle } from '@core/types/handle';
-import { makeSecurityDescriptor } from '@core/types/security';
-import { wrapStructured } from '@interpreter/utils/structured-value';
+import { evaluateRecord } from '@interpreter/eval/record';
+import { coerceRecordOutput } from '@interpreter/eval/records/coerce-record';
+import { accessField } from '@interpreter/utils/field-access';
+import type { RecordDirectiveNode } from '@core/types/record';
 
 function createEnvironment(basePath = '/tmp/mlld-ambient-mx'): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), basePath);
@@ -24,19 +26,24 @@ function setActiveLlmSession(env: Environment, sessionId: string): void {
   });
 }
 
-function createFactValue(email: string, sourceRef = '@contact') {
-  return wrapStructured(email, 'text', email, {
-    security: makeSecurityDescriptor({
-      labels: [`fact:${sourceRef}.email`]
-    }),
-    factsources: [
-      createFactSourceHandle({
-        sourceRef,
-        field: 'email',
-        instanceKey: 'c1'
-      })
-    ]
+function parseRecord(source: string): RecordDirectiveNode {
+  const directive = parseSync(source).find((node: unknown): node is RecordDirectiveNode => {
+    return Boolean(node) && typeof node === 'object' && (node as RecordDirectiveNode).kind === 'record';
   });
+  if (!directive) {
+    throw new Error('Expected a record directive');
+  }
+  return directive;
+}
+
+async function registerRecord(env: Environment, source: string) {
+  const directive = parseRecord(source);
+  await evaluateRecord(directive, env);
+  const definition = env.getRecordDefinition(directive.raw.identifier);
+  if (!definition) {
+    throw new Error(`Missing record definition @${directive.raw.identifier}`);
+  }
+  return definition;
 }
 
 describe('ambient @mx accessors', () => {
@@ -48,33 +55,132 @@ describe('ambient @mx accessors', () => {
     }
   });
 
-  it('filters @mx.handles to the current llm session', () => {
+  it('filters grouped @mx.handles to the current llm session', async () => {
     const root = createEnvironment();
     const left = root.createChild();
     const right = root.createChild();
+    const definition = await registerRecord(root, `
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+`);
 
     setActiveLlmSession(left, 'session-left');
     setActiveLlmSession(right, 'session-right');
 
-    const leftIssued = left.issueHandle(createFactValue('ada@example.com'));
-    const rightIssued = right.issueHandle(createFactValue('grace@example.com', '@contact_b'));
+    const leftOutput = await coerceRecordOutput({
+      definition,
+      value: { email: 'ada@example.com', name: 'Ada' },
+      env: left
+    });
+    const rightOutput = await coerceRecordOutput({
+      definition,
+      value: { email: 'grace@example.com', name: 'Grace' },
+      env: right
+    });
+
+    const leftMxValue = await accessField(leftOutput, { type: 'field', value: 'mx' } as any, { env: left });
+    const rightMxValue = await accessField(rightOutput, { type: 'field', value: 'mx' } as any, { env: right });
+
+    const leftProjected = await accessField(leftMxValue, { type: 'field', value: 'handles' } as any, { env: left }) as any;
+    const rightProjected = await accessField(rightMxValue, { type: 'field', value: 'handles' } as any, { env: right }) as any;
 
     const leftMx = left.getVariable('mx')?.value as any;
     const rightMx = right.getVariable('mx')?.value as any;
 
-    expect(Object.keys(leftMx.handles)).toEqual([leftIssued.handle]);
-    expect(Object.keys(rightMx.handles)).toEqual([rightIssued.handle]);
-    expect(leftMx.handles[leftIssued.handle]).toMatchObject({
-      value: 'ada@example.com',
-      labels: ['fact:@contact.email'],
-      factsource: {
-        sourceRef: '@contact',
-        field: 'email',
-        instanceKey: 'c1'
+    expect(leftProjected.email.handle).toMatch(/^h_[a-z0-9]{6}$/);
+    expect(leftProjected.name.handle).toMatch(/^h_[a-z0-9]{6}$/);
+    expect(rightProjected.email.handle).toMatch(/^h_[a-z0-9]{6}$/);
+
+    expect(leftMx.handles).toEqual([
+      {
+        record: '@contact',
+        instance: {
+          email: leftProjected.email,
+          name: leftProjected.name
+        }
       }
+    ]);
+    expect(rightMx.handles).toEqual([
+      {
+        record: '@contact',
+        instance: {
+          email: rightProjected.email,
+          name: rightProjected.name
+        }
+      }
+    ]);
+    expect(leftMx.handles).not.toEqual(rightMx.handles);
+  });
+
+  it('exposes filtered and unfiltered grouped ambient handles by active role', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string],
+  data: [subject: string, body: string],
+  display: {
+    role:planner: [subject, { ref: "from" }],
+    role:worker: [{ mask: "from" }, subject, body]
+  }
+}
+`);
+
+    setActiveLlmSession(env, 'session-grouped-handles');
+    env.setExeLabels(['llm', 'role:worker']);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        subject: 'Update',
+        body: 'Workers can inspect this'
+      },
+      env
     });
-    expect(leftMx.handles[leftIssued.handle].issuedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(leftMx.handles[rightIssued.handle]).toBeUndefined();
+
+    const mxValue = await accessField(output, { type: 'field', value: 'mx' } as any, { env });
+    await accessField(mxValue, { type: 'field', value: 'handles' } as any, { env });
+
+    env.setExeLabels(['llm', 'role:planner']);
+    const ambientMx = env.getVariable('mx')?.value as any;
+
+    expect(ambientMx.handles).toEqual([
+      {
+        record: '@email',
+        instance: {
+          from: {
+            value: 'ada@example.com',
+            handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+          },
+          subject: {
+            value: 'Update',
+            handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+          }
+        }
+      }
+    ]);
+
+    expect(ambientMx.handles.unfiltered).toEqual([
+      {
+        record: '@email',
+        instance: {
+          from: {
+            value: 'ada@example.com',
+            handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+          },
+          subject: {
+            value: 'Update',
+            handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+          },
+          body: {
+            value: 'Workers can inspect this',
+            handle: expect.stringMatching(/^h_[a-z0-9]{6}$/)
+          }
+        }
+      }
+    ]);
   });
 
   it('exposes llm session, display, and resume metadata', () => {

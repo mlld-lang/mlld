@@ -8,7 +8,7 @@ parent: builtins
 tags: [builtins, mx, debugging, tracing, shelf, policy]
 related: [builtins-reserved-variables, runtime-tracing, security-guards-basics, shelf-slots, facts-and-handles]
 related-code: [interpreter/env/Environment.ts, interpreter/env/VariableManager.ts, interpreter/env/ContextManager.ts]
-updated: 2026-04-07
+updated: 2026-04-10
 ---
 
 `@mx` is ambient runtime state. It is different from `@someValue.mx`, which is metadata attached to a specific value.
@@ -20,36 +20,65 @@ Use `@mx.*` when you want to inspect the current execution context:
 - `@mx.llm.display`
 - `@mx.llm.resume`
 - `@mx.handles`
+- `@mx.handles.unfiltered`
 - `@mx.shelf.writable`
 - `@mx.shelf.readable`
 - `@mx.policy.active`
 
 ## Handle introspection
 
-`@mx.handles` returns the handles visible in the current LLM bridge session. The accessor is scope-filtered on read, so sibling calls do not see each other's handles.
+`@mx.handles` returns the handles visible in the current LLM bridge session, grouped by record instance. The accessor is scope-filtered on read, so sibling calls do not see each other's handles. The active display mode shapes which fields appear; `@mx.handles.unfiltered` exposes the full grouped view.
 
 ```mlld
 /show @mx.handles
+/show @mx.handles.unfiltered
 ```
 
 Example shape:
 
 ```json
-{
-  "h_a7x9k2": {
-    "value": "alice@example.com",
-    "labels": ["fact:@contact.email"],
-    "factsource": {
-      "sourceRef": "@contact",
-      "field": "email",
-      "instanceKey": "c1"
-    },
-    "issuedAt": "2026-04-07T11:23:45.123Z"
+[
+  {
+    "record": "@contact",
+    "instance": {
+      "email": {
+        "value": "alice@example.com",
+        "handle": "h_a7x9k2"
+      },
+      "name": {
+        "value": "Alice",
+        "handle": "h_k91m4p"
+      }
+    }
   }
+]
+```
+
+For masked fields, the grouped view uses `{ preview, handle }`. For handle-only fields, the grouped view stores just the handle string. `@mx.handles.unfiltered` always uses `{ value, handle }` for every available field.
+
+## Value-local handle accessors
+
+`@someValue.mx` is per-value metadata. Two handle-specific accessors are now available there:
+
+- `.mx.handle` returns the stable handle for that single value inside the current LLM bridge call, or `null` outside a bridge call.
+- `.mx.handles` returns the display-shaped handle view for a structured record value.
+
+```mlld
+/show @contact.email.mx.handle
+/show @contact.mx.handles
+```
+
+Example `.mx.handles` shape for a `role:planner` display:
+
+```json
+{
+  "subject": { "value": "Update", "handle": "h_1a2b3c" },
+  "from": { "value": "ada@example.com", "handle": "h_4d5e6f" },
+  "message_id": "h_7g8h9i"
 }
 ```
 
-`value` is a debug preview, not a guaranteed full-content dump.
+Outside an active bridge call, the same accessor returns the same shape with `handle: null` or `null` handle-only entries. This makes tests and debug code deterministic without minting live handles when no resolver scope exists.
 
 ## LLM call metadata
 

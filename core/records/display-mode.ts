@@ -1,3 +1,9 @@
+import type {
+  RecordDisplayEntry,
+  RecordDisplayMode,
+  RecordFieldProjectionMetadata
+} from '@core/types/record';
+
 export interface DisplaySelection {
   strictMode: boolean;
   modeName?: string;
@@ -74,4 +80,69 @@ export function formatDisplayModeName(modeName: string): string {
   return BARE_DISPLAY_MODE_PATTERN.test(normalized)
     ? normalized
     : JSON.stringify(normalized);
+}
+
+function findDisplayEntry(
+  entries: readonly RecordDisplayEntry[],
+  fieldName: string
+): RecordDisplayEntry | undefined {
+  return entries.find(entry => entry.field === fieldName);
+}
+
+function displayEntryToMode(entry: RecordDisplayEntry): RecordDisplayMode {
+  return entry.kind;
+}
+
+export function resolveRecordFieldDisplayMode(
+  fieldProjection: Pick<
+    RecordFieldProjectionMetadata,
+    'classification' | 'display' | 'fieldName' | 'recordName'
+  >,
+  selection: DisplaySelection
+): { omitted: boolean; mode: RecordDisplayMode } {
+  if (selection.strictMode) {
+    return fieldProjection.classification === 'fact'
+      ? { omitted: false, mode: 'handle' }
+      : { omitted: true, mode: 'bare' };
+  }
+
+  const display = fieldProjection.display;
+  if (display.kind === 'open') {
+    return fieldProjection.classification === 'fact'
+      ? { omitted: false, mode: 'ref' }
+      : { omitted: false, mode: 'bare' };
+  }
+
+  if (display.kind === 'legacy') {
+    const explicit = findDisplayEntry(display.entries, fieldProjection.fieldName);
+    return explicit
+      ? { omitted: false, mode: displayEntryToMode(explicit) }
+      : { omitted: true, mode: 'bare' };
+  }
+
+  const selectedMode = selection.modeName ?? (Object.prototype.hasOwnProperty.call(display.modes, 'default')
+    ? 'default'
+    : undefined);
+  if (!selectedMode) {
+    throw new Error(
+      `Record '@${fieldProjection.recordName}' requires an explicit display mode before '${fieldProjection.fieldName}' can be projected`
+    );
+  }
+
+  const entries = display.modes[selectedMode];
+  if (!entries) {
+    throw new Error(
+      `Record '@${fieldProjection.recordName}' does not declare display mode '${selectedMode}'`
+    );
+  }
+
+  const explicit = findDisplayEntry(entries, fieldProjection.fieldName);
+  if (!explicit) {
+    return { omitted: true, mode: 'bare' };
+  }
+
+  return {
+    omitted: false,
+    mode: displayEntryToMode(explicit)
+  };
 }

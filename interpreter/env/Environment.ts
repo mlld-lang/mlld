@@ -135,7 +135,11 @@ import { checkpointPostHook } from '../hooks/checkpoint-post-hook';
 import { guardPreHook } from '../hooks/guard-pre-hook';
 import { guardPostHook } from '../hooks/guard-post-hook';
 import { taintPostHook } from '../hooks/taint-post-hook';
-import { createKeepExecutable, createKeepStructuredExecutable } from './builtins';
+import {
+  createCastExecutable,
+  createKeepExecutable,
+  createKeepStructuredExecutable
+} from './builtins';
 import { createFyiVariable, createToolDocsExecutable } from './builtins/fyi';
 import { createPolicyVariable } from './builtins/policy';
 import { createShelfBuiltinVariable, createShelveVariable } from './builtins/shelve';
@@ -173,7 +177,10 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
-import { resolveDisplaySelection } from '@core/records/display-mode';
+import {
+  resolveDisplaySelection,
+  resolveRecordFieldDisplayMode
+} from '@core/records/display-mode';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 const AMBIENT_HANDLE_PREVIEW_LIMIT = 200;
@@ -506,6 +513,7 @@ export class Environment
     this.reservedNames.add('shelf');
     this.reservedNames.add('shelve');
     this.reservedNames.add('toolDocs');
+    this.reservedNames.add('cast');
     
     // Initialize security/registry/resolver bootstrap for root environments only
     if (!parent) {
@@ -568,6 +576,7 @@ export class Environment
 
       // Register keep/keepStructured builtins
       this.registerKeepBuiltins();
+      this.registerCastBuiltin();
       this.registerPolicyBuiltins();
       this.registerToolDocsBuiltin();
       
@@ -605,6 +614,7 @@ export class Environment
 
     // Ensure keep/keepStructured helpers are available even from child environments
     this.getRootEnvironment().registerKeepBuiltins();
+    this.getRootEnvironment().registerCastBuiltin();
     this.getRootEnvironment().registerPolicyBuiltins();
     this.getRootEnvironment().registerToolDocsBuiltin();
 
@@ -1071,28 +1081,147 @@ export class Environment
     };
   }
 
-  private buildAmbientHandleView(): Record<string, unknown> {
+  private buildAmbientHandleView(): unknown[] {
     const entries = this.getIssuedHandlesForCurrentSession();
-    if (entries.length === 0) {
-      return {};
+    const filtered = this.buildGroupedAmbientHandleView(entries, { filtered: true });
+    const unfiltered = this.buildGroupedAmbientHandleView(entries, { filtered: false });
+    Object.defineProperty(filtered, 'unfiltered', {
+      value: unfiltered,
+      enumerable: false,
+      configurable: true
+    });
+    return filtered;
+  }
+
+  private buildGroupedAmbientHandleView(
+    entries: readonly ValueHandleEntry[],
+    options: { filtered: boolean }
+  ): Array<{ record: string; instance: Record<string, unknown> }> {
+    const selection = options.filtered
+      ? resolveDisplaySelection({
+          scopedDisplay: this.getScopedEnvironmentConfig()?.display,
+          exeLabels: this.getExeLabels() ?? this.getEnclosingExeLabels()
+        })
+      : { strictMode: false };
+    const groups = new Map<string, { recordName: string; instance: Record<string, unknown> }>();
+
+    for (const entry of entries) {
+      const metadata = isPlainRecord(entry.metadata) ? entry.metadata : undefined;
+      const projection = isPlainRecord(metadata?.projection) ? metadata.projection : undefined;
+      if (
+        !projection ||
+        projection.kind !== 'field' ||
+        typeof projection.recordName !== 'string' ||
+        typeof projection.fieldName !== 'string'
+      ) {
+        continue;
+      }
+
+      const groupKey =
+        typeof metadata?.groupKey === 'string' && metadata.groupKey.trim().length > 0
+          ? metadata.groupKey.trim()
+          : `${projection.recordName}:${entry.handle}`;
+      const fieldProjection = projection as {
+        kind: 'field';
+        recordName: string;
+        fieldName: string;
+        classification: 'fact' | 'data';
+        display: any;
+      };
+
+      if (options.filtered) {
+        const resolution = resolveRecordFieldDisplayMode(fieldProjection, selection);
+        if (resolution.omitted) {
+          continue;
+        }
+
+        this.assignAmbientHandleField(groups, groupKey, fieldProjection.recordName, fieldProjection.fieldName, entry, {
+          mode: resolution.mode,
+          arrayIndex: typeof metadata?.arrayIndex === 'number' ? metadata.arrayIndex : undefined
+        });
+        continue;
+      }
+
+      this.assignAmbientHandleField(groups, groupKey, fieldProjection.recordName, fieldProjection.fieldName, entry, {
+        mode: 'ref',
+        arrayIndex: typeof metadata?.arrayIndex === 'number' ? metadata.arrayIndex : undefined,
+        unfiltered: true
+      });
     }
 
-    const handles: Record<string, unknown> = {};
-    for (const entry of entries) {
-      const descriptor = extractSecurityDescriptor(entry.value, {
-        recursive: true,
-        mergeArrayElements: true
-      });
-      const factsource = this.getPrimaryFactSourceHandle(entry.value);
-      handles[entry.handle] = {
-        value: entry.preview ?? this.buildAmbientHandlePreview(entry.value),
-        labels: Array.isArray(descriptor?.labels) ? [...descriptor.labels] : [],
-        ...(factsource ? { factsource } : {}),
-        issuedAt: new Date(entry.issuedAt).toISOString()
+    return Array.from(groups.values()).map(group => ({
+      record: `@${group.recordName}`,
+      instance: this.normalizeAmbientHandleArrays(group.instance)
+    }));
+  }
+
+  private assignAmbientHandleField(
+    groups: Map<string, { recordName: string; instance: Record<string, unknown> }>,
+    groupKey: string,
+    recordName: string,
+    fieldName: string,
+    entry: ValueHandleEntry,
+    options: {
+      mode: 'bare' | 'ref' | 'mask' | 'handle';
+      arrayIndex?: number;
+      unfiltered?: boolean;
+    }
+  ): void {
+    const group =
+      groups.get(groupKey)
+      ?? (() => {
+        const created = { recordName, instance: {} as Record<string, unknown> };
+        groups.set(groupKey, created);
+        return created;
+      })();
+    const shaped = options.unfiltered
+      ? {
+          value: isStructuredValue(entry.value) ? asData(entry.value) : entry.value,
+          handle: entry.handle
+        }
+      : this.buildAmbientHandleFieldValue(entry, options.mode);
+
+    if (typeof options.arrayIndex === 'number') {
+      const existing = Array.isArray(group.instance[fieldName])
+        ? group.instance[fieldName] as unknown[]
+        : [];
+      existing[options.arrayIndex] = shaped;
+      group.instance[fieldName] = existing;
+      return;
+    }
+
+    group.instance[fieldName] = shaped;
+  }
+
+  private normalizeAmbientHandleArrays(instance: Record<string, unknown>): Record<string, unknown> {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(instance)) {
+      normalized[key] = Array.isArray(value)
+        ? value.filter(entry => entry !== undefined)
+        : value;
+    }
+    return normalized;
+  }
+
+  private buildAmbientHandleFieldValue(
+    entry: ValueHandleEntry,
+    mode: 'bare' | 'ref' | 'mask' | 'handle'
+  ): unknown {
+    if (mode === 'handle') {
+      return entry.handle;
+    }
+
+    if (mode === 'mask') {
+      return {
+        preview: entry.preview ?? this.buildAmbientHandlePreview(entry.value),
+        handle: entry.handle
       };
     }
 
-    return handles;
+    return {
+      value: isStructuredValue(entry.value) ? asData(entry.value) : entry.value,
+      handle: entry.handle
+    };
   }
 
   private buildAmbientHandlePreview(value: unknown): unknown {
@@ -2646,6 +2775,17 @@ export class Environment
       this.variableManager.setVariable('keepStructured', keepStructuredExec as any);
     } catch (error) {
       logger.warn('Failed to register keep builtins', error);
+    }
+  }
+
+  private registerCastBuiltin(): void {
+    try {
+      if (this.variableManager.hasVariable('cast')) {
+        return;
+      }
+      this.variableManager.setVariable('cast', createCastExecutable(this) as any);
+    } catch (error) {
+      logger.warn('Failed to register cast builtin', error);
     }
   }
 

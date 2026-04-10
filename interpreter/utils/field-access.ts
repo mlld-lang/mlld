@@ -24,6 +24,11 @@ import { ArrayOperationsHandler } from './array-operations';
 import { Environment } from '@interpreter/env/Environment';
 import { isNamespaceInternalField } from '../core/interpreter/namespace-shared';
 import {
+  hasDisplayProjectionTarget,
+  issueProjectionHandleForValue,
+  renderHandleProjectionSync
+} from '@interpreter/eval/records/display-projection';
+import {
   asData,
   isStructuredValue,
   extractSecurityDescriptor,
@@ -178,7 +183,8 @@ function createObjectUtilityMxView(
   mx: unknown,
   data: unknown,
   structured?: StructuredValue,
-  parentVariable?: Variable
+  parentVariable?: Variable,
+  env?: Environment
 ): unknown {
   const workspaceContext = deriveWorkspaceMxContext(mx, data);
   const hasMxObject = Boolean(mx && typeof mx === 'object');
@@ -213,6 +219,35 @@ function createObjectUtilityMxView(
       value: structured.data,
       enumerable: true,
       configurable: true
+    });
+  }
+
+  if (env) {
+    Object.defineProperty(view, 'handle', {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        if (structured) {
+          return issueProjectionHandleForValue(env, structured, {
+            nullOutsideBridge: true
+          });
+        }
+        if (!env.getCurrentLlmSessionId()) {
+          return null;
+        }
+        return env.issueHandle(data).handle;
+      }
+    });
+
+    Object.defineProperty(view, 'handles', {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        const target = structured ?? data;
+        return hasDisplayProjectionTarget(target)
+          ? renderHandleProjectionSync(target, env)
+          : null;
+      }
     });
   }
 
@@ -689,7 +724,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
           (value as any).mx;
 
-        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper, value);
+        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper, value, options?.env);
       })();
 
       if (options?.preserveContext) {
@@ -800,7 +835,8 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             structuredWrapper.mx,
             rawValue,
             structuredWrapper,
-            parentVariable
+            parentVariable,
+            options?.env
           );
           break;
         }
@@ -817,7 +853,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         if (syntheticMx) {
           updateVarMxFromDescriptor(syntheticMx as any, descriptor);
         }
-        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue, undefined, parentVariable);
+        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue, undefined, parentVariable, options?.env);
         break;
       }
       if (typeof rawValue === 'string') {
@@ -1231,65 +1267,74 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       });
   }
 
-  const provenanceSource = parentVariable ?? structuredWrapper ?? value;
-  const provenanceDescriptor = (() => {
-    if (!provenanceSource) {
-      return undefined;
-    }
-    const descriptor = extractSecurityDescriptor(provenanceSource);
-    return isStructuredValue(accessedValue)
-      ? stripFactLabelsFromDescriptor(descriptor)
-      : descriptor;
-  })();
-  const currentDescriptor = isStructuredValue(accessedValue)
-    ? extractSecurityDescriptor(accessedValue)
-    : undefined;
-  const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
-  const fieldDescriptor = fieldMetadata?.descriptor;
-  const effectiveDescriptor =
-    provenanceDescriptor && currentDescriptor && fieldDescriptor
-      ? mergeDescriptors(provenanceDescriptor, currentDescriptor, fieldDescriptor)
-      : provenanceDescriptor && currentDescriptor
-        ? mergeDescriptors(provenanceDescriptor, currentDescriptor)
-        : provenanceDescriptor && fieldDescriptor
-          ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
-          : currentDescriptor && fieldDescriptor
-            ? mergeDescriptors(currentDescriptor, fieldDescriptor)
-            : fieldDescriptor ?? currentDescriptor ?? provenanceDescriptor;
+  const isMxHandleAccessor = Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as Record<PropertyKey, unknown>)[OBJECT_UTILITY_MX_VIEW] === true &&
+      (fieldName === 'handle' || fieldName === 'handles')
+  );
 
-  if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
-    if (accessedValue != null && typeof accessedValue !== 'object') {
-      // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels.
-      accessedValue = wrapExecResult(accessedValue);
-      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
-    } else if (isStructuredValue(accessedValue)) {
-      applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
-    } else {
-      setExpressionProvenance(accessedValue, effectiveDescriptor);
-    }
-  } else if (provenanceSource) {
-    inheritExpressionProvenance(accessedValue, provenanceSource);
-  }
+  if (!isMxHandleAccessor) {
+    const provenanceSource = parentVariable ?? structuredWrapper ?? value;
+    const provenanceDescriptor = (() => {
+      if (!provenanceSource) {
+        return undefined;
+      }
+      const descriptor = extractSecurityDescriptor(provenanceSource);
+      return isStructuredValue(accessedValue)
+        ? stripFactLabelsFromDescriptor(descriptor)
+        : descriptor;
+    })();
+    const currentDescriptor = isStructuredValue(accessedValue)
+      ? extractSecurityDescriptor(accessedValue)
+      : undefined;
+    const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
+    const fieldDescriptor = fieldMetadata?.descriptor;
+    const effectiveDescriptor =
+      provenanceDescriptor && currentDescriptor && fieldDescriptor
+        ? mergeDescriptors(provenanceDescriptor, currentDescriptor, fieldDescriptor)
+        : provenanceDescriptor && currentDescriptor
+          ? mergeDescriptors(provenanceDescriptor, currentDescriptor)
+          : provenanceDescriptor && fieldDescriptor
+            ? mergeDescriptors(provenanceDescriptor, fieldDescriptor)
+            : currentDescriptor && fieldDescriptor
+              ? mergeDescriptors(currentDescriptor, fieldDescriptor)
+              : fieldDescriptor ?? currentDescriptor ?? provenanceDescriptor;
 
-  if (fieldMetadata?.factsources && fieldMetadata.factsources.length > 0) {
-    if (accessedValue != null && typeof accessedValue !== 'object') {
-      accessedValue = wrapExecResult(accessedValue);
+    if (effectiveDescriptor && ((effectiveDescriptor.labels?.length ?? 0) > 0 || (effectiveDescriptor.taint?.length ?? 0) > 0)) {
+      if (accessedValue != null && typeof accessedValue !== 'object') {
+        // Primitive values can't be keyed in WeakMap, so wrap in StructuredValue to carry security labels.
+        accessedValue = wrapExecResult(accessedValue);
+        applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
+      } else if (isStructuredValue(accessedValue)) {
+        applySecurityDescriptorToStructuredValue(accessedValue, effectiveDescriptor);
+      } else {
+        setExpressionProvenance(accessedValue, effectiveDescriptor);
+      }
+    } else if (provenanceSource) {
+      inheritExpressionProvenance(accessedValue, provenanceSource);
     }
-    if (isStructuredValue(accessedValue)) {
-      accessedValue.metadata = {
-        ...(accessedValue.metadata ?? {}),
-        factsources: [...fieldMetadata.factsources]
-      };
-      accessedValue.mx.factsources = [...fieldMetadata.factsources];
-    }
-  }
 
-  if (fieldMetadata?.projection) {
-    if (accessedValue != null && typeof accessedValue !== 'object') {
-      accessedValue = wrapExecResult(accessedValue);
+    if (fieldMetadata?.factsources && fieldMetadata.factsources.length > 0) {
+      if (accessedValue != null && typeof accessedValue !== 'object') {
+        accessedValue = wrapExecResult(accessedValue);
+      }
+      if (isStructuredValue(accessedValue)) {
+        accessedValue.metadata = {
+          ...(accessedValue.metadata ?? {}),
+          factsources: [...fieldMetadata.factsources]
+        };
+        accessedValue.mx.factsources = [...fieldMetadata.factsources];
+      }
     }
-    if (isStructuredValue(accessedValue)) {
-      setRecordProjectionMetadata(accessedValue, fieldMetadata.projection as any);
+
+    if (fieldMetadata?.projection) {
+      if (accessedValue != null && typeof accessedValue !== 'object') {
+        accessedValue = wrapExecResult(accessedValue);
+      }
+      if (isStructuredValue(accessedValue)) {
+        setRecordProjectionMetadata(accessedValue, fieldMetadata.projection as any);
+      }
     }
   }
 

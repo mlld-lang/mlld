@@ -6,7 +6,7 @@ category: core
 tags: [records, facts, data, schema, coercion, validation, structured-output]
 related: [exe-simple, labels-overview, labels-attestations, facts-and-handles, labels-facts]
 related-code: [core/types/record.ts, interpreter/eval/record.ts, interpreter/eval/records/coerce-record.ts, grammar/directives/record.peggy]
-updated: 2026-03-27
+updated: 2026-04-10
 qa_tier: 2
 ---
 
@@ -137,32 +137,34 @@ record @email_msg = {
   facts: [from: string, message_id: string],
   data: [subject: string, body: string, needs_reply: boolean],
   display: {
-    worker: [{ mask: "from" }, subject, body],
-    planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
+    role:worker: [{ mask: "from" }, subject, body],
+    role:planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
   }
 }
 ```
 
 Worker sees subject and body (its job to read them), from is masked. Planner sees from and message_id as ref (readable + handle), sees needs_reply, doesn't see subject or body (injection surfaces omitted).
+Use the exact mode key you declared. `role:planner` is not an alias for `planner`.
 
 A display mode can be declared in three places. From least to most specific:
 
-1. **exe definition** — `exe @worker(...) with { display: "worker" } = ...`. The default mode every invocation of this exe uses.
-2. **box config** — `box { display: "worker" } [...]`. Applies to llm calls inside the box.
-3. **call site** — `@claude(...) with { display: "worker" }`. Applies to a single llm call.
+1. **exe definition** — `exe @worker(...) with { display: "role:worker" } = ...`. The default mode every invocation of this exe uses.
+2. **box config** — `box { display: "role:worker" } [...]`. Applies to llm calls inside the box.
+3. **call site** — `@claude(...) with { display: "role:worker" }`. Applies to a single llm call.
 
 A more specific declaration overrides a less specific one. The call site is the most specific and always wins.
+If no explicit display is set, mlld also checks the active llm exe labels. A label such as `role:planner` selects the matching display key by default.
 
 ```mlld
 >> Box-level: every llm call inside this box uses worker mode
-box @worker with { tools: [@readEmail], display: "worker" } [...]
+box @worker with { tools: [@readEmail], display: "role:worker" } [...]
 
 >> Call-site: this single llm call uses worker mode
-var @result = @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+var @result = @claude(@prompt, { tools: @readTools }) with { display: "role:worker" }
 
 >> Box sets one mode, call site overrides it for one call
-box { display: "planner" } [
-  show @claude(@prompt, { tools: @readTools }) with { display: "worker" }
+box { display: "role:planner" } [
+  show @claude(@prompt, { tools: @readTools }) with { display: "role:worker" }
 ]
 ```
 
@@ -450,6 +452,15 @@ var @valid = (@raw as record @schema).mx.schema.valid
 ```
 
 The `record` keyword disambiguates — `=> @schema` alone could be ambiguous, but `=> record @schema` is explicitly "coerce the output against the record referenced by `@schema`." The same applies to inline coercion: `@raw as record @schema` means "take this value and coerce it against the record referenced by `@schema`."
+
+`@cast(@value, @schema)` is the builtin form of the same runtime coercion path:
+
+```mlld
+var @checked = @cast(@raw, @schema)
+var @valid = @cast(@raw, @schema).mx.schema.valid
+```
+
+Use postfix `as record` when it reads naturally in an expression chain. Use `@cast(...)` when you want an ordinary function call form, for example inside another call or when the schema is already being passed around as data.
 
 Inline coercion is terminal postfix syntax. Producer modifiers happen before it, and field access after coercion needs grouping:
 

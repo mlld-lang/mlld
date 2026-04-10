@@ -6,7 +6,7 @@ category: security
 tags: [security, records, facts, handles, fyi, authorization, provenance, prompt-injection]
 related: [labels-attestations, security-getting-started, security-guards-basics, mcp-guards, policy-authorizations, pattern-planner]
 related-code: [core/policy/fact-requirements.ts, core/policy/fact-labels.ts, interpreter/fyi/facts-runtime.ts, interpreter/utils/handle-resolution.ts, interpreter/eval/records/coerce-record.ts, core/types/handle.ts]
-updated: 2026-03-27
+updated: 2026-04-10
 ---
 
 Records, fact labels, and opaque handles form mlld's provenance-based authorization model. Together they prevent prompt injection consequences by tracking which values came from trusted sources and giving LLMs safe references instead of copyable literals.
@@ -162,7 +162,7 @@ var @call2 = box {
 
 This is the structural property that makes handles safe: a handle string carried in conversation history can never become a live reference to a value the LLM did not see in *this* call. There is no cross-call handle laundering.
 
-To inspect the handles currently visible in scope from mlld code, use `@mx.handles`. It returns the handles available to the current LLM bridge call as a structured map (handle string → value preview, labels, factsource). For trace-stream observability, use `--trace handle` to follow `handle.issued` / `handle.resolved` / `handle.resolve_failed` / `handle.released` events. See `builtins-ambient-mx` and `runtime-tracing`.
+To inspect the handles currently visible in scope from mlld code, use `@mx.handles`. It returns the handles available to the current LLM bridge call as a grouped record/instance view shaped by the active display mode. `@mx.handles.unfiltered` exposes the full grouped set, and per-value accessors such as `@contact.email.mx.handle` or `@contact.mx.handles` expose the same handle registry from the value side. For trace-stream observability, use `--trace handle` to follow `handle.issued` / `handle.resolved` / `handle.resolve_failed` / `handle.released` events. See `builtins-ambient-mx` and `runtime-tracing`.
 
 ### How identity travels across phases
 

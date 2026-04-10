@@ -24,4 +24,35 @@ describe('ValueHandleRegistry', () => {
     const registry = new ValueHandleRegistry();
     expect(registry.resolve('h_missing')).toBeUndefined();
   });
+
+  it('reuses the same handle for the same value within one session and separates by session', () => {
+    const registry = new ValueHandleRegistry();
+
+    const first = registry.issue({ email: 'ada@example.com' }, { sessionId: 'session-a' });
+    const second = registry.issue({ email: 'ada@example.com' }, { sessionId: 'session-a' });
+    const otherSession = registry.issue({ email: 'ada@example.com' }, { sessionId: 'session-b' });
+
+    expect(second.handle).toBe(first.handle);
+    expect(otherSession.handle).not.toBe(first.handle);
+  });
+
+  it('keeps distinct stable keys separate inside one session', () => {
+    const registry = new ValueHandleRegistry();
+
+    const first = registry.issue('ada@example.com', {
+      sessionId: 'session-a',
+      stableKey: 'contact|c1|email'
+    });
+    const second = registry.issue('ada@example.com', {
+      sessionId: 'session-a',
+      stableKey: 'contact|c2|email'
+    });
+    const repeated = registry.issue('ada@example.com', {
+      sessionId: 'session-a',
+      stableKey: 'contact|c1|email'
+    });
+
+    expect(second.handle).not.toBe(first.handle);
+    expect(repeated.handle).toBe(first.handle);
+  });
 });

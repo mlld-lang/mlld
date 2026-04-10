@@ -426,6 +426,7 @@ const BUILTIN_VARIABLES = new Set([
   ...SOFT_RESERVED_NAMES,
   ...SHADOWABLE_BUILTIN_NAMES,
   // Builtin helpers
+  'cast',
   'yaml', 'html', 'text',
   // Pipeline context aliases
   'p',
@@ -2472,6 +2473,95 @@ function collectExecutableOutputRecordDiagnostics(
       message: `Executable '@${exeNode.raw?.identifier ?? outputRecord.name}' references unknown record '@${outputRecord.name}'`,
       line: exeNode.location?.start?.line,
       column: exeNode.location?.start?.column
+    });
+  });
+
+  return errors;
+}
+
+function collectCastDiagnostics(
+  ast: MlldNode[],
+  recordDefinitions: ReadonlyMap<string, RecordDefinition>,
+  declaredRecordNames: ReadonlySet<string>
+): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+  const declaredNames = new Set<string>();
+
+  walkAST(ast, (node: any) => {
+    if (node.type === 'Directive' && (node.kind === 'var' || node.kind === 'exe' || node.kind === 'record' || node.kind === 'shelf')) {
+      const identifierNode = node.values?.identifier?.[0];
+      if (identifierNode?.identifier) {
+        declaredNames.add(identifierNode.identifier);
+      }
+    }
+
+    if (node.type === 'Directive' && node.kind === 'import') {
+      if (Array.isArray(node.values?.imports)) {
+        for (const imported of node.values.imports) {
+          if (typeof imported?.identifier === 'string') {
+            declaredNames.add(imported.identifier);
+          }
+          if (typeof imported?.alias === 'string') {
+            declaredNames.add(imported.alias);
+          }
+        }
+      }
+    }
+
+    if (node.type === 'LetAssignment' && typeof node.identifier === 'string') {
+      declaredNames.add(node.identifier);
+    }
+  });
+
+  walkAST(ast, node => {
+    if (node.type !== 'ExecInvocation') {
+      return;
+    }
+
+    const invocationName = readExecInvocationName(node);
+    if (invocationName !== 'cast') {
+      return;
+    }
+
+    const args = readExecInvocationArgs(node);
+    if (args.length < 2) {
+      return;
+    }
+
+    const recordArg = args[1];
+    const staticRecordName =
+      recordArg &&
+      typeof recordArg === 'object' &&
+      (recordArg as Record<string, unknown>).type === 'VariableReference' &&
+      typeof (recordArg as Record<string, unknown>).identifier === 'string' &&
+      (!Array.isArray((recordArg as Record<string, unknown>).fields)
+        || ((recordArg as Record<string, unknown>).fields as unknown[]).length === 0)
+        ? (() => {
+            const identifier = ((recordArg as Record<string, unknown>).identifier as string).trim();
+            if (declaredNames.has(identifier) && !recordDefinitions.has(identifier) && !declaredRecordNames.has(identifier)) {
+              return undefined;
+            }
+            return identifier;
+          })()
+        : (() => {
+            const extracted = extractStaticValue(recordArg);
+            return typeof extracted === 'string'
+              ? extracted.trim().replace(/^@/, '')
+              : undefined;
+          })();
+
+    if (!staticRecordName) {
+      return;
+    }
+
+    if (recordDefinitions.has(staticRecordName) || declaredRecordNames.has(staticRecordName)) {
+      return;
+    }
+
+    errors.push({
+      message: `Builtin @cast references unknown record '@${staticRecordName}'`,
+      line: (node as any).location?.start?.line,
+      column: (node as any).location?.start?.column
     });
   });
 
@@ -5844,6 +5934,11 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         recordExtraction.definitions,
         recordExtraction.declaredNames
       );
+      const castErrors = collectCastDiagnostics(
+        ast,
+        recordExtraction.definitions,
+        recordExtraction.declaredNames
+      );
       const boxShelfScopeErrors = collectBoxShelfScopeDiagnostics(
         ast,
         filepath,
@@ -5903,6 +5998,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.errors = [
           ...(result.errors ?? []),
           ...outputRecordErrors
+        ];
+      }
+      if (castErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...castErrors
         ];
       }
       if (boxShelfScopeErrors.length > 0) {

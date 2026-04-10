@@ -6,12 +6,12 @@ category: config
 tags: [tools, docs, prompts, agents, authorization]
 related: [pattern-planner, policy-authorizations, facts-and-handles]
 related-code: [interpreter/fyi/tool-docs.ts, interpreter/eval/exec/tool-metadata.ts, interpreter/env/builtins/fyi.ts]
-updated: 2026-04-09
+updated: 2026-04-10
 ---
 
-`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, classification — that the runtime will validate against.
+`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, classification, and output fields — that the runtime will validate against.
 
-The output is feature-based, not role-based. There are no "planner" or "worker" modes baked into the API. Frameworks built on mlld are free to define their own roles and use `@toolDocs` as one piece of their prompt assembly.
+When a tool returns `=> record`, `@toolDocs()` renders its visible output fields through the same display-projection path used at runtime. There is no separate `audience` switch. The active display selection (`with { display }`, box config, or a matching `role:*` llm label) is the shaping mechanism.
 
 ## Basic usage
 
@@ -41,6 +41,45 @@ Args:
 ```
 
 Each tool renders under its read/write section header, with one bullet per parameter. Control args are flagged inline with `**control arg**`. Tools are classified read vs write from the active policy (see "Classification" below).
+
+## Output fields from `=> record`
+
+When a tool has output-record metadata, `@toolDocs()` adds a `Returns:` section that describes the fields visible under the current display:
+
+```mlld
+/record @contact = {
+  facts: [email: string],
+  data: [name: string, notes: string],
+  display: {
+    role:planner: [name, { ref: "email" }],
+    role:worker: [{ mask: "email" }, name, notes]
+  }
+}
+
+/exe tool:r @searchContacts(query) = run cmd {
+  contacts-cli search @query --format json
+} => contact
+```
+
+Under `display: "role:planner"`, the rendered docs include:
+
+```
+### search_contacts
+Args:
+- `query` (string)
+Returns:
+- `name` (value, data)
+- `email` (value + handle, fact)
+```
+
+Under `display: "role:worker"`, the same tool renders:
+
+```
+Returns:
+- `email` (preview + handle, fact)
+- `name` (value, data)
+- `notes` (value, data)
+```
 
 ## Including the authorization intent shape
 
@@ -81,6 +120,7 @@ The JSON form is richer than the text form. Per-tool entries include:
 
 - `name`, `kind` (`"write"` or `"read"`), `description`
 - `params` — full parameter list
+- `output` — visible output fields under the current display, when the tool returns `=> record`
 - `controlArgs`, `updateArgs`, `exactPayloadArgs`, `dataArgs` — partition by metadata kind
 - `multiControlArgCorrelation` — boolean from `correlateControlArgs`
 - `discoveryCall` — the `@fyi.known(...)` call to surface available handles, when applicable
@@ -127,7 +167,7 @@ A consequence: when you add a custom write label like `iot:trigger` and map it v
 - `@toolDocs()` is the explicit form you call from your own prompt template. Use it when you're building system prompts by hand.
 - `<tool_notes>` is the injected form mlld appends automatically to the system message of any `exe llm` call that surfaces security-relevant tools, for example `@claude(...)`. You don't have to do anything to enable it.
 
-Both use the same per-tool sections, arg rendering, and policy-derived classification for the same tools under the same policy. Explicit `@toolDocs()` can additionally opt into features such as `includeAuthIntentShape: true` or `format: "json"`. Injected `<tool_notes>` uses the default text form unless the calling runtime path explicitly opts into additional features.
+Both use the same per-tool sections, output-field shaping, and policy-derived classification for the same tools under the same policy. Explicit `@toolDocs()` can additionally opt into features such as `includeAuthIntentShape: true` or `format: "json"`. Injected `<tool_notes>` uses the default text form unless the calling runtime path explicitly opts into additional features. `<shelf_notes>` uses the same active display selection when it summarizes visible record fields from shelf scope.
 
 ## Options
 
@@ -136,8 +176,6 @@ Both use the same per-tool sections, arg rendering, and policy-derived classific
 | `format` | `"text"` | `"text"` for prompt-ready markdown, `"json"` for programmatic use |
 | `includeAuthIntentShape` | `false` | Append the bucketed intent shape reference (text mode only) |
 | `includeOperationLabels` | `false` | Include `operationLabels` in JSON entries (json mode only) |
-
-The `audience` parameter is accepted as a free-form string for backwards compatibility but does not gate any behavior. Frameworks that previously passed `audience: "planner"` should switch to `includeAuthIntentShape: true`.
 
 ## See also
 

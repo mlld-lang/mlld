@@ -893,6 +893,29 @@ show @built
     ]);
   });
 
+  it('accepts role-labelled named display declarations in record definitions', async () => {
+    const modulePath = await writeModule('analyze-role-display-record.mld', `
+/record @contact = {
+  facts: [email: string],
+  data: [name: string, notes: string?],
+  display: {
+    role:planner: [name, { ref: "email" }],
+    role:worker: [{ mask: "email" }, name, notes]
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.records).toEqual([
+      expect.objectContaining({
+        name: 'contact',
+        display: 'named'
+      })
+    ]);
+  });
+
   it('catches statically knowable output-record reference errors', async () => {
     const modulePath = await writeModule('analyze-missing-output-record.mld', `
 /exe @send_email(recipient) = js { return "ok"; } => contact
@@ -904,6 +927,30 @@ show @built
     expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
       "Executable '@send_email' references unknown record '@contact'"
     );
+  });
+
+  it('catches statically knowable @cast record reference errors without guessing on dynamic cases', async () => {
+    const modulePath = await writeModule('analyze-missing-cast-record.mld', `
+/record @contact = {
+  facts: [email: string]
+}
+
+/var @raw = {
+  email: "ada@example.com"
+}
+
+/var @bad = @cast(@raw, @missing_record)
+/var @dynamic_name = "contact"
+/var @ok = @cast(@raw, @dynamic_name)
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message)).toContain(
+      "Builtin @cast references unknown record '@missing_record'"
+    );
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).not.toContain('@dynamic_name');
   });
 
   it('catches statically knowable shelf definition errors', async () => {

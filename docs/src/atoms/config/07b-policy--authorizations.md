@@ -494,7 +494,7 @@ For array control args, proof is checked per element. Proofless elements are dro
 Use `@policy.validate` in a guard to retry the planner when its auth has issues:
 
 ```mlld
-exe @plan(task) = @claude(@task, { tools: @allTools }) with { display: "planner" }
+exe @plan(task) = @claude(@task, { tools: @allTools }) with { display: "role:planner" }
 
 guard after @validateAuth for op:named:plan = when [
   @policy.validate(@output, @writeTools).valid == false && @mx.guard.try < 2

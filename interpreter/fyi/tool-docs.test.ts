@@ -211,6 +211,53 @@ describe('@fyi.tools', () => {
     }
   });
 
+  it('shapes output-field docs from the active display role and output record metadata', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [email: string],
+        data: [name: string, notes: string],
+        display: {
+          role:planner: [name, { ref: "email" }],
+          role:worker: [{ mask: "email" }, name, notes]
+        }
+      }
+
+      /exe tool:r @searchContacts(query) = "Ada" => contact
+
+      /var tools @tools = {
+        search_contacts: {
+          mlld: @searchContacts,
+          expose: ["query"]
+        }
+      }
+    `);
+
+    try {
+      env.setScopedEnvironmentConfig({
+        display: 'role:planner',
+        tools: env.getVariable('tools')?.internal?.toolCollection as any
+      } as any);
+
+      const plannerDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(plannerDocs.text).toContain('Returns:');
+      expect(plannerDocs.text).toContain('- `name` (value, data)');
+      expect(plannerDocs.text).toContain('- `email` (value + handle, fact)');
+      expect(plannerDocs.text).not.toContain('notes');
+
+      env.setScopedEnvironmentConfig({
+        display: 'role:worker',
+        tools: env.getVariable('tools')?.internal?.toolCollection as any
+      } as any);
+
+      const workerDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(workerDocs.text).toContain('- `email` (preview + handle, fact)');
+      expect(workerDocs.text).toContain('- `name` (value, data)');
+      expect(workerDocs.text).toContain('- `notes` (value, data)');
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('appends the auth intent shape only when explicitly requested', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
@@ -282,6 +329,49 @@ describe('@fyi.tools', () => {
           dataArgs: []
         })
       ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('includes output-field shapes in JSON tool docs when an output record is available', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [email: string],
+        data: [name: string],
+        display: {
+          role:planner: [name, { ref: "email" }]
+        }
+      }
+
+      /exe tool:r @searchContacts(query) = "Ada" => contact
+
+      /var tools @tools = {
+        search_contacts: {
+          mlld: @searchContacts,
+          expose: ["query"]
+        }
+      }
+    `);
+
+    try {
+      env.setScopedEnvironmentConfig({
+        display: 'role:planner',
+        tools: env.getVariable('tools')?.internal?.toolCollection as any
+      } as any);
+
+      const docs = await evaluateFyiTools(env.getVariable('tools')?.value, env, { format: 'json' });
+      expect(docs.data).toMatchObject({
+        tools: [
+          expect.objectContaining({
+            name: 'search_contacts',
+            output: [
+              { field: 'email', classification: 'fact', shape: 'value+handle' },
+              { field: 'name', classification: 'data', shape: 'value' }
+            ]
+          })
+        ]
+      });
     } finally {
       env.cleanup();
     }

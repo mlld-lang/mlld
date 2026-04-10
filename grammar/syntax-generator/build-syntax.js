@@ -56,7 +56,7 @@ class MlldSyntaxGenerator {
       // Wildcard in when blocks
       wildcard: '(?:^|\\s)\\*(?=\\s|$|=>)',
       // Object keys in literals: key:
-      objectKey: '(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))',
+      objectKey: '(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)?(?=\\s*:(?!:))',
       // Guard/hook operation filter syntax
       guardFilter: '\\bop:(?:named:[A-Za-z_][A-Za-z0-9_.-]*|var|run|exe|show|output|append|log|stream|for(?::(iteration|batch))?|loop|import)\\b',
       // Type-checking builtin methods

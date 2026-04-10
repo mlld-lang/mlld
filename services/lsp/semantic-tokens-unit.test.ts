@@ -253,7 +253,10 @@ describe('Semantic Tokens - Unit Tests', () => {
       const code = `/record @contact = {
   facts: [email: string, name: string],
   data: [notes: string?],
-  display: [name, { mask: "email" }]
+  display: {
+    role:planner: [name, { ref: "email" }],
+    role:worker: [name, { mask: "email" }]
+  }
 }`;
       const tokens = await getSemanticTokens(code);
 
@@ -279,7 +282,19 @@ describe('Semantic Tokens - Unit Tests', () => {
         tokenType: 'property'
       });
       expectToken(tokens, {
+        text: 'role:planner',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'role:worker',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
         text: 'mask',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'ref',
         tokenType: 'property'
       });
     });
@@ -439,6 +454,24 @@ describe('Semantic Tokens - Unit Tests', () => {
       expectToken(tokens, {
         text: '@trim',
         tokenType: 'function'
+      });
+    });
+
+    it('highlights @cast and handle accessors', async () => {
+      const code = '/show @cast(@raw, @contact).mx.handles';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '@cast',
+        tokenType: 'function'
+      });
+      expectToken(tokens, {
+        text: 'mx',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'handles',
+        tokenType: 'property'
       });
     });
 

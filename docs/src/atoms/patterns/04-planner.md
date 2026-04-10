@@ -6,7 +6,7 @@ category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
 related: [facts-and-handles, policy-authorizations, tool-docs, security-getting-started, labels-attestations, security-guards-basics, exe-tool-return]
 related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/policy/authorization-compiler.ts, interpreter/env/builtins/policy.ts, interpreter/utils/handle-resolution.ts]
-updated: 2026-04-09
+updated: 2026-04-10
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -26,8 +26,8 @@ The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can'
 
 The planner-worker split works best when tools are designed for specific security phases:
 
-- **Resolve tools** find and ground targets — search, list, metadata lookup. Use with `display: "planner"`. Return facts + handles, not raw content.
-- **Extract tools** read grounded content by ID — `get_email_by_id`, not `search_emails`. Use with `display: "worker"`. Content is visible, facts are masked.
+- **Resolve tools** find and ground targets — search, list, metadata lookup. Use with `display: "role:planner"`. Return facts + handles, not raw content.
+- **Extract tools** read grounded content by ID — `get_email_by_id`, not `search_emails`. Use with `display: "role:worker"`. Content is visible, facts are masked.
 - **Execute tools** do one concrete write — single tool, handle-backed control args, step-scoped policy.
 
 When tools mix phases (search + read content in one call), the planner sees untrusted content it shouldn't, and the orchestrator needs repair logic. Phase-shaped tools make the security boundaries clean: resolve discovers, extract reads, execute writes.
@@ -253,20 +253,21 @@ record @email_msg = {
   facts: [from: string, message_id: string],
   data: [subject: string, body: string, needs_reply: boolean],
   display: {
-    worker: [{ mask: "from" }, subject, body],
-    planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
+    role:worker: [{ mask: "from" }, subject, body],
+    role:planner: [{ ref: "from" }, { ref: "message_id" }, needs_reply]
   }
 }
 
-box @worker with { tools: [@readEmail], display: "worker" } [...]
-box @planner with { tools: [@searchContacts], display: "planner" } [...]
+box @worker with { tools: [@readEmail], display: "role:worker" } [...]
+box @planner with { tools: [@searchContacts], display: "role:planner" } [...]
 
 >> Or per call-site without boxes:
-var @readResult = @claude(@prompt, { tools: @readTools }) with { display: "worker" }
-var @plan = @claude(@prompt, { tools: @plannerTools }) with { display: "planner" }
+var @readResult = @claude(@prompt, { tools: @readTools }) with { display: "role:worker" }
+var @plan = @claude(@prompt, { tools: @plannerTools }) with { display: "role:planner" }
 ```
 
 Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
+If no explicit display is set, a matching llm label such as `role:planner` also selects the corresponding display key by default.
 
 Worker sees subject and body (its job), from is masked. Planner sees from and message_id as ref, sees needs_reply, doesn't see subject or body (injection surfaces omitted).
 
@@ -362,7 +363,7 @@ exe @getEmailById(id) = [
 var @agentResult = @claude(@plannerPrompt(@task), {
   tools: [@searchContacts, @getEmailById, @sendEmail]
 }) with {
-  display: "planner",
+  display: "role:planner",
   policy: @base
 }
 ```

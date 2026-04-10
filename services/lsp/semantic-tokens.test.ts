@@ -154,6 +154,7 @@ interface SemanticToken {
   length: number;
   tokenType: string;
   modifiers: string[];
+  text?: string;
 }
 
 function parseSemanticTokens(data: number[], sourceText?: string): SemanticToken[] {
@@ -220,6 +221,19 @@ export async function getSemanticTokens(code: string): Promise<SemanticToken[]> 
   return parseSemanticTokens(result.data, code);
 }
 
+function expectToken(tokens: SemanticToken[], expected: Partial<SemanticToken>): void {
+  const found = tokens.find((token) => {
+    if (expected.text && token.text !== expected.text) return false;
+    if (expected.tokenType && token.tokenType !== expected.tokenType) return false;
+    if (expected.line !== undefined && token.line !== expected.line) return false;
+    if (expected.char !== undefined && token.char !== expected.char) return false;
+    if (expected.modifiers && !expected.modifiers.every((modifier) => token.modifiers.includes(modifier))) return false;
+    return true;
+  });
+
+  expect(found).toBeDefined();
+}
+
 describe('Semantic Tokens', () => {
   describe('Directives', () => {
     it('should highlight directive keywords', async () => {
@@ -245,6 +259,21 @@ describe('Semantic Tokens', () => {
         length: 5, // @name
         tokenType: 'variable',
         modifiers: ['declaration']
+      });
+    });
+
+    it('should highlight role-shaped record display keys', async () => {
+      const code = `/record @contact = {
+  facts: [email: string, name: string],
+  display: {
+    role:planner: [name, { ref: "email" }]
+  }
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'role:planner',
+        tokenType: 'property'
       });
     });
   });

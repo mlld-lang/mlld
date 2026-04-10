@@ -1,5 +1,5 @@
 ---
-updated: 2026-04-06
+updated: 2026-04-10
 tags: #arch, #lsp, #tooling
 related-docs: docs/dev/GRAMMAR.md
 related-code: cli/commands/language-server.ts, cli/commands/language-server-impl.ts, cli/execution/CommandDispatcher.ts, services/lsp/ASTSemanticVisitor.ts, services/lsp/visitors/*.ts, services/lsp/utils/*.ts, tests/utils/token-validator/*.ts, services/lsp/*.test.ts
@@ -14,6 +14,8 @@ related-types: cli/commands/language-server { MlldLanguageServerConfig, Document
 - `vscode-languageserver` is a runtime dependency (`package.json` `dependencies`), not a dev-only dependency.
 - Semantic highlighting is AST-driven via `ASTSemanticVisitor` + specialized visitors.
 - Inline coercion `@value as record @schema` is highlighted explicitly as a terminal postfix expression: `ExpressionVisitor` emits `as` and `record` keyword tokens, while the child value/schema nodes keep their normal semantic tokens.
+- Record display maps that use `role:*` keys are treated as a single property token in both semantic tokens and regex grammars.
+- `@cast(...)`, `.mx.handle`, and `.mx.handles` must stay covered by both semantic-token tests and regex-highlighting tests whenever record/handle syntax changes.
 - Embedded tree-sitter WASM parsing is enabled for JavaScript, Python, and Bash code blocks.
 - Semantic token validation is also AST-driven and now documented here as canonical architecture.
 
@@ -56,11 +58,20 @@ Current directive keyword grouping in `DirectiveVisitor`:
 - `directiveDefinition`: `var`, `exe`, `guard`, `hook`, `policy`, `checkpoint`, `record`
 - `directiveAction`: `run`, `show`, `output`, `append`, `log`, `stream`, `sign`, `verify`
 
-Record field keys such as `facts`, `data`, `display`, and nested `mask` entries are highlighted through the ordinary object-key/property token path. Keep semantic-token tests for record syntax aligned with the record grammar whenever those keys or projection forms change.
+Record field keys such as `facts`, `data`, `display`, nested `mask` entries, and named display selectors like `role:planner` are highlighted through the ordinary object-key/property token path. Keep semantic-token tests for record syntax aligned with the record grammar whenever those keys or projection forms change.
 Inline coercion keywords are split across two systems and both must stay aligned:
 
 - LSP semantic tokens: `services/lsp/ASTSemanticVisitor.ts` + `services/lsp/visitors/ExpressionVisitor.ts`
 - Regex-based syntax grammars: `grammar/syntax-generator/build-syntax.js` and the generated files under `editors/`
+
+When syntax changes hit either side, the required verification is both semantic-token coverage and regex/highlighter coverage:
+
+- `services/lsp/semantic-tokens-unit.test.ts`
+- `services/lsp/semantic-tokens.test.ts`
+- `services/lsp/highlighting-rules.test.ts`
+- `grammar/syntax-generator/build-syntax.test.ts`
+- `npm run test:tokens`
+- `npm run validate:tokens`
 
 Pass-through entries currently include:
 

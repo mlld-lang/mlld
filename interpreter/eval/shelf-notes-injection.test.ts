@@ -103,6 +103,8 @@ describe('shelf notes injection', () => {
       expect(output).toContain('| @fyi.shelf.brief | text |');
       expect(output).toContain('Write to slots with @shelf.write(@fyi.shelf.outreach.selected, value) or @shelve(@fyi.shelf.outreach.selected, value).');
       expect(output).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
+      expect(output).toContain('Visible record fields under the current display:');
+      expect(output).toContain('- @contact: id (value + handle), email (value + handle), name (value + handle)');
     } finally {
       env.cleanup();
     }
@@ -158,6 +160,7 @@ describe('shelf notes injection', () => {
       expect(output).toContain('- `recipient` (string, **control arg**)');
       expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
+      expect(output).toContain('Visible record fields under the current display:');
     } finally {
       env.cleanup();
     }

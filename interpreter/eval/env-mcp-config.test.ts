@@ -2826,6 +2826,50 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('shapes injected tool notes output fields from the active display role', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const source = [
+      '/record @contact = {',
+      '  facts: [email: string],',
+      '  data: [name: string, notes: string],',
+      '  display: {',
+      '    role:planner: [name, { ref: "email" }],',
+      '    role:worker: [{ mask: "email" }, name, notes]',
+      '  }',
+      '}',
+      '/exe tool:r @searchContactsByName(query) = js { return { email: "ada@example.com", name: "Ada", notes: "Workers only" }; } => contact',
+      '/var tools @toolList = {',
+      '  search_contacts_by_name: {',
+      '    mlld: @searchContactsByName,',
+      '    expose: ["query"]',
+      '  }',
+      '}',
+      '/exe llm @planner(prompt, config) = js { return config.system ?? ""; } with { display: "role:planner" }',
+      '/show @planner("Find a contact", { tools: @toolList })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output).toContain('<tool_notes>');
+      expect(output).toContain('Returns:');
+      expect(output).toContain('- `name` (value, data)');
+      expect(output).toContain('- `email` (value + handle, fact)');
+      expect(output).not.toContain('- `notes`');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('keeps injected tool notes canonical even when the llm exe display is planner', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [

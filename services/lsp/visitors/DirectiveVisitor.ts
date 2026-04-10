@@ -326,6 +326,7 @@ export class DirectiveVisitor extends BaseVisitor {
         // Handle exe blocks: /exe @func() = [statements; => return]
         if (node.subtype === 'exeBlock' && node.values.statements) {
           this.visitExeBlock(node, context);
+          this.tokenizeExeOutputRecord(node);
           this.tokenizeSecurityLabels(node);
           this.handleDirectiveComment(node);
           return; // Skip normal value processing
@@ -335,6 +336,10 @@ export class DirectiveVisitor extends BaseVisitor {
         this.handleVariableDeclaration(node);
       }
       
+    }
+
+    if (node.kind === 'exe') {
+      this.tokenizeExeOutputRecord(node);
     }
 
     if (node.values) {
@@ -366,20 +371,35 @@ export class DirectiveVisitor extends BaseVisitor {
       });
     }
 
-    for (const key of ['facts', 'data', 'display', 'validate', 'mask', 'ref', 'handle', 'trusted', 'untrusted']) {
-      const pattern = new RegExp(`\\b${key}\\b(?=\\s*:)`, 'g');
-      for (const match of directiveText.matchAll(pattern)) {
-        if (match.index === undefined) continue;
-        const keyOffset = directive.location.start.offset + match.index;
-        const keyPos = this.document.positionAt(keyOffset);
-        this.tokenBuilder.addToken({
-          line: keyPos.line,
-          char: keyPos.character,
-          length: key.length,
-          tokenType: 'property',
-          modifiers: []
-        });
-      }
+    const propertyMatches = [
+      ...['facts', 'data', 'display', 'validate', 'mask', 'ref', 'handle', 'trusted', 'untrusted'].flatMap((key) => {
+        const pattern = new RegExp(`\\b${key}\\b(?=\\s*:)`, 'g');
+        return Array.from(directiveText.matchAll(pattern), (match) => ({
+          index: match.index,
+          length: key.length
+        }));
+      }),
+      ...Array.from(
+        directiveText.matchAll(/\brole:[A-Za-z_][A-Za-z0-9_-]*\b(?=\s*:)/g),
+        (match) => ({
+          index: match.index,
+          length: match[0].length
+        })
+      )
+    ]
+      .filter((match): match is { index: number; length: number } => typeof match.index === 'number')
+      .sort((left, right) => left.index - right.index);
+
+    for (const match of propertyMatches) {
+      const keyOffset = directive.location.start.offset + match.index;
+      const keyPos = this.document.positionAt(keyOffset);
+      this.tokenBuilder.addToken({
+        line: keyPos.line,
+        char: keyPos.character,
+        length: match.length,
+        tokenType: 'property',
+        modifiers: []
+      });
     }
 
     const visitNestedValue = (value: unknown): void => {
@@ -756,6 +776,14 @@ export class DirectiveVisitor extends BaseVisitor {
       this.visitWithClause(values.withClause, directive, context);
     }
 
+    if (Array.isArray(values.outputRecord)) {
+      for (const outputRecord of values.outputRecord) {
+        if (outputRecord?.ref && typeof outputRecord.ref === 'object' && outputRecord.ref.type) {
+          this.mainVisitor.visitNode(outputRecord.ref, context);
+        }
+      }
+    }
+
     this.visitChildren(values, context, (child, mx) => this.mainVisitor.visitNode(child, mx));
 
     // Tokenize pipeline operators (| and ||) for inline pipelines
@@ -763,6 +791,47 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Tokenize security labels if present (for /var, /exe, and similar directives).
     this.tokenizeSecurityLabels(directive);
+  }
+
+  private tokenizeExeOutputRecord(directive: LspAstNode): void {
+    if (directive.kind !== 'exe' || !directive.location || !directive.raw?.outputRecord) {
+      return;
+    }
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+    const outputMatches = Array.from(
+      directiveText.matchAll(/=>\s*(record\s+)?(@?[A-Za-z_][A-Za-z0-9_-]*)/g)
+    );
+    const outputMatch = outputMatches[outputMatches.length - 1];
+
+    if (!outputMatch || outputMatch.index === undefined) {
+      return;
+    }
+
+    if (outputMatch[1]) {
+      const recordOffset = directive.location.start.offset + outputMatch.index + outputMatch[0].indexOf('record');
+      const recordPos = this.document.positionAt(recordOffset);
+      this.tokenBuilder.addToken({
+        line: recordPos.line,
+        char: recordPos.character,
+        length: 'record'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+
+    const referenceText = outputMatch[2];
+    const referenceOffset =
+      directive.location.start.offset + outputMatch.index + outputMatch[0].lastIndexOf(referenceText);
+    const referencePos = this.document.positionAt(referenceOffset);
+    this.tokenBuilder.addToken({
+      line: referencePos.line,
+      char: referencePos.character,
+      length: referenceText.length,
+      tokenType: 'variableRef',
+      modifiers: ['reference']
+    });
   }
   
   private visitWithClause(withClause: LspAstNode, directive: LspAstNode, context: VisitorContext): void {

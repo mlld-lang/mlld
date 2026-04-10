@@ -4,16 +4,23 @@
 ]
 
 === START TOKENS ===
-when --> keyword
 [ --> operator
 @recipients --> variable
 ~= --> operator
-"alice@example.com" --> string
+[ --> operator
+@example --> variable
+. --> operator
+com --> property
+] --> operator
 => --> operator
 "allowed" --> string
 @recipients --> variable
 !~= --> operator
-"mallory@example.com" --> string
+[ --> operator
+@example --> variable
+. --> operator
+com --> property
+] --> operator
 => --> operator
 "blocked" --> string
 ] --> operator

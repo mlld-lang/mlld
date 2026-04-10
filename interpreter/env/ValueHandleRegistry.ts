@@ -13,12 +13,26 @@ export interface IssueValueHandleOptions {
   sessionId?: string;
   preview?: string;
   metadata?: Record<string, unknown>;
+  stableKey?: string;
 }
 
 export class ValueHandleRegistry {
   private readonly entries = new Map<string, ValueHandleEntry>();
+  private readonly stableIndex = new Map<string, string>();
 
   issue(value: unknown, options: IssueValueHandleOptions = {}): ValueHandleEntry {
+    const stableLookupKey = this.buildStableLookupKey(value, options);
+    if (stableLookupKey) {
+      const existingHandle = this.stableIndex.get(stableLookupKey);
+      if (existingHandle) {
+        const existing = this.entries.get(existingHandle);
+        if (existing) {
+          return existing;
+        }
+        this.stableIndex.delete(stableLookupKey);
+      }
+    }
+
     const handle = this.createHandle();
 
     const entry: ValueHandleEntry = {
@@ -33,6 +47,9 @@ export class ValueHandleRegistry {
     };
 
     this.entries.set(handle, entry);
+    if (stableLookupKey) {
+      this.stableIndex.set(stableLookupKey, handle);
+    }
     return entry;
   }
 
@@ -88,5 +105,24 @@ export class ValueHandleRegistry {
         return handle;
       }
     }
+  }
+
+  private buildStableLookupKey(
+    value: unknown,
+    options: IssueValueHandleOptions
+  ): string | undefined {
+    const scopedStableKey =
+      typeof options.stableKey === 'string' && options.stableKey.trim().length > 0
+        ? options.stableKey.trim()
+        : encodeCanonicalValue(value);
+    if (!scopedStableKey) {
+      return undefined;
+    }
+
+    const sessionScope =
+      typeof options.sessionId === 'string' && options.sessionId.trim().length > 0
+        ? options.sessionId.trim()
+        : '__global__';
+    return `${sessionScope}::${scopedStableKey}`;
   }
 }

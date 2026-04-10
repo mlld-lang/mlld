@@ -154,8 +154,8 @@ record @email_msg = {
   facts: [from: string, message_id: string],
   data: [subject: string, body: string],
   display: {
-    worker: [{ mask: "from" }, subject, body],
-    planner: [{ ref: "from" }, { ref: "message_id" }]
+    role:worker: [{ mask: "from" }, subject, body],
+    role:planner: [{ ref: "from" }, { ref: "message_id" }]
   }
 }
 ```

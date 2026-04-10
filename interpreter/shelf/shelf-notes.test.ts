@@ -85,6 +85,8 @@ describe('shelf notes', () => {
       expect(notes).toContain('Write to slots with @shelf.write(@fyi.shelf.selection, value) or @shelve(@fyi.shelf.selection, value).');
       expect(notes).toContain('Read shelf entries with @fyi.shelf.outreach.recipients');
       expect(notes).toContain('Collection slots use [] and follow the listed Merge mode.');
+      expect(notes).toContain('Visible record fields under the current display:');
+      expect(notes).toContain('- @contact: id (value + handle), email (value + handle), name (value + handle)');
     } finally {
       env.cleanup();
     }

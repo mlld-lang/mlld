@@ -497,11 +497,30 @@ export class ExpressionVisitor extends BaseVisitor {
         this.mainVisitor.visitNode(sourceNode, context);
       }
     }
-    
-    // Find and tokenize "=>" operator
-    const arrowMatch = nodeText.match(/\s+=>\s+/);
-    if (arrowMatch && arrowMatch.index !== undefined) {
-      const arrowOffset = node.location.start.offset + arrowMatch.index + arrowMatch[0].indexOf('=>');
+
+    const expressionNodes = Array.isArray(node.expression) ? node.expression : [];
+    const sourceEndOffset = Array.isArray(node.source) && node.source.length > 0
+      ? Math.max(
+          ...node.source
+            .map((sourceNode) => sourceNode?.location?.end?.offset)
+            .filter((offset): offset is number => typeof offset === 'number')
+        )
+      : node.variable?.location?.end?.offset ?? node.location.start.offset;
+    const firstExpressionOffset = expressionNodes
+      .map((exprNode) => exprNode?.location?.start?.offset)
+      .find((offset): offset is number => typeof offset === 'number') ?? node.location.end.offset;
+    const lastExpressionEndOffset = [...expressionNodes]
+      .reverse()
+      .map((exprNode) => exprNode?.location?.end?.offset)
+      .find((offset): offset is number => typeof offset === 'number') ?? firstExpressionOffset;
+
+    const headerText = sourceText.substring(sourceEndOffset, firstExpressionOffset);
+    const openBracketIndex = headerText.indexOf('[');
+    const hasBlockSyntax = openBracketIndex !== -1;
+    const arrowIndex = headerText.indexOf('=>');
+
+    if (arrowIndex !== -1) {
+      const arrowOffset = sourceEndOffset + arrowIndex;
       const arrowPosition = this.document.positionAt(arrowOffset);
 
       this.tokenBuilder.addToken({
@@ -512,25 +531,35 @@ export class ExpressionVisitor extends BaseVisitor {
         modifiers: []
       });
     }
-    
+
+    if (hasBlockSyntax) {
+      this.operatorHelper.addOperatorToken(sourceEndOffset + openBracketIndex, 1);
+    }
+
     // Process expression
-    if (node.expression && Array.isArray(node.expression)) {
-      for (const exprNode of node.expression) {
-        // Special handling for exec invocations and directives
-        if (exprNode.type === 'ExecInvocation' || exprNode.type === 'Directive') {
-          this.mainVisitor.visitNode(exprNode, context);
-        } else if (exprNode.type === 'StringLiteral' || exprNode.content) {
-          // Handle template literals
-          const templateNode = {
-            type: 'StringLiteral',
-            location: exprNode.location,
-            content: exprNode.content || [exprNode],
-            wrapperType: exprNode.wrapperType || 'backtick'
-          };
-          this.mainVisitor.visitNode(templateNode, context);
-        } else {
-          this.mainVisitor.visitNode(exprNode, context);
-        }
+    for (const exprNode of expressionNodes) {
+      // Special handling for exec invocations and directives
+      if (exprNode.type === 'ExecInvocation' || exprNode.type === 'Directive') {
+        this.mainVisitor.visitNode(exprNode, context);
+      } else if (exprNode.type === 'StringLiteral' || exprNode.content) {
+        // Handle template literals
+        const templateNode = {
+          type: 'StringLiteral',
+          location: exprNode.location,
+          content: exprNode.content || [exprNode],
+          wrapperType: exprNode.wrapperType || 'backtick'
+        };
+        this.mainVisitor.visitNode(templateNode, context);
+      } else {
+        this.mainVisitor.visitNode(exprNode, context);
+      }
+    }
+
+    if (hasBlockSyntax) {
+      const tailText = sourceText.substring(lastExpressionEndOffset, node.location.end.offset);
+      const closeBracketIndex = tailText.lastIndexOf(']');
+      if (closeBracketIndex !== -1) {
+        this.operatorHelper.addOperatorToken(lastExpressionEndOffset + closeBracketIndex, 1);
       }
     }
   }
