@@ -114,6 +114,17 @@ describe('ambient @mx accessors', () => {
     });
   });
 
+  it('derives ambient llm display from exe role labels and lets scoped display override it', () => {
+    const env = createEnvironment();
+    setActiveLlmSession(env, 'bridge-session');
+    env.setExeLabels(['llm', 'role:planner']);
+
+    expect((env.getVariable('mx')?.value as any).llm.display).toBe('role:planner');
+
+    env.setScopedEnvironmentConfig({ display: 'role:worker' });
+    expect((env.getVariable('mx')?.value as any).llm.display).toBe('role:worker');
+  });
+
   it('exposes shelf readable and writable metadata for the current scope', () => {
     const env = createEnvironment();
     env.registerRecordDefinition('contact', {

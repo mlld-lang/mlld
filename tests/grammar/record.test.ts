@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseSync } from '@grammar/parser';
+import { buildRecordDefinitionFromDirective } from '@core/validation/record-definition';
+import { formatRecordDefinition } from '@core/types/record';
 import type { DirectiveNode } from '@core/types';
 import type { RecordDirectiveNode } from '@core/types/record';
 
@@ -311,6 +313,41 @@ describe('record grammar', () => {
         ]
       }
     });
+  });
+
+  it('parses role-labeled named display modes and formats them canonically', () => {
+    const directive = getFirstDirective(`
+/record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: {
+    role:planner: [name, { ref: "email" }],
+    "role:worker": [{ mask: "email" }, name, notes]
+  }
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.display).toEqual({
+      kind: 'named',
+      modes: {
+        'role:planner': [
+          { kind: 'bare', field: 'name' },
+          { kind: 'ref', field: 'email' }
+        ],
+        'role:worker': [
+          { kind: 'mask', field: 'email' },
+          { kind: 'bare', field: 'name' },
+          { kind: 'bare', field: 'notes' }
+        ]
+      }
+    });
+
+    const { definition, issues } = buildRecordDefinitionFromDirective(directive);
+    expect(issues).toEqual([]);
+    expect(definition).toBeDefined();
+    expect(formatRecordDefinition(definition!)).toContain(
+      'display: { role:planner: [name, { ref: "email" }], role:worker: [{ mask: "email" }, name, notes] }'
+    );
   });
 
   it('parses bare root adapters for scalar and map-entry record fields', () => {

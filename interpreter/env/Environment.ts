@@ -173,6 +173,7 @@ import {
   extractSecurityDescriptor,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { resolveDisplaySelection } from '@core/records/display-mode';
 
 type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
 const AMBIENT_HANDLE_PREVIEW_LIMIT = 200;
@@ -1125,8 +1126,16 @@ export class Environment
   }
 
   private getCurrentLlmDisplayMode(): string | null {
-    const display = this.getScopedEnvironmentConfig()?.display;
-    return typeof display === 'string' && display.trim().length > 0 ? display.trim() : null;
+    const selection = resolveDisplaySelection({
+      scopedDisplay: this.getScopedEnvironmentConfig()?.display,
+      exeLabels: this.getExeLabels() ?? this.getEnclosingExeLabels()
+    });
+
+    if (selection.strictMode) {
+      return 'strict';
+    }
+
+    return selection.modeName ?? null;
   }
 
   private getCurrentLlmResumeContext(): Record<string, unknown> | null {

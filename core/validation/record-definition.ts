@@ -2,6 +2,10 @@ import {
   astLocationToSourceLocation,
   type SourceLocation
 } from '@core/types';
+import {
+  isStrictDisplayModeName,
+  normalizeDisplayModeName
+} from '@core/records/display-mode';
 import type {
   RecordDirectiveNode,
   RecordDefinition,
@@ -107,8 +111,13 @@ function normalizeDisplay(
   }
 
   const normalizedModes: Record<string, RecordDisplayEntry[]> = {};
-  for (const [modeName, entries] of Object.entries(declaration.modes)) {
-    if (modeName.trim().toLowerCase() === 'strict') {
+  for (const [rawModeName, entries] of Object.entries(declaration.modes)) {
+    const modeName = normalizeDisplayModeName(rawModeName);
+    if (!modeName) {
+      continue;
+    }
+
+    if (isStrictDisplayModeName(modeName)) {
       issues.push(issue(
         'INVALID_RECORD_DISPLAY',
         `Record '@${recordName}' cannot declare display mode 'strict'`,

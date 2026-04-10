@@ -3,6 +3,7 @@ import type {
   RecordDisplayMode,
   RecordFieldProjectionMetadata
 } from '@core/types/record';
+import { resolveDisplaySelection } from '@core/records/display-mode';
 import type { ToolCollection } from '@core/types/tools';
 import { isExecutableVariable } from '@core/types/variable';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
@@ -107,26 +108,6 @@ function isToolCollection(value: unknown): value is ToolCollection {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function normalizeDisplaySelection(value: unknown): { strictMode: boolean; modeName?: string } {
-  if (typeof value !== 'string') {
-    return { strictMode: false };
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return { strictMode: false };
-  }
-
-  if (trimmed.toLowerCase() === 'strict') {
-    return { strictMode: true };
-  }
-
-  return {
-    strictMode: false,
-    modeName: trimmed
-  };
-}
-
 function collectActiveRequirementGroups(
   env: Environment,
   toolCollection?: ToolCollection
@@ -190,7 +171,10 @@ function createProjectionContext(
 ): ProjectionContext {
   const selection = options?.strict === true
     ? { strictMode: true }
-    : normalizeDisplaySelection(options?.displayMode ?? env.getScopedEnvironmentConfig()?.display);
+    : resolveDisplaySelection({
+        scopedDisplay: options?.displayMode ?? env.getScopedEnvironmentConfig()?.display,
+        exeLabels: env.getExeLabels() ?? env.getEnclosingExeLabels()
+      });
   return {
     strictMode: selection.strictMode,
     ...(selection.modeName ? { modeName: selection.modeName } : {}),

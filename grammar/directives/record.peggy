@@ -219,9 +219,9 @@ RecordDisplayFieldName
   / field:BaseIdentifier { return field; }
 
 RecordDisplayModeName
-  = "\"" field:BaseIdentifier "\"" { return field; }
-  / "'" field:BaseIdentifier "'" { return field; }
-  / field:BaseIdentifier { return field; }
+  = "\"" field:DataLabelIdentifier "\"" { return field; }
+  / "'" field:DataLabelIdentifier "'" { return field; }
+  / field:DataLabelIdentifier { return field; }
 
 RecordFields
   = first:RecordField rest:(_ "," _ field:RecordField { return field; })* _ ","? {

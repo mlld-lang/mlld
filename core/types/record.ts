@@ -1,12 +1,14 @@
 import type { TypedDirectiveNode } from './base';
 import type { SourceLocation, VariableReferenceNode, BaseMlldNode } from './primitives';
 import type { DataValue } from './var';
+import { formatDisplayModeName } from '@core/records/display-mode';
 
 export type RecordFieldClassification = 'fact' | 'data';
 export type RecordDataTrustLevel = 'trusted' | 'untrusted';
 export type RecordFieldValueType = 'string' | 'number' | 'boolean' | 'array' | 'object' | 'handle';
 export type RecordValidationMode = 'demote' | 'strict' | 'drop';
 export type RecordDisplayMode = 'bare' | 'ref' | 'mask' | 'handle';
+export type RecordDisplayModeName = string;
 export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
 export type RecordInputSourceRoot = 'input' | 'key' | 'value';
 export type RecordDisplayEntry =
@@ -17,7 +19,7 @@ export type RecordDisplayEntry =
 
 export type RecordDisplayDeclaration =
   | { kind: 'legacy'; entries: RecordDisplayEntry[] }
-  | { kind: 'named'; modes: Record<string, RecordDisplayEntry[]> };
+  | { kind: 'named'; modes: Record<RecordDisplayModeName, RecordDisplayEntry[]> };
 
 export type RecordDisplayConfig =
   | { kind: 'open' }
@@ -252,7 +254,7 @@ function formatRecordDisplay(display: RecordDisplayConfig): string | undefined {
   }
 
   const modes = Object.entries(display.modes).map(
-    ([mode, entries]) => `${mode}: [${entries.map(formatRecordDisplayEntry).join(', ')}]`
+    ([mode, entries]) => `${formatDisplayModeName(mode)}: [${entries.map(formatRecordDisplayEntry).join(', ')}]`
   );
   return `{ ${modes.join(', ')} }`;
 }

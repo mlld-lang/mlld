@@ -496,6 +496,79 @@ describe('renderDisplayProjection', () => {
     });
   });
 
+  it('derives named display selection from exe role labels when no scoped display is set', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    role:worker: [{ mask: "from" }, subject, body],
+    role:planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        message_id: 'msg-1',
+        subject: 'Update',
+        body: 'Body'
+      },
+      env
+    });
+
+    env.setExeLabels(['llm', 'role:planner']);
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      from: {
+        value: 'ada@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      message_id: {
+        handle: expect.stringMatching(HANDLE_RE)
+      }
+    });
+  });
+
+  it('keeps explicit scoped display selection ahead of exe role defaults', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @email = {
+  facts: [from: string, message_id: string],
+  data: [subject: string, body: string],
+  display: {
+    role:worker: [{ mask: "from" }, subject, body],
+    role:planner: [{ ref: "from" }, { handle: "message_id" }]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        from: 'ada@example.com',
+        message_id: 'msg-1',
+        subject: 'Update',
+        body: 'Body'
+      },
+      env
+    });
+
+    env.setExeLabels(['llm', 'role:planner']);
+    setScopedTools(env, {}, { display: 'role:worker' });
+
+    expect(await renderDisplayProjection(output, env)).toEqual({
+      from: {
+        preview: 'a***@example.com',
+        handle: expect.stringMatching(HANDLE_RE)
+      },
+      subject: 'Update',
+      body: 'Body'
+    });
+  });
+
   it('uses default named display mode when no explicit box mode is selected', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `
