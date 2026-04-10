@@ -3,7 +3,9 @@ import { GuardError } from '@core/errors/GuardError';
 import { MlldDenialError } from '@core/errors/denial';
 import { handleExecGuardDenial } from './guard-denial-handler';
 
-const evaluateWhenExpressionMock = vi.fn();
+const { evaluateWhenExpressionMock } = vi.hoisted(() => ({
+  evaluateWhenExpressionMock: vi.fn()
+}));
 
 vi.mock('./when-expression', () => ({
   evaluateWhenExpression: evaluateWhenExpressionMock

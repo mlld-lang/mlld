@@ -19,10 +19,10 @@ qa_tier: 2
 ```mlld
 exe @trace(input) = [
   show `stage=@mx.stage value=@input`
-  => @input
+  => @mx.input
 ]
 
-show " hello " | @trace | @trim | @trace
+var @result = " hello " | @trace | @trim | @trace
 >> Output:
 >> stage=1 value= hello
 >> stage=3 value=hello

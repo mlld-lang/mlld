@@ -574,7 +574,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     if (!value) {
       return '';
     }
-    return value.replace(/\r\n/g, '\n').trim();
+    return value
+      .replace(/\r\n/g, '\n')
+      .replace(/mlld_shadow_exec_\d+\.py/g, 'mlld_shadow_exec_<ts>.py')
+      .replace(/((?:\\)?\"createdAt(?:\\)?\":\s*)\d+/g, '$1<TS>')
+      .replace(/((?:\\)?\"modifiedAt(?:\\)?\":\s*)\d+/g, '$1<TS>')
+      .trim();
   }
 
   function validateStderrOutput(
@@ -1520,8 +1525,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
-          const normalizedResult = result.trim();
-          const normalizedExpected = fixture.expected.trim();
+          const normalizedResult = normalizeOutputText(result);
+          const normalizedExpected = normalizeOutputText(fixture.expected);
           expect(normalizedResult).toBe(normalizedExpected);
           } else if (isSmokeTest) {
             // For smoke tests, just verify it doesn't crash and produces output

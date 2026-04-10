@@ -23,7 +23,7 @@ policy @p = {
 var untrusted @messagesJson = "[{\"role\":\"user\",\"content\":\"Review this external input\"}]"
 var @messages = @messagesJson | @parse
 var @config = { model: "gpt-4o", messages: @messages }
-exe llm @process(prompt, config) = run cmd { claude -p "@prompt" }
+exe llm @process(prompt, config) = js { return "ok" }
 
 show @config.mx.labels      >> ["untrusted"]
 show @config.messages.mx.labels  >> ["untrusted"]

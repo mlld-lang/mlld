@@ -209,6 +209,34 @@ async function cleanOrphanedFixtures() {
       return;
     }
 
+    // Compute expected fixture filenames for this case directory once.
+    // Orphaned doc hash dirs intentionally preserve expected.md, but they
+    // should not keep runnable generated fixtures when the source example is gone.
+    const dirName = path.basename(caseDir);
+    let caseFiles;
+    try {
+      caseFiles = await fs.readdir(caseDir);
+    } catch {
+      return; // Case dir gone; orphan cleanup handles this
+    }
+
+    const isExamplesDir = dirName === 'examples';
+    const expectedNames = new Set();
+    const exampleFiles = isExamplesDir
+      ? caseFiles.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.'))
+      : caseFiles.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
+
+    for (const file of exampleFiles) {
+      if (isExamplesDir) {
+        expectedNames.add(file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json');
+      } else if (file !== 'example.md' && file !== 'example.mld') {
+        const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
+        expectedNames.add(`${dirName}-${variant}.generated-fixture.json`);
+      } else {
+        expectedNames.add(`${dirName}.generated-fixture.json`);
+      }
+    }
+
     for (const entry of entries) {
       if (entry.isDirectory()) {
         await cleanStaleFiles(
@@ -219,36 +247,15 @@ async function cleanOrphanedFixtures() {
       }
       if (!entry.name.endsWith('.generated-fixture.json')) continue;
 
-      // Compute expected fixture filenames for this case directory
-      const dirName = path.basename(caseDir);
-      let caseFiles;
-      try {
-        caseFiles = await fs.readdir(caseDir);
-      } catch {
-        continue; // Case dir gone; orphan cleanup handles this
-      }
-
-      const isExamplesDir = dirName === 'examples';
-      const expectedNames = new Set();
-      const exampleFiles = isExamplesDir
-        ? caseFiles.filter(f => (f.endsWith('.md') || f.endsWith('.mld')) && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.'))
-        : caseFiles.filter(f => f.startsWith('example') && (f.endsWith('.md') || f.endsWith('.mld')));
-
-      for (const file of exampleFiles) {
-        if (isExamplesDir) {
-          expectedNames.add(file.replace('.md', '').replace('.mld', '') + '.generated-fixture.json');
-        } else if (file !== 'example.md' && file !== 'example.mld') {
-          const variant = file.replace('example-', '').replace('.md', '').replace('.mld', '');
-          expectedNames.add(`${dirName}-${variant}.generated-fixture.json`);
-        } else {
-          expectedNames.add(`${dirName}.generated-fixture.json`);
-        }
-      }
-
-      if (expectedNames.size > 0 && !expectedNames.has(entry.name)) {
+      if (!expectedNames.has(entry.name)) {
         await fs.unlink(path.join(fixtureDir, entry.name));
         staleFiles++;
       }
+    }
+
+    const remainingEntries = await fs.readdir(fixtureDir);
+    if (remainingEntries.length === 0) {
+      await fs.rmdir(fixtureDir);
     }
   }
 

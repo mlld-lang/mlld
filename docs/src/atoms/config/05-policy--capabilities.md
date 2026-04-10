@@ -25,6 +25,8 @@ policy @p = {
 run cmd { git status }
 ```
 
+Whether the command succeeds still depends on the current workspace. This policy only permits the `git` command family; outside a git repository, `git status` still returns git's normal error.
+
 **Tool restrictions:**
 
 | Pattern | Matches |

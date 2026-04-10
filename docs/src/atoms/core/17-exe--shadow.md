@@ -34,9 +34,12 @@ print(f"Hello, {name}!")
 exe py = { square, greet }  >> expose to all py blocks
 
 run py {
-square(4)      >> prints 16
-greet("World") >> prints Hello, World!
+square(4)
+greet("World")
 }
+>> Output:
+>> 16
+>> Hello, World!
 ```
 
 **Cross-function calls:** Shadow functions can call each other:
