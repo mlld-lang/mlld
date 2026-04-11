@@ -487,7 +487,7 @@ guard @missingOpName before op:tool:w = when [
   it('fails validation closed when policy.authorizations omits exe-level controlArgs constraints', async () => {
     const contextPath = await writeModule('analyze-authz-context.mld', `exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
 `);
-    const modulePath = await writeModule('analyze-authz-invalid.mld', `var @taskPolicy = {
+    const modulePath = await writeModule('analyze-authz-invalid.mld', `policy @taskPolicy = {
   authorizations: {
     allow: {
       send_email: true
@@ -517,7 +517,7 @@ var tools @agentTools = {
     controlArgs: []
   }
 }
-var @taskPolicy = {
+policy @taskPolicy = {
   authorizations: {
     allow: {
       create_file: {}
@@ -545,7 +545,7 @@ show @taskPolicy
 
   it('accepts exe-declared controlArgs without requiring a tools wrapper', async () => {
     const modulePath = await writeModule('analyze-authz-exe-control-args.mld', `exe tool:w @send_money(recipient, amount) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
-var @taskPolicy = {
+policy @taskPolicy = {
   authorizations: {
     allow: {
       send_money: {
@@ -562,6 +562,32 @@ show @taskPolicy
     const result = await analyze(modulePath, { checkVariables: false });
 
     expect(result.valid).toBe(true);
+  });
+
+  it('does not validate generic authorizations objects as policy declarations', async () => {
+    const modulePath = await writeModule('analyze-generic-authorizations-intent.mld', `var @decision = {
+  authorizations: {
+    resolved: {
+      send_email: {
+        recipient: "contact-handle"
+      }
+    },
+    known: {
+      send_email: {
+        recipient: "ada@example.com"
+      }
+    },
+    allow: ["send_email"]
+  }
+}
+show @decision
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).filter(entry => entry.message.includes('policy.authorizations'))).toHaveLength(0);
+    expect((result.antiPatterns ?? []).filter(entry => entry.code.startsWith('policy-authorizations-'))).toHaveLength(0);
   });
 
   it('reports denied tools for statically analyzable @policy.build callsites with base policy overrides', async () => {

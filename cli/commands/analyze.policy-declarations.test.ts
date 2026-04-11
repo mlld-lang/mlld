@@ -64,6 +64,28 @@ exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { co
     expect(warnings[0]?.suggestion).toContain('delete_draft');
   });
 
+  it('validates policy authorizations reached through union references', async () => {
+    const modulePath = await writeModule('policy-union-authorizations-invalid.mld', `var @basePolicy = {
+  authorizations: {
+    allow: {
+      send_email: true
+    }
+  }
+}
+
+policy @task = union(@basePolicy)
+
+exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      'cannot use true in policy.authorizations'
+    );
+  });
+
   it('accepts valid policy authorizable role declarations', async () => {
     const modulePath = await writeModule('policy-authorizable-valid.mld', `policy @task = {
   authorizations: {

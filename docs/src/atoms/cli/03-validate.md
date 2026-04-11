@@ -194,6 +194,8 @@ It currently catches:
 
 Dynamic callsites are skipped rather than guessed, and are surfaced only in JSON under `policyCalls`.
 
+Generic data objects are not treated as policy declarations just because they contain an `authorizations` field. Validation applies that schema only to `/policy` declarations and to statically analyzable `@policy.build(...)` / `@policy.validate(...)` callsites.
+
 **Semantic guard/policy warnings:**
 
 `mlld validate` also warns about likely-authoring mistakes that are syntactically valid:

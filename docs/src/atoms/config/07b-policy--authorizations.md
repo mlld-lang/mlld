@@ -558,6 +558,8 @@ The planner's output should contain only runtime authorization intent — not `a
 - Every constrained arg name must exist on that exe's parameter list
 - A declared control arg omitted from the `args` constraint is an error
 - A tool with declared control args authorized as `true` is an error
+
+That validation is scoped to actual policy surfaces: `/policy` declarations and statically analyzable `@policy.build(...)` / `@policy.validate(...)` callsites. Ordinary data objects may still use a field named `authorizations`; they stay plain data until framework code passes them to the policy builder or validator.
 - If trusted `controlArgs` are missing for a `tool:w` exe, every declared parameter is treated as a control arg
 - `{}` and `{ args: {} }` produce normalization warnings
 

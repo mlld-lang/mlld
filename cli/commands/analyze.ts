@@ -4074,137 +4074,212 @@ function collectPolicyAuthorizationDiagnostics(
   const errors: AnalysisError[] = [];
   const warnings: AntiPatternWarning[] = [];
   const seen = new Set<string>();
+  const bindings = buildTopLevelStaticBindings(ast);
 
-  walkAST(ast, (node) => {
-    if (getNodeObjectType(node) !== 'object' && getNodeObjectType(node) !== 'ObjectExpression') {
-      return;
+  for (const node of ast) {
+    if (!node || typeof node !== 'object' || node.type !== 'Directive' || node.kind !== 'policy') {
+      continue;
     }
 
-    const authorizationsNode = getObjectEntryValue(node, 'authorizations');
-    if (authorizationsNode === undefined) {
-      return;
-    }
+    for (const { authorizationsNode, rawAuthorizations } of collectPolicyAuthorizationTargets(
+      (node as any).values?.expr,
+      bindings
+    )) {
+      const allowNode = getObjectEntryValue(authorizationsNode, 'allow');
+      const denyEntryNode = getObjectEntryValue(authorizationsNode, 'deny');
+      const hasDynamicCoreAuthorizations =
+        containsDynamicStaticValueReference(allowNode)
+        || containsDynamicStaticValueReference(denyEntryNode);
 
-    const rawAuthorizations = extractStaticValue(authorizationsNode);
-    if (rawAuthorizations === undefined) {
-      return;
-    }
-
-    const allowNode = getObjectEntryValue(authorizationsNode, 'allow');
-    const denyEntryNode = getObjectEntryValue(authorizationsNode, 'deny');
-    const hasDynamicCoreAuthorizations =
-      containsDynamicStaticValueReference(allowNode)
-      || containsDynamicStaticValueReference(denyEntryNode);
-
-    const validation = hasDynamicCoreAuthorizations
-      ? { errors: [], warnings: [], normalized: undefined }
-      : validatePolicyAuthorizations(stripPolicyAuthorizableField(rawAuthorizations), contextExecutables, {
-          requireKnownTools: contextExecutables.size > 0,
-          requireControlArgsMetadata: contextExecutables.size > 0
-        });
-    const normalizedDeny =
-      validation.normalized?.deny
-      ?? (
-        isPlainObject(rawAuthorizations) && Array.isArray(rawAuthorizations.deny)
-          ? rawAuthorizations.deny
-            .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-            .map(entry => entry.trim())
-          : undefined
+      const validation = hasDynamicCoreAuthorizations
+        ? { errors: [], warnings: [], normalized: undefined }
+        : validatePolicyAuthorizations(stripPolicyAuthorizableField(rawAuthorizations), contextExecutables, {
+            requireKnownTools: contextExecutables.size > 0,
+            requireControlArgsMetadata: contextExecutables.size > 0
+          });
+      const normalizedDeny =
+        validation.normalized?.deny
+        ?? (
+          isPlainObject(rawAuthorizations) && Array.isArray(rawAuthorizations.deny)
+            ? rawAuthorizations.deny
+              .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+              .map(entry => entry.trim())
+            : undefined
+        );
+      const authorizableDiagnostics = collectStaticAuthorizableDiagnostics(
+        authorizationsNode,
+        rawAuthorizations,
+        contextExecutables,
+        normalizedDeny
       );
-    const authorizableDiagnostics = collectStaticAuthorizableDiagnostics(
-      authorizationsNode,
-      rawAuthorizations,
-      contextExecutables,
-      normalizedDeny
-    );
-    const line = (authorizationsNode as any)?.location?.start?.line ?? (node as any)?.location?.start?.line;
-    const column =
-      (authorizationsNode as any)?.location?.start?.column ?? (node as any)?.location?.start?.column;
+      const line = (authorizationsNode as any)?.location?.start?.line ?? (node as any)?.location?.start?.line;
+      const column =
+        (authorizationsNode as any)?.location?.start?.column ?? (node as any)?.location?.start?.column;
 
-    for (const issue of validation.errors) {
-      const key = `error:${issue.code}:${line ?? 0}:${column ?? 0}:${issue.message}`;
-      if (seen.has(key)) {
+      for (const issue of validation.errors) {
+        const key = `error:${issue.code}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        errors.push({
+          message: issue.message,
+          line,
+          column
+        });
+      }
+
+      for (const issue of authorizableDiagnostics.errors) {
+        const key = `error:authorizable:${issue.line ?? 0}:${issue.column ?? 0}:${issue.message}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        errors.push(issue);
+      }
+
+      for (const issue of validation.warnings) {
+        const warningCode = mapPolicyAuthorizationWarningCode(issue);
+        if (!warningCode) {
+          continue;
+        }
+        const key = `warning:${warningCode}:${line ?? 0}:${column ?? 0}:${issue.message}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        warnings.push({
+          code: warningCode,
+          message: issue.message,
+          line,
+          column
+        });
+      }
+
+      for (const warning of authorizableDiagnostics.warnings) {
+        const key = `warning:${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        warnings.push(warning);
+      }
+
+      if (contextExecutables.size === 0 || !validation.normalized?.deny || validation.normalized.deny.length === 0) {
         continue;
       }
-      seen.add(key);
-      errors.push({
-        message: issue.message,
-        line,
-        column
-      });
+
+      const denyEntries = extractStaticStringEntries(denyEntryNode);
+      for (const deniedTool of validation.normalized.deny) {
+        if (contextExecutables.has(deniedTool)) {
+          continue;
+        }
+
+        const location = denyEntries.find(entry => entry.value === deniedTool);
+        const closestToolName = findClosestKnownToolName(deniedTool, contextExecutables);
+        const warningMessage = `policy.authorizations.deny references unknown tool '${deniedTool}'`;
+        const key = `warning:policy-authorizations-deny-unknown-tool:${location?.line ?? line ?? 0}:${location?.column ?? column ?? 0}:${warningMessage}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        warnings.push({
+          code: 'policy-authorizations-deny-unknown-tool',
+          message: warningMessage,
+          line: location?.line ?? (denyEntryNode as any)?.location?.start?.line ?? line,
+          column: location?.column ?? (denyEntryNode as any)?.location?.start?.column ?? column,
+          suggestion: closestToolName
+            ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${deniedTool}".`
+            : `Add validation context that defines "${deniedTool}", or update policy.authorizations.deny.`
+        });
+      }
     }
-
-    for (const issue of authorizableDiagnostics.errors) {
-      const key = `error:authorizable:${issue.line ?? 0}:${issue.column ?? 0}:${issue.message}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      errors.push(issue);
-    }
-
-    for (const issue of validation.warnings) {
-      const warningCode = mapPolicyAuthorizationWarningCode(issue);
-      if (!warningCode) {
-        continue;
-      }
-      const key = `warning:${warningCode}:${line ?? 0}:${column ?? 0}:${issue.message}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      warnings.push({
-        code: warningCode,
-        message: issue.message,
-        line,
-        column
-      });
-    }
-
-    for (const warning of authorizableDiagnostics.warnings) {
-      const key = `warning:${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      warnings.push(warning);
-    }
-
-    if (contextExecutables.size === 0 || !validation.normalized?.deny || validation.normalized.deny.length === 0) {
-      return;
-    }
-
-    const denyEntries = extractStaticStringEntries(denyEntryNode);
-    for (const deniedTool of validation.normalized.deny) {
-      if (contextExecutables.has(deniedTool)) {
-        continue;
-      }
-
-      const location = denyEntries.find(entry => entry.value === deniedTool);
-      const closestToolName = findClosestKnownToolName(deniedTool, contextExecutables);
-      const warningMessage = `policy.authorizations.deny references unknown tool '${deniedTool}'`;
-      const key = `warning:policy-authorizations-deny-unknown-tool:${location?.line ?? line ?? 0}:${location?.column ?? column ?? 0}:${warningMessage}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      warnings.push({
-        code: 'policy-authorizations-deny-unknown-tool',
-        message: warningMessage,
-        line: location?.line ?? (denyEntryNode as any)?.location?.start?.line ?? line,
-        column: location?.column ?? (denyEntryNode as any)?.location?.start?.column ?? column,
-        suggestion: closestToolName
-          ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${deniedTool}".`
-          : `Add validation context that defines "${deniedTool}", or update policy.authorizations.deny.`
-      });
-    }
-  });
+  }
 
   return { errors, warnings };
 }
 
+type PolicyAuthorizationValidationTarget = {
+  authorizationsNode: unknown;
+  rawAuthorizations: unknown;
+};
+
 interface TopLevelStaticBinding {
   node: unknown;
+}
+
+function collectPolicyAuthorizationTargets(
+  node: unknown,
+  bindings: ReadonlyMap<string, TopLevelStaticBinding>,
+  stack: Set<string> = new Set<string>()
+): PolicyAuthorizationValidationTarget[] {
+  const unwrapped = unwrapSingleNodeArray(node);
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return [];
+  }
+
+  const nodeType = getNodeObjectType(unwrapped);
+  if (nodeType === 'object' || nodeType === 'ObjectExpression') {
+    const authorizationsNode = getObjectEntryValue(unwrapped, 'authorizations');
+    if (authorizationsNode === undefined) {
+      return [];
+    }
+
+    const rawAuthorizations = extractStaticValue(authorizationsNode);
+    return rawAuthorizations === undefined
+      ? []
+      : [{ authorizationsNode, rawAuthorizations }];
+  }
+
+  const typedNode = unwrapped as Record<string, unknown>;
+  if (typedNode.type === 'VariableReference' && typeof typedNode.identifier === 'string') {
+    if (Array.isArray(typedNode.pipes) && typedNode.pipes.length > 0) {
+      return [];
+    }
+
+    const binding = bindings.get(typedNode.identifier);
+    if (!binding || stack.has(typedNode.identifier)) {
+      return [];
+    }
+
+    const bindingNode = applyStaticFieldAccessToNode(
+      binding.node,
+      typedNode.fields as readonly unknown[] | undefined
+    );
+    if (bindingNode === undefined) {
+      return [];
+    }
+
+    const nextStack = new Set(stack);
+    nextStack.add(typedNode.identifier);
+    return collectPolicyAuthorizationTargets(bindingNode, bindings, nextStack);
+  }
+
+  if (typedNode.type === 'union' && Array.isArray(typedNode.args)) {
+    const targets: PolicyAuthorizationValidationTarget[] = [];
+
+    for (const arg of typedNode.args as Array<Record<string, unknown>>) {
+      if (arg?.type !== 'ref' || typeof arg.name !== 'string') {
+        continue;
+      }
+      if (stack.has(arg.name)) {
+        continue;
+      }
+
+      const binding = bindings.get(arg.name);
+      if (!binding) {
+        continue;
+      }
+
+      const nextStack = new Set(stack);
+      nextStack.add(arg.name);
+      targets.push(...collectPolicyAuthorizationTargets(binding.node, bindings, nextStack));
+    }
+
+    return targets;
+  }
+
+  return [];
 }
 
 type StaticResolutionFailure =
