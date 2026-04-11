@@ -153,6 +153,24 @@ describe('exe evaluator characterization', () => {
     });
   });
 
+  it('keeps dynamic output record annotations parseable when an exe-level with-clause follows', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:r @parseWithSchema(input, schema) = @input => record @schema with { controlArgs: ["input"] }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    const executableDef = getExecutableDef(env, 'parseWithSchema');
+    expect(executableDef.outputRecord).toMatchObject({
+      kind: 'dynamic',
+      ref: {
+        type: 'VariableReference',
+        identifier: 'schema'
+      }
+    });
+    expect(executableDef.controlArgs).toEqual(['input']);
+  });
+
   it('embeds display metadata from referenced records into executable variable metadata', async () => {
     const env = createEnvironment();
     env.setCurrentFilePath('/project/records.mld');

@@ -616,7 +616,7 @@ SlashExe
     }
 
 ExeOutputRecordAnnotation
-  = __ "=>" _ "record" __ ref:UnifiedVariableNoTail {
+  = __ "=>" _ "record" __ ref:UnifiedVariableCallerBounded {
       return {
         identifier: text().replace(/^\s*=>\s*/, '').trim(),
         node: helpers.createNode('ExeOutputRecord', {

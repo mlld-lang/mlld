@@ -421,13 +421,7 @@ UnifiedDoubleQuotedContent
 // Unlike UnifiedVariableNoTail, this does not check !TailModifiers so
 // literals like "@first | @second" stay inside the same quoted token.
 UnifiedVariableInDoubleQuotes
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
+  = ref:UnifiedVariableCallerBounded { return ref; }
 
 // Content inside single quotes - no variables, no operator checks
 UnifiedCommandSingleQuotedContent

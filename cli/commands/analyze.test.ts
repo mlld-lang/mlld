@@ -994,6 +994,17 @@ show @built
     );
   });
 
+  it('accepts dynamic output record annotations followed by exe-level with-clauses', async () => {
+    const modulePath = await writeModule('analyze-dynamic-output-record-with-tail.mld', `
+/exe tool:r @parse(input, schema) = @input => record @schema with { controlArgs: ["input"] }
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors ?? []).toEqual([]);
+  });
+
   it('catches statically knowable @cast record reference errors without guessing on dynamic cases', async () => {
     const modulePath = await writeModule('analyze-missing-cast-record.mld', `
 /record @contact = {

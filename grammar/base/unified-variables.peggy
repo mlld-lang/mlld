@@ -140,14 +140,22 @@ UnifiedVariableReferenceWithTail "variable reference with tail modifiers"
       return varRef;
     }
 
-// Unified variable reference without tail modifiers
-UnifiedVariableNoTail "variable reference without tail modifiers"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* !TailModifiers {
+// Shared variable-reference core for caller-bounded contexts.
+// Callers that need to reject trailing tail modifiers should wrap this
+// rule with an explicit !TailModifiers check.
+UnifiedVariableCallerBounded "variable reference with caller-managed tail boundary"
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccessOptional* {
       const normalizedId = helpers.normalizePathVar(id);
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
+    }
+
+// Unified variable reference without tail modifiers
+UnifiedVariableNoTail "variable reference without tail modifiers"
+  = ref:UnifiedVariableCallerBounded !TailModifiers {
+      return ref;
     }
 
 // Unified variable with condensed pipes for interpolation contexts
