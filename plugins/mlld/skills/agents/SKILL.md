@@ -198,10 +198,8 @@ exe @routeTask(task, agents) = [
   let @agentSummary = for @a in @agents => `@a.id: @a.capabilities`
 
   >> Fast classification with haiku
-  let @outPath = `@root/tmp/router-@task.id\.json`
   let @prompt = @scorePrompt(@task, @agentSummary.join("\n"))
-  @claudePoll(@prompt, { model: "haiku", tools: ["Read", "Write"], poll: @outPath })
-  let @result = <@outPath>? | @json
+  let @result = @claude(@prompt, { model: "haiku", tools: ["Read"] }) | @json
 
   >> Low confidence → refine with stronger model
   when @result.confidence == "low" [
@@ -224,10 +222,8 @@ The gate checks agent output quality before finalizing:
 
 ```mlld
 exe @checkOutput(task, output) = [
-  let @outPath = `@root/tmp/gate-@task.id\.json`
   let @prompt = @checkPrompt(@task, @output)
-  @claudePoll(@prompt, { model: "haiku", tools: ["Read", "Write"], poll: @outPath })
-  let @result = <@outPath>? | @json
+  let @result = @claude(@prompt, { model: "haiku" }) | @json
   when !@result => { pass: true, feedback: null }
   => @result
 ]
@@ -243,8 +239,8 @@ Integrate the gate with pipeline `=> retry` so the agent automatically retries w
 ```mlld
 exe @callAgent() = [
   let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
-  >> ... build prompt with @feedback, call @claudePoll ...
-  => <@outPath>?
+  >> ... build prompt with @feedback, call @claude ...
+  => @claude(@prompt, { model: "sonnet", tools: @tools })
 ]
 
 exe @qualityGate() = [
@@ -259,6 +255,8 @@ var @result = @callAgent() | @qualityGate
 ```
 
 The gate's feedback flows to the source via `@mx.hint`, where the agent appends it to the prompt before retrying. See `examples/event-agent/` for the full working implementation.
+
+When an agent with write tools returns malformed JSON, prefer `resume` over `retry` — `resume` continues the conversation and appends a correction message without replaying tool calls, whereas `retry` re-runs the entire exe including any writes. Guard action precedence: `deny > resume > retry > allow`. Use `retry` for read-only agents; `resume` for agents that write.
 
 ### Agent Contracts
 
@@ -278,6 +276,8 @@ export { @meta, @taskPrompt }
 
 The orchestrator loads all agent modules, reads their `@meta` for the router, and calls their `@taskPrompt` for dispatch. Adding a new agent = adding a new module file and prompt template.
 
+In multi-phase pipelines, use `display: "planner"` on router calls and `display: "worker"` on dispatch calls to control which record fields each phase sees — planners get handles for authorization, workers get content for execution. See `mlld:security` for the full planner-worker authorization pattern.
+
 **See**: `examples/event-agent/`
 
 ---
@@ -291,7 +291,7 @@ A workflow agent is a stateless mlld script invoked by an external system (Rails
 Every workflow agent follows the same shape:
 
 ```mlld
-import { @claudePoll } from @mlld/claude
+import { @claude } from @mlld/claude
 import "@payload" as @p
 
 >> Parse input
@@ -299,14 +299,15 @@ var @input = <@p.inputFile> | @json
 
 >> Do work (one or more LLM calls)
 var @prompt = @myPrompt(@input)
-@claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outputPath })
-var @result = <@outputPath>?
+var @result = @claude(@prompt, { model: "sonnet", tools: @tools })
 
 >> Write output
 output @result to "@p.outputFile"
 ```
 
 The external system decides *when* to call each job and *what order* to run them. The mlld script just does its part.
+
+For jobs that return structured data, coerce the LLM response through a record schema rather than hand-parsing JSON: `var @result = @claude(@prompt, { model: "sonnet" }) => record @outputSchema`. This validates field types and establishes field-level trust. For agents with write tools, see `mlld:security` for records, handles, display projections, and policy enforcement.
 
 ### Job Taxonomy
 
@@ -339,13 +340,11 @@ The key pattern for decision jobs. Separating generation from evaluation prevent
 ```mlld
 >> Call 1: Generate options (no bias, no ranking)
 var @genPrompt = @generatePrompt(@context)
-@claudePoll(@genPrompt, { model: "sonnet", tools: @tools, poll: @optionsPath })
-var @options = <@optionsPath>? | @json
+var @options = @claude(@genPrompt, { model: "sonnet", tools: @tools }) | @json
 
 >> Call 2: Evaluate and choose (critical judgment)
 var @evalPrompt = @evaluatePrompt(@context, @options)
-@claudePoll(@evalPrompt, { model: "opus", tools: @tools, poll: @outputPath })
-var @decision = <@outputPath>? | @json
+var @decision = @claude(@evalPrompt, { model: "opus", tools: @tools }) | @json
 ```
 
 Use Sonnet for generation (explores broadly, fast) and Opus for evaluation (careful judgment, worth the cost). The generation prompt says "do NOT rank" — evaluation is the second call's job.
@@ -419,7 +418,7 @@ project/
 - `llm/mcp/` — Tool modules. `mlld mcp` with no args serves this directory.
 - `llm/agents/` — Agent definition modules with `@meta` and prompt exports.
 - `llm/prompts/` — Shared `.att` templates and `.md` prompt fragments.
-- `llm/lib/` — Shared mlld utilities (`@logEvent`, `@claudePoll` wrappers, etc.).
+- `llm/lib/` — Shared mlld utilities (`@logEvent`, `@claude` wrappers, etc.).
 
 ## Getting Started
 

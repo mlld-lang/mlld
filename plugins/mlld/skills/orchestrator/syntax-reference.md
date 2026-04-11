@@ -2,32 +2,24 @@
 
 For general mlld syntax, run `mlld howto intro`. This covers orchestrator-specific patterns only.
 
-## @claude / @claudePoll (LLM invocation)
+## @claude (LLM invocation)
 
 ```mlld
-import { @claude, @claudePoll } from @mlld/claude
+import { @claude } from @mlld/claude
 
->> Simple call with config object
+>> Returns the response directly
 let @result = @claude(@prompt, { model: "sonnet", tools: ["Read", "Write", "Glob"] })
-
->> Poll-based call (waits for agent to write output file)
-let @result = @claudePoll(@prompt, {
-  model: "opus",
-  tools: ["Read", "Write", "Glob"],
-  poll: @outputPath
-})
 ```
 
-Config options for `@claude(prompt, config)`: model, dir, tools, stream, system.
-Config options for `@claudePoll(prompt, config)`: model, tools, poll, timeout, system.
+Config options for `@claude(prompt, config)`: model, dir, tools, stream, system, bare, sessionId, resume.
 
-The prompt must instruct the agent to write to the poll path. The function polls for that file, then returns its contents.
+Convenience single-arg exes: `@haiku(@prompt)`, `@sonnet(@prompt)`, `@opus(@prompt)`.
 
 ## Checkpoint and Resume
 
 ```mlld
 >> Label expensive calls — caching is automatic
-exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @review(prompt) = @claude(@prompt, { model: "sonnet", tools: @tools })
 
 >> Named checkpoints between phases
 checkpoint "collection"
@@ -46,16 +38,18 @@ mlld run pipeline --resume @analyze("item-50")  # fuzzy: from item-50 onward
 mlld run pipeline --new                # fresh run, clear cache
 ```
 
-## File-based output protocol
+## Structured output
+
+`@claude` returns the response directly — no file protocol needed.
 
 ```mlld
-let @outputPath = `@runDir/decision-@iteration\.json`
-let @fullPrompt = `@prompt
+let @decision = @claude(@prompt, { model: "opus", tools: @tools })
+```
 
-IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
+To save prompts or responses for debugging:
 
-@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
-let @decision = <@outputPath>?
+```mlld
+output @prompt to "@runDir/decision-@iteration.prompt.md"
 ```
 
 ## State persistence
@@ -88,7 +82,7 @@ let @existing = <@outPath>?
 if @existing [ => @existing | @parse ]
 
 >> After (automatic — the llm label handles it):
-exe llm @review(item) = @claudePoll(...)
+exe llm @review(item) = @claude(@buildPrompt(@item), { model: "sonnet", tools: @tools })
 var @result = @review(@item)  >> cache hit if already computed
 ```
 
@@ -123,7 +117,7 @@ var @workerTools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(git:*)", "Bas
 ## Parallel fan-out
 
 ```mlld
-exe llm @process(file) = @claudePoll(@buildPrompt(@file), { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @process(file) = @claude(@buildPrompt(@file), { model: "sonnet", tools: @tools })
 
 >> Each call independently cached by argument hash — no manual idempotency needed
 var @results = for parallel(20) @file in @files => @process(@file)
@@ -154,11 +148,8 @@ Use `=> retry` in a pipeline stage to re-run from the source with feedback. Avai
 >> Source re-runs on retry; @mx.hint carries gate feedback
 exe @callAgent() = [
   let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
-  let @fullPrompt = `@prompt@feedback
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool.`
-  @claudePoll(@fullPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
-  => <@outPath>?
+  let @fullPrompt = `@prompt@feedback`
+  => @claude(@fullPrompt, { model: "sonnet", tools: @tools })
 ]
 
 >> Gate: accept, retry with feedback, or fall back

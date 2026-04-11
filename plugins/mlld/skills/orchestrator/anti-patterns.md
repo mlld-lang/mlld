@@ -147,8 +147,7 @@ The model handles escalation better than code because it reads the *reason* for 
 
 ```mlld
 >> BAD
-@claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
-let @result = <@outPath>?
+let @result = @claude(@prompt, { model: "sonnet", tools: @tools })
 let @gate = @checkOutput(@task, @result)
 if !@gate.pass [
   let @retryPrompt = `@prompt
@@ -156,8 +155,7 @@ if !@gate.pass [
 Previous attempt was rejected: @gate.feedback
 
 Address the feedback and try again.`
-  @claudePoll(@retryPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
-  let @retryResult = <@outPath>?
+  let @retryResult = @claude(@retryPrompt, { model: "sonnet", tools: @tools })
   >> ... more manual checking ...
 ]
 ```
@@ -168,10 +166,8 @@ Address the feedback and try again.`
 >> GOOD
 exe @callAgent() = [
   let @feedback = @mx.hint ? `\n\nPrevious attempt rejected: @mx.hint` : ""
-  let @fullPrompt = `@prompt@feedback
-  ...`
-  @claudePoll(@fullPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
-  => <@outPath>?
+  let @fullPrompt = `@prompt@feedback`
+  => @claude(@fullPrompt, { model: "sonnet", tools: @tools })
 ]
 
 exe @qualityGate() = [
@@ -205,8 +201,7 @@ loop(@maxAttempts) [
       show `  @item.name: skipped`
       => null
     ]
-    @claudePoll(@prompt, { model: "opus", tools: @tools, poll: @outPath })
-    let @result = <@outPath>?
+    let @result = @claude(@prompt, { model: "opus", tools: @tools })
     if !@result [
       @logEvent(@runDir, "failed", { id: @item.id })
       => null
@@ -230,7 +225,7 @@ loop(@maxAttempts) [
 
 ```mlld
 >> GOOD
-exe llm @review(item) = @claudePoll(@buildPrompt(@item), { model: "opus", tools: @tools, poll: @outPath })
+exe llm @review(item) = @claude(@buildPrompt(@item), { model: "opus", tools: @tools })
 
 checkpoint "review"
 var @results = for parallel(20) @item in @items => @review(@item)

@@ -51,10 +51,10 @@ The `llm` label on `exe` marks calls for caching. Checkpointing auto-enables whe
 
 ```mlld
 >> Define once — every invocation is independently cached by argument hash
-exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @review(prompt) = @claude(@prompt, { model: "sonnet", tools: @tools })
 
 >> For one-off calls
-var llm @summary = @claudePoll(@prompt, { model: "sonnet", poll: @outPath })
+var llm @summary = @claude(@prompt, { model: "sonnet" })
 ```
 
 ### Crash recovery
@@ -71,8 +71,8 @@ mlld run pipeline              # items 1-46 are instant cache hits, continues fr
 `checkpoint` directives mark phase boundaries. On `--resume "name"`, everything before the checkpoint hits cache; everything after re-executes.
 
 ```mlld
-exe llm @collect(item) = @claudePoll(@collectPrompt(@item), { model: "sonnet", tools: @tools, poll: @outPath })
-exe llm @analyze(item, data) = @claudePoll(@analyzePrompt(@item, @data), { model: "opus", tools: @tools, poll: @outPath })
+exe llm @collect(item) = @claude(@collectPrompt(@item), { model: "sonnet", tools: @tools })
+exe llm @analyze(item, data) = @claude(@analyzePrompt(@item, @data), { model: "opus", tools: @tools })
 
 checkpoint "collection"
 var @data = for parallel(20) @item in @items => @collect(@item)
@@ -109,8 +109,7 @@ loop(@maxAttempts) [
       => null
     ]
     show `  @item.name: processing...`
-    @claudePoll(@prompt, { model: "opus", tools: @tools, poll: @outPath })
-    let @result = <@outPath>?
+    let @result = @claude(@prompt, { model: "opus", tools: @tools })
     if !@result [
       show `  @item.name: FAILED`
       @logEvent(@runDir, "failed", { id: @item.id })
@@ -133,7 +132,7 @@ loop(@maxAttempts) [
 
 AFTER (checkpoint, ~3 lines):
 ```mlld
-exe llm @review(item) = @claudePoll(@buildPrompt(@item), { model: "opus", tools: @tools, poll: @outPath })
+exe llm @review(item) = @claude(@buildPrompt(@item), { model: "opus", tools: @tools })
 
 checkpoint "phase-1"
 var @results = for parallel(20) @item in @items => @review(@item)
@@ -226,11 +225,8 @@ Use pipeline `=> retry` with `@mx.hint` for step-level quality checks on LLM out
 >> Source: calls the LLM (re-runs on retry with gate feedback via @mx.hint)
 exe @callAgent() = [
   let @feedback = @mx.hint ? `\n\nPrevious attempt was rejected: @mx.hint\n\nAddress the feedback and try again.` : ""
-  let @fullPrompt = `@prompt@feedback
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool.`
-  @claudePoll(@fullPrompt, { model: "sonnet", tools: @tools, poll: @outPath })
-  => <@outPath>?
+  let @fullPrompt = `@prompt@feedback`
+  => @claude(@fullPrompt, { model: "sonnet", tools: @tools })
 ]
 
 >> Gate: validates output, retries with feedback, falls back after 3 attempts
@@ -252,7 +248,7 @@ On retry, `@callAgent()` re-executes with `@mx.try` incremented and `@mx.hint` s
 ```mlld
 exe @classify() = [
   let @model = @mx.try > 1 ? "sonnet" : "haiku"
-  >> ... call @claudePoll with @model ...
+  >> ... call @claude with @model ...
   => @result
 ]
 
@@ -288,8 +284,8 @@ var @reviewTools = ["Read", "Write"]
 >> Phase 2: verifier can explore the codebase
 var @verifyTools = ["Read", "Write", "Glob", "Grep"]
 
-exe llm @review(file) = @claudePoll(@reviewPrompt(@file), { model: "sonnet", tools: @reviewTools, poll: @outPath })
-exe llm @verify(finding, source) = @claudePoll(@verifyPrompt(@finding, @source), { model: "sonnet", tools: @verifyTools, poll: @outPath })
+exe llm @review(file) = @claude(@reviewPrompt(@file), { model: "sonnet", tools: @reviewTools })
+exe llm @verify(finding, source) = @claude(@verifyPrompt(@finding, @source), { model: "sonnet", tools: @verifyTools })
 
 var @files = <src/**/*.ts>
 
@@ -309,8 +305,8 @@ Decision agent infers phase from filesystem state. Parallel fan-out for batch op
 **See**: [../../examples/research/](../../examples/research/)
 
 ```mlld
-exe llm @assess(source) = @claudePoll(@assessPrompt(@source), { model: "sonnet", tools: @workerTools, poll: @outPath })
-exe llm @synthesize(data) = @claudePoll(@synthesizePrompt(@data), { model: "opus", tools: @workerTools, poll: @outPath })
+exe llm @assess(source) = @claude(@assessPrompt(@source), { model: "sonnet", tools: @workerTools })
+exe llm @synthesize(data) = @claude(@synthesizePrompt(@data), { model: "opus", tools: @workerTools })
 
 loop(endless) [
   let @context = @buildContext(@runDir)
@@ -334,8 +330,8 @@ Continuous decision loop with external state (GitHub Issues). Creates issues, di
 **See**: [../../examples/development/](../../examples/development/)
 
 ```mlld
-exe llm @callWorker(prompt, config) = @claudePoll(@prompt, @config)
-exe llm @callDecisionAgent(context) = @claudePoll(@decisionPrompt(@context), { model: "opus", tools: @decisionTools, poll: @outPath })
+exe llm @callWorker(prompt, config) = @claude(@prompt, @config)
+exe llm @callDecisionAgent(context) = @claude(@decisionPrompt(@context), { model: "opus", tools: @decisionTools })
 
 loop(endless) [
   let @context = @buildContext(@config, @runDir)
@@ -401,7 +397,7 @@ Label LLM calls and mark phase boundaries. The checkpoint system handles crash r
 
 ```mlld
 >> Label LLM calls — caching is automatic
-exe llm @review(prompt) = @claudePoll(@prompt, { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @review(prompt) = @claude(@prompt, { model: "sonnet", tools: @tools })
 
 >> Mark phase boundaries
 checkpoint "collection"
@@ -451,21 +447,19 @@ Decision-loop orchestrators that track cross-iteration state (last worker result
 
 This is program state the decision agent reads, not resumption infrastructure.
 
-## File-Based Output Protocol
+## Structured Output
 
-Tell the LLM to write structured output to a specific file path. Don't parse streaming output.
+`@claude` returns the response directly. Read structured JSON from the response — no file protocol needed.
 
 ```mlld
-let @outputPath = `@runDir/decision-@iteration.json`
-let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
-
-@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
-let @decision = <@outputPath>?
+let @decision = @claude(@prompt, { model: "opus", tools: @tools })
 ```
 
-The orchestrator reads the file after the agent finishes. The file doubles as a debugging artifact.
+For debugging, save prompts or responses to disk separately:
+
+```mlld
+output @prompt to "@runDir/decision-@iteration.prompt.md"
+```
 
 ## Template Composition
 
@@ -551,7 +545,7 @@ Decision agents: read + write (for output file). Workers: full access scoped to 
 Use `for parallel(N)` for batch operations. The `llm` label makes each call independently cached — no manual idempotency checks needed.
 
 ```mlld
-exe llm @review(file) = @claudePoll(@reviewPrompt(@file), { model: "sonnet", tools: @tools, poll: @outPath })
+exe llm @review(file) = @claude(@reviewPrompt(@file), { model: "sonnet", tools: @tools })
 
 var @results = for parallel(20) @file in @files => @review(@file)
 ```
@@ -594,8 +588,7 @@ Development archetype: opus for decisions and workers (high-stakes).
 
 - **Hook-based observability**: Use hooks to log LLM calls with cache status — replaces manual event logging for instrumentation.
 - **Prompt archival**: Save worker prompts to `@runDir/worker-*.prompt.md` for replay.
-- **File-based output**: Decision/worker JSON files persist in the run directory.
-- **`MLLD_DEBUG_CLAUDE_POLL=1`**: Diagnostics for `@claudePoll` polling behavior.
+- **Response archival**: Save `@claude` responses to the run directory for inspection.
 
 ```mlld
 >> Hook: log every LLM call with cache status
@@ -643,7 +636,7 @@ Put this logic in the decision prompt. The orchestrator never checks what phase 
 4. Prompts over predicates — rules in prompts, not if-else in code
 5. Multi-phase via checkpoints or prompts — use `checkpoint` directives for linear pipelines; let decision agents track phases via prompts for loop-based orchestrators
 6. Edge cases in prompts — add guidance text, not conditionals
-7. File-based output — write JSON to path, don't parse streams
+7. Structured return — `@claude` returns the response directly; parse JSON from the return value
 8. External state — separate state management from orchestration
 
 For the full design philosophy with 17 principles and worked examples, see `/mlld:llm-first`.

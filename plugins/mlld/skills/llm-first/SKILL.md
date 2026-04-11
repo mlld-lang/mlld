@@ -54,10 +54,10 @@ Each iteration, you make a fresh call with full context. The LLM reads the conte
 ```mlld
 >> Each iteration is a fresh call with fresh context
 let @context = @buildContext(@runDir)
-let @decision = @claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
+let @decision = @claude(@fullPrompt, { model: "opus", tools: @tools })
 ```
 
-> **Example**: [`examples/development/index.mld:81-109`](../../examples/development/index.mld) — Fresh `@buildContext` + `@claudePoll` each iteration. No conversation history carried forward.
+> **Example**: [`examples/development/index.mld:81-109`](../../examples/development/index.mld) — Fresh `@buildContext` + `@claude` each iteration. No conversation history carried forward.
 
 ### 3. Check and Repair
 
@@ -73,6 +73,8 @@ You don't need a separate "check" step. The decision loop IS the check.
 **Two levels of repair**:
 - **Decision-loop repair** (this principle): The outer loop catches failures across steps. The decision agent sees what went wrong and adjusts strategy. Open-ended and judgment-driven.
 - **Step-level retry**: For within-step quality checks on a single LLM call, use pipeline `=> retry` with `@mx.hint`. A gate stage validates output and retries with feedback before the step completes. Bounded and deterministic. See the Quality Gates section in `/mlld:orchestrator`.
+
+For LLM write repair specifically: use the `resume` guard action, which continues the conversation so the model can fix its own output without replaying tool calls. Use `retry` for read-only repair where replaying tool calls is safe.
 
 Both coexist naturally — a worker can use pipeline retry for output quality, while the outer decision loop handles strategic failures.
 
@@ -283,23 +285,17 @@ Enable clean resume after interruption or human handoff.
 
 > **Example**: [`examples/development/lib/context.mld:31-41`](../../examples/development/lib/context.mld) — `@loadRunState`/`@saveRunState` manage `run.json`. [`examples/development/index.mld:42-60`](../../examples/development/index.mld) — Run ID resolution and state initialization.
 
-### 15. File-Based Output Protocol
+### 15. Structured Output Protocol
 
-Instead of parsing LLM streaming output, tell the agent to write JSON to a specific path.
+Instead of parsing LLM streaming output, ask the agent to return valid JSON directly.
 
 ```mlld
-let @outputPath = `@runDir/decision-@iteration.json`
-let @fullPrompt = `@prompt
-
-IMPORTANT: Write your JSON response to @outputPath using the Write tool.`
-
-@claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
-let @decision = <@outputPath>?
+let @decision = @claude(@fullPrompt, { model: "opus", tools: @tools })
 ```
 
-The orchestrator reads the file after the agent finishes. The file doubles as a debugging artifact.
+`@claude` returns the response directly. Save the prompt to a file for debugging if needed (see Principle 16).
 
-> **Example**: [`examples/development/index.mld:94-109`](../../examples/development/index.mld) — Decision agent writes to specific path; orchestrator reads file. [`examples/research/index.mld:78-86`](../../examples/research/index.mld) — Same pattern for research decisions.
+> **Example**: [`examples/development/index.mld:94-109`](../../examples/development/index.mld) — Decision agent returns structured JSON; orchestrator reads it directly. [`examples/research/index.mld:78-86`](../../examples/research/index.mld) — Same pattern for research decisions.
 
 ### 16. Prompt Archival
 
@@ -342,7 +338,7 @@ loop(endless) [
   let @context = @buildContext(@runDir)
 
   >> 2. Decision call
-  let @decision = @claudePoll(@fullPrompt, { model: "opus", tools: @tools, poll: @outputPath })
+  let @decision = @claude(@fullPrompt, { model: "opus", tools: @tools })
 
   >> 3. Execute action (mechanical switch)
   when @decision.action [

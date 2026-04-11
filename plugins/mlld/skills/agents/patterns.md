@@ -48,13 +48,11 @@ Separate generation from evaluation for high-quality decisions. Prevents anchori
 ```mlld
 >> Call 1: Explore option space (Sonnet — fast, broad)
 >> Prompt says: "Generate 3-5 options. Do NOT rank them."
-@claudePoll(@genPrompt, { model: "sonnet", tools: @tools, poll: @optionsPath })
-var @options = <@optionsPath>? | @json
+var @options = @claude(@genPrompt, { model: "sonnet", tools: @tools }) | @json
 
 >> Call 2: Critical evaluation (Opus — careful, expensive)
 >> Prompt says: "Evaluate each option. Choose one. Explain why."
-@claudePoll(@evalPrompt, { model: "opus", tools: @tools, poll: @outputPath })
-var @decision = <@outputPath>? | @json
+var @decision = @claude(@evalPrompt, { model: "opus", tools: @tools }) | @json
 ```
 
 The generation call uses a cheaper, faster model because breadth matters more than depth. The evaluation call uses a stronger model because judgment matters more than speed.
@@ -125,7 +123,9 @@ Guards compose — multiple guards apply in order. A guard can be defined in one
 import { @blockDestructive } from "./guards.mld"
 ```
 
-For comprehensive security patterns including taint tracking and policy enforcement, see `mlld howto mcp-security` and `mlld howto mcp-guards`.
+When guarding agents that write, use `resume` to handle malformed output — it appends a correction to the conversation without replaying tool calls. Action precedence: `deny > resume > retry > allow`. Reserve `retry` for read-only agents.
+
+For comprehensive security patterns including taint tracking, policy enforcement, records, handles, and display projections, see `mlld:security`.
 
 ## Model Selection for Agents
 
