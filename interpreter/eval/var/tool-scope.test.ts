@@ -23,6 +23,7 @@ function createEnvWithExecutables(
       controlArgs?: string[];
       updateArgs?: string[];
       exactPayloadArgs?: string[];
+      sourceArgs?: string[];
     }
   >
 ): Environment {
@@ -42,7 +43,8 @@ function createEnvWithExecutables(
               sourceDirective: 'exec',
               ...(Array.isArray(normalized.controlArgs) ? { controlArgs: normalized.controlArgs } : {}),
               ...(Array.isArray(normalized.updateArgs) ? { updateArgs: normalized.updateArgs } : {}),
-              ...(Array.isArray(normalized.exactPayloadArgs) ? { exactPayloadArgs: normalized.exactPayloadArgs } : {})
+              ...(Array.isArray(normalized.exactPayloadArgs) ? { exactPayloadArgs: normalized.exactPayloadArgs } : {}),
+              ...(Array.isArray(normalized.sourceArgs) ? { sourceArgs: normalized.sourceArgs } : {})
             }
           }
         })
@@ -140,13 +142,14 @@ describe('tool scope helpers', () => {
     });
   });
 
-  it('accepts restrict-only overrides for controlArgs, updateArgs, and exactPayloadArgs', () => {
+  it('accepts restrict-only overrides for controlArgs, updateArgs, exactPayloadArgs, and sourceArgs', () => {
     const env = createEnvWithExecutables({
       updateIssue: {
         params: ['owner', 'repo', 'id', 'title', 'body'],
         controlArgs: ['owner', 'repo', 'id'],
         updateArgs: ['title', 'body'],
-        exactPayloadArgs: ['title', 'body']
+        exactPayloadArgs: ['title', 'body'],
+        sourceArgs: ['body']
       }
     });
 
@@ -161,7 +164,8 @@ describe('tool scope helpers', () => {
           expose: ['id', 'title', 'body'],
           controlArgs: ['id'],
           updateArgs: ['title'],
-          exactPayloadArgs: ['title']
+          exactPayloadArgs: ['title'],
+          sourceArgs: ['body']
         }
       },
       env
@@ -176,7 +180,8 @@ describe('tool scope helpers', () => {
       expose: ['id', 'title', 'body'],
       controlArgs: ['id'],
       updateArgs: ['title'],
-      exactPayloadArgs: ['title']
+      exactPayloadArgs: ['title'],
+      sourceArgs: ['body']
     });
   });
 
@@ -274,13 +279,14 @@ describe('tool scope helpers', () => {
     ).toThrow(/controlArgs must reference visible parameters/i);
   });
 
-  it('rejects controlArgs, updateArgs, and exactPayloadArgs overrides that widen executable metadata', () => {
+  it('rejects controlArgs, updateArgs, exactPayloadArgs, and sourceArgs overrides that widen executable metadata', () => {
     const env = createEnvWithExecutables({
       updateIssue: {
         params: ['id', 'title', 'body'],
         controlArgs: ['id'],
         updateArgs: ['title'],
-        exactPayloadArgs: ['title']
+        exactPayloadArgs: ['title'],
+        sourceArgs: ['body']
       }
     });
 
@@ -322,6 +328,19 @@ describe('tool scope helpers', () => {
         env
       )
     ).toThrow(/exactPayloadArgs must be a subset of executable exactPayloadArgs/i);
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            expose: ['id', 'title', 'body'],
+            sourceArgs: ['title']
+          }
+        },
+        env
+      )
+    ).toThrow(/sourceArgs must be a subset of executable sourceArgs/i);
   });
 
   it('returns literal tools values unchanged when withClause.tools is not an AST node', async () => {

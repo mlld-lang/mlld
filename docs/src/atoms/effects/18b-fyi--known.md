@@ -6,7 +6,7 @@ category: effects
 tags: [fyi, facts, handles, discovery, agents, security]
 related: [labels-facts, records-basics, facts-and-handles, pattern-planner, policy-authorizations]
 related-code: [interpreter/fyi/facts-runtime.ts, interpreter/env/ValueHandleRegistry.ts, core/policy/fact-requirements.ts]
-updated: 2026-03-29
+updated: 2026-04-11
 ---
 
 The primary handle path is still display projections on record-coerced tool results. Agents get handles directly in the data they fetch. See `records-basics` and `facts-and-handles`.
@@ -16,6 +16,7 @@ The primary handle path is still display projections on record-coerced tool resu
 ## When to use it
 
 - The worker needs handles for a write tool's control args
+- The worker needs handles for a read/extract tool's declared `sourceArgs`
 - A planner or earlier phase already registered proof-bearing values
 - The current step needs to browse matching candidates instead of copying a handle from the latest tool result
 
@@ -50,7 +51,7 @@ No-arg discovery returns every proof-bearing handle in the registry:
 ]
 ```
 
-Operation-aware discovery returns candidates grouped by control arg:
+Operation-aware discovery returns candidates grouped by control arg or source arg:
 
 ```json
 {
@@ -75,12 +76,12 @@ There is no separate root list to configure. If the handle exists in the executi
 
 ## Filtering
 
-`@fyi.known("send_email")` uses the fact requirement resolver to filter candidates. For `send_email`, only values that satisfy the destination requirement for each control arg are returned. If the resolver cannot determine requirements for an `(op, arg)` pair, discovery returns nothing for that position.
+`@fyi.known("send_email")` uses the fact requirement resolver to filter candidates. For `send_email`, only values that satisfy the destination requirement for each control arg are returned. For read/extract tools that declare `sourceArgs`, discovery groups candidates under those source arg names and returns fact-bearing handles plus matching `known` handles. If the resolver cannot determine requirements for an `(op, arg)` pair, discovery returns nothing for that position.
 
 This keeps discovery aligned with the same requirement model used by positive checks and runtime enforcement.
 
 ## Availability
 
-`@fyi.known()` is implicitly available to LLMs that receive write tools with declared `controlArgs`. Workers need a way to discover handles for those security-relevant arguments, so the runtime injects the tool automatically on the MCP bridge.
+`@fyi.known()` is implicitly available to LLMs that receive tools with declared `controlArgs` or `sourceArgs`. Workers need a way to discover handles for those security-relevant arguments, so the runtime injects the tool automatically on the MCP bridge.
 
 The planner does NOT call `@fyi.known()`. The planner shapes authorization intent from its own tool calls and the user's task. The worker discovers handles later via `@fyi.known()`. See `pattern-planner` for the full flow.

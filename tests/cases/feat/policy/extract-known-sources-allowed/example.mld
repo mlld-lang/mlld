@@ -1,0 +1,28 @@
+var @policyConfig = {
+  defaults: { rules: ["no-unknown-extraction-sources"] }
+}
+policy @p = union(@policyConfig)
+
+record @document = {
+  facts: [id: string],
+  data: [body: string]
+}
+
+exe @approve(source) = [
+  => known @source
+]
+
+exe @emitDocument() = {
+  id: "doc-1",
+  body: "Quarterly summary"
+} => document
+
+exe tool:r @extract(source, query) = `source:@source query:@query` with {
+  sourceArgs: ["source"]
+}
+
+var @knownSource = @approve("doc-2")
+var @document = @emitDocument()
+
+show @extract(@knownSource, "known")
+show @extract(@document.id, "fact")

@@ -47,7 +47,8 @@ export interface OperationFactRequirementResolution {
 type PositiveFactPolicyRule =
   | 'no-send-to-unknown'
   | 'no-send-to-external'
-  | 'no-destroy-unknown';
+  | 'no-destroy-unknown'
+  | 'no-unknown-extraction-sources';
 
 type BuiltInOperationFactSpec = {
   opRef: string;
@@ -78,7 +79,8 @@ const BUILTIN_OPERATION_FACT_SPECS: readonly BuiltInOperationFactSpec[] = [
 const POSITIVE_FACT_POLICY_RULES = new Set<PositiveFactPolicyRule>([
   'no-send-to-unknown',
   'no-send-to-external',
-  'no-destroy-unknown'
+  'no-destroy-unknown',
+  'no-unknown-extraction-sources'
 ]);
 
 function isEmptyAuthorizationValue(value: unknown): boolean {
@@ -142,6 +144,30 @@ export function getOperationControlArgs(operation: OperationMetadataLike): {
   }
 
   for (const candidate of [metadata.authorizationControlArgs, metadata.controlArgs]) {
+    if (!Array.isArray(candidate)) {
+      continue;
+    }
+    return {
+      declared: true,
+      args: candidate.filter(
+        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
+      )
+    };
+  }
+
+  return { declared: false, args: [] };
+}
+
+export function getOperationSourceArgs(operation: OperationMetadataLike): {
+  declared: boolean;
+  args: string[];
+} {
+  const metadata = operation.metadata;
+  if (!metadata) {
+    return { declared: false, args: [] };
+  }
+
+  for (const candidate of [metadata.authorizationSourceArgs, metadata.sourceArgs]) {
     if (!Array.isArray(candidate)) {
       continue;
     }
@@ -229,15 +255,43 @@ export function selectTargetArgs(
   });
 }
 
+export function selectSourceArgs(
+  operation: OperationMetadataLike,
+  args: Readonly<Record<string, unknown>> | undefined
+): string[] {
+  if (!args) {
+    return [];
+  }
+
+  const sourceArgInfo = getOperationSourceArgs(operation);
+  if (!sourceArgInfo.declared) {
+    return [];
+  }
+
+  return sourceArgInfo.args.filter(
+    sourceArg =>
+      Object.prototype.hasOwnProperty.call(args, sourceArg) &&
+      !isEmptyAuthorizationValue(args[sourceArg])
+  );
+}
+
 function normalizeArgName(argName?: string): string | null {
   const normalized = typeof argName === 'string' ? argName.trim().toLowerCase() : '';
   return normalized.length > 0 ? normalized : null;
 }
 
-function normalizeControlArgs(controlArgs?: readonly string[]): string[] {
-  return (controlArgs ?? [])
+function normalizeArgList(args?: readonly string[]): string[] {
+  return (args ?? [])
     .map(value => value.trim().toLowerCase())
     .filter(value => value.length > 0);
+}
+
+function normalizeControlArgs(controlArgs?: readonly string[]): string[] {
+  return normalizeArgList(controlArgs);
+}
+
+function normalizeSourceArgs(sourceArgs?: readonly string[]): string[] {
+  return normalizeArgList(sourceArgs);
 }
 
 function isDeclaredControlArg(
@@ -257,13 +311,40 @@ function isDeclaredControlArg(
   return normalizeControlArgs(controlArgInfo.args).includes(normalizedArgName);
 }
 
+function isDeclaredSourceArg(
+  operation: OperationMetadataLike,
+  argName: string
+): boolean {
+  const normalizedArgName = normalizeArgName(argName);
+  if (!normalizedArgName) {
+    return false;
+  }
+
+  const sourceArgInfo = getOperationSourceArgs(operation);
+  if (!sourceArgInfo.declared) {
+    return false;
+  }
+
+  return normalizeSourceArgs(sourceArgInfo.args).includes(normalizedArgName);
+}
+
 export function getPositiveCheckAcceptedPatterns(options: {
-  rule: 'no-send-to-unknown' | 'no-send-to-external' | 'no-destroy-unknown';
+  rule:
+    | 'no-send-to-unknown'
+    | 'no-send-to-external'
+    | 'no-destroy-unknown'
+    | 'no-unknown-extraction-sources';
   operation: OperationMetadataLike;
   argName: string;
 }): readonly string[] {
   if (options.rule === 'no-send-to-external') {
     return SEND_INTERNAL_PATTERNS;
+  }
+
+  if (options.rule === 'no-unknown-extraction-sources') {
+    return isDeclaredSourceArg(options.operation, options.argName)
+      ? DECLARED_CONTROL_ARG_KNOWN_PATTERNS
+      : DECLARED_CONTROL_ARG_KNOWN_PATTERNS;
   }
 
   if (isDeclaredControlArg(options.operation, options.argName)) {
@@ -394,8 +475,29 @@ function resolveBuiltInFactRequirementsFromOperationLabels(options: {
   operationLabels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
   enabledRules: ReadonlySet<PositiveFactPolicyRule>;
 }): FactRequirementResolution | null {
+  const normalizedSourceArgs = normalizeSourceArgs(options.sourceArgs);
+  if (options.hasSourceArgsMetadata === true) {
+    const requirements: FactRequirement[] = [];
+    if (normalizedSourceArgs.includes(options.argName)) {
+      appendRequirements(requirements, {
+        argName: options.argName,
+        basePatterns: ANY_FACT_PATTERNS,
+        enabledRules: options.enabledRules
+      });
+    }
+    if (requirements.length > 0) {
+      return {
+        status: 'resolved',
+        opRef: options.opRef,
+        requirements
+      };
+    }
+  }
+
   const operationLabels = options.operationLabels ?? [];
   const normalizedControlArgs = normalizeControlArgs(options.controlArgs);
   const hasSend = operationLabels.some(label => matchesLabelPattern('exfil:send', label));
@@ -468,6 +570,8 @@ export function resolveFactRequirementsForOperationArg(options: {
   operationLabels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
   policy?: Pick<PolicyConfig, 'defaults' | 'facts'>;
 }): FactRequirementResolution {
   const argName = normalizeArgName(options.argName);
@@ -492,6 +596,8 @@ export function resolveFactRequirementsForOperationArg(options: {
         operationLabels: options.operationLabels,
         controlArgs: options.controlArgs,
         hasControlArgsMetadata: options.hasControlArgsMetadata,
+        sourceArgs: options.sourceArgs,
+        hasSourceArgsMetadata: options.hasSourceArgsMetadata,
     enabledRules
   });
   if (liveMetadataResolution) {
@@ -552,6 +658,8 @@ export function resolveFactRequirementsForOperation(options: {
   operationLabels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
   policy?: Pick<PolicyConfig, 'defaults' | 'facts'>;
 }): OperationFactRequirementResolution {
   const normalizedOpRef = typeof options.opRef === 'string'
@@ -562,6 +670,9 @@ export function resolveFactRequirementsForOperation(options: {
 
   for (const controlArg of normalizeControlArgs(options.controlArgs)) {
     candidateArgs.add(controlArg);
+  }
+  for (const sourceArg of normalizeSourceArgs(options.sourceArgs)) {
+    candidateArgs.add(sourceArg);
   }
 
   if (normalizedOpRef) {
@@ -587,6 +698,8 @@ export function resolveFactRequirementsForOperation(options: {
       operationLabels: options.operationLabels,
       controlArgs: options.controlArgs,
       hasControlArgsMetadata: options.hasControlArgsMetadata,
+      sourceArgs: options.sourceArgs,
+      hasSourceArgsMetadata: options.hasSourceArgsMetadata,
       policy: normalizedPolicy
     });
 

@@ -3,7 +3,7 @@ id: security
 title: Security
 brief: Guards, labels, policies, records, shelf slots, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-04-07
+updated: 2026-04-11
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -116,7 +116,7 @@ policy @p = {
 
 | Section | Purpose |
 |---------|---------|
-| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
+| `defaults.rules` | Enable built-in rules: `no-secret-exfil`, `no-sensitive-exfil`, `no-send-to-unknown`, `no-send-to-external`, `no-destroy-unknown`, `no-unknown-extraction-sources`, `no-untrusted-destructive`, `no-untrusted-privileged`, `untrusted-llms-get-influenced` |
 | `authorizations` | Per-tool authorization with argument constraints — compiles to internal privileged guards (see below) |
 | `defaults.unlabeled` | Auto-label data with no user labels (`"untrusted"` or `"trusted"`) |
 | `operations` | Group semantic exe labels (`net:w`) under risk categories (`exfil`, `destructive`, `privileged`) |
@@ -129,7 +129,7 @@ policy @p = {
 
 **Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
-Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the named destination/target args to carry `known` (or `known:internal` for internal-only send destinations).
+Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the named destination/target args to carry `known` (or `known:internal` for internal-only send destinations). For read/extract tools, declare `sourceArgs` and enable `no-unknown-extraction-sources` to require proof-bearing source selectors.
 
 **Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-authorizations`, `policy-composition`, `policy-auth`
 

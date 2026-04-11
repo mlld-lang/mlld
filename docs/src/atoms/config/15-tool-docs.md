@@ -6,10 +6,10 @@ category: config
 tags: [tools, docs, prompts, agents, authorization]
 related: [pattern-planner, policy-authorizations, facts-and-handles]
 related-code: [interpreter/fyi/tool-docs.ts, interpreter/eval/exec/tool-metadata.ts, interpreter/env/builtins/fyi.ts]
-updated: 2026-04-10
+updated: 2026-04-11
 ---
 
-`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, classification, and output fields — that the runtime will validate against.
+`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, source args, classification, and output fields — that the runtime will validate against.
 
 When a tool returns `=> record`, `@toolDocs()` renders its visible output fields through the same display-projection path used at runtime. There is no separate `audience` switch. The active display selection (`with { display }`, box config, or a matching `role:*` llm label) is the shaping mechanism. Role identity and display shaping stay separate: the exe's `role:*` label determines authorization identity, while display only chooses the projection.
 
@@ -40,7 +40,7 @@ Args:
 - `body` (string)
 ```
 
-Each tool renders under its read/write section header, with one bullet per parameter. Control args are flagged inline with `**control arg**`. Tools are classified read vs write from the active policy (see "Classification" below).
+Each tool renders under its read/write section header, with one bullet per parameter. Control args are flagged inline with `**control arg**`. Source-selection args are flagged inline with `**source arg**`. Tools are classified read vs write from the active policy (see "Classification" below).
 
 ## Output fields from `=> record`
 
@@ -135,7 +135,7 @@ The JSON form is richer than the text form. Per-tool entries include:
 - `name`, `kind` (`"write"` or `"read"`), `description`
 - `params` — full parameter list
 - `output` — visible output fields under the current display, when the tool returns `=> record`
-- `controlArgs`, `updateArgs`, `exactPayloadArgs`, `dataArgs` — partition by metadata kind
+- `controlArgs`, `sourceArgs`, `updateArgs`, `exactPayloadArgs`, `dataArgs` — partition by metadata kind
 - `multiControlArgCorrelation` — boolean from `correlateControlArgs`
 - `discoveryCall` — the `@fyi.known(...)` call to surface available handles, when applicable
 - `operationLabels` — populated when `includeOperationLabels: true`
@@ -196,4 +196,4 @@ All three use the same per-tool sections, output-field shaping, and policy-deriv
 
 - `pattern-planner` — the planner-worker authorization pattern uses `@toolDocs` for explicit prompt assembly
 - `policy-authorizations` — the bucketed intent shape and `@policy.build`
-- `facts-and-handles` — how `controlArgs` and proof flow through tool dispatch
+- `facts-and-handles` — how `controlArgs`, `sourceArgs`, and proof flow through tool dispatch

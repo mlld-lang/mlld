@@ -47,6 +47,8 @@ type QueryOperationContext = {
   labels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -150,7 +152,9 @@ function resolveQueryOperationContext(
       env.getPolicySummary()?.operations
     ),
     controlArgs: metadata.controlArgs,
-    hasControlArgsMetadata: metadata.hasControlArgsMetadata
+    hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    sourceArgs: metadata.sourceArgs,
+    hasSourceArgsMetadata: metadata.hasSourceArgsMetadata
   };
 }
 
@@ -331,6 +335,8 @@ export async function evaluateFyiKnown(
         operationLabels: operationContext?.labels,
         controlArgs: operationContext?.controlArgs,
         hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
+        sourceArgs: operationContext?.sourceArgs,
+        hasSourceArgsMetadata: operationContext?.hasSourceArgsMetadata,
         policy: env.getPolicySummary()
       })
     : resolveFactRequirementsForOperation({
@@ -338,6 +344,8 @@ export async function evaluateFyiKnown(
         operationLabels: operationContext?.labels,
         controlArgs: operationContext?.controlArgs,
         hasControlArgsMetadata: operationContext?.hasControlArgsMetadata,
+        sourceArgs: operationContext?.sourceArgs,
+        hasSourceArgsMetadata: operationContext?.hasSourceArgsMetadata,
         policy: env.getPolicySummary()
       });
 

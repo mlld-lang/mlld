@@ -1,0 +1,10 @@
+var @policyConfig = {
+  defaults: { rules: ["no-unknown-extraction-sources"] }
+}
+policy @p = union(@policyConfig)
+
+exe tool:r @extract(source, query) = `source:@source query:@query` with {
+  sourceArgs: ["source"]
+}
+
+show @extract("doc-1", "summary")

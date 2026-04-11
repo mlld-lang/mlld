@@ -42,6 +42,8 @@ export interface BaseExecutable {
   updateArgs?: string[];
   /** Payload fields that must appear verbatim in the user task text */
   exactPayloadArgs?: string[];
+  /** Source-bearing args that must carry proof when extraction-source checks are enabled */
+  sourceArgs?: string[];
   /** Whether multiple control args must be authorized from the same source record */
   correlateControlArgs?: boolean;
   /** Human-readable summary for tool metadata */

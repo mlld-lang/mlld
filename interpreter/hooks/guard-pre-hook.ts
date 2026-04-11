@@ -174,6 +174,7 @@ function buildInterpolatedPolicyGuardResult(options: {
 
   const policy = options.env.getPolicySummary();
   const hasControlArgsMetadata = Array.isArray(options.operation.metadata?.authorizationControlArgs);
+  const hasSourceArgsMetadata = Array.isArray(options.operation.metadata?.authorizationSourceArgs);
   const result = checkLabelFlow(
     {
       inputTaint: options.inputTaint,
@@ -183,6 +184,10 @@ function buildInterpolatedPolicyGuardResult(options: {
         ? getAuthorizationControlArgs(options.operation)
         : undefined,
       hasControlArgsMetadata,
+      sourceArgs: hasSourceArgsMetadata
+        ? getAuthorizationSourceArgs(options.operation)
+        : undefined,
+      hasSourceArgsMetadata,
       taintFacts: options.operation.metadata?.taintFacts === true
     },
     policy
@@ -226,6 +231,14 @@ function getAuthorizationControlArgs(operation: NonNullable<Parameters<PreHook>[
     return [];
   }
   return controlArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+function getAuthorizationSourceArgs(operation: NonNullable<Parameters<PreHook>[3]>): string[] {
+  const sourceArgs = operation.metadata?.authorizationSourceArgs;
+  if (!Array.isArray(sourceArgs)) {
+    return [];
+  }
+  return sourceArgs.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
 }
 
 function getGuardKey(guard: GuardDefinition): string {

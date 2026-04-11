@@ -15,14 +15,20 @@ export function collectSecurityRelevantArgNamesForOperation(options: {
   labels?: readonly string[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
   policy?: PolicyConfig;
 }): string[] {
   const metadata =
-    options.labels !== undefined || options.controlArgs !== undefined
+    options.labels !== undefined
+    || options.controlArgs !== undefined
+    || options.sourceArgs !== undefined
       ? {
           labels: [...(options.labels ?? [])],
           controlArgs: options.controlArgs,
-          hasControlArgsMetadata: options.hasControlArgsMetadata === true
+          hasControlArgsMetadata: options.hasControlArgsMetadata === true,
+          sourceArgs: options.sourceArgs,
+          hasSourceArgsMetadata: options.hasSourceArgsMetadata === true
         }
       : resolveNamedOperationMetadata(options.env, options.operationName);
 
@@ -38,12 +44,21 @@ export function collectSecurityRelevantArgNamesForOperation(options: {
     ),
     controlArgs: metadata.controlArgs,
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
+    sourceArgs: metadata.sourceArgs,
+    hasSourceArgsMetadata: metadata.hasSourceArgsMetadata,
     policy: options.policy
   });
 
   const argNames = new Set(Object.keys(resolution.requirementsByArg));
   if (metadata.hasControlArgsMetadata) {
     for (const argName of metadata.controlArgs ?? []) {
+      if (typeof argName === 'string' && argName.trim().length > 0) {
+        argNames.add(argName);
+      }
+    }
+  }
+  if (metadata.hasSourceArgsMetadata) {
+    for (const argName of metadata.sourceArgs ?? []) {
       if (typeof argName === 'string' && argName.trim().length > 0) {
         argNames.add(argName);
       }

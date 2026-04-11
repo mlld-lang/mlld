@@ -17,6 +17,7 @@ describe('generatePolicyGuards defaults rules', () => {
           'no-send-to-unknown',
           'no-send-to-external',
           'no-destroy-unknown',
+          'no-unknown-extraction-sources',
           'no-untrusted-destructive'
         ]
       }
@@ -30,6 +31,7 @@ describe('generatePolicyGuards defaults rules', () => {
     expect(names).toContain('__policy_rule_no_send_to_unknown');
     expect(names).toContain('__policy_rule_no_send_to_external');
     expect(names).toContain('__policy_rule_no_destroy_unknown');
+    expect(names).toContain('__policy_rule_no_unknown_extraction_sources');
     expect(names).toContain('__policy_rule_no_untrusted_destructive');
 
     const secretGuard = guards.find(guard => guard.name === '__policy_rule_no_secret_exfil');
@@ -251,6 +253,75 @@ describe('generatePolicyGuards defaults rules', () => {
         args: { participants: ['acct-1'] },
         argDescriptors: {
           participants: { attestations: ['known'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+  });
+
+  it('checks named source arg attestations for extraction rules', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-unknown-extraction-sources'] }
+    };
+
+    const guards = generatePolicyGuards(policy);
+    const extractGuard = guards.find(
+      guard => guard.name === '__policy_rule_no_unknown_extraction_sources'
+    );
+
+    expect(
+      extractGuard?.policyCondition?.({
+        operation: {
+          name: 'extractContacts',
+          labels: ['tool:r'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        args: { source: 'contact-1' },
+        argDescriptors: {
+          source: { attestations: ['fact:@contact.id'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      extractGuard?.policyCondition?.({
+        operation: {
+          name: 'extractContacts',
+          labels: ['tool:r'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        args: { source: 'contact-1' },
+        argDescriptors: {
+          source: { attestations: ['known'] }
+        }
+      })
+    ).toEqual({ decision: 'allow' });
+
+    expect(
+      extractGuard?.policyCondition?.({
+        operation: {
+          name: 'extractContacts',
+          labels: ['tool:r'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        args: { source: 'contact-1' },
+        argDescriptors: {
+          query: { attestations: ['known'] }
+        }
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'"
+    });
+
+    expect(
+      extractGuard?.policyCondition?.({
+        operation: {
+          name: 'extractContacts',
+          labels: ['tool:r']
+        },
+        args: { source: 'contact-1' },
+        argDescriptors: {
+          source: { attestations: ['known'] }
         }
       })
     ).toEqual({ decision: 'allow' });
@@ -683,6 +754,42 @@ describe('generatePolicyGuards defaults rules', () => {
         }
       })
     ).toBeUndefined();
+  });
+
+  it('keeps extraction-source positive checks in inherited authorization paths', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-unknown-extraction-sources'] }
+    };
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          labels: ['tool:r'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        args: { source: 'doc-1' },
+        argDescriptors: {
+          source: { attestations: ['known'] }
+        }
+      })
+    ).toBeUndefined();
+
+    expect(
+      evaluateAuthorizationInheritedPolicyChecks({
+        policy,
+        operation: {
+          labels: ['tool:r'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        args: { source: 'doc-1' },
+        argDescriptors: {
+          source: { labels: [] }
+        }
+      })
+    ).toMatchObject({
+      rule: 'policy.defaults.rules.no-unknown-extraction-sources'
+    });
   });
 
   it('allows fact attestations to satisfy inherited positive checks', () => {

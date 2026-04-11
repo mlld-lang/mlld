@@ -158,6 +158,7 @@ class FunctionMcpBridgeServer {
             ...(Array.isArray(clonedExecutableDef?.controlArgs) ? { controlArgs: clonedExecutableDef.controlArgs } : {}),
             ...(Array.isArray(clonedExecutableDef?.updateArgs) ? { updateArgs: clonedExecutableDef.updateArgs } : {}),
             ...(Array.isArray(clonedExecutableDef?.exactPayloadArgs) ? { exactPayloadArgs: clonedExecutableDef.exactPayloadArgs } : {}),
+            ...(Array.isArray(clonedExecutableDef?.sourceArgs) ? { sourceArgs: clonedExecutableDef.sourceArgs } : {}),
             ...(clonedExecutableDef?.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
             ...(Array.isArray(clonedExecutableDef?.optionalParams) ? { optional: clonedExecutableDef.optionalParams } : {}),
             ...(typeof executable.description === 'string'
@@ -454,7 +455,8 @@ function cloneToolDefinitionForBridge(definition: ToolDefinition, mlldName: stri
     ...(Array.isArray(definition.optional) ? { optional: [...definition.optional] } : {}),
     ...(Array.isArray(definition.controlArgs) ? { controlArgs: [...definition.controlArgs] } : {}),
     ...(Array.isArray(definition.updateArgs) ? { updateArgs: [...definition.updateArgs] } : {}),
-    ...(Array.isArray(definition.exactPayloadArgs) ? { exactPayloadArgs: [...definition.exactPayloadArgs] } : {})
+    ...(Array.isArray(definition.exactPayloadArgs) ? { exactPayloadArgs: [...definition.exactPayloadArgs] } : {}),
+    ...(Array.isArray(definition.sourceArgs) ? { sourceArgs: [...definition.sourceArgs] } : {})
   };
 }
 

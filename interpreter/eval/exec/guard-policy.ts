@@ -111,6 +111,7 @@ export type CreateExecOperationPolicyContextOptions = {
   operationName?: string;
   toolLabels: readonly string[];
   authorizationControlArgs?: readonly string[];
+  authorizationSourceArgs?: readonly string[];
   commandAccessSubstrate?: boolean;
   correlateControlArgs?: boolean;
   operationTaintFacts?: boolean;
@@ -527,6 +528,9 @@ export async function createExecOperationContextAndEnforcePolicy(
       ...(options.commandAccessSubstrate === true ? { commandAccessSubstrate: true } : {}),
       ...(Array.isArray(options.authorizationControlArgs)
         ? { authorizationControlArgs: [...options.authorizationControlArgs] }
+        : {}),
+      ...(Array.isArray(options.authorizationSourceArgs)
+        ? { authorizationSourceArgs: [...options.authorizationSourceArgs] }
         : {}),
       ...(options.correlateControlArgs === true ? { correlateControlArgs: true } : {}),
       ...(options.operationTaintFacts === true ? { taintFacts: true } : {})

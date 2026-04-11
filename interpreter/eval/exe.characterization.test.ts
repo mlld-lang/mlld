@@ -97,6 +97,16 @@ describe('exe evaluator characterization', () => {
     expect(executableDef.exactPayloadArgs).toEqual(['subject']);
   });
 
+  it('materializes exe-level sourceArgs from with-clause metadata', async () => {
+    const env = createEnvironment();
+    const directive = parseSync(
+      '/exe tool:r @extractDocument(source, query) = @query with { sourceArgs: ["source"] }'
+    )[0] as DirectiveNode;
+
+    await evaluateExe(directive, env);
+    expect(getExecutableDef(env, 'extractDocument').sourceArgs).toEqual(['source']);
+  });
+
   it('materializes exe-level correlateControlArgs from with-clause metadata', async () => {
     const env = createEnvironment();
     const directive = parseSync(

@@ -209,6 +209,49 @@ describe('evaluateFyiKnown', () => {
     ]);
   });
 
+  it('prefers live operation metadata for declared sourceArgs', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const source = `
+/record @document = {
+  facts: [id: string],
+  data: [body: string]
+}
+/exe @emitDocument() = js {
+  return { id: "doc-1", body: "Quarterly summary" };
+} => document
+/exe tool:r @extractSummary(source, query) = @source with {
+  sourceArgs: ["source"]
+}
+/var @document = @emitDocument()
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+
+    const document = env.getVariable('document');
+    if (!document) {
+      throw new Error('Expected @document to be defined');
+    }
+    const id = await accessField(document.value, { type: 'field', value: 'id' } as any, { env });
+    env.issueHandle(id, {
+      preview: 'Document 1',
+      metadata: { field: 'id' }
+    });
+
+    const result = await evaluateFyiKnown(
+      { op: 'op:named:extractSummary', arg: 'source' },
+      env
+    );
+
+    expect(result.data).toEqual([
+      {
+        handle: expect.stringMatching(HANDLE_RE),
+        label: 'Document 1',
+        field: 'id',
+        fact: 'fact:@document.id'
+      }
+    ]);
+  });
+
   it('filters destructive targets to id facts', async () => {
     const env = await createContactsEnv();
 

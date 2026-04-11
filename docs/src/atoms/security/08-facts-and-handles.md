@@ -211,12 +211,13 @@ var @policyConfig = {
 |---|---|
 | `no-send-to-unknown` | Recipient must carry fact proof or `known` attestation |
 | `no-destroy-unknown` | Deletion target must carry fact proof or `known` attestation |
+| `no-unknown-extraction-sources` | Declared `sourceArgs` must carry fact proof or `known` attestation |
 | `no-untrusted-destructive` | Tainted data can't flow into write operations (scopes to control args when declared) |
 | `no-untrusted-privileged` | Tainted data can't flow into credential/account operations (scopes to control args when declared) |
 | `no-secret-exfil` | Secret-labeled data can't be sent to external destinations |
 | `correlate-control-args` | When a write tool with multiple `controlArgs` declares `correlateControlArgs: true`, all control arg values on a single dispatch must come from the same source record instance — prevents mixing fact-bearing args across records. See `policy-authorizations`. |
 
-The first two are *positive checks* -- they require proof on specific values. `correlate-control-args` is a *cross-arg correlation check* -- it's per-tool opt-in via metadata, not a default rule. The rest are *negative checks* -- they block contamination.
+The first three are *positive checks* -- they require proof on specific values. `correlate-control-args` is a *cross-arg correlation check* -- it's per-tool opt-in via metadata, not a default rule. The rest are *negative checks* -- they block contamination.
 
 ## Guards with facts
 

@@ -7,7 +7,7 @@ parent: policy
 tags: [security, policies, guards]
 related: [security-guards-basics, policy-operations, policy-composition, policy-capabilities, policy-label-flow, policy-auth, policy-authorizations, auth, box-config]
 related-code: [interpreter/eval/policy.ts, interpreter/env/environment-provider.ts]
-updated: 2026-03-24
+updated: 2026-04-11
 qa_tier: 2
 ---
 
@@ -24,6 +24,7 @@ policy @p = {
       >> or with override: { "rule": "no-untrusted-destructive", "taintFacts": true }
       "no-send-to-unknown",
       "no-destroy-unknown",
+      "no-unknown-extraction-sources",
       "no-novel-urls"
     ]
   },
@@ -44,7 +45,7 @@ policy @p = {
 
 **`defaults`** sets baseline behavior. `rules` enables built-in security rules that block dangerous label-to-operation flows. `unlabeled` optionally auto-labels all data that has no user-assigned labels -- set to `"untrusted"` to treat unlabeled data as untrusted, or `"trusted"` to treat it as trusted. This is opt-in; without it, unlabeled data has no trust label.
 
-Built-in positive checks use the same `defaults.rules` list. `no-send-to-unknown` checks `exfil:send` operations and requires destination args to carry fact proof or `known`. `no-destroy-unknown` checks `destructive:targeted` operations and requires target args to carry fact proof or `known`. When `controlArgs` is explicitly declared, any `fact:*` proof on those args satisfies the check. Without `controlArgs`, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes). `no-send-to-external` is the stricter variant requiring `fact:internal:*` or `known:internal`.
+Built-in positive checks use the same `defaults.rules` list. `no-send-to-unknown` checks `exfil:send` operations and requires destination args to carry fact proof or `known`. `no-destroy-unknown` checks `destructive:targeted` operations and requires target args to carry fact proof or `known`. `no-unknown-extraction-sources` checks params declared with `sourceArgs` and requires those source-selection args to carry fact proof or `known`. When `controlArgs` or `sourceArgs` are explicitly declared, any `fact:*` proof on those args satisfies the check. Without `controlArgs`, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes). `no-send-to-external` is the stricter variant requiring `fact:internal:*` or `known:internal`.
 
 `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to control args when the operation has explicit `controlArgs` with entries. Tainted data args (body, title) are not checked — they're expected payload. Without `controlArgs`, all args are checked. Use the object form `{ "rule": "no-untrusted-destructive", "taintFacts": true }` to force all-arg checking even when `controlArgs` is declared.
 

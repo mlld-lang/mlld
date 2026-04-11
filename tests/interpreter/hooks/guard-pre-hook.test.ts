@@ -1550,6 +1550,65 @@ it('denies /run commands that interpolate expression-derived secrets', async () 
     await expect(evaluateDirective(directive, env)).rejects.toThrow(/destination must carry 'known'/i);
   });
 
+  it('activates no-unknown-extraction-sources for sourceArgs-declared tools', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/exe tool:r @extractDoc(source, query) = `source:@source query:@query` with { sourceArgs: ["source"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-unknown-extraction-sources"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @extractDoc("doc-1", "summary") with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).rejects.toThrow(/extraction source must carry 'known'/i);
+  });
+
+  it('allows known extraction sources when no-unknown-extraction-sources is enabled', async () => {
+    const env = createEnv();
+    await evaluateDirective(parseSync('/var known @source = "doc-1"')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:r @extractDoc(source, query) = `source:@source query:@query` with { sourceArgs: ["source"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-unknown-extraction-sources"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @extractDoc(@source, "summary") with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('source:doc-1 query:summary');
+  });
+
+  it('allows fact-bearing extraction sources when no-unknown-extraction-sources is enabled', async () => {
+    const env = createEnv();
+    await evaluateDirective(
+      parseSync('/record @document = { facts: [id: string], data: [body: string] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/exe @loadDocument() = { id: "doc-1", body: "Quarterly summary" } => document')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(parseSync('/var @document = @loadDocument()')[0] as DirectiveNode, env);
+    await evaluateDirective(
+      parseSync('/exe tool:r @extractDoc(source, query) = `source:@source query:@query` with { sourceArgs: ["source"] }')[0] as DirectiveNode,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/var @taskPolicy = { defaults: { rules: ["no-unknown-extraction-sources"] } }')[0] as DirectiveNode,
+      env
+    );
+
+    const directive = parseSync('/show @extractDoc(@document.id, "summary") with { policy: @taskPolicy }')[0] as DirectiveNode;
+    await expect(evaluateDirective(directive, env)).resolves.toBeDefined();
+    const effects = env.getEffectHandler() as TestEffectHandler;
+    expect(effects.getOutput().trim()).toBe('source:doc-1 query:summary');
+  });
+
   it('treats trusted-data record fields as proofless for inherited no-send-to-unknown checks', async () => {
     const env = createEnv();
     await evaluateDirective(

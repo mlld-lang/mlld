@@ -190,6 +190,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const executableControlArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.controlArgs);
     const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
     const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
+    const executableSourceArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.sourceArgs);
 
     const description = toolValue.description;
     if (description !== undefined && typeof description !== 'string') {
@@ -206,6 +207,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const controlArgs = normalizeStringArray(toolValue.controlArgs, toolName, 'controlArgs');
     const updateArgs = normalizeStringArray(toolValue.updateArgs, toolName, 'updateArgs');
     const exactPayloadArgs = normalizeStringArray(toolValue.exactPayloadArgs, toolName, 'exactPayloadArgs');
+    const sourceArgs = normalizeStringArray(toolValue.sourceArgs, toolName, 'sourceArgs');
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -309,6 +311,13 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       visibleParams,
       executableValues: executableExactPayloadArgs
     });
+    validateRestrictedArgOverride({
+      field: 'sourceArgs',
+      toolName,
+      values: sourceArgs,
+      visibleParams,
+      executableValues: executableSourceArgs
+    });
 
     collection[toolName] = {
       mlld: mlldName,
@@ -320,6 +329,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ...(controlArgs ? { controlArgs } : {}),
       ...(updateArgs ? { updateArgs } : {}),
       ...(exactPayloadArgs ? { exactPayloadArgs } : {}),
+      ...(sourceArgs ? { sourceArgs } : {}),
       ...(correlateControlArgs === true ? { correlateControlArgs: true } : {})
     };
   }
@@ -346,7 +356,7 @@ function resolveToolMlldName(value: unknown, toolName: string): string {
 function normalizeStringArray(
   value: unknown,
   toolName: string,
-  field: 'labels' | 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs'
+  field: 'labels' | 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
 ): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -366,7 +376,7 @@ function normalizeExecutableMetadataStringArray(value: unknown): string[] {
 }
 
 function validateRestrictedArgOverride(options: {
-  field: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs';
+  field: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs';
   toolName: string;
   values: string[] | undefined;
   visibleParams: readonly string[];

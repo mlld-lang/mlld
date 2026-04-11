@@ -12,6 +12,7 @@ export interface ToolDefinition {
   controlArgs?: string[];
   updateArgs?: string[];
   exactPayloadArgs?: string[];
+  sourceArgs?: string[];
   correlateControlArgs?: boolean;
 }
 
@@ -24,6 +25,7 @@ export interface ToolAuthorizationContextEntry {
   updateArgs?: string[];
   hasUpdateArgsMetadata?: boolean;
   exactPayloadArgs?: string[];
+  sourceArgs?: string[];
   labels?: string[];
   description?: string;
   correlateControlArgs?: boolean;
@@ -63,6 +65,8 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
     && (candidate.hasUpdateArgsMetadata === undefined || typeof candidate.hasUpdateArgsMetadata === 'boolean')
     && (candidate.exactPayloadArgs === undefined
       || (Array.isArray(candidate.exactPayloadArgs) && candidate.exactPayloadArgs.every(entry => typeof entry === 'string')))
+    && (candidate.sourceArgs === undefined
+      || (Array.isArray(candidate.sourceArgs) && candidate.sourceArgs.every(entry => typeof entry === 'string')))
     && (candidate.labels === undefined
       || (Array.isArray(candidate.labels) && candidate.labels.every(entry => typeof entry === 'string')))
     && (candidate.description === undefined || typeof candidate.description === 'string')
@@ -98,6 +102,9 @@ export function cloneToolCollectionAuthorizationContext(
           : {}),
         ...(Array.isArray(entry.exactPayloadArgs)
           ? { exactPayloadArgs: cloneStringList(entry.exactPayloadArgs) }
+          : {}),
+        ...(Array.isArray(entry.sourceArgs)
+          ? { sourceArgs: cloneStringList(entry.sourceArgs) }
           : {}),
         ...(Array.isArray(entry.labels)
           ? { labels: cloneStringList(entry.labels) }

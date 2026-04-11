@@ -448,6 +448,54 @@ describe('checkLabelFlow operations mapping', () => {
 
     expect(result.allowed).toBe(true);
   });
+
+  it('requires declared extraction sources to carry known', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-unknown-extraction-sources'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['tool:r'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['untrusted'], taint: ['untrusted'] },
+          { labels: ['known'], taint: ['known'] }
+        ],
+        inputNames: ['source', 'query'],
+        sourceArgs: ['source'],
+        hasSourceArgsMetadata: true
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.rule).toBe('policy.defaults.rules.no-unknown-extraction-sources');
+  });
+
+  it('treats fact-bearing extraction sources as satisfying no-unknown-extraction-sources', () => {
+    const policy: PolicyConfig = {
+      defaults: { rules: ['no-unknown-extraction-sources'] }
+    };
+
+    const result = checkLabelFlow(
+      {
+        inputTaint: [],
+        opLabels: ['tool:r'],
+        exeLabels: [],
+        inputs: [
+          { labels: ['fact:@document.id'], taint: [] }
+        ],
+        inputNames: ['source'],
+        sourceArgs: ['source'],
+        hasSourceArgsMetadata: true
+      },
+      policy
+    );
+
+    expect(result.allowed).toBe(true);
+  });
 });
 
 describe('checkLabelFlow taint scoping', () => {

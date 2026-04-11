@@ -3,6 +3,7 @@ import {
   collectDeclarativeFactRequirementEntries,
   resolveFactRequirementsForOperationArg,
   selectDestinationArgs,
+  selectSourceArgs,
   selectTargetArgs
 } from './fact-requirements';
 import { mergePolicyConfigs, normalizePolicyConfig } from './union';
@@ -87,7 +88,40 @@ describe('fact requirements', () => {
     ).toEqual(['participants']);
   });
 
+  it('uses declared sourceArgs for extraction source selection', () => {
+    expect(
+      selectSourceArgs(
+        {
+          labels: ['tool:r:extract_contacts'],
+          metadata: { authorizationSourceArgs: ['source'] }
+        },
+        { source: 'contact-1', query: 'recent activity' }
+      )
+    ).toEqual(['source']);
+
+    expect(selectSourceArgs({ labels: ['tool:r:extract_contacts'] }, { source: 'contact-1' })).toEqual([]);
+  });
+
   it('derives fact requirements from live operation metadata when available', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:named:extractContacts',
+        argName: 'source',
+        sourceArgs: ['source'],
+        hasSourceArgsMetadata: true
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:named:extractcontacts',
+      requirements: [
+        {
+          arg: 'source',
+          patterns: ['fact:*'],
+          source: 'builtin'
+        }
+      ]
+    });
+
     expect(
       resolveFactRequirementsForOperationArg({
         opRef: 'op:named:createCalendarEvent',
@@ -138,6 +172,18 @@ describe('fact requirements', () => {
     ).toEqual({
       status: 'no_requirement',
       opRef: 'op:named:sendmoney',
+      requirements: []
+    });
+
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: 'op:named:extractContacts',
+        argName: 'source',
+        hasSourceArgsMetadata: false
+      })
+    ).toEqual({
+      status: 'unknown_operation',
+      opRef: 'op:named:extractcontacts',
       requirements: []
     });
   });

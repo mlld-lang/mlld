@@ -205,7 +205,7 @@ function buildExecutableMxMetadata(
   executableDef?: ExecutableDefinition
 ): Pick<
   VariableContext,
-  'params' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'correlateControlArgs'
+  'params' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs' | 'correlateControlArgs'
 > {
   const paramTypes =
     executableDef?.paramTypes && typeof executableDef.paramTypes === 'object'
@@ -226,6 +226,7 @@ function buildExecutableMxMetadata(
     controlArgs: normalizeExecutableMxStringList(executableDef?.controlArgs),
     updateArgs: normalizeExecutableMxStringList(executableDef?.updateArgs),
     exactPayloadArgs: normalizeExecutableMxStringList(executableDef?.exactPayloadArgs),
+    sourceArgs: normalizeExecutableMxStringList(executableDef?.sourceArgs),
     correlateControlArgs:
       executableDef?.correlateControlArgs === true
         ? true

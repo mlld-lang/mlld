@@ -43,6 +43,7 @@ type JsonToolDocEntry = {
   controlArgs: string[];
   updateArgs: string[];
   exactPayloadArgs: string[];
+  sourceArgs: string[];
   dataArgs: string[];
   multiControlArgCorrelation: boolean;
   discoveryCall?: string;
@@ -96,6 +97,7 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
           updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
           exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
+          sourceArgs: normalizeToolCollectionStringList(entry.sourceArgs),
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }
@@ -231,6 +233,8 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     ...(metadata.updateArgs ? { updateArgs: [...metadata.updateArgs] } : {}),
     hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
     ...(metadata.exactPayloadArgs ? { exactPayloadArgs: [...metadata.exactPayloadArgs] } : {}),
+    ...(metadata.sourceArgs ? { sourceArgs: [...metadata.sourceArgs] } : {}),
+    hasSourceArgsMetadata: metadata.hasSourceArgsMetadata,
     ...(metadata.outputRecord ? { outputRecord: metadata.outputRecord } : {}),
     ...(metadata.embeddedRecordDefinitions
       ? { embeddedRecordDefinitions: { ...metadata.embeddedRecordDefinitions } }
@@ -262,6 +266,7 @@ function buildNameOnlyMetadata(name: string): EffectiveToolMetadata {
     labels: [],
     hasControlArgsMetadata: false,
     hasUpdateArgsMetadata: false,
+    hasSourceArgsMetadata: false,
     correlateControlArgs: false,
     taintFacts: false
   };
@@ -527,6 +532,9 @@ function buildToolArgLine(
   if ((entry.controlArgs ?? []).includes(param.name)) {
     annotations.push('**control arg**');
   }
+  if ((entry.sourceArgs ?? []).includes(param.name)) {
+    annotations.push('**source arg**');
+  }
   return `- \`${param.name}\` (${annotations.join(', ')})`;
 }
 
@@ -695,6 +703,11 @@ function buildToolDescriptionAnnotationLines(
     lines.push(`[UPDATE: ${formatArgList(entry.updateArgs ?? [])}]`);
   }
 
+  const sourceArgs = entry.sourceArgs ?? [];
+  if (sourceArgs.length > 0) {
+    lines.push(`[SOURCE: ${formatArgList(sourceArgs)}]`);
+  }
+
   const exactPayloadArgs = entry.exactPayloadArgs ?? [];
   if (exactPayloadArgs.length > 0) {
     lines.push(`[EXACT PAYLOAD: ${formatArgList(exactPayloadArgs)} (must appear in user task)]`);
@@ -727,7 +740,8 @@ function buildJsonToolEntry(
   const controlArgs = entry.controlArgs ?? [];
   const updateArgs = entry.updateArgs ?? [];
   const exactPayloadArgs = entry.exactPayloadArgs ?? [];
-  const reservedArgs = new Set([...controlArgs, ...updateArgs, ...exactPayloadArgs]);
+  const sourceArgs = entry.sourceArgs ?? [];
+  const reservedArgs = new Set([...controlArgs, ...updateArgs, ...exactPayloadArgs, ...sourceArgs]);
   const dataArgs = entry.params.filter(param => !reservedArgs.has(param));
   return {
     name: entry.name,
@@ -737,9 +751,10 @@ function buildJsonToolEntry(
     controlArgs: [...controlArgs],
     updateArgs: [...updateArgs],
     exactPayloadArgs: [...exactPayloadArgs],
+    sourceArgs: [...sourceArgs],
     dataArgs,
     multiControlArgCorrelation: entry.correlateControlArgs && controlArgs.length > 1,
-    ...(helperStatus.available && controlArgs.length > 0
+    ...(helperStatus.available && (controlArgs.length > 0 || sourceArgs.length > 0)
       ? { discoveryCall: `@fyi.known("${entry.name}")` }
       : {}),
     ...(includeOperationLabels ? { operationLabels: [...entry.labels] } : {}),

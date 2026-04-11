@@ -1375,6 +1375,8 @@ async function repairSecurityRelevantExecArgs(options: {
     labels: readonly string[];
     controlArgs?: readonly string[];
     hasControlArgsMetadata: boolean;
+    sourceArgs?: readonly string[];
+    hasSourceArgsMetadata: boolean;
   };
   policySummary: ReturnType<Environment['getPolicySummary']>;
   paramNames: readonly string[];
@@ -1389,6 +1391,8 @@ async function repairSecurityRelevantExecArgs(options: {
     labels: options.effectiveToolMetadata.labels,
     controlArgs: options.effectiveToolMetadata.controlArgs,
     hasControlArgsMetadata: options.effectiveToolMetadata.hasControlArgsMetadata,
+    sourceArgs: options.effectiveToolMetadata.sourceArgs,
+    hasSourceArgsMetadata: options.effectiveToolMetadata.hasSourceArgsMetadata,
     policy: options.policySummary
   });
 
@@ -3411,6 +3415,10 @@ async function evaluateExecInvocationInternal(
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
       : undefined;
+  const policyGuardSourceArgs =
+    effectiveToolMetadata.hasSourceArgsMetadata
+      ? effectiveToolMetadata.sourceArgs ?? []
+      : undefined;
   const authorizationDecisionControlArgs =
     effectiveToolMetadata.hasControlArgsMetadata
       ? effectiveToolMetadata.controlArgs ?? []
@@ -3585,6 +3593,7 @@ async function evaluateExecInvocationInternal(
       operationName: toolOperationName ?? variable.name ?? commandName,
       toolLabels,
       authorizationControlArgs: policyGuardControlArgs,
+      authorizationSourceArgs: policyGuardSourceArgs,
       commandAccessSubstrate: (variable.internal as any)?.isToolbridgeWrapper === true,
       correlateControlArgs: effectiveToolMetadata.correlateControlArgs === true,
       operationTaintFacts: effectiveOperationTaintFacts,

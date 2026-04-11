@@ -15,6 +15,7 @@ import {
   matchesLabelPattern
 } from './fact-labels';
 import {
+  DECLARED_CONTROL_ARG_KNOWN_PATTERNS,
   SEND_KNOWN_PATTERNS,
   SEND_INTERNAL_PATTERNS,
   TARGET_KNOWN_PATTERNS
@@ -39,6 +40,8 @@ export interface FlowContext {
   inputNames?: readonly (string | null | undefined)[];
   controlArgs?: readonly string[];
   hasControlArgsMetadata?: boolean;
+  sourceArgs?: readonly string[];
+  hasSourceArgsMetadata?: boolean;
   taintFacts?: boolean;
 }
 
@@ -58,6 +61,7 @@ const LABEL_FLOW_BUILTIN_RULES = new Set([
   'no-send-to-unknown',
   'no-send-to-external',
   'no-destroy-unknown',
+  'no-unknown-extraction-sources',
   'no-untrusted-destructive',
   'no-untrusted-privileged',
   'no-influenced-advice'
@@ -264,7 +268,8 @@ export function checkLabelFlow(
   const requiresPrimaryInputCheck = enabledRules.some(rule =>
     rule.rule === 'no-send-to-unknown' ||
     rule.rule === 'no-send-to-external' ||
-    rule.rule === 'no-destroy-unknown'
+    rule.rule === 'no-destroy-unknown' ||
+    rule.rule === 'no-unknown-extraction-sources'
   );
   if (inputTaint.length === 0 && !requiresPrimaryInputCheck) {
     return { allowed: true };
@@ -305,6 +310,29 @@ function collectInputTaintLabels(input?: FlowInputDescriptor): string[] {
     ...(input?.labels ?? []).filter(label => !isAttestationLabel(label)),
     ...(input?.taint ?? [])
   ]);
+}
+
+function collectDeclaredArgAttestations(
+  ctx: FlowContext,
+  argNames: readonly string[]
+): Map<string, string[]> | null {
+  if (!Array.isArray(ctx.inputs) || !Array.isArray(ctx.inputNames)) {
+    return null;
+  }
+
+  const normalizedArgs = normalizeList(argNames);
+  const requested = new Set(normalizedArgs);
+  const collected = new Map<string, string[]>();
+  const limit = Math.min(ctx.inputs.length, ctx.inputNames.length);
+  for (let index = 0; index < limit; index += 1) {
+    const inputName = ctx.inputNames[index];
+    if (typeof inputName !== 'string' || !requested.has(inputName)) {
+      continue;
+    }
+    collected.set(inputName, collectInputAttestations(ctx.inputs[index]));
+  }
+
+  return collected;
 }
 
 function getScopedTaintInputLabels(
@@ -387,6 +415,8 @@ function checkBuiltinPolicyRules(
   const primaryInputKnown = hasAnyTargetLabel(primaryInputAttestations, SEND_KNOWN_PATTERNS);
   const primaryInputKnownInternal = hasAnyTargetLabel(primaryInputAttestations, SEND_INTERNAL_PATTERNS);
   const primaryInputKnownTarget = hasAnyTargetLabel(primaryInputAttestations, TARGET_KNOWN_PATTERNS);
+  const sourceArgs = normalizeList(ctx.sourceArgs);
+  const sourceArgAttestations = collectDeclaredArgAttestations(ctx, sourceArgs);
 
   for (const rule of enabledRules) {
     if (rule.rule === 'no-secret-exfil' && hasSecret && hasExfil) {
@@ -433,6 +463,35 @@ function checkBuiltinPolicyRules(
         label: 'known',
         matched: 'destructive:targeted'
       };
+    }
+    if (
+      rule.rule === 'no-unknown-extraction-sources' &&
+      ctx.hasSourceArgsMetadata === true
+    ) {
+      if (sourceArgs.length === 0) {
+        continue;
+      }
+      if (!sourceArgAttestations) {
+        return {
+          allowed: false,
+          reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'",
+          rule: 'policy.defaults.rules.no-unknown-extraction-sources',
+          label: 'known',
+          matched: 'tool'
+        };
+      }
+      for (const sourceArg of sourceArgs) {
+        const attestations = sourceArgAttestations.get(sourceArg);
+        if (!hasAnyTargetLabel(attestations, DECLARED_CONTROL_ARG_KNOWN_PATTERNS)) {
+          return {
+            allowed: false,
+            reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'",
+            rule: 'policy.defaults.rules.no-unknown-extraction-sources',
+            label: 'known',
+            matched: 'tool'
+          };
+        }
+      }
     }
     if (rule.rule === 'no-untrusted-destructive' && hasUntrustedDestructiveInput && hasDestructive) {
       return {

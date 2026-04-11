@@ -339,6 +339,51 @@ describe('@fyi.tools', () => {
     }
   });
 
+  it('renders source args in text and JSON output for read tools', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:r @extractDocument(source, question) = "Answer" with {
+        sourceArgs: ["source"]
+      }
+
+      /var tools @tools = {
+        extract_document: {
+          mlld: @extractDocument,
+          expose: ["source", "question"]
+        }
+      }
+
+      /var @jsonDocs = @toolDocs(@tools, { format: "json" })
+    `);
+
+    try {
+      const textDocs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(textDocs.text).toContain('Read tools:');
+      expect(textDocs.text).toContain('### extract_document');
+      expect(textDocs.text).toContain('- `source` (string, **source arg**)');
+      expect(textDocs.text).toContain('- `question` (string)');
+
+      const jsonDocs = await readVarData(env, 'jsonDocs') as {
+        helpers: { fyi_known: { available: boolean; reason: string } };
+        tools: Array<Record<string, unknown>>;
+      };
+      expect(jsonDocs.helpers.fyi_known).toEqual({
+        available: true,
+        reason: 'write_tools_with_control_args_present'
+      });
+      expect(jsonDocs.tools).toEqual([
+        expect.objectContaining({
+          name: 'extract_document',
+          kind: 'read',
+          sourceArgs: ['source'],
+          dataArgs: ['question'],
+          discoveryCall: '@fyi.known("extract_document")'
+        })
+      ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('includes output-field shapes in JSON tool docs when an output record is available', async () => {
     const env = await interpretWithEnv(`
       /record @contact = {

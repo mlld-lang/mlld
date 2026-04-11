@@ -9,6 +9,7 @@ import {
   resolveExeCorrelateControlArgs,
   resolveExeControlArgs,
   resolveExeDescription,
+  resolveExeSourceArgs,
   resolveExeUpdateArgs,
   validateExecutableAuthorizationMetadata
 } from './exe/definition-helpers';
@@ -112,6 +113,12 @@ export async function evaluateExe(
   const exactPayloadArgs = await resolveExeExactPayloadArgs(rawExactPayloadArgs, env, executableDef.paramNames);
   if (exactPayloadArgs !== undefined) {
     executableDef.exactPayloadArgs = exactPayloadArgs;
+  }
+
+  const rawSourceArgs = getWithClauseField(directive.values?.withClause, 'sourceArgs');
+  const sourceArgs = await resolveExeSourceArgs(rawSourceArgs, env, executableDef.paramNames);
+  if (sourceArgs !== undefined) {
+    executableDef.sourceArgs = sourceArgs;
   }
 
   validateExecutableAuthorizationMetadata({

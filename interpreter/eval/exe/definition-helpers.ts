@@ -107,11 +107,19 @@ export async function resolveExeExactPayloadArgs(
   return resolveExecutableArgListMetadata(raw, env, paramNames, 'exactPayloadArgs');
 }
 
+export async function resolveExeSourceArgs(
+  raw: unknown,
+  env: Environment,
+  paramNames: readonly string[]
+): Promise<string[] | undefined> {
+  return resolveExecutableArgListMetadata(raw, env, paramNames, 'sourceArgs');
+}
+
 async function resolveExecutableArgListMetadata(
   raw: unknown,
   env: Environment,
   paramNames: readonly string[],
-  fieldName: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs'
+  fieldName: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
 ): Promise<string[] | undefined> {
   if (raw === undefined) {
     return undefined;

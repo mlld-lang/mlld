@@ -144,6 +144,7 @@ export interface VariableContext {
   controlArgs?: readonly string[] | null;
   updateArgs?: readonly string[] | null;
   exactPayloadArgs?: readonly string[] | null;
+  sourceArgs?: readonly string[] | null;
   correlateControlArgs?: boolean | null;
   source?: string;
   retries?: number;

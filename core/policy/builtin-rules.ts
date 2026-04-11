@@ -8,6 +8,7 @@ export const BUILTIN_POLICY_RULES = [
   'no-send-to-unknown',
   'no-send-to-external',
   'no-destroy-unknown',
+  'no-unknown-extraction-sources',
   'no-untrusted-destructive',
   'no-untrusted-privileged',
   'no-influenced-advice',

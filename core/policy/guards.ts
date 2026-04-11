@@ -23,8 +23,10 @@ import {
   getPositiveCheckAcceptedPatterns,
   SEND_INTERNAL_PATTERNS,
   collectDeclarativeFactRequirementEntries,
+  getOperationSourceArgs,
   getScopedTaintControlArgs,
   selectDestinationArgs,
+  selectSourceArgs,
   selectTargetArgs
 } from './fact-requirements';
 import { normalizeNamedOperationRef } from './operation-labels';
@@ -469,6 +471,47 @@ export function evaluateAuthorizationInheritedPolicyChecks(options: {
     }
   }
 
+  const sourceArgInfo = getOperationSourceArgs(options.operation);
+  if (
+    enabledRuleNames.has('no-unknown-extraction-sources') &&
+    sourceArgInfo.declared &&
+    sourceArgInfo.args.length > 0
+  ) {
+    const sourceArgs = selectSourceArgs(options.operation, options.args);
+    if (sourceArgs.length === 0) {
+      return buildInheritedPositiveCheckFailure({
+        reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'",
+        rule: 'policy.defaults.rules.no-unknown-extraction-sources',
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the source"
+        )
+      });
+    }
+
+    for (const argName of sourceArgs) {
+      const effectiveAttestations = normalizeList([
+        ...collectDescriptorAttestations(options.argDescriptors?.[argName]),
+        ...collectAuthorizedAttestations(options.authorizedArgAttestations, argName)
+      ]);
+      if (!hasAnyMatchingLabel(
+        effectiveAttestations,
+        getPositiveCheckAcceptedPatterns({
+          rule: 'no-unknown-extraction-sources',
+          operation: options.operation,
+          argName
+        })
+      )) {
+        return buildInheritedPositiveCheckFailure({
+          reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'",
+          rule: 'policy.defaults.rules.no-unknown-extraction-sources',
+          missingLabelSuggestion: projectedHandleSuggestion(
+            "Use a projected handle for the source"
+          )
+        });
+      }
+    }
+  }
+
   if (
     enabledRuleNames.has('no-untrusted-privileged') &&
     hasMatchingLabel(expandedOperationLabels, 'privileged')
@@ -652,6 +695,17 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
         ),
         fallbackToFirstProvided: true,
         operations: policy.operations,
+        policyDisplayName,
+        locked: policyLocked
+      }));
+    }
+    if (rule.rule === 'no-unknown-extraction-sources') {
+      guards.push(makeSourceArgAttestationGuard({
+        name: '__policy_rule_no_unknown_extraction_sources',
+        reason: "Rule 'no-unknown-extraction-sources': extraction source must carry 'known'",
+        missingLabelSuggestion: projectedHandleSuggestion(
+          "Use a projected handle for the source"
+        ),
         policyDisplayName,
         locked: policyLocked
       }));
@@ -1438,6 +1492,74 @@ function makeNamedArgAttestationGuard(options: {
         const attestations = collectDescriptorAttestations(argDescriptors?.[argName]);
         if (!hasAnyMatchingLabel(attestations, getPositiveCheckAcceptedPatterns({
           rule: options.ruleName,
+          operation,
+          argName
+        }))) {
+          return {
+            decision: 'deny',
+            reason: options.reason,
+            policyName: options.policyDisplayName,
+            locked: options.locked === true,
+            suggestions: [
+              options.missingLabelSuggestion,
+              'Review active policies with @mx.policy.active'
+            ]
+          };
+        }
+      }
+
+      return { decision: 'allow' };
+    }
+  };
+}
+
+function makeSourceArgAttestationGuard(options: {
+  name: string;
+  reason: string;
+  missingLabelSuggestion: string;
+  policyDisplayName?: string;
+  locked?: boolean;
+}): PolicyGuardSpec {
+  return {
+    name: options.name,
+    filterKind: 'operation',
+    filterValue: 'exe',
+    scope: 'perOperation',
+    block: makeGuardBlock(),
+    timing: 'before',
+    privileged: true,
+    policyCondition: ({ operation, args, argDescriptors }) => {
+      if (!shouldApplySurfaceScopedPolicyToOperation(operation)) {
+        return { decision: 'allow' };
+      }
+
+      if (typeof operation.name !== 'string' || operation.name.length === 0) {
+        return { decision: 'allow' };
+      }
+
+      const sourceArgInfo = getOperationSourceArgs(operation);
+      if (!sourceArgInfo.declared || sourceArgInfo.args.length === 0) {
+        return { decision: 'allow' };
+      }
+
+      const selectedArgs = selectSourceArgs(operation, args);
+      if (selectedArgs.length === 0) {
+        return {
+          decision: 'deny',
+          reason: options.reason,
+          policyName: options.policyDisplayName,
+          locked: options.locked === true,
+          suggestions: [
+            options.missingLabelSuggestion,
+            'Review active policies with @mx.policy.active'
+          ]
+        };
+      }
+
+      for (const argName of selectedArgs) {
+        const attestations = collectDescriptorAttestations(argDescriptors?.[argName]);
+        if (!hasAnyMatchingLabel(attestations, getPositiveCheckAcceptedPatterns({
+          rule: 'no-unknown-extraction-sources',
           operation,
           argName
         }))) {
