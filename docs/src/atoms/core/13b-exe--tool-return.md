@@ -7,7 +7,7 @@ parent: exe
 tags: [return, tool-dispatch, agents, security]
 related: [script-return, exe-blocks, exe-metadata, pattern-planner, tool-docs, facts-and-handles]
 related-code: [grammar/generated/parser/parser.ts, interpreter/eval/exe/block-execution.ts, interpreter/eval/exec-invocation.ts]
-updated: 2026-04-10
+updated: 2026-04-11
 qa_tier: 2
 ---
 
@@ -156,6 +156,7 @@ An exe with only `->` and no `=>` is in strict mode. Called from mlld code, its 
 
 - **No display projection** on `->` values. If you `-> @contactRecord`, the LLM sees the raw record as you wrote it, not the `display.role:worker` or `display.role:planner` projected form. If you want projection, use `=> @contactRecord` and let the canonical pipeline apply it.
 - **No record coercion** on `->` values. `=>` still flows through the exe's output record adapter; `->` does not.
+- **Producer-side taint follows the `->` / `=->` expression itself.** Values referenced in the tool-return expression contribute their labels and taint. Earlier tainted work elsewhere in the exe body does not taint the tool slot unless that data is used in the returned expression.
 - **Explicit casts are still allowed before `->`.** If you want validation and record metadata on an intermediate value, do it yourself with `@cast(@raw, @contact)` or `@raw as record @contact` before writing `->`. `->` still will not add another coercion or projection step on top.
 - **No withClause finalization** on `->` values.
 

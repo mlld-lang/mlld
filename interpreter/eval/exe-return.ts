@@ -1,5 +1,6 @@
 import type { ExeReturnNode } from '@core/types';
 import type { ToolReturnMode } from '@core/types/executable';
+import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
 import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
 
@@ -12,6 +13,7 @@ export interface ExeToolReturnState {
   reaches: unknown[];
   strict: boolean;
   allToolSigilsInForBodies: boolean;
+  descriptor?: SecurityDescriptor;
 }
 
 export interface ExeExecutionContext {
@@ -19,6 +21,10 @@ export interface ExeExecutionContext {
   scope?: string;
   hasFunctionBoundary?: boolean;
   toolReturnState?: ExeToolReturnState;
+}
+
+export interface ResolveExeReturnOptions {
+  isolateSecurityDescriptor?: boolean;
 }
 
 export function createExeReturnControl(value: unknown): ExeReturnControl {
@@ -49,9 +55,23 @@ export function createExeToolReturnState(mode: ToolReturnMode | undefined): ExeT
   };
 }
 
-export function appendExeToolReturnValue(env: Environment, value: unknown): void {
+export function appendExeToolReturnValue(
+  env: Environment,
+  value: unknown,
+  descriptor?: SecurityDescriptor
+): void {
   const exeContext = env.getExecutionContext<ExeExecutionContext>('exe');
-  exeContext?.toolReturnState?.reaches.push(value);
+  const state = exeContext?.toolReturnState;
+  if (!state) {
+    return;
+  }
+  state.reaches.push(value);
+  if (!descriptor) {
+    return;
+  }
+  state.descriptor = state.descriptor
+    ? mergeDescriptors(state.descriptor, descriptor)
+    : descriptor;
 }
 
 export function finalizeExeToolReturn(state: ExeToolReturnState | undefined): unknown {
@@ -65,6 +85,12 @@ export function finalizeExeToolReturn(state: ExeToolReturnState | undefined): un
     return state.reaches[0];
   }
   return [...state.reaches];
+}
+
+export function getExeToolReturnDescriptor(
+  state: ExeToolReturnState | undefined
+): SecurityDescriptor | undefined {
+  return state?.descriptor;
 }
 
 function isDescendantEnvironment(candidate: Environment, ancestor: Environment): boolean {
@@ -91,8 +117,9 @@ function normalizeReturnEnvironment(baseEnv: Environment, evaluatedEnv: Environm
 
 export async function resolveExeReturnValue(
   node: ExeReturnNode,
-  env: Environment
-): Promise<{ value: unknown; env: Environment }> {
+  env: Environment,
+  options: ResolveExeReturnOptions = {}
+): Promise<{ value: unknown; env: Environment; descriptor?: SecurityDescriptor }> {
   const hasReturnValue = node?.meta?.hasValue !== false;
   if (!hasReturnValue) {
     return { value: undefined, env };
@@ -110,10 +137,18 @@ export async function resolveExeReturnValue(
       ((returnNodes[0] as { fields?: unknown[] }).fields?.length ?? 0) === 0) &&
     (!Array.isArray((returnNodes[0] as { pipes?: unknown[] }).pipes) ||
       ((returnNodes[0] as { pipes?: unknown[] }).pipes?.length ?? 0) === 0);
-  const result = await evaluate(returnNodes, env, {
+  const evaluationEnv = options.isolateSecurityDescriptor ? env.createChild() : env;
+  const result = await evaluate(returnNodes, evaluationEnv, {
     isExpression: true,
     preserveBareVariableReference
   });
-  const resolvedEnv = normalizeReturnEnvironment(env, result.env || env);
-  return { value: result.value, env: resolvedEnv };
+  const descriptor = options.isolateSecurityDescriptor
+    ? (result.env || evaluationEnv).getLocalSecurityDescriptor()
+    : undefined;
+  const resolvedEnv = normalizeReturnEnvironment(env, result.env || evaluationEnv);
+  return {
+    value: result.value,
+    env: resolvedEnv,
+    ...(descriptor ? { descriptor } : {})
+  };
 }

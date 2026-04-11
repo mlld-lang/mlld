@@ -8,6 +8,7 @@ import {
   createExeReturnControl,
   createExeToolReturnState,
   finalizeExeToolReturn,
+  getExeToolReturnDescriptor,
   getExeReturnKind,
   isExeReturnControl,
   resolveExeReturnValue,
@@ -48,7 +49,10 @@ export async function evaluateExeBlock(
     metadata: {
       blockEnv,
       ...(scope === 'function' && !parentExeContext?.toolReturnState
-        ? { toolReturn: finalizeExeToolReturn(localToolReturnState) }
+        ? {
+            toolReturn: finalizeExeToolReturn(localToolReturnState),
+            toolReturnDescriptor: getExeToolReturnDescriptor(localToolReturnState)
+          }
         : {})
     }
   });
@@ -86,11 +90,13 @@ export async function evaluateExeBlock(
         continue;
       }
       if (stmt.type === 'ExeReturn') {
-        const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
-        blockEnv = returnResult.env;
         const returnKind = getExeReturnKind(stmt as ExeReturnNode);
+        const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv, {
+          isolateSecurityDescriptor: returnKind !== 'canonical'
+        });
+        blockEnv = returnResult.env;
         if (returnKind === 'tool' || returnKind === 'dual') {
-          appendExeToolReturnValue(blockEnv, returnResult.value);
+          appendExeToolReturnValue(blockEnv, returnResult.value, returnResult.descriptor);
         }
         if (returnKind === 'tool') {
           continue;
@@ -170,11 +176,13 @@ export async function evaluateExeBlock(
     let returnValue: unknown = undefined;
     const returnNode = block.values?.return;
     if (returnNode) {
-      const returnResult = await resolveExeReturnValue(returnNode, blockEnv);
-      blockEnv = returnResult.env;
       const returnKind = getExeReturnKind(returnNode);
+      const returnResult = await resolveExeReturnValue(returnNode, blockEnv, {
+        isolateSecurityDescriptor: returnKind !== 'canonical'
+      });
+      blockEnv = returnResult.env;
       if (returnKind === 'tool' || returnKind === 'dual') {
-        appendExeToolReturnValue(blockEnv, returnResult.value);
+        appendExeToolReturnValue(blockEnv, returnResult.value, returnResult.descriptor);
       }
       if (returnKind !== 'tool') {
         returnValue = returnResult.value;

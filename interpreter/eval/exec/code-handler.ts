@@ -15,6 +15,7 @@ import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 import {
   createExeToolReturnState,
   finalizeExeToolReturn,
+  getExeToolReturnDescriptor,
   isExeReturnControl,
   unwrapExeReturnControl,
   type ExeExecutionContext
@@ -66,6 +67,7 @@ export type CodeExecutableHandlerResult =
       kind: 'continue';
       result: unknown;
       toolResult?: unknown;
+      toolResultDescriptor?: SecurityDescriptor;
       execEnv: Environment;
       outputRecordEnv?: Environment;
     }
@@ -506,6 +508,7 @@ export async function executeCodeExecutable(
       kind: 'continue',
       result,
       ...(toolReturnState ? { toolResult: finalizeExeToolReturn(toolReturnState) } : {}),
+      ...(toolReturnState ? { toolResultDescriptor: getExeToolReturnDescriptor(toolReturnState) } : {}),
       execEnv,
       outputRecordEnv
     };

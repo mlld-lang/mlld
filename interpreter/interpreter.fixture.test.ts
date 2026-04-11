@@ -9,6 +9,10 @@ import { glob } from 'tinyglobby';
 import { Environment } from './env/Environment';
 import { inferMlldMode } from '@core/utils/mode';
 import { isPython3RuntimeAvailable } from '@tests/utils/runtime-availability';
+import { parse } from '@grammar/parser';
+import { evaluate } from './core/interpreter';
+import { evaluateExecInvocation } from './eval/exec-invocation';
+import { extractSecurityDescriptor } from './utils/structured-value';
 
 // Mock tinyglobby for fixture tests
 vi.mock('tinyglobby', () => ({
@@ -630,6 +634,91 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       expect(actualValue).toBe(expectedValue);
     }
+  }
+
+  function collectDescriptorSignals(value: unknown): string[] {
+    const descriptor = extractSecurityDescriptor(value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    return Array.from(new Set([
+      ...(descriptor?.labels ?? []),
+      ...(descriptor?.taint ?? [])
+    ])).sort();
+  }
+
+  async function runCustomFixtureScenario(
+    fixtureName: string,
+    input: string,
+    basePath: string
+  ): Promise<string | null> {
+    if (!fixtureName.endsWith('/tool-return-taint-scope')) {
+      return null;
+    }
+
+    const env = new Environment(fileSystem, pathService, basePath);
+    const { ast } = await parse(input);
+    await evaluate(ast, env);
+
+    const workerVar = env.getVariable('worker');
+    const leakyVar = env.getVariable('workerLeaky');
+
+    if (!workerVar || !leakyVar) {
+      throw new Error(`Missing worker definitions for ${fixtureName}`);
+    }
+
+    workerVar.internal = {
+      ...(workerVar.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+    leakyVar.internal = {
+      ...(leakyVar.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const createPayloadArg = (nodeId: string) => ({
+      type: 'VariableReference',
+      nodeId,
+      identifier: 'payload'
+    }) as any;
+
+    const cleanResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'tool-return-taint-clean',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'tool-return-taint-clean-ref',
+          identifier: 'worker',
+          args: [createPayloadArg('tool-return-taint-payload-ref-clean')]
+        }
+      } as any,
+      env
+    );
+
+    const leakyResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'tool-return-taint-leaky',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'tool-return-taint-leaky-ref',
+          identifier: 'workerLeaky',
+          args: [createPayloadArg('tool-return-taint-payload-ref-leaky')]
+        }
+      } as any,
+      env
+    );
+
+    const cleanData = ((cleanResult.value as any)?.data ?? {}) as Record<string, unknown>;
+    const leakyData = ((leakyResult.value as any)?.data ?? {}) as Record<string, unknown>;
+
+    return [
+      `clean.recipient=${String(cleanData.recipient ?? '')}`,
+      `clean.untrusted=${collectDescriptorSignals(cleanResult.value).includes('untrusted')}`,
+      `leaky.preview=${String(leakyData.preview ?? '')}`,
+      `leaky.untrusted=${collectDescriptorSignals(leakyResult.value).includes('untrusted')}`
+    ].join('\n');
   }
   
   // Helper to determine mode for a fixture based on its file path
@@ -1456,6 +1545,28 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } else {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
+          const customFixtureOutput = await runCustomFixtureScenario(
+            fixture.name,
+            fixture.input,
+            basePath
+          );
+          if (customFixtureOutput !== null) {
+            if (isValidFixture && !isSmokeTest) {
+              const normalizedResult = normalizeOutputText(customFixtureOutput);
+              const normalizedExpected = normalizeOutputText(fixture.expected);
+              expect(normalizedResult).toBe(normalizedExpected);
+            } else if (isSmokeTest) {
+              expect(customFixtureOutput).toBeDefined();
+            }
+
+            validateStderrOutput(undefined, ioExpectations.expectedStderr, fixture.name);
+            if (ioExpectations.expectedErrorShape) {
+              throw new Error(
+                `expected-error.json present for ${fixture.name} but the fixture executed without throwing`
+              );
+            }
+            return;
+          }
           if (fixture.name.includes('import/stdin')) {
             if (fixture.name.endsWith('stdin-text')) {
               // Plain text stdin content

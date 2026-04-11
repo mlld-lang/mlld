@@ -1,0 +1,11 @@
+/var @recipientHandle = "h_a7x9k2"
+/var untrusted @payload = "external request"
+/exe @worker(payload) = [
+  let @internal = { body: @payload }
+  -> { status: "sent", recipient: @recipientHandle }
+  => @internal
+]
+/exe @workerLeaky(payload) = [
+  let @internal = { body: @payload }
+  -> { status: "sent", recipient: @recipientHandle, preview: @payload }
+]

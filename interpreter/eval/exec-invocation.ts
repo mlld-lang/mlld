@@ -1614,6 +1614,8 @@ async function evaluateExecInvocationInternal(
   try {
     let policyEnforcer: PolicyEnforcer | undefined;
     let resultSecurityDescriptor: SecurityDescriptor | undefined;
+    let strictToolResultDescriptor: SecurityDescriptor | undefined;
+    let strictToolResultBaseDescriptor: SecurityDescriptor | undefined;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
         return;
@@ -3670,9 +3672,11 @@ async function evaluateExecInvocationInternal(
 
       // Capture descriptors from executable definition and parameters
       const descriptorPieces: SecurityDescriptor[] = [];
+      const strictToolDescriptorPieces: SecurityDescriptor[] = [];
       const variableDescriptor = getVariableSecurityDescriptor(variable);
       if (variableDescriptor) {
         descriptorPieces.push(variableDescriptor);
+        strictToolDescriptorPieces.push(variableDescriptor);
       }
       const mergedParamDescriptor = collectAndMergeParameterDescriptors(params, execEnv);
       if (mergedParamDescriptor) {
@@ -3680,16 +3684,27 @@ async function evaluateExecInvocationInternal(
       }
       if (mcpSecurityDescriptor) {
         descriptorPieces.push(mcpSecurityDescriptor);
+        strictToolDescriptorPieces.push(mcpSecurityDescriptor);
       }
       const sourceTaintLabel = deriveExecutableSourceTaintLabel({
         type: (definition as any).type,
         language: (definition as any).language
       });
       if (sourceTaintLabel) {
-        descriptorPieces.push(makeSecurityDescriptor({ taint: [sourceTaintLabel] }));
+        const sourceDescriptor = makeSecurityDescriptor({ taint: [sourceTaintLabel] });
+        descriptorPieces.push(sourceDescriptor);
+        strictToolDescriptorPieces.push(sourceDescriptor);
       }
       if (toolProvenance) {
-        descriptorPieces.push(makeSecurityDescriptor({ tools: [toolProvenance] }));
+        const provenanceDescriptor = makeSecurityDescriptor({ tools: [toolProvenance] });
+        descriptorPieces.push(provenanceDescriptor);
+        strictToolDescriptorPieces.push(provenanceDescriptor);
+      }
+      if (strictToolDescriptorPieces.length > 0) {
+        strictToolResultBaseDescriptor =
+          strictToolDescriptorPieces.length === 1
+            ? strictToolDescriptorPieces[0]
+            : runtimeEnv.mergeSecurityDescriptors(...strictToolDescriptorPieces);
       }
       if (descriptorPieces.length > 0) {
         const descriptorFromPieces =
@@ -3856,6 +3871,7 @@ async function evaluateExecInvocationInternal(
     }
     result = codeResult.result;
     strictToolResult = codeResult.toolResult;
+    strictToolResultDescriptor = codeResult.toolResultDescriptor;
     execEnv = codeResult.execEnv;
     outputRecordEnv = codeResult.outputRecordEnv ?? execEnv;
   } else {
@@ -3959,27 +3975,43 @@ async function evaluateExecInvocationInternal(
     }
   }
 
-  const localExecutionDescriptor = execEnv.getLocalSecurityDescriptor();
-  const resultValueDescriptor = extractSecurityDescriptor(result);
-  const shouldPreferUntrustedReturn = hasUntrustedWithoutTrusted(resultValueDescriptor);
+  const resultValueDescriptor = extractSecurityDescriptor(result, {
+    recursive: useStrictToolResult,
+    mergeArrayElements: useStrictToolResult
+  });
 
-  mergeResultDescriptor(
-    shouldPreferUntrustedReturn && localExecutionDescriptor
-      ? stripTrustedFromDescriptor(localExecutionDescriptor)
-      : localExecutionDescriptor
-  );
-  mergeResultDescriptor(resultValueDescriptor);
+  if (useStrictToolResult) {
+    resultSecurityDescriptor = undefined;
+    mergeResultDescriptor(strictToolResultBaseDescriptor);
+    mergeResultDescriptor(strictToolResultDescriptor);
+    mergeResultDescriptor(resultValueDescriptor);
+    resultSecurityDescriptor = applyExecOutputPolicyLabels({
+      policyEnforcer: activePolicyEnforcer,
+      exeLabels,
+      resultSecurityDescriptor
+    });
+  } else {
+    const localExecutionDescriptor = execEnv.getLocalSecurityDescriptor();
+    const shouldPreferUntrustedReturn = hasUntrustedWithoutTrusted(resultValueDescriptor);
 
-  if (shouldPreferUntrustedReturn && resultSecurityDescriptor) {
-    resultSecurityDescriptor = stripTrustedFromDescriptor(resultSecurityDescriptor);
-  }
+    mergeResultDescriptor(
+      shouldPreferUntrustedReturn && localExecutionDescriptor
+        ? stripTrustedFromDescriptor(localExecutionDescriptor)
+        : localExecutionDescriptor
+    );
+    mergeResultDescriptor(resultValueDescriptor);
 
-  if (
-    recordTrustRefinementApplied
-    && resultSecurityDescriptor
-    && !hasDescriptorLabel(resultValueDescriptor, 'untrusted')
-  ) {
-    resultSecurityDescriptor = stripUntrustedFromDescriptor(resultSecurityDescriptor);
+    if (shouldPreferUntrustedReturn && resultSecurityDescriptor) {
+      resultSecurityDescriptor = stripTrustedFromDescriptor(resultSecurityDescriptor);
+    }
+
+    if (
+      recordTrustRefinementApplied
+      && resultSecurityDescriptor
+      && !hasDescriptorLabel(resultValueDescriptor, 'untrusted')
+    ) {
+      resultSecurityDescriptor = stripUntrustedFromDescriptor(resultSecurityDescriptor);
+    }
   }
 
   if (resultSecurityDescriptor) {

@@ -401,10 +401,12 @@ export async function evaluateCore({
         { location: node.location }
       );
     }
-    const returnResult = await resolveExeReturnValue(node as ExeReturnNode, env);
     const returnKind = getExeReturnKind(node as ExeReturnNode);
+    const returnResult = await resolveExeReturnValue(node as ExeReturnNode, env, {
+      isolateSecurityDescriptor: returnKind !== 'canonical'
+    });
     if (returnKind === 'tool' || returnKind === 'dual') {
-      appendExeToolReturnValue(returnResult.env || env, returnResult.value);
+      appendExeToolReturnValue(returnResult.env || env, returnResult.value, returnResult.descriptor);
     }
     if (returnKind === 'tool') {
       return {

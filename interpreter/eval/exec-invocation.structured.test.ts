@@ -379,6 +379,101 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(bridgeResult.value.data).toBe('tool-slot-value');
   });
 
+  it('scopes strict tool-return taint to the thin-arrow expression instead of ambient exe state', async () => {
+    const src = `
+/var @recipientHandle = "h_a7x9k2"
+/var untrusted @payload = "external request"
+/exe @worker(payload) = [
+  let @internal = { body: @payload }
+  -> { status: "sent", recipient: @recipientHandle }
+  => @internal
+]
+/exe @workerLeaky(payload) = [
+  let @internal = { body: @payload }
+  -> { status: "sent", recipient: @recipientHandle, preview: @payload }
+]
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const workerVar = env.getVariable('worker');
+    const leakyVar = env.getVariable('workerLeaky');
+    expect(workerVar).toBeDefined();
+    expect(leakyVar).toBeDefined();
+    workerVar!.internal = {
+      ...(workerVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+    leakyVar!.internal = {
+      ...(leakyVar!.internal ?? {}),
+      isToolbridgeWrapper: true
+    };
+
+    const createPayloadArg = (nodeId: string) => ({
+      type: 'VariableReference',
+      nodeId,
+      identifier: 'payload'
+    }) as any;
+
+    const cleanResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'tool-return-taint-clean',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'tool-return-taint-clean-ref',
+          identifier: 'worker',
+          args: [createPayloadArg('tool-return-taint-payload-ref-clean')]
+        }
+      },
+      env
+    );
+    expect(cleanResult.value.type).toBe('object');
+    expect(cleanResult.value.data).toEqual({
+      status: 'sent',
+      recipient: 'h_a7x9k2'
+    });
+    const cleanDescriptor = extractSecurityDescriptor(cleanResult.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const cleanSignals = [
+      ...(cleanDescriptor?.labels ?? []),
+      ...(cleanDescriptor?.taint ?? [])
+    ];
+    expect(cleanSignals).not.toContain('untrusted');
+    expect(cleanSignals).not.toContain('influenced');
+
+    const leakyResult = await evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'tool-return-taint-leaky',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'tool-return-taint-leaky-ref',
+          identifier: 'workerLeaky',
+          args: [createPayloadArg('tool-return-taint-payload-ref-leaky')]
+        }
+      },
+      env
+    );
+    expect(leakyResult.value.type).toBe('object');
+    expect(leakyResult.value.data).toEqual({
+      status: 'sent',
+      recipient: 'h_a7x9k2',
+      preview: 'external request'
+    });
+    const leakyDescriptor = extractSecurityDescriptor(leakyResult.value, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+    const leakySignals = [
+      ...(leakyDescriptor?.labels ?? []),
+      ...(leakyDescriptor?.taint ?? [])
+    ];
+    expect(leakySignals).toContain('untrusted');
+  });
+
   it('counts tool reaches from runtime execution, not source occurrence count', async () => {
     const src = `
 /exe @branch(first, second) = [

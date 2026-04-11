@@ -18,6 +18,7 @@ import {
   applySecurityDescriptorToCurrentVariables,
   attachSecurityDescriptorToValue
 } from './control-flow-security';
+import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
 
 export async function evaluateIf(
   node: IfNode,
@@ -68,13 +69,22 @@ export async function evaluateIf(
           { location: stmt.location }
         );
       }
-      const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv);
+      const returnKind = getExeReturnKind(stmt as ExeReturnNode);
+      const returnResult = await resolveExeReturnValue(stmt as ExeReturnNode, blockEnv, {
+        isolateSecurityDescriptor: returnKind !== 'canonical'
+      });
       blockEnv = returnResult.env;
       applySecurityDescriptorToCurrentVariables(blockEnv, conditionDescriptor);
       const returnValue = attachSecurityDescriptorToValue(returnResult.value, conditionDescriptor);
-      const returnKind = getExeReturnKind(stmt as ExeReturnNode);
       if (returnKind === 'tool' || returnKind === 'dual') {
-        appendExeToolReturnValue(blockEnv, returnValue);
+        appendExeToolReturnValue(
+          blockEnv,
+          returnValue,
+          extractSecurityDescriptor(returnValue, {
+            recursive: true,
+            mergeArrayElements: true
+          }) ?? returnResult.descriptor
+        );
       }
       if (returnKind === 'tool') {
         lastValue = undefined;
