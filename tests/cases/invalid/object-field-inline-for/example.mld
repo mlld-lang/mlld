@@ -1,0 +1,8 @@
+exe @classify(x) = when [
+  !@x => null
+  @x.kind == "checks" => {
+    kind: "checks",
+    failing: for @item in @x.items when !@item.ok => @item.id
+  }
+  * => { kind: "other" }
+]
