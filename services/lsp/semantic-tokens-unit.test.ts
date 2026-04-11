@@ -298,6 +298,30 @@ describe('Semantic Tokens - Unit Tests', () => {
         tokenType: 'property'
       });
     });
+
+    it('highlights authorizable policy keys and plain-object role labels', async () => {
+      const code = `/var @policy = {
+  authorizations: {
+    authorizable: {
+      role:planner: [@sendEmail]
+    }
+  }
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'authorizations',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'authorizable',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'role:planner',
+        tokenType: 'property'
+      });
+    });
     
     it('highlights multiple directives', async () => {
       const code = `/var @x = 1

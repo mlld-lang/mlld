@@ -11,7 +11,7 @@ updated: 2026-04-10
 
 `@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, classification, and output fields — that the runtime will validate against.
 
-When a tool returns `=> record`, `@toolDocs()` renders its visible output fields through the same display-projection path used at runtime. There is no separate `audience` switch. The active display selection (`with { display }`, box config, or a matching `role:*` llm label) is the shaping mechanism.
+When a tool returns `=> record`, `@toolDocs()` renders its visible output fields through the same display-projection path used at runtime. There is no separate `audience` switch. The active display selection (`with { display }`, box config, or a matching `role:*` llm label) is the shaping mechanism. Role identity and display shaping stay separate: the exe's `role:*` label determines authorization identity, while display only chooses the projection.
 
 ## Basic usage
 
@@ -108,6 +108,20 @@ Authorization intent shape:
 
 The shape reference describes mlld's bucketed intent — the three buckets `@policy.build` accepts. It is intentionally framework-agnostic; how you wire those buckets into your orchestration is up to you.
 
+## Injected authorization notes
+
+For `exe llm` calls, mlld now injects two distinct tool-note blocks:
+
+- `<tool_notes>` for tools the LLM can call directly
+- `<authorization_notes>` for tools the LLM can authorize workers to use but cannot call directly
+
+Both blocks use the same tool-metadata and display-projection path. The difference is the source set:
+
+- `<tool_notes>` is shaped from the callable `tools:` surface
+- `<authorization_notes>` is shaped from `policy.authorizations.authorizable[role:*]` for the caller's immutable exe role
+
+Display overrides still shape visible output fields in both blocks, but they do not change which role's `authorizable` permissions are used.
+
 ## JSON output
 
 For programmatic consumers (custom renderers, validators, schema generation), pass `format: "json"`:
@@ -162,12 +176,13 @@ A consequence: when you add a custom write label like `iot:trigger` and map it v
 
 ## Explicit vs injected docs
 
-`@toolDocs()` and the auto-injected `<tool_notes>` block share the same base rendering and classification path. The differences:
+`@toolDocs()`, the auto-injected `<tool_notes>` block, and the auto-injected `<authorization_notes>` block share the same base rendering and classification path. The differences:
 
 - `@toolDocs()` is the explicit form you call from your own prompt template. Use it when you're building system prompts by hand.
-- `<tool_notes>` is the injected form mlld appends automatically to the system message of any `exe llm` call that surfaces security-relevant tools, for example `@claude(...)`. You don't have to do anything to enable it.
+- `<tool_notes>` is the injected form mlld appends automatically to the system message of any `exe llm` call that surfaces callable tools, for example `@claude(...)`.
+- `<authorization_notes>` is the injected form mlld appends automatically when the active base policy grants the caller role any `authorizable` tools.
 
-Both use the same per-tool sections, output-field shaping, and policy-derived classification for the same tools under the same policy. Explicit `@toolDocs()` can additionally opt into features such as `includeAuthIntentShape: true` or `format: "json"`. Injected `<tool_notes>` uses the default text form unless the calling runtime path explicitly opts into additional features. `<shelf_notes>` uses the same active display selection when it summarizes visible record fields from shelf scope.
+All three use the same per-tool sections, output-field shaping, and policy-derived classification for the same tools under the same policy. Explicit `@toolDocs()` can additionally opt into features such as `includeAuthIntentShape: true` or `format: "json"`. Injected notes use the default text form. When all injected blocks are present, the order is `<tool_notes>`, then `<authorization_notes>`, then `<shelf_notes>`.
 
 ## Options
 

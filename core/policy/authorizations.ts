@@ -1,4 +1,5 @@
 import type { FactSourceHandle } from '@core/types/handle';
+import { isExecutableVariable } from '@core/types/variable';
 import { isTolerantMatch } from '@interpreter/eval/expressions';
 
 export type AuthorizationConstraintClause =
@@ -17,6 +18,8 @@ export type PolicyAuthorizations = {
   allow?: Record<string, AuthorizationEntry>;
   deny?: string[];
 };
+
+export type PolicyAuthorizableMap = Record<string, string[]>;
 
 export interface AuthorizationToolContext {
   name: string;
@@ -272,6 +275,113 @@ function normalizeStringList(value: unknown): string[] | undefined {
     }
   }
   return normalized;
+}
+
+function normalizePolicyAuthorizableToolRef(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (isExecutableVariable(value)) {
+    const name = value.name?.trim();
+    return name && name.length > 0 ? name : undefined;
+  }
+
+  return undefined;
+}
+
+function clonePolicyAuthorizableMap(
+  value?: PolicyAuthorizableMap
+): PolicyAuthorizableMap | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const cloned = Object.fromEntries(
+    Object.entries(value).map(([role, tools]) => [role, [...tools]])
+  );
+  return Object.keys(cloned).length > 0 ? cloned : undefined;
+}
+
+export function normalizePolicyAuthorizableMap(raw: unknown): PolicyAuthorizableMap | undefined {
+  if (!isPlainObject(raw)) {
+    return undefined;
+  }
+
+  const normalized: PolicyAuthorizableMap = {};
+  for (const [roleName, rawTools] of Object.entries(raw)) {
+    const trimmedRoleName = roleName.trim();
+    if (!trimmedRoleName || !Array.isArray(rawTools)) {
+      continue;
+    }
+
+    const tools: string[] = [];
+    for (const entry of rawTools) {
+      const normalizedTool = normalizePolicyAuthorizableToolRef(entry);
+      if (normalizedTool && !tools.includes(normalizedTool)) {
+        tools.push(normalizedTool);
+      }
+    }
+    normalized[trimmedRoleName] = tools;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+export function mergePolicyAuthorizableMaps(
+  base?: PolicyAuthorizableMap,
+  incoming?: PolicyAuthorizableMap
+): PolicyAuthorizableMap | undefined {
+  if (!base) {
+    return clonePolicyAuthorizableMap(incoming);
+  }
+  if (!incoming) {
+    return clonePolicyAuthorizableMap(base);
+  }
+
+  const merged: PolicyAuthorizableMap = {};
+  const roleNames = new Set([...Object.keys(base), ...Object.keys(incoming)]);
+
+  for (const roleName of roleNames) {
+    const baseTools = base[roleName];
+    const incomingTools = incoming[roleName];
+
+    if (baseTools && incomingTools) {
+      merged[roleName] = baseTools.filter(toolName => incomingTools.includes(toolName));
+      continue;
+    }
+
+    merged[roleName] = [...(incomingTools ?? baseTools ?? [])];
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+export function getPolicyAuthorizableToolsForRole(
+  authorizable: PolicyAuthorizableMap | undefined,
+  roleName: string | undefined
+): string[] | undefined {
+  const normalizedRoleName = typeof roleName === 'string' ? roleName.trim() : '';
+  if (!authorizable || normalizedRoleName.length === 0) {
+    return undefined;
+  }
+
+  return authorizable[normalizedRoleName]
+    ? [...authorizable[normalizedRoleName]]
+    : undefined;
+}
+
+export function stripPolicyAuthorizableField(raw: unknown): unknown {
+  if (!isPlainObject(raw) || !Object.prototype.hasOwnProperty.call(raw, 'authorizable')) {
+    return raw;
+  }
+
+  const { authorizable: _, ...rest } = raw;
+  return rest;
 }
 
 function isNormalizedConstraintClause(value: unknown): value is AuthorizationConstraintClause {

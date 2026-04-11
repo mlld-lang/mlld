@@ -3,6 +3,7 @@ import { parseSync } from '@grammar/parser';
 import type { ExecInvocation } from '@core/types';
 import { createHandleWrapper } from '@core/types/handle';
 import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
+import { normalizePolicyConfig } from '@core/policy/union';
 import { interpret } from '@interpreter/index';
 import type { Environment } from '@interpreter/env/Environment';
 import { evaluateDirective } from '@interpreter/eval/directive';
@@ -210,6 +211,59 @@ describe('@policy builtin', () => {
         'updatePassword'
       )
     ).toBe(false);
+  });
+
+  it('rejects tools outside the active role authorizable set before compilation', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @send_email(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
+      /exe tool:w @delete_file(id) = js { return id; } with { controlArgs: ["id"] }
+
+      /var tools @writeTools = {
+        send_email: { mlld: @send_email, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] },
+        delete_file: { mlld: @delete_file, expose: ["id"], controlArgs: ["id"] }
+      }
+    `);
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        authorizations: {
+          authorizable: {
+            'role:planner': ['send_email']
+          }
+        } as any
+      })!
+    );
+    env.setLlmToolConfig({
+      sessionId: 'planner-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      authorizationRole: 'role:planner',
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      { allow: ['delete_file'] },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(built.valid).toBe(false);
+    expect(built.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'invalid_authorization',
+          tool: 'delete_file',
+          message: "Role 'role:planner' cannot authorize tool 'delete_file'"
+        })
+      ])
+    );
+    expect(built.policy.authorizable).toBeUndefined();
   });
 
   it('reports proofless control args and emits an empty allow fragment for that tool', async () => {

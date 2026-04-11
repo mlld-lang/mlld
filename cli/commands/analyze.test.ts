@@ -588,7 +588,6 @@ show @built
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
-
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
       "Tool 'delete_draft' is denied by policy.authorizations.deny"
@@ -602,6 +601,46 @@ show @built
           expect.objectContaining({
             reason: 'authorizations-denied-tool',
             tool: 'delete_draft'
+          })
+        ])
+      })
+    ]);
+  });
+
+  it('reports authorizable fields when statically analyzable policy.build intent includes them', async () => {
+    const modulePath = await writeModule('analyze-policy-build-authorizable-intent.mld', `exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+
+var tools @writeTools = {
+  send_email: {
+    mlld: @send_email,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+
+var @built = @policy.build({
+  authorizable: {
+    role:planner: [@send_email]
+  },
+  allow: ["send_email"]
+}, @writeTools)
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      '@policy.build intent cannot include authorizable; declare policy.authorizations.authorizable on the base policy instead'
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'invalid_authorization',
+            message: expect.stringContaining('@policy.build intent cannot include authorizable')
           })
         ])
       })

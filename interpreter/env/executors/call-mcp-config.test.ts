@@ -426,6 +426,119 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('injects authorization notes from policy authorizable using immutable role identity', async () => {
+    const env = await createInterpretedEnv(
+      [
+        '/record @contact = {',
+        '  facts: [email: string],',
+        '  data: [name: string, notes: string],',
+        '  display: {',
+        '    role:planner: [name, { ref: "email" }],',
+        '    role:worker: [{ mask: "email" }, name, notes]',
+        '  }',
+        '}',
+        '/exe tool:r @searchContacts(query) = "Ada" => contact',
+        '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
+        '/var @toolList = [@searchContacts]'
+      ].join('\n')
+    );
+
+    env.setExeLabels(['llm', 'role:planner']);
+    env.setScopedEnvironmentConfig({
+      ...(env.getScopedEnvironmentConfig() ?? {}),
+      display: 'role:worker'
+    } as any);
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        authorizations: {
+          authorizable: {
+            'role:planner': ['sendEmail']
+          }
+        } as any
+      })!
+    );
+
+    let toolList = await extractVariableValue(env.getVariable('toolList') as any, env);
+    if (isStructuredValue(toolList)) {
+      toolList = asData(toolList);
+    }
+
+    const result = await createCallMcpConfig({
+      tools: toolList,
+      env
+    });
+
+    try {
+      expect(result.authorizationRole).toBe('role:planner');
+      expect(result.toolNotes).toContain('### mcp__mlld_tools__search_contacts');
+      expect(result.authorizationNotes).toContain('<authorization_notes>');
+      expect(result.authorizationNotes).toContain('Tools you can authorize workers to use');
+      expect(result.authorizationNotes).toContain('See <tool_notes> for tools you can call directly.');
+      expect(result.authorizationNotes).toContain('### mcp__mlld_tools__send_email');
+      expect(result.authorizationNotes).toContain('- `recipient` (string, **control arg**)');
+      expect(result.authorizationNotes).toContain('To authorize, pass authorization intent to your worker tool:');
+      expect(result.authorizationNotes).not.toContain('search_contacts');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('narrows surfaced function tools to the policy-authorized subset from compiled allow rules', async () => {
+    const env = await createInterpretedEnv([
+      '/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }',
+      '/exe tool:w @deleteFile(id) = "deleted" with { controlArgs: ["id"] }',
+      '/var tools @writeTools = {',
+      '  send_email: { mlld: @sendEmail, expose: ["recipient", "subject", "body"], controlArgs: ["recipient"] },',
+      '  delete_file: { mlld: @deleteFile, expose: ["id"], controlArgs: ["id"] }',
+      '}'
+    ].join('\n'));
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        authorizations: {
+          allow: {
+            send_email: true
+          }
+        }
+      } as any)!
+    );
+
+    let toolCollection = await extractVariableValue(env.getVariable('writeTools') as any, env);
+    if (isStructuredValue(toolCollection)) {
+      toolCollection = asData(toolCollection);
+    }
+
+    const result = await createCallMcpConfig({
+      tools: toolCollection,
+      env
+    });
+
+    try {
+      expect(result.availableTools).toEqual([
+        { name: 'send_email' },
+        { name: 'known' }
+      ]);
+
+      const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
+      const listed = await sendJsonRpc(socketPath, {
+        jsonrpc: '2.0',
+        id: 120,
+        method: 'tools/list',
+        params: {}
+      });
+      const names = (((listed.result as any)?.tools ?? []) as Array<{ name?: string }>)
+        .map(tool => tool.name)
+        .filter((name): name is string => typeof name === 'string')
+        .sort();
+
+      expect(names).toEqual(['known', 'send_email']);
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('serves @fyi.known through the generated function MCP bridge', async () => {
     const env = await createInterpretedEnv(
       [

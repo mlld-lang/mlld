@@ -1,6 +1,7 @@
 import {
   mergePolicyAuthorizations,
   normalizePolicyAuthorizations,
+  stripPolicyAuthorizableField,
   validateNormalizedPolicyAuthorizations,
   type PolicyAuthorizationValidationResult
 } from '@core/policy/authorizations';
@@ -31,6 +32,21 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
     return value.config as PolicyConfig;
   }
   return value as PolicyConfig;
+}
+
+function sanitizeRuntimePolicyCandidate(candidate: PolicyConfig): PolicyConfig {
+  const { authorizable: _, ...rest } = candidate;
+  const strippedAuthorizations = stripPolicyAuthorizableField(rest.authorizations);
+  const hasAuthorizations =
+    isPlainObject(strippedAuthorizations)
+      ? Object.keys(strippedAuthorizations).length > 0
+      : strippedAuthorizations !== undefined;
+  return {
+    ...rest,
+    ...(hasAuthorizations
+      ? { authorizations: strippedAuthorizations as PolicyConfig['authorizations'] }
+      : {})
+  };
 }
 
 function resolvePolicyConfigSources(value: unknown): PolicyConfig[] | undefined {
@@ -154,7 +170,9 @@ export async function resolveInvocationPolicyFragment(
   }
   const rawPolicySource = await materializePolicySourceValue(rawResolvedValue, env);
   const policySources = resolvePolicyConfigSources(rawPolicySource);
-  const compiledCandidates = reattachRawAuthorizations(candidates, policySources);
+  const compiledCandidates = reattachRawAuthorizations(candidates, policySources).map(
+    sanitizeRuntimePolicyCandidate
+  );
 
   const normalized = compiledCandidates.reduce<PolicyConfig | undefined>(
     (merged, candidate) => mergePolicyConfigs(merged, normalizePolicyConfig(candidate)),

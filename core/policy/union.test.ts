@@ -130,6 +130,49 @@ describe('PolicyConfig defaults', () => {
   });
 });
 
+describe('PolicyConfig authorizable', () => {
+  it('normalizes source authorizable metadata separately from runtime allow and deny', () => {
+    const config = normalizePolicyConfig({
+      authorizations: {
+        deny: ['delete_file'],
+        authorizable: {
+          'role:planner': ['@sendEmail', '@sendEmail', 'create_file']
+        }
+      } as any
+    } as PolicyConfig);
+
+    expect(config.authorizable).toEqual({
+      'role:planner': ['sendEmail', 'create_file']
+    });
+    expect(config.authorizations).toEqual({
+      deny: ['delete_file']
+    });
+  });
+
+  it('intersects shared authorizable roles while preserving distinct roles', () => {
+    const merged = mergePolicyConfigs(
+      {
+        authorizable: {
+          'role:planner': ['send_email', 'create_file'],
+          'role:reviewer': ['search_contacts']
+        }
+      },
+      {
+        authorizable: {
+          'role:planner': ['send_email'],
+          'role:worker': ['send_email']
+        }
+      }
+    );
+
+    expect(merged.authorizable).toEqual({
+      'role:planner': ['send_email'],
+      'role:reviewer': ['search_contacts'],
+      'role:worker': ['send_email']
+    });
+  });
+});
+
 describe('PolicyConfig capabilities', () => {
   it('expands allow list shorthand entries', () => {
     const config = normalizePolicyConfig({

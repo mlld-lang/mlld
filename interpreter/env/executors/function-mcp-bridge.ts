@@ -87,6 +87,8 @@ export interface FunctionMcpBridgeOptions {
   sessionId: string;
   availableTools?: readonly AvailableToolDescriptor[];
   toolMetadata?: CallMcpConfig['toolMetadata'];
+  authorizationRole?: string;
+  authorizationNotes?: string;
   conversationDescriptor?: SecurityDescriptor;
   cleanupGraceMs?: number;
 }
@@ -116,6 +118,8 @@ class FunctionMcpBridgeServer {
     sessionId: string,
     availableTools: readonly AvailableToolDescriptor[] | undefined,
     toolMetadata: CallMcpConfig['toolMetadata'],
+    authorizationRole: string | undefined,
+    authorizationNotes: string | undefined,
     conversationDescriptor?: SecurityDescriptor
   ) {
     this.toolEnv = env.createChild();
@@ -128,6 +132,8 @@ class FunctionMcpBridgeServer {
       unifiedAllowedTools: '',
       availableTools: availableTools ?? [],
       toolMetadata: toolMetadata ?? [],
+      authorizationRole,
+      authorizationNotes,
       inBox: false,
       cleanup: async () => {}
     });
@@ -527,6 +533,8 @@ export async function createFunctionMcpBridge(
     options.sessionId,
     options.availableTools,
     options.toolMetadata,
+    options.authorizationRole,
+    options.authorizationNotes,
     options.conversationDescriptor
   );
   await server.start();

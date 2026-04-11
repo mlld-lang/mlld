@@ -462,8 +462,13 @@ CodeExecutionValue
 
 // Property key - shared between old ObjectLiteral and DataObjectLiteral
 PropertyKey
-  = BaseIdentifier
+  = PropertyIdentifier
   / DataString      // Use DataString for object property keys
+
+PropertyIdentifier
+  = first:BaseIdentifier suffix:(':' BaseIdentifier)? {
+      return suffix ? first + ':' + suffix[1] : first;
+    }
 
 // Nested directive like @run
 NestedDirective

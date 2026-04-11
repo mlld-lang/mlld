@@ -1,7 +1,11 @@
 import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
 import {
+  mergePolicyAuthorizableMaps,
   mergePolicyAuthorizations,
+  normalizePolicyAuthorizableMap,
   normalizePolicyAuthorizations,
+  stripPolicyAuthorizableField,
+  type PolicyAuthorizableMap,
   type PolicyAuthorizations
 } from './authorizations';
 import { normalizeNamedOperationRef } from './operation-labels';
@@ -128,6 +132,7 @@ export type PolicyConfig = {
   locked?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
+  authorizable?: PolicyAuthorizableMap;
   authorizations?: PolicyAuthorizations;
   auth?: Record<string, AuthConfig>;
   keychain?: PolicyKeychainConfig;
@@ -204,6 +209,10 @@ export function mergePolicyConfigs(
     normalizedBase.authorizations,
     normalizedIncoming.authorizations
   );
+  const authorizable = mergePolicyAuthorizableMaps(
+    normalizedBase.authorizable,
+    normalizedIncoming.authorizable
+  );
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
   const danger = mergePolicyDanger(normalizedBase.danger as string[] | undefined, normalizedIncoming.danger as string[] | undefined);
@@ -213,6 +222,7 @@ export function mergePolicyConfigs(
     ...(locked ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
+    ...(authorizable ? { authorizable } : {}),
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
@@ -274,7 +284,17 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const facts = normalizePolicyFacts(config.facts);
   const signers = normalizePolicySigners(config.signers);
   const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
-  const authorizations = normalizePolicyAuthorizations(config.authorizations);
+  const authorizable = normalizePolicyAuthorizableMap(
+    config.authorizable
+    ?? (
+      isPlainObject(config.authorizations)
+        ? (config.authorizations as Record<string, unknown>).authorizable
+        : undefined
+    )
+  );
+  const authorizations = normalizePolicyAuthorizations(
+    stripPolicyAuthorizableField(config.authorizations)
+  );
   const auth = normalizePolicyAuth(config.auth);
   const keychain = normalizePolicyKeychain(config.keychain);
   const urls = normalizePolicyUrls(config.urls);
@@ -287,6 +307,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(config.locked === true ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
+    ...(authorizable ? { authorizable } : {}),
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),

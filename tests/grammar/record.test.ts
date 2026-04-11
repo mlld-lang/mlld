@@ -350,6 +350,44 @@ describe('record grammar', () => {
     );
   });
 
+  it('parses plain object role keys for policy authorizable declarations', () => {
+    const directive = getFirstDirective(`
+/var @policy = {
+  authorizations: {
+    authorizable: {
+      role:planner: [@sendEmail]
+    }
+  }
+}
+`) as DirectiveNode;
+
+    expect(directive.kind).toBe('var');
+    expect((directive.values as any).value?.[0]).toMatchObject({
+      type: 'object',
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          key: 'authorizations',
+          value: expect.objectContaining({
+            type: 'object',
+            entries: expect.arrayContaining([
+              expect.objectContaining({
+                key: 'authorizable',
+                value: expect.objectContaining({
+                  type: 'object',
+                  entries: expect.arrayContaining([
+                    expect.objectContaining({
+                      key: 'role:planner'
+                    })
+                  ])
+                })
+              })
+            ])
+          })
+        })
+      ])
+    });
+  });
+
   it('parses bare root adapters for scalar and map-entry record fields', () => {
     const directive = getFirstDirective(`
 /record @hotel_price = {

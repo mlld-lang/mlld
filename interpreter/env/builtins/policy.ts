@@ -1,3 +1,8 @@
+import { mlldNameToMCPName } from '@core/mcp/names';
+import {
+  getPolicyAuthorizableToolsForRole,
+  stripPolicyAuthorizableField
+} from '@core/policy/authorizations';
 import type { Environment } from '@interpreter/env/Environment';
 import type { NodeFunctionExecutable } from '@core/types/executable';
 import {
@@ -14,7 +19,8 @@ import { mergePolicyConfigs, type PolicyConfig } from '@core/policy/union';
 import {
   clonePolicyAuthorizationCompileReport,
   compilePolicyAuthorizations,
-  createEmptyPolicyAuthorizationCompileReport
+  createEmptyPolicyAuthorizationCompileReport,
+  type PolicyAuthorizationCompilerIssue
 } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
@@ -252,7 +258,7 @@ function createPolicyBuilderResult(
   const authorizations = compilation.authorizations ?? {};
 
   return {
-    policy: mergePolicyConfigs(basePolicy, {
+    policy: mergePolicyConfigs(stripAuthorizableFromPolicyConfig(basePolicy), {
       authorizations: {
         allow: authorizations.allow ?? {},
         ...(authorizations.deny ? { deny: authorizations.deny } : {})
@@ -345,6 +351,157 @@ async function normalizeIntentContainer(
   return rawIntent;
 }
 
+function uniquePreservingOrder(values: readonly string[]): string[] {
+  const unique: string[] = [];
+  for (const value of values) {
+    if (!unique.includes(value)) {
+      unique.push(value);
+    }
+  }
+  return unique;
+}
+
+function stripAuthorizableFromIntent(value: unknown): unknown {
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const stripped = stripPolicyAuthorizableField(value);
+  if (!isPlainObject(stripped)) {
+    return stripped;
+  }
+
+  if (!isPlainObject(stripped.authorizations)) {
+    return stripped;
+  }
+
+  return {
+    ...stripped,
+    authorizations: stripPolicyAuthorizableField(stripped.authorizations)
+  };
+}
+
+function collectRequestedAuthorizationToolNames(raw: unknown): string[] {
+  if (!isPlainObject(raw)) {
+    return [];
+  }
+
+  const container = isPlainObject(raw.authorizations)
+    ? (raw.authorizations as Record<string, unknown>)
+    : raw;
+  const requested: string[] = [];
+  const add = (value: unknown): void => {
+    if (typeof value !== 'string') {
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0 && !requested.includes(trimmed)) {
+      requested.push(trimmed);
+    }
+  };
+
+  if (Array.isArray(container.allow)) {
+    for (const toolName of container.allow) {
+      add(toolName);
+    }
+  } else if (isPlainObject(container.allow)) {
+    for (const toolName of Object.keys(container.allow)) {
+      add(toolName);
+    }
+  }
+
+  for (const bucketName of ['known', 'resolved']) {
+    if (!isPlainObject(container[bucketName])) {
+      continue;
+    }
+    for (const toolName of Object.keys(container[bucketName] as Record<string, unknown>)) {
+      add(toolName);
+    }
+  }
+
+  for (const [key] of Object.entries(container)) {
+    if (key === 'allow' || key === 'deny' || key === 'known' || key === 'resolved') {
+      continue;
+    }
+    add(key);
+  }
+
+  return requested;
+}
+
+function resolveAuthorizationSurfaceNamesForTool(
+  requestedToolName: string,
+  toolContext: ReadonlyMap<string, { name: string }>
+): string[] {
+  const trimmed = requestedToolName.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalized = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  const candidates = uniquePreservingOrder([
+    trimmed,
+    normalized,
+    mlldNameToMCPName(normalized)
+  ].filter(value => value.length > 0));
+  const matched: string[] = [];
+
+  for (const candidate of candidates) {
+    if (toolContext.has(candidate) && !matched.includes(candidate)) {
+      matched.push(candidate);
+    }
+  }
+
+  for (const toolName of toolContext.keys()) {
+    const loweredToolName = toolName.trim().toLowerCase();
+    if (candidates.some(candidate => candidate.trim().toLowerCase() === loweredToolName) && !matched.includes(toolName)) {
+      matched.push(toolName);
+    }
+  }
+
+  return matched;
+}
+
+function resolveAllowedAuthorizableSurfaceNames(
+  rawToolNames: readonly string[],
+  toolContext: ReadonlyMap<string, { name: string }>
+): Set<string> {
+  const allowed = new Set<string>();
+  for (const toolName of rawToolNames) {
+    for (const surfaceName of resolveAuthorizationSurfaceNamesForTool(toolName, toolContext)) {
+      allowed.add(surfaceName);
+    }
+  }
+  return allowed;
+}
+
+function stripAuthorizableFromPolicyConfig(
+  policy: PolicyConfig | undefined
+): PolicyConfig | undefined {
+  if (!policy) {
+    return undefined;
+  }
+
+  const { authorizable: _, ...rest } = policy;
+  return rest;
+}
+
+function createPolicyBuilderIssueResult(
+  basePolicy: PolicyConfig | undefined,
+  issues: PolicyAuthorizationCompilerIssue[]
+) {
+  return {
+    policy: mergePolicyConfigs(stripAuthorizableFromPolicyConfig(basePolicy), {
+      authorizations: {
+        allow: {}
+      }
+    }),
+    valid: false,
+    issues,
+    report: createEmptyPolicyAuthorizationCompileReport()
+  };
+}
+
 async function buildPolicyAuthorizations(
   mode: 'build' | 'validate',
   intentOrEnv?: unknown,
@@ -371,11 +528,56 @@ async function buildPolicyAuthorizations(
   }
 
   const rawAuthorizations = await normalizeIntentContainer(intent, executionEnv);
+  const strippedAuthorizations = stripAuthorizableFromIntent(rawAuthorizations);
   const builderOptions = await resolvePolicyBuilderOptions(options, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
   const basePolicy = builderOptions.basePolicy ?? executionEnv.getPolicySummary();
+  const authorizationRole =
+    executionEnv.getLlmToolConfig()?.authorizationRole
+    ?? executionEnv.getCurrentAuthorizationRole();
+  const authorizableToolNames = getPolicyAuthorizableToolsForRole(
+    basePolicy?.authorizable,
+    authorizationRole
+  );
+  const requestedSurfaceNames = uniquePreservingOrder(
+    collectRequestedAuthorizationToolNames(strippedAuthorizations).flatMap(toolName =>
+      resolveAuthorizationSurfaceNamesForTool(toolName, toolContext)
+    )
+  );
+
+  if (basePolicy?.authorizable && requestedSurfaceNames.length > 0) {
+    const deniedTools = new Set(basePolicy.authorizations?.deny ?? []);
+    const allowedTools = resolveAllowedAuthorizableSurfaceNames(authorizableToolNames ?? [], toolContext);
+    const issues: PolicyAuthorizationCompilerIssue[] = [];
+
+    for (const toolName of requestedSurfaceNames) {
+      if (deniedTools.has(toolName)) {
+        issues.push({
+          reason: 'denied_by_policy',
+          tool: toolName,
+          message: `Tool '${toolName}' is denied by policy.authorizations.deny`
+        });
+        continue;
+      }
+
+      if (!allowedTools.has(toolName)) {
+        issues.push({
+          reason: 'invalid_authorization',
+          tool: toolName,
+          message: authorizationRole
+            ? `Role '${authorizationRole}' cannot authorize tool '${toolName}'`
+            : `Authorization requires an active exe role label before tool '${toolName}' can be authorized`
+        });
+      }
+    }
+
+    if (issues.length > 0) {
+      return createPolicyBuilderIssueResult(basePolicy, issues);
+    }
+  }
+
   const compilation = await compilePolicyAuthorizations({
-    rawAuthorizations,
+    rawAuthorizations: strippedAuthorizations,
     rawSource: intent,
     env: executionEnv,
     toolContext,

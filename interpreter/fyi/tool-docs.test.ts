@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { interpret } from '@interpreter/index';
-import { evaluateFyiTools } from '@interpreter/fyi/tool-docs';
+import {
+  evaluateFyiTools,
+  renderInjectedAuthorizationNotes
+} from '@interpreter/fyi/tool-docs';
+import { resolveNamedOperationMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import type { Environment } from '@interpreter/env/Environment';
+import { normalizePolicyConfig } from '@core/policy/union';
 
 const pathService = new PathService();
 const pathContext = {
@@ -441,6 +446,45 @@ describe('@fyi.tools', () => {
           discoveryCall: '@fyi.known("sendEmail")'
         })
       ]);
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('renders authorization notes as a separate injected block with bridge guidance', async () => {
+    const env = await interpretWithEnv(`
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
+        controlArgs: ["recipient"]
+      }
+    `);
+
+    try {
+      env.setPolicySummary(
+        normalizePolicyConfig({
+          authorizations: {
+            authorizable: {
+              'role:planner': ['send_email']
+            }
+          } as any
+        })!
+      );
+      env.setExeLabels(['llm', 'role:planner']);
+      const entry = resolveNamedOperationMetadata(env, 'send_email');
+      expect(entry).toBeDefined();
+
+      const notes = renderInjectedAuthorizationNotes({
+        env,
+        entries: [entry!]
+      });
+
+      expect(notes).toContain('<authorization_notes>');
+      expect(notes).toContain('Tools you can authorize workers to use (you cannot call these directly):');
+      expect(notes).toContain('See <tool_notes> for tools you can call directly.');
+      expect(notes).toContain('### send_email');
+      expect(notes).toContain('- `recipient` (string, **control arg**)');
+      expect(notes).toContain('To authorize, pass authorization intent to your worker tool:');
+      expect(notes).toContain('{ resolved: { tool_name: { control_arg: handle } } }');
+      expect(notes).toContain('</authorization_notes>');
     } finally {
       env.cleanup();
     }

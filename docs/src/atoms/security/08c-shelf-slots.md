@@ -274,7 +274,7 @@ When an `exe llm` call runs inside a shelf-scoped box, mlld automatically append
 - Readable slots list record type
 - Aliased reads and writes are shown with the name the agent actually sees, such as `@fyi.shelf.brief` or `@fyi.shelf.execution_log`
 - Injection happens even when the LLM call has no `tools`
-- If both notes are present, `<tool_notes>` comes first and `<shelf_notes>` follows it
+- If injected note blocks are present, the order is `<tool_notes>`, then `<authorization_notes>`, then `<shelf_notes>`
 
 This gives workers the exact shelf surface they can read and write without exposing slots outside the scoped box config.
 

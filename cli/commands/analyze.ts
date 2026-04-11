@@ -26,10 +26,12 @@ import { validateExecutableAuthorizationMetadata } from '@interpreter/eval/exe/d
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
 import {
+  stripPolicyAuthorizableField,
   validatePolicyAuthorizations,
   type AuthorizationToolContext,
   type PolicyAuthorizationIssue
 } from '@core/policy/authorizations';
+import { isRoleDisplayModeName } from '@core/records/display-mode';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import * as yaml from 'js-yaml';
@@ -237,6 +239,7 @@ export type AntiPatternWarningCode =
   | 'guard-context-missing-arg'
   | 'policy-operations-unknown-label'
   | 'policy-authorizations-deny-unknown-tool'
+  | 'policy-authorizations-authorizable-unknown-tool'
   | 'policy-label-flow-unknown-target'
   | 'policy-authorizations-empty-entry'
   | 'policy-authorizations-unconstrained-tool'
@@ -464,6 +467,7 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'guard-context-missing-arg',
   'policy-operations-unknown-label',
   'policy-authorizations-deny-unknown-tool',
+  'policy-authorizations-authorizable-unknown-tool',
   'policy-label-flow-unknown-target',
   'policy-authorizations-empty-entry',
   'policy-authorizations-unconstrained-tool'
@@ -2018,26 +2022,105 @@ function extractStaticValue(value: unknown): unknown {
     return result;
   }
 
+  if (typedValue.type === 'ObjectExpression' && typedValue.properties && typeof typedValue.properties === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [entryKey, entryValue] of Object.entries(typedValue.properties as Record<string, unknown>)) {
+      const extracted = extractStaticValue(entryValue);
+      if (extracted !== undefined) {
+        result[entryKey] = extracted;
+      }
+    }
+    return result;
+  }
+
   return undefined;
 }
 
 function getObjectEntryValue(node: unknown, key: string): unknown {
+  if (Array.isArray(node) && node.length === 1) {
+    return getObjectEntryValue(node[0], key);
+  }
   if (!node || typeof node !== 'object') {
     return undefined;
   }
 
   const typedNode = node as Record<string, unknown>;
-  if (typedNode.type !== 'object' || !Array.isArray(typedNode.entries)) {
+  if (typedNode.type === 'object' && Array.isArray(typedNode.entries)) {
+    for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
+      if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
+        return entry.value;
+      }
+    }
     return undefined;
   }
 
-  for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
-    if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
-      return entry.value;
-    }
+  if (typedNode.type === 'ObjectExpression' && typedNode.properties && typeof typedNode.properties === 'object') {
+    return (typedNode.properties as Record<string, unknown>)[key];
   }
 
   return undefined;
+}
+
+function getNodeObjectType(node: unknown): string | undefined {
+  return node && typeof node === 'object'
+    ? (node as Record<string, unknown>).type as string | undefined
+    : undefined;
+}
+
+function unwrapSingleNodeArray(value: unknown): unknown {
+  return Array.isArray(value) && value.length === 1 ? value[0] : value;
+}
+
+function hasStaticAuthorizableIntent(value: unknown): boolean {
+  const unwrapped = unwrapSingleNodeArray(value);
+  if (!isPlainObject(unwrapped)) {
+    return false;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(unwrapped, 'authorizable')) {
+    return true;
+  }
+
+  return isPlainObject(unwrapped.authorizations)
+    && Object.prototype.hasOwnProperty.call(unwrapped.authorizations, 'authorizable');
+}
+
+function getObjectNodeEntries(node: unknown): Array<Record<string, unknown>> {
+  const unwrapped = unwrapSingleNodeArray(node);
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return [];
+  }
+
+  const typedNode = unwrapped as Record<string, unknown>;
+  if (typedNode.type === 'object' && Array.isArray(typedNode.entries)) {
+    return typedNode.entries as Array<Record<string, unknown>>;
+  }
+
+  if (typedNode.type === 'ObjectExpression' && typedNode.properties && typeof typedNode.properties === 'object') {
+    return Object.entries(typedNode.properties as Record<string, unknown>).map(([entryKey, entryValue]) => ({
+      type: 'pair',
+      key: entryKey,
+      value: entryValue
+    }));
+  }
+
+  return [];
+}
+
+function getObjectEntryLocation(node: unknown, key: string): { line?: number; column?: number } {
+  for (const entry of getObjectNodeEntries(node)) {
+    if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
+      return {
+        line: (entry as any)?.location?.start?.line ?? (entry.value as any)?.location?.start?.line,
+        column: (entry as any)?.location?.start?.column ?? (entry.value as any)?.location?.start?.column
+      };
+    }
+  }
+
+  return {
+    line: (unwrapSingleNodeArray(node) as any)?.location?.start?.line,
+    column: (unwrapSingleNodeArray(node) as any)?.location?.start?.column
+  };
 }
 
 interface StaticStringEntry {
@@ -3880,6 +3963,107 @@ function mapPolicyAuthorizationWarningCode(
   }
 }
 
+function normalizeStaticAuthorizableToolName(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+}
+
+function collectStaticAuthorizableDiagnostics(
+  authorizationsNode: unknown,
+  rawAuthorizations: unknown,
+  contextExecutables: ReadonlyMap<string, ValidationContextExecutable>,
+  normalizedDeny: readonly string[] | undefined
+): {
+  errors: AnalysisError[];
+  warnings: AntiPatternWarning[];
+} {
+  const errors: AnalysisError[] = [];
+  const warnings: AntiPatternWarning[] = [];
+
+  if (!isPlainObject(rawAuthorizations) || !Object.prototype.hasOwnProperty.call(rawAuthorizations, 'authorizable')) {
+    return { errors, warnings };
+  }
+
+  const { line, column } = getObjectEntryLocation(authorizationsNode, 'authorizable');
+  const denySet = new Set(
+    (normalizedDeny ?? [])
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      .map(entry => entry.trim())
+  );
+  const rawAuthorizable = rawAuthorizations.authorizable;
+
+  if (!isPlainObject(rawAuthorizable)) {
+    errors.push({
+      message: 'policy.authorizations.authorizable must be an object',
+      line,
+      column
+    });
+    return { errors, warnings };
+  }
+
+  for (const [roleName, rawTools] of Object.entries(rawAuthorizable)) {
+    if (!isRoleDisplayModeName(roleName)) {
+      errors.push({
+        message: `policy.authorizations.authorizable key '${roleName}' must use a role:* label`,
+        line,
+        column
+      });
+    }
+
+    if (!Array.isArray(rawTools)) {
+      errors.push({
+        message: `policy.authorizations.authorizable.${roleName} must be an array`,
+        line,
+        column
+      });
+      continue;
+    }
+
+    for (const rawTool of rawTools) {
+      const toolName = normalizeStaticAuthorizableToolName(rawTool);
+      if (!toolName) {
+        errors.push({
+          message: `policy.authorizations.authorizable.${roleName} must contain executable refs or tool names`,
+          line,
+          column
+        });
+        continue;
+      }
+
+      if (denySet.has(toolName)) {
+        errors.push({
+          message: `Tool '${toolName}' cannot be authorizable for '${roleName}' because it is denied by policy.authorizations.deny`,
+          line,
+          column
+        });
+      }
+
+      if (contextExecutables.size > 0 && !contextExecutables.has(toolName)) {
+        const closestToolName = findClosestKnownToolName(toolName, contextExecutables);
+        warnings.push({
+          code: 'policy-authorizations-authorizable-unknown-tool',
+          message: `policy.authorizations.authorizable.${roleName} references unknown tool '${toolName}'`,
+          line,
+          column,
+          suggestion: closestToolName
+            ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${toolName}".`
+            : `Add validation context that defines "${toolName}", or update policy.authorizations.authorizable.${roleName}.`
+        });
+      }
+    }
+  }
+
+  return { errors, warnings };
+}
+
 function collectPolicyAuthorizationDiagnostics(
   ast: MlldNode[],
   contextExecutables: ReadonlyMap<string, ValidationContextExecutable>
@@ -3892,12 +4076,12 @@ function collectPolicyAuthorizationDiagnostics(
   const seen = new Set<string>();
 
   walkAST(ast, (node) => {
-    if (node.type !== 'object') {
+    if (getNodeObjectType(node) !== 'object' && getNodeObjectType(node) !== 'ObjectExpression') {
       return;
     }
 
     const authorizationsNode = getObjectEntryValue(node, 'authorizations');
-    if (authorizationsNode === undefined || containsDynamicStaticValueReference(authorizationsNode)) {
+    if (authorizationsNode === undefined) {
       return;
     }
 
@@ -3906,10 +4090,33 @@ function collectPolicyAuthorizationDiagnostics(
       return;
     }
 
-    const validation = validatePolicyAuthorizations(rawAuthorizations, contextExecutables, {
-      requireKnownTools: contextExecutables.size > 0,
-      requireControlArgsMetadata: contextExecutables.size > 0
-    });
+    const allowNode = getObjectEntryValue(authorizationsNode, 'allow');
+    const denyEntryNode = getObjectEntryValue(authorizationsNode, 'deny');
+    const hasDynamicCoreAuthorizations =
+      containsDynamicStaticValueReference(allowNode)
+      || containsDynamicStaticValueReference(denyEntryNode);
+
+    const validation = hasDynamicCoreAuthorizations
+      ? { errors: [], warnings: [], normalized: undefined }
+      : validatePolicyAuthorizations(stripPolicyAuthorizableField(rawAuthorizations), contextExecutables, {
+          requireKnownTools: contextExecutables.size > 0,
+          requireControlArgsMetadata: contextExecutables.size > 0
+        });
+    const normalizedDeny =
+      validation.normalized?.deny
+      ?? (
+        isPlainObject(rawAuthorizations) && Array.isArray(rawAuthorizations.deny)
+          ? rawAuthorizations.deny
+            .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+            .map(entry => entry.trim())
+          : undefined
+      );
+    const authorizableDiagnostics = collectStaticAuthorizableDiagnostics(
+      authorizationsNode,
+      rawAuthorizations,
+      contextExecutables,
+      normalizedDeny
+    );
     const line = (authorizationsNode as any)?.location?.start?.line ?? (node as any)?.location?.start?.line;
     const column =
       (authorizationsNode as any)?.location?.start?.column ?? (node as any)?.location?.start?.column;
@@ -3925,6 +4132,15 @@ function collectPolicyAuthorizationDiagnostics(
         line,
         column
       });
+    }
+
+    for (const issue of authorizableDiagnostics.errors) {
+      const key = `error:authorizable:${issue.line ?? 0}:${issue.column ?? 0}:${issue.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      errors.push(issue);
     }
 
     for (const issue of validation.warnings) {
@@ -3945,12 +4161,20 @@ function collectPolicyAuthorizationDiagnostics(
       });
     }
 
+    for (const warning of authorizableDiagnostics.warnings) {
+      const key = `warning:${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      warnings.push(warning);
+    }
+
     if (contextExecutables.size === 0 || !validation.normalized?.deny || validation.normalized.deny.length === 0) {
       return;
     }
 
-    const denyNode = getObjectEntryValue(authorizationsNode, 'deny');
-    const denyEntries = extractStaticStringEntries(denyNode);
+    const denyEntries = extractStaticStringEntries(denyEntryNode);
     for (const deniedTool of validation.normalized.deny) {
       if (contextExecutables.has(deniedTool)) {
         continue;
@@ -3967,8 +4191,8 @@ function collectPolicyAuthorizationDiagnostics(
       warnings.push({
         code: 'policy-authorizations-deny-unknown-tool',
         message: warningMessage,
-        line: location?.line ?? (denyNode as any)?.location?.start?.line ?? line,
-        column: location?.column ?? (denyNode as any)?.location?.start?.column ?? column,
+        line: location?.line ?? (denyEntryNode as any)?.location?.start?.line ?? line,
+        column: location?.column ?? (denyEntryNode as any)?.location?.start?.column ?? column,
         suggestion: closestToolName
           ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${deniedTool}".`
           : `Add validation context that defines "${deniedTool}", or update policy.authorizations.deny.`
@@ -4026,6 +4250,66 @@ function getStaticObjectEntryNode(node: unknown, key: string): unknown {
     return getStaticObjectEntryNode(node[0], key);
   }
   return getObjectEntryValue(node, key);
+}
+
+function applyStaticFieldAccessToNode(
+  node: unknown,
+  fields: readonly unknown[] | undefined
+): unknown {
+  let current = unwrapSingleNodeArray(node);
+
+  for (const field of fields ?? []) {
+    const accessor = readStaticFieldAccessor(field);
+    if (typeof accessor !== 'string') {
+      return undefined;
+    }
+
+    current = getStaticObjectEntryNode(current, accessor);
+    if (current === undefined) {
+      return undefined;
+    }
+  }
+
+  return current;
+}
+
+function getStaticAuthorizableIntentFieldNode(
+  node: unknown,
+  bindings: ReadonlyMap<string, TopLevelStaticBinding>,
+  stack: Set<string> = new Set<string>()
+): unknown {
+  const unwrapped = unwrapSingleNodeArray(node);
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return undefined;
+  }
+
+  const typedNode = unwrapped as Record<string, unknown>;
+  if (typedNode.type === 'VariableReference' && typeof typedNode.identifier === 'string') {
+    if (Array.isArray(typedNode.pipes) && typedNode.pipes.length > 0) {
+      return undefined;
+    }
+
+    const binding = bindings.get(typedNode.identifier);
+    if (!binding || stack.has(typedNode.identifier)) {
+      return undefined;
+    }
+
+    const bindingNode = applyStaticFieldAccessToNode(
+      binding.node,
+      typedNode.fields as readonly unknown[] | undefined
+    );
+    if (bindingNode === undefined) {
+      return undefined;
+    }
+
+    const nextStack = new Set(stack);
+    nextStack.add(typedNode.identifier);
+    return getStaticAuthorizableIntentFieldNode(bindingNode, bindings, nextStack);
+  }
+
+  const authorizationsNode = getStaticObjectEntryNode(unwrapped, 'authorizations');
+  const containerNode = authorizationsNode ?? unwrapped;
+  return getStaticObjectEntryNode(containerNode, 'authorizable');
 }
 
 function readStaticFieldAccessor(field: unknown): string | number | undefined {
@@ -4217,6 +4501,18 @@ function resolveStaticExpression(
         return resolved;
       }
       result[entry.key] = resolved.value;
+    }
+    return { ok: true, value: result };
+  }
+
+  if (typedNode.type === 'ObjectExpression' && typedNode.properties && typeof typedNode.properties === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [entryKey, entryValue] of Object.entries(typedNode.properties as Record<string, unknown>)) {
+      const resolved = resolveStaticExpression(entryValue, bindings, stack, entryKey);
+      if (!resolved.ok) {
+        return resolved;
+      }
+      result[entryKey] = resolved.value;
     }
     return { ok: true, value: result };
   }
@@ -4458,9 +4754,33 @@ function collectPolicyCallDiagnostics(
       toolsSource: classifyPolicyCallSource(toolsArg),
       taskSource: 'unknown'
     };
+    const staticAuthorizableIntentNode = getStaticAuthorizableIntentFieldNode(intentArg, bindings);
+    const invalidAuthorizableIntentMessage =
+      `${callInfoBase.callee} intent cannot include authorizable; declare policy.authorizations.authorizable on the base policy instead`;
 
     const resolvedIntent = resolveStaticExpression(intentArg, bindings);
     if (!resolvedIntent.ok) {
+      if (staticAuthorizableIntentNode !== undefined) {
+        const diagnostics: PolicyCallDiagnostic[] = [
+          {
+            reason: 'invalid_authorization',
+            message: invalidAuthorizableIntentMessage
+          }
+        ];
+
+        policyCalls.push({
+          ...callInfoBase,
+          status: 'analyzed',
+          diagnostics
+        });
+        errors.push({
+          message: invalidAuthorizableIntentMessage,
+          line: (staticAuthorizableIntentNode as any)?.location?.start?.line ?? line,
+          column: (staticAuthorizableIntentNode as any)?.location?.start?.column ?? column
+        });
+        return;
+      }
+
       policyCalls.push({
         ...callInfoBase,
         status: 'skipped',
@@ -4535,6 +4855,14 @@ function collectPolicyCallDiagnostics(
       }
     }
 
+    const intentDiagnostics: PolicyCallDiagnostic[] = [];
+    if (staticAuthorizableIntentNode !== undefined || hasStaticAuthorizableIntent(resolvedIntent.value)) {
+      intentDiagnostics.push({
+        reason: 'invalid_authorization',
+        message: invalidAuthorizableIntentMessage
+      });
+    }
+
     let deniedTools: readonly string[] | undefined;
     const policyNode = getWithClauseField(invocation.withClause, 'policy');
     if (policyNode !== undefined) {
@@ -4560,6 +4888,7 @@ function collectPolicyCallDiagnostics(
     );
 
     const diagnostics = [
+      ...intentDiagnostics,
       ...staticAnalysis.issues.map(issue => toPolicyCallDiagnostic(issue)),
       ...authorizationValidation.errors.map(issue => toPolicyCallDiagnostic(issue))
     ];

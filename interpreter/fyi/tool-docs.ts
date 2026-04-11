@@ -535,7 +535,14 @@ function buildToolSectionLines(
   heading: string,
   entries: readonly EffectiveToolMetadata[]
 ): string[] {
-  const lines: string[] = [`${heading}:`, ''];
+  return [`${heading}:`, '', ...buildToolEntryLines(env, entries)];
+}
+
+function buildToolEntryLines(
+  env: Environment,
+  entries: readonly EffectiveToolMetadata[]
+): string[] {
+  const lines: string[] = [];
 
   for (const [index, entry] of entries.entries()) {
     if (index > 0) {
@@ -615,7 +622,27 @@ function buildTextLines(options: {
   return lines;
 }
 
-function wrapToolNotesBlock(lines: readonly string[]): string | undefined {
+function buildAuthorizationTextLines(options: {
+  env: Environment;
+  entries: readonly EffectiveToolMetadata[];
+}): string[] {
+  const entries = options.entries.filter(entry => entry.name !== 'known');
+  if (entries.length === 0) {
+    return [];
+  }
+
+  return [
+    'Tools you can authorize workers to use (you cannot call these directly):',
+    'See <tool_notes> for tools you can call directly.',
+    '',
+    ...buildToolEntryLines(options.env, entries),
+    '',
+    'To authorize, pass authorization intent to your worker tool:',
+    '  { resolved: { tool_name: { control_arg: handle } } }'
+  ];
+}
+
+function wrapNotesBlock(tagName: string, lines: readonly string[]): string | undefined {
   const normalized = lines.map(line => line.trimEnd());
   while (normalized.length > 0 && normalized[0].trim().length === 0) {
     normalized.shift();
@@ -628,7 +655,7 @@ function wrapToolNotesBlock(lines: readonly string[]): string | undefined {
     return undefined;
   }
 
-  return `<tool_notes>\n${normalized.join('\n')}\n</tool_notes>`;
+  return `<${tagName}>\n${normalized.join('\n')}\n</${tagName}>`;
 }
 
 function joinAnnotationLines(lines: readonly string[]): string | undefined {
@@ -795,7 +822,21 @@ export function renderInjectedToolNotes(options: {
     entries,
     includeAuthIntentShape: options.includeAuthIntentShape === true
   });
-  return wrapToolNotesBlock(lines);
+  return wrapNotesBlock('tool_notes', lines);
+}
+
+export function renderInjectedAuthorizationNotes(options: {
+  env: Environment;
+  entries: readonly EffectiveToolMetadata[];
+}): string | undefined {
+  const entries = dedupeToolMetadata(options.entries);
+  return wrapNotesBlock(
+    'authorization_notes',
+    buildAuthorizationTextLines({
+      env: options.env,
+      entries
+    })
+  );
 }
 
 export function renderToolDescriptionNotes(options: {
@@ -811,14 +852,21 @@ export function appendToolNotesToSystemPrompt(
   systemPrompt: unknown,
   toolNotes: string | undefined
 ): string | undefined {
-  if (!toolNotes) {
+  return appendInjectedNotesToSystemPrompt(systemPrompt, toolNotes);
+}
+
+export function appendInjectedNotesToSystemPrompt(
+  systemPrompt: unknown,
+  notesBlock: string | undefined
+): string | undefined {
+  if (!notesBlock) {
     return typeof systemPrompt === 'string' ? systemPrompt : undefined;
   }
 
   const base = typeof systemPrompt === 'string' ? systemPrompt.trimEnd() : '';
   if (base.length === 0) {
-    return toolNotes;
+    return notesBlock;
   }
 
-  return `${base}\n\n${toolNotes}`;
+  return `${base}\n\n${notesBlock}`;
 }

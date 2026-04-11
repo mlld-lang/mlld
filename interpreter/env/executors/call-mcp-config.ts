@@ -3,6 +3,7 @@ import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { getPolicyAuthorizableToolsForRole } from '@core/policy/authorizations';
 import type { Environment } from '@interpreter/env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
@@ -19,11 +20,15 @@ import {
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import {
   resolveEffectiveToolMetadata,
+  resolveNamedOperationMetadata,
   resolveToolCollectionEntryMetadata,
   shouldAutoExposeFyiKnown,
   type EffectiveToolMetadata
 } from '@interpreter/eval/exec/tool-metadata';
-import { renderInjectedToolNotes } from '@interpreter/fyi/tool-docs';
+import {
+  renderInjectedAuthorizationNotes,
+  renderInjectedToolNotes
+} from '@interpreter/fyi/tool-docs';
 import { createAutoProvisionedShelveExecutable } from '@interpreter/shelf/runtime';
 import { traceHandleReleased } from '@interpreter/tracing/events';
 import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
@@ -103,6 +108,8 @@ export interface CallMcpConfig {
   readonly availableTools: readonly AvailableToolDescriptor[];
   readonly toolMetadata?: readonly EffectiveToolMetadata[];
   readonly toolNotes?: string;
+  readonly authorizationRole?: string;
+  readonly authorizationNotes?: string;
   readonly inBox: boolean;
   cleanup(): Promise<void>;
 }
@@ -359,6 +366,41 @@ function toFunctionToolDisplayName(mcpName: string): string {
 
 function toVfsToolDisplayName(toolName: string): string {
   return `mcp__${VFS_MCP_SERVER_NAME}__${toolName}`;
+}
+
+function resolveAuthorizationNoteEntries(env: Environment): EffectiveToolMetadata[] {
+  const authorizationRole = env.getCurrentAuthorizationRole();
+  const authorizableToolNames = getPolicyAuthorizableToolsForRole(
+    env.getPolicySummary()?.authorizable,
+    authorizationRole
+  );
+  if (!authorizableToolNames || authorizableToolNames.length === 0) {
+    return [];
+  }
+
+  const resolved: EffectiveToolMetadata[] = [];
+  const seen = new Set<string>();
+
+  for (const toolName of authorizableToolNames) {
+    const candidates = uniquePreservingOrder([toolName, mlldNameToMCPName(toolName)]);
+    for (const candidate of candidates) {
+      const metadata = resolveNamedOperationMetadata(env, candidate);
+      if (!metadata) {
+        continue;
+      }
+
+      const mcpName = mlldNameToMCPName(metadata.name);
+      const entry = withDisplayName(metadata, toFunctionToolDisplayName(mcpName));
+      const dedupeKey = `${entry.name}::${entry.displayName ?? ''}`;
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        resolved.push(entry);
+      }
+      break;
+    }
+  }
+
+  return resolved;
 }
 
 function looksLikeToolCollection(value: unknown): value is ToolCollection {
@@ -925,7 +967,29 @@ function buildBuiltinToolMetadata(
 }
 
 export async function createCallMcpConfig(options: CallMcpConfigOptions): Promise<CallMcpConfig> {
-  const { builtinTools, functionTools } = resolveToolInput(options.tools, options.env);
+  const policyAllowedToolNames = options.env.getPolicySummary()?.authorizations?.allow;
+  const policyToolScope =
+    policyAllowedToolNames
+      ? new Set(
+          [...Object.keys(policyAllowedToolNames), 'known']
+            .map(name => name.trim().toLowerCase())
+            .filter(Boolean)
+        )
+      : undefined;
+  let { builtinTools, functionTools } = resolveToolInput(options.tools, options.env);
+  builtinTools = builtinTools.filter(toolName => options.env.isToolAllowed(toolName, toolName));
+  functionTools = functionTools.filter(tool => {
+    const candidates = uniquePreservingOrder([
+      tool.csvName,
+      tool.mcpName,
+      tool.executable.name
+    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0));
+    const allowedByEnvScope = candidates.some(candidate => options.env.isToolAllowed(candidate, tool.mcpName));
+    const allowedByPolicyScope =
+      !policyToolScope
+      || candidates.some(candidate => policyToolScope.has(candidate.trim().toLowerCase()));
+    return allowedByEnvScope && allowedByPolicyScope;
+  });
   const implicitKnownTool = resolveImplicitFyiKnownTool(options.env);
   const functionToolMetadata = functionTools.map(tool => tool.metadata);
   if (
@@ -982,6 +1046,11 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     ...builtinToolMetadata,
     ...surfacedFunctionToolMetadata
   ];
+  const authorizationRole = options.env.getCurrentAuthorizationRole();
+  const authorizationNotes = renderInjectedAuthorizationNotes({
+    env: options.env,
+    entries: resolveAuthorizationNoteEntries(options.env)
+  });
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),
     ...functionTools.map(tool => tool.mcpName).filter(Boolean)
@@ -1031,6 +1100,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       sessionId,
       availableTools,
       toolMetadata,
+      authorizationRole,
+      authorizationNotes,
       conversationDescriptor: options.conversationDescriptor
     });
     cleanupFns.push(functionBridge.cleanup);
@@ -1067,6 +1138,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
       availableTools,
       toolMetadata,
       toolNotes,
+      authorizationRole,
+      authorizationNotes,
       inBox,
       async cleanup(): Promise<void> {
         if (cleaned) {
@@ -1115,6 +1188,8 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
     availableTools,
     toolMetadata,
     toolNotes,
+    authorizationRole,
+    authorizationNotes,
     inBox,
     cleanup
   };

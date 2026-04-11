@@ -7,6 +7,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { accessField } from '@interpreter/utils/field-access';
 import { normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
+import { normalizePolicyConfig } from '@core/policy/union';
 
 async function createEnvironment(source: string, filePath = '/main.mld'): Promise<{
   env: Environment;
@@ -161,6 +162,72 @@ describe('shelf notes injection', () => {
       expect(output).toContain('| @fyi.shelf.outreach.selected | contact? | replace | from recipients |');
       expect(output).toContain('| @fyi.shelf.brief | text |');
       expect(output).toContain('Visible record fields under the current display:');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('injects authorization notes between tool notes and shelf notes', async () => {
+    const { env, effects } = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @outreach = {
+  recipients: contact[],
+  selected: contact? from recipients
+}
+/var @taskBrief = "Pick one recipient"
+/exe tool:r @searchContacts(query) = "Ada"
+/exe tool:w @sendEmail(recipient, subject, body) = "sent" with { controlArgs: ["recipient"] }
+/var tools @toolList = {
+  search_contacts: {
+    mlld: @searchContacts,
+    expose: ["query"]
+  }
+}
+/exe llm @agent(prompt, config) = js { return config.system ?? ""; }
+`);
+
+    env.setPolicySummary(
+      normalizePolicyConfig({
+        authorizations: {
+          authorizable: {
+            'role:planner': ['send_email']
+          }
+        } as any
+      })!
+    );
+
+    try {
+      const outreach = env.getVariable('outreach');
+      const taskBrief = env.getVariable('taskBrief');
+      if (!outreach || !taskBrief) {
+        throw new Error('Expected shelf and alias variables to be defined');
+      }
+
+      const recipientsRef = await accessField(outreach, { type: 'field', value: 'recipients' } as any, { env });
+      const selectedRef = await accessField(outreach, { type: 'field', value: 'selected' } as any, { env });
+      const scopedEnv = env.createChild();
+      const scope = await normalizeScopedShelfConfig({ read: [recipientsRef], write: [selectedRef] }, env);
+      scope.readAliases = { brief: taskBrief };
+      scopedEnv.setExeLabels(['llm', 'role:planner']);
+      scopedEnv.setScopedEnvironmentConfig({ shelf: scope, display: 'role:worker' } as any);
+
+      const output = await evaluateToOutput(
+        '/show @agent("Send the message", { tools: @toolList, system: "User system prompt" })',
+        scopedEnv,
+        effects
+      );
+
+      expect(output).toContain('User system prompt\n\n<tool_notes>');
+      expect(output).toContain('</tool_notes>\n\n<authorization_notes>');
+      expect(output).toContain('</authorization_notes>\n\n<shelf_notes>');
+      expect(output.indexOf('<tool_notes>')).toBeGreaterThan(output.indexOf('User system prompt'));
+      expect(output.indexOf('<authorization_notes>')).toBeGreaterThan(output.indexOf('<tool_notes>'));
+      expect(output.indexOf('<shelf_notes>')).toBeGreaterThan(output.indexOf('<authorization_notes>'));
+      expect(output).toContain('### mcp__mlld_tools__search_contacts');
+      expect(output).toContain('### mcp__mlld_tools__send_email');
     } finally {
       env.cleanup();
     }

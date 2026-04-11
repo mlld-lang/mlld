@@ -17,7 +17,7 @@ An LLM agent that both decides and executes has one shot to get everything right
 
 Splitting creates a security boundary:
 
-- The **planner** runs with read tools that return projected handles, looks up trusted data, and produces an authorization bundle specifying exactly which tools and argument values are allowed
+- The **planner** runs with callable read/dispatch tools, sees projected handles, and receives separate authorization docs for any write tools its role may authorize
 - The **worker** runs under that authorization, can read untrusted content, but can only call tools the planner pre-approved with pre-approved values
 
 The worker can be tricked into *wanting* to send to `attacker@evil.com`. It can't actually do it because the planner never authorized that recipient.
@@ -100,7 +100,20 @@ The planner looks up contacts and receives a projected result with `ref` handles
 }
 ```
 
-The planner produces a bucketed authorization intent, organized by proof source:
+Base policy declares which planner role can authorize which write tools:
+
+```mlld
+policy @workspace = {
+  authorizations: {
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@sendEmail]
+    }
+  }
+}
+```
+
+The planner then produces a bucketed authorization intent, organized by proof source:
 
 ```json
 {
@@ -156,7 +169,7 @@ Return JSON with:
 
 `@toolDocs` renders each tool with its parameter list, control args flagged, and read/write classification derived from the active policy. The `includeAuthIntentShape: true` option appends a description of mlld's bucketed intent shape (`resolved` / `known` / `allow`) so the planner knows the structure `@policy.build` expects.
 
-`@toolDocs` and the `<tool_notes>` block that mlld auto-injects into `exe llm` calls share the same base rendering and classification path. Use `@toolDocs` when you're assembling a prompt template by hand and want explicit control over options such as `includeAuthIntentShape: true`; let the auto-injection handle the default text form when you're calling an `exe llm` such as `@claude(...)` with tools listed in `tools:`. The per-tool surface stays aligned, but explicit `@toolDocs` can include extra opt-in sections that injected notes do not add by default.
+`@toolDocs`, `<tool_notes>`, and `<authorization_notes>` share the same base rendering and classification path. Use `@toolDocs` when you're assembling a prompt template by hand and want explicit control over options such as `includeAuthIntentShape: true`. Let auto-injection handle the default text form when you're calling an `exe llm` such as `@claude(...)`: `<tool_notes>` covers callable tools, `<authorization_notes>` covers tools the current role can authorize but not call directly.
 
 ### Worker phase
 
@@ -169,7 +182,10 @@ var @base = {
   },
   operations: { "exfil:send": ["exfil:send"] },
   authorizations: {
-    deny: ["update_password"]
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@sendEmail]
+    }
   }
 }
 ```
@@ -267,7 +283,7 @@ var @plan = @claude(@prompt, { tools: @plannerTools }) with { display: "role:pla
 ```
 
 Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
-If no explicit display is set, a matching llm label such as `role:planner` also selects the corresponding display key by default.
+If no explicit display is set, a matching llm label such as `role:planner` also selects the corresponding display key by default. That display default does not change authorization identity: the exe's `role:*` label is who you are for `authorizable`, while `with { display }` only filters what you see.
 
 Worker sees subject and body (its job), from is masked. Planner sees from and message_id as ref, sees needs_reply, doesn't see subject or body (injection surfaces omitted).
 

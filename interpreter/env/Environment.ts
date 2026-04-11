@@ -178,6 +178,7 @@ import {
   isStructuredValue
 } from '@interpreter/utils/structured-value';
 import {
+  findRoleDisplayMode,
   resolveDisplaySelection,
   resolveRecordFieldDisplayMode
 } from '@core/records/display-mode';
@@ -1265,6 +1266,15 @@ export class Environment
     }
 
     return selection.modeName ?? null;
+  }
+
+  getCurrentAuthorizationRole(): string | undefined {
+    const llmAuthorizationRole = this.getLlmToolConfig()?.authorizationRole;
+    return findRoleDisplayMode(
+      llmAuthorizationRole
+        ? [llmAuthorizationRole]
+        : this.getExeLabels() ?? this.getEnclosingExeLabels()
+    );
   }
 
   private getCurrentLlmResumeContext(): Record<string, unknown> | null {

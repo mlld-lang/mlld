@@ -8,42 +8,48 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
-updated: 2026-04-08
+updated: 2026-04-10
 ---
 
-The `authorizations` section in policy declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. The runtime compiles these into internal privileged guards that enforce a default-deny envelope.
+The `authorizations` section has two layers:
 
-Control arg values in authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, hand-built `with { policy }` hard-fails.
+- Base policy declares `authorizations.authorizable` so a role such as `role:planner` can authorize a specific set of tools.
+- Runtime task policy carries compiled `authorizations.allow` / `authorizations.deny` constraints that the worker actually runs under.
+
+Control arg values in runtime authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, and direct runtime policy fragments still fail closed.
 
 ```mlld
 var known @approvedRecipient = "mark@example.com"
 
-policy @base = {
+policy @workspace = {
   defaults: { rules: ["no-send-to-unknown", "no-destroy-unknown"] },
   operations: {
     "exfil:send": ["tool:w:send_email", "tool:w:share_file"],
     "destructive:targeted": ["tool:w:delete_file"]
-  }
-}
-
-var @taskPolicy = {
+  },
   authorizations: {
-    allow: {
-      send_email: {
-        args: {
-          recipients: [@approvedRecipient]
-        }
-      },
-      create_file: true
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@send_email, @create_file]
     }
   }
 }
 
-var @result = @worker(@prompt) with { policy: @taskPolicy }
+var @built = @policy.build({
+  known: {
+    send_email: {
+      recipients: [@approvedRecipient]
+    }
+  },
+  allow: {
+    create_file: true
+  }
+}, @agentTools) with { policy: @workspace }
+
+var @result = @worker(@prompt) with { policy: @built.policy }
 ```
 
-The `with { policy }` merge combines `@taskPolicy` with the ambient `@base` policy. The merged config activates authorization enforcement for the call chain.
-Policy compilation preserves proof-bearing structured leaves while normalizing the policy. That includes policy fragments coming from variables, field access, imported modules, and `{ ...@basePolicy }` object-spread composition.
+The framework reads `authorizable` from the base policy, validates planner intent with `@policy.build`, and applies the returned runtime policy to the worker call. Policy compilation preserves proof-bearing structured leaves while normalizing the runtime policy. That includes policy fragments coming from variables, field access, imported modules, and `{ ...@basePolicy }` object-spread composition.
 
 ## Tool Metadata
 
@@ -80,6 +86,30 @@ var tools @agentTools = {
 `controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
 
 Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
+
+## Role-based authorization permissions
+
+`authorizations.authorizable` is developer-declared base policy metadata. It decides which exe role can authorize which tools:
+
+```mlld
+policy @workspace = {
+  authorizations: {
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@send_email, @create_file]
+    }
+  }
+}
+```
+
+Rules:
+
+- Keys must use the exact `role:*` label form. No bare `planner` alias.
+- Values are executable refs or surfaced tool names for tools the role may authorize.
+- `authorizations.deny` is absolute. A denied tool cannot also be authorizable.
+- `authorizable` belongs only on the base policy. It is not mergeable runtime policy state.
+
+Authorization identity comes from the caller exe's `role:*` label, not from `with { display }`. Display can shape projected values and tool docs, but it does not change which `authorizable` entry applies.
 
 ## Entries
 
@@ -327,7 +357,7 @@ When debugging "why was this dispatch denied," the policy denial hint includes a
 
 ## Deny list
 
-`authorizations.deny` prevents specific tools from ever being planner-authorized:
+`authorizations.deny` prevents specific tools from ever being authorized, even if a role lists them under `authorizable`:
 
 ```mlld
 policy @base = {
@@ -398,7 +428,7 @@ show @writeTools["create_draft"](@step.args) with { policy: @built.policy }
 
 Imported `var tools` collections are valid inputs here. Plain arrays of executable refs are also accepted and auto-normalized by executable name. The builder uses stored authorization metadata first when it exists, so callers do not need to redundantly import every underlying executable just to build or validate auth.
 
-The builder reads the active policy from the environment (deny list, rules, operations). It returns `{ policy, valid, issues, report }`:
+The builder reads the active policy from the environment (deny list, rules, operations). Framework code checks `authorizable` before calling the builder and strips any stray `authorizable` field from runtime intent so the builder contract stays strict. It returns `{ policy, valid, issues, report }`:
 
 - `policy` — valid auth fragment, ready for `with { policy }`
 - `valid` — boolean
@@ -421,6 +451,7 @@ What the builder checks:
 - `resolved` and `known` on the same tool+arg → `known` dropped (`superseded_by_resolved`)
 - Mixed flat + bucketed top-level fields → rejected (`invalid_authorization`)
 - Unrecognized bucketed top-level fields → rejected (`invalid_authorization`)
+- `authorizable` in runtime intent → rejected (`invalid_authorization`)
 - Non-control args → silently stripped
 
 Builder and validator results are additive:
@@ -473,13 +504,15 @@ Three buckets:
 - **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
 - **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has `controlArgs`, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
 
+`authorizable` is not a fourth bucket. It stays on the developer-owned base policy and never belongs in planner-produced runtime intent.
+
 The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
 **Where user-typed payload values go.** User-provided literal values — update fields like `new_start_time: "14:00"`, payload values like `subject: "Q4 Review"` — belong in `known`, keyed by the tool they satisfy. If the user's task is "reschedule my 2pm meeting to 3pm," then `event_id: h_abc` (from a prior resolve phase) goes in `resolved.reschedule_calendar_event.event_id` and `new_start_time: "15:00"` (from the user's task text) goes in `known.reschedule_calendar_event.new_start_time`. The runtime validates both buckets against the tool's `controlArgs` / `updateArgs` / `exactPayloadArgs` metadata.
 
 If a planner produces a request with separate `authorizations` and `literal_inputs` (or equivalent) fields, merge `literal_inputs` into the `known` bucket before calling `@policy.build`. Without this merge, the builder sees control args (via `resolved`) but no payload values, and the `updateArgs` check fails with `no_update_fields`. The fix is not to read tool metadata in orchestration code and synthesize a richer intent — it's to put the user's literal values in the right bucket. `known` is the primitive for uninfluenced user-provided payloads; use it.
 
-The builder also accepts flat and nested intent shapes for backward compatibility:
+The builder also accepts flat and nested runtime intent shapes:
 
 ```json
 { "send_email": { "recipients": "h_2l5r36" }, "create_file": true }
@@ -505,16 +538,17 @@ guard after @validateAuth for op:named:plan = when [
 
 The planner prompt is: "Put handle values or direct fact-bearing tool results in `resolved`. Put values the user explicitly provided in `known`. Put tool-level authorizations in `allow`."
 
-## Direct planner use
+## Framework-managed dispatch
 
-`with { policy }` still works for hand-built auth. The same proof rules apply — proofless control args are hard-rejected at compilation:
+The supported planner flow is: base policy declares `authorizable`, planner emits runtime authorization intent, framework validates it with `@policy.build`, then the worker runs with the compiled policy:
 
 ```mlld
 var @plannerOutput = @planner(@task) | @parse
-var @result = @agent(@prompt) with { policy: @plannerOutput }
+var @built = @policy.build(@plannerOutput.authorizations, @writeTools) with { policy: @workspace }
+var @result = @worker(@prompt) with { policy: @built.policy }
 ```
 
-The planner's output should contain only `authorizations` — not `defaults`, `rules`, `locked`, `labels`, `operations`, or other policy sections. Those are developer-controlled.
+The planner's output should contain only runtime authorization intent — not `authorizable`, `defaults`, `rules`, `locked`, `labels`, `operations`, or other developer-controlled policy sections.
 
 ## Validation
 

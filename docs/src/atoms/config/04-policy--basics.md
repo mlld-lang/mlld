@@ -101,7 +101,7 @@ guard before op:run = when [
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
 
-**`authorizations`** declares which `tool:w` operations are authorized for a task, with per-argument constraints on control args. It compiles to internal privileged guards that enforce a default-deny envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the executable's `with { controlArgs: [...] }` declaration, optionally tightened by an active tool collection. Use this for planner-authorized agent execution: the planner produces a JSON fragment containing `authorizations`, and the host injects it via `with { policy }`. Invalid authorization fragments fail closed during activation.
+**`authorizations`** has two roles. Base policy uses `authorizations.authorizable` to declare which exe roles can authorize which tools. Runtime policy uses `authorizations.allow` / `authorizations.deny` to enforce the compiled per-task envelope. In the current phase this applies only to `tool:w`, and trusted control-arg metadata comes from the executable's `with { controlArgs: [...] }` declaration, optionally tightened by an active tool collection. The planner produces bucketed authorization intent for `@policy.build`; the framework checks `authorizable`, compiles the intent, and applies the returned policy to the worker call. Invalid authorization intent fails closed during activation.
 
 Pinned planner values can also carry attestation requirements. If a planner pins a `known` recipient, the matching authorization can satisfy inherited positive checks. Pinning the same raw literal without that attestation is not enough to bypass rules such as `no-send-to-unknown`.
 
@@ -116,6 +116,19 @@ var @taskPolicy = {
 }
 
 var @result = @worker(@prompt) with { policy: @taskPolicy }
+```
+
+Developer-declared base policy permissions live alongside runtime deny rules:
+
+```mlld
+policy @workspace = {
+  authorizations: {
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@send_email, @create_file]
+    }
+  }
+}
 ```
 
 See `policy-authorizations` for full syntax including control-arg enforcement and validation.

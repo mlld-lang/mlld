@@ -119,7 +119,10 @@ import {
   resolveEffectiveToolMetadata
 } from './exec/tool-metadata';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
-import { appendToolNotesToSystemPrompt } from '@interpreter/fyi/tool-docs';
+import {
+  appendInjectedNotesToSystemPrompt,
+  appendToolNotesToSystemPrompt
+} from '@interpreter/fyi/tool-docs';
 import {
   appendShelfNotesToSystemPrompt,
   renderInjectedShelfNotes
@@ -3293,7 +3296,11 @@ async function evaluateExecInvocationInternal(
           disableAutoProvisionedShelve: isLlmResumeContinuation
         });
         const previousSystem = nextConfig.system;
-        const nextSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+        const toolNotesSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
+        const nextSystem = appendInjectedNotesToSystemPrompt(
+          toolNotesSystem,
+          callConfig.authorizationNotes
+        );
         if (nextSystem !== undefined) {
           nextConfig.system = nextSystem;
           didUpdateConfigArg ||= nextSystem !== previousSystem;

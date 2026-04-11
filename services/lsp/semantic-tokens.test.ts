@@ -276,6 +276,26 @@ describe('Semantic Tokens', () => {
         tokenType: 'property'
       });
     });
+
+    it('should highlight authorizable policy keys in plain objects', async () => {
+      const code = `/var @policy = {
+  authorizations: {
+    authorizable: {
+      role:planner: [@sendEmail]
+    }
+  }
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'authorizable',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'role:planner',
+        tokenType: 'property'
+      });
+    });
   });
   
   describe('Template Contexts', () => {

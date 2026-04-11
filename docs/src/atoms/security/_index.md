@@ -135,19 +135,23 @@ Built-in send/destroy rules use the same model: label a send operation as `exfil
 
 ## Authorizations
 
-Authorizations declare which `tool:w` operations are authorized for a specific task, with per-argument constraints on control args. A planning LLM produces a JSON authorization fragment; the runtime validates it, merges it via `with { policy }`, and enforces it by compiling internal privileged guards.
+Authorizations have two layers. Base policy declares `authorizations.authorizable` so a role such as `role:planner` can authorize a specific set of write tools. Per-task runtime policy carries compiled `authorizations.allow` / `authorizations.deny` constraints. The planner produces bucketed authorization intent, the framework checks it against `authorizable`, calls `@policy.build`, and applies the compiled policy to the worker environment.
 
 ```mlld
-var @taskPolicy = {
+policy @workspace = {
   authorizations: {
-    allow: {
-      send_email: { args: { recipients: ["mark@example.com"] } },
-      create_file: true
+    deny: ["update_password"],
+    authorizable: {
+      role:planner: [@send_email, @create_file]
     }
   }
 }
 
-var @result = @agent(@prompt) with { policy: @taskPolicy }
+var @built = @policy.build({
+  resolved: { send_email: { recipients: "h_a7x9k2" } }
+}, @writeTools) with { policy: @workspace }
+
+var @result = @worker(@prompt) with { policy: @built.policy }
 ```
 
 **Default-deny:** `tool:w` operations not listed in `allow` are denied.
@@ -158,7 +162,7 @@ var @result = @agent(@prompt) with { policy: @taskPolicy }
 
 **Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. Planner-pinned approved values can carry `known` attestations into that override path; raw literals cannot. `locked: true` still prevents all overrides.
 
-**Planner contract:** The planner should produce only `{ authorizations: { ... } }`. The host enforces that restriction before injection. Invalid authorization fragments fail closed during `with { policy }` activation, and no partial authorization layer is installed.
+**Planner contract:** The planner produces bucketed authorization intent only. It must not produce `authorizable`, `defaults`, `rules`, `locked`, `labels`, or other developer-owned policy sections. `authorizable` stays in the base policy; runtime intent goes through `@policy.build`.
 
 **Atoms:** `policy-authorizations` (full syntax and control-arg enforcement)
 
