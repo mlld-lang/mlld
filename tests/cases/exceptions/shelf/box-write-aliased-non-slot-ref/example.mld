@@ -1,0 +1,21 @@
+record @contact = {
+  key: id,
+  facts: [id: string]
+}
+
+shelf @workspace = {
+  selected: contact?
+}
+
+exe @fail() = [
+  let @notSlot = { nope: true }
+  box {
+    shelf: {
+      write: [@notSlot as selected]
+    }
+  } [
+    => null
+  ]
+]
+
+@fail()

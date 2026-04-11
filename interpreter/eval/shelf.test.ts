@@ -392,6 +392,111 @@ describe('shelf runtime', () => {
     expect(asData(selectedId)).toBe('c_1');
   });
 
+  it('supports let-bound string-keyed slot refs in aliased box write scope', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @workspace = {
+  execution_log: contact[],
+  selected: contact? from execution_log
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/exe @writeSelected(slotName) = [
+  let @logSlot = @workspace.execution_log
+  let @selectedSlot = @workspace[@slotName]
+  let @entry = @emitContact("c_1", "Mark")
+  box {
+    shelf: {
+      write: [@logSlot as execution_log, @selectedSlot as selected]
+    }
+  } [
+    @shelf.write(@fyi.shelf.execution_log, @entry)
+    @shelf.write(@fyi.shelf.selected, @entry)
+  ]
+]
+@writeSelected("selected")
+`);
+
+    const selected = env.readShelfSlot('workspace', 'selected');
+    const selectedId = await accessField(selected, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(selectedId)).toBe('c_1');
+
+    const executionLog = env.readShelfSlot('workspace', 'execution_log') as unknown[];
+    expect(executionLog).toHaveLength(1);
+  });
+
+  it('supports let-bound field-access slot refs in aliased box write scope', async () => {
+    const env = await createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+/shelf @workspace = {
+  execution_log: contact[],
+  archived: contact? from execution_log
+}
+/exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+/exe @writeArchived() = [
+  let @logSlot = @workspace.execution_log
+  let @archivedSlot = @workspace.archived
+  let @entry = @emitContact("c_2", "Ada")
+  box {
+    shelf: {
+      write: [@logSlot as execution_log, @archivedSlot as archived]
+    }
+  } [
+    @shelf.write(@fyi.shelf.execution_log, @entry)
+    @shelf.write(@fyi.shelf.archived, @entry)
+  ]
+]
+@writeArchived()
+`);
+
+    const archived = env.readShelfSlot('workspace', 'archived');
+    const archivedId = await accessField(archived, { type: 'field', value: 'id' } as any, { env });
+    expect(asData(archivedId)).toBe('c_2');
+
+    const executionLog = env.readShelfSlot('workspace', 'execution_log') as unknown[];
+    expect(executionLog).toHaveLength(1);
+  });
+
+  it('rejects non-slot values in aliased box write scope', async () => {
+    await expect(createEnvironment(`
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+/shelf @workspace = {
+  selected: contact?
+}
+/exe @fail() = [
+  let @notSlot = { nope: true }
+  box {
+    shelf: {
+      write: [@notSlot as selected]
+    }
+  } [
+    => null
+  ]
+]
+@fail()
+`)).rejects.toThrow('box.shelf.write aliases must resolve to shelf slot references');
+  });
+
   it('exposes declared slot names and slot refs through shelf.mx introspection', async () => {
     const env = await createEnvironment(`
 /record @contact = {

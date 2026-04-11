@@ -94,7 +94,7 @@ box {
 ]
 ```
 
-`read` and `write` accept the runtime shapes described in `shelf-slots`: arrays of slot refs, aliased entries, `{ name, ref }` pairs, or object maps whose keys become aliases. The older inline literal form still works.
+`read` and `write` accept the runtime shapes described in `shelf-slots`: arrays of slot refs, aliased entries, `{ name, ref }` pairs, or object maps whose keys become aliases. Variables that hold live slot refs also work here, including refs selected through field access or dynamic keyed lookup. The older inline literal form still works, and write aliases still require real slot refs at runtime.
 
 **Advanced: MCP configuration via `@mcpConfig()`:**
 

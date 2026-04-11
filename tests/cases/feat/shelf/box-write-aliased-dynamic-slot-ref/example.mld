@@ -1,0 +1,54 @@
+record @contact = {
+  key: id,
+  facts: [id: string, email: string, name: string]
+}
+
+shelf @workspace = {
+  execution_log: contact[],
+  selected: contact? from execution_log,
+  archived: contact? from execution_log
+}
+
+exe @emitContact(id, name) = js {
+  return {
+    id,
+    email: id + "@example.com",
+    name
+  };
+} => contact
+
+exe @writeDynamic(slotName, entry) = [
+  let @logSlot = @workspace.execution_log
+  let @targetSlot = @workspace[@slotName]
+  box {
+    shelf: {
+      write: [@logSlot as execution_log, @targetSlot as selected]
+    }
+  } [
+    @shelf.write(@fyi.shelf.execution_log, @entry)
+    @shelf.write(@fyi.shelf.selected, @entry)
+  ]
+]
+
+exe @writeField(entry) = [
+  let @logSlot = @workspace.execution_log
+  let @targetSlot = @workspace.archived
+  box {
+    shelf: {
+      write: [@logSlot as execution_log, @targetSlot as archived]
+    }
+  } [
+    @shelf.write(@fyi.shelf.execution_log, @entry)
+    @shelf.write(@fyi.shelf.archived, @entry)
+  ]
+]
+
+var @first = @emitContact("c_1", "Mark")
+var @second = @emitContact("c_2", "Ada")
+
+@writeDynamic("selected", @first)
+@writeField(@second)
+
+show @shelf.read(@workspace.selected).id
+show @shelf.read(@workspace.archived).id
+show @shelf.read(@workspace.execution_log).length

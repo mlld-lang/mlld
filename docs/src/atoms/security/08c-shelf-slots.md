@@ -264,7 +264,9 @@ In the direct array form, `as <alias>` is the explicit way to rename a slot for 
 
 `<shelf_notes>` renders the alias names, not the concrete shelf paths, so the agent's view of the surface stays consistent across different invocations of the wrapper.
 
-Slot refs are first-class runtime values. Pass them around as exe parameters, store them in objects, dispatch them through collection lookups — anywhere a static slot ref would work, a variable holding a slot ref also works. For whole-shelf wrappers, use `@someShelf.mx.slots` or `@someShelf.mx.slotEntries` to inspect the declared surface and build the box scope value programmatically.
+Slot refs are first-class runtime values. Pass them around as exe parameters, store them in objects, dispatch them through collection lookups — anywhere a static slot ref would work, a variable holding a slot ref also works. That includes `box.shelf.write`: `let @slot = @workspace[@slotName]` and `let @slot = @workspace.selected` are both valid aliased write targets as long as the value is still a real slot ref at runtime. Non-slot values do not become writable just because they are aliased.
+
+For whole-shelf wrappers, use `@someShelf.mx.slots` or `@someShelf.mx.slotEntries` to inspect the declared surface and build the box scope value programmatically.
 
 ## Agent system notes
 

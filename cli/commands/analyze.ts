@@ -2816,6 +2816,14 @@ function extractDirectShelfSlotRef(
   };
 }
 
+function isShelfScopeValueReference(node: unknown): node is VariableReferenceNode {
+  return Boolean(
+    node &&
+    typeof node === 'object' &&
+    (node as VariableReferenceNode).type === 'VariableReference'
+  );
+}
+
 function collectBoxShelfScopeDiagnostics(
   ast: MlldNode[],
   filePath: string,
@@ -2884,6 +2892,10 @@ function collectBoxShelfScopeDiagnostics(
           continue;
         }
 
+        if (label === 'write' && alias.length > 0 && isShelfScopeValueReference(entry.value)) {
+          continue;
+        }
+
         if (label === 'write') {
           const location = astLocationToSourceLocation((entry as any).location, filePath);
           push('box.shelf.write aliases must resolve to shelf slot references', location);
@@ -2911,9 +2923,18 @@ function collectBoxShelfScopeDiagnostics(
             readAliases[alias.trim()] = true;
             continue;
           }
+
+          if (label === 'write' && isShelfScopeValueReference(valueNode)) {
+            continue;
+          }
         }
 
-        if (label === 'write' && valueNode && !extractDirectShelfSlotRef(valueNode, filePath)) {
+        if (
+          label === 'write' &&
+          valueNode &&
+          !extractDirectShelfSlotRef(valueNode, filePath) &&
+          !isShelfScopeValueReference(valueNode)
+        ) {
           const location = astLocationToSourceLocation((entry as any).location, filePath);
           push('box.shelf.write aliases must resolve to shelf slot references', location);
         }
