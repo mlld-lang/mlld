@@ -72,7 +72,7 @@ See `mlld howto security` for comprehensive prompt injection defense strategies.
 
 mlld is very full-featured for creating LLM workflows. It *should* be possible to do most things you'd want to do natively in mlld, but you can also fallback to python or javascript or shell scripts *inside* mlld.
 
-Before using a js/python fallback, search the docs: mlld PROBABLY solved it already.
+Before using a js/python fallback, search the docs: mlld PROBABLY solved it already. This matters for correctness, not just style — crossing into JS/Python strips all metadata (labels, factsources, handles). A value that round-trips through JS loses its proof trail and will fail downstream security checks. Native mlld preserves metadata automatically.
 
 Use the `mlld` skill (installed with `mlld skill install`) and see the examples included with the skill.
 
@@ -155,6 +155,36 @@ mlld values are `StructuredValue` wrappers carrying `.text`, `.data`, and `.mx` 
 - **Need `.mx` in JS?** Use `.keep` on the value before passing it as a parameter. This preserves the full StructuredValue wrapper, so JS can access `.mx` for metadata (labels AND factsources) and `.data` for the content. Note this changes the interface — JS code must read `.data` explicitly instead of receiving raw data directly. `.keep` is the canonical accessor for inspecting factsources or passing a fact-bearing value through a JS helper without losing its proof.
 - **`.keep` is only for embedded-language boundaries.** It is not the mlld-to-mlld preservation mechanism. Regular mlld reads already use wrapper-preserving field access where needed, while object spread and other plain-data boundaries intentionally materialize.
 - **Reserved identifiers can collide with your JS locals.** Names like `mx` are injected into the JS scope by the runtime. If you write `const mx = ...` in a `js {}` block you'll see `Identifier 'mx' has already been declared` — rename your local to something else.
+
+### Prefer native mlld over JS/Python for data reshaping
+
+The most common reason developers drop to JS is reshaping data — iterating over object keys, mapping arrays, transforming structures. mlld handles all of these natively, and native constructs preserve metadata:
+
+```mlld
+>> Object key-value iteration (replaces Object.entries)
+var @prices = { "Hotel A": "$100", "Hotel B": "$200" }
+var @records = for @name, @price in @prices => { name: @name, price: @price }
+
+>> Object metadata access
+show @prices.mx.keys       >> ["Hotel A", "Hotel B"]
+show @prices.mx.values     >> ["$100", "$200"]
+show @prices.mx.entries    >> [["Hotel A", "$100"], ["Hotel B", "$200"]]
+
+>> Key access inside single-variable iteration
+for @val in @prices => show `@val.mx.key: @val`
+
+>> Array mapping (replaces Array.map)
+var @names = ["alice", "bob"]
+var @users = for @n in @names => { name: @n }
+
+>> String splitting (replaces String.split in JS)
+var @lines = @raw.split("\n")
+var @items = for @line in @lines when @line.trim() => @line.trim()
+```
+
+**Rule of thumb:** if you're writing `js { return Object.entries(...).map(...) }`, rewrite it as `for @k, @v in @obj => { ... }`. The result is shorter AND preserves labels and factsources.
+
+Reserve `js {}` / `py {}` for operations mlld genuinely cannot do: complex math, regex with capture groups, calling external libraries, computed object keys. When you must use JS, understand that the return value is a fresh plain value with no mlld metadata.
 
 ### Returns are always explicit
 

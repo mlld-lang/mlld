@@ -12,6 +12,8 @@ qa_tier: 2
 
 Records declare which fields in structured data are authoritative facts and which are informational content. When an exe returns data through `=> record`, the record's classification applies automatically.
 
+For tool results, this is also the canonical secure data-plane return path to an LLM caller. Returning through `=> contact`, `=> record @schema`, or `=> @cast(@value, @schema)` turns on record-mediated return filtering at the bridge: the active `role:*` display projection shapes what the LLM sees.
+
 If the exe result is labeled `untrusted`, records also refine that trust at the field level:
 
 - `facts` fields clear the inherited exe `untrusted`
@@ -461,6 +463,8 @@ var @valid = @cast(@raw, @schema).mx.schema.valid
 ```
 
 Use postfix `as record` when it reads naturally in an expression chain. Use `@cast(...)` when you want an ordinary function call form, for example inside another call or when the schema is already being passed around as data.
+
+For tool returns, `=> record @schema` and `=> @cast(@value, @schema)` are equivalent ways to enable the record-mediated planner/LLM view. Choose the form that fits the surrounding expression best.
 
 Inline coercion is terminal postfix syntax. Producer modifiers happen before it, and field access after coercion needs grouping:
 

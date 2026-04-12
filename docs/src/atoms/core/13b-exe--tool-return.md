@@ -13,7 +13,17 @@ qa_tier: 2
 
 An exe can return one value to mlld code that called it and a different value to an LLM that called it as a tool. The two return channels are `=>` (mlld-canonical) and `->` (LLM-facing).
 
-This matters when an exe processes tainted content but should report clean attestation to a planning LLM. The full data goes to mlld code via `=>`; the clean status goes to the LLM via `->`. No session protocol, no callbacks — just two return paths from a single function.
+This matters when an exe has two different consumers:
+
+- the canonical mlld/runtime path, which often wants a domain record or full internal result
+- the LLM tool caller, which may need either the same projected domain result or a deliberately different planner-facing envelope
+
+In practice this yields two common secure patterns:
+
+- **canonical record return for domain data** — `=> @value as record @Type`, `=> record @schema`, or `=> @cast(@value, @schema)` so the bridge applies the active `role:*` display projection
+- **explicit `->` return for differentiated planner-facing results** — status, counts, summaries, or a planner-specific object that intentionally differs from the canonical return
+
+No session protocol, no callbacks — just two return paths from a single function.
 
 ## The three sigils
 
@@ -154,7 +164,7 @@ An exe with only `->` and no `=>` is in strict mode. Called from mlld code, its 
 
 `->` bypasses producer-side reshaping:
 
-- **No display projection** on `->` values. If you `-> @contactRecord`, the LLM sees the raw record as you wrote it, not the `display.role:worker` or `display.role:planner` projected form. If you want projection, use `=> @contactRecord` and let the canonical pipeline apply it.
+- **No implicit producer-side display projection** on `->` values. If you want the standard record-mediated planner view, prefer the canonical path — `=> @value as record @Type`, `=> record @schema`, or `=> @cast(@value, @schema)` — and let the bridge apply the active `role:*` display projection.
 - **No record coercion** on `->` values. `=>` still flows through the exe's output record adapter; `->` does not.
 - **Producer-side taint follows the `->` / `=->` expression itself.** Values referenced in the tool-return expression contribute their labels and taint. Earlier tainted work elsewhere in the exe body does not taint the tool slot unless that data is used in the returned expression.
 - **Explicit casts are still allowed before `->`.** If you want validation and record metadata on an intermediate value, do it yourself with `@cast(@raw, @contact)` or `@raw as record @contact` before writing `->`. `->` still will not add another coercion or projection step on top.
@@ -172,8 +182,8 @@ Audit story: `->` and `=->` are grep-able by design. `grep -rn "^\s*-> \|^\s*=->
 
 ## When to use each
 
-- **`=>` only** (classic mode) — the default. Most exes. If the LLM will see the exe's output via tool dispatch AND mlld code needs the same value, just use `=>`. Backwards compatible.
-- **`=> + ->`** — when the exe processes tainted content or full state that mlld code needs to log/persist, but the LLM should only see clean attestation.
+- **`=>` only** (classic mode) — the default. Most exes. Use this when the LLM should see the normal projected record/domain result and there is no reason for a differentiated planner-facing tool result.
+- **`=> + ->`** — when the planner-facing tool result should intentionally differ from the canonical return. Common cases: the exe processes tainted content or full state that mlld code needs to log/persist, but the LLM should only see clean attestation; or the planner should see a wrapper like `{ found, contacts, summary }` instead of the plain domain record alone.
 - **`=->` alone** — when both consumers should see the same value and you want strict mode's explicit coverage. Common in branches where you'd otherwise write `-> @v => @v` as two statements.
 - **`->` only** — when the exe is an LLM-facing tool with no mlld-code consumer. The canonical slot is deliberately empty.
 

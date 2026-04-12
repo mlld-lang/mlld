@@ -341,22 +341,28 @@ show @writeTools["create_file"](@plannerResult.args) with { policy: @stepAuth.po
 
 If `@plannerResult.args` contains handle-bearing objects, collection dispatch preserves those wrappers through arg spreading and resolves them only at dispatch. Planner-selected collection calls therefore keep the same proof-carrying behavior as direct executable calls.
 
-## Persistent-session variant: workers as tools via `->`
+## Persistent-session variant: workers as tools via `->` and canonical record return
 
 The stateless variant above dispatches each phase as a separate `@claude` call and threads prior-step context through orchestration code. That works, but each iteration re-pays the full prompt assembly cost and the planner has to reconstruct its situational awareness from primitives like shelf state and prior-step summaries.
 
-The **persistent-session variant** uses the `->` tool-return channel (see `exe-tool-return`) to run the planner as a single long-running `@claude` call with workers exposed directly as tools. Each worker exe declares its own `->` shape for what the planner sees; the planner's conversation history naturally accumulates progress across tool calls.
+The **persistent-session variant** runs the planner as a single long-running `@claude` call with workers exposed directly as tools. A worker tool can use either of the two sanctioned planner boundaries:
+
+- **canonical record return** when the planner should see the normal projected domain result
+- **`->`** when the planner-facing tool result should intentionally differ from the canonical return, for example by adding count/status/summary fields or returning an attestation envelope
+
+The planner's conversation history naturally accumulates progress across tool calls.
 
 ```mlld
->> Worker exes are tools the planner can call. Each worker's -> value is
->> what the planner sees as the tool result. The => value (which may carry
->> full untainted data, logs, or internal state) goes to mlld code that
->> calls the worker directly — NOT to the planner.
+>> Worker exes are tools the planner can call. Use canonical record return
+>> when the planner should see the normal projected domain result. Use ->
+>> when the planner-facing result should intentionally differ.
 
 exe @searchContacts(query) = [
   let @results = run cmd { contacts-cli search @query --format json }
   let @parsed = @results | @parse as record @contact[]
-  -> { found: @parsed | @length, contacts: @parsed }
+  >> Differentiated planner-facing envelope: count + contacts + summary
+  >> rather than the plain contact array alone.
+  -> { found: @parsed | @length, contacts: @parsed, summary: "Found matching contacts" }
   => @parsed
 ]
 
@@ -369,7 +375,6 @@ exe exfil:send @sendEmail(recipient, subject, body) = [
 exe @getEmailById(id) = [
   let @email = run cmd { email-cli get @id --format json }
   let @parsed = @email | @parse as record @email_msg
-  -> @parsed
   => @parsed
 ]
 
@@ -384,7 +389,7 @@ var @agentResult = @claude(@plannerPrompt(@task), {
 }
 ```
 
-The planner naturally accumulates progress via its own conversation history. When it sees the `{status: "sent", recipient: ...}` tool result from `@sendEmail`, it KNOWS the email was sent and can compose a final answer without re-issuing the write. No "prior step" threading, no cumulative execution log, no separate compose dispatch step.
+The planner naturally accumulates progress via its own conversation history. When it sees the `{status: "sent", recipient: ...}` tool result from `@sendEmail`, it knows the email was sent and can compose a final answer without re-issuing the write. When it calls `@getEmailById`, it sees the canonical projected `@email_msg` result because that worker does not need a differentiated planner-facing envelope. No "prior step" threading, no cumulative execution log, no separate compose dispatch step.
 
 **Which variant to use:**
 
