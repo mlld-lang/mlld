@@ -503,6 +503,20 @@ The planner calls resolve tools with `display: "planner"` (no injection surfaces
 
 **Selection beats re-derivation.** Preserve structured handle-bearing values in records. Let planners and workers select from grounded values. Don't reconstruct or heuristically re-derive identifiers in JS.
 
+**Native reshaping preserves proof; JS drops it.** When reshaping tool output (e.g., dict-keyed API returns into record-coercible arrays), use native mlld iteration, not JS blocks. JS auto-unwrap strips labels and factsources — values that round-trip through JS lose their proof trail and will fail downstream positive checks like `no-send-to-unknown`.
+
+```mlld
+>> Dict-keyed API return → record-coercible array (preserves metadata)
+let @raw = @mcp.getHotelsPrices(@hotel_names)
+let @records = for @name, @price in @raw => { name: @name, price_range: @price }
+
+>> String-list return → record-coercible array (preserves metadata)
+let @raw = @mcp.getChannels()
+let @channels = for @ch in @raw => { name: @ch }
+```
+
+See `mlld howto intro` §"Prefer native mlld over JS/Python for data reshaping" for the full set of native alternatives to common JS patterns (`for @k, @v in @obj`, `.mx.keys`, `.mx.entries`).
+
 ---
 
 ## The Planner-Worker Pattern
@@ -837,7 +851,7 @@ The agent triages at scale. Humans set the rules. Injection can influence what t
 ### Security patterns
 - `mlld howto facts-and-handles` — the full security model: records, facts, handles, display, positive checks
 - `mlld howto pattern-planner` — planner-worker authorization pattern
-- `mlld howto url-exfiltration` — no-novel-urls, exfil:fetch, domain allowlists
+- `mlld howto url-exfiltration` — no-novel-urls, exfil labels, domain allowlists
 - `mlld howto security-getting-started` — progressive security levels (0-4)
 
 ### MCP security
