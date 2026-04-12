@@ -36,7 +36,8 @@ import {
   wrapStructured,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
-  applySecurityDescriptorToStructuredValue
+  applySecurityDescriptorToStructuredValue,
+  type StructuredValue
 } from '../utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
@@ -1620,6 +1621,7 @@ async function evaluateExecInvocationInternal(
     let resultSecurityDescriptor: SecurityDescriptor | undefined;
     let strictToolResultDescriptor: SecurityDescriptor | undefined;
     let strictToolResultBaseDescriptor: SecurityDescriptor | undefined;
+    let surfacedLlmSessionId: string | undefined;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
         return;
@@ -1660,12 +1662,29 @@ async function evaluateExecInvocationInternal(
     };
   };
 
+  const attachLlmSessionIdMetadata = <T>(structured: StructuredValue<T>): StructuredValue<T> => {
+    const sessionId =
+      typeof surfacedLlmSessionId === 'string' && surfacedLlmSessionId.trim().length > 0
+        ? surfacedLlmSessionId.trim()
+        : undefined;
+    if (!sessionId) {
+      return structured;
+    }
+
+    structured.metadata = {
+      ...(structured.metadata ?? {}),
+      sessionId
+    };
+    structured.mx.sessionId = sessionId;
+    return structured;
+  };
+
   const createEvalResult = (
     value: unknown,
     targetEnv: Environment,
     options?: { type?: string; text?: string }
   ): EvalResult => {
-    const wrapped = wrapExecResult(value, options);
+    const wrapped = attachLlmSessionIdMetadata(wrapExecResult(value, options));
     if (resultSecurityDescriptor) {
       const existing = getStructuredSecurityDescriptor(wrapped);
       const merged = existing
@@ -1683,7 +1702,7 @@ async function evaluateExecInvocationInternal(
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    const structured = wrapExecResult(value, options);
+    const structured = attachLlmSessionIdMetadata(wrapExecResult(value, options));
     if (resultSecurityDescriptor) {
       setStructuredSecurityDescriptor(structured, resultSecurityDescriptor);
     }
@@ -3206,6 +3225,7 @@ async function evaluateExecInvocationInternal(
   let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
   let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
+  surfacedLlmSessionId = currentLlmResumeState?.sessionId;
   let llmTraceSessionId: string | undefined;
   let llmTraceProvider: string | undefined;
   let llmTraceModel: string | undefined;
@@ -3892,6 +3912,7 @@ async function evaluateExecInvocationInternal(
     result = resumeEnvelope.value;
     if (resumeEnvelope.resumeState) {
       currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, resumeEnvelope.resumeState);
+      surfacedLlmSessionId = currentLlmResumeState.sessionId;
       const nextMetadata: Record<string, unknown> = {
         ...((operationContext.metadata ?? {}) as Record<string, unknown>),
         ...(llmResumeEligible ? { llmResumeEligible: true } : {}),
@@ -3935,6 +3956,10 @@ async function evaluateExecInvocationInternal(
 
   if (useStrictToolResult) {
     result = strictToolResult;
+  }
+
+  if (surfacedLlmSessionId) {
+    result = attachLlmSessionIdMetadata(wrapExecResult(result));
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)

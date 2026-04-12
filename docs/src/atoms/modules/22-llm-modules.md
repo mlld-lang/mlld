@@ -6,7 +6,7 @@ category: modules
 tags: [modules, llm, exe, config, tools, bridge, streaming, box]
 related: [module-patterns, exe-simple, exe-blocks, box-blocks, stream]
 related-code: [interpreter/eval/exec-invocation.ts, interpreter/env/executors/call-mcp-config.ts]
-updated: 2026-03-11
+updated: 2026-04-12
 qa_tier: 2
 ---
 
@@ -66,6 +66,21 @@ exe llm @agent(prompt, config) = [
 ```
 
 This is why `exe llm` functions don't need to manually construct `--mcp-config` flags or manage bridge lifecycles — the runtime handles it.
+
+## Returned session metadata
+
+If an `exe llm` implementation returns provider session metadata in its runtime envelope, the final value also exposes it through value-local `.mx` metadata:
+
+```mlld
+var @result = @claude("Review the auth module", {
+  model: "opus",
+  tools: ["Read", "Grep"]
+})
+
+show @result.mx.sessionId
+```
+
+This is available on values returned by `exe llm` calls, including results that were later shaped into records. Use `@result.mx.sessionId` when you need to correlate a returned value with provider-side traces or transcripts. Use ambient `@mx.llm.sessionId` when you need the current in-flight bridge session inside the executing `exe llm` body.
 
 ### Tool types in the array
 

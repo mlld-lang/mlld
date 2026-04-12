@@ -8,7 +8,7 @@ parent: builtins
 tags: [builtins, mx, debugging, tracing, shelf, policy]
 related: [builtins-reserved-variables, runtime-tracing, security-guards-basics, shelf-slots, facts-and-handles]
 related-code: [interpreter/env/Environment.ts, interpreter/env/VariableManager.ts, interpreter/env/ContextManager.ts]
-updated: 2026-04-10
+updated: 2026-04-12
 ---
 
 `@mx` is ambient runtime state. It is different from `@someValue.mx`, which is metadata attached to a specific value.
@@ -83,6 +83,13 @@ Outside an active bridge call, the same accessor returns the same shape with `ha
 ## LLM call metadata
 
 `@mx.llm.sessionId` is the current bridge call session id, or `null` when no LLM call is active.
+
+For values returned by `exe llm`, session metadata can also appear on the returned value itself as `@someValue.mx.sessionId` when the provider returned a session id in the runtime envelope. That value-local accessor survives normal return shaping such as record coercion:
+
+```mlld
+let @result = @claude("Review this file", { model: "sonnet" })
+show @result.mx.sessionId
+```
 
 `@mx.llm.display` is the active display mode for the current call, or `null`.
 

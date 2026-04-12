@@ -212,6 +212,28 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.stdout).toBe(asText(result.value));
   });
 
+  it('surfaces llm session ids on returned values and direct mx field access', async () => {
+    const src = `
+/exe llm @agent(prompt, config) = js {
+  return {
+    value: { ok: true },
+    _mlld: { sessionId: 'agent-session', provider: 'fake' }
+  };
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation = await parseSingleInvocation('/show @agent("start")');
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.mx.sessionId).toBe('agent-session');
+
+    const sessionInvocation = await parseSingleInvocation('/show @agent("start").mx.sessionId');
+    const sessionResult = await evaluateExecInvocation(sessionInvocation, env);
+    expect(asText(sessionResult.value)).toBe('agent-session');
+  });
+
   it('coerces exec output through declared records before returning structured values', async () => {
     const src = `
 /record @contact = {
@@ -277,6 +299,32 @@ describe('evaluateExecInvocation (structured)', () => {
     const display = await accessField(result.value, { type: 'field', value: 'display' } as any);
     expect(isStructuredValue(display)).toBe(true);
     expect(display.text).toBe('Ada Lovelace');
+  });
+
+  it('keeps llm session ids after record coercion for mx field access', async () => {
+    const src = `
+/record @agent_result = {
+  data: [ok: boolean]
+}
+/exe llm @agent(prompt, config) = js {
+  return {
+    value: { ok: true },
+    _mlld: { sessionId: 'record-session', provider: 'fake' }
+  };
+} => agent_result
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation = await parseSingleInvocation('/show @agent("start")');
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.mx.schema?.valid).toBe(true);
+    expect(result.value.mx.sessionId).toBe('record-session');
+
+    const sessionInvocation = await parseSingleInvocation('/show @agent("start").mx.sessionId');
+    const sessionResult = await evaluateExecInvocation(sessionInvocation, env);
+    expect(asText(sessionResult.value)).toBe('record-session');
   });
 
   it('uses null instead of canonical fallback for strict bridge wrappers with no tool reach', async () => {

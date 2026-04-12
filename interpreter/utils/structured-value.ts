@@ -43,6 +43,7 @@ type StructuredValueLoadResult = Partial<LoadContentResult> & {
 export interface StructuredValueMetadata {
   source?: string;
   command?: string;
+  sessionId?: string;
   exitCode?: number;
   duration?: number;
   stderr?: string;
@@ -126,6 +127,7 @@ export interface StructuredValueContext {
   md?: string;
   source?: string;
   command?: string;
+  sessionId?: string;
   exitCode?: number;
   duration?: number;
   stderr?: string;
@@ -638,6 +640,7 @@ function buildVarMxFromMetadata(
   const flattenedDomain = metadata?.domain as string | undefined;
   const flattenedTitle = metadata?.title as string | undefined;
   const flattenedDescription = metadata?.description as string | undefined;
+  const flattenedSessionId = metadata?.sessionId as string | undefined;
   const flattenedStatus = metadata?.status as number | undefined;
   const flattenedHeaders = metadata?.headers as Record<string, unknown> | undefined;
   const flattenedTokest = (metadata?.tokest as number | undefined) ?? metrics?.tokest;
@@ -680,6 +683,7 @@ function buildVarMxFromMetadata(
     md: flattenedMd,
     source: metadata?.source,
     command: metadata?.command,
+    sessionId: flattenedSessionId,
     exitCode: metadata?.exitCode,
     duration: metadata?.duration,
     stderr: metadata?.stderr,
