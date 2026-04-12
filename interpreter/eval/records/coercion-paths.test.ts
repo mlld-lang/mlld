@@ -103,6 +103,48 @@ async function expectFactBearingRoundTrip(source: string, fileSystem = new Memor
   }
 }
 
+async function expectFactBearingQuotedComputedKey(source: string, fileSystem = new MemoryFileSystem()) {
+  let environment: Environment | undefined;
+
+  try {
+    await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      format: 'markdown',
+      captureEnvironment: env => {
+        environment = env;
+      }
+    });
+
+    expect(environment).toBeDefined();
+    const selected = environment!.getVariable('selected')?.value;
+    expect(selected, 'expected @selected to be defined').toBeDefined();
+
+    const email = await accessField(selected, { type: 'field', value: 'email' } as any, {
+      env: environment!
+    });
+    const factsources = (email as any).mx?.factsources;
+
+    expect((email as any).mx?.labels).toEqual(
+      expect.arrayContaining(['fact:@contact.email'])
+    );
+    expect(factsources).toEqual([
+      expect.objectContaining({
+        ref: '@contact.email',
+        sourceRef: '@contact',
+        field: 'email',
+        instanceKey: 'c1',
+        position: 0,
+        coercionId: expect.any(String)
+      })
+    ]);
+    expect(factsources?.[0]?.coercionId).toMatch(UUID_RE);
+  } finally {
+    environment?.cleanup();
+  }
+}
+
 describe('record coercion path coverage', () => {
   it('preserves factsources for js exe output coercion', async () => {
     await expectFactBearingRoundTrip(
@@ -197,5 +239,21 @@ describe('record coercion path coverage', () => {
       }),
       fileSystem
     );
+  });
+
+  it('preserves factsources through quoted computed object keys', async () => {
+    await expectFactBearingQuotedComputedKey([
+      '/record @contact = {',
+      '  key: id,',
+      '  facts: [email: string, id: string],',
+      '  data: [name: string]',
+      '}',
+      '/exe @emit() = js {',
+      '  return { email: "alice@example.com", id: "c1", name: "Alice" };',
+      '} => contact',
+      '/var @key = "selected"',
+      '/var @obj = { "@key": @emit() }',
+      '/var @selected = @obj[@key]'
+    ].join('\n'));
   });
 });
