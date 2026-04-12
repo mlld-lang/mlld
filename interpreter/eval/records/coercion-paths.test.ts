@@ -103,7 +103,7 @@ async function expectFactBearingRoundTrip(source: string, fileSystem = new Memor
   }
 }
 
-async function expectFactBearingQuotedComputedKey(source: string, fileSystem = new MemoryFileSystem()) {
+async function expectFactBearingComputedKey(source: string, fileSystem = new MemoryFileSystem()) {
   let environment: Environment | undefined;
 
   try {
@@ -241,8 +241,8 @@ describe('record coercion path coverage', () => {
     );
   });
 
-  it('preserves factsources through quoted computed object keys', async () => {
-    await expectFactBearingQuotedComputedKey([
+  it('preserves factsources through bracket computed object keys', async () => {
+    await expectFactBearingComputedKey([
       '/record @contact = {',
       '  key: id,',
       '  facts: [email: string, id: string],',
@@ -252,7 +252,7 @@ describe('record coercion path coverage', () => {
       '  return { email: "alice@example.com", id: "c1", name: "Alice" };',
       '} => contact',
       '/var @key = "selected"',
-      '/var @obj = { "@key": @emit() }',
+      '/var @obj = { [@key]: @emit() }',
       '/var @selected = @obj[@key]'
     ].join('\n'));
   });

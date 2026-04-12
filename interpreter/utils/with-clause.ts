@@ -1,4 +1,4 @@
-import { convertEntriesToProperties } from './object-compat';
+import { convertEntriesToProperties, getStaticObjectKey } from './object-compat';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -34,15 +34,22 @@ function extractInlineObjectFieldEntries(value: unknown): WithClauseFieldEntry[]
   }
 
   return (inlineValue.entries as Array<Record<string, unknown>>)
-    .filter(
-      (entry): entry is Record<string, unknown> =>
-        (entry.type === 'pair' || entry.type === 'conditionalPair') && typeof entry.key === 'string'
-    )
-    .map(entry => ({
-      key: entry.key as string,
-      value: entry.value,
-      location: entry.location
-    }));
+    .flatMap(entry => {
+      if (entry.type !== 'pair' && entry.type !== 'conditionalPair') {
+        return [];
+      }
+
+      const key = getStaticObjectKey(entry.key);
+      if (key === undefined) {
+        throw new Error('Computed object keys are not supported in this static object context');
+      }
+
+      return [{
+        key,
+        value: entry.value,
+        location: entry.location
+      }];
+    });
 }
 
 export function listWithClauseFields(withClause: unknown): WithClauseFieldEntry[] {

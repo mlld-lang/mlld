@@ -7,6 +7,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
 import { isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 import type { DescriptorCollector } from './security-descriptor';
 import { interpolateAndCollect } from './security-descriptor';
 
@@ -170,7 +171,14 @@ export async function evaluateCollectionObject(
         continue;
       }
 
-      result[entry.key] = await evaluateArrayItem(
+      const resolvedKey = await resolveCollectionObjectKey(
+        entry.key,
+        env,
+        collectDescriptor,
+        context,
+        sourceLocation
+      );
+      result[resolvedKey] = await evaluateArrayItem(
         entry.value,
         env,
         collectDescriptor,
@@ -194,6 +202,45 @@ export async function evaluateCollectionObject(
   }
 
   return result;
+}
+
+async function resolveCollectionObjectKey(
+  key: unknown,
+  env: Environment,
+  collectDescriptor?: DescriptorCollector,
+  context?: EvaluationContext,
+  sourceLocation?: SourceLocation
+): Promise<string> {
+  const staticKey = getStaticObjectKey(key);
+  if (staticKey !== undefined) {
+    return staticKey;
+  }
+
+  if (Array.isArray(key)) {
+    return interpolateAndCollect(key, env, collectDescriptor);
+  }
+
+  if (
+    key &&
+    typeof key === 'object' &&
+    'needsInterpolation' in key &&
+    Array.isArray((key as { parts?: unknown[] }).parts)
+  ) {
+    return interpolateAndCollect((key as { parts: unknown[] }).parts, env, collectDescriptor);
+  }
+
+  const evaluated = await evaluateArrayItem(
+    key,
+    env,
+    collectDescriptor,
+    context,
+    sourceLocation
+  );
+  if (isStructuredValue(evaluated)) {
+    return String(evaluated.data ?? '');
+  }
+
+  return String(evaluated ?? '');
 }
 
 async function evaluatePlainObject(

@@ -462,8 +462,12 @@ CodeExecutionValue
 
 // Property key - shared between old ObjectLiteral and DataObjectLiteral
 PropertyKey
-  = PropertyIdentifier
+  = ComputedPropertyKey
+  / PropertyIdentifier
   / DataString      // Use DataString for object property keys
+
+ComputedPropertyKey
+  = "[" _ expr:UnifiedExpression _ "]" { return expr; }
 
 PropertyIdentifier
   = first:BaseIdentifier suffix:(':' BaseIdentifier)? {

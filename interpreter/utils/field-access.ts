@@ -42,6 +42,7 @@ import { inheritExpressionProvenance, setExpressionProvenance } from '@core/type
 import type { DataObjectValue } from '@core/types/var';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
+import { getStaticObjectKey } from './object-compat';
 
 const COMMON_FILE_EXTENSION_FIELDS = new Set([
   'json',
@@ -106,7 +107,7 @@ function getObjectField(obj: any, fieldName: string): any | undefined {
   // New format: entries array
   if (obj.entries && Array.isArray(obj.entries)) {
     for (const entry of obj.entries) {
-      if (entry.type === 'pair' && entry.key === fieldName) {
+      if (entry.type === 'pair' && getStaticObjectKey(entry.key) === fieldName) {
         return entry.value;
       }
     }
@@ -127,7 +128,7 @@ function getObjectField(obj: any, fieldName: string): any | undefined {
 function hasObjectField(obj: any, fieldName: string): boolean {
   // New format: entries array
   if (obj.entries && Array.isArray(obj.entries)) {
-    return obj.entries.some((entry: any) => entry.type === 'pair' && entry.key === fieldName);
+    return obj.entries.some((entry: any) => entry.type === 'pair' && getStaticObjectKey(entry.key) === fieldName);
   }
 
   // Old format: properties record
@@ -154,7 +155,7 @@ function isObjectAST(value: any): boolean {
       (entry: any) =>
         entry &&
         typeof entry === 'object' &&
-        ((entry.type === 'pair' && typeof entry.key === 'string' && 'value' in entry) ||
+        ((entry.type === 'pair' && 'key' in entry && 'value' in entry) ||
           (entry.type === 'spread' && 'value' in entry))
     );
   }

@@ -6,7 +6,7 @@ brief: What mlld is, mental model, and key concepts
 category: intro
 tags: [overview, quickstart, mental-model, gotchas]
 related: [gotchas, labels-overview, security-policies, security-guards-basics]
-updated: 2026-04-08
+updated: 2026-04-12
 ---
 
 ## Essential Commands
@@ -134,7 +134,7 @@ mlld is its own language — don't assume JS/Python syntax works. Common mistake
 - **No `else if`** — use `when` for multi-branch matching, or nest `if` blocks: `if @a [...] else [ if @b [...] ]`
 - **No array spread in literals** — use `.concat()`: `var @combined = @arr1.concat(@arr2)`
 - **Object spread materializes plain data** — `{ ...@value }` makes a fresh plain object and drops wrapper metadata/identity. Use field access or pass the value directly when labels, factsources, or tool-collection identity matter.
-- **Computed object keys use quoted interpolation** — `{ "@key": @value }` interpolates `@key` at runtime and preserves metadata on `@value`. No JS needed: `var @obj = for @k, @v in @source => { "@k": @v }`
+- **Computed object keys are native** — `{ [@key]: @value }` resolves `@key` at runtime and preserves metadata on `@value`. No JS needed: `var @obj = for @k, @v in @source => { [@k]: @v }`
 - **No methods on literals** — assign first: `var @s = "hello"` then `var @up = @s.toUpperCase()`
 - **No standalone boolean flags** — use `--flag true` not `--flag` (all CLI payload flags need values)
 - **Executable identifiers in templates render as `(executable: name)`.** A template like `` `calling @claude` `` interpolates `@claude` as `(executable: claude)`, not as the literal string `@claude`. Same for any `exe`-bound name. Use backticks around just the literal portion (`` `calling ` + "@claude" ``), escape the `@` (`` `calling \@claude` ``), or pick a different debug label.
@@ -184,13 +184,13 @@ var @items = for @line in @lines when @line.trim() => @line.trim()
 
 **Rule of thumb:** if you're writing `js { return Object.entries(...).map(...) }`, rewrite it as `for @k, @v in @obj => { ... }`. The result is shorter AND preserves labels and factsources.
 
-Reserve `js {}` / `py {}` for operations mlld genuinely cannot do: complex math, regex with capture groups, calling external libraries. Dynamic object keys already work natively with quoted-key interpolation:
+Reserve `js {}` / `py {}` for operations mlld genuinely cannot do: complex math, regex with capture groups, calling external libraries. Dynamic object keys already work natively:
 
 ```mlld
-var @obj = { "@key": @value }
+var @obj = { [@key]: @value }
 ```
 
-In object-key position, the quoted form interpolates `@key` at runtime and preserves labels and factsources on `@value`. Bracket syntax like `{ [@key]: @value }` is not supported. This interpolation rule is specific to object keys; quoted strings elsewhere stay ordinary quoted strings.
+Bracket object keys evaluate the expression inside `[]` at runtime and preserve labels and factsources on `@value`.
 
 ### Returns are always explicit
 

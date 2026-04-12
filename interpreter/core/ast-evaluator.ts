@@ -1,6 +1,7 @@
 import { Environment } from '@interpreter/env/Environment';
 import { SourceLocation } from '@core/types/astTypes';
 import type { SecurityDescriptor } from '@core/types/security';
+import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 
 async function interpolateAndRecord(nodes: any, env: Environment): Promise<string> {
   const { interpolate } = await import('@interpreter/core/interpreter');
@@ -33,6 +34,40 @@ export interface ObjectNode {
 }
 
 export class ASTEvaluator {
+  private static async resolveObjectKey(key: any, env: Environment): Promise<string> {
+    const staticKey = getStaticObjectKey(key);
+    if (staticKey !== undefined) {
+      return staticKey;
+    }
+
+    if (Array.isArray(key)) {
+      return interpolateAndRecord(key, env);
+    }
+
+    if (
+      key &&
+      typeof key === 'object' &&
+      'needsInterpolation' in key &&
+      Array.isArray((key as { parts?: unknown[] }).parts)
+    ) {
+      return interpolateAndRecord((key as { parts: any[] }).parts, env);
+    }
+
+    if (key && typeof key === 'object' && Array.isArray((key as { content?: unknown[] }).content)) {
+      return interpolateAndRecord((key as { content: any[] }).content, env);
+    }
+
+    if (key && typeof key === 'object' && 'type' in key) {
+      const { evaluate } = await import('@interpreter/core/interpreter');
+      const { isStructuredValue, asData } = await import('@interpreter/utils/structured-value');
+      const result = await evaluate(key as any, env, { isExpression: true });
+      const value = isStructuredValue(result.value) ? asData(result.value) : result.value;
+      return String(value ?? '');
+    }
+
+    return String(key ?? '');
+  }
+
   /**
    * Normalize an array value to have consistent type information
    */
@@ -159,7 +194,8 @@ export class ASTEvaluator {
         for (const entry of normalized.entries) {
           if (entry.type === 'pair') {
             // Recursively evaluate each property value
-            evaluatedObject[entry.key] = await this.evaluateToRuntime(entry.value, env);
+            const resolvedKey = await this.resolveObjectKey(entry.key, env);
+            evaluatedObject[resolvedKey] = await this.evaluateToRuntime(entry.value, env);
           } else if (entry.type === 'spread') {
             // Spread entry - interpolate variable name and merge
             const varName = await interpolateAndRecord(entry.value, env);

@@ -22,6 +22,7 @@ import {
   getWithClauseField,
   listWithClauseFields
 } from '@interpreter/utils/with-clause';
+import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 import { validateExecutableAuthorizationMetadata } from '@interpreter/eval/exe/definition-helpers';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { BUILTIN_POLICY_RULES, isBuiltinPolicyRuleName } from '@core/policy/builtin-rules';
@@ -2009,13 +2010,14 @@ function extractStaticValue(value: unknown): unknown {
   if (typedValue.type === 'object' && Array.isArray(typedValue.entries)) {
     const result: Record<string, unknown> = {};
     for (const entry of typedValue.entries as Array<Record<string, unknown>>) {
-      if (
-        (entry.type === 'pair' || entry.type === 'conditionalPair') &&
-        typeof entry.key === 'string'
-      ) {
+      if (entry.type === 'pair' || entry.type === 'conditionalPair') {
+        const key = getStaticObjectKey(entry.key);
+        if (key === undefined) {
+          continue;
+        }
         const extracted = extractStaticValue(entry.value);
         if (extracted !== undefined) {
-          result[entry.key] = extracted;
+          result[key] = extracted;
         }
       }
     }
@@ -2047,7 +2049,10 @@ function getObjectEntryValue(node: unknown, key: string): unknown {
   const typedNode = node as Record<string, unknown>;
   if (typedNode.type === 'object' && Array.isArray(typedNode.entries)) {
     for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
-      if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
+      if (
+        (entry.type === 'pair' || entry.type === 'conditionalPair')
+        && getStaticObjectKey(entry.key) === key
+      ) {
         return entry.value;
       }
     }
@@ -2109,7 +2114,10 @@ function getObjectNodeEntries(node: unknown): Array<Record<string, unknown>> {
 
 function getObjectEntryLocation(node: unknown, key: string): { line?: number; column?: number } {
   for (const entry of getObjectNodeEntries(node)) {
-    if ((entry.type === 'pair' || entry.type === 'conditionalPair') && entry.key === key) {
+    if (
+      (entry.type === 'pair' || entry.type === 'conditionalPair')
+      && getStaticObjectKey(entry.key) === key
+    ) {
       return {
         line: (entry as any)?.location?.start?.line ?? (entry.value as any)?.location?.start?.line,
         column: (entry as any)?.location?.start?.column ?? (entry.value as any)?.location?.start?.column

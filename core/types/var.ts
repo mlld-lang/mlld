@@ -16,8 +16,8 @@ import type { DataLabel } from './security';
  * Data object entry - either a key-value pair or a spread
  */
 export type DataObjectEntry =
-  | { type: 'pair'; key: string; value: DataValue }
-  | { type: 'conditionalPair'; key: string; value: DataValue }
+  | { type: 'pair'; key: unknown; value: DataValue }
+  | { type: 'conditionalPair'; key: unknown; value: DataValue }
   | { type: 'spread'; value: VariableNodeArray };
 
 /**

@@ -8,6 +8,27 @@
 import { DataObjectValue, DataObjectEntry, DataValue } from '@core/types/var';
 import type { VariableNodeArray } from '@core/types/values';
 
+export function getStaticObjectKey(key: unknown): string | undefined {
+  if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
+    return String(key);
+  }
+
+  if (!key || typeof key !== 'object') {
+    return undefined;
+  }
+
+  const keyNode = key as Record<string, unknown>;
+  if (keyNode.type === 'Literal') {
+    return String(keyNode.value ?? '');
+  }
+
+  if (keyNode.type === 'Text') {
+    return String(keyNode.content ?? '');
+  }
+
+  return undefined;
+}
+
 /**
  * Converts entries array to properties record for backwards compatibility.
  * Ignores spread entries (they must be evaluated first).
@@ -21,7 +42,11 @@ export function convertEntriesToProperties(
   const props: Record<string, DataValue> = {};
   for (const entry of entries) {
     if (entry.type === 'pair') {
-      props[entry.key] = entry.value;
+      const key = getStaticObjectKey(entry.key);
+      if (key === undefined) {
+        throw new Error('Computed object keys are not supported in this static object context');
+      }
+      props[key] = entry.value;
     }
     // Skip spreads - they need evaluation context
   }
@@ -65,7 +90,7 @@ export function hasSpreads(obj: DataObjectValue): boolean {
  */
 export function getEntryValue(obj: DataObjectValue, key: string): DataValue | undefined {
   for (const entry of obj.entries) {
-    if (entry.type === 'pair' && entry.key === key) {
+    if (entry.type === 'pair' && getStaticObjectKey(entry.key) === key) {
       return entry.value;
     }
   }
@@ -79,9 +104,13 @@ export function getEntryValue(obj: DataObjectValue, key: string): DataValue | un
  * @returns Array of pair entries only
  */
 export function getPairEntries(obj: DataObjectValue): Array<{ type: 'pair'; key: string; value: DataValue }> {
-  return obj.entries.filter((e): e is { type: 'pair'; key: string; value: DataValue } =>
-    e.type === 'pair'
-  );
+  return obj.entries.flatMap((entry) => {
+    if (entry.type !== 'pair') {
+      return [];
+    }
+    const key = getStaticObjectKey(entry.key);
+    return key === undefined ? [] : [{ type: 'pair' as const, key, value: entry.value }];
+  });
 }
 
 /**

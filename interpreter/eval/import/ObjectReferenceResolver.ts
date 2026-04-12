@@ -283,7 +283,8 @@ export class ObjectReferenceResolver {
     if (Array.isArray(value.entries) && value.entries.length > 0) {
       for (const entry of value.entries) {
         if (entry.type === 'pair') {
-          resolved[entry.key] = this.resolveObjectReferences(entry.value, variableMap, options);
+          resolved[this.resolveObjectKey(entry.key, variableMap, options)] =
+            this.resolveObjectReferences(entry.value, variableMap, options);
         } else if (entry.type === 'spread') {
           for (const spreadNode of entry.value || []) {
             const spreadValue = this.resolveObjectReferences(spreadNode, variableMap, options);
@@ -319,6 +320,56 @@ export class ObjectReferenceResolver {
       resolved[key] = this.resolveObjectReferences(val, variableMap, options);
     }
     return resolved;
+  }
+
+  private resolveObjectKey(
+    key: unknown,
+    variableMap: Map<string, Variable>,
+    options?: { resolveStrings?: boolean }
+  ): string {
+    if (typeof key === 'string' || typeof key === 'number' || typeof key === 'boolean') {
+      return String(key);
+    }
+
+    if (
+      key &&
+      typeof key === 'object' &&
+      'needsInterpolation' in (key as Record<string, unknown>) &&
+      Array.isArray((key as { parts?: unknown[] }).parts)
+    ) {
+      return ((key as { parts: unknown[] }).parts ?? [])
+        .map(part => {
+          const resolved = this.resolveObjectReferences(part, variableMap, { ...options, resolveStrings: true });
+          if (typeof resolved === 'string' || typeof resolved === 'number' || typeof resolved === 'boolean') {
+            return String(resolved);
+          }
+          if (resolved && typeof resolved === 'object' && 'content' in (resolved as Record<string, unknown>)) {
+            return String((resolved as Record<string, unknown>).content ?? '');
+          }
+          return '';
+        })
+        .join('');
+    }
+
+    if (
+      key &&
+      typeof key === 'object' &&
+      'type' in (key as Record<string, unknown>) &&
+      (key as { type?: unknown }).type === 'Literal'
+    ) {
+      return String((key as { value?: unknown }).value ?? '');
+    }
+
+    if (
+      key &&
+      typeof key === 'object' &&
+      'type' in (key as Record<string, unknown>) &&
+      (key as { type?: unknown }).type === 'Text'
+    ) {
+      return String((key as { content?: unknown }).content ?? '');
+    }
+
+    return String(this.resolveObjectReferences(key, variableMap, { ...options, resolveStrings: true }) ?? '');
   }
 
   private isVariableLike(value: unknown): value is Variable {

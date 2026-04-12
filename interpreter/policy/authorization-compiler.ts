@@ -41,6 +41,7 @@ import {
   wrapStructured
 } from '@interpreter/utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
+import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
@@ -1468,7 +1469,7 @@ function getAstObjectEntryValue(node: unknown, key: string): unknown {
   if (!isAstObjectNode(node)) {
     return undefined;
   }
-  return node.entries?.find(entry => entry?.key === key)?.value;
+  return node.entries?.find(entry => getStaticObjectKey(entry?.key) === key)?.value;
 }
 
 async function unwrapResolvedConstraintValue(
@@ -1524,9 +1525,9 @@ export async function materializePolicySourceValue(
       }
       if (
         (entry as { type?: unknown }).type === 'pair'
-        && typeof (entry as { key?: unknown }).key === 'string'
       ) {
-        result[(entry as { key: string }).key] = await materializePolicySourceValue(
+        const key = await materializePolicySourceValue((entry as { key?: unknown }).key, env);
+        result[String(key ?? '')] = await materializePolicySourceValue(
           (entry as { value?: unknown }).value,
           env
         );
@@ -1648,10 +1649,17 @@ async function resolveConstraintSourceValue(
     if (isAstObjectNode(value)) {
       const result: { [key: string]: unknown } = {};
       for (const entry of value.entries ?? []) {
-        if (typeof entry?.key !== 'string') {
+        if (!entry || typeof entry !== 'object') {
           continue;
         }
-        result[entry.key] = await resolveConstraintSourceValue(entry.value, env);
+        if ((entry as { type?: unknown }).type !== 'pair') {
+          continue;
+        }
+        const key = await resolveConstraintSourceValue((entry as { key?: unknown }).key, env);
+        result[String(key ?? '')] = await resolveConstraintSourceValue(
+          (entry as { value?: unknown }).value,
+          env
+        );
       }
       return (
         await repairSecurityRelevantValue({

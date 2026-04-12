@@ -152,6 +152,7 @@ import {
 import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
 import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
 import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
+import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -166,7 +167,12 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   // AST entry-based objects (new grammar format)
   if (Array.isArray(record.entries)) {
     for (const entry of record.entries) {
-      if (entry && typeof entry === 'object' && entry.type === 'pair' && entry.key === name) {
+      if (
+        entry &&
+        typeof entry === 'object' &&
+        entry.type === 'pair' &&
+        getStaticObjectKey(entry.key) === name
+      ) {
         return entry.value;
       }
     }

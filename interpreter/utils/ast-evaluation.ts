@@ -6,6 +6,7 @@ import type { MlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import { isStructuredValue } from './structured-value';
+import { getStaticObjectKey } from './object-compat';
 
 function serializeWrappedTemplateNode(node: unknown): string {
   if (node === null || node === undefined) {
@@ -128,7 +129,10 @@ export function createASTAwareJSONReplacer() {
         const plainObj: Record<string, unknown> = {};
         for (const entry of dataObj.entries) {
           if (entry.type === 'pair') {
-            plainObj[entry.key] = entry.value;
+            const key = getStaticObjectKey(entry.key);
+            if (key !== undefined) {
+              plainObj[key] = entry.value;
+            }
           }
           // Skip spreads - they need evaluation
         }
