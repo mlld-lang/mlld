@@ -851,7 +851,7 @@ The agent triages at scale. Humans set the rules. Injection can influence what t
 ### Security patterns
 - `mlld howto facts-and-handles` — the full security model: records, facts, handles, display, positive checks
 - `mlld howto pattern-planner` — planner-worker authorization pattern
-- `mlld howto url-exfiltration` — no-novel-urls, exfil labels, domain allowlists
+- `mlld howto url-exfiltration` — no-novel-urls, exfil:fetch, domain allowlists
 - `mlld howto security-getting-started` — progressive security levels (0-4)
 
 ### MCP security

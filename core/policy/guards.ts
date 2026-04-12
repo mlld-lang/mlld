@@ -640,7 +640,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_secret_exfil',
         label: 'secret',
-        operationLabel: 'exfil',
+        operationLabel: 'exfil:send',
         reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
         operations: policy.operations,
         policyDisplayName,
