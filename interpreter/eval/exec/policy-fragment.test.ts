@@ -1055,4 +1055,48 @@ describe('resolveInvocationPolicyFragment', () => {
       activePolicies: []
     });
   });
+
+  it('scopes attestation source to the accessed field, not the root variable', async () => {
+    const env = createEnv();
+
+    await evaluateDirective(
+      parseSync('/record @contact = { key: id, facts: [id: string, email: string], data: [name: string] }')[0] as any,
+      env
+    );
+
+    const contactRecord = env.getVariable('contact');
+
+    const agentConfig = createObjectVariable(
+      'agent',
+      {
+        basePolicy: {
+          defaults: { rules: ['no-secret-exfil'] },
+          operations: { exfil: ['exfil:send'] }
+        },
+        records: { contact: contactRecord?.value }
+      },
+      false,
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
+    );
+    env.setVariable('agent', agentConfig);
+
+    const policy = await resolveInvocationPolicyFragment(
+      {
+        type: 'VariableReference',
+        nodeId: 'agent-policy-ref',
+        identifier: 'agent',
+        fields: [{ type: 'field', value: 'basePolicy', optional: false }]
+      } as any,
+      env
+    );
+
+    expect(policy).toBeDefined();
+    expect(policy?.defaults?.rules).toEqual(['no-secret-exfil']);
+    expect(policy?.operations).toEqual({ exfil: ['exfil:send'] });
+  });
 });

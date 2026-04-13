@@ -138,7 +138,17 @@ export async function resolveInvocationPolicyFragment(
     if (candidate.type === 'VariableReference' && typeof candidate.identifier === 'string') {
       const referenced = env.getVariable(candidate.identifier);
       if (referenced) {
-        attestationSource = referenced.value;
+        const fields = candidate.fields;
+        if (Array.isArray(fields) && fields.length > 0) {
+          const { accessFields } = await import('@interpreter/utils/field-access');
+          const fieldResult = await accessFields(referenced.value, fields as any[], {
+            preserveContext: true,
+            env
+          });
+          attestationSource = (fieldResult as any).value ?? fieldResult;
+        } else {
+          attestationSource = referenced.value;
+        }
         attestationSourceLocked = true;
       }
     }
