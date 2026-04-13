@@ -11,6 +11,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { appendAuditEvent } from '@core/security/AuditLogger';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { descriptorToInputTaint } from '@interpreter/policy/label-flow-utils';
+import { requiresHostShellExecution } from '@interpreter/utils/alias-resolver';
 import type { ShellSession } from '@services/fs/ShellSession';
 import type { WorkspaceValue } from '@core/types/workspace';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -20,6 +21,7 @@ export interface WorkspaceProvider {
   isToolAllowed?(toolName: string, rawToolName?: string): boolean;
   getExeLabels?(): readonly string[] | undefined;
   getEnclosingExeLabels?(): readonly string[];
+  hasExeLabel?(label: string): boolean;
 }
 
 interface SecuritySnapshotLike {
@@ -64,6 +66,7 @@ export class CommandExecutorFactory {
   private nodeExecutor: NodeExecutor;
   private pythonExecutor: PythonExecutor;
   private bashExecutor: BashExecutor;
+  private hostBashExecutor: BashExecutor;
   private readonly workspaceProvider: WorkspaceProvider;
   private readonly errorUtils: ErrorUtils;
   private readonly defaultWorkingDirectory: string;
@@ -95,6 +98,12 @@ export class CommandExecutorFactory {
       variableProvider,
       getStreamingBus,
       workspaceProvider
+    );
+    this.hostBashExecutor = new BashExecutor(
+      errorUtils,
+      workingDirectory,
+      variableProvider,
+      getStreamingBus
     );
   }
 
@@ -222,12 +231,18 @@ export class CommandExecutorFactory {
 
   private isWorkspaceLlmInvocation(context?: CommandExecutionContext): boolean {
     const contextLabels = Array.isArray(context?.exeLabels) ? context!.exeLabels : [];
+    if (contextLabels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm')) {
+      return true;
+    }
     const envLabels = this.workspaceProvider.getExeLabels?.() ?? [];
+    if (envLabels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm')) {
+      return true;
+    }
+    if (this.workspaceProvider.hasExeLabel?.('llm')) {
+      return true;
+    }
     const opStackLabels = this.workspaceProvider.getEnclosingExeLabels?.() ?? [];
-    const labels = contextLabels.length > 0 ? contextLabels
-      : envLabels.length > 0 ? envLabels
-      : opStackLabels;
-    return labels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm');
+    return opStackLabels.some(label => typeof label === 'string' && label.trim().toLowerCase() === 'llm');
   }
 
   private async executeWorkspaceLlmCommand(
@@ -499,6 +514,24 @@ export class CommandExecutorFactory {
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
+    const activeWorkspace = this.workspaceProvider.getActiveWorkspace();
+    if (activeWorkspace && this.isWorkspaceLlmInvocation(context)) {
+      const normalizedLanguage = language.toLowerCase();
+      if (
+        (normalizedLanguage === 'bash' || normalizedLanguage === 'sh' || normalizedLanguage === 'shell') &&
+        requiresHostShellExecution(code)
+      ) {
+        return this.executeWorkspaceLlmBashCode(
+          activeWorkspace,
+          code,
+          params,
+          metadata,
+          options,
+          context
+        );
+      }
+    }
+
     const executor = this.getCodeExecutor(language);
     
     if (!executor) {
@@ -518,6 +551,39 @@ export class CommandExecutorFactory {
 
     // Fallback (shouldn't reach here)
     return executor.execute(code, options, context);
+  }
+
+  private async executeWorkspaceLlmBashCode(
+    workspace: WorkspaceValue,
+    code: string,
+    params?: Record<string, any>,
+    metadata?: Record<string, any>,
+    options?: CommandExecutionOptions,
+    context?: CommandExecutionContext
+  ): Promise<string> {
+    let beforeSnapshot: WorkspaceSnapshot | undefined;
+    let writesRecorded = false;
+
+    try {
+      beforeSnapshot = await this.captureWorkspaceSnapshot(workspace);
+      const result = await this.hostBashExecutor.execute(code, options, context, params, metadata);
+
+      if (beforeSnapshot) {
+        await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, code);
+        writesRecorded = true;
+      }
+
+      return result;
+    } catch (error) {
+      if (beforeSnapshot && !writesRecorded) {
+        try {
+          await this.recordWorkspaceCommandWrites(workspace, beforeSnapshot, code);
+        } catch {
+          // Best-effort audit logging for workspace command writes.
+        }
+      }
+      throw error;
+    }
   }
 
   /**

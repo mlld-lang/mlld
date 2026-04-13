@@ -60,6 +60,86 @@ describe('CommandExecutorFactory workspace llm routing', () => {
     );
   });
 
+  it('routes workspace llm sh code through host bash executor', async () => {
+    const workspace = createWorkspace();
+    const factory = new CommandExecutorFactory(createDependencies(workspace));
+
+    const hostBashExecute = vi.fn().mockResolvedValue('host-bash-ok');
+    const workspaceBashExecute = vi.fn().mockResolvedValue('workspace-bash-ok');
+
+    (factory as any).hostBashExecutor = { execute: hostBashExecute };
+    (factory as any).bashExecutor = { execute: workspaceBashExecute };
+    (factory as any).captureWorkspaceSnapshot = vi.fn().mockResolvedValue(new Map());
+    (factory as any).recordWorkspaceCommandWrites = vi.fn().mockResolvedValue(undefined);
+
+    const output = await factory.executeCode(
+      'opencode run --format json',
+      'sh',
+      { prompt: 'hi' },
+      undefined,
+      undefined,
+      { directiveType: 'exec', exeLabels: ['llm'] }
+    );
+
+    expect(output).toBe('host-bash-ok');
+    expect(hostBashExecute).toHaveBeenCalledWith(
+      'opencode run --format json',
+      undefined,
+      expect.objectContaining({ exeLabels: ['llm'] }),
+      { prompt: 'hi' },
+      undefined
+    );
+    expect(workspaceBashExecute).not.toHaveBeenCalled();
+  });
+
+  it('keeps workspace llm sh code on workspace bash executor when only native shell commands are used', async () => {
+    const workspace = createWorkspace();
+    const factory = new CommandExecutorFactory(createDependencies(workspace));
+
+    const hostBashExecute = vi.fn().mockResolvedValue('host-bash-ok');
+    const workspaceBashExecute = vi.fn().mockResolvedValue('workspace-bash-ok');
+
+    (factory as any).hostBashExecutor = { execute: hostBashExecute };
+    (factory as any).bashExecutor = { execute: workspaceBashExecute };
+
+    const output = await factory.executeCode(
+      'printf "hello" > output.txt',
+      'sh',
+      undefined,
+      undefined,
+      undefined,
+      { directiveType: 'exec', exeLabels: ['llm'] }
+    );
+
+    expect(output).toBe('workspace-bash-ok');
+    expect(workspaceBashExecute).toHaveBeenCalledTimes(1);
+    expect(hostBashExecute).not.toHaveBeenCalled();
+  });
+
+  it('keeps non-llm workspace sh code on workspace bash executor', async () => {
+    const workspace = createWorkspace();
+    const factory = new CommandExecutorFactory(createDependencies(workspace));
+
+    const hostBashExecute = vi.fn().mockResolvedValue('host-bash-ok');
+    const workspaceBashExecute = vi.fn().mockResolvedValue('workspace-bash-ok');
+
+    (factory as any).hostBashExecutor = { execute: hostBashExecute };
+    (factory as any).bashExecutor = { execute: workspaceBashExecute };
+
+    const output = await factory.executeCode(
+      'cat file.txt',
+      'sh',
+      undefined,
+      undefined,
+      undefined,
+      { directiveType: 'exec', exeLabels: ['task'] }
+    );
+
+    expect(output).toBe('workspace-bash-ok');
+    expect(workspaceBashExecute).toHaveBeenCalledTimes(1);
+    expect(hostBashExecute).not.toHaveBeenCalled();
+  });
+
   it('keeps non-llm workspace commands on ShellSession routing', async () => {
     const workspace = createWorkspace();
     const factory = new CommandExecutorFactory(createDependencies(workspace));
@@ -137,6 +217,33 @@ describe('CommandExecutorFactory workspace llm routing', () => {
 
     expect(output).toBe('opstack-fallback-ok');
     expect(shellExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats ancestor llm labels as active even when nearer env/opStack labels differ', async () => {
+    const workspace = createWorkspace();
+    const deps = createDependencies(workspace);
+    (deps.workspaceProvider as any).getExeLabels = () => ['tool:w'];
+    (deps.workspaceProvider as any).getEnclosingExeLabels = () => ['tool:w'];
+    (deps.workspaceProvider as any).hasExeLabel = (label: string) => label === 'llm';
+    const factory = new CommandExecutorFactory(deps);
+
+    const hostBashExecute = vi.fn().mockResolvedValue('ancestor-llm-ok');
+    const workspaceBashExecute = vi.fn().mockResolvedValue('workspace-bash-ok');
+    (factory as any).hostBashExecutor = { execute: hostBashExecute };
+    (factory as any).bashExecutor = { execute: workspaceBashExecute };
+
+    const output = await factory.executeCode(
+      'opencode run --format json',
+      'sh',
+      undefined,
+      undefined,
+      undefined,
+      { directiveType: 'exec', exeLabels: ['tool:w'] }
+    );
+
+    expect(output).toBe('ancestor-llm-ok');
+    expect(hostBashExecute).toHaveBeenCalledTimes(1);
+    expect(workspaceBashExecute).not.toHaveBeenCalled();
   });
 
   it('routes to ShellSession when all label sources are empty', async () => {

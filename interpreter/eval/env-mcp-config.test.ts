@@ -1294,6 +1294,85 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves boxed @mx.llm bridge context through imported llm cmd helpers that omit inner config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/provider.mld', [
+      `/exe @helper() = cmd { ${process.execPath} -e "process.stdout.write(process.argv[1] ?? 'MISSING')" "@mx.llm.allowed" }`,
+      '/exe llm @provider(prompt, config) = @helper()',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe tool:w @hello() = "hi"',
+      '/var @out = box { tools: ["Bash", "hello"] } [',
+      '  => @provider("Use the tool bridge", { tools: [@hello] })',
+      ']',
+      '/show @out'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
+  it('preserves boxed @mx.llm bridge context through imported llm sh helpers that omit inner config.tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const nodeBin = process.execPath.replace(/\\/g, '/');
+    await fileSystem.writeFile('/provider.mld', [
+      '/exe @helper(nodeBin, allowed) = sh {',
+      '  "$nodeBin" -e "process.stdout.write(process.argv[1] ?? \'MISSING\')" "$allowed"',
+      '}',
+      '/exe llm @provider(prompt, config) = [',
+      '  let @allowed = when [',
+      '    @mx.llm && @mx.llm.allowed => @mx.llm.allowed',
+      '    * => "MISSING"',
+      '  ]',
+      `  => @helper("${nodeBin}", @allowed)`,
+      ']',
+      '/export { @provider }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @provider } from "/provider.mld"',
+      '/exe tool:w @hello() = "hi"',
+      '/var @out = box { tools: ["Bash", "hello"] } [',
+      '  => @provider("Use the tool bridge", { tools: [@hello] })',
+      ']',
+      '/show @out'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__hello');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('does not emit auth.deny noise for imported llm wrapper helpers under control-arg tool surfaces', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/provider.mld', [

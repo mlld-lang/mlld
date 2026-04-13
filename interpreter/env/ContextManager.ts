@@ -188,6 +188,23 @@ export class ContextManager {
     return [];
   }
 
+  hasEnclosingExeLabel(label: string): boolean {
+    const normalized = label.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    for (let i = this.opStack.length - 1; i >= 0; i--) {
+      const ctx = this.opStack[i];
+      if (ctx.type !== 'exe' || !ctx.labels || ctx.labels.length === 0) {
+        continue;
+      }
+      if (ctx.labels.some(candidate => candidate.trim().toLowerCase() === normalized)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async withOperation<T>(context: OperationContext, fn: () => Promise<T> | T): Promise<T> {
     this.pushOperation(context);
     try {

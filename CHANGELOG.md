@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld validate` / `mlld analyze` now statically validate record declarations, shelf declarations, executable metadata (`controlArgs`, `updateArgs`, `exactPayloadArgs`, `correlateControlArgs`, output records), `resume` guard arms, and statically obvious `box.shelf` binding conflicts before runtime.
 
 ### Fixed
+- Boxed `exe llm` calls now preserve host command resolution and MCP bridge context through nested `cmd`/`sh` helpers, which restores CLI harnesses such as OpenCode and Codex inside rig boxes.
 - Internal exe return control wrappers no longer leak through exe/box execution, tool collection dispatch, hooks, or fixture-visible output paths. Hook and guard bodies continue to accept canonical `=>` returns only.
 - Non-final standalone bracketed `when [ ... ]` expressions inside exe blocks no longer terminate the block implicitly. Their values are now discarded unless the `when` is the last statement, explicit returns inside `when` branches still bubble normally, inline/bound guard forms keep their established early-return behavior, and the parser warns on non-final bracketed `when [ ... ]` statements in exe blocks.
 - Block-bodied executables now route managed guard and policy denials through terminal `when` handlers, so `denied =>` fallbacks keep working after refactoring direct `when` bodies into `[...]` blocks.

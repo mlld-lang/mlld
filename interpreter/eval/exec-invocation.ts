@@ -3608,11 +3608,11 @@ async function evaluateExecInvocationInternal(
     }
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
-    const {
-      operationContext,
-      exeLabels,
-      mergePolicyInputDescriptor
-    } = await createExecOperationContextAndEnforcePolicy({
+	    const {
+	      operationContext,
+	      exeLabels,
+	      mergePolicyInputDescriptor
+	    } = await createExecOperationContextAndEnforcePolicy({
       node,
       definition,
       commandName,
@@ -3633,13 +3633,20 @@ async function evaluateExecInvocationInternal(
         interpolateWithResultDescriptor,
         getResultSecurityDescriptor: () => resultSecurityDescriptor,
         resolveStdinInput
-      }
-    });
+	      }
+	    });
 
-    if (llmResumeEligible || currentLlmResumeState) {
-      const nextMetadata: Record<string, unknown> = {
-        ...((operationContext.metadata ?? {}) as Record<string, unknown>)
-      };
+	    const activeExeLabels = exeLabels.length > 0
+	      ? exeLabels
+	      : Array.from(runtimeEnv.getExeLabels() ?? runtimeEnv.getEnclosingExeLabels());
+	    if (activeExeLabels.length > 0) {
+	      execEnv.setExeLabels(activeExeLabels);
+	    }
+
+	    if (llmResumeEligible || currentLlmResumeState) {
+	      const nextMetadata: Record<string, unknown> = {
+	        ...((operationContext.metadata ?? {}) as Record<string, unknown>)
+	      };
       if (llmResumeEligible) {
         nextMetadata.llmResumeEligible = true;
       }

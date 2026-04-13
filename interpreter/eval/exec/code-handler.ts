@@ -104,19 +104,22 @@ export async function executeCodeExecutable(
   const isMlldExecutable =
     typeof definition.language === 'string' && definition.language.startsWith('mlld-');
   const toolReturnState = createExeToolReturnState(definition.toolReturnMode);
-  const rootExeContext: ExeExecutionContext | undefined = isMlldExecutable
-    ? {
-        allowReturn: true,
-        scope: 'function',
+	  const rootExeContext: ExeExecutionContext | undefined = isMlldExecutable
+	    ? {
+	        allowReturn: true,
+	        scope: 'function',
         hasFunctionBoundary: true,
         ...(toolReturnState ? { toolReturnState } : {})
-      }
-    : undefined;
-  const rootExeContextEnv = execEnv;
+	      }
+	    : undefined;
+	  const rootExeContextEnv = execEnv;
+	  const activeExeLabels = exeLabels.length > 0
+	    ? exeLabels
+	    : Array.from(execEnv.getExeLabels() ?? execEnv.getEnclosingExeLabels());
 
-  if (exeLabels.length > 0) {
-    execEnv.setExeLabels(exeLabels);
-  }
+	  if (activeExeLabels.length > 0) {
+	    execEnv.setExeLabels(activeExeLabels);
+	  }
 
   if (rootExeContext) {
     rootExeContextEnv.pushExecutionContext('exe', rootExeContext);
@@ -424,16 +427,16 @@ export async function executeCodeExecutable(
           }
         : undefined;
 
-    const codeResult = await execEnv.executeCode(
-      code,
-      definition.language || 'javascript',
-      codeParams,
-      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined,
-      codeOptions,
-      workingDirectory
-        ? { directiveType: 'exec', sourceLocation: node.location, workingDirectory }
-        : { directiveType: 'exec', sourceLocation: node.location }
-    );
+	    const codeResult = await execEnv.executeCode(
+	      code,
+	      definition.language || 'javascript',
+	      codeParams,
+	      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined,
+	      codeOptions,
+	      workingDirectory
+	        ? { directiveType: 'exec', sourceLocation: node.location, workingDirectory, exeLabels: activeExeLabels }
+	        : { directiveType: 'exec', sourceLocation: node.location, exeLabels: activeExeLabels }
+	    );
 
     let processedResult: any;
     if (

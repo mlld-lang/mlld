@@ -2536,6 +2536,27 @@ export class Environment
     return this.contextManager.getEnclosingExeLabels();
   }
 
+  hasExeLabel(label: string): boolean {
+    const normalized = label.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    let current: Environment | undefined = this;
+    while (current) {
+      const localLabels = (current as any)._exeLabels as readonly string[] | undefined;
+      if (
+        Array.isArray(localLabels) &&
+        localLabels.some(candidate => candidate.trim().toLowerCase() === normalized)
+      ) {
+        return true;
+      }
+      current = current.parent;
+    }
+
+    return this.contextManager.hasEnclosingExeLabel(normalized);
+  }
+
   setToolsAvailability(allowed: readonly string[], denied: readonly string[]): void {
     this.contextManager.setToolAvailability(allowed, denied);
   }

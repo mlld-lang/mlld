@@ -125,9 +125,9 @@ export type CommandExecutableHandlerOptions = {
 export async function executeCommandExecutable(
   options: CommandExecutableHandlerOptions
 ): Promise<unknown> {
-  const {
-    definition,
-    commandName,
+	  const {
+	    definition,
+	    commandName,
     node,
     env,
     execEnv,
@@ -147,11 +147,14 @@ export async function executeCommandExecutable(
     hasStreamFormat,
     suppressTerminal,
     skipResultWithClause,
-    chunkEffect,
-    services
-  } = options;
+	    chunkEffect,
+	    services
+	  } = options;
+	  const activeExeLabels = exeLabels.length > 0
+	    ? exeLabels
+	    : Array.from(execEnv.getExeLabels() ?? execEnv.getEnclosingExeLabels());
 
-  const referencedInTemplate = collectReferencedTemplateParameters(definition.commandTemplate, params);
+	  const referencedInTemplate = collectReferencedTemplateParameters(definition.commandTemplate, params);
 
   let autoverifyVars: string[] = [];
   if (exeLabels.includes('llm')) {
@@ -259,19 +262,19 @@ export async function executeCommandExecutable(
         ...envAuthSecrets,
         ...usingParts.secrets
       },
-      executionContext: {
-        directiveType: 'exec',
-        streamingEnabled,
+	      executionContext: {
+	        directiveType: 'exec',
+	        streamingEnabled,
         pipelineId,
         stageIndex: 0,
-        sourceLocation: node.location,
-        emitEffect: chunkEffect,
-        workingDirectory,
-        suppressTerminal: hasStreamFormat || suppressTerminal,
-        exeLabels
-      },
-      sourceLocation: node.location ?? null,
-      directiveType: 'exec'
+	        sourceLocation: node.location,
+	        emitEffect: chunkEffect,
+	        workingDirectory,
+	        suppressTerminal: hasStreamFormat || suppressTerminal,
+	        exeLabels: activeExeLabels
+	      },
+	      sourceLocation: node.location ?? null,
+	      directiveType: 'exec'
     });
     const providerOutput = providerResult.stdout ?? '';
     const parsed = parseAndWrapJson(providerOutput);
@@ -282,9 +285,10 @@ export async function executeCommandExecutable(
       definition,
       params,
       evaluatedArgs,
-      exeLabels,
-      autoverifyVars,
-      localEnvVars,
+	      exeLabels,
+	      activeExeLabels,
+	      autoverifyVars,
+	      localEnvVars,
       injectedEnv,
       execEnv,
       node,
@@ -855,6 +859,7 @@ async function executeLocalCommand(options: {
   params: readonly string[];
   evaluatedArgs: unknown[];
   exeLabels: readonly string[];
+  activeExeLabels: readonly string[];
   autoverifyVars: readonly string[];
   localEnvVars: Record<string, string>;
   injectedEnv: Record<string, string>;
@@ -873,10 +878,11 @@ async function executeLocalCommand(options: {
   const {
     command,
     definition,
-    params,
-    evaluatedArgs,
-    exeLabels,
-    autoverifyVars,
+	    params,
+	    evaluatedArgs,
+	    exeLabels,
+	    activeExeLabels,
+	    autoverifyVars,
     localEnvVars,
     injectedEnv,
     execEnv,
@@ -901,7 +907,7 @@ async function executeLocalCommand(options: {
     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 128 * 1024;
   })();
 
-  const hasLlmLabel = exeLabels.some(label => label.trim().toLowerCase() === 'llm');
+	  const hasLlmLabel = activeExeLabels.some(label => label.trim().toLowerCase() === 'llm');
   const needsBashFallback =
     !hasLlmLabel &&
     Object.values(localEnvVars).some(
@@ -958,19 +964,19 @@ async function executeLocalCommand(options: {
       codeParams.MLLD_VERIFY_VARS = autoverifyVars.join(',');
     }
 
-    const commandOutput = await execEnv.executeCode(
-      fallbackCommand,
-      'sh',
+	    const commandOutput = await execEnv.executeCode(
+	      fallbackCommand,
+	      'sh',
       codeParams,
       undefined,
       workingDirectory ? { workingDirectory } : undefined,
-      {
-        directiveType: 'exec',
-        sourceLocation: node.location,
-        workingDirectory,
-        exeLabels
-      }
-    );
+	      {
+	        directiveType: 'exec',
+	        sourceLocation: node.location,
+	        workingDirectory,
+	        exeLabels: activeExeLabels
+	      }
+	    );
 
     if (typeof commandOutput === 'string') {
       const parsed = parseAndWrapJson(commandOutput);
@@ -987,8 +993,8 @@ async function executeLocalCommand(options: {
     (commandOptions as any).workingDirectory = workingDirectory;
   }
 
-  const commandOutput = await execEnv.executeCommand(
-    command,
+	  const commandOutput = await execEnv.executeCommand(
+	    command,
     commandOptions,
     {
       directiveType: 'exec',
@@ -996,12 +1002,12 @@ async function executeLocalCommand(options: {
       pipelineId,
       stageIndex: 0,
       sourceLocation: node.location,
-      emitEffect: chunkEffect,
-      workingDirectory,
-      suppressTerminal: hasStreamFormat || suppressTerminal,
-      exeLabels
-    }
-  );
+	      emitEffect: chunkEffect,
+	      workingDirectory,
+	      suppressTerminal: hasStreamFormat || suppressTerminal,
+	      exeLabels: activeExeLabels
+	    }
+	  );
 
   if (typeof commandOutput === 'string') {
     const parsed = parseAndWrapJson(commandOutput);

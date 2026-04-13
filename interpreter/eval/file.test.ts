@@ -283,6 +283,49 @@ describe('file/files evaluation', () => {
     expect(await fileSystem.exists('/project/box-sh-vfs-target-19f2.txt')).toBe(false);
   });
 
+  it('routes boxed llm sh executables through host bash instead of workspace shell', async () => {
+    const fileSystem = await createFileSystem();
+    const pathService = new PathService();
+    const nodeBin = process.execPath.replace(/\\/g, '/');
+    const originalBashBinary = process.env.MLLD_BASH_BINARY;
+    const hostRoot = process.cwd().replace(/\\/g, '/');
+    const hostPathContext: PathContext = {
+      projectRoot: hostRoot,
+      fileDirectory: hostRoot,
+      executionDirectory: hostRoot,
+      invocationDirectory: hostRoot,
+      filePath: path.join(hostRoot, 'main.mld')
+    };
+    process.env.MLLD_BASH_BINARY = '/bin/bash';
+
+    try {
+      const output = await interpret(
+        [
+          '/exe llm @probe(nodeBin) = sh {',
+          '  "$nodeBin" -e "process.stdout.write(\'host-llm-bash\')"',
+          '}',
+          '/var @out = box { tools: ["Bash"] } [',
+          `  => @probe("${nodeBin}")`,
+          ']',
+          '/show @out'
+        ].join('\n'),
+        {
+          fileSystem,
+          pathService,
+          pathContext: hostPathContext
+        }
+      );
+
+      expect(String(output).trim()).toBe('host-llm-bash');
+    } finally {
+      if (originalBashBinary === undefined) {
+        delete process.env.MLLD_BASH_BINARY;
+      } else {
+        process.env.MLLD_BASH_BINARY = originalBashBinary;
+      }
+    }
+  });
+
   it('uses resolver shorthand workspaces in box blocks', async () => {
     const fileSystem = await createFileSystem();
     const pathService = new PathService();
