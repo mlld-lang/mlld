@@ -3,6 +3,7 @@ import { version } from '@core/version';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { ToolCollection } from '@core/types/tools';
+import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
 import { FunctionRouter } from './FunctionRouter';
 import { generateToolSchema, mlldNameToMCPName } from './SchemaGenerator';
 import type {
@@ -148,7 +149,8 @@ export class MCPServer {
           continue;
         }
         const toolDef = this.toolCollection[toolName];
-        const schema = generateToolSchema(toolName, execVar, toolDef);
+        const metadata = resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName);
+        const schema = generateToolSchema(toolName, execVar, toolDef, metadata);
         if (toolDef?.description) {
           schema.description = toolDef.description;
         }

@@ -11,6 +11,7 @@ export type RecordDisplayMode = 'bare' | 'ref' | 'mask' | 'handle';
 export type RecordDisplayModeName = string;
 export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
 export type RecordInputSourceRoot = 'input' | 'key' | 'value';
+export type RecordDirection = 'input' | 'output' | 'hybrid';
 export type RecordDisplayEntry =
   | { kind: 'bare'; field: string }
   | { kind: 'ref'; field: string }
@@ -117,6 +118,8 @@ export interface RecordDefinition {
   fields: RecordFieldDefinition[];
   rootMode: RecordRootMode;
   display: RecordDisplayConfig;
+  direction: RecordDirection;
+  correlate?: boolean;
   validate: RecordValidationMode;
   when?: RecordWhenRule[];
   location?: SourceLocation;
@@ -131,7 +134,8 @@ export function isRecordDefinition(value: unknown): value is RecordDefinition {
   return (
     typeof candidate.name === 'string' &&
     Array.isArray(candidate.fields) &&
-    (candidate.rootMode === 'object' || candidate.rootMode === 'scalar' || candidate.rootMode === 'map-entry')
+    (candidate.rootMode === 'object' || candidate.rootMode === 'scalar' || candidate.rootMode === 'map-entry') &&
+    (candidate.direction === 'input' || candidate.direction === 'output' || candidate.direction === 'hybrid')
   );
 }
 
@@ -317,6 +321,10 @@ export function formatRecordDefinition(definition: RecordDefinition): string {
     lines.push(`  display: ${display}`);
   }
 
+  if (typeof definition.correlate === 'boolean') {
+    lines.push(`  correlate: ${definition.correlate ? 'true' : 'false'}`);
+  }
+
   if (definition.when && definition.when.length > 0) {
     lines.push('  when: [');
     for (const rule of definition.when) {
@@ -354,6 +362,7 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     facts?: RecordFieldDefinition[];
     data?: RecordFieldDefinition[];
     display?: RecordDisplayDeclaration;
+    correlate?: boolean;
     when?: RecordWhenRule[];
     validate?: RecordValidationMode;
     unsupported?: Array<{ key: string; value?: BaseMlldNode | DataValue }>;
@@ -366,7 +375,37 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     fieldCount: number;
     factCount: number;
     dataCount: number;
+    hasCorrelate?: boolean;
     hasWhen: boolean;
     validate: RecordValidationMode;
   };
+}
+
+export function getRecordDirection(options: {
+  display: RecordDisplayConfig;
+  correlate?: boolean;
+}): RecordDirection {
+  if (typeof options.correlate === 'boolean') {
+    return 'input';
+  }
+  if (options.display.kind !== 'open') {
+    return 'output';
+  }
+  return 'hybrid';
+}
+
+export function canUseRecordForOutput(definition: RecordDefinition): boolean {
+  return definition.direction !== 'input';
+}
+
+export function canUseRecordForInput(definition: RecordDefinition): boolean {
+  return definition.direction !== 'output';
+}
+
+export function resolveRecordFactCorrelation(definition: Pick<RecordDefinition, 'fields' | 'correlate'>): boolean {
+  if (typeof definition.correlate === 'boolean') {
+    return definition.correlate;
+  }
+  const factCount = definition.fields.filter(field => field.classification === 'fact').length;
+  return factCount > 1;
 }

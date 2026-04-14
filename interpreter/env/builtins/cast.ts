@@ -5,6 +5,7 @@ import {
   createExecutableVariable,
   type VariableSource
 } from '@core/types/variable';
+import { canUseRecordForOutput } from '@core/types/record';
 import { coerceRecordOutput } from '@interpreter/eval/records/coerce-record';
 import { normalizeResolvedRecordDefinition } from '@interpreter/eval/records/resolve-record-definition';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
@@ -32,6 +33,14 @@ function resolveCastRecordDefinition(
 ) {
   const direct = normalizeResolvedRecordDefinition(recordArg);
   if (direct) {
+    if (!canUseRecordForOutput(direct)) {
+      throw new MlldInterpreterError(
+        'Builtin @cast cannot use an input-only record',
+        'record',
+        undefined as any,
+        { code: 'INPUT_RECORD_COERCION_ATTEMPT' }
+      );
+    }
     return direct;
   }
 
@@ -48,6 +57,14 @@ function resolveCastRecordDefinition(
 
     const definition = env.getRecordDefinition(recordName);
     if (definition) {
+      if (!canUseRecordForOutput(definition)) {
+        throw new MlldInterpreterError(
+          `Builtin @cast cannot use input-only record '@${recordName}'`,
+          'record',
+          undefined as any,
+          { code: 'INPUT_RECORD_COERCION_ATTEMPT' }
+        );
+      }
       return definition;
     }
 

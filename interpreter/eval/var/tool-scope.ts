@@ -1,7 +1,15 @@
 import {
   getToolCollectionAuthorizationContext,
-  type ToolCollection
+  normalizeToolAuthorizableValue,
+  type ToolAuthorizableValue,
+  type ToolCollection,
+  type ToolInputSchema
 } from '@core/types/tools';
+import {
+  canUseRecordForInput,
+  resolveRecordFactCorrelation,
+  type RecordDefinition
+} from '@core/types/record';
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
@@ -11,6 +19,7 @@ import {
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { isRecordVariable } from '@core/types/variable';
 
 export type ToolScopeValue = {
   tools: string[];
@@ -191,23 +200,51 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
     const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
     const executableSourceArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.sourceArgs);
+    const unknownFields = Object.keys(toolValue).filter(key =>
+      ![
+        'mlld',
+        'inputs',
+        'labels',
+        'description',
+        'instructions',
+        'authorizable',
+        'bind',
+        'expose',
+        'optional',
+        'controlArgs',
+        'updateArgs',
+        'exactPayloadArgs',
+        'sourceArgs',
+        'correlateControlArgs'
+      ].includes(key)
+    );
+    if (unknownFields.length > 0) {
+      throw new Error(
+        `Tool '${toolName}' has unknown fields: ${unknownFields.join(', ')}`
+      );
+    }
 
     const description = toolValue.description;
     if (description !== undefined && typeof description !== 'string') {
       throw new Error(`Tool '${toolName}' description must be a string`);
     }
-    const correlateControlArgs = toolValue.correlateControlArgs;
-    if (correlateControlArgs !== undefined && typeof correlateControlArgs !== 'boolean') {
-      throw new Error(`Tool '${toolName}' correlateControlArgs must be a boolean`);
+    const instructions = toolValue.instructions;
+    if (instructions !== undefined && typeof instructions !== 'string') {
+      throw new Error(`Tool '${toolName}' instructions must be a string`);
     }
 
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
-    const expose = normalizeStringArray(toolValue.expose, toolName, 'expose');
-    const optional = normalizeStringArray(toolValue.optional, toolName, 'optional');
-    const controlArgs = normalizeStringArray(toolValue.controlArgs, toolName, 'controlArgs');
-    const updateArgs = normalizeStringArray(toolValue.updateArgs, toolName, 'updateArgs');
-    const exactPayloadArgs = normalizeStringArray(toolValue.exactPayloadArgs, toolName, 'exactPayloadArgs');
-    const sourceArgs = normalizeStringArray(toolValue.sourceArgs, toolName, 'sourceArgs');
+    const authorizable = normalizeToolAuthorizable(toolValue.authorizable, toolName);
+    const expose = normalizeLegacyStringArray(toolValue.expose, toolName, 'expose');
+    const optional = normalizeLegacyStringArray(toolValue.optional, toolName, 'optional');
+    const controlArgs = normalizeLegacyStringArray(toolValue.controlArgs, toolName, 'controlArgs');
+    const updateArgs = normalizeLegacyStringArray(toolValue.updateArgs, toolName, 'updateArgs');
+    const exactPayloadArgs = normalizeLegacyStringArray(toolValue.exactPayloadArgs, toolName, 'exactPayloadArgs');
+    const sourceArgs = normalizeLegacyStringArray(toolValue.sourceArgs, toolName, 'sourceArgs');
+    const correlateControlArgs = (toolValue as Record<string, unknown>).correlateControlArgs;
+    if (correlateControlArgs !== undefined && typeof correlateControlArgs !== 'boolean') {
+      throw new Error(`Tool '${toolName}' correlateControlArgs must be a boolean`);
+    }
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -226,103 +263,117 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       }
     }
 
-    if (expose) {
-      const invalidExpose = expose.filter(name => !paramSet.has(name));
-      if (invalidExpose.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
-        );
-      }
-    }
+    const inputSchema = resolveToolInputSchema({
+      toolName,
+      rawInputRef: (toolValue as Record<string, unknown>).inputs,
+      env,
+      executableName: mlldName,
+      executableParamNames: paramNames,
+      bindKeys: boundKeys
+    });
 
-    if (optional) {
-      const invalidOptional = optional.filter(name => !paramSet.has(name));
-      if (invalidOptional.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' optional values must match parameters of '@${mlldName}': ${invalidOptional.join(', ')}`
-        );
-      }
-    }
-
-    if (expose) {
-      const overlap = boundKeys.filter(key => expose.includes(key));
-      if (overlap.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' expose values cannot include bound parameters: ${overlap.join(', ')}`
-        );
-      }
-
-      const covered = new Set([...boundKeys, ...expose]);
-      let lastCoveredIndex = -1;
-      for (let i = 0; i < paramNames.length; i++) {
-        if (covered.has(paramNames[i])) {
-          lastCoveredIndex = i;
-        }
-      }
-      if (lastCoveredIndex >= 0) {
-        const missing: string[] = [];
-        for (let i = 0; i <= lastCoveredIndex; i++) {
-          const paramName = paramNames[i];
-          if (!covered.has(paramName)) {
-            missing.push(paramName);
-          }
-        }
-        if (missing.length > 0) {
+    if (!inputSchema) {
+      if (expose) {
+        const invalidExpose = expose.filter(name => !paramSet.has(name));
+        if (invalidExpose.length > 0) {
           throw new Error(
-            `Tool '${toolName}' bind and expose must cover required parameters: ${missing.join(', ')}`
+            `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
           );
         }
       }
-    }
 
-    if (optional) {
-      if (!expose) {
-        throw new Error(`Tool '${toolName}' optional values require expose to be set`);
+      if (optional) {
+        const invalidOptional = optional.filter(name => !paramSet.has(name));
+        if (invalidOptional.length > 0) {
+          throw new Error(
+            `Tool '${toolName}' optional values must match parameters of '@${mlldName}': ${invalidOptional.join(', ')}`
+          );
+        }
       }
-      const optionalOutsideExpose = optional.filter(name => !expose.includes(name));
-      if (optionalOutsideExpose.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' optional values must be a subset of expose: ${optionalOutsideExpose.join(', ')}`
-        );
-      }
-    }
 
-    const visibleParams = expose
-      ? expose
-      : paramNames.filter(paramName => !boundKeys.includes(paramName));
-    validateRestrictedArgOverride({
-      field: 'controlArgs',
-      toolName,
-      values: controlArgs,
-      visibleParams,
-      executableValues: executableControlArgs
-    });
-    validateRestrictedArgOverride({
-      field: 'updateArgs',
-      toolName,
-      values: updateArgs,
-      visibleParams,
-      executableValues: executableUpdateArgs
-    });
-    validateRestrictedArgOverride({
-      field: 'exactPayloadArgs',
-      toolName,
-      values: exactPayloadArgs,
-      visibleParams,
-      executableValues: executableExactPayloadArgs
-    });
-    validateRestrictedArgOverride({
-      field: 'sourceArgs',
-      toolName,
-      values: sourceArgs,
-      visibleParams,
-      executableValues: executableSourceArgs
-    });
+      if (expose) {
+        const overlap = boundKeys.filter(key => expose.includes(key));
+        if (overlap.length > 0) {
+          throw new Error(
+            `Tool '${toolName}' expose values cannot include bound parameters: ${overlap.join(', ')}`
+          );
+        }
+
+        const covered = new Set([...boundKeys, ...expose]);
+        let lastCoveredIndex = -1;
+        for (let i = 0; i < paramNames.length; i += 1) {
+          if (covered.has(paramNames[i])) {
+            lastCoveredIndex = i;
+          }
+        }
+        if (lastCoveredIndex >= 0) {
+          const missing: string[] = [];
+          for (let i = 0; i <= lastCoveredIndex; i += 1) {
+            const paramName = paramNames[i];
+            if (!covered.has(paramName)) {
+              missing.push(paramName);
+            }
+          }
+          if (missing.length > 0) {
+            throw new Error(
+              `Tool '${toolName}' bind and expose must cover required parameters: ${missing.join(', ')}`
+            );
+          }
+        }
+      }
+
+      if (optional) {
+        if (!expose) {
+          throw new Error(`Tool '${toolName}' optional values require expose to be set`);
+        }
+        const optionalOutsideExpose = optional.filter(name => !expose.includes(name));
+        if (optionalOutsideExpose.length > 0) {
+          throw new Error(
+            `Tool '${toolName}' optional values must be a subset of expose: ${optionalOutsideExpose.join(', ')}`
+          );
+        }
+      }
+
+      const visibleParams = expose
+        ? expose
+        : paramNames.filter(paramName => !boundKeys.includes(paramName));
+      validateRestrictedArgOverride({
+        field: 'controlArgs',
+        toolName,
+        values: controlArgs,
+        visibleParams,
+        executableValues: executableControlArgs
+      });
+      validateRestrictedArgOverride({
+        field: 'updateArgs',
+        toolName,
+        values: updateArgs,
+        visibleParams,
+        executableValues: executableUpdateArgs
+      });
+      validateRestrictedArgOverride({
+        field: 'exactPayloadArgs',
+        toolName,
+        values: exactPayloadArgs,
+        visibleParams,
+        executableValues: executableExactPayloadArgs
+      });
+      validateRestrictedArgOverride({
+        field: 'sourceArgs',
+        toolName,
+        values: sourceArgs,
+        visibleParams,
+        executableValues: executableSourceArgs
+      });
+    }
 
     collection[toolName] = {
       mlld: mlldName,
+      ...(inputSchema ? { inputs: inputSchema.recordName } : {}),
       ...(labels ? { labels } : {}),
       ...(description ? { description } : {}),
+      ...(instructions ? { instructions } : {}),
+      ...(authorizable !== undefined ? { authorizable } : {}),
       ...(bind ? { bind } : {}),
       ...(expose ? { expose } : {}),
       ...(optional ? { optional } : {}),
@@ -356,7 +407,46 @@ function resolveToolMlldName(value: unknown, toolName: string): string {
 function normalizeStringArray(
   value: unknown,
   toolName: string,
-  field: 'labels' | 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
+  field: 'labels'
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+    throw new Error(`Tool '${toolName}' ${field} must be an array of strings`);
+  }
+  return value;
+}
+
+function normalizeToolAuthorizable(
+  value: unknown,
+  toolName: string
+): ToolAuthorizableValue | undefined {
+  const normalized = normalizeToolAuthorizableValue(value);
+  if (value !== undefined && normalized === undefined) {
+    throw new Error(
+      `Tool '${toolName}' authorizable must be false, a role string, or an array of role strings`
+    );
+  }
+  const roleNames =
+    normalized === false
+      ? []
+      : typeof normalized === 'string'
+        ? [normalized]
+        : normalized ?? [];
+  const invalidRoles = roleNames.filter(role => !/^role:[a-z][a-z0-9_-]*$/i.test(role));
+  if (invalidRoles.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' authorizable entries must match role:*: ${invalidRoles.join(', ')}`
+    );
+  }
+  return normalized;
+}
+
+function normalizeLegacyStringArray(
+  value: unknown,
+  toolName: string,
+  field: 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
 ): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -373,6 +463,100 @@ function normalizeExecutableMetadataStringArray(value: unknown): string[] {
   }
 
   return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function resolveToolInputSchema(options: {
+  toolName: string;
+  rawInputRef: unknown;
+  env: Environment;
+  executableName: string;
+  executableParamNames: readonly string[];
+  bindKeys: readonly string[];
+}): ToolInputSchema | undefined {
+  const { toolName, rawInputRef, env, executableName, executableParamNames, bindKeys } = options;
+  if (rawInputRef === undefined) {
+    return undefined;
+  }
+  const recordDefinition = resolveToolInputRecordDefinition(rawInputRef, env, toolName);
+  if (!canUseRecordForInput(recordDefinition)) {
+    throw new Error(
+      `Tool '${toolName}' inputs must reference an input-capable record`
+    );
+  }
+  if (recordDefinition.validate === 'demote') {
+    throw new Error(
+      `Tool '${toolName}' inputs cannot use record '@${recordDefinition.name}' with validate: "demote"`
+    );
+  }
+  const fieldNames = recordDefinition.fields.map(field => field.name);
+  const fieldSet = new Set(fieldNames);
+  const paramSet = new Set(executableParamNames);
+  const overlap = bindKeys.filter(key => fieldSet.has(key));
+  if (overlap.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' bind cannot include input-record fields: ${overlap.join(', ')}`
+    );
+  }
+  const invalidParams = fieldNames.filter(name => !paramSet.has(name));
+  if (invalidParams.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' inputs for '@${executableName}' reference unknown parameters: ${invalidParams.join(', ')}`
+    );
+  }
+  const covered = new Set([...fieldNames, ...bindKeys]);
+  const orphanParams = executableParamNames.filter(name => !covered.has(name));
+  if (orphanParams.length > 0) {
+    throw new Error(
+      `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`
+    );
+  }
+  const optionalParams = recordDefinition.fields
+    .filter(field => field.optional)
+    .map(field => field.name);
+  return {
+    recordName: recordDefinition.name,
+    fields: recordDefinition.fields.map(field => ({
+      name: field.name,
+      classification: field.classification,
+      ...(field.valueType ? { valueType: field.valueType } : {}),
+      optional: field.optional === true,
+      ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+    })),
+    factFields: recordDefinition.fields
+      .filter(field => field.classification === 'fact')
+      .map(field => field.name),
+    dataFields: recordDefinition.fields
+      .filter(field => field.classification === 'data')
+      .map(field => field.name),
+    visibleParams: executableParamNames.filter(paramName => fieldSet.has(paramName)),
+    optionalParams,
+    correlate: resolveRecordFactCorrelation(recordDefinition),
+    ...(typeof recordDefinition.correlate === 'boolean'
+      ? { declaredCorrelate: recordDefinition.correlate }
+      : {})
+  };
+}
+
+function resolveToolInputRecordDefinition(
+  value: unknown,
+  env: Environment,
+  toolName: string
+): RecordDefinition {
+  if (typeof value === 'string') {
+    const recordName = value.startsWith('@') ? value.slice(1) : value;
+    const recordDefinition = env.getRecordDefinition(recordName);
+    if (recordDefinition) {
+      return recordDefinition;
+    }
+    throw new Error(`Tool '${toolName}' inputs reference unknown record '@${recordName}'`);
+  }
+  if (isRecordVariable(value as any)) {
+    return (value as { value: RecordDefinition }).value;
+  }
+  if (isVariable(value) && isRecordVariable(value as any)) {
+    return (value as { value: RecordDefinition }).value;
+  }
+  throw new Error(`Tool '${toolName}' inputs must be a record reference`);
 }
 
 function validateRestrictedArgOverride(options: {

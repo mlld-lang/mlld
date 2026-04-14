@@ -75,6 +75,82 @@ async function interpretWithEnvAndFiles(
 }
 
 describe('tool collections', () => {
+  it('creates tool collection entries from input records', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: [subject: string, body: string?],
+        validate: "strict"
+      }
+
+      /exe @send_email(recipient, subject, body, api_key) = js {
+        return { recipient, subject, body, api_key };
+      }
+
+      /var tools @agentTools = {
+        send_email: {
+          mlld: @send_email,
+          inputs: @send_email_inputs,
+          labels: ["tool:w", "comm:w"],
+          description: "Send mail",
+          instructions: "Prefer drafts first.",
+          authorizable: "role:planner",
+          bind: { api_key: "sekret" }
+        }
+      }
+    `);
+
+    const toolsVar = env.getVariable('agentTools');
+    const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(collection.send_email).toMatchObject({
+      mlld: 'send_email',
+      inputs: 'send_email_inputs',
+      labels: ['tool:w', 'comm:w'],
+      description: 'Send mail',
+      instructions: 'Prefer drafts first.',
+      authorizable: 'role:planner'
+    });
+  });
+
+  it('rejects orphan executable parameters when inputs records leave them uncovered', async () => {
+    await expect(
+      interpretWithEnv(`
+        /record @send_email_inputs = {
+          facts: [recipient: string],
+          data: [subject: string],
+          validate: "strict"
+        }
+        /exe @send_email(recipient, subject, body) = js { return body; }
+        /var tools @badTools = {
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs
+          }
+        }
+      `)
+    ).rejects.toThrow(/cover all parameters/i);
+  });
+
+  it('rejects bound params that are also declared in the input record', async () => {
+    await expect(
+      interpretWithEnv(`
+        /record @send_email_inputs = {
+          facts: [recipient: string],
+          data: [subject: string],
+          validate: "strict"
+        }
+        /exe @send_email(recipient, subject) = js { return subject; }
+        /var tools @badTools = {
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs,
+            bind: { subject: "hidden" }
+          }
+        }
+      `)
+    ).rejects.toThrow(/bind cannot include input-record fields/i);
+  });
+
   it('creates tool collection variables with validated entries', async () => {
     const env = await interpretWithEnv(`
       /exe @readData(id: string) = js { return id; }

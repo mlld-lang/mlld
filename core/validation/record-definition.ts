@@ -7,6 +7,7 @@ import {
   normalizeDisplayModeName
 } from '@core/records/display-mode';
 import type {
+  RecordDirection,
   RecordDirectiveNode,
   RecordDefinition,
   RecordDataTrustLevel,
@@ -18,6 +19,7 @@ import type {
   RecordWhenCondition,
   RecordWhenResult
 } from '@core/types/record';
+import { getRecordDirection } from '@core/types/record';
 import type { StaticValidationIssue } from './issues';
 
 const DEFAULT_VALIDATE_MODE = 'demote';
@@ -49,6 +51,25 @@ function issue(
   return { code, message, location };
 }
 
+function validateRecordDirection(options: {
+  name: string;
+  display: RecordDisplayConfig;
+  correlate?: boolean;
+  location?: SourceLocation;
+}): StaticValidationIssue[] {
+  const { name, display, correlate, location } = options;
+  if (display.kind !== 'open' && typeof correlate === 'boolean') {
+    return [
+      issue(
+        'MIXED_RECORD_DIRECTION',
+        `Record '@${name}' cannot declare both display and correlate`,
+        location
+      )
+    ];
+  }
+  return [];
+}
+
 function normalizeFields(
   fields: RecordFieldDefinition[],
   classification: 'fact' | 'data'
@@ -68,6 +89,24 @@ function normalizeFields(
       dataTrust: normalizeRecordDataTrustLevel(field.dataTrust)
     };
   });
+}
+
+function validateRecordFieldShape(
+  field: RecordFieldDefinition,
+  recordName: string,
+  filePath?: string,
+  fallbackLocation?: SourceLocation
+): StaticValidationIssue[] {
+  if (field.classification === 'data' && field.valueType === 'handle') {
+    return [
+      issue(
+        'HANDLE_ON_DATA',
+        `Record '@${recordName}' data field '${field.name}' cannot use handle type`,
+        getRecordFieldLocation(field, filePath, fallbackLocation)
+      )
+    ];
+  }
+  return [];
 }
 
 function normalizeRecordDataTrustLevel(value: unknown): RecordDataTrustLevel {
@@ -472,6 +511,7 @@ export function buildRecordDefinitionFromDirective(
 
     seen.add(field.name);
     fieldByName.set(field.name, field);
+    issues.push(...validateRecordFieldShape(field, name, options.filePath, directiveLocation));
     issues.push(...validateRecordFieldPurity(field, name, options.filePath, directiveLocation));
   }
 
@@ -500,6 +540,15 @@ export function buildRecordDefinitionFromDirective(
     issues,
     directiveLocation
   );
+  const correlate = typeof directive.values?.correlate === 'boolean'
+    ? directive.values.correlate
+    : undefined;
+  issues.push(...validateRecordDirection({
+    name,
+    display,
+    correlate,
+    location: directiveLocation
+  }));
 
   const when = directive.values?.when;
   if (Array.isArray(when)) {
@@ -520,6 +569,8 @@ export function buildRecordDefinitionFromDirective(
       fields,
       rootMode: inferRecordRootMode(fields),
       display,
+      direction: getRecordDirection({ display, correlate }),
+      ...(typeof correlate === 'boolean' ? { correlate } : {}),
       validate: directive.values?.validate ?? DEFAULT_VALIDATE_MODE,
       ...(Array.isArray(when) && when.length > 0 ? { when: [...when] } : {}),
       location: directiveLocation

@@ -177,8 +177,8 @@ class FunctionMcpBridgeServer {
     });
 
     for (const [mcpName, cloned] of clonedExecutables.entries()) {
-      const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName]);
       const metadata = resolveToolCollectionEntryMetadata(this.toolEnv, this.toolCollection, mcpName);
+      const schema = generateToolSchema(mcpName, cloned, this.toolCollection[mcpName], metadata);
       const notes = metadata
         ? renderToolDescriptionNotes({
             env: this.toolEnv,

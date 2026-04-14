@@ -2,10 +2,40 @@
  * Tool collection type definitions for MCP tool gateway.
  */
 
+import type {
+  RecordDataTrustLevel,
+  RecordFieldClassification,
+  RecordFieldValueType
+} from './record';
+
+export interface ToolInputFieldSchema {
+  name: string;
+  classification: RecordFieldClassification;
+  valueType?: RecordFieldValueType;
+  optional: boolean;
+  dataTrust?: RecordDataTrustLevel;
+}
+
+export interface ToolInputSchema {
+  recordName: string;
+  fields: ToolInputFieldSchema[];
+  factFields: string[];
+  dataFields: string[];
+  visibleParams: string[];
+  optionalParams: string[];
+  correlate: boolean;
+  declaredCorrelate?: boolean;
+}
+
+export type ToolAuthorizableValue = false | string | string[];
+
 export interface ToolDefinition {
   mlld?: string;
+  inputs?: string;
   labels?: string[];
   description?: string;
+  instructions?: string;
+  authorizable?: ToolAuthorizableValue;
   bind?: Record<string, unknown>;
   expose?: string[];
   optional?: string[];
@@ -20,14 +50,17 @@ export type ToolCollection = Record<string, ToolDefinition>;
 
 export interface ToolAuthorizationContextEntry {
   params: string[];
-  controlArgs: string[];
-  hasControlArgsMetadata: boolean;
+  inputSchema?: ToolInputSchema;
+  controlArgs?: string[];
+  hasControlArgsMetadata?: boolean;
   updateArgs?: string[];
   hasUpdateArgsMetadata?: boolean;
   exactPayloadArgs?: string[];
   sourceArgs?: string[];
   labels?: string[];
   description?: string;
+  instructions?: string;
+  authorizable?: ToolAuthorizableValue;
   correlateControlArgs?: boolean;
 }
 
@@ -48,6 +81,93 @@ function cloneStringList(values: readonly string[]): string[] {
     .map(entry => entry.trim());
 }
 
+function cloneToolInputSchemaField(field: ToolInputFieldSchema): ToolInputFieldSchema {
+  return {
+    name: field.name,
+    classification: field.classification,
+    ...(field.valueType ? { valueType: field.valueType } : {}),
+    optional: field.optional === true,
+    ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+  };
+}
+
+export function cloneToolInputSchema(schema: ToolInputSchema): ToolInputSchema {
+  return {
+    recordName: schema.recordName,
+    fields: schema.fields.map(cloneToolInputSchemaField),
+    factFields: cloneStringList(schema.factFields),
+    dataFields: cloneStringList(schema.dataFields),
+    visibleParams: cloneStringList(schema.visibleParams),
+    optionalParams: cloneStringList(schema.optionalParams),
+    correlate: schema.correlate === true,
+    ...(schema.declaredCorrelate !== undefined
+      ? { declaredCorrelate: schema.declaredCorrelate === true }
+      : {})
+  };
+}
+
+function isToolInputFieldSchema(value: unknown): value is ToolInputFieldSchema {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Partial<ToolInputFieldSchema>;
+  return (
+    typeof candidate.name === 'string' &&
+    (candidate.classification === 'fact' || candidate.classification === 'data') &&
+    typeof candidate.optional === 'boolean' &&
+    (candidate.valueType === undefined
+      || candidate.valueType === 'string'
+      || candidate.valueType === 'number'
+      || candidate.valueType === 'boolean'
+      || candidate.valueType === 'array'
+      || candidate.valueType === 'object'
+      || candidate.valueType === 'handle') &&
+    (candidate.dataTrust === undefined || candidate.dataTrust === 'trusted' || candidate.dataTrust === 'untrusted')
+  );
+}
+
+export function isToolInputSchema(value: unknown): value is ToolInputSchema {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Partial<ToolInputSchema>;
+  return (
+    typeof candidate.recordName === 'string' &&
+    Array.isArray(candidate.fields) &&
+    candidate.fields.every(isToolInputFieldSchema) &&
+    Array.isArray(candidate.factFields) &&
+    candidate.factFields.every(entry => typeof entry === 'string') &&
+    Array.isArray(candidate.dataFields) &&
+    candidate.dataFields.every(entry => typeof entry === 'string') &&
+    Array.isArray(candidate.visibleParams) &&
+    candidate.visibleParams.every(entry => typeof entry === 'string') &&
+    Array.isArray(candidate.optionalParams) &&
+    candidate.optionalParams.every(entry => typeof entry === 'string') &&
+    typeof candidate.correlate === 'boolean' &&
+    (candidate.declaredCorrelate === undefined || typeof candidate.declaredCorrelate === 'boolean')
+  );
+}
+
+export function normalizeToolAuthorizableValue(
+  value: unknown
+): ToolAuthorizableValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === false) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = cloneStringList(value);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function isAuthorizationContextEntry(value: unknown): value is ToolAuthorizationContextEntry {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -57,9 +177,10 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
   return (
     Array.isArray(candidate.params)
     && candidate.params.every(entry => typeof entry === 'string')
-    && Array.isArray(candidate.controlArgs)
-    && candidate.controlArgs.every(entry => typeof entry === 'string')
-    && typeof candidate.hasControlArgsMetadata === 'boolean'
+    && (candidate.inputSchema === undefined || isToolInputSchema(candidate.inputSchema))
+    && (candidate.controlArgs === undefined
+      || (Array.isArray(candidate.controlArgs) && candidate.controlArgs.every(entry => typeof entry === 'string')))
+    && (candidate.hasControlArgsMetadata === undefined || typeof candidate.hasControlArgsMetadata === 'boolean')
     && (candidate.updateArgs === undefined
       || (Array.isArray(candidate.updateArgs) && candidate.updateArgs.every(entry => typeof entry === 'string')))
     && (candidate.hasUpdateArgsMetadata === undefined || typeof candidate.hasUpdateArgsMetadata === 'boolean')
@@ -70,7 +191,14 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
     && (candidate.labels === undefined
       || (Array.isArray(candidate.labels) && candidate.labels.every(entry => typeof entry === 'string')))
     && (candidate.description === undefined || typeof candidate.description === 'string')
+    && (candidate.instructions === undefined || typeof candidate.instructions === 'string')
     && (candidate.correlateControlArgs === undefined || typeof candidate.correlateControlArgs === 'boolean')
+    && (
+      candidate.authorizable === undefined
+      || candidate.authorizable === false
+      || typeof candidate.authorizable === 'string'
+      || (Array.isArray(candidate.authorizable) && candidate.authorizable.every(entry => typeof entry === 'string'))
+    )
   );
 }
 
@@ -92,8 +220,15 @@ export function cloneToolCollectionAuthorizationContext(
       toolName,
       {
         params: cloneStringList(entry.params),
-        controlArgs: cloneStringList(entry.controlArgs),
-        hasControlArgsMetadata: entry.hasControlArgsMetadata === true,
+        ...(entry.inputSchema
+          ? { inputSchema: cloneToolInputSchema(entry.inputSchema) }
+          : {}),
+        ...(Array.isArray(entry.controlArgs)
+          ? { controlArgs: cloneStringList(entry.controlArgs) }
+          : {}),
+        ...(entry.hasControlArgsMetadata !== undefined
+          ? { hasControlArgsMetadata: entry.hasControlArgsMetadata === true }
+          : {}),
         ...(Array.isArray(entry.updateArgs)
           ? { updateArgs: cloneStringList(entry.updateArgs) }
           : {}),
@@ -111,6 +246,16 @@ export function cloneToolCollectionAuthorizationContext(
           : {}),
         ...(typeof entry.description === 'string'
           ? { description: entry.description }
+          : {}),
+        ...(typeof entry.instructions === 'string'
+          ? { instructions: entry.instructions }
+          : {}),
+        ...(entry.authorizable !== undefined
+          ? {
+              authorizable: Array.isArray(entry.authorizable)
+                ? cloneStringList(entry.authorizable)
+                : entry.authorizable
+            }
           : {}),
         ...(entry.correlateControlArgs === true
           ? { correlateControlArgs: true }

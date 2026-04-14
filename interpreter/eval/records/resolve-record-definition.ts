@@ -1,6 +1,7 @@
 import type { Environment } from '@interpreter/env/Environment';
 import { MlldInterpreterError } from '@core/errors';
 import {
+  canUseRecordForOutput,
   isSerializedRecordDefinition,
   isSerializedRecordVariable,
   type RecordDefinition
@@ -42,6 +43,14 @@ export async function resolveConfiguredOutputRecordDefinition(options: {
       runtimeEnv.getRecordDefinition(outputRecord) ??
       readEmbeddedRecordDefinition(variable, outputRecord);
     if (recordDefinition) {
+      if (!canUseRecordForOutput(recordDefinition)) {
+        throw new MlldInterpreterError(
+          `Executable '@${variable?.name ?? commandName}' cannot use input-only record '@${outputRecord}' as output`,
+          'exec',
+          nodeSourceLocation as any,
+          { code: 'INPUT_RECORD_COERCION_ATTEMPT' }
+        );
+      }
       return recordDefinition;
     }
 
@@ -77,6 +86,14 @@ export async function resolveDynamicRecordDefinition(options: {
     const resolved = await evaluateDataValue(ref as any, execEnv);
     const recordDefinition = normalizeResolvedRecordDefinition(resolved);
     if (recordDefinition) {
+      if (!canUseRecordForOutput(recordDefinition)) {
+        throw new MlldInterpreterError(
+          invalidReferenceMessage(displayRef),
+          'record',
+          nodeSourceLocation as any,
+          { code: 'INPUT_RECORD_COERCION_ATTEMPT' }
+        );
+      }
       return recordDefinition;
     }
   } catch (error) {

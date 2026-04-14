@@ -30,6 +30,7 @@ import {
   getCapturedModuleEnv,
   sealCapturedModuleEnv
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
+import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -588,16 +589,16 @@ export class FunctionRouter {
     toolName: string
   ): Promise<Record<string, unknown>> {
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    const metadata = this.toolCollection
+      ? resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName)
+      : undefined;
     const bound =
       definition.bind && typeof definition.bind === 'object' && !Array.isArray(definition.bind)
         ? definition.bind
         : undefined;
     const boundKeys = bound ? Object.keys(bound) : [];
-    const hasExpose = Array.isArray(definition.expose);
-    const exposed = hasExpose
-      ? definition.expose!
-      : paramNames.filter(param => !boundKeys.includes(param));
-    const optionalSet = new Set(Array.isArray(definition.optional) ? definition.optional : []);
+    const exposed = metadata?.params ?? paramNames.filter(param => !boundKeys.includes(param));
+    const optionalSet = new Set(metadata?.optionalParams ?? definition.optional ?? []);
     const exposedSet = new Set(exposed);
 
     for (const key of Object.keys(args)) {

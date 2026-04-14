@@ -13,6 +13,7 @@ SlashRecord
       const whenEntry = body.entries.find(entry => entry.kind === 'when');
       const validateEntry = body.entries.find(entry => entry.kind === 'validate');
       const displayEntry = body.entries.find(entry => entry.kind === 'display');
+      const correlateEntry = body.entries.find(entry => entry.kind === 'correlate');
 
       const values = {
         identifier: [identifierNode],
@@ -22,6 +23,7 @@ SlashRecord
         ...(displayEntry
           ? { display: displayEntry.value }
           : {}),
+        ...(correlateEntry ? { correlate: correlateEntry.value } : {}),
         ...(whenEntry ? { when: whenEntry.rules } : {}),
         ...(validateEntry ? { validate: validateEntry.mode } : {})
       };
@@ -31,6 +33,7 @@ SlashRecord
         fieldCount: facts.length + data.length,
         factCount: facts.length,
         dataCount: data.length,
+        hasCorrelate: Boolean(correlateEntry),
         hasWhen: Boolean(whenEntry),
         validate: validateEntry ? validateEntry.mode : 'demote'
       };
@@ -67,6 +70,7 @@ RecordEntry
   / RecordFactsEntry
   / RecordDataEntry
   / RecordDisplayEntry
+  / RecordCorrelateEntry
   / RecordWhenEntry
   / RecordValidateEntry
 
@@ -118,6 +122,11 @@ RecordDisplayEntry
       return { kind: 'display', value };
     }
 
+RecordCorrelateEntry
+  = "correlate" _ ":" _ value:RecordBooleanLiteral {
+      return { kind: 'correlate', value };
+    }
+
 RecordValidateEntry
   = "validate" _ ":" _ mode:RecordValidateMode {
       return { kind: 'validate', mode };
@@ -131,6 +140,9 @@ RecordWhenEntry
 RecordValidateMode
   = "\"" mode:("demote" / "strict" / "drop") "\"" { return mode; }
   / "'" mode:("demote" / "strict" / "drop") "'" { return mode; }
+
+RecordBooleanLiteral
+  = value:$("true" / "false") ![a-zA-Z0-9_] { return value === 'true'; }
 
 RecordFieldList
   = "[" _ fields:RecordFields? _ "]" {

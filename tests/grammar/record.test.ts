@@ -265,6 +265,25 @@ describe('record grammar', () => {
     ]);
   });
 
+  it('parses input-direction correlate declarations on records', () => {
+    const directive = getFirstDirective(`
+/record @send_email_inputs = {
+  facts: [recipient: string, tx_id: string],
+  data: [body: string?],
+  correlate: false
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.correlate).toBe(false);
+
+    const { definition, issues } = buildRecordDefinitionFromDirective(directive);
+    expect(issues).toEqual([]);
+    expect(definition).toMatchObject({
+      direction: 'input',
+      correlate: false
+    });
+  });
+
   it('parses object-typed record field annotations', () => {
     const directive = getFirstDirective(`
 /record @worker_output = {

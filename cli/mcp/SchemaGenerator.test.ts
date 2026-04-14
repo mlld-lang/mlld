@@ -111,6 +111,50 @@ describe('SchemaGenerator', () => {
     expect(schema.inputSchema.required).toEqual([]);
   });
 
+  it('derives schema properties from resolved input records', () => {
+    const execVar = createExecutableVariable(
+      'sendEmail',
+      'code',
+      'return {};',
+      ['recipient', 'subject', 'body', 'api_key'],
+      'node',
+      source,
+      undefined
+    );
+
+    const schema = generateToolSchema(
+      'sendEmail',
+      execVar,
+      { bind: { api_key: 'sekret' }, inputs: 'send_email_inputs' },
+      {
+        name: 'send_email',
+        params: ['recipient', 'subject', 'body'],
+        optionalParams: ['body'],
+        description: 'Send email',
+        inputSchema: {
+          recordName: 'send_email_inputs',
+          fields: [
+            { name: 'recipient', classification: 'fact', valueType: 'string', optional: false },
+            { name: 'subject', classification: 'data', valueType: 'string', optional: false, dataTrust: 'untrusted' },
+            { name: 'body', classification: 'data', valueType: 'string', optional: true, dataTrust: 'untrusted' }
+          ],
+          factFields: ['recipient'],
+          dataFields: ['subject', 'body'],
+          visibleParams: ['recipient', 'subject', 'body'],
+          optionalParams: ['body'],
+          correlate: false
+        }
+      }
+    );
+
+    expect(schema.inputSchema.properties).toEqual({
+      recipient: { type: 'string' },
+      subject: { type: 'string' },
+      body: { type: 'string' }
+    });
+    expect(schema.inputSchema.required).toEqual(['recipient', 'subject']);
+  });
+
   it('converts mlld names to MCP snake_case', () => {
     expect(mlldNameToMCPName('listIssues')).toBe('list_issues');
     expect(mlldNameToMCPName('createIssue')).toBe('create_issue');

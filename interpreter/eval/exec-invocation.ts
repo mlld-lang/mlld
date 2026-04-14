@@ -117,8 +117,14 @@ import {
   hasRuntimeAuthorizationSurface,
   isRuntimeAuthorizationSurfaceOperation,
   resolveAuthorizationSurfaceOperation,
-  resolveEffectiveToolMetadata
+  resolveEffectiveToolMetadata,
+  resolveToolCollectionEntryMetadata,
+  type EffectiveToolMetadata
 } from './exec/tool-metadata';
+import { isHandleWrapper, isFactSourceHandle } from '@core/types/handle';
+import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
+import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
+import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { createCallMcpConfig } from '../env/executors/call-mcp-config';
 import {
   appendInjectedNotesToSystemPrompt,
@@ -265,12 +271,6 @@ function getCollectionVisibleParams(
   executableParamNames: readonly string[],
   definition: ToolDefinition
 ): string[] {
-  if (Array.isArray(definition.expose)) {
-    return definition.expose.filter(
-      (param): param is string => typeof param === 'string' && param.trim().length > 0
-    );
-  }
-
   const boundKeys = new Set(Object.keys(getToolDefinitionBind(definition) ?? {}));
   return executableParamNames.filter(param => !boundKeys.has(param));
 }
@@ -381,6 +381,7 @@ async function normalizeCollectionDispatchArguments(options: {
   env: Environment;
   executableParamNames: readonly string[];
   definition: ToolDefinition;
+  metadata?: EffectiveToolMetadata;
   preserveStructuredArgs?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
@@ -397,12 +398,8 @@ async function normalizeCollectionDispatchArguments(options: {
   return normalizeExecutableDispatchArguments({
     ...rest,
     executableParamNames,
-    visibleParamNames: getCollectionVisibleParams(executableParamNames, definition),
-    optionalParamNames: Array.isArray(definition.optional)
-      ? definition.optional.filter(
-          (param): param is string => typeof param === 'string' && param.trim().length > 0
-        )
-      : [],
+    visibleParamNames: options.metadata?.params ?? getCollectionVisibleParams(executableParamNames, definition),
+    optionalParamNames: options.metadata?.optionalParams ?? [],
     bind: getToolDefinitionBind(definition)
   });
 }
@@ -854,6 +851,188 @@ function buildToolCallArguments(
     argsRecord[key] = evaluatedArgs[index];
   }
   return argsRecord;
+}
+
+function hasUntrustedDescriptor(value: unknown): boolean {
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  if (!descriptor) {
+    return false;
+  }
+  return descriptor.labels.includes('untrusted') || descriptor.taint.includes('untrusted');
+}
+
+function hasAcceptedProofForInput(value: unknown): boolean {
+  const descriptor = extractSecurityDescriptor(value, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+  const proofLabels = collectProofClaimLabels(descriptor);
+  return proofLabels.some(label =>
+    DECLARED_CONTROL_ARG_KNOWN_PATTERNS.some(pattern => matchesLabelPattern(pattern, label))
+  );
+}
+
+function collectInputFactSources(value: unknown, seen = new Set<unknown>()): FactSourceHandle[] {
+  const collected: FactSourceHandle[] = [];
+
+  const push = (candidate: unknown): void => {
+    if (!Array.isArray(candidate)) {
+      return;
+    }
+    for (const entry of candidate) {
+      if (isFactSourceHandle(entry)) {
+        collected.push(entry);
+      }
+    }
+  };
+
+  const visit = (candidate: unknown): void => {
+    if (!candidate || typeof candidate !== 'object') {
+      return;
+    }
+    if (seen.has(candidate)) {
+      return;
+    }
+    seen.add(candidate);
+
+    if (isVariable(candidate)) {
+      push(candidate.mx?.factsources);
+      visit(candidate.value);
+      return;
+    }
+
+    if (isStructuredValue(candidate)) {
+      push(candidate.metadata?.factsources);
+      push(candidate.mx?.factsources);
+      visit(candidate.data);
+      return;
+    }
+
+    const recordCandidate = candidate as {
+      mx?: { factsources?: readonly unknown[] };
+      metadata?: { factsources?: readonly unknown[] };
+    };
+    push(recordCandidate.mx?.factsources);
+    push(recordCandidate.metadata?.factsources);
+
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        visit(entry);
+      }
+      return;
+    }
+
+    if (isPlainObject(candidate)) {
+      for (const entry of Object.values(candidate)) {
+        visit(entry);
+      }
+    }
+  };
+
+  visit(value);
+
+  const deduped = new Map<string, FactSourceHandle>();
+  for (const handle of collected) {
+    const key = `${handle.instanceKey ?? ''}::${handle.coercionId ?? ''}::${handle.position ?? ''}::${handle.ref}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, handle);
+    }
+  }
+  return Array.from(deduped.values());
+}
+
+function collectCorrelationKeys(factsources: readonly FactSourceHandle[]): string[] {
+  return factsources
+    .map(handle => {
+      if (typeof handle.instanceKey === 'string' && handle.instanceKey.length > 0) {
+        return `instance:${handle.instanceKey}`;
+      }
+      if (typeof handle.coercionId === 'string' && typeof handle.position === 'number') {
+        return `coercion:${handle.coercionId}:${handle.position}`;
+      }
+      return undefined;
+    })
+    .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
+function matchesInputType(value: unknown, expected: string | undefined): boolean {
+  if (!expected) {
+    return true;
+  }
+
+  const resolved = isStructuredValue(value) ? asData(value) : value;
+  switch (expected) {
+    case 'string':
+      return typeof resolved === 'string';
+    case 'number':
+      return typeof resolved === 'number' && Number.isFinite(resolved);
+    case 'boolean':
+      return typeof resolved === 'boolean';
+    case 'array':
+      return Array.isArray(resolved);
+    case 'object':
+      return isPlainObject(resolved);
+    case 'handle':
+      return isHandleWrapper(resolved);
+    default:
+      return true;
+  }
+}
+
+function validateToolInputSchema(options: {
+  metadata: EffectiveToolMetadata;
+  args: Record<string, unknown> | undefined;
+}): void {
+  const { metadata, args } = options;
+  const inputSchema = metadata.inputSchema;
+  if (!inputSchema) {
+    return;
+  }
+
+  const providedArgs = args ?? {};
+  const fieldMap = new Map(inputSchema.fields.map(field => [field.name, field]));
+
+  const correlationSets: string[][] = [];
+  for (const field of inputSchema.fields) {
+    const hasValue = Object.prototype.hasOwnProperty.call(providedArgs, field.name)
+      && providedArgs[field.name] !== undefined;
+    if (!hasValue) {
+      if (!field.optional) {
+        throw new Error(`Tool '${metadata.name}' is missing required input '${field.name}'`);
+      }
+      continue;
+    }
+
+    const value = providedArgs[field.name];
+    if (!matchesInputType(value, field.valueType)) {
+      throw new Error(`Tool '${metadata.name}' input '${field.name}' must be ${field.valueType}`);
+    }
+    if (field.classification === 'fact') {
+      if (!hasAcceptedProofForInput(value)) {
+        throw new Error(`Tool '${metadata.name}' input '${field.name}' must carry known or fact proof`);
+      }
+      if (inputSchema.correlate) {
+        correlationSets.push(collectCorrelationKeys(collectInputFactSources(value)));
+      }
+      continue;
+    }
+    if (field.dataTrust === 'trusted' && hasUntrustedDescriptor(value)) {
+      throw new Error(`Tool '${metadata.name}' trusted input '${field.name}' cannot carry untrusted taint`);
+    }
+  }
+
+  if (inputSchema.correlate && correlationSets.length > 1) {
+    let shared = new Set(correlationSets[0]);
+    for (const keys of correlationSets.slice(1)) {
+      shared = new Set(keys.filter(key => shared.has(key)));
+    }
+    if (shared.size === 0) {
+      throw new Error(`Tool '${metadata.name}' fact inputs must correlate to the same source instance`);
+    }
+  }
 }
 
 function hasProvidedUpdateArgValue(
@@ -3103,6 +3282,11 @@ async function evaluateExecInvocationInternal(
   }
 
   if (collectionDispatchContext) {
+    const collectionMetadata = resolveToolCollectionEntryMetadata(
+      env,
+      collectionDispatchContext.collection,
+      collectionDispatchContext.toolKey
+    );
     const normalizedArgs = await normalizeCollectionDispatchArguments({
       env,
       executableParamNames: Array.isArray(variable.paramNames)
@@ -3112,6 +3296,7 @@ async function evaluateExecInvocationInternal(
           )
         : [],
       definition: collectionDispatchContext.definition,
+      metadata: collectionMetadata,
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       evaluatedArgs,
       originalVariables,
@@ -3462,6 +3647,10 @@ async function evaluateExecInvocationInternal(
     isToolWriteLabelSet(toolLabels) &&
     authorizationSurfaceOperation;
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
+  validateToolInputSchema({
+    metadata: effectiveToolMetadata,
+    args: authorizationArgs
+  });
   enforceUpdateToolArguments({
     metadata: effectiveToolMetadata,
     args: authorizationArgs
