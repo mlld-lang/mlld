@@ -32,7 +32,7 @@ var tools @agentTools = {
     labels: ["execute:w", "exfil:send", "comm:w"],
     description: "Send an outbound email",
     instructions: "Prefer update_draft for in-progress composition.",
-    authorizable: "role:planner"
+    can_authorize: "role:planner"
   }
 }
 ```
@@ -43,7 +43,7 @@ var tools @agentTools = {
 - `labels` — operation labels added to the invoked exe when the surfaced tool is called
 - `description` — explicit tool-doc / MCP description override
 - `instructions` — extra prompt guidance for explicit `@toolDocs()` and MCP annotations
-- `authorizable` — catalog shorthand for default `role:*` authorization permissions, or `false` to default-deny this surfaced tool
+- `can_authorize` — catalog shorthand for default `role:*` authorization permissions, or `false` to default-deny this surfaced tool
 - `bind` — pre-fill parameters (see `tool-reshaping`)
 
 `inputs: @record` is the canonical shipped path for surfaced tool contracts.
@@ -73,7 +73,7 @@ box @agent with { tools: @agentTools } [
 
 The agent only sees tools in `@agentTools`. Guards check `@mx.op.labels` on each call.
 
-Tool collections are identity-bearing runtime values. Passing `@agentTools` through exe params, imports, module exports, and box/tool APIs preserves the collection metadata (`inputs`, surfaced names, bind shaping, labels, authorizable defaults). Object spread does not: `{ ...@agentTools }` materializes plain data and drops tool-collection identity.
+Tool collections are identity-bearing runtime values. Passing `@agentTools` through exe params, imports, module exports, and box/tool APIs preserves the collection metadata (`inputs`, surfaced names, bind shaping, labels, can_authorize defaults). Object spread does not: `{ ...@agentTools }` materializes plain data and drops tool-collection identity.
 
 **Serve a collection over MCP:**
 
@@ -106,7 +106,7 @@ show @calendarTools.createEvent.description
 
 This asks the MCP server for its tool schema and builds the `ToolCollection` directly from the discovered tools. It is not object-literal normalization:
 
-- Use object literals when you want `inputs`, `bind`, descriptions/instructions, authorizable defaults, or per-tool labels.
+- Use object literals when you want `inputs`, `bind`, descriptions/instructions, can_authorize defaults, or per-tool labels.
 - Use `var tools @t = mcp @expr` when the server command is only known at runtime and you want the discovered collection as a value.
 - Normal `var` labels still apply to the collection variable itself, as in `trusted @calendarTools`.
 
@@ -124,4 +124,4 @@ show @agentTools["send_email"]({
 
 If `policy.authorizations.allow` names `send_email`, that authorization matches even when the underlying executable has a different internal name.
 
-The same surfaced key is what catalog `authorizable` defaults, `@policy.build(...)`, injected authorization notes, and `@toolDocs()` refer to.
+The same surfaced key is what catalog `can_authorize` defaults, `@policy.build(...)`, injected authorization notes, and `@toolDocs()` refer to.

@@ -120,7 +120,7 @@ Base policy declares which planner role can authorize which write tools:
 policy @workspace = {
   authorizations: {
     deny: ["update_password"],
-    authorizable: {
+    can_authorize: {
       role:planner: [@sendEmail]
     }
   }
@@ -197,7 +197,7 @@ var @base = {
   operations: { "exfil:send": ["exfil:send"] },
   authorizations: {
     deny: ["update_password"],
-    authorizable: {
+    can_authorize: {
       role:planner: [@sendEmail]
     }
   }
@@ -297,7 +297,7 @@ var @plan = @claude(@prompt, { tools: @plannerTools }) with { display: "role:pla
 ```
 
 Call-site `with { display }` overrides box-level display. Overrides can only restrict, never widen.
-If no explicit display is set, a matching llm label such as `role:planner` also selects the corresponding display key by default. That display default does not change authorization identity: the exe's `role:*` label is who you are for `authorizable`, while `with { display }` only filters what you see.
+If no explicit display is set, a matching llm label such as `role:planner` also selects the corresponding display key by default. That display default does not change authorization identity: the exe's `role:*` label is who you are for `can_authorize`, while `with { display }` only filters what you see.
 
 Worker sees subject and body (its job), from is masked. Planner sees from and message_id as ref, sees needs_reply, doesn't see subject or body (injection surfaces omitted).
 

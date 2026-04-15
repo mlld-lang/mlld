@@ -102,7 +102,7 @@ guard before op:run = when [
 
 `needs` declarations are module requirement checks. They do not replace capability policy rules.
 
-**`authorizations`** has two roles. Base policy uses `authorizations.authorizable` to declare which exe roles can authorize which tools. Runtime policy uses `authorizations.allow` / `authorizations.deny` to enforce the compiled per-task envelope. In the current phase this applies only to `tool:w`, and trusted argument metadata comes from the surfaced tool catalog's `inputs: @record` declaration: `facts` define control args, `update` defines mutation fields, and `exact` defines task-grounded payload checks. The planner produces bucketed authorization intent for `@policy.build`; the framework checks `authorizable`, compiles the intent, and applies the returned policy to the worker call. Invalid authorization intent fails closed during activation.
+**`authorizations`** has two roles. Base policy uses `authorizations.can_authorize` to declare which exe roles can authorize which tools. Runtime policy uses `authorizations.allow` / `authorizations.deny` to enforce the compiled per-task envelope. In the current phase this applies only to `tool:w`, and trusted argument metadata comes from the surfaced tool catalog's `inputs: @record` declaration: `facts` define control args, `update` defines mutation fields, and `exact` defines task-grounded payload checks. The planner produces bucketed authorization intent for `@policy.build`; the framework checks `can_authorize`, compiles the intent, and applies the returned policy to the worker call. Invalid authorization intent fails closed during activation.
 
 Pinned planner values can also carry attestation requirements. If a planner pins a `known` recipient, the matching authorization can satisfy inherited positive checks. Pinning the same raw literal without that attestation is not enough to bypass rules such as `no-send-to-unknown`.
 
@@ -125,7 +125,7 @@ Developer-declared base policy permissions live alongside runtime deny rules:
 policy @workspace = {
   authorizations: {
     deny: ["update_password"],
-    authorizable: {
+    can_authorize: {
       role:planner: [@send_email, @create_file]
     }
   }

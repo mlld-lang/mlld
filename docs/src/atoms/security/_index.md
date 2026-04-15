@@ -135,13 +135,13 @@ Built-in send/destroy rules use the same model: label a send operation as `exfil
 
 ## Authorizations
 
-Authorizations have two layers. Base policy declares `authorizations.authorizable` so a role such as `role:planner` can authorize a specific set of write tools. Per-task runtime policy carries compiled `authorizations.allow` / `authorizations.deny` constraints. The planner produces bucketed authorization intent, the framework checks it against `authorizable`, calls `@policy.build`, and applies the compiled policy to the worker environment.
+Authorizations have two layers. Base policy declares `authorizations.can_authorize` so a role such as `role:planner` can authorize a specific set of write tools. Per-task runtime policy carries compiled `authorizations.allow` / `authorizations.deny` constraints. The planner produces bucketed authorization intent, the framework checks it against `can_authorize`, calls `@policy.build`, and applies the compiled policy to the worker environment.
 
 ```mlld
 policy @workspace = {
   authorizations: {
     deny: ["update_password"],
-    authorizable: {
+    can_authorize: {
       role:planner: [@send_email, @create_file]
     }
   }
@@ -162,7 +162,7 @@ var @result = @worker(@prompt) with { policy: @built.policy }
 
 **Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. Planner-pinned approved values can carry `known` attestations into that override path; raw literals cannot. `locked: true` still prevents all overrides.
 
-**Planner contract:** The planner produces bucketed authorization intent only. It must not produce `authorizable`, `defaults`, `rules`, `locked`, `labels`, or other developer-owned policy sections. `authorizable` stays in the base policy; runtime intent goes through `@policy.build`.
+**Planner contract:** The planner produces bucketed authorization intent only. It must not produce `can_authorize`, `defaults`, `rules`, `locked`, `labels`, or other developer-owned policy sections. `can_authorize` stays in the base policy; runtime intent goes through `@policy.build`.
 
 **Atoms:** `policy-authorizations` (full syntax and input-record-driven authorization enforcement)
 

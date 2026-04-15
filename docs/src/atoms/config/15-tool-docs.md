@@ -138,9 +138,9 @@ For `exe llm` calls, mlld now injects two distinct tool-note blocks:
 Both blocks use the same tool-metadata and display-projection path. The difference is the source set:
 
 - `<tool_notes>` is shaped from the callable `tools:` surface
-- `<authorization_notes>` is shaped from `policy.authorizations.authorizable[role:*]` for the caller's immutable exe role
+- `<authorization_notes>` is shaped from `policy.authorizations.can_authorize[role:*]` for the caller's immutable exe role
 
-Display overrides still shape visible output fields in both blocks, but they do not change which role's `authorizable` permissions are used.
+Display overrides still shape visible output fields in both blocks, but they do not change which role's `can_authorize` permissions are used.
 
 ## JSON output
 
@@ -211,7 +211,7 @@ A consequence: when you add a custom write label like `iot:trigger` and map it v
 
 - `@toolDocs()` is the explicit form you call from your own prompt template. Use it when you're building system prompts by hand.
 - `<tool_notes>` is the injected form mlld appends automatically to the system message of any `exe llm` call that surfaces callable tools, for example `@claude(...)`.
-- `<authorization_notes>` is the injected form mlld appends automatically when the active base policy grants the caller role any `authorizable` tools.
+- `<authorization_notes>` is the injected form mlld appends automatically when the active base policy grants the caller role any `can_authorize` tools.
 
 All three use the same classification, label summaries, record shaping, and output-field shaping for the same tools under the same policy. Explicit `@toolDocs()` includes freeform `Description:` and `Instructions:` lines and can opt into `includeAuthIntentShape: true` or `format: "json"`. Injected notes stay compact: they keep the structural sections but omit description/instructions. When all injected blocks are present, the order is `<tool_notes>`, then `<authorization_notes>`, then `<shelf_notes>`.
 
