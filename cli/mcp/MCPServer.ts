@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { ToolCollection } from '@core/types/tools';
 import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
+import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 import { FunctionRouter } from './FunctionRouter';
 import { generateToolSchema, mlldNameToMCPName } from './SchemaGenerator';
 import type {
@@ -151,8 +152,17 @@ export class MCPServer {
         const toolDef = this.toolCollection[toolName];
         const metadata = resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName);
         const schema = generateToolSchema(toolName, execVar, toolDef, metadata);
-        if (toolDef?.description) {
-          schema.description = toolDef.description;
+        const notes = metadata
+          ? renderToolDescriptionNotes({
+              env: this.environment,
+              entry: metadata
+            })
+          : undefined;
+        if (notes) {
+          const baseDescription = typeof schema.description === 'string' ? schema.description.trimEnd() : '';
+          schema.description = baseDescription.length > 0
+            ? `${baseDescription} ${notes}`
+            : notes;
         }
         tools.push(schema);
       }

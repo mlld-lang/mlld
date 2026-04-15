@@ -346,23 +346,34 @@ describe('createCallMcpConfig', () => {
 
   it('accepts tool collections and carries shaped schemas plus injected tool notes', async () => {
     const env = await createInterpretedEnv([
-      '/exe tool:w @sendEmail(owner, recipient, subject, body) = "sent" with {',
-      '  controlArgs: ["owner", "recipient"]',
+      '/record @outbound_email_inputs = {',
+      '  facts: [recipient: string],',
+      '  data: {',
+      '    trusted: [subject: string],',
+      '    untrusted: [body: string?]',
+      '  },',
+      '  validate: "strict"',
       '}',
+      '/record @search_contacts_inputs = {',
+      '  data: [query: string],',
+      '  validate: "strict"',
+      '}',
+      '/exe tool:w @sendEmail(owner, recipient, subject, body) = "sent"',
       '/exe tool:r @searchContactsByName(query) = "Ada"',
       '',
       '/var tools @writeTools = {',
       '  outboundEmail: {',
       '    mlld: @sendEmail,',
+      '    inputs: @outbound_email_inputs,',
+      '    labels: ["execute:w", "exfil:send", "comm:w"],',
       '    bind: { owner: "mlld" },',
-      '    expose: ["recipient", "subject", "body"],',
-      '    optional: ["body"],',
-      '    controlArgs: ["recipient"],',
-      '    description: "Send an outbound email"',
+      '    description: "Send an outbound email",',
+      '    instructions: "Prefer update_draft for in-progress composition."',
       '  },',
       '  searchContactsByName: {',
       '    mlld: @searchContactsByName,',
-      '    expose: ["query"],',
+      '    inputs: @search_contacts_inputs,',
+      '    labels: ["resolve:r", "comm:r"],',
       '    description: "Search contacts by name"',
       '  }',
       '}'
@@ -388,14 +399,24 @@ describe('createCallMcpConfig', () => {
       expect(result.toolNotes).toContain('<tool_notes>');
       expect(result.toolNotes).toContain('Write tools (require authorization):');
       expect(result.toolNotes).toContain('### mcp__mlld_tools__outbound_email');
-      expect(result.toolNotes).toContain('- `recipient` (string, **control arg**)');
+      expect(result.toolNotes).toContain('Routing: execute (write)');
+      expect(result.toolNotes).toContain('Risk: exfil (send)');
+      expect(result.toolNotes).toContain('Domain: communication (write)');
+      expect(result.toolNotes).toContain('Description: Send an outbound email');
+      expect(result.toolNotes).toContain('Instructions: Prefer update_draft for in-progress composition.');
+      expect(result.toolNotes).toContain('Facts:');
+      expect(result.toolNotes).toContain('- `recipient` (string)');
+      expect(result.toolNotes).toContain('Trusted payload:');
       expect(result.toolNotes).toContain('- `subject` (string)');
-      expect(result.toolNotes).toContain('- `body` (string)');
+      expect(result.toolNotes).toContain('Untrusted payload:');
+      expect(result.toolNotes).toContain('- `body` (string, optional)');
       expect(result.toolNotes).toContain('Read tools:');
       expect(result.toolNotes).toContain('### mcp__mlld_tools__search_contacts_by_name');
+      expect(result.toolNotes).toContain('Routing: resolve (read)');
+      expect(result.toolNotes).toContain('Domain: communication (read)');
+      expect(result.toolNotes).toContain('Description: Search contacts by name');
+      expect(result.toolNotes).toContain('Untrusted payload:');
       expect(result.toolNotes).toContain('- `query` (string)');
-      expect(result.toolNotes).not.toContain('Send an outbound email');
-      expect(result.toolNotes).not.toContain('Search contacts by name');
       expect(result.toolNotes).not.toContain('@fyi.known("outbound_email")');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
@@ -417,7 +438,14 @@ describe('createCallMcpConfig', () => {
       expect(outbound).toBeDefined();
       expect(Object.keys(outbound?.inputSchema?.properties ?? {})).toEqual(['recipient', 'subject', 'body']);
       expect(outbound?.inputSchema?.required ?? []).toEqual(['recipient', 'subject']);
-      expect(outbound?.description).toContain('Send an outbound email [CONTROL: recipient]');
+      expect(outbound?.description).toContain('Send an outbound email');
+      expect(outbound?.description).toContain('[Routing: execute (write)]');
+      expect(outbound?.description).toContain('[Risk: exfil (send)]');
+      expect(outbound?.description).toContain('[Domain: communication (write)]');
+      expect(outbound?.description).toContain('Instructions: Prefer update_draft for in-progress composition.');
+      expect(outbound?.description).toContain('[FACTS: recipient]');
+      expect(outbound?.description).toContain('[TRUSTED PAYLOAD: subject]');
+      expect(outbound?.description).toContain('[UNTRUSTED PAYLOAD: body?]');
       expect(outbound?.description).not.toContain('@fyi.known("outbound_email")');
       expect(outbound?.description).not.toContain('DATA args (payload)');
     } finally {
@@ -478,6 +506,49 @@ describe('createCallMcpConfig', () => {
       expect(result.authorizationNotes).toContain('- `recipient` (string, **control arg**)');
       expect(result.authorizationNotes).toContain('To authorize, pass authorization intent to your worker tool:');
       expect(result.authorizationNotes).not.toContain('search_contacts');
+    } finally {
+      await result.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('derives authorization notes from catalog authorizable defaults', async () => {
+    const env = await createInterpretedEnv([
+      '/record @send_email_inputs = {',
+      '  facts: [recipient: string],',
+      '  data: [subject: string, body: string],',
+      '  validate: "strict"',
+      '}',
+      '/exe tool:w @sendEmail(recipient, subject, body) = "sent"',
+      '/var tools @writeTools = {',
+      '  send_email: {',
+      '    mlld: @sendEmail,',
+      '    inputs: @send_email_inputs,',
+      '    labels: ["execute:w", "exfil:send", "comm:w"],',
+      '    authorizable: "role:planner",',
+      '    description: "Send an outbound email"',
+      '  }',
+      '}'
+    ].join('\n'));
+
+    env.setExeLabels(['llm', 'role:planner']);
+
+    let toolCollection = await extractVariableValue(env.getVariable('writeTools') as any, env);
+    if (isStructuredValue(toolCollection)) {
+      toolCollection = asData(toolCollection);
+    }
+
+    const result = await createCallMcpConfig({
+      tools: toolCollection,
+      env
+    });
+
+    try {
+      expect(result.authorizationRole).toBe('role:planner');
+      expect(result.authorizationNotes).toContain('<authorization_notes>');
+      expect(result.authorizationNotes).toContain('### mcp__mlld_tools__send_email');
+      expect(result.authorizationNotes).toContain('Facts:');
+      expect(result.authorizationNotes).toContain('- `recipient` (string)');
     } finally {
       await result.cleanup();
       env.cleanup();

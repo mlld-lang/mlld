@@ -266,6 +266,105 @@ describe('@policy builtin', () => {
     expect(built.policy.authorizable).toBeUndefined();
   });
 
+  it('derives role authorizable defaults from catalog entries', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: [subject: string, body: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @send_email(recipient, subject, body) = js { return recipient; }
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @send_email,
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "exfil:send", "comm:w"],
+          authorizable: "role:planner"
+        }
+      }
+    `);
+
+    env.setLlmToolConfig({
+      sessionId: 'planner-session',
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      authorizationRole: 'role:planner',
+      inBox: false,
+      cleanup: async () => {}
+    });
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        send_email: {
+          recipient: { eq: 'ada@example.com', attestations: ['known'] }
+        }
+      },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizable).toBeUndefined();
+    expect(built.policy.authorizations.allow.send_email).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'ada@example.com',
+            attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('treats catalog authorizable false as a deny default', async () => {
+    const env = await interpretWithEnv(`
+      /record @delete_file_inputs = {
+        facts: [id: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @delete_file(id) = js { return id; }
+
+      /var tools @writeTools = {
+        delete_file: {
+          mlld: @delete_file,
+          inputs: @delete_file_inputs,
+          labels: ["execute:w", "destructive:targeted"],
+          authorizable: false
+        }
+      }
+    `);
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      { allow: ['delete_file'] },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(built.valid).toBe(false);
+    expect(built.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'denied_by_policy',
+          tool: 'delete_file'
+        })
+      ])
+    );
+    expect(built.policy.authorizable).toBeUndefined();
+    expect(built.policy.authorizations.allow).toEqual({});
+  });
+
   it('reports proofless control args and emits an empty allow fragment for that tool', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }

@@ -39,12 +39,17 @@ type JsonToolDocEntry = {
   name: string;
   kind: 'write' | 'read';
   description?: string;
+  instructions?: string;
+  inputRecord?: string;
   params: string[];
   controlArgs: string[];
   updateArgs: string[];
   exactPayloadArgs: string[];
   sourceArgs: string[];
   dataArgs: string[];
+  factArgs?: string[];
+  trustedDataArgs?: string[];
+  untrustedDataArgs?: string[];
   multiControlArgCorrelation: boolean;
   discoveryCall?: string;
   operationLabels?: string[];
@@ -67,6 +72,28 @@ function normalizeToolCollectionStringList(value: unknown): string[] {
   return value
     .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
     .map(entry => entry.trim());
+}
+
+function normalizeToolCollectionAuthorizable(
+  value: unknown
+): false | string | string[] | undefined {
+  if (value === false) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function buildToolCollectionMatchSignature(value: unknown): string | undefined {
@@ -92,6 +119,7 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
         toolName,
         {
           ...(typeof entry.mlld === 'string' ? { mlld: entry.mlld.trim() } : {}),
+          ...(typeof entry.inputs === 'string' ? { inputs: entry.inputs.trim() } : {}),
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
@@ -101,6 +129,12 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }
+            : {}),
+          ...(typeof entry.instructions === 'string' && entry.instructions.trim().length > 0
+            ? { instructions: entry.instructions.trim() }
+            : {}),
+          ...(normalizeToolCollectionAuthorizable(entry.authorizable) !== undefined
+            ? { authorizable: normalizeToolCollectionAuthorizable(entry.authorizable) }
             : {}),
           ...(bind ? { bind } : {})
         }
@@ -228,6 +262,15 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     ...(metadata.optionalParams ? { optionalParams: [...metadata.optionalParams] } : {}),
     labels,
     ...(metadata.description ? { description: metadata.description } : {}),
+    ...(metadata.instructions ? { instructions: metadata.instructions } : {}),
+    ...(metadata.authorizable !== undefined
+      ? {
+          authorizable: Array.isArray(metadata.authorizable)
+            ? [...metadata.authorizable]
+            : metadata.authorizable
+        }
+      : {}),
+    ...(metadata.inputSchema ? { inputSchema: { ...metadata.inputSchema, fields: metadata.inputSchema.fields.map(field => ({ ...field })) } } : {}),
     ...(metadata.controlArgs ? { controlArgs: [...metadata.controlArgs] } : {}),
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
     ...(metadata.updateArgs ? { updateArgs: [...metadata.updateArgs] } : {}),
@@ -494,15 +537,6 @@ function getRenderedToolName(entry: EffectiveToolMetadata): string {
   return displayName.length > 0 ? displayName : entry.name;
 }
 
-function formatControlArgsCell(entry: EffectiveToolMetadata): string {
-  const controlArgs = entry.controlArgs ?? [];
-  const base = formatArgList(controlArgs);
-  if (controlArgs.length > 1 && entry.correlateControlArgs) {
-    return `${base} (same source)`;
-  }
-  return base;
-}
-
 function buildAuthIntentShapeLines(): string[] {
   return [
     'Authorization intent shape:',
@@ -524,18 +558,184 @@ function getRenderedToolParamEntries(entry: EffectiveToolMetadata): EffectiveToo
   }));
 }
 
-function buildToolArgLine(
+type ToolDocInputField = NonNullable<EffectiveToolMetadata['inputSchema']>['fields'][number];
+type ToolDocFieldReference = {
+  param: EffectiveToolParam;
+  field?: ToolDocInputField;
+};
+
+const LABEL_TOKEN_ALIASES: Record<string, string> = {
+  comm: 'communication'
+};
+
+function humanizeLabelToken(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  return LABEL_TOKEN_ALIASES[trimmed] ?? trimmed.replace(/_/g, ' ');
+}
+
+function buildToolLabelSummaryLines(entry: EffectiveToolMetadata): string[] {
+  const routing: string[] = [];
+  const risk: string[] = [];
+  const domain: string[] = [];
+  const other: string[] = [];
+  const routingLabels = new Set(['resolve', 'extract', 'execute', 'compose', 'advice']);
+  const riskLabels = new Set(['exfil', 'destructive', 'privileged']);
+
+  for (const label of entry.labels) {
+    const trimmed = label.trim();
+    if (!trimmed || trimmed.startsWith('role:') || trimmed === 'tool:r' || trimmed === 'tool:w' || trimmed === 'llm') {
+      continue;
+    }
+
+    const segments = trimmed.split(':');
+    if (segments.length === 2 && (segments[1] === 'r' || segments[1] === 'w')) {
+      const rendered = `${humanizeLabelToken(segments[0])} (${segments[1] === 'r' ? 'read' : 'write'})`;
+      if (routingLabels.has(segments[0])) {
+        routing.push(rendered);
+      } else {
+        domain.push(rendered);
+      }
+      continue;
+    }
+
+    if (riskLabels.has(segments[0])) {
+      risk.push(
+        segments.length > 1
+          ? `${humanizeLabelToken(segments[0])} (${segments.slice(1).map(humanizeLabelToken).join(':')})`
+          : humanizeLabelToken(segments[0])
+      );
+      continue;
+    }
+
+    other.push(trimmed);
+  }
+
+  const lines: string[] = [];
+  if (routing.length > 0) {
+    lines.push(`Routing: ${routing.join(', ')}`);
+  }
+  if (risk.length > 0) {
+    lines.push(`Risk: ${risk.join(', ')}`);
+  }
+  if (domain.length > 0) {
+    lines.push(`Domain: ${domain.join(', ')}`);
+  }
+  if (other.length > 0) {
+    lines.push(`Labels: ${other.join(', ')}`);
+  }
+  return lines;
+}
+
+function buildToolFieldLine(
+  param: EffectiveToolParam,
+  extraAnnotations: readonly string[] = []
+): string {
+  const annotations = [param.type ?? 'string'];
+  if (param.optional) {
+    annotations.push('optional');
+  }
+  annotations.push(...extraAnnotations);
+  return `- \`${param.name}\` (${annotations.join(', ')})`;
+}
+
+function buildLegacyToolArgLine(
   entry: EffectiveToolMetadata,
   param: EffectiveToolParam
 ): string {
-  const annotations = [param.type ?? 'string'];
+  const annotations: string[] = [];
   if ((entry.controlArgs ?? []).includes(param.name)) {
     annotations.push('**control arg**');
   }
   if ((entry.sourceArgs ?? []).includes(param.name)) {
     annotations.push('**source arg**');
   }
-  return `- \`${param.name}\` (${annotations.join(', ')})`;
+  return buildToolFieldLine(param, annotations);
+}
+
+function buildToolFieldReferences(
+  entry: EffectiveToolMetadata,
+  predicate: (field: ToolDocInputField) => boolean
+): ToolDocFieldReference[] {
+  if (!entry.inputSchema) {
+    return [];
+  }
+
+  const paramEntries = new Map(
+    getRenderedToolParamEntries(entry).map(param => [param.name, param] as const)
+  );
+
+  return entry.inputSchema.fields
+    .filter(predicate)
+    .map(field => {
+      const baseParam = paramEntries.get(field.name);
+      return {
+        param: {
+          name: field.name,
+          type: field.valueType ?? baseParam?.type,
+          optional: field.optional === true || baseParam?.optional === true
+        },
+        field
+      };
+    });
+}
+
+function buildFieldSummary(fields: readonly ToolDocFieldReference[]): string {
+  return fields
+    .map(({ param }) => {
+      const typeSuffix =
+        param.type && param.type !== 'string'
+          ? `: ${param.type}`
+          : '';
+      return `${param.name}${param.optional ? '?' : ''}${typeSuffix}`;
+    })
+    .join(', ');
+}
+
+function buildToolFieldSectionLines(
+  heading: string,
+  fields: readonly ToolDocFieldReference[]
+): string[] {
+  if (fields.length === 0) {
+    return [];
+  }
+
+  return [heading + ':', ...fields.map(field => buildToolFieldLine(field.param))];
+}
+
+function buildInputSchemaSectionLines(entry: EffectiveToolMetadata): string[] {
+  if (!entry.inputSchema) {
+    return [];
+  }
+
+  const facts = buildToolFieldReferences(entry, field => field.classification === 'fact');
+  const trustedData = buildToolFieldReferences(
+    entry,
+    field => field.classification === 'data' && field.dataTrust === 'trusted'
+  );
+  const untrustedData = buildToolFieldReferences(
+    entry,
+    field => field.classification === 'data' && field.dataTrust === 'untrusted'
+  );
+  const payload = buildToolFieldReferences(
+    entry,
+    field => field.classification === 'data' && field.dataTrust === undefined
+  );
+  const updateNames = new Set(entry.updateArgs ?? []);
+  const exactNames = new Set(entry.exactPayloadArgs ?? []);
+  const updates = buildToolFieldReferences(entry, field => updateNames.has(field.name));
+  const exact = buildToolFieldReferences(entry, field => exactNames.has(field.name));
+
+  return [
+    ...buildToolFieldSectionLines('Facts', facts),
+    ...buildToolFieldSectionLines('Trusted payload', trustedData),
+    ...buildToolFieldSectionLines('Untrusted payload', untrustedData),
+    ...buildToolFieldSectionLines('Payload', payload),
+    ...buildToolFieldSectionLines('Updates', updates),
+    ...buildToolFieldSectionLines('Exact text', exact)
+  ];
 }
 
 function buildToolSectionLines(
@@ -557,15 +757,29 @@ function buildToolEntryLines(
       lines.push('');
     }
 
-    lines.push(`### ${getRenderedToolName(entry)}`, 'Args:');
-    const params = getRenderedToolParamEntries(entry);
-    if (params.length === 0) {
-      lines.push('- (none)');
-      continue;
+    lines.push(`### ${getRenderedToolName(entry)}`);
+    lines.push(...buildToolLabelSummaryLines(entry));
+    if (entry.description) {
+      lines.push(`Description: ${entry.description}`);
+    }
+    if (entry.instructions) {
+      lines.push(`Instructions: ${entry.instructions}`);
     }
 
-    for (const param of params) {
-      lines.push(buildToolArgLine(entry, param));
+    const inputSchemaLines = buildInputSchemaSectionLines(entry);
+    if (inputSchemaLines.length > 0) {
+      lines.push(...inputSchemaLines);
+    } else {
+      lines.push('Args:');
+      const params = getRenderedToolParamEntries(entry);
+      if (params.length === 0) {
+        lines.push('- (none)');
+        continue;
+      }
+
+      for (const param of params) {
+        lines.push(buildLegacyToolArgLine(entry, param));
+      }
     }
 
     const outputDescriptors = buildToolOutputDescriptors(entry, env);
@@ -690,27 +904,75 @@ function buildToolDescriptionAnnotationLines(
     return [];
   }
 
-  const lines: string[] = [];
-  const controlArgs = entry.controlArgs ?? [];
-  if (controlArgs.length > 0) {
-    const suffix = entry.correlateControlArgs && controlArgs.length > 1
-      ? `${formatArgList(controlArgs)} (same source)`
-      : formatArgList(controlArgs);
-    lines.push(`[CONTROL: ${suffix}]`);
+  const lines = buildToolLabelSummaryLines(entry).map(line => `[${line}]`);
+
+  if (entry.instructions) {
+    lines.push(`Instructions: ${entry.instructions}`);
   }
 
-  if (entry.hasUpdateArgsMetadata) {
-    lines.push(`[UPDATE: ${formatArgList(entry.updateArgs ?? [])}]`);
-  }
+  if (entry.inputSchema) {
+    const facts = buildToolFieldReferences(entry, field => field.classification === 'fact');
+    const trustedData = buildToolFieldReferences(
+      entry,
+      field => field.classification === 'data' && field.dataTrust === 'trusted'
+    );
+    const untrustedData = buildToolFieldReferences(
+      entry,
+      field => field.classification === 'data' && field.dataTrust === 'untrusted'
+    );
+    const payload = buildToolFieldReferences(
+      entry,
+      field => field.classification === 'data' && field.dataTrust === undefined
+    );
+    const updateNames = new Set(entry.updateArgs ?? []);
+    const exactNames = new Set(entry.exactPayloadArgs ?? []);
+    const updates = buildToolFieldReferences(entry, field => updateNames.has(field.name));
+    const exact = buildToolFieldReferences(entry, field => exactNames.has(field.name));
 
-  const sourceArgs = entry.sourceArgs ?? [];
-  if (sourceArgs.length > 0) {
-    lines.push(`[SOURCE: ${formatArgList(sourceArgs)}]`);
-  }
+    if (facts.length > 0) {
+      const suffix =
+        entry.correlateControlArgs && facts.length > 1
+          ? `${buildFieldSummary(facts)} (same source)`
+          : buildFieldSummary(facts);
+      lines.push(`[FACTS: ${suffix}]`);
+    }
+    if (trustedData.length > 0) {
+      lines.push(`[TRUSTED PAYLOAD: ${buildFieldSummary(trustedData)}]`);
+    }
+    if (untrustedData.length > 0) {
+      lines.push(`[UNTRUSTED PAYLOAD: ${buildFieldSummary(untrustedData)}]`);
+    }
+    if (payload.length > 0) {
+      lines.push(`[PAYLOAD: ${buildFieldSummary(payload)}]`);
+    }
+    if (updates.length > 0) {
+      lines.push(`[UPDATES: ${buildFieldSummary(updates)}]`);
+    }
+    if (exact.length > 0) {
+      lines.push(`[EXACT TEXT: ${buildFieldSummary(exact)}]`);
+    }
+  } else {
+    const controlArgs = entry.controlArgs ?? [];
+    if (controlArgs.length > 0) {
+      const suffix = entry.correlateControlArgs && controlArgs.length > 1
+        ? `${formatArgList(controlArgs)} (same source)`
+        : formatArgList(controlArgs);
+      lines.push(`[CONTROL: ${suffix}]`);
+    }
 
-  const exactPayloadArgs = entry.exactPayloadArgs ?? [];
-  if (exactPayloadArgs.length > 0) {
-    lines.push(`[EXACT PAYLOAD: ${formatArgList(exactPayloadArgs)} (must appear in user task)]`);
+    if (entry.hasUpdateArgsMetadata) {
+      lines.push(`[UPDATE: ${formatArgList(entry.updateArgs ?? [])}]`);
+    }
+
+    const sourceArgs = entry.sourceArgs ?? [];
+    if (sourceArgs.length > 0) {
+      lines.push(`[SOURCE: ${formatArgList(sourceArgs)}]`);
+    }
+
+    const exactPayloadArgs = entry.exactPayloadArgs ?? [];
+    if (exactPayloadArgs.length > 0) {
+      lines.push(`[EXACT PAYLOAD: ${formatArgList(exactPayloadArgs)} (must appear in user task)]`);
+    }
   }
 
   const outputDescriptors = buildToolOutputDescriptors(entry, env);
@@ -741,18 +1003,35 @@ function buildJsonToolEntry(
   const updateArgs = entry.updateArgs ?? [];
   const exactPayloadArgs = entry.exactPayloadArgs ?? [];
   const sourceArgs = entry.sourceArgs ?? [];
-  const reservedArgs = new Set([...controlArgs, ...updateArgs, ...exactPayloadArgs, ...sourceArgs]);
-  const dataArgs = entry.params.filter(param => !reservedArgs.has(param));
+  const factArgs = entry.inputSchema ? [...entry.inputSchema.factFields] : undefined;
+  const trustedDataArgs = entry.inputSchema
+    ? entry.inputSchema.fields
+        .filter(field => field.classification === 'data' && field.dataTrust === 'trusted')
+        .map(field => field.name)
+    : undefined;
+  const untrustedDataArgs = entry.inputSchema
+    ? entry.inputSchema.fields
+        .filter(field => field.classification === 'data' && field.dataTrust === 'untrusted')
+        .map(field => field.name)
+    : undefined;
+  const dataArgs = entry.inputSchema
+    ? [...entry.inputSchema.dataFields]
+    : entry.params.filter(param => !new Set([...controlArgs, ...updateArgs, ...exactPayloadArgs, ...sourceArgs]).has(param));
   return {
     name: entry.name,
     kind: isWriteToolMetadata(env, entry) ? 'write' : 'read',
     ...(entry.description ? { description: entry.description } : {}),
+    ...(entry.instructions ? { instructions: entry.instructions } : {}),
+    ...(entry.inputSchema ? { inputRecord: entry.inputSchema.recordName } : {}),
     params: [...entry.params],
     controlArgs: [...controlArgs],
     updateArgs: [...updateArgs],
     exactPayloadArgs: [...exactPayloadArgs],
     sourceArgs: [...sourceArgs],
     dataArgs,
+    ...(factArgs ? { factArgs } : {}),
+    ...(trustedDataArgs && trustedDataArgs.length > 0 ? { trustedDataArgs } : {}),
+    ...(untrustedDataArgs && untrustedDataArgs.length > 0 ? { untrustedDataArgs } : {}),
     multiControlArgCorrelation: entry.correlateControlArgs && controlArgs.length > 1,
     ...(helperStatus.available && (controlArgs.length > 0 || sourceArgs.length > 0)
       ? { discoveryCall: `@fyi.known("${entry.name}")` }

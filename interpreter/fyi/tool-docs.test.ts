@@ -179,20 +179,35 @@ describe('@fyi.tools', () => {
 
   it('renders canonical explicit @toolDocs() sections outside MCP context', async () => {
     const env = await interpretWithEnv(`
-      /exe tool:w @sendEmail(recipient, subject) = "sent" with {
-        controlArgs: ["recipient"]
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: {
+          trusted: [subject: string],
+          untrusted: [body: string?]
+        },
+        validate: "strict"
       }
+
+      /record @search_contacts_inputs = {
+        data: [query: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent"
       /exe tool:r @lookupContact(query) = "Ada"
 
       /var tools @tools = {
         send_email: {
           mlld: @sendEmail,
-          expose: ["recipient", "subject"],
-          description: "Send an outbound email"
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "exfil:send", "comm:w"],
+          description: "Send an outbound email",
+          instructions: "Prefer update_draft for in-progress composition."
         },
         search_contacts_by_name: {
           mlld: @lookupContact,
-          expose: ["query"],
+          inputs: @search_contacts_inputs,
+          labels: ["resolve:r", "comm:r"],
           description: "Search contacts by name"
         }
       }
@@ -204,13 +219,24 @@ describe('@fyi.tools', () => {
       const docs = await readVarData(env, 'docs') as string;
       expect(docs).toContain('Write tools (require authorization):');
       expect(docs).toContain('### send_email');
-      expect(docs).toContain('- `recipient` (string, **control arg**)');
+      expect(docs).toContain('Routing: execute (write)');
+      expect(docs).toContain('Risk: exfil (send)');
+      expect(docs).toContain('Domain: communication (write)');
+      expect(docs).toContain('Description: Send an outbound email');
+      expect(docs).toContain('Instructions: Prefer update_draft for in-progress composition.');
+      expect(docs).toContain('Facts:');
+      expect(docs).toContain('- `recipient` (string)');
+      expect(docs).toContain('Trusted payload:');
       expect(docs).toContain('- `subject` (string)');
+      expect(docs).toContain('Untrusted payload:');
+      expect(docs).toContain('- `body` (string, optional)');
       expect(docs).toContain('Read tools:');
       expect(docs).toContain('### search_contacts_by_name');
+      expect(docs).toContain('Routing: resolve (read)');
+      expect(docs).toContain('Domain: communication (read)');
+      expect(docs).toContain('Description: Search contacts by name');
+      expect(docs).toContain('Untrusted payload:');
       expect(docs).toContain('- `query` (string)');
-      expect(docs).not.toContain('Send an outbound email');
-      expect(docs).not.toContain('Search contacts by name');
     } finally {
       env.cleanup();
     }
@@ -498,8 +524,20 @@ describe('@fyi.tools', () => {
 
   it('renders authorization notes as a separate injected block with bridge guidance', async () => {
     const env = await interpretWithEnv(`
-      /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {
-        controlArgs: ["recipient"]
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: [subject: string, body: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent"
+
+      /var tools @tools = {
+        send_email: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "exfil:send", "comm:w"]
+        }
       }
     `);
 
@@ -514,6 +552,10 @@ describe('@fyi.tools', () => {
         })!
       );
       env.setExeLabels(['llm', 'role:planner']);
+      env.setScopedEnvironmentConfig({
+        ...(env.getScopedEnvironmentConfig() ?? {}),
+        tools: env.getVariable('tools')?.internal?.toolCollection as any
+      } as any);
       const entry = resolveNamedOperationMetadata(env, 'send_email');
       expect(entry).toBeDefined();
 
@@ -526,10 +568,60 @@ describe('@fyi.tools', () => {
       expect(notes).toContain('Tools you can authorize workers to use (you cannot call these directly):');
       expect(notes).toContain('See <tool_notes> for tools you can call directly.');
       expect(notes).toContain('### send_email');
-      expect(notes).toContain('- `recipient` (string, **control arg**)');
+      expect(notes).toContain('Facts:');
+      expect(notes).toContain('- `recipient` (string)');
       expect(notes).toContain('To authorize, pass authorization intent to your worker tool:');
       expect(notes).toContain('{ resolved: { tool_name: { control_arg: handle } } }');
       expect(notes).toContain('</authorization_notes>');
+    } finally {
+      env.cleanup();
+    }
+  });
+
+  it('includes record-based sections and instructions in JSON tool docs', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: {
+          trusted: [subject: string],
+          untrusted: [body: string?]
+        },
+        validate: "strict"
+      }
+
+      /exe tool:w @sendEmail(recipient, subject, body) = "sent"
+
+      /var tools @tools = {
+        send_email: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "exfil:send", "comm:w"],
+          description: "Send an outbound email",
+          instructions: "Prefer update_draft for in-progress composition."
+        }
+      }
+
+      /var @jsonDocs = @toolDocs(@tools, { format: "json" })
+    `);
+
+    try {
+      const docs = await readVarData(env, 'jsonDocs') as {
+        tools: Array<Record<string, unknown>>;
+      };
+      expect(docs.tools).toEqual([
+        expect.objectContaining({
+          name: 'send_email',
+          inputRecord: 'send_email_inputs',
+          description: 'Send an outbound email',
+          instructions: 'Prefer update_draft for in-progress composition.',
+          controlArgs: ['recipient'],
+          factArgs: ['recipient'],
+          trustedDataArgs: ['subject'],
+          untrustedDataArgs: ['body'],
+          dataArgs: ['subject', 'body'],
+          discoveryCall: '@fyi.known("send_email")'
+        })
+      ]);
     } finally {
       env.cleanup();
     }

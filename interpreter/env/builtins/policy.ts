@@ -22,7 +22,10 @@ import {
   createEmptyPolicyAuthorizationCompileReport,
   type PolicyAuthorizationCompilerIssue
 } from '@interpreter/policy/authorization-compiler';
-import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
+import {
+  buildAuthorizationToolContextForCollection,
+  mergeCatalogPolicyDefaults
+} from '@interpreter/eval/exec/tool-metadata';
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
@@ -136,6 +139,28 @@ function normalizeToolCollectionStringList(value: unknown): string[] {
     .map(entry => entry.trim());
 }
 
+function normalizeToolCollectionAuthorizable(
+  value: unknown
+): false | string | string[] | undefined {
+  if (value === false) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function buildToolCollectionMatchSignature(value: unknown): string | undefined {
   if (!isPlainObject(value)) {
     return undefined;
@@ -159,14 +184,23 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
         toolName,
         {
           ...(typeof entry.mlld === 'string' ? { mlld: entry.mlld.trim() } : {}),
+          ...(typeof entry.inputs === 'string' ? { inputs: entry.inputs.trim() } : {}),
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
           updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
           exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
+          sourceArgs: normalizeToolCollectionStringList((entry as { sourceArgs?: unknown }).sourceArgs),
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }
+            : {}),
+          ...(typeof (entry as { instructions?: unknown }).instructions === 'string'
+            && (entry as { instructions: string }).instructions.trim().length > 0
+            ? { instructions: (entry as { instructions: string }).instructions.trim() }
+            : {}),
+          ...(normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) !== undefined
+            ? { authorizable: normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) }
             : {}),
           ...(bind ? { bind } : {})
         }
@@ -531,7 +565,10 @@ async function buildPolicyAuthorizations(
   const strippedAuthorizations = stripAuthorizableFromIntent(rawAuthorizations);
   const builderOptions = await resolvePolicyBuilderOptions(options, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
-  const basePolicy = builderOptions.basePolicy ?? executionEnv.getPolicySummary();
+  const basePolicy = mergeCatalogPolicyDefaults(
+    builderOptions.basePolicy ?? executionEnv.getPolicySummary(),
+    toolCollection
+  );
   const authorizationRole =
     executionEnv.getLlmToolConfig()?.authorizationRole
     ?? executionEnv.getCurrentAuthorizationRole();

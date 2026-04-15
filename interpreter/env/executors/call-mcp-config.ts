@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { getPolicyAuthorizableToolsForRole } from '@core/policy/authorizations';
+import { mergePolicyConfigs } from '@core/policy/union';
 import type { Environment } from '@interpreter/env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
@@ -19,6 +20,7 @@ import {
 } from '@interpreter/eval/var/tool-scope';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import {
+  buildCatalogPolicyDefaultsFromMetadata,
   resolveEffectiveToolMetadata,
   resolveNamedOperationMetadata,
   resolveToolCollectionEntryMetadata,
@@ -345,6 +347,28 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function normalizeToolCollectionAuthorizable(
+  value: unknown
+): false | string | string[] | undefined {
+  if (value === false) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    .map(entry => entry.trim());
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function withDisplayName(
   metadata: EffectiveToolMetadata,
   displayName?: string
@@ -368,10 +392,22 @@ function toVfsToolDisplayName(toolName: string): string {
   return `mcp__${VFS_MCP_SERVER_NAME}__${toolName}`;
 }
 
-function resolveAuthorizationNoteEntries(env: Environment): EffectiveToolMetadata[] {
+function resolveAuthorizationNoteEntries(
+  env: Environment,
+  functionTools: readonly ResolvedFunctionToolSpec[] = []
+): EffectiveToolMetadata[] {
   const authorizationRole = env.getCurrentAuthorizationRole();
+  const catalogDefaults = buildCatalogPolicyDefaultsFromMetadata(
+    functionTools.map(tool => ({
+      name: tool.csvName,
+      authorizable: tool.definition?.authorizable ?? tool.metadata.authorizable
+    }))
+  );
+  const effectivePolicy = catalogDefaults
+    ? mergePolicyConfigs(env.getPolicySummary(), catalogDefaults)
+    : env.getPolicySummary();
   const authorizableToolNames = getPolicyAuthorizableToolsForRole(
-    env.getPolicySummary()?.authorizable,
+    effectivePolicy?.authorizable,
     authorizationRole
   );
   if (!authorizableToolNames || authorizableToolNames.length === 0) {
@@ -382,6 +418,27 @@ function resolveAuthorizationNoteEntries(env: Environment): EffectiveToolMetadat
   const seen = new Set<string>();
 
   for (const toolName of authorizableToolNames) {
+    const matchedFunctionTool = functionTools.find(tool => {
+      const candidates = uniquePreservingOrder([
+        tool.csvName,
+        tool.mcpName,
+        tool.metadata.name
+      ]).map(candidate => candidate.trim().toLowerCase());
+      return candidates.includes(toolName.trim().toLowerCase());
+    });
+    if (matchedFunctionTool) {
+      const entry = withDisplayName(
+        matchedFunctionTool.metadata,
+        toFunctionToolDisplayName(matchedFunctionTool.mcpName)
+      );
+      const dedupeKey = `${entry.name}::${entry.displayName ?? ''}`;
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        resolved.push(entry);
+      }
+      continue;
+    }
+
     const candidates = uniquePreservingOrder([toolName, mlldNameToMCPName(toolName)]);
     for (const candidate of candidates) {
       const metadata = resolveNamedOperationMetadata(env, candidate);
@@ -476,14 +533,25 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
       toolName,
       {
         mlld: typeof entry.mlld === 'string' ? entry.mlld : '',
+        ...(typeof entry.inputs === 'string' && entry.inputs.trim().length > 0
+          ? { inputs: entry.inputs.trim() }
+          : {}),
         expose: normalizeToolCollectionStringList(entry.expose),
         optional: normalizeToolCollectionStringList(entry.optional),
         controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
         updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
         exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
+        sourceArgs: normalizeToolCollectionStringList((entry as { sourceArgs?: unknown }).sourceArgs),
         labels: normalizeToolCollectionStringList(entry.labels),
         ...(typeof entry.description === 'string' && entry.description.trim().length > 0
           ? { description: entry.description.trim() }
+          : {}),
+        ...(typeof (entry as { instructions?: unknown }).instructions === 'string'
+          && (entry as { instructions: string }).instructions.trim().length > 0
+          ? { instructions: (entry as { instructions: string }).instructions.trim() }
+          : {}),
+        ...(normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) !== undefined
+          ? { authorizable: normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) }
           : {}),
         ...(bind ? { bind } : {})
       }
@@ -1049,7 +1117,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   const authorizationRole = options.env.getCurrentAuthorizationRole();
   const authorizationNotes = renderInjectedAuthorizationNotes({
     env: options.env,
-    entries: resolveAuthorizationNoteEntries(options.env)
+    entries: resolveAuthorizationNoteEntries(options.env, functionTools)
   });
   const availableTools = buildAvailableTools([
     ...(inBox ? vfsTools : builtinTools),

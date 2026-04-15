@@ -1,5 +1,8 @@
 import { mcpNameToMlldName } from '@core/mcp/names';
+import type { PolicyConfig } from '@core/policy/union';
+import { mergePolicyConfigs } from '@core/policy/union';
 import { expandOperationLabels } from '@core/policy/label-flow';
+import type { PolicyAuthorizableMap } from '@core/policy/authorizations';
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
 import {
   resolveRecordFactCorrelation,
@@ -836,6 +839,89 @@ function createAuthorizationToolContextEntry(
     hasUpdateArgsMetadata: metadata.hasUpdateArgsMetadata,
     exactPayloadArgs: new Set(metadata.exactPayloadArgs ?? [])
   };
+}
+
+function normalizeCatalogAuthorizableRoles(
+  value: ToolAuthorizableValue | undefined
+): string[] {
+  if (value === false || value === undefined) {
+    return [];
+  }
+  return typeof value === 'string' ? [value] : [...value];
+}
+
+function buildCatalogPolicyDefaultsFromEntries(
+  entries: Iterable<readonly [string, ToolAuthorizableValue | undefined]>
+): PolicyConfig | undefined {
+  const authorizable: PolicyAuthorizableMap = {};
+  const denied = new Set<string>();
+
+  for (const [toolName, rawAuthorizable] of entries) {
+    const normalizedToolName = normalizeTrimmedString(toolName);
+    if (!normalizedToolName) {
+      continue;
+    }
+    if (rawAuthorizable === false) {
+      denied.add(normalizedToolName);
+      continue;
+    }
+
+    for (const roleName of normalizeCatalogAuthorizableRoles(rawAuthorizable)) {
+      const normalizedRoleName = normalizeTrimmedString(roleName);
+      if (!normalizedRoleName) {
+        continue;
+      }
+      const tools = authorizable[normalizedRoleName] ?? [];
+      if (!tools.includes(normalizedToolName)) {
+        tools.push(normalizedToolName);
+      }
+      authorizable[normalizedRoleName] = tools;
+    }
+  }
+
+  const normalizedAuthorizable = Object.keys(authorizable).length > 0
+    ? authorizable
+    : undefined;
+  const normalizedDenied = denied.size > 0 ? [...denied] : undefined;
+  if (!normalizedAuthorizable && !normalizedDenied) {
+    return undefined;
+  }
+
+  return {
+    ...(normalizedAuthorizable ? { authorizable: normalizedAuthorizable } : {}),
+    ...(normalizedDenied ? { authorizations: { deny: normalizedDenied } } : {})
+  };
+}
+
+export function buildCatalogPolicyDefaultsFromCollection(
+  collection: ToolCollection
+): PolicyConfig | undefined {
+  const stored = getToolCollectionAuthorizationContext(collection);
+  return buildCatalogPolicyDefaultsFromEntries(
+    Object.entries(collection).map(([toolName, definition]) => [
+      toolName,
+      stored?.[toolName]?.authorizable ?? definition.authorizable
+    ] as const)
+  );
+}
+
+export function buildCatalogPolicyDefaultsFromMetadata(
+  entries: readonly Pick<EffectiveToolMetadata, 'name' | 'authorizable'>[]
+): PolicyConfig | undefined {
+  return buildCatalogPolicyDefaultsFromEntries(
+    entries.map(entry => [entry.name, entry.authorizable] as const)
+  );
+}
+
+export function mergeCatalogPolicyDefaults(
+  basePolicy: PolicyConfig | undefined,
+  collection: ToolCollection | undefined
+): PolicyConfig | undefined {
+  if (!collection) {
+    return basePolicy;
+  }
+  const catalogPolicy = buildCatalogPolicyDefaultsFromCollection(collection);
+  return catalogPolicy ? mergePolicyConfigs(basePolicy, catalogPolicy) : basePolicy;
 }
 
 function buildAuthorizationToolContextFromStoredContext(
