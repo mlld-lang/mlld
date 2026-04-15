@@ -60,7 +60,7 @@ describe('MlldSyntaxGenerator', () => {
     expect('labels: ["execute:w"]'.match(objectKeyRegex)?.[0]).toBe('labels');
     expect('description: "Send a message"'.match(objectKeyRegex)?.[0]).toBe('description');
     expect('instructions: "Prefer drafts first"'.match(objectKeyRegex)?.[0]).toBe('instructions');
-    expect('authorizable: { role:planner: [@sendEmail] }'.match(objectKeyRegex)?.[0]).toBe('authorizable');
+    expect('can_authorize: { role:planner: [@sendEmail] }'.match(objectKeyRegex)?.[0]).toBe('can_authorize');
     expect('role:planner: [name, { ref: "email" }]'.match(objectKeyRegex)?.[0]).toBe('role:planner');
     expect('{ mask: "email" }'.match(objectKeyRegex)?.[0]).toBe('mask');
   });

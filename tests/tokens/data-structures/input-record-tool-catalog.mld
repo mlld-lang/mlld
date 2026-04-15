@@ -13,7 +13,7 @@
     mlld: @send_email,
     inputs: @send_email_inputs,
     labels: ["execute:w"],
-    authorizable: "role:planner",
+    can_authorize: "role:planner",
     description: "Send a message",
     instructions: "Prefer drafts first"
   }
@@ -32,7 +32,7 @@ mlld --> property
 @send_email --> variable
 inputs --> property
 labels --> property
-authorizable --> property
+can_authorize --> property
 description --> property
 instructions --> property
 === END TOKENS ===

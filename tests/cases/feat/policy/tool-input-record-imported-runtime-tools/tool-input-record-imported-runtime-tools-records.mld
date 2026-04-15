@@ -1,0 +1,7 @@
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/export { @send_email_inputs }

@@ -35,7 +35,11 @@ function resolvePolicyConfigSource(value: unknown): PolicyConfig | undefined {
 }
 
 function sanitizeRuntimePolicyCandidate(candidate: PolicyConfig): PolicyConfig {
-  const { authorizable: _, ...rest } = candidate;
+  const {
+    authorizable: _legacyAuthorizable,
+    can_authorize: _canAuthorize,
+    ...rest
+  } = candidate as PolicyConfig & { authorizable?: unknown };
   const strippedAuthorizations = stripPolicyAuthorizableField(rest.authorizations);
   const hasAuthorizations =
     isPlainObject(strippedAuthorizations)

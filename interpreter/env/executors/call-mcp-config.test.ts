@@ -475,7 +475,7 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('injects authorization notes from policy authorizable using immutable role identity', async () => {
+  it('injects authorization notes from policy can_authorize using immutable role identity', async () => {
     const env = await createInterpretedEnv(
       [
         '/record @contact = {',
@@ -500,7 +500,7 @@ describe('createCallMcpConfig', () => {
     env.setPolicySummary(
       normalizePolicyConfig({
         authorizations: {
-          authorizable: {
+          can_authorize: {
             'role:planner': ['sendEmail']
           }
         } as any
@@ -533,7 +533,7 @@ describe('createCallMcpConfig', () => {
     }
   });
 
-  it('derives authorization notes from catalog authorizable defaults', async () => {
+  it('derives authorization notes from catalog can_authorize defaults', async () => {
     const env = await createInterpretedEnv([
       '/record @send_email_inputs = {',
       '  facts: [recipient: string],',
@@ -546,7 +546,7 @@ describe('createCallMcpConfig', () => {
       '    mlld: @sendEmail,',
       '    inputs: @send_email_inputs,',
       '    labels: ["execute:w", "exfil:send", "comm:w"],',
-      '    authorizable: "role:planner",',
+      '    can_authorize: "role:planner",',
       '    description: "Send an outbound email"',
       '  }',
       '}'

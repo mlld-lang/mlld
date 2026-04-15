@@ -41,6 +41,7 @@ export interface ToolDefinition {
   labels?: string[];
   description?: string;
   instructions?: string;
+  can_authorize?: ToolAuthorizableValue;
   authorizable?: ToolAuthorizableValue;
   bind?: Record<string, unknown>;
   expose?: string[];
@@ -66,6 +67,7 @@ export interface ToolAuthorizationContextEntry {
   labels?: string[];
   description?: string;
   instructions?: string;
+  can_authorize?: ToolAuthorizableValue;
   authorizable?: ToolAuthorizableValue;
   correlateControlArgs?: boolean;
 }
@@ -80,6 +82,12 @@ const TOOL_COLLECTION_METADATA = Symbol.for('mlld.toolCollectionMetadata');
 
 export const TOOL_COLLECTION_METADATA_EXPORT_KEY = '__mlld_tool_collection_metadata__';
 export const TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY = '__mlld_tool_collection_captured_module_env__';
+
+function getToolCanAuthorizeValue(
+  value: Pick<ToolDefinition, 'can_authorize' | 'authorizable'>
+): ToolAuthorizableValue | undefined {
+  return value.can_authorize ?? value.authorizable;
+}
 
 function cloneStringList(values: readonly string[]): string[] {
   return values
@@ -238,6 +246,7 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
   }
 
   const candidate = value as Partial<ToolAuthorizationContextEntry>;
+  const canAuthorize = getToolCanAuthorizeValue(candidate);
   return (
     Array.isArray(candidate.params)
     && candidate.params.every(entry => typeof entry === 'string')
@@ -258,10 +267,10 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
     && (candidate.instructions === undefined || typeof candidate.instructions === 'string')
     && (candidate.correlateControlArgs === undefined || typeof candidate.correlateControlArgs === 'boolean')
     && (
-      candidate.authorizable === undefined
-      || candidate.authorizable === false
-      || typeof candidate.authorizable === 'string'
-      || (Array.isArray(candidate.authorizable) && candidate.authorizable.every(entry => typeof entry === 'string'))
+      canAuthorize === undefined
+      || canAuthorize === false
+      || typeof canAuthorize === 'string'
+      || (Array.isArray(canAuthorize) && canAuthorize.every(entry => typeof entry === 'string'))
     )
   );
 }
@@ -280,9 +289,11 @@ export function cloneToolCollectionAuthorizationContext(
   context: ToolCollectionAuthorizationContext
 ): ToolCollectionAuthorizationContext {
   return Object.fromEntries(
-    Object.entries(context).map(([toolName, entry]) => [
-      toolName,
-      {
+    Object.entries(context).map(([toolName, entry]) => {
+      const canAuthorize = getToolCanAuthorizeValue(entry);
+      return [
+        toolName,
+        {
         params: cloneStringList(entry.params),
         ...(entry.inputSchema
           ? { inputSchema: cloneToolInputSchema(entry.inputSchema) }
@@ -314,18 +325,19 @@ export function cloneToolCollectionAuthorizationContext(
         ...(typeof entry.instructions === 'string'
           ? { instructions: entry.instructions }
           : {}),
-        ...(entry.authorizable !== undefined
+        ...(canAuthorize !== undefined
           ? {
-              authorizable: Array.isArray(entry.authorizable)
-                ? cloneStringList(entry.authorizable)
-                : entry.authorizable
+              can_authorize: Array.isArray(canAuthorize)
+                ? cloneStringList(canAuthorize)
+                : canAuthorize
             }
           : {}),
         ...(entry.correlateControlArgs === true
           ? { correlateControlArgs: true }
           : {})
       }
-    ])
+    ];
+    })
   );
 }
 

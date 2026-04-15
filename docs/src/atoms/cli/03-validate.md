@@ -103,7 +103,7 @@ Add `mlld-config.json` to suppress intentional patterns:
 }
 ```
 
-Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, `guard-context-missing-arg`, `policy-operations-unknown-label`, `policy-authorizations-deny-unknown-tool`, `policy-authorizations-authorizable-unknown-tool`, and `policy-label-flow-unknown-target`.
+Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform`, `hyphenated-identifier-in-template`, `privileged-wildcard-allow`, `guard-unreachable-arm`, `unknown-policy-rule`, `privileged-guard-without-policy-operation`, `guard-context-missing-exe`, `guard-context-missing-op-label`, `guard-context-missing-arg`, `policy-operations-unknown-label`, `policy-authorizations-deny-unknown-tool`, `policy-authorizations-can-authorize-unknown-tool`, `legacy-authorizable-field`, and `policy-label-flow-unknown-target`.
 
 **Policy / guard validation:**
 
@@ -173,7 +173,7 @@ Skipped entries stay out of default text output so `mlld validate` only reports 
 
 - unknown tool-entry keys
 - non-string `description` / `instructions`
-- invalid `authorizable` shapes (must be `false`, `role:*`, or an array of `role:*`)
+- invalid `can_authorize` shapes (must be `false`, `role:*`, or an array of `role:*`)
 - `inputs` that do not reference an input-capable record
 - input-record fields that do not match executable params
 - executable params left uncovered by `inputs` or `bind`

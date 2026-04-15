@@ -675,8 +675,8 @@ show @built
     ]);
   });
 
-  it('reports authorizable fields when statically analyzable policy.build intent includes them', async () => {
-    const modulePath = await writeModule('analyze-policy-build-authorizable-intent.mld', `record @send_email_inputs = {
+  it('reports can_authorize fields when statically analyzable policy.build intent includes them', async () => {
+    const modulePath = await writeModule('analyze-policy-build-can-authorize-intent.mld', `record @send_email_inputs = {
   facts: [recipient: string],
   data: [subject: string, body: string],
   validate: "strict"
@@ -693,7 +693,7 @@ var tools @writeTools = {
 }
 
 var @built = @policy.build({
-  authorizable: {
+  can_authorize: {
     role:planner: [@send_email]
   },
   allow: ["send_email"]
@@ -705,7 +705,7 @@ show @built
 
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
-      '@policy.build intent cannot include authorizable; declare policy.authorizations.authorizable on the base policy instead'
+      '@policy.build intent cannot include can_authorize; declare policy.authorizations.can_authorize on the base policy instead'
     );
     expect(result.policyCalls).toEqual([
       expect.objectContaining({
@@ -714,7 +714,7 @@ show @built
         diagnostics: expect.arrayContaining([
           expect.objectContaining({
             reason: 'invalid_authorization',
-            message: expect.stringContaining('@policy.build intent cannot include authorizable')
+            message: expect.stringContaining('@policy.build intent cannot include can_authorize')
           })
         ])
       })
@@ -1151,8 +1151,8 @@ show @built
     ]);
   });
 
-  it('rejects invalid input-record catalog authorizable values', async () => {
-    const modulePath = await writeModule('analyze-input-record-authorizable-invalid.mld', `
+  it('rejects invalid input-record catalog can_authorize values', async () => {
+    const modulePath = await writeModule('analyze-input-record-can-authorize-invalid.mld', `
 /record @send_email_inputs = {
   facts: [recipient: string],
   data: [subject: string, body: string],
@@ -1165,7 +1165,7 @@ show @built
   send_email: {
     mlld: @send_email,
     inputs: @send_email_inputs,
-    authorizable: "planner"
+    can_authorize: "planner"
   }
 }
 `);
@@ -1174,7 +1174,7 @@ show @built
 
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message)).toContain(
-      "Tool 'send_email' authorizable entries must match role:*: planner"
+      "Tool 'send_email' can_authorize entries must match role:*: planner"
     );
   });
 

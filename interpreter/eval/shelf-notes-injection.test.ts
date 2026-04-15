@@ -192,7 +192,7 @@ describe('shelf notes injection', () => {
     env.setPolicySummary(
       normalizePolicyConfig({
         authorizations: {
-          authorizable: {
+          can_authorize: {
             'role:planner': ['send_email']
           }
         } as any

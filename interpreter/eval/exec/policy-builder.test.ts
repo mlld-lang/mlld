@@ -213,7 +213,7 @@ describe('@policy builtin', () => {
     ).toBe(false);
   });
 
-  it('rejects tools outside the active role authorizable set before compilation', async () => {
+  it('rejects tools outside the active role can_authorize set before compilation', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @send_email(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }
       /exe tool:w @delete_file(id) = js { return id; } with { controlArgs: ["id"] }
@@ -227,7 +227,7 @@ describe('@policy builtin', () => {
     env.setPolicySummary(
       normalizePolicyConfig({
         authorizations: {
-          authorizable: {
+          can_authorize: {
             'role:planner': ['send_email']
           }
         } as any
@@ -263,10 +263,10 @@ describe('@policy builtin', () => {
         })
       ])
     );
-    expect(built.policy.authorizable).toBeUndefined();
+    expect(built.policy.can_authorize).toBeUndefined();
   });
 
-  it('derives role authorizable defaults from catalog entries', async () => {
+  it('derives role can_authorize defaults from catalog entries', async () => {
     const env = await interpretWithEnv(`
       /record @send_email_inputs = {
         facts: [recipient: string],
@@ -281,7 +281,7 @@ describe('@policy builtin', () => {
           mlld: @send_email,
           inputs: @send_email_inputs,
           labels: ["execute:w", "exfil:send", "comm:w"],
-          authorizable: "role:planner"
+          can_authorize: "role:planner"
         }
       }
     `);
@@ -312,7 +312,7 @@ describe('@policy builtin', () => {
 
     expect(built.valid).toBe(true);
     expect(built.issues).toEqual([]);
-    expect(built.policy.authorizable).toBeUndefined();
+    expect(built.policy.can_authorize).toBeUndefined();
     expect(built.policy.authorizations.allow.send_email).toEqual({
       kind: 'constrained',
       args: {
@@ -326,7 +326,7 @@ describe('@policy builtin', () => {
     });
   });
 
-  it('treats catalog authorizable false as a deny default', async () => {
+  it('treats catalog can_authorize false as a deny default', async () => {
     const env = await interpretWithEnv(`
       /record @delete_file_inputs = {
         facts: [id: string],
@@ -340,7 +340,7 @@ describe('@policy builtin', () => {
           mlld: @delete_file,
           inputs: @delete_file_inputs,
           labels: ["execute:w", "destructive:targeted"],
-          authorizable: false
+          can_authorize: false
         }
       }
     `);
@@ -361,7 +361,7 @@ describe('@policy builtin', () => {
         })
       ])
     );
-    expect(built.policy.authorizable).toBeUndefined();
+    expect(built.policy.can_authorize).toBeUndefined();
     expect(built.policy.authorizations.allow).toEqual({});
   });
 

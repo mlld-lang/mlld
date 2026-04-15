@@ -1,0 +1,20 @@
+/var known @itemId = "item-1"
+
+/record @update_item_inputs = {
+  facts: [itemId: string],
+  data: [title: string],
+  update: [title],
+  validate: "strict"
+}
+
+/exe tool:w @updateItem(itemId, title) = `updated:@itemId:@title`
+
+/var tools @writeTools = {
+  updateItem: {
+    mlld: @updateItem,
+    inputs: @update_item_inputs,
+    labels: ["tool:w", "update:w"]
+  }
+}
+
+/show @writeTools.updateItem(@itemId, "hello")

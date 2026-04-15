@@ -277,10 +277,10 @@ describe('Semantic Tokens', () => {
       });
     });
 
-    it('should highlight authorizable policy keys in plain objects', async () => {
+    it('should highlight can_authorize policy keys in plain objects', async () => {
       const code = `/var @policy = {
   authorizations: {
-    authorizable: {
+    can_authorize: {
       role:planner: [@sendEmail]
     }
   }
@@ -288,7 +288,7 @@ describe('Semantic Tokens', () => {
       const tokens = await getSemanticTokens(code);
 
       expectToken(tokens, {
-        text: 'authorizable',
+        text: 'can_authorize',
         tokenType: 'property'
       });
       expectToken(tokens, {
@@ -319,7 +319,7 @@ var tools @agentTools = {
     mlld: @send_email,
     inputs: @send_email_inputs,
     labels: ["execute:w"],
-    authorizable: "role:planner",
+    can_authorize: "role:planner",
     description: "Send a message",
     instructions: "Prefer drafts first"
   }
@@ -339,7 +339,7 @@ var tools @agentTools = {
         'validate',
         'inputs',
         'labels',
-        'authorizable',
+        'can_authorize',
         'description',
         'instructions'
       ]) {

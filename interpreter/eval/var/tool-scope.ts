@@ -28,6 +28,10 @@ export type ToolScopeValue = {
   isWildcard: boolean;
 };
 
+function readToolCanAuthorizeValue(value: Record<string, unknown>): unknown {
+  return value.can_authorize ?? value.authorizable;
+}
+
 function unwrapToolScopeValue(value: unknown): unknown {
   const directCollection = resolveDirectToolCollection(value);
   if (directCollection) {
@@ -295,6 +299,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
         'labels',
         'description',
         'instructions',
+        'can_authorize',
         'authorizable',
         'bind',
         'expose',
@@ -322,7 +327,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     }
 
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
-    const authorizable = normalizeToolAuthorizable(toolValue.authorizable, toolName);
+    const canAuthorize = normalizeToolAuthorizable(readToolCanAuthorizeValue(toolValue), toolName);
     const expose = normalizeLegacyStringArray(toolValue.expose, toolName, 'expose');
     const optional = normalizeLegacyStringArray(toolValue.optional, toolName, 'optional');
     const controlArgs = normalizeLegacyStringArray(toolValue.controlArgs, toolName, 'controlArgs');
@@ -484,7 +489,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ...(labels ? { labels } : {}),
       ...(description ? { description } : {}),
       ...(instructions ? { instructions } : {}),
-      ...(authorizable !== undefined ? { authorizable } : {}),
+      ...(canAuthorize !== undefined ? { can_authorize: canAuthorize } : {}),
       ...(bind ? { bind } : {}),
       ...(expose ? { expose } : {}),
       ...(optional ? { optional } : {}),
@@ -629,7 +634,7 @@ function normalizeToolAuthorizable(
   const normalized = normalizeToolAuthorizableValue(value);
   if (value !== undefined && normalized === undefined) {
     throw new Error(
-      `Tool '${toolName}' authorizable must be false, a role string, or an array of role strings`
+      `Tool '${toolName}' can_authorize must be false, a role string, or an array of role strings`
     );
   }
   const roleNames =
@@ -641,7 +646,7 @@ function normalizeToolAuthorizable(
   const invalidRoles = roleNames.filter(role => !/^role:[a-z][a-z0-9_-]*$/i.test(role));
   if (invalidRoles.length > 0) {
     throw new Error(
-      `Tool '${toolName}' authorizable entries must match role:*: ${invalidRoles.join(', ')}`
+      `Tool '${toolName}' can_authorize entries must match role:*: ${invalidRoles.join(', ')}`
     );
   }
   return normalized;

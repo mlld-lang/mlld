@@ -378,11 +378,22 @@ export function getPolicyAuthorizableToolsForRole(
 }
 
 export function stripPolicyAuthorizableField(raw: unknown): unknown {
-  if (!isPlainObject(raw) || !Object.prototype.hasOwnProperty.call(raw, 'authorizable')) {
+  if (!isPlainObject(raw)) {
     return raw;
   }
 
-  const { authorizable: _, ...rest } = raw;
+  if (
+    !Object.prototype.hasOwnProperty.call(raw, 'authorizable')
+    && !Object.prototype.hasOwnProperty.call(raw, 'can_authorize')
+  ) {
+    return raw;
+  }
+
+  const {
+    authorizable: _legacyAuthorizable,
+    can_authorize: _canAuthorize,
+    ...rest
+  } = raw as Record<string, unknown>;
   return rest;
 }
 

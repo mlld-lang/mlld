@@ -130,18 +130,18 @@ describe('PolicyConfig defaults', () => {
   });
 });
 
-describe('PolicyConfig authorizable', () => {
-  it('normalizes source authorizable metadata separately from runtime allow and deny', () => {
+describe('PolicyConfig can_authorize', () => {
+  it('normalizes source can_authorize metadata separately from runtime allow and deny', () => {
     const config = normalizePolicyConfig({
       authorizations: {
         deny: ['delete_file'],
-        authorizable: {
+        can_authorize: {
           'role:planner': ['@sendEmail', '@sendEmail', 'create_file']
         }
       } as any
     } as PolicyConfig);
 
-    expect(config.authorizable).toEqual({
+    expect(config.can_authorize).toEqual({
       'role:planner': ['sendEmail', 'create_file']
     });
     expect(config.authorizations).toEqual({
@@ -149,23 +149,23 @@ describe('PolicyConfig authorizable', () => {
     });
   });
 
-  it('intersects shared authorizable roles while preserving distinct roles', () => {
+  it('intersects shared can_authorize roles while preserving distinct roles', () => {
     const merged = mergePolicyConfigs(
       {
-        authorizable: {
+        can_authorize: {
           'role:planner': ['send_email', 'create_file'],
           'role:reviewer': ['search_contacts']
         }
       },
       {
-        authorizable: {
+        can_authorize: {
           'role:planner': ['send_email'],
           'role:worker': ['send_email']
         }
       }
     );
 
-    expect(merged.authorizable).toEqual({
+    expect(merged.can_authorize).toEqual({
       'role:planner': ['send_email'],
       'role:reviewer': ['search_contacts'],
       'role:worker': ['send_email']

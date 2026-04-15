@@ -1,0 +1,30 @@
+/record @create_draft_inputs = {
+  data: [subject: string, body: string],
+  exact: [subject],
+  validate: "strict"
+}
+
+/exe tool:w @createDraft(subject, body) = "drafted"
+
+/var tools @writeTools = {
+  createDraft: {
+    mlld: @createDraft,
+    inputs: @create_draft_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+/var @built = @policy.build({
+  known: {
+    createDraft: {
+      subject: {
+        value: "Urgent follow-up",
+        source: "user"
+      }
+    }
+  }
+}, @writeTools, { task: "Draft an email about the roadmap" })
+
+/show @built.valid
+/show @built.issues[0].reason
+/show @built.issues[0].arg

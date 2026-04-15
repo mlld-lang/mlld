@@ -1,0 +1,30 @@
+/var @blockedSubjects = ["blocked subject"]
+
+/record @send_email_inputs = {
+  data: [subjects: array],
+  blocklist: { subjects: @blockedSubjects },
+  validate: "strict"
+}
+
+/exe tool:w @sendEmail(subjects) = "sent"
+
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+/var @built = @policy.build({
+  allow: {
+    sendEmail: {
+      subjects: ["ok subject", "blocked subject"]
+    }
+  }
+}, @writeTools)
+
+/show @built.valid
+/show @built.report.droppedArrayElements.length
+/show @built.report.droppedArrayElements[0].reason
+/show @built.report.droppedArrayElements[0].index

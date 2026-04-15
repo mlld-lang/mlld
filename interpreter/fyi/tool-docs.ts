@@ -140,8 +140,8 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           ...(typeof entry.instructions === 'string' && entry.instructions.trim().length > 0
             ? { instructions: entry.instructions.trim() }
             : {}),
-          ...(normalizeToolCollectionAuthorizable(entry.authorizable) !== undefined
-            ? { authorizable: normalizeToolCollectionAuthorizable(entry.authorizable) }
+          ...(normalizeToolCollectionAuthorizable(entry.can_authorize ?? entry.authorizable) !== undefined
+            ? { can_authorize: normalizeToolCollectionAuthorizable(entry.can_authorize ?? entry.authorizable) }
             : {}),
           ...(bind ? { bind } : {})
         }
@@ -270,11 +270,11 @@ function cloneToolMetadata(metadata: EffectiveToolMetadata): EffectiveToolMetada
     labels,
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.instructions ? { instructions: metadata.instructions } : {}),
-    ...(metadata.authorizable !== undefined
+    ...(metadata.can_authorize !== undefined
       ? {
-          authorizable: Array.isArray(metadata.authorizable)
-            ? [...metadata.authorizable]
-            : metadata.authorizable
+          can_authorize: Array.isArray(metadata.can_authorize)
+            ? [...metadata.can_authorize]
+            : metadata.can_authorize
         }
       : {}),
     ...(metadata.inputSchema ? { inputSchema: { ...metadata.inputSchema, fields: metadata.inputSchema.fields.map(field => ({ ...field })) } } : {}),

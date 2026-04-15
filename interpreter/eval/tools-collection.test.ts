@@ -95,7 +95,7 @@ describe('tool collections', () => {
           labels: ["tool:w", "comm:w"],
           description: "Send mail",
           instructions: "Prefer drafts first.",
-          authorizable: "role:planner",
+          can_authorize: "role:planner",
           bind: { api_key: "sekret" }
         }
       }
@@ -109,7 +109,7 @@ describe('tool collections', () => {
       labels: ['tool:w', 'comm:w'],
       description: 'Send mail',
       instructions: 'Prefer drafts first.',
-      authorizable: 'role:planner'
+      can_authorize: 'role:planner'
     });
   });
 

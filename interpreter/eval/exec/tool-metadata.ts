@@ -31,7 +31,7 @@ export interface EffectiveToolMetadata {
   labels: string[];
   description?: string;
   instructions?: string;
-  authorizable?: ToolAuthorizableValue;
+  can_authorize?: ToolAuthorizableValue;
   inputSchema?: ToolInputSchema;
   controlArgs?: string[];
   hasControlArgsMetadata: boolean;
@@ -717,7 +717,7 @@ function applyToolDefinitionAuthMetadata(
     labels,
     ...(description ? { description } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(definition.authorizable !== undefined ? { authorizable: definition.authorizable } : {}),
+    ...(definition.can_authorize !== undefined ? { can_authorize: definition.can_authorize } : {}),
     ...(inputSchema ? { inputSchema } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,
@@ -751,7 +751,7 @@ function mergeToolDefinitionMetadata(
     labels,
     ...(description ? { description } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(base.authorizable !== undefined ? { authorizable: base.authorizable } : {}),
+    ...(base.can_authorize !== undefined ? { can_authorize: base.can_authorize } : {}),
     correlateControlArgs: base.correlateControlArgs
   };
 }
@@ -894,7 +894,7 @@ function normalizeCatalogAuthorizableRoles(
 function buildCatalogPolicyDefaultsFromEntries(
   entries: Iterable<readonly [string, ToolAuthorizableValue | undefined]>
 ): PolicyConfig | undefined {
-  const authorizable: PolicyAuthorizableMap = {};
+  const canAuthorize: PolicyAuthorizableMap = {};
   const denied = new Set<string>();
 
   for (const [toolName, rawAuthorizable] of entries) {
@@ -912,24 +912,24 @@ function buildCatalogPolicyDefaultsFromEntries(
       if (!normalizedRoleName) {
         continue;
       }
-      const tools = authorizable[normalizedRoleName] ?? [];
+      const tools = canAuthorize[normalizedRoleName] ?? [];
       if (!tools.includes(normalizedToolName)) {
         tools.push(normalizedToolName);
       }
-      authorizable[normalizedRoleName] = tools;
+      canAuthorize[normalizedRoleName] = tools;
     }
   }
 
-  const normalizedAuthorizable = Object.keys(authorizable).length > 0
-    ? authorizable
+  const normalizedCanAuthorize = Object.keys(canAuthorize).length > 0
+    ? canAuthorize
     : undefined;
   const normalizedDenied = denied.size > 0 ? [...denied] : undefined;
-  if (!normalizedAuthorizable && !normalizedDenied) {
+  if (!normalizedCanAuthorize && !normalizedDenied) {
     return undefined;
   }
 
   return {
-    ...(normalizedAuthorizable ? { authorizable: normalizedAuthorizable } : {}),
+    ...(normalizedCanAuthorize ? { can_authorize: normalizedCanAuthorize } : {}),
     ...(normalizedDenied ? { authorizations: { deny: normalizedDenied } } : {})
   };
 }
@@ -941,16 +941,16 @@ export function buildCatalogPolicyDefaultsFromCollection(
   return buildCatalogPolicyDefaultsFromEntries(
     Object.entries(collection).map(([toolName, definition]) => [
       toolName,
-      stored?.[toolName]?.authorizable ?? definition.authorizable
+      stored?.[toolName]?.can_authorize ?? definition.can_authorize
     ] as const)
   );
 }
 
 export function buildCatalogPolicyDefaultsFromMetadata(
-  entries: readonly Pick<EffectiveToolMetadata, 'name' | 'authorizable'>[]
+  entries: readonly Pick<EffectiveToolMetadata, 'name' | 'can_authorize'>[]
 ): PolicyConfig | undefined {
   return buildCatalogPolicyDefaultsFromEntries(
-    entries.map(entry => [entry.name, entry.authorizable] as const)
+    entries.map(entry => [entry.name, entry.can_authorize] as const)
   );
 }
 
@@ -1047,7 +1047,7 @@ function buildToolContextFromStoredEntry(
     labels,
     ...(description ? { description } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(entry.authorizable !== undefined ? { authorizable: entry.authorizable } : {}),
+    ...(entry.can_authorize !== undefined ? { can_authorize: entry.can_authorize } : {}),
     ...(inputSchema ? { inputSchema } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,
@@ -1076,7 +1076,7 @@ function toStoredAuthorizationContextEntry(
     | 'labels'
     | 'description'
     | 'instructions'
-    | 'authorizable'
+    | 'can_authorize'
   >
 ): ToolAuthorizationContextEntry {
   return {
@@ -1091,7 +1091,7 @@ function toStoredAuthorizationContextEntry(
     ...(metadata.labels.length > 0 ? { labels: [...metadata.labels] } : {}),
     ...(metadata.description ? { description: metadata.description } : {}),
     ...(metadata.instructions ? { instructions: metadata.instructions } : {}),
-    ...(metadata.authorizable !== undefined ? { authorizable: metadata.authorizable } : {}),
+    ...(metadata.can_authorize !== undefined ? { can_authorize: metadata.can_authorize } : {}),
     ...(metadata.correlateControlArgs ? { correlateControlArgs: true } : {})
   };
 }
@@ -1322,7 +1322,7 @@ export function resolveToolCollectionEntryMetadata(
     labels: normalizeStringList(definition.labels),
     ...(description ? { description } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(definition.authorizable !== undefined ? { authorizable: definition.authorizable } : {}),
+    ...(definition.can_authorize !== undefined ? { can_authorize: definition.can_authorize } : {}),
     ...(inputSchema ? { inputSchema } : {}),
     ...(hasControlArgsMetadata ? { controlArgs } : {}),
     hasControlArgsMetadata,

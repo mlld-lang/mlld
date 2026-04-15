@@ -1,0 +1,16 @@
+/import { @send_email_inputs } from "./tool-input-record-imported-runtime-tools-records.mld"
+
+/var known @recipient = "ada@example.com"
+
+/exe tool:w @sendEmail(recipient, subject) = `sent:@recipient:@subject`
+
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"],
+    can_authorize: "role:planner"
+  }
+}
+
+/show @writeTools.sendEmail(@recipient, "hello")

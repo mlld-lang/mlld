@@ -480,11 +480,11 @@ describe('record grammar', () => {
     );
   });
 
-  it('parses plain object role keys for policy authorizable declarations', () => {
+  it('parses plain object role keys for policy can_authorize declarations', () => {
     const directive = getFirstDirective(`
 /var @policy = {
   authorizations: {
-    authorizable: {
+    can_authorize: {
       role:planner: [@sendEmail]
     }
   }
@@ -501,7 +501,7 @@ describe('record grammar', () => {
             type: 'object',
             entries: expect.arrayContaining([
               expect.objectContaining({
-                key: 'authorizable',
+                key: 'can_authorize',
                 value: expect.objectContaining({
                   type: 'object',
                   entries: expect.arrayContaining([

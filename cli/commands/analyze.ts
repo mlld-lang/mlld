@@ -246,10 +246,11 @@ export type AntiPatternWarningCode =
   | 'guard-context-missing-arg'
   | 'policy-operations-unknown-label'
   | 'policy-authorizations-deny-unknown-tool'
-  | 'policy-authorizations-authorizable-unknown-tool'
+  | 'policy-authorizations-can-authorize-unknown-tool'
   | 'policy-label-flow-unknown-target'
   | 'policy-authorizations-empty-entry'
   | 'policy-authorizations-unconstrained-tool'
+  | 'legacy-authorizable-field'
   | 'thin-arrow-exe-not-surfaced'
   | 'strict-tool-return-without-record'
   | 'mixed-tool-return-for-scope';
@@ -474,10 +475,11 @@ const SUPPRESSIBLE_WARNING_CODES = new Set<AntiPatternWarningCode>([
   'guard-context-missing-arg',
   'policy-operations-unknown-label',
   'policy-authorizations-deny-unknown-tool',
-  'policy-authorizations-authorizable-unknown-tool',
+  'policy-authorizations-can-authorize-unknown-tool',
   'policy-label-flow-unknown-target',
   'policy-authorizations-empty-entry',
-  'policy-authorizations-unconstrained-tool'
+  'policy-authorizations-unconstrained-tool',
+  'legacy-authorizable-field'
 ]);
 const GENERIC_EXE_PARAMETER_SUGGESTIONS = new Map<string, string>([
   ['result', 'status'],
@@ -2118,6 +2120,16 @@ function getObjectEntryValue(node: unknown, key: string): unknown {
   return undefined;
 }
 
+function getFirstObjectEntryValue(node: unknown, ...keys: string[]): unknown {
+  for (const key of keys) {
+    const value = getObjectEntryValue(node, key);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function getNodeObjectType(node: unknown): string | undefined {
   return node && typeof node === 'object'
     ? (node as Record<string, unknown>).type as string | undefined
@@ -2134,12 +2146,18 @@ function hasStaticAuthorizableIntent(value: unknown): boolean {
     return false;
   }
 
-  if (Object.prototype.hasOwnProperty.call(unwrapped, 'authorizable')) {
+  if (
+    Object.prototype.hasOwnProperty.call(unwrapped, 'can_authorize')
+    || Object.prototype.hasOwnProperty.call(unwrapped, 'authorizable')
+  ) {
     return true;
   }
 
   return isPlainObject(unwrapped.authorizations)
-    && Object.prototype.hasOwnProperty.call(unwrapped.authorizations, 'authorizable');
+    && (
+      Object.prototype.hasOwnProperty.call(unwrapped.authorizations, 'can_authorize')
+      || Object.prototype.hasOwnProperty.call(unwrapped.authorizations, 'authorizable')
+    );
 }
 
 function getObjectNodeEntries(node: unknown): Array<Record<string, unknown>> {
@@ -2181,6 +2199,16 @@ function getObjectEntryLocation(node: unknown, key: string): { line?: number; co
     line: (unwrapSingleNodeArray(node) as any)?.location?.start?.line,
     column: (unwrapSingleNodeArray(node) as any)?.location?.start?.column
   };
+}
+
+function getFirstObjectEntryLocation(node: unknown, ...keys: string[]): { line?: number; column?: number } {
+  for (const key of keys) {
+    const location = getObjectEntryLocation(node, key);
+    if (location.line !== undefined || location.column !== undefined) {
+      return location;
+    }
+  }
+  return {};
 }
 
 interface StaticStringEntry {
@@ -3630,6 +3658,7 @@ const TOOL_CATALOG_FIELDS = new Set([
   'labels',
   'description',
   'instructions',
+  'can_authorize',
   'authorizable',
   'bind',
   'expose',
@@ -4041,9 +4070,14 @@ function collectToolCatalogDiagnostics(
   ast: MlldNode[],
   executables: readonly ExecutableInfo[],
   recordDefinitions: ReadonlyMap<string, RecordDefinition>
-): AnalysisError[] {
+): {
+  errors: AnalysisError[];
+  warnings: AntiPatternWarning[];
+} {
   const errors: AnalysisError[] = [];
+  const warnings: AntiPatternWarning[] = [];
   const seen = new Set<string>();
+  const seenWarnings = new Set<string>();
   const executableByName = new Map(executables.map(executable => [executable.name, executable]));
 
   const pushError = (message: string, line?: number, column?: number): void => {
@@ -4053,6 +4087,15 @@ function collectToolCatalogDiagnostics(
     }
     seen.add(key);
     errors.push({ message, line, column });
+  };
+
+  const pushWarning = (warning: AntiPatternWarning): void => {
+    const key = `${warning.code}:${warning.line ?? 0}:${warning.column ?? 0}:${warning.message}`;
+    if (seenWarnings.has(key)) {
+      return;
+    }
+    seenWarnings.add(key);
+    warnings.push(warning);
   };
 
   walkAST(ast, node => {
@@ -4134,19 +4177,30 @@ function collectToolCatalogDiagnostics(
         pushError(`Tool '${toolName}' labels must be an array of strings`, entryLine, entryColumn);
       }
 
-      const authorizableValue = extractStaticValue(getObjectEntryValue(toolValue, 'authorizable'));
-      if (authorizableValue !== undefined) {
+      const canAuthorizeNode = getFirstObjectEntryValue(toolValue, 'can_authorize', 'authorizable');
+      const canAuthorizeValue = extractStaticValue(canAuthorizeNode);
+      if (getObjectEntryValue(toolValue, 'authorizable') !== undefined) {
+        const { line, column } = getObjectEntryLocation(toolValue, 'authorizable');
+        pushWarning({
+          code: 'legacy-authorizable-field',
+          message: `Tool '${toolName}' uses legacy field 'authorizable'; rename it to 'can_authorize'`,
+          line,
+          column,
+          suggestion: `Replace 'authorizable' with 'can_authorize' on tool '${toolName}'.`
+        });
+      }
+      if (canAuthorizeValue !== undefined) {
         const roleEntries =
-          authorizableValue === false
+          canAuthorizeValue === false
             ? []
-            : typeof authorizableValue === 'string'
-              ? [authorizableValue]
-              : Array.isArray(authorizableValue)
-                ? authorizableValue
+            : typeof canAuthorizeValue === 'string'
+              ? [canAuthorizeValue]
+              : Array.isArray(canAuthorizeValue)
+                ? canAuthorizeValue
                 : null;
         if (roleEntries === null) {
           pushError(
-            `Tool '${toolName}' authorizable must be false, a role:* string, or an array of role:* strings`,
+            `Tool '${toolName}' can_authorize must be false, a role:* string, or an array of role:* strings`,
             entryLine,
             entryColumn
           );
@@ -4156,7 +4210,7 @@ function collectToolCatalogDiagnostics(
           );
           if (invalidRoles.length > 0) {
             pushError(
-              `Tool '${toolName}' authorizable entries must match role:*: ${invalidRoles.join(', ')}`,
+              `Tool '${toolName}' can_authorize entries must match role:*: ${invalidRoles.join(', ')}`,
               entryLine,
               entryColumn
             );
@@ -4353,7 +4407,7 @@ function collectToolCatalogDiagnostics(
     }
   });
 
-  return errors;
+  return { errors, warnings };
 }
 
 function detectGuardContextWarnings(
@@ -4594,21 +4648,29 @@ function collectStaticAuthorizableDiagnostics(
   const errors: AnalysisError[] = [];
   const warnings: AntiPatternWarning[] = [];
 
-  if (!isPlainObject(rawAuthorizations) || !Object.prototype.hasOwnProperty.call(rawAuthorizations, 'authorizable')) {
+  if (
+    !isPlainObject(rawAuthorizations)
+    || (
+      !Object.prototype.hasOwnProperty.call(rawAuthorizations, 'can_authorize')
+      && !Object.prototype.hasOwnProperty.call(rawAuthorizations, 'authorizable')
+    )
+  ) {
     return { errors, warnings };
   }
 
-  const { line, column } = getObjectEntryLocation(authorizationsNode, 'authorizable');
+  const { line, column } = getFirstObjectEntryLocation(authorizationsNode, 'can_authorize', 'authorizable');
   const denySet = new Set(
     (normalizedDeny ?? [])
       .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
       .map(entry => entry.trim())
   );
-  const rawAuthorizable = rawAuthorizations.authorizable;
+  const rawAuthorizable =
+    (rawAuthorizations as Record<string, unknown>).can_authorize
+    ?? (rawAuthorizations as Record<string, unknown>).authorizable;
 
   if (!isPlainObject(rawAuthorizable)) {
     errors.push({
-      message: 'policy.authorizations.authorizable must be an object',
+      message: 'policy.authorizations.can_authorize must be an object',
       line,
       column
     });
@@ -4618,7 +4680,7 @@ function collectStaticAuthorizableDiagnostics(
   for (const [roleName, rawTools] of Object.entries(rawAuthorizable)) {
     if (!isRoleDisplayModeName(roleName)) {
       errors.push({
-        message: `policy.authorizations.authorizable key '${roleName}' must use a role:* label`,
+        message: `policy.authorizations.can_authorize key '${roleName}' must use a role:* label`,
         line,
         column
       });
@@ -4626,7 +4688,7 @@ function collectStaticAuthorizableDiagnostics(
 
     if (!Array.isArray(rawTools)) {
       errors.push({
-        message: `policy.authorizations.authorizable.${roleName} must be an array`,
+        message: `policy.authorizations.can_authorize.${roleName} must be an array`,
         line,
         column
       });
@@ -4637,7 +4699,7 @@ function collectStaticAuthorizableDiagnostics(
       const toolName = normalizeStaticAuthorizableToolName(rawTool);
       if (!toolName) {
         errors.push({
-          message: `policy.authorizations.authorizable.${roleName} must contain executable refs or tool names`,
+          message: `policy.authorizations.can_authorize.${roleName} must contain executable refs or tool names`,
           line,
           column
         });
@@ -4646,7 +4708,7 @@ function collectStaticAuthorizableDiagnostics(
 
       if (denySet.has(toolName)) {
         errors.push({
-          message: `Tool '${toolName}' cannot be authorizable for '${roleName}' because it is denied by policy.authorizations.deny`,
+          message: `Tool '${toolName}' cannot appear under policy.authorizations.can_authorize.${roleName} because it is denied by policy.authorizations.deny`,
           line,
           column
         });
@@ -4655,13 +4717,13 @@ function collectStaticAuthorizableDiagnostics(
       if (contextExecutables.size > 0 && !contextExecutables.has(toolName)) {
         const closestToolName = findClosestKnownToolName(toolName, contextExecutables);
         warnings.push({
-          code: 'policy-authorizations-authorizable-unknown-tool',
-          message: `policy.authorizations.authorizable.${roleName} references unknown tool '${toolName}'`,
+          code: 'policy-authorizations-can-authorize-unknown-tool',
+          message: `policy.authorizations.can_authorize.${roleName} references unknown tool '${toolName}'`,
           line,
           column,
           suggestion: closestToolName
             ? `Use "${closestToolName}" if that was the intended tool name, or add validation context that defines "${toolName}".`
-            : `Add validation context that defines "${toolName}", or update policy.authorizations.authorizable.${roleName}.`
+            : `Add validation context that defines "${toolName}", or update policy.authorizations.can_authorize.${roleName}.`
         });
       }
     }
@@ -4736,7 +4798,7 @@ function collectPolicyAuthorizationDiagnostics(
       }
 
       for (const issue of authorizableDiagnostics.errors) {
-        const key = `error:authorizable:${issue.line ?? 0}:${issue.column ?? 0}:${issue.message}`;
+        const key = `error:can_authorize:${issue.line ?? 0}:${issue.column ?? 0}:${issue.message}`;
         if (seen.has(key)) {
           continue;
         }
@@ -4990,7 +5052,7 @@ function getStaticAuthorizableIntentFieldNode(
 
   const authorizationsNode = getStaticObjectEntryNode(unwrapped, 'authorizations');
   const containerNode = authorizationsNode ?? unwrapped;
-  return getStaticObjectEntryNode(containerNode, 'authorizable');
+  return getFirstObjectEntryValue(containerNode, 'can_authorize', 'authorizable');
 }
 
 function readStaticFieldAccessor(field: unknown): string | number | undefined {
@@ -5428,7 +5490,7 @@ function collectPolicyCallDiagnostics(
     };
     const staticAuthorizableIntentNode = getStaticAuthorizableIntentFieldNode(intentArg, bindings);
     const invalidAuthorizableIntentMessage =
-      `${callInfoBase.callee} intent cannot include authorizable; declare policy.authorizations.authorizable on the base policy instead`;
+      `${callInfoBase.callee} intent cannot include can_authorize; declare policy.authorizations.can_authorize on the base policy instead`;
 
     const resolvedIntent = resolveStaticExpression(intentArg, bindings);
     if (!resolvedIntent.ok) {
@@ -6935,7 +6997,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const needs = extractNeeds(content, ast);
       const checkpointErrors = detectCheckpointDirectiveErrors(ast);
       const executableDefinitionErrors = collectExecutableDefinitionDiagnostics(ast);
-      const toolCatalogErrors = collectToolCatalogDiagnostics(
+      const toolCatalogDiagnostics = collectToolCatalogDiagnostics(
         ast,
         executables,
         availableRecordDefinitions
@@ -7004,11 +7066,11 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
           ...executableDefinitionErrors
         ];
       }
-      if (toolCatalogErrors.length > 0) {
+      if (toolCatalogDiagnostics.errors.length > 0) {
         result.valid = false;
         result.errors = [
           ...(result.errors ?? []),
-          ...toolCatalogErrors
+          ...toolCatalogDiagnostics.errors
         ];
       }
       if (outputRecordErrors.length > 0) {
@@ -7089,6 +7151,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ...detectPolicyDeclarationWarnings(ast, policies, contextExecutables),
         ...(contextExecutables.size > 0 ? detectGuardContextWarnings(ast, contextExecutables) : []),
         ...detectThinArrowReturnAntiPatterns(ast, surfacedToolExeNames),
+        ...toolCatalogDiagnostics.warnings,
         ...policyAuthorizationDiagnostics.warnings
       ]).filter(warning => !suppressedWarningCodes.has(warning.code));
       if (antiPatterns.length > 0) {

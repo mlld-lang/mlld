@@ -400,14 +400,14 @@ function resolveAuthorizationNoteEntries(
   const catalogDefaults = buildCatalogPolicyDefaultsFromMetadata(
     functionTools.map(tool => ({
       name: tool.csvName,
-      authorizable: tool.definition?.authorizable ?? tool.metadata.authorizable
+      can_authorize: tool.definition?.can_authorize ?? tool.metadata.can_authorize
     }))
   );
   const effectivePolicy = catalogDefaults
     ? mergePolicyConfigs(env.getPolicySummary(), catalogDefaults)
     : env.getPolicySummary();
   const authorizableToolNames = getPolicyAuthorizableToolsForRole(
-    effectivePolicy?.authorizable,
+    effectivePolicy?.can_authorize,
     authorizationRole
   );
   if (!authorizableToolNames || authorizableToolNames.length === 0) {
@@ -550,8 +550,16 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
           && (entry as { instructions: string }).instructions.trim().length > 0
           ? { instructions: (entry as { instructions: string }).instructions.trim() }
           : {}),
-        ...(normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) !== undefined
-          ? { authorizable: normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) }
+        ...(normalizeToolCollectionAuthorizable(
+          (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
+          ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
+        ) !== undefined
+          ? {
+              can_authorize: normalizeToolCollectionAuthorizable(
+                (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
+                ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
+              )
+            }
           : {}),
         ...(bind ? { bind } : {})
       }

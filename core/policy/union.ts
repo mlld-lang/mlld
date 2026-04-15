@@ -132,7 +132,7 @@ export type PolicyConfig = {
   locked?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
-  authorizable?: PolicyAuthorizableMap;
+  can_authorize?: PolicyAuthorizableMap;
   authorizations?: PolicyAuthorizations;
   auth?: Record<string, AuthConfig>;
   keychain?: PolicyKeychainConfig;
@@ -209,9 +209,9 @@ export function mergePolicyConfigs(
     normalizedBase.authorizations,
     normalizedIncoming.authorizations
   );
-  const authorizable = mergePolicyAuthorizableMaps(
-    normalizedBase.authorizable,
-    normalizedIncoming.authorizable
+  const canAuthorize = mergePolicyAuthorizableMaps(
+    normalizedBase.can_authorize,
+    normalizedIncoming.can_authorize
   );
   const envConfig = mergePolicyEnv(normalizedBase.env, normalizedIncoming.env);
   const limits = mergeLimits(normalizedBase.limits, normalizedIncoming.limits);
@@ -222,7 +222,7 @@ export function mergePolicyConfigs(
     ...(locked ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
-    ...(authorizable ? { authorizable } : {}),
+    ...(canAuthorize ? { can_authorize: canAuthorize } : {}),
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),
@@ -284,11 +284,15 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const facts = normalizePolicyFacts(config.facts);
   const signers = normalizePolicySigners(config.signers);
   const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
-  const authorizable = normalizePolicyAuthorizableMap(
-    config.authorizable
+  const canAuthorize = normalizePolicyAuthorizableMap(
+    config.can_authorize
+    ?? (config as { authorizable?: PolicyAuthorizableMap }).authorizable
     ?? (
       isPlainObject(config.authorizations)
-        ? (config.authorizations as Record<string, unknown>).authorizable
+        ? (
+            (config.authorizations as Record<string, unknown>).can_authorize
+            ?? (config.authorizations as Record<string, unknown>).authorizable
+          )
         : undefined
     )
   );
@@ -307,7 +311,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
     ...(config.locked === true ? { locked: true } : {}),
     ...(defaults ? { defaults } : {}),
     ...(defaultStance ? { default: defaultStance } : {}),
-    ...(authorizable ? { authorizable } : {}),
+    ...(canAuthorize ? { can_authorize: canAuthorize } : {}),
     ...(authorizations ? { authorizations } : {}),
     ...(auth ? { auth } : {}),
     ...(keychain ? { keychain } : {}),

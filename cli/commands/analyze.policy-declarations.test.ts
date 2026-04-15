@@ -100,8 +100,8 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
     );
   });
 
-  it('accepts valid policy authorizable role declarations', async () => {
-    const modulePath = await writeModule('policy-authorizable-valid.mld', `record @send_email_inputs = {
+  it('accepts valid policy can_authorize role declarations', async () => {
+    const modulePath = await writeModule('policy-can-authorize-valid.mld', `record @send_email_inputs = {
   facts: [recipient: string],
   data: [subject: string, body: string],
   validate: "strict"
@@ -117,7 +117,7 @@ var tools @agentTools = {
 
 policy @task = {
   authorizations: {
-    authorizable: {
+    can_authorize: {
       role:planner: [@send_email]
     }
   }
@@ -131,12 +131,12 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
     expect(result.valid).toBe(true);
     expect((result.errors ?? []).length).toBe(0);
     expect((result.antiPatterns ?? []).filter(
-      entry => entry.code === 'policy-authorizations-authorizable-unknown-tool'
+      entry => entry.code === 'policy-authorizations-can-authorize-unknown-tool'
     )).toHaveLength(0);
   });
 
-  it('diagnoses invalid authorizable role keys and denied tool conflicts', async () => {
-    const modulePath = await writeModule('policy-authorizable-invalid.mld', `record @delete_file_inputs = {
+  it('diagnoses invalid can_authorize role keys and denied tool conflicts', async () => {
+    const modulePath = await writeModule('policy-can-authorize-invalid.mld', `record @delete_file_inputs = {
   facts: [id: string],
   validate: "strict"
 }
@@ -152,7 +152,7 @@ var tools @agentTools = {
 policy @task = {
   authorizations: {
     deny: ["delete_file"],
-    authorizable: {
+    can_authorize: {
       planner: [@delete_file]
     }
   }
@@ -164,8 +164,8 @@ exe destructive:targeted, tool:w @delete_file(id) = cmd { echo "ok" }
     const result = await analyze(modulePath, { checkVariables: false });
     expect(result.valid).toBe(false);
     const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
-    expect(messages).toContain("policy.authorizations.authorizable key 'planner' must use a role:* label");
-    expect(messages).toContain("Tool 'delete_file' cannot be authorizable for 'planner' because it is denied by policy.authorizations.deny");
+    expect(messages).toContain("policy.authorizations.can_authorize key 'planner' must use a role:* label");
+    expect(messages).toContain("Tool 'delete_file' cannot appear under policy.authorizations.can_authorize.planner because it is denied by policy.authorizations.deny");
   });
 
   it('warns when policy label-flow targets do not match declared categories or context labels', async () => {

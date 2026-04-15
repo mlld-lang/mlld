@@ -1,0 +1,20 @@
+/var known @recipient = "mallory@example.com"
+
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: ["ada@example.com"] },
+  validate: "strict"
+}
+
+/exe tool:w @sendEmail(recipient, subject) = "sent"
+
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+/show @writeTools.sendEmail(@recipient, "hello")

@@ -199,8 +199,16 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
             && (entry as { instructions: string }).instructions.trim().length > 0
             ? { instructions: (entry as { instructions: string }).instructions.trim() }
             : {}),
-          ...(normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) !== undefined
-            ? { authorizable: normalizeToolCollectionAuthorizable((entry as { authorizable?: unknown }).authorizable) }
+          ...(normalizeToolCollectionAuthorizable(
+            (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
+            ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
+          ) !== undefined
+            ? {
+                can_authorize: normalizeToolCollectionAuthorizable(
+                  (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
+                  ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
+                )
+              }
             : {}),
           ...(bind ? { bind } : {})
         }
@@ -516,7 +524,11 @@ function stripAuthorizableFromPolicyConfig(
     return undefined;
   }
 
-  const { authorizable: _, ...rest } = policy;
+  const {
+    authorizable: _legacyAuthorizable,
+    can_authorize: _canAuthorize,
+    ...rest
+  } = policy;
   return rest;
 }
 
@@ -573,7 +585,7 @@ async function buildPolicyAuthorizations(
     executionEnv.getLlmToolConfig()?.authorizationRole
     ?? executionEnv.getCurrentAuthorizationRole();
   const authorizableToolNames = getPolicyAuthorizableToolsForRole(
-    basePolicy?.authorizable,
+    basePolicy?.can_authorize,
     authorizationRole
   );
   const requestedSurfaceNames = uniquePreservingOrder(
@@ -582,7 +594,7 @@ async function buildPolicyAuthorizations(
     )
   );
 
-  if (basePolicy?.authorizable && requestedSurfaceNames.length > 0) {
+  if (basePolicy?.can_authorize && requestedSurfaceNames.length > 0) {
     const deniedTools = new Set(basePolicy.authorizations?.deny ?? []);
     const allowedTools = resolveAllowedAuthorizableSurfaceNames(authorizableToolNames ?? [], toolContext);
     const issues: PolicyAuthorizationCompilerIssue[] = [];
