@@ -81,4 +81,73 @@ describe('when expression error context', () => {
     expect(mlldError.message).toContain('/project/worker.mld');
     expect(mlldError.message).not.toContain(MAIN_FILE);
   });
+
+  it('preserves wrapped policy error details on originalError snapshots', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const pathContext = createPathContext();
+    const source = [
+      '/var @approvedRecipients = ["ada"]',
+      '/var known @mallory = "mallory"',
+      '/record @send_email_inputs = {',
+      '  facts: [recipient: string],',
+      '  data: [subject: string],',
+      '  allowlist: { recipient: @approvedRecipients },',
+      '  validate: "strict"',
+      '}',
+      '/exe tool:w @sendEmail(recipient, subject) = `sent:@recipient:@subject`',
+      '/var tools @writeTools = {',
+      '  sendEmail: {',
+      '    mlld: @sendEmail,',
+      '    inputs: @send_email_inputs,',
+      '    labels: ["tool:w"]',
+      '  }',
+      '}',
+      '/exe @dispatch() = when [',
+      '  * => @writeTools.sendEmail(@mallory, "hello")',
+      ']',
+      '/show @dispatch()'
+    ].join('\n');
+
+    let thrown: unknown;
+    try {
+      await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        approveAllImports: true
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(MlldWhenExpressionError);
+    const mlldError = thrown as MlldWhenExpressionError & {
+      details?: {
+        originalError?: {
+          class?: string;
+          code?: string;
+          direction?: string;
+          phase?: string;
+          tool?: string;
+          field?: string;
+          hint?: string;
+          message?: string;
+        };
+      };
+      cause?: unknown;
+    };
+
+    expect(mlldError.details?.originalError).toMatchObject({
+      class: 'MlldPolicyError',
+      code: 'allowlist_mismatch',
+      direction: 'input',
+      phase: 'dispatch',
+      tool: 'sendEmail',
+      field: 'recipient',
+      message: expect.stringContaining('allowlist'),
+      hint: expect.stringContaining('allowlist')
+    });
+    expect(mlldError.cause).toBeDefined();
+  });
 });

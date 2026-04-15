@@ -55,7 +55,7 @@ var untrusted @mcpData = @echo("external data")
 
 Now `@mcpData` has both `src:mcp` taint AND the `untrusted` label, so built-in rules like `no-untrusted-destructive` apply.
 
-**Capability denials** (from `capabilities.deny`) are hard errors — the operation fails immediately and cannot be caught. **Managed label-flow denials** (from `defaults.rules` and `labels` deny/allow) flow through the guard pipeline — an explicit privileged guard can override them with `allow`, and `denied =>` handlers can catch them. To make a label-flow denial absolute, add `locked: true` to the policy. See `security-denied-handlers` for guard denial handling.
+**Capability denials** (from `capabilities.deny`) are hard errors — the operation fails immediately and cannot be caught. **Managed label-flow denials** (from `defaults.rules` and `labels` deny/allow) and record-backed input-contract denials (fact proof, `allowlist`, `blocklist`, `update`, `correlate`) can be caught with `denied =>` handlers. Explicit privileged guards can override label-flow denials with `allow`; input-contract denials remain contract failures. To make a label-flow denial absolute, add `locked: true` to the policy. See `security-denied-handlers` for denial handling.
 
 **Environment policy alignment:** `policy.env` constraints (provider allow/deny, tools, mcps, network) are enforced when runtime env config is derived. Guard `env` actions may return a policy fragment, and that fragment is merged into active policy before execution. This lets guards tighten runtime environment constraints without mutating the declared policy source.
 

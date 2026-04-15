@@ -834,4 +834,37 @@ describe('when evaluator characterization', () => {
       })
     });
   });
+
+  it('routes top-level when-expression policy-rule denials through denied handlers on direct tool calls', async () => {
+    const { ast } = await parse([
+      '/var @approvedRecipients = ["ada"]',
+      '/var known @ada = "ada"',
+      '/policy @externalOnlyInternal = {',
+      '  defaults: { rules: ["no-send-to-external"] }',
+      '}',
+      '/record @allow_inputs = {',
+      '  facts: [recipient: string],',
+      '  data: [subject: string],',
+      '  allowlist: { recipient: @approvedRecipients },',
+      '  validate: "strict"',
+      '}',
+      '/exe tool:w @sendAllow(recipient, subject) = `allow:@recipient:@subject`',
+      '/var tools @allowTools = {',
+      '  sendAllow: {',
+      '    mlld: @sendAllow,',
+      '    inputs: @allow_inputs,',
+      '    labels: ["tool:w", "exfil:send"]',
+      '  }',
+      '}',
+      '/var @result = when [',
+      '  denied => @mx.denial.code',
+      '  * => @allowTools.sendAllow(@ada, "hello") with { policy: @externalOnlyInternal }',
+      ']'
+    ].join('\n'));
+
+    await evaluate(ast, env);
+
+    const result = await extractVariableValue(env.getVariable('result')!, env);
+    expect(result).toBe('POLICY_LABEL_FLOW_DENIED');
+  });
 });

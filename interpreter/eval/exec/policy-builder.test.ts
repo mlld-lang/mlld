@@ -390,6 +390,8 @@ describe('@policy builtin', () => {
     expect(built.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'proofless_control_arg',
+          phase: 'build',
           reason: 'proofless_control_arg',
           tool: 'sendEmail',
           arg: 'recipient'
@@ -1047,6 +1049,8 @@ describe('@policy builtin', () => {
     expect(compilation.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'no_update_fields',
+          phase: 'build',
           reason: 'no_update_fields',
           tool: 'updateScheduledTransaction'
         })
@@ -1249,6 +1253,8 @@ describe('@policy builtin', () => {
     expect(compilation.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'allowlist_mismatch',
+          phase: 'build',
           reason: 'allowlist_mismatch',
           tool: 'sendEmail',
           arg: 'recipient'
@@ -1461,6 +1467,8 @@ describe('@policy builtin', () => {
       expect(result.issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
+            code: 'proofless_control_arg',
+            phase: 'build',
             reason: 'proofless_control_arg',
             tool: 'sendEmail',
             arg: 'recipient'

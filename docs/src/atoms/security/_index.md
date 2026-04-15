@@ -127,7 +127,7 @@ policy @p = {
 
 **Policy composition**: `union()` merges configs with intersection for `allow`, union for `deny`, minimum for `limits` — always resolving toward more restrictive.
 
-**Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
+**Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) and record-backed input-contract denials (`allowlist`, `blocklist`, fact proof, `update`, `correlate`) can be caught with `denied =>` handlers. Label-flow denials can also be overridden by explicit privileged guard `allow` decisions. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
 Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the surfaced destination/target args to carry `known` (or `known:internal` for internal-only send destinations). For read/extract tools, use input-record `facts` on the surfaced read tool and enable `no-unknown-extraction-sources` to require proof-bearing source selectors.
 

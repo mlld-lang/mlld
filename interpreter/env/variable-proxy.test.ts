@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createVariableProxy, VARIABLE_PROXY_PROPS, isVariableProxy, getVariableType, createMlldHelpers, prepareParamsForShadow } from './variable-proxy';
 import { createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { keepStructured } from '@interpreter/utils/structured-value';
 
 describe('Variable Proxy System', () => {
   const mockSource = {
@@ -54,6 +55,53 @@ describe('Variable Proxy System', () => {
         })
       );
       expect(metadata?.internal).toEqual({});
+    });
+
+    it('preserves stable nested object identity across repeated property reads', () => {
+      const objVar = createObjectVariable(
+        'tools',
+        {
+          send_email: {
+            labels: ['execute:w'],
+            bind: {
+              mode: 'safe',
+              retries: 2
+            }
+          }
+        },
+        false,
+        mockSource
+      );
+      const proxy = createVariableProxy(objVar);
+
+      const firstEntry = proxy.send_email;
+      const secondEntry = proxy.send_email;
+
+      expect(firstEntry).toBe(secondEntry);
+      expect(firstEntry.bind).toBe(secondEntry.bind);
+      expect(Object.entries(proxy)[0]?.[1]).toBe(Object.entries(proxy)[0]?.[1]);
+    });
+
+    it('preserves keepStructured wrappers for metadata access', () => {
+      const kept = keepStructured({ name: 'Ada' }) as any;
+      kept.internal = { ...(kept.internal ?? {}), keepStructured: true };
+      kept.mx = {
+        ...(kept.mx ?? {}),
+        filename: 'sample.json',
+        labels: ['secret']
+      };
+
+      const variable = {
+        ...createObjectVariable('file', {}, false, mockSource),
+        value: kept
+      } as any;
+
+      const proxy = createVariableProxy(variable);
+
+      expect(proxy.mx.filename).toBe('sample.json');
+      expect(proxy.mx.labels).toEqual(['secret']);
+      expect(proxy.data.name).toBe('Ada');
+      expect(proxy.type).toBe('object');
     });
     
     it('should preserve custom toString behavior', () => {

@@ -543,7 +543,11 @@ function createPolicyBuilderIssueResult(
       }
     }),
     valid: false,
-    issues,
+    issues: issues.map(issue => ({
+      ...issue,
+      code: issue.code ?? issue.reason,
+      phase: issue.phase ?? 'build'
+    })),
     report: createEmptyPolicyAuthorizationCompileReport()
   };
 }

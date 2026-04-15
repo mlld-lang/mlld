@@ -1,0 +1,17 @@
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe tool:w @sendEmail(recipient, subject) = `imported:@recipient:@subject`
+
+/var tools @importedWriteTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+/export { @importedWriteTools }

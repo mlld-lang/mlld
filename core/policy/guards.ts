@@ -639,6 +639,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule.rule === 'no-secret-exfil') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_secret_exfil',
+        ruleName: 'no-secret-exfil',
         label: 'secret',
         operationLabel: 'exfil',
         reason: "Rule 'no-secret-exfil': label 'secret' cannot flow to 'exfil'",
@@ -713,6 +714,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule.rule === 'no-untrusted-destructive') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_destructive',
+        ruleName: 'no-untrusted-destructive',
         label: 'untrusted',
         operationLabel: 'destructive',
         reason: "Rule 'no-untrusted-destructive': label 'untrusted' cannot flow to 'destructive'",
@@ -725,6 +727,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule.rule === 'no-untrusted-privileged') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_untrusted_privileged',
+        ruleName: 'no-untrusted-privileged',
         label: 'untrusted',
         operationLabel: 'privileged',
         reason: "Rule 'no-untrusted-privileged': label 'untrusted' cannot flow to 'privileged'",
@@ -737,6 +740,7 @@ export function generatePolicyGuards(policy: PolicyConfig, policyDisplayName?: s
     if (rule.rule === 'no-influenced-advice') {
       guards.push(makeDataRuleGuard({
         name: '__policy_rule_no_influenced_advice',
+        ruleName: 'no-influenced-advice',
         label: 'influenced',
         operationLabel: 'advice',
         reason: "Rule 'no-influenced-advice': label 'influenced' cannot flow to 'advice' — use structured extraction to debias evaluative output",
@@ -1385,6 +1389,7 @@ function hasAnyMatchingLabel(
 
 function makeDataRuleGuard(options: {
   name: string;
+  ruleName: string;
   label: string;
   operationLabel: string;
   reason: string;
@@ -1427,6 +1432,7 @@ function makeDataRuleGuard(options: {
         decision: 'deny',
         reason: options.reason,
         policyName: options.policyDisplayName,
+        rule: `policy.defaults.rules.${options.ruleName}`,
         locked: options.locked === true
       };
     }
@@ -1480,6 +1486,7 @@ function makeNamedArgAttestationGuard(options: {
           decision: 'deny',
           reason: options.reason,
           policyName: options.policyDisplayName,
+          rule: `policy.defaults.rules.${options.ruleName}`,
           locked: options.locked === true,
           suggestions: [
             options.missingLabelSuggestion,
@@ -1499,6 +1506,7 @@ function makeNamedArgAttestationGuard(options: {
             decision: 'deny',
             reason: options.reason,
             policyName: options.policyDisplayName,
+            rule: `policy.defaults.rules.${options.ruleName}`,
             locked: options.locked === true,
             suggestions: [
               options.missingLabelSuggestion,
@@ -1548,6 +1556,7 @@ function makeSourceArgAttestationGuard(options: {
           decision: 'deny',
           reason: options.reason,
           policyName: options.policyDisplayName,
+          rule: 'policy.defaults.rules.no-unknown-extraction-sources',
           locked: options.locked === true,
           suggestions: [
             options.missingLabelSuggestion,
@@ -1567,6 +1576,7 @@ function makeSourceArgAttestationGuard(options: {
             decision: 'deny',
             reason: options.reason,
             policyName: options.policyDisplayName,
+            rule: 'policy.defaults.rules.no-unknown-extraction-sources',
             locked: options.locked === true,
             suggestions: [
               options.missingLabelSuggestion,
@@ -1611,6 +1621,7 @@ function makeSensitiveExfilGuard(
         decision: 'deny',
         reason: "Rule 'no-sensitive-exfil': label 'sensitive' cannot flow to 'exfil'",
         policyName: policyDisplayName,
+        rule: 'policy.defaults.rules.no-sensitive-exfil',
         locked: locked === true
       };
     }

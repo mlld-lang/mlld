@@ -25,7 +25,7 @@ import {
   type ToolDefinition
 } from '@core/types/tools';
 import { applyWithClause } from './with-clause';
-import { MlldInterpreterError, MlldSecurityError, CircularReferenceError } from '@core/errors';
+import { MlldInterpreterError, MlldPolicyError, MlldSecurityError, CircularReferenceError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
@@ -54,6 +54,7 @@ import type { FactSourceHandle } from '@core/types/handle';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
+import type { ActiveWhenExpressionContext } from './when-expression';
 import { resolveWorkingDirectory } from '../utils/working-directory';
 import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import { evaluatePolicyAuthorizationDecision } from '@core/policy/authorizations';
@@ -1296,6 +1297,25 @@ function validateToolInputSchema(options: {
 
   const providedArgs = args ?? {};
   const fieldMap = new Map(inputSchema.fields.map(field => [field.name, field]));
+  const throwDispatchPolicyError = (params: {
+    code: 'allowlist_mismatch' | 'blocklist_match' | 'proofless_control_arg' | 'proofless_source_arg' | 'correlate_mismatch';
+    message: string;
+    field?: string;
+    hint: string;
+  }): never => {
+    throw new MlldPolicyError(
+      params.message,
+      {
+        code: params.code,
+        phase: 'dispatch',
+        direction: 'input',
+        tool: metadata.name,
+        ...(params.field ? { field: params.field } : {}),
+        hint: params.hint
+      },
+      { env }
+    );
+  };
 
   const correlationSets: string[][] = [];
   for (const field of inputSchema.fields) {
@@ -1314,7 +1334,12 @@ function validateToolInputSchema(options: {
     }
     if (field.classification === 'fact') {
       if (!hasAcceptedProofForInput(value)) {
-        throw new Error(`Tool '${metadata.name}' input '${field.name}' must carry known or fact proof`);
+        throwDispatchPolicyError({
+          code: isToolWriteLabelSet(metadata.labels) ? 'proofless_control_arg' : 'proofless_source_arg',
+          message: `Tool '${metadata.name}' input '${field.name}' must carry known or fact proof`,
+          field: field.name,
+          hint: `Pass '${field.name}' as a known or fact-backed value before calling '${metadata.name}'.`
+        });
       }
       if (inputSchema.correlate) {
         correlationSets.push(collectCorrelationKeys(collectInputFactSources(value)));
@@ -1382,7 +1407,12 @@ function validateToolInputSchema(options: {
       continue;
     }
     if (!valueMatchesPolicySet(providedArgs[fieldName], target)) {
-      throw new Error(`Tool '${metadata.name}' input '${fieldName}' must match its allowlist`);
+      throwDispatchPolicyError({
+        code: 'allowlist_mismatch',
+        message: `Tool '${metadata.name}' input '${fieldName}' must match its allowlist`,
+        field: fieldName,
+        hint: `Provide '${fieldName}' from the declared allowlist before calling '${metadata.name}'.`
+      });
     }
   }
 
@@ -1391,7 +1421,12 @@ function validateToolInputSchema(options: {
       continue;
     }
     if (valueMatchesPolicySet(providedArgs[fieldName], target)) {
-      throw new Error(`Tool '${metadata.name}' input '${fieldName}' must not match its blocklist`);
+      throwDispatchPolicyError({
+        code: 'blocklist_match',
+        message: `Tool '${metadata.name}' input '${fieldName}' must not match its blocklist`,
+        field: fieldName,
+        hint: `Remove '${fieldName}' from the declared blocklist before calling '${metadata.name}'.`
+      });
     }
   }
 
@@ -1401,7 +1436,11 @@ function validateToolInputSchema(options: {
       shared = new Set(keys.filter(key => shared.has(key)));
     }
     if (shared.size === 0) {
-      throw new Error(`Tool '${metadata.name}' fact inputs must correlate to the same source instance`);
+      throwDispatchPolicyError({
+        code: 'correlate_mismatch',
+        message: `Tool '${metadata.name}' fact inputs must correlate to the same source instance`,
+        hint: `Pass fact inputs to '${metadata.name}' from the same correlated source.`
+      });
     }
   }
 }
@@ -1420,10 +1459,12 @@ function hasProvidedUpdateArgValue(
 
 function enforceUpdateToolArguments(options: {
   metadata: {
+    name: string;
     updateArgs?: readonly string[];
     hasUpdateArgsMetadata: boolean;
   };
   args: Record<string, unknown> | undefined;
+  env: Environment;
 }): void {
   if (!options.metadata.hasUpdateArgsMetadata) {
     return;
@@ -1435,9 +1476,29 @@ function enforceUpdateToolArguments(options: {
   }
 
   if (updateArgs.length > 0) {
-    throw new Error(`Update with no changed fields - specify at least one of: ${updateArgs.join(', ')}`);
+    throw new MlldPolicyError(
+      `Update with no changed fields - specify at least one of: ${updateArgs.join(', ')}`,
+      {
+        code: 'no_update_fields',
+        phase: 'dispatch',
+        direction: 'input',
+        tool: options.metadata.name,
+        hint: `Provide at least one declared update field before calling '${options.metadata.name}'.`
+      },
+      { env: options.env }
+    );
   }
-  throw new Error('Update with no changed fields - specify at least one declared update field');
+  throw new MlldPolicyError(
+    'Update with no changed fields - specify at least one declared update field',
+    {
+      code: 'no_update_fields',
+      phase: 'dispatch',
+      direction: 'input',
+      tool: options.metadata.name,
+      hint: `Declare at least one update field before calling '${options.metadata.name}'.`
+    },
+    { env: options.env }
+  );
 }
 
 function mergeAuthorizationAttestationsIntoArgDescriptors(options: {
@@ -3470,6 +3531,12 @@ async function evaluateExecInvocationInternal(
   if (isCodeExecutable(definition)) {
     whenExprNode = extractExecDeniedHandlerWhenExpression(definition);
   }
+  if (!whenExprNode) {
+    const enclosingWhenExpr = env.getExecutionContext<ActiveWhenExpressionContext>('when-expression');
+    if (enclosingWhenExpr?.hasDeniedHandler) {
+      whenExprNode = enclosingWhenExpr.node;
+    }
+  }
 
   let runtimeEnv = env;
   runtimeEnv = await applyInvocationScopedRuntimeConfig({
@@ -4084,7 +4151,8 @@ async function evaluateExecInvocationInternal(
   });
   enforceUpdateToolArguments({
     metadata: effectiveToolMetadata,
-    args: authorizationArgs
+    args: authorizationArgs,
+    env
   });
   const trackedMcpName =
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0

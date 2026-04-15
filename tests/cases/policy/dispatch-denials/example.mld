@@ -1,0 +1,104 @@
+/var @approvedRecipients = ["ada"]
+/var @blockedSubjects = ["phish"]
+/var known @ada = "ada"
+/var known @mallory = "mallory"
+/var known @itemId = "item-1"
+
+/policy @externalOnlyInternal = {
+  defaults: { rules: ["no-send-to-external"] }
+}
+
+/record @allow_send_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approvedRecipients },
+  validate: "strict"
+}
+
+/record @block_send_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  blocklist: { subject: @blockedSubjects },
+  validate: "strict"
+}
+
+/record @update_item_inputs = {
+  facts: [itemId: string],
+  data: [title: string?],
+  update: [title],
+  validate: "strict"
+}
+
+/record @proof_send_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe tool:w @sendAllow(recipient, subject) = `allow:@recipient:@subject`
+/exe tool:w @sendBlock(recipient, subject) = `block:@recipient:@subject`
+/exe tool:w @updateItem(itemId, title) = `update:@itemId:@title`
+/exe tool:w @sendProof(recipient, subject) = `proof:@recipient:@subject`
+
+/var tools @allowTools = {
+  sendAllow: {
+    mlld: @sendAllow,
+    inputs: @allow_send_inputs,
+    labels: ["tool:w", "exfil:send"]
+  }
+}
+
+/var tools @blockTools = {
+  sendBlock: {
+    mlld: @sendBlock,
+    inputs: @block_send_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @updateTools = {
+  updateItem: {
+    mlld: @updateItem,
+    inputs: @update_item_inputs,
+    labels: ["tool:w", "update:w"]
+  }
+}
+
+/var tools @proofTools = {
+  sendProof: {
+    mlld: @sendProof,
+    inputs: @proof_send_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var @allowDenied = when [
+  denied => `@mx.denial.code:@mx.denial.phase:@mx.denial.direction:@mx.denial.tool:@mx.denial.field`
+  * => @allowTools.sendAllow(@mallory, "hello")
+]
+
+/var @blockDenied = when [
+  denied => `@mx.denial.code:@mx.denial.phase:@mx.denial.direction:@mx.denial.tool:@mx.denial.field`
+  * => @blockTools.sendBlock(@ada, "phish")
+]
+
+/var @updateDenied = when [
+  denied => `@mx.denial.code:@mx.denial.phase:@mx.denial.direction:@mx.denial.tool`
+  * => @updateTools.updateItem(@itemId)
+]
+
+/var @proofDenied = when [
+  denied => `@mx.denial.code:@mx.denial.phase:@mx.denial.direction:@mx.denial.tool:@mx.denial.field`
+  * => @proofTools.sendProof("guest", "hello")
+]
+
+/var @policyDenied = when [
+  denied => @mx.denial.code
+  * => @allowTools.sendAllow(@ada, "hello") with { policy: @externalOnlyInternal }
+]
+
+/show @allowDenied
+/show @blockDenied
+/show @updateDenied
+/show @proofDenied
+/show @policyDenied

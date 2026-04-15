@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuardError } from '@core/errors/GuardError';
 import { MlldDenialError } from '@core/errors/denial';
+import { MlldPolicyError } from '@core/errors/MlldPolicyError';
 import { handleExecGuardDenial } from './guard-denial-handler';
 
 const { evaluateWhenExpressionMock } = vi.hoisted(() => ({
@@ -118,6 +119,53 @@ describe('handleExecGuardDenial', () => {
 
     expect(result).toBeNull();
     expect(evaluateWhenExpressionMock).not.toHaveBeenCalled();
+    expect(env.emitEffect).not.toHaveBeenCalled();
+  });
+
+  it('routes policy enforcement denials through denied handlers without guard warnings', async () => {
+    const execEnv = createMockExecEnv();
+    const env = {
+      emitEffect: vi.fn(),
+      recordSecurityDescriptor: vi.fn(),
+      recordGuardDenialFromError: vi.fn()
+    } as any;
+
+    evaluateWhenExpressionMock.mockResolvedValue({
+      value: 'allowlist_mismatch',
+      env: execEnv,
+      internal: { deniedHandlerRan: true }
+    });
+
+    const error = new MlldPolicyError(
+      "Tool 'sendEmail' input 'recipient' must match its allowlist",
+      {
+        code: 'allowlist_mismatch',
+        phase: 'dispatch',
+        direction: 'input',
+        tool: 'sendEmail',
+        field: 'recipient',
+        hint: "Provide 'recipient' from the declared allowlist before calling 'sendEmail'."
+      }
+    );
+
+    const result = await handleExecGuardDenial(error, {
+      execEnv,
+      env,
+      whenExprNode: {} as any
+    });
+
+    expect(result).not.toBeNull();
+    expect(execEnv.withDeniedContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        denied: true,
+        code: 'allowlist_mismatch',
+        phase: 'dispatch',
+        direction: 'input',
+        tool: 'sendEmail',
+        field: 'recipient'
+      }),
+      expect.any(Function)
+    );
     expect(env.emitEffect).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { MlldDirectiveError } from './MlldDirectiveError';
+import type { ErrorSnapshot } from './errorSerialization';
 
 export interface ErrorSummary {
   type: string;
@@ -18,7 +19,7 @@ export class MlldConditionError extends MlldDirectiveError {
     command?: string;
     conditionIndex?: number;
     modifier?: 'all' | 'any';
-    originalError?: Error;
+    originalError?: ErrorSnapshot | unknown;
     errors?: ErrorSummary[];
   };
 
@@ -32,14 +33,16 @@ export class MlldConditionError extends MlldDirectiveError {
       stdout?: string;
       command?: string;
       conditionIndex?: number;
-      originalError?: Error;
+      originalError?: ErrorSnapshot | unknown;
       errors?: ErrorSummary[];
-    } = {}
+    } = {},
+    cause?: unknown
   ) {
     super(message, 'when', {
       location,
       code: 'CONDITION_ERROR',
-      context: { modifier, ...details }
+      context: { modifier, ...details },
+      cause: cause instanceof Error ? cause : undefined
     });
     
     this.details = { ...details, modifier };

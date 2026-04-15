@@ -15,6 +15,24 @@ export interface SerializableValueOptions extends ValueSanitizerOptions {
   errorOptions?: ErrorSerializationOptions;
 }
 
+export interface ErrorSnapshot {
+  class: string;
+  name: string;
+  message: string;
+  code?: string;
+  severity?: string;
+  phase?: string;
+  direction?: string;
+  hint?: string;
+  tool?: string;
+  field?: string;
+  arg?: string;
+  reason?: string;
+  sourceLocation?: unknown;
+  details?: unknown;
+  cause?: unknown;
+}
+
 const DEFAULT_VALUE_OPTIONS: Required<ValueSanitizerOptions> = {
   maxDepth: 6,
   maxObjectKeys: 50,
@@ -348,3 +366,65 @@ export function cloneErrorForTransport(
 
 export const summarizeError = serializeError;
 export const toJsonSafe = sanitizeSerializableValue;
+
+export function createErrorSnapshot(
+  error: unknown,
+  options: ErrorSerializationOptions = {}
+): unknown {
+  const serialized = serializeError(error, {
+    includeDetails: true,
+    includeStack: false,
+    ...options
+  });
+
+  if (!serialized || typeof serialized !== 'object' || Array.isArray(serialized)) {
+    return serialized;
+  }
+
+  const record = serialized as Record<string, unknown>;
+  const details =
+    record.details && typeof record.details === 'object' && !Array.isArray(record.details)
+      ? (record.details as Record<string, unknown>)
+      : undefined;
+
+  const snapshot: ErrorSnapshot = {
+    class:
+      typeof record.name === 'string' && record.name.trim().length > 0
+        ? record.name
+        : 'Error',
+    name:
+      typeof record.name === 'string' && record.name.trim().length > 0
+        ? record.name
+        : 'Error',
+    message:
+      typeof record.message === 'string'
+        ? record.message
+        : String(record.message ?? 'Unknown error')
+  };
+
+  for (const key of ['code', 'severity'] as const) {
+    if (typeof record[key] === 'string' && record[key].trim().length > 0) {
+      snapshot[key] = record[key] as string;
+    }
+  }
+
+  for (const key of ['phase', 'direction', 'hint', 'tool', 'field', 'arg', 'reason'] as const) {
+    if (typeof details?.[key] === 'string' && (details[key] as string).trim().length > 0) {
+      snapshot[key] = details[key] as string;
+    }
+  }
+
+  if (record.sourceLocation !== undefined) {
+    snapshot.sourceLocation = record.sourceLocation;
+  }
+
+  if (details !== undefined) {
+    snapshot.details = details;
+  }
+
+  if (record.cause !== undefined) {
+    snapshot.cause = record.cause;
+  }
+
+  return snapshot;
+}

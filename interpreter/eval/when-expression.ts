@@ -12,6 +12,7 @@ import { isExecutableVariable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { GuardError, isBailError, MlldDenialError, MlldWhenExpressionError } from '@core/errors';
+import { createErrorSnapshot } from '@core/errors/errorSerialization';
 import { evaluate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { evaluateCondition, conditionTargetsDenied, evaluateAugmentedAssignment, evaluateLetAssignment } from './when';
@@ -31,6 +32,12 @@ import {
 
 export interface WhenExpressionOptions {
   denyMode?: boolean;
+}
+
+export interface ActiveWhenExpressionContext {
+  allowLetShadowing: boolean;
+  node: WhenExpressionNode;
+  hasDeniedHandler: boolean;
 }
 
 type InterpolateFn = typeof import('../core/interpreter').interpolate;
@@ -177,17 +184,32 @@ function getConditionPairText(pair: WhenConditionPair, source?: string): string 
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in (error as Record<string, unknown>) &&
+    typeof (error as { message?: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message;
+  }
   return String(error);
+}
+
+function getErrorCause(error: unknown): Error | undefined {
+  return error instanceof Error ? error : undefined;
 }
 
 function isHardDenial(error: unknown): error is MlldDenialError {
   if (!(error instanceof MlldDenialError)) {
     return false;
   }
-  if (!(error instanceof GuardError)) {
-    return true;
-  }
-  return error.context?.blocker?.type === 'policy';
+  return error.context?.code === 'POLICY_CAPABILITY_DENIED'
+    || error.context?.code === 'DEPENDENCY_UNMET'
+    || error.context?.code === 'PROFILE_UNMET';
+}
+
+function shouldPropagateRawDenial(error: unknown): boolean {
+  return error instanceof GuardError && error.decision === 'deny';
 }
 
 async function evaluateActionNodes(
@@ -394,8 +416,14 @@ export async function evaluateWhenExpression(
   context?: EvaluationContext,
   options?: WhenExpressionOptions
 ): Promise<EvalResult> {
-  return env.withExecutionContext('when-expression', { allowLetShadowing: true }, async () =>
-    evaluateWhenExpressionInternal(node, env, context, options)
+  return env.withExecutionContext(
+    'when-expression',
+    {
+      allowLetShadowing: true,
+      node,
+      hasDeniedHandler: whenExpressionHasDeniedHandler(node)
+    } satisfies ActiveWhenExpressionContext,
+    async () => evaluateWhenExpressionInternal(node, env, context, options)
   );
 }
 
@@ -418,6 +446,9 @@ async function evaluateWhenExpressionInternal(
   const errors: MlldWhenExpressionError[] = [];
   const denyMode = Boolean(options?.denyMode);
   let deniedHandlerRan = false;
+  const hasDeniedHandler = normalizedEntries.some(
+    entry => isConditionPair(entry) && conditionTargetsDenied(entry.condition)
+  );
   
   const boundIdentifier = (node as any).boundIdentifier || node.meta?.boundIdentifier;
   const hasBoundValue = Boolean((node as any).boundValue && typeof boundIdentifier === 'string' && boundIdentifier.length > 0);
@@ -840,7 +871,7 @@ async function evaluateWhenExpressionInternal(
             throw actionError;
           }
 
-          if (!denyMode) {
+          if (!denyMode && hasDeniedHandler) {
             const { handleExecGuardDenial } = await import('./guard-denial-handler');
             const handled = await handleExecGuardDenial(actionError, {
               execEnv: accumulatedEnv,
@@ -858,6 +889,9 @@ async function evaluateWhenExpressionInternal(
               };
             }
           }
+          if (shouldPropagateRawDenial(actionError)) {
+            throw actionError;
+          }
           const conditionText = getConditionPairText(pair, sourceInfo.source)
             ?? getConditionText(pair.condition, sourceInfo.source);
           const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
@@ -868,13 +902,13 @@ async function evaluateWhenExpressionInternal(
             {
               conditionIndex: i,
               phase: 'action',
-              originalError: actionError as Error,
+              originalError: createErrorSnapshot(actionError),
               conditionText,
               conditionLocation,
               filePath: sourceInfo.filePath,
               sourceContent: sourceInfo.source
             },
-            { env }
+            { env, cause: getErrorCause(actionError) }
           );
         }
       }
@@ -883,6 +917,9 @@ async function evaluateWhenExpressionInternal(
         throw conditionError;
       }
       if (isHardDenial(conditionError)) {
+        throw conditionError;
+      }
+      if (shouldPropagateRawDenial(conditionError)) {
         throw conditionError;
       }
       if (conditionError instanceof MlldWhenExpressionError && conditionError.details?.phase === 'action') {
@@ -901,13 +938,13 @@ async function evaluateWhenExpressionInternal(
         {
           conditionIndex: i,
           phase: 'condition',
-          originalError: conditionError as Error,
+          originalError: createErrorSnapshot(conditionError),
           conditionText,
           conditionLocation,
           filePath: sourceInfo.filePath,
           sourceContent: sourceInfo.source
         },
-        { env }
+        { env, cause: getErrorCause(conditionError) }
       ));
     }
   }
@@ -999,6 +1036,27 @@ async function evaluateWhenExpressionInternal(
         if (isHardDenial(actionError)) {
           throw actionError;
         }
+        if (!denyMode && hasDeniedHandler) {
+          const { handleExecGuardDenial } = await import('./guard-denial-handler');
+          const handled = await handleExecGuardDenial(actionError, {
+            execEnv: accumulatedEnv,
+            env,
+            whenExprNode: node
+          });
+          if (handled) {
+            return {
+              ...handled,
+              env: handled.env ?? accumulatedEnv,
+              internal: {
+                ...(handled.internal ?? {}),
+                deniedHandlerRan: true
+              }
+            };
+          }
+        }
+        if (shouldPropagateRawDenial(actionError)) {
+          throw actionError;
+        }
         const conditionText = getConditionText(pair.condition, sourceInfo.source);
         const conditionLocation = getConditionLocation(pair.condition, sourceInfo.filePath);
         const actionMessage = getErrorMessage(actionError);
@@ -1008,13 +1066,13 @@ async function evaluateWhenExpressionInternal(
           {
             conditionIndex: i,
             phase: 'action',
-            originalError: actionError as Error,
+            originalError: createErrorSnapshot(actionError),
             conditionText,
             conditionLocation,
             filePath: sourceInfo.filePath,
             sourceContent: sourceInfo.source
           },
-          { env }
+          { env, cause: getErrorCause(actionError) }
         );
       }
     }
@@ -1050,6 +1108,14 @@ async function evaluateWhenExpressionInternal(
   
   // No conditions matched - return null
   return buildResult(null, accumulatedEnv);
+}
+
+function whenExpressionHasDeniedHandler(node: WhenExpressionNode): boolean {
+  return node.conditions.some(
+    entry =>
+      isConditionPair(entry) &&
+      conditionTargetsDenied(normalizeWhenCondition(entry.condition))
+  );
 }
 
 /**

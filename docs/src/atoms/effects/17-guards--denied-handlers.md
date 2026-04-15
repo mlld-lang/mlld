@@ -28,9 +28,9 @@ exe @safe(value) = when [
 ]
 ```
 
-`denied` handlers catch denials from guards and managed policy label-flow denials (`defaults.rules`, `labels` deny/allow) in both per-operation and per-input scope. When a guard or policy denies an operation, the exe's `when` block can match `denied` and provide a fallback value. Capability denials (`capabilities.deny`, environment constraints) are hard errors and cannot be caught.
+`denied` handlers catch denials from guards, managed policy label-flow denials (`defaults.rules`, `labels` deny/allow), and direct input-record dispatch checks such as `proofless_control_arg`, `allowlist_mismatch`, `blocklist_match`, `no_update_fields`, and `correlate_mismatch`. When one of those paths denies an operation, the exe's `when` block can match `denied` and provide a fallback value. Capability denials (`capabilities.deny`, environment constraints) are hard errors and cannot be caught.
 
-When you run mlld through the SDK or `mlld live --stdio`, the same denial is also surfaced as structured observability data. Streamed executions emit a `guard_denial` event immediately, and structured execute results collect the payload in `result.denials`, whether the denial was handled by `denied =>` or terminated the call.
+When you run mlld through the SDK or `mlld live --stdio`, guard and managed policy label-flow denials are also surfaced as structured observability data. Streamed executions emit a `guard_denial` event immediately, and structured execute results collect the payload in `result.denials`, whether the denial was handled by `denied =>` or terminated the call. Input-record dispatch denials use the same `denied =>` surface inside mlld, but if they go uncaught the outer `when` wrapper preserves the inner error snapshot on `error.details.originalError`.
 
 **Accessing guard context:**
 
@@ -42,6 +42,17 @@ exe @handler(value) = when [
   * => show @value
 ]
 ```
+
+Input-record denials populate `@mx.denial` with structured fields:
+
+```mlld
+var @result = when [
+  denied => `@mx.denial.code:@mx.denial.phase:@mx.denial.tool:@mx.denial.field`
+  * => @tools.send_email("mallory@example.com", "Hello")
+]
+```
+
+Common fields are `code`, `phase`, `direction`, `tool`, `field`, and `hint`.
 
 Named operation inputs are available in denied handlers through `@mx.args`, just like in guard bodies:
 
@@ -58,4 +69,15 @@ exe @send(url, payload) = when [
 exe @successOnly(value) = when [
   !denied => @value
 ]
+```
+
+If a `when` action throws and no `denied` arm catches it, SDK callers can inspect the wrapped error's inner snapshot:
+
+```ts
+try {
+  await execute(script);
+} catch (error: any) {
+  console.log(error.details?.originalError?.class);
+  console.log(error.details?.originalError?.code);
+}
 ```

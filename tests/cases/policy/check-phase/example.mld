@@ -1,0 +1,188 @@
+/var @approvedRecipients = ["ada"]
+/var @blockedSubjects = ["phish"]
+/var known @ada = "ada"
+/var known @mallory = "mallory"
+/var known @itemId = "item-1"
+/var known @fromEmail = "ada"
+/var known @toEmail = "mallory"
+
+/record @exact_inputs = {
+  facts: [],
+  data: [subject: string],
+  exact: [subject],
+  validate: "strict"
+}
+
+/record @allow_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approvedRecipients },
+  validate: "strict"
+}
+
+/record @block_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  blocklist: { subject: @blockedSubjects },
+  validate: "strict"
+}
+
+/record @update_inputs = {
+  facts: [itemId: string],
+  data: [title: string?],
+  update: [title],
+  validate: "strict"
+}
+
+/record @proof_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/record @correlate_inputs = {
+  facts: [from: string, to: string],
+  correlate: true,
+  validate: "strict"
+}
+
+/exe tool:w @createDraft(subject) = `draft:@subject`
+/exe tool:w @sendAllow(recipient, subject) = `allow:@recipient:@subject`
+/exe tool:w @sendBlock(recipient, subject) = `block:@recipient:@subject`
+/exe tool:w @updateItem(itemId, title) = `update:@itemId:@title`
+/exe tool:w @sendProof(recipient, subject) = `proof:@recipient:@subject`
+/exe tool:r @compareContacts(from, to) = `compare:@from:@to`
+
+/var tools @exactTools = {
+  createDraft: {
+    mlld: @createDraft,
+    inputs: @exact_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @allowTools = {
+  sendAllow: {
+    mlld: @sendAllow,
+    inputs: @allow_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @blockTools = {
+  sendBlock: {
+    mlld: @sendBlock,
+    inputs: @block_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @updateTools = {
+  updateItem: {
+    mlld: @updateItem,
+    inputs: @update_inputs,
+    labels: ["tool:w", "update:w"]
+  }
+}
+
+/var tools @proofTools = {
+  sendProof: {
+    mlld: @sendProof,
+    inputs: @proof_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @correlateTools = {
+  compareContacts: {
+    mlld: @compareContacts,
+    inputs: @correlate_inputs,
+    labels: ["tool:r"]
+  }
+}
+
+/exe @issueSummary(result) = js {
+  const first = Array.isArray(result?.issues) ? result.issues[0] : null;
+  return first ? `${first.code}:${first.phase}` : "none";
+}
+
+/var @exactBuilt = @policy.build({
+  allow: {
+    createDraft: {
+      subject: "secret subject"
+    }
+  }
+}, @exactTools, {
+  task: "Draft something else entirely"
+})
+
+/var @allowBuilt = @policy.build({
+  allow: {
+    sendAllow: {
+      recipient: "mallory",
+      subject: "hello"
+    }
+  }
+}, @allowTools)
+
+/var @blockBuilt = @policy.build({
+  allow: {
+    sendBlock: {
+      recipient: "ada",
+      subject: "phish"
+    }
+  }
+}, @blockTools)
+
+/var @updateBuilt = @policy.build({
+  allow: {
+    updateItem: {
+      itemId: "item-1"
+    }
+  }
+}, @updateTools)
+
+/var @proofBuilt = @policy.build({
+  allow: {
+    sendProof: {
+      recipient: "guest",
+      subject: "hello"
+    }
+  }
+}, @proofTools)
+
+/var @allowDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @allowTools.sendAllow(@mallory, "hello")
+]
+
+/var @blockDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @blockTools.sendBlock(@ada, "phish")
+]
+
+/var @updateDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @updateTools.updateItem(@itemId)
+]
+
+/var @proofDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @proofTools.sendProof("guest", "hello")
+]
+
+/var @correlateDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @correlateTools.compareContacts(@fromEmail, @toEmail)
+]
+
+/show @issueSummary(@exactBuilt)
+/show @issueSummary(@allowBuilt)
+/show @allowDispatch
+/show @issueSummary(@blockBuilt)
+/show @blockDispatch
+/show @issueSummary(@updateBuilt)
+/show @updateDispatch
+/show @issueSummary(@proofBuilt)
+/show @proofDispatch
+/show @correlateDispatch

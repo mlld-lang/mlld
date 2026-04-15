@@ -119,6 +119,14 @@ The input-only policy sections are:
 - `blocklist: { field: @set }` — values must not be present in the named set
 - `optional_benign: [field, ...]` — acknowledges optional fact fields whose omission is benign and suppresses the validator advisory
 
+Phase routing for those checks is explicit:
+
+- `facts` proof runs at builder and dispatch
+- `exact` runs at builder only
+- `allowlist`, `blocklist`, and `update` run at builder and dispatch
+- `optional_benign` is validate-only
+- `correlate` runs at dispatch only
+
 `display:` is output-only. Any record that declares `display:` is an output record, and any record that declares input-only sections such as `exact`, `update`, `allowlist`, `blocklist`, or `optional_benign` is an input record. Mixing the two directions is a validation error.
 
 The `when` clause can conditionally promote data fields to trusted:

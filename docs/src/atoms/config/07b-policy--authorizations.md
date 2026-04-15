@@ -94,7 +94,7 @@ For record-backed tool catalogs:
 - record `facts` become the tool's effective control args on write surfaces
 - record `facts` become the tool's effective source args on read-only surfaces
 - record `correlate: true` becomes the same-source check for multi-fact write tools
-- record `exact`, `update`, `allowlist`, `blocklist`, and `optional_benign` sections become dispatch-time and validate-time input policy checks
+- record `exact` runs at builder time only, `allowlist` / `blocklist` / `update` run at builder and dispatch, `optional_benign` is validator-only, and `correlate` is dispatch-only
 - `data.trusted` and `data.untrusted` flow into runtime validation, `@toolDocs()`, MCP annotations, and injected tool notes
 - tool catalog `labels` are added to the invoked exe when the surfaced tool is called
 
@@ -383,7 +383,7 @@ If the planner had written `"send_email": true`, validation would reject it beca
 
 Authorization matching is not enough by itself for positive checks, and proofless raw literals do not make it to dispatch. `@policy.build` drops them with issues, and hand-built `with { policy }` fragments hard-fail compilation. If the planner pins `@approvedRecipient` and that value carried `known`, or uses the bucketed `known` shape, the authorization guard carries that attestation forward so the later worker call can satisfy inherited positive checks.
 
-Authorization denials behave like any other guard denial — they can be caught with `denied =>` handlers and are surfaced through the SDK's existing denial reporting.
+Authorization denials behave like any other guard denial — they can be caught with `denied =>` handlers and are surfaced through the SDK's existing denial reporting. Record-backed dispatch denials such as `allowlist_mismatch`, `blocklist_match`, `no_update_fields`, and `proofless_control_arg` also reach `denied =>`; inside the handler, inspect `@mx.denial.code`, `@mx.denial.phase`, `@mx.denial.tool`, and `@mx.denial.field`.
 
 Authorization denial reasons distinguish the cause:
 
@@ -487,6 +487,10 @@ What the builder checks:
 - `true` for tools with effective control args in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
 - `allow: { tool: true }` in bucketed intent → explicit tool-level authorization
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
+- `exact` mismatch against `options.task` → tool dropped (`exact_not_in_task`)
+- `allowlist` mismatch → tool dropped (`allowlist_mismatch`)
+- `blocklist` match → tool dropped (`blocklist_match`)
+- update tool with no non-null update fields → tool dropped (`no_update_fields`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
 - `known` literals missing from the provided task text → dropped (`known_not_in_task`)
 - Handle wrappers in `known` while task validation is enabled → dropped (`known_contains_handle`)

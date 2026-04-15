@@ -1,0 +1,143 @@
+/var @approvedRecipients = ["ada"]
+/var @blockedSubjects = ["phish"]
+/var known @ada = "ada"
+/var known @mallory = "mallory"
+/var known @itemId = "item-1"
+
+/policy @externalOnlyInternal = {
+  defaults: { rules: ["no-send-to-external"] }
+}
+
+/record @allow_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approvedRecipients },
+  validate: "strict"
+}
+
+/record @block_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  blocklist: { subject: @blockedSubjects },
+  validate: "strict"
+}
+
+/record @update_inputs = {
+  facts: [itemId: string],
+  data: [title: string?],
+  update: [title],
+  validate: "strict"
+}
+
+/record @proof_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe tool:w @sendAllow(recipient, subject) = `allow:@recipient:@subject`
+/exe tool:w @sendBlock(recipient, subject) = `block:@recipient:@subject`
+/exe tool:w @updateItem(itemId, title) = `update:@itemId:@title`
+/exe tool:w @sendProof(recipient, subject) = `proof:@recipient:@subject`
+
+/var tools @allowTools = {
+  sendAllow: {
+    mlld: @sendAllow,
+    inputs: @allow_inputs,
+    labels: ["tool:w", "exfil:send"]
+  }
+}
+
+/var tools @blockTools = {
+  sendBlock: {
+    mlld: @sendBlock,
+    inputs: @block_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var tools @updateTools = {
+  updateItem: {
+    mlld: @updateItem,
+    inputs: @update_inputs,
+    labels: ["tool:w", "update:w"]
+  }
+}
+
+/var tools @proofTools = {
+  sendProof: {
+    mlld: @sendProof,
+    inputs: @proof_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/exe @issueSummary(result) = js {
+  const first = Array.isArray(result?.issues) ? result.issues[0] : null;
+  return first ? `${first.code}:${first.phase}` : "none";
+}
+
+/show @issueSummary(@policy.build({
+  allow: {
+    sendAllow: {
+      recipient: "mallory",
+      subject: "hello"
+    }
+  }
+}, @allowTools))
+
+/var @allowDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @allowTools.sendAllow(@mallory, "hello")
+]
+/show @allowDispatch
+
+/show @issueSummary(@policy.build({
+  allow: {
+    sendBlock: {
+      recipient: "ada",
+      subject: "phish"
+    }
+  }
+}, @blockTools))
+
+/var @blockDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @blockTools.sendBlock(@ada, "phish")
+]
+/show @blockDispatch
+
+/show @issueSummary(@policy.build({
+  allow: {
+    updateItem: {
+      itemId: "item-1"
+    }
+  }
+}, @updateTools))
+
+/var @updateDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @updateTools.updateItem(@itemId)
+]
+/show @updateDispatch
+
+/show @issueSummary(@policy.build({
+  allow: {
+    sendProof: {
+      recipient: "guest",
+      subject: "hello"
+    }
+  }
+}, @proofTools))
+
+/var @proofDispatch = when [
+  denied => `@mx.denial.code:@mx.denial.phase`
+  * => @proofTools.sendProof("guest", "hello")
+]
+/show @proofDispatch
+
+/var @policyRuleDispatch = when [
+  denied => @mx.denial.code
+  * => @allowTools.sendAllow(@ada, "hello") with { policy: @externalOnlyInternal }
+]
+/show @policyRuleDispatch

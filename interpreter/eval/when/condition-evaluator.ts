@@ -4,6 +4,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { logger } from '@core/utils/logger';
 import { MlldConditionError } from '@core/errors';
+import { createErrorSnapshot } from '@core/errors/errorSerialization';
 import { assertNoErrorLikeBooleanValue } from '../truthiness-guard';
 
 export interface WhenConditionRuntime {
@@ -81,7 +82,8 @@ function safeTruthy(
       error instanceof Error ? error.message : String(error),
       undefined,
       options?.location,
-      { originalError: error as Error } as any
+      { originalError: createErrorSnapshot(error) } as any,
+      error
     );
   }
 
@@ -106,7 +108,7 @@ async function evaluateUnifiedExpressionCondition(
     const message = `Failed to evaluate condition expression (${op}).`;
 
     throw new MlldConditionError(message, undefined, node.location, {
-      originalError: err as Error,
+      originalError: createErrorSnapshot(err),
       errors: [
         {
           type: 'expression',
@@ -117,7 +119,7 @@ async function evaluateUnifiedExpressionCondition(
           }
         }
       ]
-    } as any);
+    } as any, err);
   }
 
   const truthy = safeTruthy(resultValue, runtime, {
@@ -186,7 +188,8 @@ async function evaluateGenericConditionPath(
       'Failed to evaluate condition value',
       undefined,
       (condition[0] as any)?.location,
-      { originalError: err as Error } as any
+      { originalError: createErrorSnapshot(err) } as any,
+      err
     );
   }
 
@@ -228,7 +231,8 @@ async function invokeExecCondition(execNode: any, env: Environment): Promise<any
       `Failed to evaluate function in condition: ${name}`,
       undefined,
       execNode?.location,
-      { originalError: err as Error } as any
+      { originalError: createErrorSnapshot(err) } as any,
+      err
     );
   }
 }

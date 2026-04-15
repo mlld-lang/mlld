@@ -126,7 +126,7 @@ Guard traces show both individual evaluations and aggregate decisions. When mult
 | `handle.resolve_failed` | verbose | handle ID, reason, sessionId |
 | `handle.released` | verbose | sessionId, handleCount |
 
-Trace handle lifecycle to debug authorization failures. If `auth.deny` fires because a control arg lacks proof, check whether the corresponding `handle.issued` happened and whether `handle.resolved` succeeded.
+Trace handle lifecycle to debug authorization failures. If `auth.deny` fires because a fact arg lacks proof, check whether the corresponding `handle.issued` happened and whether `handle.resolved` succeeded.
 
 ### Policy and authorization
 
@@ -136,7 +136,7 @@ Trace handle lifecycle to debug authorization failures. If `auth.deny` fires bec
 | `policy.validate` | effects | same as policy.build |
 | `policy.compile_drop` | effects | dropped entries and array elements |
 | `policy.compile_repair` | verbose | repaired args with repair steps |
-| `auth.check` | effects | tool, args summary, controlArgs |
+| `auth.check` | effects | tool, args summary, effective auth args |
 | `auth.allow` | effects | tool, matched attestation count |
 | `auth.deny` | effects | tool, reason, code |
 

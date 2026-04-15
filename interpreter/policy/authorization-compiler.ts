@@ -77,6 +77,8 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'blocklist_match'
     | 'known_contains_handle'
     | 'ambiguous_projected_value';
+  code?: string;
+  phase?: 'build' | 'dispatch';
   message: string;
   tool?: string;
   arg?: string;
@@ -2571,16 +2573,33 @@ function pushCompilerIssue(
   issues: PolicyAuthorizationCompilerIssue[],
   issue: PolicyAuthorizationCompilerIssue
 ): void {
+  const normalizedIssue: PolicyAuthorizationCompilerIssue = {
+    ...issue,
+    code: issue.code ?? issue.reason,
+    phase: issue.phase ?? 'build'
+  };
   const exists = issues.some(existing =>
-    existing.reason === issue.reason
-    && existing.message === issue.message
-    && existing.tool === issue.tool
-    && existing.arg === issue.arg
-    && existing.element === issue.element
+    existing.reason === normalizedIssue.reason
+    && existing.message === normalizedIssue.message
+    && existing.tool === normalizedIssue.tool
+    && existing.arg === normalizedIssue.arg
+    && existing.element === normalizedIssue.element
   );
   if (!exists) {
-    issues.push(issue);
+    issues.push(normalizedIssue);
   }
+}
+
+function withCompilerIssuePhase(
+  issues: PolicyAuthorizationCompilerIssue[],
+  mode: CompilePolicyAuthorizationsOptions['mode']
+): PolicyAuthorizationCompilerIssue[] {
+  const phase = mode === 'builder' ? 'build' : 'dispatch';
+  return issues.map(issue => ({
+    ...issue,
+    code: issue.code ?? issue.reason,
+    phase
+  }));
 }
 
 function deleteToolAuthorization(
@@ -2947,7 +2966,7 @@ export async function compilePolicyAuthorizations(
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
   const toolLevelAllowTools = normalizedIntent.toolLevelAllowTools;
   if (rawAuthorizations === undefined || rawAuthorizations === null) {
-    return { authorizations: undefined, issues, report };
+    return { authorizations: undefined, issues: withCompilerIssuePhase(issues, options.mode), report };
   }
 
   validateRawAuthorizationMetadata({
@@ -2983,7 +3002,7 @@ export async function compilePolicyAuthorizations(
       validateAuthorizationsOrThrow(validation, report);
     }
     filterBuilderValidationErrors(undefined, validation, issues);
-    return { authorizations: undefined, issues, report };
+    return { authorizations: undefined, issues: withCompilerIssuePhase(issues, options.mode), report };
   }
 
   for (const toolName of toolLevelAllowTools) {
@@ -3049,7 +3068,7 @@ export async function compilePolicyAuthorizations(
 
   return {
     authorizations: normalized,
-    issues,
+    issues: withCompilerIssuePhase(issues, options.mode),
     report
   };
 }

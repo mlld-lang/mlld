@@ -30,6 +30,8 @@ export { GuardError } from './GuardError';
 export { GuardRetrySignal } from './GuardRetrySignal';
 export { GuardResumeSignal, isGuardResumeSignal } from './GuardResumeSignal';
 export { MlldSecurityError } from './MlldSecurityError';
+export { MlldPolicyError } from './MlldPolicyError';
+export type { PolicyErrorDetails, PolicyEnforcementCode } from './MlldPolicyError';
 export { CircularReferenceError } from './CircularReferenceError';
 export type { CircularReferenceErrorContext } from './CircularReferenceError';
 export { MlldBailError, BAIL_EXIT_CODE, isBailError } from './MlldBailError';

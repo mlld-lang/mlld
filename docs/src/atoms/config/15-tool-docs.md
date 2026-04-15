@@ -156,7 +156,7 @@ The JSON form is richer than the text form. Per-tool entries include:
 - `inputRecord` — source record name when the tool uses `inputs: @record`
 - `params` — full parameter list
 - `output` — visible output fields under the current display, when the tool returns `=> record`
-- `controlArgs`, `sourceArgs`, `dataArgs` — effective security partitions derived from the surfaced tool metadata
+- `controlArgs`, `sourceArgs`, `dataArgs` — effective security partitions derived from the surfaced tool definition; record-backed tools also expose the record-native `factArgs`, `trustedDataArgs`, and `untrustedDataArgs`
 - `factArgs`, `trustedDataArgs`, `untrustedDataArgs` — record-derived input partitions when available
 - `inputPolicy` — record-derived `exact`, `update`, `allowlist`, `blocklist`, and `optionalBenign` sections when present
 - `multiControlArgCorrelation` — boolean from record `correlate: true`

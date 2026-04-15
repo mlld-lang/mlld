@@ -1,0 +1,5 @@
+allowlist_mismatch:dispatch:input:sendAllow:recipient
+blocklist_match:dispatch:input:sendBlock:subject
+no_update_fields:dispatch:input:updateItem
+proofless_control_arg:dispatch:input:sendProof:recipient
+POLICY_LABEL_FLOW_DENIED

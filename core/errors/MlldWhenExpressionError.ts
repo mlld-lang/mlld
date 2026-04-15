@@ -2,6 +2,7 @@
  * Error thrown when evaluating when expressions
  */
 
+import type { ErrorSnapshot } from './errorSerialization';
 import { ErrorSeverity, MlldError } from './MlldError';
 import type { SourceLocation } from '../types';
 import type { Environment } from '@interpreter/env/Environment';
@@ -9,7 +10,7 @@ import type { Environment } from '@interpreter/env/Environment';
 export interface WhenExpressionErrorDetails {
   conditionIndex?: number;
   phase?: 'condition' | 'action';
-  originalError?: Error;
+  originalError?: ErrorSnapshot | unknown;
   errors?: string[];
   conditionErrors?: string;
   conditionText?: string;
@@ -29,6 +30,7 @@ export class MlldWhenExpressionError extends MlldError {
     options?: {
       env?: Environment;
       severity?: ErrorSeverity;
+      cause?: unknown;
     }
   ) {
     const locationStr = location
@@ -39,7 +41,8 @@ export class MlldWhenExpressionError extends MlldError {
       severity: options?.severity ?? ErrorSeverity.Recoverable,
       details,
       sourceLocation: location,
-      env: options?.env
+      env: options?.env,
+      cause: options?.cause
     });
     this.details = details;
     this.name = 'MlldWhenExpressionError';

@@ -80,6 +80,12 @@ export interface DeniedContextSnapshot {
   reason?: string | null;
   guardName?: string | null;
   guardFilter?: string | null;
+  code?: string | null;
+  phase?: string | null;
+  direction?: string | null;
+  tool?: string | null;
+  field?: string | null;
+  hint?: string | null;
 }
 
 export interface SecuritySnapshotLike {
@@ -483,8 +489,19 @@ export class ContextManager {
 
     if (deniedContext) {
       mxValue.denied = true;
+      mxValue.denial = {
+        denied: true,
+        ...(deniedContext.code ? { code: deniedContext.code } : {}),
+        ...(deniedContext.reason ? { reason: deniedContext.reason } : {}),
+        ...(deniedContext.phase ? { phase: deniedContext.phase } : {}),
+        ...(deniedContext.direction ? { direction: deniedContext.direction } : {}),
+        ...(deniedContext.tool ? { tool: deniedContext.tool } : {}),
+        ...(deniedContext.field ? { field: deniedContext.field } : {}),
+        ...(deniedContext.hint ? { hint: deniedContext.hint } : {})
+      };
     } else {
       mxValue.denied = false;
+      mxValue.denial = null;
     }
 
     if (guardContext?.input !== undefined) {
@@ -714,6 +731,12 @@ export class ContextManager {
       reason: resolvedReason,
       name: resolvedName,
       filter: resolvedFilter,
+      code: deniedContext?.code ?? null,
+      phase: deniedContext?.phase ?? null,
+      direction: deniedContext?.direction ?? null,
+      tool: deniedContext?.tool ?? null,
+      field: deniedContext?.field ?? null,
+      hint: guardContext?.hint ?? deniedContext?.hint ?? null,
       attempt,
       try: typeof guardContext?.try === 'number' ? guardContext.try : attempt,
       max,

@@ -50,6 +50,9 @@ function unwrapStructuredRecursively(
   seen: WeakMap<object, any> = new WeakMap()
 ): any {
   if (isStructuredValue(value)) {
+    if ((value.internal as any)?.keepStructured) {
+      return value;
+    }
     return unwrapStructuredRecursively(asData(value), seen);
   }
 
@@ -157,6 +160,7 @@ function isIdentityBearingToolEntry(value: unknown): boolean {
  */
 export function createVariableProxy(variable: Variable): any {
   let value = variable.value;
+  const unwrapSeen = new WeakMap<object, any>();
 
   // Unwrap StructuredValue to its .data so the proxy target is the native
   // JS value (array/object). This ensures Array.isArray(), .flat(), .map()
@@ -164,7 +168,9 @@ export function createVariableProxy(variable: Variable): any {
   // Respect .keep/.keepStructured — when set, preserve the wrapper for
   // metadata access in JS.
   if (isStructuredValue(value) && !(value.internal as any)?.keepStructured) {
-    value = unwrapStructuredRecursively(asData(value));
+    value = unwrapStructuredRecursively(asData(value), unwrapSeen);
+  } else if (value !== null && typeof value === 'object') {
+    value = unwrapStructuredRecursively(value, unwrapSeen);
   }
 
   // Can't proxy primitives (string, number, boolean, null)
@@ -214,7 +220,7 @@ export function createVariableProxy(variable: Variable): any {
           
         default:
           // Resolve nested structured wrappers as properties are accessed.
-          return unwrapStructuredRecursively(Reflect.get(target, prop, receiver));
+          return unwrapStructuredRecursively(Reflect.get(target, prop, receiver), unwrapSeen);
       }
     },
     

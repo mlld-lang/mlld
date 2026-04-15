@@ -1,5 +1,6 @@
 import { GuardError } from '@core/errors/GuardError';
 import type { GuardErrorDetails } from '@core/errors/GuardError';
+import { MlldPolicyError } from '@core/errors/MlldPolicyError';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -16,6 +17,13 @@ function extractDenialInfo(error: unknown): {
   guardInput: unknown;
   guardName: string | null;
   guardFilter: string | null;
+  code?: string | null;
+  phase?: string | null;
+  direction?: string | null;
+  tool?: string | null;
+  field?: string | null;
+  hint?: string | null;
+  warning?: string | null;
 } | null {
   if (error instanceof GuardError && error.decision === 'deny') {
     const details = (error.details ?? {}) as GuardErrorDetails;
@@ -24,7 +32,30 @@ function extractDenialInfo(error: unknown): {
       guardContext: details.guardContext as GuardContextSnapshot | undefined,
       guardInput: details.guardInput,
       guardName: details.guardName ?? null,
-      guardFilter: details.guardFilter ?? null
+      guardFilter: details.guardFilter ?? null,
+      code: error.context?.code ?? null,
+      warning: formatGuardWarning(
+        error.reason ?? details.reason ?? error.message ?? 'Guard denied operation',
+        details.guardFilter ?? null,
+        details.guardName ?? null
+      )
+    };
+  }
+
+  if (error instanceof MlldPolicyError) {
+    return {
+      reason: error.message,
+      guardContext: undefined,
+      guardInput: undefined,
+      guardName: null,
+      guardFilter: null,
+      code: error.code,
+      phase: error.phase,
+      direction: error.direction,
+      tool: error.tool,
+      field: error.field ?? null,
+      hint: error.hint,
+      warning: null
     };
   }
   return null;
@@ -50,11 +81,16 @@ export async function handleExecGuardDenial(
     denied: true,
     reason,
     guardName,
-    guardFilter
+    guardFilter,
+    ...(denialInfo.code ? { code: denialInfo.code } : {}),
+    ...(denialInfo.phase ? { phase: denialInfo.phase } : {}),
+    ...(denialInfo.direction ? { direction: denialInfo.direction } : {}),
+    ...(denialInfo.tool ? { tool: denialInfo.tool } : {}),
+    ...(denialInfo.field ? { field: denialInfo.field } : {}),
+    ...(denialInfo.hint ? { hint: denialInfo.hint } : {})
   };
 
   const { evaluateWhenExpression } = await import('./when-expression');
-  const warning = formatGuardWarning(reason, deniedContext.guardFilter, deniedContext.guardName);
   maybeInjectGuardInputVariable(options.execEnv, guardInput ?? guardContext?.input);
   // Populate @output for after-guard denied handlers when available
   if (guardContext?.output !== undefined) {
@@ -92,15 +128,17 @@ export async function handleExecGuardDenial(
     return null;
   }
 
-  const materializedWarning = boundary.display(warning);
-  options.env.emitEffect('stderr', `${warning}\n`);
-  if (materializedWarning.descriptor) {
-    options.env.recordSecurityDescriptor(materializedWarning.descriptor);
+  if (denialInfo.warning) {
+    const materializedWarning = boundary.display(denialInfo.warning);
+    options.env.emitEffect('stderr', `${denialInfo.warning}\n`);
+    if (materializedWarning.descriptor) {
+      options.env.recordSecurityDescriptor(materializedWarning.descriptor);
+    }
   }
 
   return {
     ...normalizedResult,
-    stderr: warning
+    ...(denialInfo.warning ? { stderr: denialInfo.warning } : {})
   };
 }
 
