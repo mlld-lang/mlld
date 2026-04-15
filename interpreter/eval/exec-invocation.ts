@@ -159,6 +159,7 @@ import { resolveConfiguredOutputRecordDefinition } from './records/resolve-recor
 import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
 import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
 import { getStaticObjectKey } from '@interpreter/utils/object-compat';
+import { isTolerantMatch } from '@interpreter/eval/expressions';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -1216,10 +1217,11 @@ function matchesInputType(value: unknown, expected: string | undefined): boolean
 }
 
 function validateToolInputSchema(options: {
+  env: Environment;
   metadata: EffectiveToolMetadata;
   args: Record<string, unknown> | undefined;
 }): void {
-  const { metadata, args } = options;
+  const { env, metadata, args } = options;
   const inputSchema = metadata.inputSchema;
   if (!inputSchema) {
     return;
@@ -1254,6 +1256,67 @@ function validateToolInputSchema(options: {
     }
     if (field.dataTrust === 'trusted' && hasUntrustedDescriptor(value)) {
       throw new Error(`Tool '${metadata.name}' trusted input '${field.name}' cannot carry untrusted taint`);
+    }
+  }
+
+  const resolvePolicySetMembers = (
+    target: { kind: 'reference'; name: string } | { kind: 'array'; values: unknown[] }
+  ): unknown[] => {
+    if (target.kind === 'array') {
+      return [...target.values];
+    }
+
+    const variable = env.getVariable(target.name);
+    if (!variable) {
+      return [];
+    }
+
+    let resolved: unknown = variable;
+    if (isVariable(resolved)) {
+      resolved = resolved.value;
+    }
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+
+    if (Array.isArray(resolved)) {
+      return resolved;
+    }
+
+    return resolved === undefined ? [] : [resolved];
+  };
+
+  const valueMatchesPolicySet = (
+    value: unknown,
+    target: { kind: 'reference'; name: string } | { kind: 'array'; values: unknown[] }
+  ): boolean => {
+    const members = resolvePolicySetMembers(target);
+    if (members.length === 0) {
+      return false;
+    }
+
+    if (Array.isArray(value)) {
+      return value.every(entry => members.some(member => isTolerantMatch(entry, member)));
+    }
+
+    return members.some(member => isTolerantMatch(value, member));
+  };
+
+  for (const [fieldName, target] of Object.entries(inputSchema.allowlist ?? {})) {
+    if (!Object.prototype.hasOwnProperty.call(providedArgs, fieldName)) {
+      continue;
+    }
+    if (!valueMatchesPolicySet(providedArgs[fieldName], target)) {
+      throw new Error(`Tool '${metadata.name}' input '${fieldName}' must match its allowlist`);
+    }
+  }
+
+  for (const [fieldName, target] of Object.entries(inputSchema.blocklist ?? {})) {
+    if (!Object.prototype.hasOwnProperty.call(providedArgs, fieldName)) {
+      continue;
+    }
+    if (valueMatchesPolicySet(providedArgs[fieldName], target)) {
+      throw new Error(`Tool '${metadata.name}' input '${fieldName}' must not match its blocklist`);
     }
   }
 
@@ -3937,6 +4000,7 @@ async function evaluateExecInvocationInternal(
     argFactSourceDescriptors: effectiveArgFactSourceDescriptors
   });
   validateToolInputSchema({
+    env,
     metadata: effectiveToolMetadata,
     args: validationArgs
   });

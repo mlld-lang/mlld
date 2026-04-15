@@ -6,6 +6,7 @@ import {
   type ToolInputSchema
 } from '@core/types/tools';
 import {
+  canUseRecordForOutput,
   canUseRecordForInput,
   type RecordDefinition
 } from '@core/types/record';
@@ -48,6 +49,87 @@ function unwrapToolScopeValue(value: unknown): unknown {
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isArrayLikeValue(value: unknown): boolean {
+  let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (isVariable(resolved)) {
+    return isArrayLikeValue(resolved.value);
+  }
+  return Array.isArray(resolved);
+}
+
+function normalizeToolLabelValues(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+}
+
+function hasUpdateWriteLabel(labels: readonly string[]): boolean {
+  return labels.some(label => label.trim().toLowerCase() === 'update:w');
+}
+
+function resolveNamedRecordDefinition(
+  env: Environment,
+  name: string
+): RecordDefinition | undefined {
+  const recordDefinition = env.getRecordDefinition(name);
+  if (recordDefinition) {
+    return recordDefinition;
+  }
+
+  const variable = env.getVariable(name);
+  if (variable && isRecordVariable(variable)) {
+    return (variable as { value: RecordDefinition }).value;
+  }
+
+  return undefined;
+}
+
+function validatePolicySetTargets(options: {
+  toolName: string;
+  field: 'allowlist' | 'blocklist';
+  targets: Record<string, { kind: 'reference'; name: string } | { kind: 'array'; values: unknown[] }>;
+  env: Environment;
+}): void {
+  for (const [fieldName, target] of Object.entries(options.targets)) {
+    if (target.kind === 'array') {
+      continue;
+    }
+
+    const recordDefinition = resolveNamedRecordDefinition(options.env, target.name);
+    if (recordDefinition) {
+      if (!canUseRecordForOutput(recordDefinition)) {
+        throw new Error(
+          `Tool '${options.toolName}' ${options.field} target '@${target.name}' for field '${fieldName}' must not be an input record`
+        );
+      }
+
+      const factCount = recordDefinition.fields.filter(field => field.classification === 'fact').length;
+      if (factCount !== 1) {
+        throw new Error(
+          `Tool '${options.toolName}' ${options.field} target '@${target.name}' for field '${fieldName}' must resolve to a single-fact record or array`
+        );
+      }
+      continue;
+    }
+
+    const variable = options.env.getVariable(target.name);
+    if (variable && isArrayLikeValue(variable)) {
+      continue;
+    }
+
+    throw new Error(
+      `Tool '${options.toolName}' ${options.field} target '@${target.name}' for field '${fieldName}' must resolve to a record or array`
+    );
+  }
 }
 
 export function resolveDirectToolCollection(value: unknown): ToolCollection | undefined {
@@ -275,7 +357,11 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       env,
       executableName: mlldName,
       executableParamNames: paramNames,
-      bindKeys: boundKeys
+      bindKeys: boundKeys,
+      labels: [
+        ...normalizeToolLabelValues(execVar.mx?.labels),
+        ...(labels ?? [])
+      ]
     });
 
     if (inputSchema) {
@@ -283,6 +369,8 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
         'expose',
         'optional',
         'controlArgs',
+        'updateArgs',
+        'exactPayloadArgs',
         'sourceArgs',
         'correlateControlArgs'
       ].filter(field => (toolValue as Record<string, unknown>)[field] !== undefined);
@@ -588,8 +676,17 @@ function resolveToolInputSchema(options: {
   executableName: string;
   executableParamNames: readonly string[];
   bindKeys: readonly string[];
+  labels?: readonly string[];
 }): ToolInputSchema | undefined {
-  const { toolName, rawInputRef, env, executableName, executableParamNames, bindKeys } = options;
+  const {
+    toolName,
+    rawInputRef,
+    env,
+    executableName,
+    executableParamNames,
+    bindKeys,
+    labels
+  } = options;
   if (rawInputRef === undefined) {
     return undefined;
   }
@@ -626,10 +723,28 @@ function resolveToolInputSchema(options: {
       `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`
     );
   }
-  return buildToolInputSchemaFromRecordDefinition({
+  const inputSchema = buildToolInputSchemaFromRecordDefinition({
     recordDefinition,
     executableParamNames
   });
+  if (inputSchema.updateFields.length > 0 && !hasUpdateWriteLabel(labels ?? [])) {
+    throw new Error(
+      `Tool '${toolName}' inputs require label 'update:w' when record '@${recordDefinition.name}' declares update fields`
+    );
+  }
+  validatePolicySetTargets({
+    toolName,
+    field: 'allowlist',
+    targets: inputSchema.allowlist,
+    env
+  });
+  validatePolicySetTargets({
+    toolName,
+    field: 'blocklist',
+    targets: inputSchema.blocklist,
+    env
+  });
+  return inputSchema;
 }
 
 function resolveToolInputRecordDefinition(

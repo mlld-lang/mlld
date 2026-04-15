@@ -48,7 +48,13 @@ describe('MlldSyntaxGenerator', () => {
     expect('trusted: [subject: string?]'.match(objectKeyRegex)?.[0]).toBe('trusted');
     expect('untrusted: [body: string]'.match(objectKeyRegex)?.[0]).toBe('untrusted');
     expect('display: [name, { mask: "email" }]'.match(objectKeyRegex)?.[0]).toBe('display');
+    expect('key: recipient'.match(objectKeyRegex)?.[0]).toBe('key');
     expect('correlate: true'.match(objectKeyRegex)?.[0]).toBe('correlate');
+    expect('exact: [subject]'.match(objectKeyRegex)?.[0]).toBe('exact');
+    expect('update: [body]'.match(objectKeyRegex)?.[0]).toBe('update');
+    expect('allowlist: { recipient: @approvedRecipients }'.match(objectKeyRegex)?.[0]).toBe('allowlist');
+    expect('blocklist: { recipient: ["blocked-recipient"] }'.match(objectKeyRegex)?.[0]).toBe('blocklist');
+    expect('optional_benign: [cc]'.match(objectKeyRegex)?.[0]).toBe('optional_benign');
     expect('validate: "strict"'.match(objectKeyRegex)?.[0]).toBe('validate');
     expect('inputs: @send_email_inputs'.match(objectKeyRegex)?.[0]).toBe('inputs');
     expect('labels: ["execute:w"]'.match(objectKeyRegex)?.[0]).toBe('labels');

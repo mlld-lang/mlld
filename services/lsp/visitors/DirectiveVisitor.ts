@@ -372,7 +372,24 @@ export class DirectiveVisitor extends BaseVisitor {
     }
 
     const propertyMatches = [
-      ...['facts', 'data', 'display', 'validate', 'mask', 'ref', 'handle', 'trusted', 'untrusted'].flatMap((key) => {
+      ...[
+        'facts',
+        'data',
+        'display',
+        'key',
+        'correlate',
+        'validate',
+        'exact',
+        'update',
+        'allowlist',
+        'blocklist',
+        'optional_benign',
+        'mask',
+        'ref',
+        'handle',
+        'trusted',
+        'untrusted'
+      ].flatMap((key) => {
         const pattern = new RegExp(`\\b${key}\\b(?=\\s*:)`, 'g');
         return Array.from(directiveText.matchAll(pattern), (match) => ({
           index: match.index,

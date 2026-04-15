@@ -5,7 +5,8 @@
 import type {
   RecordDataTrustLevel,
   RecordFieldClassification,
-  RecordFieldValueType
+  RecordFieldValueType,
+  RecordPolicySetTarget
 } from './record';
 
 export interface ToolInputFieldSchema {
@@ -23,6 +24,11 @@ export interface ToolInputSchema {
   dataFields: string[];
   visibleParams: string[];
   optionalParams: string[];
+  exactFields: string[];
+  updateFields: string[];
+  allowlist: Record<string, RecordPolicySetTarget>;
+  blocklist: Record<string, RecordPolicySetTarget>;
+  optionalBenignFields: string[];
   correlate: boolean;
   declaredCorrelate?: boolean;
 }
@@ -91,6 +97,20 @@ function cloneToolInputSchemaField(field: ToolInputFieldSchema): ToolInputFieldS
   };
 }
 
+function cloneRecordPolicySetTarget(target: RecordPolicySetTarget): RecordPolicySetTarget {
+  if (target.kind === 'reference') {
+    return {
+      kind: 'reference',
+      name: target.name
+    };
+  }
+
+  return {
+    kind: 'array',
+    values: [...target.values]
+  };
+}
+
 export function cloneToolInputSchema(schema: ToolInputSchema): ToolInputSchema {
   return {
     recordName: schema.recordName,
@@ -99,11 +119,41 @@ export function cloneToolInputSchema(schema: ToolInputSchema): ToolInputSchema {
     dataFields: cloneStringList(schema.dataFields),
     visibleParams: cloneStringList(schema.visibleParams),
     optionalParams: cloneStringList(schema.optionalParams),
+    exactFields: cloneStringList(schema.exactFields),
+    updateFields: cloneStringList(schema.updateFields),
+    allowlist: Object.fromEntries(
+      Object.entries(schema.allowlist).map(([fieldName, target]) => [
+        fieldName,
+        cloneRecordPolicySetTarget(target)
+      ])
+    ),
+    blocklist: Object.fromEntries(
+      Object.entries(schema.blocklist).map(([fieldName, target]) => [
+        fieldName,
+        cloneRecordPolicySetTarget(target)
+      ])
+    ),
+    optionalBenignFields: cloneStringList(schema.optionalBenignFields),
     correlate: schema.correlate === true,
     ...(schema.declaredCorrelate !== undefined
       ? { declaredCorrelate: schema.declaredCorrelate === true }
       : {})
   };
+}
+
+function isRecordPolicySetTarget(value: unknown): value is RecordPolicySetTarget {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Partial<RecordPolicySetTarget>;
+  if (candidate.kind === 'reference') {
+    return typeof (candidate as { name?: unknown }).name === 'string';
+  }
+  if (candidate.kind === 'array') {
+    return Array.isArray((candidate as { values?: unknown }).values);
+  }
+  return false;
 }
 
 function isToolInputFieldSchema(value: unknown): value is ToolInputFieldSchema {
@@ -143,6 +193,20 @@ export function isToolInputSchema(value: unknown): value is ToolInputSchema {
     candidate.visibleParams.every(entry => typeof entry === 'string') &&
     Array.isArray(candidate.optionalParams) &&
     candidate.optionalParams.every(entry => typeof entry === 'string') &&
+    Array.isArray(candidate.exactFields) &&
+    candidate.exactFields.every(entry => typeof entry === 'string') &&
+    Array.isArray(candidate.updateFields) &&
+    candidate.updateFields.every(entry => typeof entry === 'string') &&
+    !!candidate.allowlist &&
+    typeof candidate.allowlist === 'object' &&
+    !Array.isArray(candidate.allowlist) &&
+    Object.values(candidate.allowlist).every(isRecordPolicySetTarget) &&
+    !!candidate.blocklist &&
+    typeof candidate.blocklist === 'object' &&
+    !Array.isArray(candidate.blocklist) &&
+    Object.values(candidate.blocklist).every(isRecordPolicySetTarget) &&
+    Array.isArray(candidate.optionalBenignFields) &&
+    candidate.optionalBenignFields.every(entry => typeof entry === 'string') &&
     typeof candidate.correlate === 'boolean' &&
     (candidate.declaredCorrelate === undefined || typeof candidate.declaredCorrelate === 'boolean')
   );

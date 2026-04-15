@@ -722,6 +722,76 @@ describe('tool collections', () => {
     expect(output.trim()).toBe('sent:hello:world');
   });
 
+  it('rejects direct collection dispatch when a record-backed allowlist does not match', async () => {
+    await expect(
+      interpret(`
+        /var @approvedRecipients = ["ada-recipient"]
+
+        /record @send_email_inputs = {
+          facts: [],
+          data: [recipient: string, subject: string],
+          allowlist: { recipient: @approvedRecipients },
+          validate: "strict"
+        }
+
+        /exe @send_email(recipient, subject) = \`sent:@recipient:@subject\`
+
+        /var tools @writeTools = {
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs
+          }
+        }
+
+        /show @writeTools["send_email"]({
+          recipient: "mallory-recipient",
+          subject: "hello"
+        })
+      `, {
+        fileSystem: new MemoryFileSystem(),
+        pathService,
+        pathContext,
+        filePath: pathContext.filePath,
+        format: 'markdown',
+        normalizeBlankLines: true
+      })
+    ).rejects.toThrow(/must match its allowlist/i);
+  });
+
+  it('rejects direct collection dispatch when a record-backed blocklist matches', async () => {
+    await expect(
+      interpret(`
+        /record @send_email_inputs = {
+          facts: [],
+          data: [recipient: string, subject: string],
+          blocklist: { recipient: ["blocked-recipient"] },
+          validate: "strict"
+        }
+
+        /exe @send_email(recipient, subject) = \`sent:@recipient:@subject\`
+
+        /var tools @writeTools = {
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs
+          }
+        }
+
+        /show @writeTools["send_email"]({
+          recipient: "blocked-recipient",
+          subject: "hello"
+        })
+      `, {
+        fileSystem: new MemoryFileSystem(),
+        pathService,
+        pathContext,
+        filePath: pathContext.filePath,
+        format: 'markdown',
+        normalizeBlankLines: true
+      })
+    ).rejects.toThrow(/must not match its blocklist/i);
+  });
+
   it('spreads a single named object into a single visible param for direct dispatch', async () => {
     const output = await interpret(`
       /exe tool:w @delete_item(id) = { ok: true, id: @id } with { controlArgs: ["id"] }

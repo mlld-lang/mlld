@@ -428,6 +428,9 @@ function buildDerivedInputMetadata(labels: readonly string[], inputSchema?: Tool
   optionalParams?: string[];
   controlArgs: string[];
   hasControlArgsMetadata: boolean;
+  updateArgs: string[];
+  hasUpdateArgsMetadata: boolean;
+  exactPayloadArgs: string[];
   sourceArgs: string[];
   hasSourceArgsMetadata: boolean;
   correlateControlArgs: boolean;
@@ -436,6 +439,9 @@ function buildDerivedInputMetadata(labels: readonly string[], inputSchema?: Tool
     return {
       controlArgs: [],
       hasControlArgsMetadata: false,
+      updateArgs: [],
+      hasUpdateArgsMetadata: false,
+      exactPayloadArgs: [],
       sourceArgs: [],
       hasSourceArgsMetadata: false,
       correlateControlArgs: false
@@ -443,6 +449,8 @@ function buildDerivedInputMetadata(labels: readonly string[], inputSchema?: Tool
   }
 
   const factFields = normalizeStringList(inputSchema.factFields);
+  const updateFields = normalizeStringList((inputSchema as { updateFields?: readonly unknown[] }).updateFields);
+  const exactFields = normalizeStringList((inputSchema as { exactFields?: readonly unknown[] }).exactFields);
   const writeSurface = hasWriteSurfaceLabel(labels);
   const readSurface = hasReadSurfaceLabel(labels);
   const treatAsWriteSurface = writeSurface || !readSurface;
@@ -455,6 +463,9 @@ function buildDerivedInputMetadata(labels: readonly string[], inputSchema?: Tool
     optionalParams: [...inputSchema.optionalParams],
     controlArgs,
     hasControlArgsMetadata: treatAsWriteSurface,
+    updateArgs: [...updateFields],
+    hasUpdateArgsMetadata: updateFields.length > 0,
+    exactPayloadArgs: [...exactFields],
     sourceArgs,
     hasSourceArgsMetadata: treatAsReadSurface,
     correlateControlArgs: treatAsWriteSurface && controlArgs.length > 1 && inputSchema.correlate === true
@@ -530,11 +541,22 @@ function getEffectiveToolControlArgs(options: {
 }
 
 function getEffectiveToolUpdateArgs(options: {
+  inputSchema?: ToolInputSchema;
   params: readonly string[];
   baseUpdateArgs?: readonly string[];
   baseHasUpdateArgsMetadata: boolean;
   definition?: ToolDefinition;
 }): { updateArgs: string[]; hasUpdateArgsMetadata: boolean } {
+  if (options.inputSchema) {
+    const derived = buildDerivedInputMetadata([], options.inputSchema);
+    if (derived.hasUpdateArgsMetadata) {
+      const visibleParams = new Set(options.params);
+      return {
+        updateArgs: derived.updateArgs.filter(arg => visibleParams.has(arg)),
+        hasUpdateArgsMetadata: true
+      };
+    }
+  }
   const visibleParams = new Set(options.params);
 
   if (Array.isArray(options.definition?.updateArgs)) {
@@ -558,10 +580,18 @@ function getEffectiveToolUpdateArgs(options: {
 }
 
 function getEffectiveToolExactPayloadArgs(options: {
+  inputSchema?: ToolInputSchema;
   params: readonly string[];
   baseExactPayloadArgs?: readonly string[];
   definition?: ToolDefinition;
 }): string[] | undefined {
+  if (options.inputSchema) {
+    const derived = buildDerivedInputMetadata([], options.inputSchema);
+    if (derived.exactPayloadArgs.length > 0) {
+      const visibleParams = new Set(options.params);
+      return derived.exactPayloadArgs.filter(arg => visibleParams.has(arg));
+    }
+  }
   const visibleParams = new Set(options.params);
 
   if (Array.isArray(options.definition?.exactPayloadArgs)) {
@@ -656,12 +686,14 @@ function applyToolDefinitionAuthMetadata(
     definition
   });
   const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
+    inputSchema,
     params,
     baseUpdateArgs: base.updateArgs,
     baseHasUpdateArgsMetadata: base.hasUpdateArgsMetadata,
     definition
   });
   const exactPayloadArgs = getEffectiveToolExactPayloadArgs({
+    inputSchema,
     params,
     baseExactPayloadArgs: base.exactPayloadArgs,
     definition
@@ -841,6 +873,7 @@ function createAuthorizationToolContextEntry(
   return {
     name: toolName,
     params: new Set(metadata.params),
+    ...(metadata.inputSchema ? { inputSchema: cloneToolInputSchema(metadata.inputSchema) } : {}),
     controlArgs: new Set(metadata.controlArgs ?? []),
     hasControlArgsMetadata: metadata.hasControlArgsMetadata,
     updateArgs: new Set(metadata.updateArgs ?? []),
@@ -945,11 +978,12 @@ function buildAuthorizationToolContextFromStoredContext(
     contexts.set(toolName, {
       name: toolName,
       params: new Set(entry.params),
+      ...(entry.inputSchema ? { inputSchema: cloneToolInputSchema(entry.inputSchema) } : {}),
       controlArgs: new Set(entry.controlArgs ?? derived?.controlArgs ?? entry.inputSchema?.factFields ?? []),
       hasControlArgsMetadata: entry.hasControlArgsMetadata === true || derived?.hasControlArgsMetadata === true,
-      updateArgs: new Set(entry.updateArgs ?? []),
-      hasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true,
-      exactPayloadArgs: new Set(entry.exactPayloadArgs ?? [])
+      updateArgs: new Set(entry.updateArgs ?? derived?.updateArgs ?? []),
+      hasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true || derived?.hasUpdateArgsMetadata === true,
+      exactPayloadArgs: new Set(entry.exactPayloadArgs ?? derived?.exactPayloadArgs ?? [])
     });
   }
 
@@ -981,12 +1015,14 @@ function buildToolContextFromStoredEntry(
     definition
   });
   const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
+    inputSchema,
     params,
     baseUpdateArgs: entry.updateArgs,
     baseHasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true,
     definition
   });
   const exactPayloadArgs = getEffectiveToolExactPayloadArgs({
+    inputSchema,
     params,
     baseExactPayloadArgs: entry.exactPayloadArgs,
     definition

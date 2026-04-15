@@ -5,6 +5,7 @@ export type StaticPolicyCallIssueReason =
   | 'proofless_resolved_value'
   | 'known_not_in_task'
   | 'no_update_fields'
+  | 'exact_not_in_task'
   | 'payload_not_in_task'
   | 'known_contains_handle';
 
@@ -181,6 +182,10 @@ function buildPayloadNotInTaskMessage(argName: string, literal: string): string 
   return `Payload literal '${literal}' for '${argName}' not found in task text`;
 }
 
+function buildExactNotInTaskMessage(argName: string, literal: string): string {
+  return `Exact literal '${literal}' for '${argName}' not found in task text`;
+}
+
 const HANDLE_TOKEN_RE = /^h_[a-z0-9]+$/;
 
 function extractHandleTokenCandidate(value: unknown): string | undefined {
@@ -203,7 +208,7 @@ function validateLiteralValueAgainstTask(options: {
   value: unknown;
   normalizedTaskText: string;
   issues: StaticPolicyCallIssue[];
-  reason: 'known_not_in_task' | 'payload_not_in_task';
+  reason: 'known_not_in_task' | 'payload_not_in_task' | 'exact_not_in_task';
   buildMessage: (literal: string) => string;
   rejectHandleWrappers: boolean;
 }): boolean {
@@ -301,11 +306,13 @@ function validateExactPayloadValueAgainstTask(options: {
   value: unknown;
   normalizedTaskText: string;
   issues: StaticPolicyCallIssue[];
+  reason?: 'payload_not_in_task' | 'exact_not_in_task';
+  buildMessage?: (literal: string) => string;
 }): boolean {
   return validateLiteralValueAgainstTask({
     ...options,
-    reason: 'payload_not_in_task',
-    buildMessage: literal => buildPayloadNotInTaskMessage(options.argName, literal),
+    reason: options.reason ?? 'payload_not_in_task',
+    buildMessage: options.buildMessage ?? (literal => buildPayloadNotInTaskMessage(options.argName, literal)),
     rejectHandleWrappers: false
   });
 }
@@ -660,11 +667,15 @@ export function validateStaticRawAuthorizationMetadata(options: {
       }
     }
 
-    if (!normalizedTaskText || !rawArgs || !(tool.exactPayloadArgs && tool.exactPayloadArgs.size > 0)) {
+    const exactFields =
+      tool.inputSchema?.exactFields && tool.inputSchema.exactFields.length > 0
+        ? new Set(tool.inputSchema.exactFields)
+        : tool.exactPayloadArgs;
+    if (!normalizedTaskText || !rawArgs || !(exactFields && exactFields.size > 0)) {
       continue;
     }
 
-    for (const argName of tool.exactPayloadArgs) {
+    for (const argName of exactFields) {
       if (!hasOwnProperty(rawArgs, argName)) {
         continue;
       }
@@ -674,7 +685,13 @@ export function validateStaticRawAuthorizationMetadata(options: {
         argName,
         value: rawArgs[argName],
         normalizedTaskText,
-        issues: options.issues
+        issues: options.issues,
+        ...(tool.inputSchema?.exactFields && tool.inputSchema.exactFields.length > 0
+          ? {
+              reason: 'exact_not_in_task' as const,
+              buildMessage: (literal: string) => buildExactNotInTaskMessage(argName, literal)
+            }
+          : {})
       });
     }
   }

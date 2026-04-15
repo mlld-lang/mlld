@@ -1,5 +1,5 @@
 import { mlldNameToMCPName } from '@core/mcp/names';
-import type { RecordDefinition } from '@core/types/record';
+import type { RecordDefinition, RecordPolicySetTarget } from '@core/types/record';
 import type { ToolCollection } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import { describeRecordProjectionFields } from '@interpreter/eval/records/display-projection';
@@ -50,6 +50,13 @@ type JsonToolDocEntry = {
   factArgs?: string[];
   trustedDataArgs?: string[];
   untrustedDataArgs?: string[];
+  inputPolicy?: {
+    exact?: string[];
+    update?: string[];
+    allowlist?: Record<string, RecordPolicySetTarget>;
+    blocklist?: Record<string, RecordPolicySetTarget>;
+    optionalBenign?: string[];
+  };
   multiControlArgCorrelation: boolean;
   discoveryCall?: string;
   operationLabels?: string[];
@@ -705,6 +712,28 @@ function buildToolFieldSectionLines(
   return [heading + ':', ...fields.map(field => buildToolFieldLine(field.param))];
 }
 
+function formatPolicyTarget(target: RecordPolicySetTarget): string {
+  if (target.kind === 'reference') {
+    return `@${target.name}`;
+  }
+  return JSON.stringify(target.values);
+}
+
+function buildToolPolicyTargetSectionLines(
+  heading: string,
+  targets: Readonly<Record<string, RecordPolicySetTarget>>
+): string[] {
+  const entries = Object.entries(targets);
+  if (entries.length === 0) {
+    return [];
+  }
+
+  return [
+    `${heading}:`,
+    ...entries.map(([fieldName, target]) => `- \`${fieldName}\` -> ${formatPolicyTarget(target)}`)
+  ];
+}
+
 function buildInputSchemaSectionLines(entry: EffectiveToolMetadata): string[] {
   if (!entry.inputSchema) {
     return [];
@@ -727,14 +756,21 @@ function buildInputSchemaSectionLines(entry: EffectiveToolMetadata): string[] {
   const exactNames = new Set(entry.exactPayloadArgs ?? []);
   const updates = buildToolFieldReferences(entry, field => updateNames.has(field.name));
   const exact = buildToolFieldReferences(entry, field => exactNames.has(field.name));
+  const optionalBenign = buildToolFieldReferences(
+    entry,
+    field => entry.inputSchema?.optionalBenignFields.includes(field.name) === true
+  );
 
   return [
     ...buildToolFieldSectionLines('Facts', facts),
     ...buildToolFieldSectionLines('Trusted payload', trustedData),
     ...buildToolFieldSectionLines('Untrusted payload', untrustedData),
     ...buildToolFieldSectionLines('Payload', payload),
-    ...buildToolFieldSectionLines('Updates', updates),
-    ...buildToolFieldSectionLines('Exact text', exact)
+    ...buildToolFieldSectionLines('Update', updates),
+    ...buildToolFieldSectionLines('Exact', exact),
+    ...buildToolPolicyTargetSectionLines('Allowlist', entry.inputSchema.allowlist),
+    ...buildToolPolicyTargetSectionLines('Blocklist', entry.inputSchema.blocklist),
+    ...buildToolFieldSectionLines('Optional benign', optionalBenign)
   ];
 }
 
@@ -979,10 +1015,27 @@ function buildToolDescriptionAnnotationLines(
       lines.push(`[PAYLOAD: ${buildFieldSummary(payload)}]`);
     }
     if (updates.length > 0) {
-      lines.push(`[UPDATES: ${buildFieldSummary(updates)}]`);
+      lines.push(`[UPDATE: ${buildFieldSummary(updates)}]`);
     }
     if (exact.length > 0) {
-      lines.push(`[EXACT TEXT: ${buildFieldSummary(exact)}]`);
+      lines.push(`[EXACT: ${buildFieldSummary(exact)}]`);
+    }
+    if (Object.keys(entry.inputSchema.allowlist).length > 0) {
+      lines.push(
+        `[ALLOWLIST: ${Object.entries(entry.inputSchema.allowlist)
+          .map(([fieldName, target]) => `${fieldName} in ${formatPolicyTarget(target)}`)
+          .join(', ')}]`
+      );
+    }
+    if (Object.keys(entry.inputSchema.blocklist).length > 0) {
+      lines.push(
+        `[BLOCKLIST: ${Object.entries(entry.inputSchema.blocklist)
+          .map(([fieldName, target]) => `${fieldName} not in ${formatPolicyTarget(target)}`)
+          .join(', ')}]`
+      );
+    }
+    if (entry.inputSchema.optionalBenignFields.length > 0) {
+      lines.push(`[OPTIONAL BENIGN: ${formatArgList(entry.inputSchema.optionalBenignFields)}]`);
     }
   } else {
     const controlArgs = entry.controlArgs ?? [];
@@ -1065,6 +1118,34 @@ function buildJsonToolEntry(
     ...(factArgs ? { factArgs } : {}),
     ...(trustedDataArgs && trustedDataArgs.length > 0 ? { trustedDataArgs } : {}),
     ...(untrustedDataArgs && untrustedDataArgs.length > 0 ? { untrustedDataArgs } : {}),
+    ...(entry.inputSchema
+      && (
+        entry.inputSchema.exactFields.length > 0
+        || entry.inputSchema.updateFields.length > 0
+        || Object.keys(entry.inputSchema.allowlist).length > 0
+        || Object.keys(entry.inputSchema.blocklist).length > 0
+        || entry.inputSchema.optionalBenignFields.length > 0
+      )
+      ? {
+          inputPolicy: {
+            ...(entry.inputSchema.exactFields.length > 0
+              ? { exact: [...entry.inputSchema.exactFields] }
+              : {}),
+            ...(entry.inputSchema.updateFields.length > 0
+              ? { update: [...entry.inputSchema.updateFields] }
+              : {}),
+            ...(Object.keys(entry.inputSchema.allowlist).length > 0
+              ? { allowlist: { ...entry.inputSchema.allowlist } }
+              : {}),
+            ...(Object.keys(entry.inputSchema.blocklist).length > 0
+              ? { blocklist: { ...entry.inputSchema.blocklist } }
+              : {}),
+            ...(entry.inputSchema.optionalBenignFields.length > 0
+              ? { optionalBenign: [...entry.inputSchema.optionalBenignFields] }
+              : {})
+          }
+        }
+      : {}),
     multiControlArgCorrelation: entry.correlateControlArgs && controlArgs.length > 1,
     ...(helperStatus.available && (controlArgs.length > 0 || sourceArgs.length > 0)
       ? { discoveryCall: `@fyi.known("${entry.name}")` }

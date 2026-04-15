@@ -36,6 +36,7 @@ import { isRoleDisplayModeName } from '@core/records/display-mode';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
 import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
+import { cloneToolInputSchema } from '@core/types/tools';
 import * as yaml from 'js-yaml';
 import type {
   MlldNode,
@@ -49,6 +50,7 @@ import type {
 } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import {
+  canUseRecordForOutput,
   canUseRecordForInput,
   type RecordDefinition
 } from '@core/types/record';
@@ -3643,6 +3645,8 @@ const INPUT_RECORD_MIXED_CATALOG_FIELDS = [
   'expose',
   'optional',
   'controlArgs',
+  'updateArgs',
+  'exactPayloadArgs',
   'sourceArgs',
   'correlateControlArgs'
 ] as const;
@@ -3659,6 +3663,15 @@ function hasWriteSurfaceLabel(labels: ReadonlySet<string> | readonly string[]): 
 function hasReadSurfaceLabel(labels: ReadonlySet<string> | readonly string[]): boolean {
   for (const label of labels) {
     if (typeof label === 'string' && /(^|:)r$/i.test(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasUpdateWriteLabel(labels: ReadonlySet<string> | readonly string[]): boolean {
+  for (const label of labels) {
+    if (typeof label === 'string' && label.trim().toLowerCase() === 'update:w') {
       return true;
     }
   }
@@ -3748,6 +3761,7 @@ function cloneValidationContextExecutable(
   return {
     name,
     params: new Set(source.params),
+    ...(source.inputSchema ? { inputSchema: cloneToolInputSchema(source.inputSchema) } : {}),
     labels: new Set(source.labels),
     controlArgs: new Set(source.controlArgs),
     hasControlArgsMetadata: source.hasControlArgsMetadata,
@@ -3906,6 +3920,7 @@ function mergeValidationContextAst(
             executableParamNames: [...executableTarget.params]
           });
 
+          target.inputSchema = inputSchema;
           target.params = new Set(inputSchema.visibleParams.filter(param => !boundKeys.includes(param)));
           target.controlArgs.clear();
           target.hasControlArgsMetadata = false;
@@ -3921,15 +3936,29 @@ function mergeValidationContextAst(
             }
           }
 
-          target.updateArgs = new Set(
-            [...target.updateArgs].filter(argName => target.params.has(argName))
-          );
-          if (target.updateArgs.size === 0) {
-            target.hasUpdateArgsMetadata = false;
+          if (inputSchema.updateFields.length > 0) {
+            target.updateArgs = new Set(
+              inputSchema.updateFields.filter(argName => target.params.has(argName))
+            );
+            target.hasUpdateArgsMetadata = target.updateArgs.size > 0;
+          } else {
+            target.updateArgs = new Set(
+              [...target.updateArgs].filter(argName => target.params.has(argName))
+            );
+            if (target.updateArgs.size === 0) {
+              target.hasUpdateArgsMetadata = false;
+            }
           }
-          target.exactPayloadArgs = new Set(
-            [...target.exactPayloadArgs].filter(argName => target.params.has(argName))
-          );
+
+          if (inputSchema.exactFields.length > 0) {
+            target.exactPayloadArgs = new Set(
+              inputSchema.exactFields.filter(argName => target.params.has(argName))
+            );
+          } else {
+            target.exactPayloadArgs = new Set(
+              [...target.exactPayloadArgs].filter(argName => target.params.has(argName))
+            );
+          }
         }
       }
 
@@ -4215,6 +4244,16 @@ function collectToolCatalogDiagnostics(
       });
       const fieldNames = schema.fields.map(field => field.name);
       const fieldSet = new Set(fieldNames);
+      const effectiveLabels = new Set<string>([
+        ...(executable.labels ?? []),
+        ...(
+          Array.isArray(labelsValue)
+            ? labelsValue
+              .filter((label): label is string => typeof label === 'string' && label.trim().length > 0)
+              .map(label => label.trim())
+            : []
+        )
+      ]);
 
       const boundFieldOverlap = resolvedBindKeys.filter(key => fieldSet.has(key));
       if (boundFieldOverlap.length > 0) {
@@ -4234,6 +4273,72 @@ function collectToolCatalogDiagnostics(
           entryLine,
           entryColumn
         );
+      }
+
+      if (schema.updateFields.length > 0 && !hasUpdateWriteLabel(effectiveLabels)) {
+        pushError(
+          `Tool '${toolName}' inputs require label 'update:w' when record '@${recordName}' declares update fields`,
+          entryLine,
+          entryColumn
+        );
+      }
+
+      for (const [fieldName, target] of Object.entries(schema.allowlist)) {
+        if (target.kind !== 'reference') {
+          continue;
+        }
+
+        const targetRecord = recordDefinitions.get(target.name);
+        if (!targetRecord) {
+          continue;
+        }
+
+        if (!canUseRecordForOutput(targetRecord)) {
+          pushError(
+            `Tool '${toolName}' allowlist target '@${target.name}' for field '${fieldName}' must not be an input record`,
+            entryLine,
+            entryColumn
+          );
+          continue;
+        }
+
+        const factCount = targetRecord.fields.filter(field => field.classification === 'fact').length;
+        if (factCount !== 1) {
+          pushError(
+            `Tool '${toolName}' allowlist target '@${target.name}' for field '${fieldName}' must resolve to a single-fact record or array`,
+            entryLine,
+            entryColumn
+          );
+        }
+      }
+
+      for (const [fieldName, target] of Object.entries(schema.blocklist)) {
+        if (target.kind !== 'reference') {
+          continue;
+        }
+
+        const targetRecord = recordDefinitions.get(target.name);
+        if (!targetRecord) {
+          continue;
+        }
+
+        if (!canUseRecordForOutput(targetRecord)) {
+          pushError(
+            `Tool '${toolName}' blocklist target '@${target.name}' for field '${fieldName}' must not be an input record`,
+            entryLine,
+            entryColumn
+          );
+          continue;
+        }
+
+        const factCount = targetRecord.fields.filter(field => field.classification === 'fact').length;
+        if (factCount !== 1) {
+          pushError(
+            `Tool '${toolName}' blocklist target '@${target.name}' for field '${fieldName}' must resolve to a single-fact record or array`,
+            entryLine,
+            entryColumn
+          );
+        }
       }
 
       const coveredParams = new Set([...fieldNames, ...resolvedBindKeys]);

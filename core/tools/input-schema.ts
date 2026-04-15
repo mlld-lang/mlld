@@ -32,6 +32,19 @@ export function buildToolInputSchemaFromRecordDefinition(options: {
     optionalParams: fields
       .filter(field => field.optional)
       .map(field => field.name),
+    exactFields: [...(recordDefinition.inputPolicy?.exact ?? [])].filter(name => visibleParamSet.has(name)),
+    updateFields: [...(recordDefinition.inputPolicy?.update ?? [])].filter(name => visibleParamSet.has(name)),
+    allowlist: Object.fromEntries(
+      Object.entries(recordDefinition.inputPolicy?.allowlist ?? {})
+        .filter(([fieldName]) => visibleParamSet.has(fieldName))
+        .map(([fieldName, target]) => [fieldName, target])
+    ),
+    blocklist: Object.fromEntries(
+      Object.entries(recordDefinition.inputPolicy?.blocklist ?? {})
+        .filter(([fieldName]) => visibleParamSet.has(fieldName))
+        .map(([fieldName, target]) => [fieldName, target])
+    ),
+    optionalBenignFields: [...(recordDefinition.inputPolicy?.optionalBenign ?? [])].filter(name => visibleParamSet.has(name)),
     correlate: resolveRecordFactCorrelation(recordDefinition),
     ...(typeof recordDefinition.correlate === 'boolean'
       ? { declaredCorrelate: recordDefinition.correlate }

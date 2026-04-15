@@ -12,6 +12,28 @@ export type RecordDisplayModeName = string;
 export type RecordRootMode = 'object' | 'scalar' | 'map-entry';
 export type RecordInputSourceRoot = 'input' | 'key' | 'value';
 export type RecordDirection = 'input' | 'output' | 'hybrid';
+export interface RecordPolicySetTargetReference {
+  kind: 'reference';
+  name: string;
+}
+
+export interface RecordPolicySetTargetArray {
+  kind: 'array';
+  values: unknown[];
+}
+
+export type RecordPolicySetTarget =
+  | RecordPolicySetTargetReference
+  | RecordPolicySetTargetArray;
+
+export interface RecordInputPolicySections {
+  exact?: string[];
+  update?: string[];
+  allowlist?: Record<string, RecordPolicySetTarget>;
+  blocklist?: Record<string, RecordPolicySetTarget>;
+  optionalBenign?: string[];
+}
+
 export type RecordDisplayEntry =
   | { kind: 'bare'; field: string }
   | { kind: 'ref'; field: string }
@@ -120,6 +142,7 @@ export interface RecordDefinition {
   display: RecordDisplayConfig;
   direction: RecordDirection;
   correlate?: boolean;
+  inputPolicy?: RecordInputPolicySections;
   validate: RecordValidationMode;
   when?: RecordWhenRule[];
   location?: SourceLocation;
@@ -233,6 +256,26 @@ function formatRecordFields(fields: RecordFieldDefinition[]): string {
   return `[${fields.map(formatRecordField).join(', ')}]`;
 }
 
+function formatRecordPolicyFieldNames(fields: readonly string[]): string {
+  return `[${fields.join(', ')}]`;
+}
+
+function formatRecordPolicySetTarget(target: RecordPolicySetTarget): string {
+  if (target.kind === 'reference') {
+    return `@${target.name}`;
+  }
+
+  return `[${target.values.map(value => JSON.stringify(value)).join(', ')}]`;
+}
+
+function formatRecordPolicySetMap(
+  section: Record<string, RecordPolicySetTarget>
+): string {
+  return `{ ${Object.entries(section)
+    .map(([fieldName, target]) => `${fieldName}: ${formatRecordPolicySetTarget(target)}`)
+    .join(', ')} }`;
+}
+
 function formatRecordDisplayEntry(entry: RecordDisplayEntry): string {
   switch (entry.kind) {
     case 'bare':
@@ -325,6 +368,26 @@ export function formatRecordDefinition(definition: RecordDefinition): string {
     lines.push(`  correlate: ${definition.correlate ? 'true' : 'false'}`);
   }
 
+  if (definition.inputPolicy?.exact && definition.inputPolicy.exact.length > 0) {
+    lines.push(`  exact: ${formatRecordPolicyFieldNames(definition.inputPolicy.exact)}`);
+  }
+
+  if (definition.inputPolicy?.update && definition.inputPolicy.update.length > 0) {
+    lines.push(`  update: ${formatRecordPolicyFieldNames(definition.inputPolicy.update)}`);
+  }
+
+  if (definition.inputPolicy?.allowlist && Object.keys(definition.inputPolicy.allowlist).length > 0) {
+    lines.push(`  allowlist: ${formatRecordPolicySetMap(definition.inputPolicy.allowlist)}`);
+  }
+
+  if (definition.inputPolicy?.blocklist && Object.keys(definition.inputPolicy.blocklist).length > 0) {
+    lines.push(`  blocklist: ${formatRecordPolicySetMap(definition.inputPolicy.blocklist)}`);
+  }
+
+  if (definition.inputPolicy?.optionalBenign && definition.inputPolicy.optionalBenign.length > 0) {
+    lines.push(`  optional_benign: ${formatRecordPolicyFieldNames(definition.inputPolicy.optionalBenign)}`);
+  }
+
   if (definition.when && definition.when.length > 0) {
     lines.push('  when: [');
     for (const rule of definition.when) {
@@ -363,6 +426,11 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
     data?: RecordFieldDefinition[];
     display?: RecordDisplayDeclaration;
     correlate?: boolean;
+    exact?: string[];
+    update?: string[];
+    allowlist?: Record<string, DataValue>;
+    blocklist?: Record<string, DataValue>;
+    optionalBenign?: string[];
     when?: RecordWhenRule[];
     validate?: RecordValidationMode;
     unsupported?: Array<{ key: string; value?: BaseMlldNode | DataValue }>;
@@ -384,8 +452,14 @@ export interface RecordDirectiveNode extends TypedDirectiveNode<'record', 'recor
 export function getRecordDirection(options: {
   display: RecordDisplayConfig;
   correlate?: boolean;
+  hasInputPolicy?: boolean;
+  hasSupply?: boolean;
 }): RecordDirection {
-  if (typeof options.correlate === 'boolean') {
+  if (
+    typeof options.correlate === 'boolean'
+    || options.hasInputPolicy === true
+    || options.hasSupply === true
+  ) {
     return 'input';
   }
   if (options.display.kind !== 'open') {

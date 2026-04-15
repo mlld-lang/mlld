@@ -265,6 +265,117 @@ describe('record grammar', () => {
     ]);
   });
 
+  it('parses top-level input policy sections on records', () => {
+    const directive = getFirstDirective(`
+/record @send_email_inputs = {
+  facts: [recipient: string, cc: string?],
+  data: [subject: string, body: string?],
+  exact: [subject],
+  update: [body],
+  allowlist: { recipient: @approved_recipients },
+  blocklist: { recipient: ["blocked-recipient"] },
+  optional_benign: [cc]
+}
+`) as RecordDirectiveNode;
+
+    expect(directive.values.exact).toEqual(['subject']);
+    expect(directive.values.update).toEqual(['body']);
+    expect(directive.values.optionalBenign).toEqual(['cc']);
+    expect(directive.values.allowlist).toMatchObject({
+      recipient: {
+        type: 'VariableReference',
+        identifier: 'approved_recipients'
+      }
+    });
+    expect(directive.values.blocklist).toMatchObject({
+      recipient: {
+        type: 'array',
+        items: [
+          {
+            type: 'Literal',
+            value: 'blocked-recipient'
+          }
+        ]
+      }
+    });
+
+    const { definition, issues } = buildRecordDefinitionFromDirective(directive);
+    expect(issues).toEqual([]);
+    expect(definition).toMatchObject({
+      direction: 'input',
+      inputPolicy: {
+        exact: ['subject'],
+        update: ['body'],
+        optionalBenign: ['cc'],
+        allowlist: {
+          recipient: { kind: 'reference', name: 'approved_recipients' }
+        },
+        blocklist: {
+          recipient: { kind: 'array', values: ['blocked-recipient'] }
+        }
+      }
+    });
+  });
+
+  it('rejects prefix optional markers on record fields', () => {
+    expect(() => parseSync(`
+/record @contact = {
+  facts: [email?: string]
+}
+`)).toThrow();
+  });
+
+  it('rejects per-field attribute bags', () => {
+    expect(() => parseSync(`
+/record @contact = {
+  facts: [email: string { exact: true }]
+}
+`)).toThrow(/field_attribute_bag_used/i);
+  });
+
+  it('rejects unknown top-level record sections', () => {
+    expect(() => parseSync(`
+/record @contact = {
+  facts: [email: string],
+  attrs: { email: { exact: true } }
+}
+`)).toThrow(/unknown_record_section/i);
+  });
+
+  it('reports exact and update fields that point at fact fields', () => {
+    const directive = getFirstDirective(`
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  exact: [recipient],
+  update: [recipient]
+}
+`) as RecordDirectiveNode;
+
+    const { issues } = buildRecordDefinitionFromDirective(directive);
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'exact_field_not_in_data' }),
+        expect.objectContaining({ code: 'update_field_not_in_data' })
+      ])
+    );
+  });
+
+  it('reports optional_benign fields that are not optional facts', () => {
+    const directive = getFirstDirective(`
+/record @send_email_inputs = {
+  facts: [recipient: string, cc: string?],
+  data: [subject: string],
+  optional_benign: [recipient, subject]
+}
+`) as RecordDirectiveNode;
+
+    const { issues } = buildRecordDefinitionFromDirective(directive);
+    expect(
+      issues.filter(issue => issue.code === 'optional_benign_invalid_field')
+    ).toHaveLength(2);
+  });
+
   it('parses input-direction correlate declarations on records', () => {
     const directive = getFirstDirective(`
 /record @send_email_inputs = {

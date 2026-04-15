@@ -14,6 +14,11 @@ SlashRecord
       const validateEntry = body.entries.find(entry => entry.kind === 'validate');
       const displayEntry = body.entries.find(entry => entry.kind === 'display');
       const correlateEntry = body.entries.find(entry => entry.kind === 'correlate');
+      const exactEntry = body.entries.find(entry => entry.kind === 'exact');
+      const updateEntry = body.entries.find(entry => entry.kind === 'update');
+      const allowlistEntry = body.entries.find(entry => entry.kind === 'allowlist');
+      const blocklistEntry = body.entries.find(entry => entry.kind === 'blocklist');
+      const optionalBenignEntry = body.entries.find(entry => entry.kind === 'optional_benign');
 
       const values = {
         identifier: [identifierNode],
@@ -24,6 +29,11 @@ SlashRecord
           ? { display: displayEntry.value }
           : {}),
         ...(correlateEntry ? { correlate: correlateEntry.value } : {}),
+        ...(exactEntry ? { exact: exactEntry.value } : {}),
+        ...(updateEntry ? { update: updateEntry.value } : {}),
+        ...(allowlistEntry ? { allowlist: allowlistEntry.value } : {}),
+        ...(blocklistEntry ? { blocklist: blocklistEntry.value } : {}),
+        ...(optionalBenignEntry ? { optionalBenign: optionalBenignEntry.value } : {}),
         ...(whenEntry ? { when: whenEntry.rules } : {}),
         ...(validateEntry ? { validate: validateEntry.mode } : {})
       };
@@ -71,8 +81,14 @@ RecordEntry
   / RecordDataEntry
   / RecordDisplayEntry
   / RecordCorrelateEntry
+  / RecordExactEntry
+  / RecordUpdateEntry
+  / RecordAllowlistEntry
+  / RecordBlocklistEntry
+  / RecordOptionalBenignEntry
   / RecordWhenEntry
   / RecordValidateEntry
+  / RecordUnknownEntry
 
 RecordKeyEntry
   = "key" _ ":" _ value:BaseIdentifier {
@@ -127,6 +143,31 @@ RecordCorrelateEntry
       return { kind: 'correlate', value };
     }
 
+RecordExactEntry
+  = "exact" _ ":" _ value:RecordPolicyFieldNameList {
+      return { kind: 'exact', value };
+    }
+
+RecordUpdateEntry
+  = "update" _ ":" _ value:RecordPolicyFieldNameList {
+      return { kind: 'update', value };
+    }
+
+RecordAllowlistEntry
+  = "allowlist" _ ":" _ value:RecordPolicySetMap {
+      return { kind: 'allowlist', value };
+    }
+
+RecordBlocklistEntry
+  = "blocklist" _ ":" _ value:RecordPolicySetMap {
+      return { kind: 'blocklist', value };
+    }
+
+RecordOptionalBenignEntry
+  = "optional_benign" _ ":" _ value:RecordPolicyFieldNameList {
+      return { kind: 'optional_benign', value };
+    }
+
 RecordValidateEntry
   = "validate" _ ":" _ mode:RecordValidateMode {
       return { kind: 'validate', mode };
@@ -147,6 +188,34 @@ RecordBooleanLiteral
 RecordFieldList
   = "[" _ fields:RecordFields? _ "]" {
       return fields || [];
+    }
+
+RecordPolicyFieldNameList
+  = "[" _ fields:RecordWhenFieldNames? _ "]" {
+      return fields || [];
+    }
+
+RecordPolicySetMap
+  = "{" _ entries:RecordPolicySetEntries? _ "}" {
+      const pairs = entries || [];
+      const seen = new Set();
+      for (const [field] of pairs) {
+        if (seen.has(field)) {
+          error(`Duplicate record policy target '${field}'`);
+        }
+        seen.add(field);
+      }
+      return Object.fromEntries(pairs);
+    }
+
+RecordPolicySetEntries
+  = first:RecordPolicySetEntry rest:(_ ","? _ entry:RecordPolicySetEntry { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordPolicySetEntry
+  = field:BaseIdentifier _ ":" _ value:DataPropertyValue {
+      return [field, value];
     }
 
 RecordDisplayList
@@ -245,7 +314,7 @@ RecordField
   / RecordInputField
 
 RecordInputField
-  = source:RecordFieldSource alias:RecordFieldAlias? fieldType:RecordFieldTypeAnnotation? {
+  = source:RecordFieldSource alias:RecordFieldAlias? fieldType:RecordFieldTypeAnnotation? _ bag:RecordFieldAttributeBag? {
       const sourceName = helpers.recordFieldSourceName(source);
       const fieldName = alias || sourceName;
       return {
@@ -259,7 +328,7 @@ RecordInputField
     }
 
 RecordComputedField
-  = "{" _ key:BaseIdentifier _ ":" _ value:DataPropertyValue _ "}" fieldType:RecordFieldTypeAnnotation? {
+  = "{" _ key:BaseIdentifier _ ":" _ value:DataPropertyValue _ "}" fieldType:RecordFieldTypeAnnotation? _ bag:RecordFieldAttributeBag? {
       return {
         kind: 'computed',
         name: key,
@@ -307,6 +376,12 @@ RecordFieldTypeAnnotation
         valueType,
         optional: Boolean(optional)
       };
+    }
+
+RecordFieldAttributeBag
+  = "{" _ entries:DataObjectEntries? _ "}" {
+      void entries;
+      error("field_attribute_bag_used: per-field attribute bags were removed in v2; use a top-level record section instead");
     }
 
 RecordFieldValueType
@@ -453,6 +528,12 @@ RecordWhenFieldNameList
 RecordWhenFieldNames
   = first:BaseIdentifier rest:(_ ","? _ field:BaseIdentifier { return field; })* _ ","? {
       return [first, ...rest];
+    }
+
+RecordUnknownEntry
+  = key:BaseIdentifier _ ":" _ value:DataPropertyValue {
+      void value;
+      error(`unknown_record_section: unknown record section '${key}'`);
     }
 
 RecordDataTrustLevel

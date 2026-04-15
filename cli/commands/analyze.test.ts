@@ -1037,6 +1037,120 @@ show @built
     );
   });
 
+  it('requires update:w when an input record declares update fields', async () => {
+    const modulePath = await writeModule('analyze-input-record-update-label.mld', `
+/record @update_issue_inputs = {
+  facts: [id: string],
+  data: [subject: string?, body: string?],
+  update: [subject, body],
+  validate: "strict"
+}
+
+/exe tool:w @update_issue(id, subject, body) = js { return "ok"; }
+
+/var tools @agentTools = {
+  update_issue: {
+    mlld: @update_issue,
+    inputs: @update_issue_inputs,
+    labels: ["execute:w"]
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message)).toContain(
+      "Tool 'update_issue' inputs require label 'update:w' when record '@update_issue_inputs' declares update fields"
+    );
+  });
+
+  it('rejects allowlist and blocklist targets that point at input records', async () => {
+    const modulePath = await writeModule('analyze-input-record-policy-targets.mld', `
+/record @approved_recipients = {
+  facts: [recipient: string],
+  correlate: true,
+  validate: "strict"
+}
+
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approved_recipients },
+  blocklist: { recipient: @approved_recipients },
+  validate: "strict"
+}
+
+/exe tool:w @send_email(recipient, subject) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain(
+      "Tool 'send_email' allowlist target '@approved_recipients' for field 'recipient' must not be an input record"
+    );
+    expect(messages).toContain(
+      "Tool 'send_email' blocklist target '@approved_recipients' for field 'recipient' must not be an input record"
+    );
+  });
+
+  it('reports exact_not_in_task for statically analyzable policy builder calls against input-record exact fields', async () => {
+    const modulePath = await writeModule('analyze-policy-build-input-record-exact.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  exact: [subject],
+  validate: "strict"
+}
+
+/exe tool:w @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @writeTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+/var @built = @policy.build({
+  send_email: {
+    recipient: "ada-recipient",
+    subject: "Quarterly budget",
+    body: "see attached"
+  }
+}, @writeTools, { task: "email about the roadmap" })
+/show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed',
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            reason: 'exact_not_in_task',
+            tool: 'send_email',
+            arg: 'subject'
+          })
+        ])
+      })
+    ]);
+  });
+
   it('rejects invalid input-record catalog authorizable values', async () => {
     const modulePath = await writeModule('analyze-input-record-authorizable-invalid.mld', `
 /record @send_email_inputs = {

@@ -179,12 +179,19 @@ describe('@fyi.tools', () => {
 
   it('renders canonical explicit @toolDocs() sections outside MCP context', async () => {
     const env = await interpretWithEnv(`
+      /var @approvedRecipients = ["ada-recipient"]
+
       /record @send_email_inputs = {
-        facts: [recipient: string],
+        facts: [recipient: string, cc: string?],
         data: {
           trusted: [subject: string],
           untrusted: [body: string?]
         },
+        exact: [subject],
+        update: [body],
+        allowlist: { recipient: @approvedRecipients },
+        blocklist: { recipient: ["blocked-recipient"] },
+        optional_benign: [cc],
         validate: "strict"
       }
 
@@ -193,14 +200,14 @@ describe('@fyi.tools', () => {
         validate: "strict"
       }
 
-      /exe tool:w @sendEmail(recipient, subject, body) = "sent"
+      /exe tool:w @sendEmail(recipient, cc, subject, body) = "sent"
       /exe tool:r @lookupContact(query) = "Ada"
 
       /var tools @tools = {
         send_email: {
           mlld: @sendEmail,
           inputs: @send_email_inputs,
-          labels: ["execute:w", "exfil:send", "comm:w"],
+          labels: ["execute:w", "update:w", "exfil:send", "comm:w"],
           description: "Send an outbound email",
           instructions: "Prefer update_draft for in-progress composition."
         },
@@ -221,15 +228,23 @@ describe('@fyi.tools', () => {
       expect(docs).toContain('### send_email');
       expect(docs).toContain('Routing: execute (write)');
       expect(docs).toContain('Risk: exfil (send)');
-      expect(docs).toContain('Domain: communication (write)');
+      expect(docs).toContain('Domain: update (write), communication (write)');
       expect(docs).toContain('Description: Send an outbound email');
       expect(docs).toContain('Instructions: Prefer update_draft for in-progress composition.');
       expect(docs).toContain('Facts:');
       expect(docs).toContain('- `recipient` (string)');
+      expect(docs).toContain('- `cc` (string, optional)');
       expect(docs).toContain('Trusted payload:');
       expect(docs).toContain('- `subject` (string)');
       expect(docs).toContain('Untrusted payload:');
       expect(docs).toContain('- `body` (string, optional)');
+      expect(docs).toContain('Exact:');
+      expect(docs).toContain('Update:');
+      expect(docs).toContain('Allowlist:');
+      expect(docs).toContain('- `recipient` -> @approvedRecipients');
+      expect(docs).toContain('Blocklist:');
+      expect(docs).toContain('- `recipient` -> ["blocked-recipient"]');
+      expect(docs).toContain('Optional benign:');
       expect(docs).toContain('Read tools:');
       expect(docs).toContain('### search_contacts_by_name');
       expect(docs).toContain('Routing: resolve (read)');
@@ -580,22 +595,29 @@ describe('@fyi.tools', () => {
 
   it('includes record-based sections and instructions in JSON tool docs', async () => {
     const env = await interpretWithEnv(`
+      /var @approvedRecipients = ["ada-recipient"]
+
       /record @send_email_inputs = {
-        facts: [recipient: string],
+        facts: [recipient: string, cc: string?],
         data: {
           trusted: [subject: string],
           untrusted: [body: string?]
         },
+        exact: [subject],
+        update: [body],
+        allowlist: { recipient: @approvedRecipients },
+        blocklist: { recipient: ["blocked-recipient"] },
+        optional_benign: [cc],
         validate: "strict"
       }
 
-      /exe tool:w @sendEmail(recipient, subject, body) = "sent"
+      /exe tool:w @sendEmail(recipient, cc, subject, body) = "sent"
 
       /var tools @tools = {
         send_email: {
           mlld: @sendEmail,
           inputs: @send_email_inputs,
-          labels: ["execute:w", "exfil:send", "comm:w"],
+          labels: ["execute:w", "update:w", "exfil:send", "comm:w"],
           description: "Send an outbound email",
           instructions: "Prefer update_draft for in-progress composition."
         }
@@ -614,11 +636,22 @@ describe('@fyi.tools', () => {
           inputRecord: 'send_email_inputs',
           description: 'Send an outbound email',
           instructions: 'Prefer update_draft for in-progress composition.',
-          controlArgs: ['recipient'],
-          factArgs: ['recipient'],
+          controlArgs: ['recipient', 'cc'],
+          factArgs: ['recipient', 'cc'],
           trustedDataArgs: ['subject'],
           untrustedDataArgs: ['body'],
           dataArgs: ['subject', 'body'],
+          inputPolicy: {
+            exact: ['subject'],
+            update: ['body'],
+            allowlist: {
+              recipient: { kind: 'reference', name: 'approvedRecipients' }
+            },
+            blocklist: {
+              recipient: { kind: 'array', values: ['blocked-recipient'] }
+            },
+            optionalBenign: ['cc']
+          },
           discoveryCall: '@fyi.known("send_email")'
         })
       ]);

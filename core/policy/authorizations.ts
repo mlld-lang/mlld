@@ -1,5 +1,6 @@
 import type { FactSourceHandle } from '@core/types/handle';
 import { isExecutableVariable } from '@core/types/variable';
+import type { ToolInputSchema } from '@core/types/tools';
 import { isTolerantMatch } from '@interpreter/eval/expressions';
 
 export type AuthorizationConstraintClause =
@@ -24,6 +25,7 @@ export type PolicyAuthorizableMap = Record<string, string[]>;
 export interface AuthorizationToolContext {
   name: string;
   params: Set<string>;
+  inputSchema?: ToolInputSchema;
   controlArgs: Set<string>;
   hasControlArgsMetadata: boolean;
   updateArgs: Set<string>;

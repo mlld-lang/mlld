@@ -42,6 +42,7 @@ import {
 } from '@interpreter/utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
 import { getStaticObjectKey } from '@interpreter/utils/object-compat';
+import { isTolerantMatch } from '@interpreter/eval/expressions';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
@@ -69,7 +70,11 @@ export interface PolicyAuthorizationCompilerIssue {
     | 'known_from_influenced_source'
     | 'known_not_in_task'
     | 'no_update_fields'
+    | 'exact_check_skipped_no_task'
+    | 'exact_not_in_task'
     | 'payload_not_in_task'
+    | 'allowlist_mismatch'
+    | 'blocklist_match'
     | 'known_contains_handle'
     | 'ambiguous_projected_value';
   message: string;
@@ -321,13 +326,17 @@ function buildPayloadNotInTaskMessage(argName: string, literal: string): string 
   return `Payload literal '${literal}' for '${argName}' not found in task text`;
 }
 
+function buildExactNotInTaskMessage(argName: string, literal: string): string {
+  return `Exact literal '${literal}' for '${argName}' not found in task text`;
+}
+
 function validateLiteralValueAgainstTask(options: {
   toolName: string;
   argName: string;
   value: unknown;
   normalizedTaskText: string;
   issues: PolicyAuthorizationCompilerIssue[];
-  reason: 'known_not_in_task' | 'payload_not_in_task';
+  reason: 'known_not_in_task' | 'payload_not_in_task' | 'exact_not_in_task';
   buildMessage: (literal: string) => string;
   rejectHandleWrappers: boolean;
 }): boolean {
@@ -435,11 +444,13 @@ function validateExactPayloadValueAgainstTask(options: {
   value: unknown;
   normalizedTaskText: string;
   issues: PolicyAuthorizationCompilerIssue[];
+  reason?: 'payload_not_in_task' | 'exact_not_in_task';
+  buildMessage?: (literal: string) => string;
 }): boolean {
   return validateLiteralValueAgainstTask({
     ...options,
-    reason: 'payload_not_in_task',
-    buildMessage: literal => buildPayloadNotInTaskMessage(options.argName, literal),
+    reason: options.reason ?? 'payload_not_in_task',
+    buildMessage: options.buildMessage ?? (literal => buildPayloadNotInTaskMessage(options.argName, literal)),
     rejectHandleWrappers: false
   });
 }
@@ -1298,11 +1309,142 @@ function deleteRawAuthorizationTool(
   delete allow[toolName];
 }
 
+function resolvePolicySetTargetMembers(
+  env: Environment,
+  target: { kind: 'reference'; name: string } | { kind: 'array'; values: unknown[] }
+): unknown[] {
+  if (target.kind === 'array') {
+    return [...target.values];
+  }
+
+  const variable = env.getVariable(target.name);
+  if (!variable) {
+    return [];
+  }
+
+  let resolved: unknown = variable;
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (Array.isArray(resolved)) {
+    return resolved;
+  }
+
+  return resolved === undefined ? [] : [resolved];
+}
+
+function valueMatchesPolicySet(value: unknown, members: readonly unknown[]): boolean {
+  return members.some(member => isTolerantMatch(value, member));
+}
+
+function rewriteAuthorizationValueAgainstPolicySet(options: {
+  value: unknown;
+  members: readonly unknown[];
+  mode: 'allowlist' | 'blocklist';
+}): {
+  value?: unknown;
+  droppedArrayElements: Array<{ index: number; value: unknown }>;
+  passed: boolean;
+} {
+  const passes = (candidate: unknown): boolean => {
+    const matched = valueMatchesPolicySet(candidate, options.members);
+    return options.mode === 'allowlist' ? matched : !matched;
+  };
+
+  if (Array.isArray(options.value)) {
+    const retained: unknown[] = [];
+    const droppedArrayElements: Array<{ index: number; value: unknown }> = [];
+    options.value.forEach((entry, index) => {
+      if (passes(entry)) {
+        retained.push(entry);
+      } else {
+        droppedArrayElements.push({ index, value: entry });
+      }
+    });
+    return {
+      value: retained,
+      droppedArrayElements,
+      passed: retained.length > 0 || droppedArrayElements.length === 0
+    };
+  }
+
+  if (isPlainObject(options.value) && hasOwnProperty(options.value, 'eq')) {
+    const rewritten = rewriteAuthorizationValueAgainstPolicySet({
+      value: (options.value as Record<string, unknown>).eq,
+      members: options.members,
+      mode: options.mode
+    });
+    return {
+      value: rewritten.value === undefined
+        ? undefined
+        : {
+            ...(options.value as Record<string, unknown>),
+            eq: rewritten.value
+          },
+      droppedArrayElements: rewritten.droppedArrayElements,
+      passed: rewritten.passed
+    };
+  }
+
+  if (isPlainObject(options.value) && Array.isArray((options.value as Record<string, unknown>).oneOf)) {
+    const candidates = (options.value as Record<string, unknown>).oneOf as unknown[];
+    const retained = candidates.filter(candidate => passes(candidate));
+    return {
+      value: retained.length > 0
+        ? {
+            ...(options.value as Record<string, unknown>),
+            oneOf: retained
+          }
+        : undefined,
+      droppedArrayElements: [],
+      passed: retained.length > 0
+    };
+  }
+
+  if (isPlainObject(options.value) && (hasOwnProperty(options.value, 'value') || hasOwnProperty(options.value, 'source'))) {
+    if (!hasOwnProperty(options.value, 'value')) {
+      return {
+        value: undefined,
+        droppedArrayElements: [],
+        passed: false
+      };
+    }
+
+    const rewritten = rewriteAuthorizationValueAgainstPolicySet({
+      value: (options.value as Record<string, unknown>).value,
+      members: options.members,
+      mode: options.mode
+    });
+    return {
+      value: rewritten.value === undefined
+        ? undefined
+        : {
+            ...(options.value as Record<string, unknown>),
+            value: rewritten.value
+          },
+      droppedArrayElements: rewritten.droppedArrayElements,
+      passed: rewritten.passed
+    };
+  }
+
+  return {
+    value: passes(options.value) ? options.value : undefined,
+    droppedArrayElements: [],
+    passed: passes(options.value)
+  };
+}
+
 function validateRawAuthorizationMetadata(options: {
   rawAuthorizations: unknown;
+  env: Environment;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
+  report: PolicyAuthorizationCompileReport;
 }): void {
   const allow = isPlainObject(options.rawAuthorizations) && isPlainObject(options.rawAuthorizations.allow)
     ? options.rawAuthorizations.allow
@@ -1323,13 +1465,142 @@ function validateRawAuthorizationMetadata(options: {
     }
 
     const rawArgs = extractRawAuthorizationArgs(entry);
+    if (!rawArgs) {
+      continue;
+    }
+
+    let shouldDropTool = false;
+
+    for (const [argName, target] of Object.entries(tool.inputSchema?.allowlist ?? {})) {
+      if (!hasOwnProperty(rawArgs, argName)) {
+        continue;
+      }
+
+      const members = resolvePolicySetTargetMembers(options.env, target);
+      const rewritten = rewriteAuthorizationValueAgainstPolicySet({
+        value: rawArgs[argName],
+        members,
+        mode: 'allowlist'
+      });
+
+      for (const dropped of rewritten.droppedArrayElements) {
+        options.report.droppedArrayElements.push({
+          tool: toolName,
+          arg: argName,
+          index: dropped.index,
+          reason: 'allowlist_mismatch',
+          value: encodeCanonicalValue(dropped.value)
+        });
+      }
+
+      if (!rewritten.passed || rewritten.value === undefined) {
+        pushCompilerIssue(options.issues, {
+          reason: 'allowlist_mismatch',
+          message: `Tool '${toolName}' authorization for '${argName}' must match its allowlist`,
+          tool: toolName,
+          arg: argName
+        });
+        shouldDropTool = true;
+        break;
+      }
+
+      rawArgs[argName] = rewritten.value;
+    }
+
+    if (shouldDropTool) {
+      delete allow[toolName];
+      continue;
+    }
+
+    for (const [argName, target] of Object.entries(tool.inputSchema?.blocklist ?? {})) {
+      if (!hasOwnProperty(rawArgs, argName)) {
+        continue;
+      }
+
+      const members = resolvePolicySetTargetMembers(options.env, target);
+      const rewritten = rewriteAuthorizationValueAgainstPolicySet({
+        value: rawArgs[argName],
+        members,
+        mode: 'blocklist'
+      });
+
+      for (const dropped of rewritten.droppedArrayElements) {
+        options.report.droppedArrayElements.push({
+          tool: toolName,
+          arg: argName,
+          index: dropped.index,
+          reason: 'blocklist_match',
+          value: encodeCanonicalValue(dropped.value)
+        });
+      }
+
+      if (!rewritten.passed || rewritten.value === undefined) {
+        pushCompilerIssue(options.issues, {
+          reason: 'blocklist_match',
+          message: `Tool '${toolName}' authorization for '${argName}' must not match its blocklist`,
+          tool: toolName,
+          arg: argName
+        });
+        shouldDropTool = true;
+        break;
+      }
+
+      rawArgs[argName] = rewritten.value;
+    }
+
+    if (shouldDropTool) {
+      delete allow[toolName];
+      continue;
+    }
+
+    const exactFields =
+      tool.inputSchema?.exactFields && tool.inputSchema.exactFields.length > 0
+        ? new Set(tool.inputSchema.exactFields)
+        : tool.exactPayloadArgs;
+    if (exactFields && exactFields.size > 0) {
+      if (!normalizedTaskText && tool.inputSchema?.exactFields && tool.inputSchema.exactFields.length > 0) {
+        pushCompilerIssue(options.issues, {
+          reason: 'exact_check_skipped_no_task',
+          message: `Tool '${toolName}' exact checks were skipped because no task text was provided`,
+          tool: toolName
+        });
+      } else if (normalizedTaskText) {
+        let payloadValid = true;
+        for (const argName of exactFields) {
+          if (!hasOwnProperty(rawArgs, argName)) {
+            continue;
+          }
+
+          payloadValid =
+            validateExactPayloadValueAgainstTask({
+              toolName,
+              argName,
+              value: rawArgs[argName],
+              normalizedTaskText,
+              issues: options.issues,
+              ...(tool.inputSchema?.exactFields && tool.inputSchema.exactFields.length > 0
+                ? {
+                    reason: 'exact_not_in_task' as const,
+                    buildMessage: (literal: string) => buildExactNotInTaskMessage(argName, literal)
+                  }
+                : {})
+            })
+            && payloadValid;
+        }
+
+        if (!payloadValid) {
+          delete allow[toolName];
+          continue;
+        }
+      }
+    }
+
     if (tool.hasUpdateArgsMetadata) {
       const updateArgs = [...tool.updateArgs];
       const hasUpdateValue =
-        rawArgs !== undefined
-          && updateArgs.some(argName =>
-            hasOwnProperty(rawArgs, argName) && hasNonNullAuthorizationValue(rawArgs[argName])
-          );
+        updateArgs.some(argName =>
+          hasOwnProperty(rawArgs, argName) && hasNonNullAuthorizationValue(rawArgs[argName])
+        );
       if (!hasUpdateValue) {
         pushCompilerIssue(options.issues, {
           reason: 'no_update_fields',
@@ -1337,33 +1608,7 @@ function validateRawAuthorizationMetadata(options: {
           tool: toolName
         });
         delete allow[toolName];
-        continue;
       }
-    }
-
-    if (!normalizedTaskText || !rawArgs || !(tool.exactPayloadArgs && tool.exactPayloadArgs.size > 0)) {
-      continue;
-    }
-
-    let payloadValid = true;
-    for (const argName of tool.exactPayloadArgs) {
-      if (!hasOwnProperty(rawArgs, argName)) {
-        continue;
-      }
-
-      payloadValid =
-        validateExactPayloadValueAgainstTask({
-          toolName,
-          argName,
-          value: rawArgs[argName],
-          normalizedTaskText,
-          issues: options.issues
-        })
-        && payloadValid;
-    }
-
-    if (!payloadValid) {
-      delete allow[toolName];
     }
   }
 }
@@ -2672,9 +2917,11 @@ export async function compilePolicyAuthorizations(
 
   validateRawAuthorizationMetadata({
     rawAuthorizations,
+    env: options.env,
     toolContext: options.toolContext,
     taskText: options.taskText,
-    issues
+    issues,
+    report
   });
 
   stripNonControlArgsFromRawPolicyAuthorizations(rawAuthorizations, options.toolContext, report);

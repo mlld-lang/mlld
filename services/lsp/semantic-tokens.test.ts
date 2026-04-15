@@ -304,7 +304,13 @@ describe('Semantic Tokens', () => {
     trusted: [subject: string?],
     untrusted: [body: string]
   },
+  key: recipient,
   correlate: true,
+  exact: [subject],
+  update: [body],
+  allowlist: { recipient: @approvedRecipients },
+  blocklist: { recipient: ["blocked-recipient"] },
+  optional_benign: [],
   validate: "strict"
 }
 
@@ -323,6 +329,13 @@ var tools @agentTools = {
       for (const text of [
         'trusted',
         'untrusted',
+        'key',
+        'correlate',
+        'exact',
+        'update',
+        'allowlist',
+        'blocklist',
+        'optional_benign',
         'validate',
         'inputs',
         'labels',

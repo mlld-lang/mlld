@@ -65,6 +65,7 @@ function createInputRecord(options: {
   facts?: Array<{ name: string; optional?: boolean; valueType?: string }>;
   data?: Array<{ name: string; optional?: boolean; valueType?: string; dataTrust?: 'trusted' | 'untrusted' }>;
   correlate?: boolean;
+  inputPolicy?: RecordDefinition['inputPolicy'];
 }): RecordDefinition {
   return {
     name: options.name,
@@ -73,6 +74,7 @@ function createInputRecord(options: {
     direction: 'input',
     validate: 'strict',
     ...(options.correlate !== undefined ? { correlate: options.correlate } : {}),
+    ...(options.inputPolicy ? { inputPolicy: options.inputPolicy } : {}),
     fields: [
       ...(options.facts ?? []).map(field => ({
         kind: 'input' as const,
@@ -313,6 +315,134 @@ describe('tool scope helpers', () => {
         env
       )
     ).toThrow(/inputs cannot be combined with controlArgs/i);
+  });
+
+  it('rejects updateArgs and exactPayloadArgs when inputs are declared', () => {
+    const env = createEnvWithExecutables(
+      {
+        updateIssue: ['id', 'subject', 'body']
+      },
+      {
+        update_issue_inputs: createInputRecord({
+          name: 'update_issue_inputs',
+          facts: [{ name: 'id', valueType: 'string' }],
+          data: [{ name: 'subject', valueType: 'string' }, { name: 'body', valueType: 'string' }]
+        })
+      }
+    );
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            inputs: '@update_issue_inputs',
+            updateArgs: ['subject']
+          }
+        },
+        env
+      )
+    ).toThrow(/inputs cannot be combined with updateArgs/i);
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            inputs: '@update_issue_inputs',
+            exactPayloadArgs: ['subject']
+          }
+        },
+        env
+      )
+    ).toThrow(/inputs cannot be combined with exactPayloadArgs/i);
+  });
+
+  it('requires update:w when an input record declares update fields', () => {
+    const env = createEnvWithExecutables(
+      {
+        updateIssue: ['id', 'subject', 'body']
+      },
+      {
+        update_issue_inputs: createInputRecord({
+          name: 'update_issue_inputs',
+          facts: [{ name: 'id', valueType: 'string' }],
+          data: [{ name: 'subject', valueType: 'string', optional: true }, { name: 'body', valueType: 'string', optional: true }],
+          inputPolicy: {
+            update: ['subject', 'body']
+          }
+        })
+      }
+    );
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            inputs: '@update_issue_inputs',
+            labels: ['execute:w']
+          }
+        },
+        env
+      )
+    ).toThrow(/require label 'update:w'/i);
+
+    expect(
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@updateIssue',
+            inputs: '@update_issue_inputs',
+            labels: ['execute:w', 'update:w']
+          }
+        },
+        env
+      )
+    ).toEqual({
+      issue: {
+        mlld: 'updateIssue',
+        inputs: 'update_issue_inputs',
+        labels: ['execute:w', 'update:w']
+      }
+    });
+  });
+
+  it('rejects allowlist targets that point at input records', () => {
+    const env = createEnvWithExecutables(
+      {
+        sendEmail: ['recipient', 'subject']
+      },
+      {
+        approved_recipients: createInputRecord({
+          name: 'approved_recipients',
+          facts: [{ name: 'recipient', valueType: 'string' }]
+        }),
+        send_email_inputs: createInputRecord({
+          name: 'send_email_inputs',
+          facts: [{ name: 'recipient', valueType: 'string' }],
+          data: [{ name: 'subject', valueType: 'string' }],
+          inputPolicy: {
+            allowlist: {
+              recipient: { kind: 'reference', name: 'approved_recipients' }
+            }
+          }
+        })
+      }
+    );
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          email: {
+            mlld: '@sendEmail',
+            inputs: '@send_email_inputs',
+            labels: ['execute:w']
+          }
+        },
+        env
+      )
+    ).toThrow(/allowlist target '@approved_recipients'.*must not be an input record/i);
   });
 
   it('rejects non-executable tool references', () => {

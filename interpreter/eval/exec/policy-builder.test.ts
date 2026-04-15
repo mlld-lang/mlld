@@ -1136,6 +1136,187 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('reports exact_not_in_task for input-record exact fields', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_draft_inputs = {
+        data: [subject: string, body: string],
+        exact: [subject],
+        validate: "strict"
+      }
+
+      /exe tool:w @createDraft(subject, body) = js { return subject; }
+
+      /var tools @writeTools = {
+        createDraft: {
+          mlld: @createDraft,
+          inputs: @create_draft_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        known: {
+          createDraft: {
+            subject: {
+              value: 'Urgent follow-up',
+              source: 'user'
+            }
+          }
+        }
+      },
+      rawSource: {
+        known: {
+          createDraft: {
+            subject: {
+              value: 'Urgent follow-up',
+              source: 'user'
+            }
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      taskText: 'Draft an email about the roadmap',
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'exact_not_in_task',
+          tool: 'createDraft',
+          arg: 'subject'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow).toEqual({});
+  });
+
+  it('drops tools when input-record allowlist checks fail', async () => {
+    const env = await interpretWithEnv(`
+      /var @approvedRecipients = ["ada@example.com"]
+
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: [subject: string],
+        allowlist: { recipient: @approvedRecipients },
+        validate: "strict"
+      }
+
+      /exe tool:w @sendEmail(recipient, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        allow: {
+          sendEmail: {
+            recipient: 'mallory@example.com',
+            subject: 'hi'
+          }
+        }
+      },
+      rawSource: {
+        allow: {
+          sendEmail: {
+            recipient: 'mallory@example.com',
+            subject: 'hi'
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'allowlist_mismatch',
+          tool: 'sendEmail',
+          arg: 'recipient'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow).toEqual({});
+  });
+
+  it('drops blocklisted array elements for input-record policy checks', async () => {
+    const env = await interpretWithEnv(`
+      /var @blockedSubjects = ["blocked subject"]
+
+      /record @send_email_inputs = {
+        facts: [],
+        data: [subjects: array],
+        blocklist: { subjects: @blockedSubjects },
+        validate: "strict"
+      }
+
+      /exe tool:w @sendEmail(subjects) = js { return subjects; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {
+        allow: {
+          sendEmail: {
+            subjects: ['ok subject', 'blocked subject']
+          }
+        }
+      },
+      rawSource: {
+        allow: {
+          sendEmail: {
+            subjects: ['ok subject', 'blocked subject']
+          }
+        }
+      },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.report.droppedArrayElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: 'sendEmail',
+          arg: 'subjects',
+          index: 1,
+          reason: 'blocklist_match'
+        })
+      ])
+    );
+    expect(compilation.authorizations?.allow?.sendEmail).toBeDefined();
+  });
+
   it('accepts handle wrapper values in the resolved bucket', async () => {
     const env = await interpretWithEnv(`
       /exe exfil:send, tool:w @sendEmail(recipient, subject, body) = js { return recipient; } with { controlArgs: ["recipient"] }

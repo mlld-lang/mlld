@@ -15,6 +15,8 @@ import type {
   RecordDisplayDeclaration,
   RecordDisplayEntry,
   RecordFieldDefinition,
+  RecordInputPolicySections,
+  RecordPolicySetTarget,
   RecordRootMode,
   RecordWhenCondition,
   RecordWhenResult
@@ -54,20 +56,300 @@ function issue(
 function validateRecordDirection(options: {
   name: string;
   display: RecordDisplayConfig;
-  correlate?: boolean;
+  hasInputOnlySections: boolean;
   location?: SourceLocation;
 }): StaticValidationIssue[] {
-  const { name, display, correlate, location } = options;
-  if (display.kind !== 'open' && typeof correlate === 'boolean') {
+  const { name, display, hasInputOnlySections, location } = options;
+  if (display.kind !== 'open' && hasInputOnlySections) {
     return [
       issue(
-        'MIXED_RECORD_DIRECTION',
-        `Record '@${name}' cannot declare both display and correlate`,
+        'mixed_record_direction',
+        `Record '@${name}' cannot declare both display and input-only sections`,
         location
       )
     ];
   }
   return [];
+}
+
+function normalizeStringList(values: readonly unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const normalized: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== 'string') {
+      continue;
+    }
+
+    const trimmed = entry.trim();
+    if (trimmed.length > 0 && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+
+  return normalized;
+}
+
+function isVariableReferenceWithoutAccess(value: unknown): value is {
+  type: 'VariableReference';
+  identifier: string;
+  fields?: unknown[];
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (value as { type?: unknown }).type === 'VariableReference'
+    && typeof (value as { identifier?: unknown }).identifier === 'string'
+    && (!Array.isArray((value as { fields?: unknown }).fields)
+      || ((value as { fields?: unknown[] }).fields?.length ?? 0) === 0)
+  );
+}
+
+function extractStaticRecordPolicyLiteral(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const extracted = value.map(entry => extractStaticRecordPolicyLiteral(entry));
+    return extracted.every(entry => entry !== undefined) ? extracted : undefined;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (Array.isArray(candidate.content)) {
+    const extractedContent = extractStaticRecordPolicyLiteral(candidate.content);
+    if (typeof extractedContent === 'string') {
+      return extractedContent;
+    }
+    if (
+      Array.isArray(extractedContent)
+      && extractedContent.every(entry => typeof entry === 'string')
+    ) {
+      return extractedContent.join('');
+    }
+  }
+
+  if (candidate.type === 'Literal') {
+    return candidate.value;
+  }
+
+  if (candidate.type === 'Text') {
+    return typeof candidate.content === 'string' ? candidate.content : undefined;
+  }
+
+  if (candidate.type === 'array' && Array.isArray(candidate.items)) {
+    const extracted = candidate.items.map(entry => extractStaticRecordPolicyLiteral(entry));
+    return extracted.every(entry => entry !== undefined) ? extracted : undefined;
+  }
+
+  return undefined;
+}
+
+function normalizePolicySetTarget(value: unknown): RecordPolicySetTarget | undefined {
+  if (isVariableReferenceWithoutAccess(value)) {
+    return {
+      kind: 'reference',
+      name: value.identifier.trim()
+    };
+  }
+
+  const literal = extractStaticRecordPolicyLiteral(value);
+  if (Array.isArray(literal)) {
+    return {
+      kind: 'array',
+      values: literal
+    };
+  }
+
+  return undefined;
+}
+
+function normalizePolicySetMap(options: {
+  raw: unknown;
+  code: 'allowlist_invalid_target' | 'blocklist_invalid_target';
+  recordName: string;
+  issues: StaticValidationIssue[];
+  fallbackLocation?: SourceLocation;
+}): Record<string, RecordPolicySetTarget> {
+  if (!options.raw || typeof options.raw !== 'object' || Array.isArray(options.raw)) {
+    return {};
+  }
+
+  const normalized: Record<string, RecordPolicySetTarget> = {};
+  const sectionName = options.code.startsWith('allowlist') ? 'allowlist' : 'blocklist';
+
+  for (const [fieldName, rawTarget] of Object.entries(options.raw as Record<string, unknown>)) {
+    const target = normalizePolicySetTarget(rawTarget);
+    if (!target) {
+      options.issues.push(issue(
+        options.code,
+        `Record '@${options.recordName}' ${sectionName} target for field '${fieldName}' must be a record reference or array`,
+        options.fallbackLocation
+      ));
+      continue;
+    }
+    normalized[fieldName] = target;
+  }
+
+  return normalized;
+}
+
+function buildRecordInputPolicySections(options: {
+  directive: RecordDirectiveNode;
+  recordName: string;
+  issues: StaticValidationIssue[];
+  fallbackLocation?: SourceLocation;
+}): RecordInputPolicySections | undefined {
+  const exact = normalizeStringList(options.directive.values?.exact);
+  const update = normalizeStringList(options.directive.values?.update);
+  const optionalBenign = normalizeStringList(options.directive.values?.optionalBenign);
+  const allowlist = normalizePolicySetMap({
+    raw: options.directive.values?.allowlist,
+    code: 'allowlist_invalid_target',
+    recordName: options.recordName,
+    issues: options.issues,
+    fallbackLocation: options.fallbackLocation
+  });
+  const blocklist = normalizePolicySetMap({
+    raw: options.directive.values?.blocklist,
+    code: 'blocklist_invalid_target',
+    recordName: options.recordName,
+    issues: options.issues,
+    fallbackLocation: options.fallbackLocation
+  });
+
+  if (
+    exact.length === 0
+    && update.length === 0
+    && optionalBenign.length === 0
+    && Object.keys(allowlist).length === 0
+    && Object.keys(blocklist).length === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(exact.length > 0 ? { exact } : {}),
+    ...(update.length > 0 ? { update } : {}),
+    ...(Object.keys(allowlist).length > 0 ? { allowlist } : {}),
+    ...(Object.keys(blocklist).length > 0 ? { blocklist } : {}),
+    ...(optionalBenign.length > 0 ? { optionalBenign } : {})
+  };
+}
+
+function hasInputPolicySections(policy: RecordInputPolicySections | undefined): boolean {
+  return Boolean(
+    policy
+    && (
+      (policy.exact?.length ?? 0) > 0
+      || (policy.update?.length ?? 0) > 0
+      || Object.keys(policy.allowlist ?? {}).length > 0
+      || Object.keys(policy.blocklist ?? {}).length > 0
+      || (policy.optionalBenign?.length ?? 0) > 0
+    )
+  );
+}
+
+function validateRecordInputPolicySections(options: {
+  recordName: string;
+  fieldByName: ReadonlyMap<string, RecordFieldDefinition>;
+  inputPolicy: RecordInputPolicySections | undefined;
+  location?: SourceLocation;
+}): StaticValidationIssue[] {
+  const issues: StaticValidationIssue[] = [];
+  const { recordName, fieldByName, inputPolicy, location } = options;
+  if (!inputPolicy) {
+    return issues;
+  }
+
+  for (const fieldName of inputPolicy.exact ?? []) {
+    const field = fieldByName.get(fieldName);
+    if (!field) {
+      issues.push(issue(
+        'exact_field_undefined',
+        `Record '@${recordName}' exact field '${fieldName}' is not defined`,
+        location
+      ));
+      continue;
+    }
+    if (field.classification !== 'data') {
+      issues.push(issue(
+        'exact_field_not_in_data',
+        `Record '@${recordName}' exact field '${fieldName}' must be declared in data`,
+        location
+      ));
+    }
+  }
+
+  for (const fieldName of inputPolicy.update ?? []) {
+    const field = fieldByName.get(fieldName);
+    if (!field) {
+      issues.push(issue(
+        'update_field_undefined',
+        `Record '@${recordName}' update field '${fieldName}' is not defined`,
+        location
+      ));
+      continue;
+    }
+    if (field.classification !== 'data') {
+      issues.push(issue(
+        'update_field_not_in_data',
+        `Record '@${recordName}' update field '${fieldName}' must be declared in data`,
+        location
+      ));
+    }
+  }
+
+  for (const fieldName of Object.keys(inputPolicy.allowlist ?? {})) {
+    if (!fieldByName.has(fieldName)) {
+      issues.push(issue(
+        'allowlist_field_undefined',
+        `Record '@${recordName}' allowlist field '${fieldName}' is not defined`,
+        location
+      ));
+    }
+  }
+
+  for (const fieldName of Object.keys(inputPolicy.blocklist ?? {})) {
+    if (!fieldByName.has(fieldName)) {
+      issues.push(issue(
+        'blocklist_field_undefined',
+        `Record '@${recordName}' blocklist field '${fieldName}' is not defined`,
+        location
+      ));
+    }
+  }
+
+  for (const fieldName of inputPolicy.optionalBenign ?? []) {
+    const field = fieldByName.get(fieldName);
+    if (!field) {
+      issues.push(issue(
+        'optional_benign_field_undefined',
+        `Record '@${recordName}' optional_benign field '${fieldName}' is not defined`,
+        location
+      ));
+      continue;
+    }
+    if (field.classification !== 'fact' || field.optional !== true) {
+      issues.push(issue(
+        'optional_benign_invalid_field',
+        `Record '@${recordName}' optional_benign field '${fieldName}' must be an optional fact`,
+        location
+      ));
+    }
+  }
+
+  return issues;
 }
 
 function normalizeFields(
@@ -520,7 +802,7 @@ export function buildRecordDefinitionFromDirective(
     const keyField = fieldByName.get(key);
     if (!keyField) {
       issues.push(issue(
-        'INVALID_RECORD_KEY',
+        'key_field_undefined',
         `Record '@${name}' key field '${key}' is not defined`,
         directiveLocation
       ));
@@ -528,6 +810,12 @@ export function buildRecordDefinitionFromDirective(
       issues.push(issue(
         'INVALID_RECORD_KEY',
         `Record '@${name}' key field '${key}' cannot be optional`,
+        directiveLocation
+      ));
+    } else if (keyField.classification !== 'fact') {
+      issues.push(issue(
+        'INVALID_RECORD_KEY',
+        `Record '@${name}' key field '${key}' must be declared in facts`,
         directiveLocation
       ));
     }
@@ -540,13 +828,26 @@ export function buildRecordDefinitionFromDirective(
     issues,
     directiveLocation
   );
+  const inputPolicy = buildRecordInputPolicySections({
+    directive,
+    recordName: name,
+    issues,
+    fallbackLocation: directiveLocation
+  });
   const correlate = typeof directive.values?.correlate === 'boolean'
     ? directive.values.correlate
     : undefined;
+  const hasInputOnlySections = typeof correlate === 'boolean' || hasInputPolicySections(inputPolicy);
   issues.push(...validateRecordDirection({
     name,
     display,
-    correlate,
+    hasInputOnlySections,
+    location: directiveLocation
+  }));
+  issues.push(...validateRecordInputPolicySections({
+    recordName: name,
+    fieldByName,
+    inputPolicy,
     location: directiveLocation
   }));
 
@@ -569,8 +870,13 @@ export function buildRecordDefinitionFromDirective(
       fields,
       rootMode: inferRecordRootMode(fields),
       display,
-      direction: getRecordDirection({ display, correlate }),
+      direction: getRecordDirection({
+        display,
+        correlate,
+        hasInputPolicy: hasInputPolicySections(inputPolicy)
+      }),
       ...(typeof correlate === 'boolean' ? { correlate } : {}),
+      ...(inputPolicy ? { inputPolicy } : {}),
       validate: directive.values?.validate ?? DEFAULT_VALIDATE_MODE,
       ...(Array.isArray(when) && when.length > 0 ? { when: [...when] } : {}),
       location: directiveLocation
