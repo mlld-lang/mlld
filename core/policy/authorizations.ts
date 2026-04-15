@@ -2,6 +2,8 @@ import type { FactSourceHandle } from '@core/types/handle';
 import { isExecutableVariable } from '@core/types/variable';
 import type { ToolInputSchema } from '@core/types/tools';
 import { isTolerantMatch } from '@interpreter/eval/expressions';
+import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
+import { isVariable } from '@interpreter/utils/variable-resolution';
 
 export type AuthorizationConstraintClause =
   | { eq: unknown; attestations?: readonly string[] }
@@ -20,7 +22,8 @@ export type PolicyAuthorizations = {
   deny?: string[];
 };
 
-export type PolicyAuthorizableMap = Record<string, string[]>;
+export type PolicyCanAuthorizeMap = Record<string, string[]>;
+export type PolicyAuthorizableMap = PolicyCanAuthorizeMap;
 
 export interface AuthorizationToolContext {
   name: string;
@@ -75,6 +78,9 @@ export type PolicyAuthorizationDecision =
   | {
       decision: 'deny';
       matched: true;
+      // `args_mismatch` is the generic compiled-policy mismatch code.
+      // Input-record section failures such as allowlist/blocklist keep their
+      // own section-scoped reasons in the interpreter layer.
       code: 'unlisted' | 'args_mismatch';
       reason: string;
     };
@@ -960,13 +966,19 @@ function clauseMatches(
 } {
   if ('eq' in clause) {
     return {
-      matched: isTolerantMatch(actual, clause.eq),
+      matched: isTolerantMatch(
+        unwrapAuthorizationComparableValue(actual),
+        unwrapAuthorizationComparableValue(clause.eq)
+      ),
       attestations: clause.attestations,
       factsources: authorizationConstraintEqFactsources.get(clause)
     };
   }
   for (let index = 0; index < clause.oneOf.length; index += 1) {
-    if (!isTolerantMatch(actual, clause.oneOf[index])) {
+    if (!isTolerantMatch(
+      unwrapAuthorizationComparableValue(actual),
+      unwrapAuthorizationComparableValue(clause.oneOf[index])
+    )) {
       continue;
     }
     return {
@@ -976,6 +988,34 @@ function clauseMatches(
     };
   }
   return { matched: false };
+}
+
+function unwrapAuthorizationComparableValue(value: unknown): unknown {
+  let resolved = value;
+
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)) {
+    return resolved;
+  }
+
+  const record = resolved as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, 'value')) {
+    return unwrapAuthorizationComparableValue(record.value);
+  }
+  if (Object.prototype.hasOwnProperty.call(record, 'eq')) {
+    return unwrapAuthorizationComparableValue(record.eq);
+  }
+  if (Array.isArray(record.oneOf)) {
+    return record.oneOf.map(entry => unwrapAuthorizationComparableValue(entry));
+  }
+
+  return resolved;
 }
 
 export function evaluatePolicyAuthorizationDecision(params: {

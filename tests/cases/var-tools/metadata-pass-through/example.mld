@@ -1,0 +1,50 @@
+/var known @recipient = "ada@example.com"
+
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe @send_email(recipient, subject, retries, settings) = js {
+  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;
+}
+
+/exe @catalogSummary(keyed, entries) = js {
+  const entry = entries[0][1];
+  return JSON.stringify({
+    keyed: {
+      mlld: keyed.mlld.name,
+      inputs: keyed.inputs.name,
+      labels: keyed.labels,
+      description: keyed.description,
+      instructions: keyed.instructions,
+      can_authorize: keyed.can_authorize,
+      bind: keyed.bind
+    },
+    entries: {
+      mlld: entry.mlld.name,
+      inputs: entry.inputs.name,
+      labels: entry.labels,
+      description: entry.description,
+      instructions: entry.instructions,
+      can_authorize: entry.can_authorize,
+      bind: entry.bind
+    }
+  }, null, 2);
+}
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w", "comm:w"],
+    description: "Send mail",
+    instructions: "Prefer drafts first.",
+    can_authorize: "role:planner",
+    bind: { retries: 3, settings: { mode: "safe" } }
+  }
+}
+
+/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries)
+/show @agentTools.send_email(@recipient, "hello")

@@ -1,11 +1,11 @@
 import { normalizeCommandPatternEntry, parseFsPatternEntry } from './capability-patterns';
 import {
+  type PolicyCanAuthorizeMap,
   mergePolicyAuthorizableMaps,
   mergePolicyAuthorizations,
   normalizePolicyAuthorizableMap,
   normalizePolicyAuthorizations,
   stripPolicyAuthorizableField,
-  type PolicyAuthorizableMap,
   type PolicyAuthorizations
 } from './authorizations';
 import { normalizeNamedOperationRef } from './operation-labels';
@@ -132,7 +132,7 @@ export type PolicyConfig = {
   locked?: boolean;
   defaults?: PolicyDefaults;
   default?: 'deny' | 'allow';
-  can_authorize?: PolicyAuthorizableMap;
+  can_authorize?: PolicyCanAuthorizeMap;
   authorizations?: PolicyAuthorizations;
   auth?: Record<string, AuthConfig>;
   keychain?: PolicyKeychainConfig;
@@ -286,7 +286,7 @@ export function normalizePolicyConfig(config?: PolicyConfig): PolicyConfig {
   const filesystemIntegrity = normalizePolicyFilesystemIntegrity(config.filesystem_integrity);
   const canAuthorize = normalizePolicyAuthorizableMap(
     config.can_authorize
-    ?? (config as { authorizable?: PolicyAuthorizableMap }).authorizable
+    ?? (config as { authorizable?: PolicyCanAuthorizeMap }).authorizable
     ?? (
       isPlainObject(config.authorizations)
         ? (

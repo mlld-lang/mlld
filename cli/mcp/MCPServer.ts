@@ -3,7 +3,10 @@ import { version } from '@core/version';
 import type { Environment } from '@interpreter/env/Environment';
 import type { ExecutableVariable } from '@core/types/variable';
 import type { ToolCollection } from '@core/types/tools';
-import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
+import {
+  normalizeToolExecutableReferenceName,
+  resolveToolCollectionEntryMetadata
+} from '@interpreter/eval/exec/tool-metadata';
 import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 import { FunctionRouter } from './FunctionRouter';
 import { generateToolSchema, mlldNameToMCPName } from './SchemaGenerator';
@@ -182,7 +185,7 @@ export class MCPServer {
     const map = new Map<string, ExecutableVariable>();
 
     for (const [toolName, toolDef] of Object.entries(toolCollection)) {
-      const execName = toolDef?.mlld;
+      const execName = normalizeToolExecutableReferenceName(toolDef?.mlld);
       if (!execName) {
         throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
       }

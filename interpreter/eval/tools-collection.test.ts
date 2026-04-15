@@ -8,6 +8,7 @@ import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { fileURLToPath } from 'url';
 import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
+import { isExecutableVariable, isRecordVariable } from '@core/types/variable';
 
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
@@ -75,6 +76,36 @@ async function interpretWithEnvAndFiles(
   return environment;
 }
 
+function getVisibleToolExecutableName(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
+    return (value as { name?: string }).name;
+  }
+  return undefined;
+}
+
+function getVisibleToolInputName(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value && typeof value === 'object' && isRecordVariable(value as any)) {
+    return (value as { name?: string }).name;
+  }
+  return isPlainRecordDefinition(value) ? value.name : undefined;
+}
+
+function isPlainRecordDefinition(value: unknown): value is { name: string; fields: unknown[] } {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && typeof (value as { name?: unknown }).name === 'string'
+    && Array.isArray((value as { fields?: unknown }).fields)
+  );
+}
+
 describe('tool collections', () => {
   it('creates tool collection entries from input records', async () => {
     const env = await interpretWithEnv(`
@@ -103,9 +134,10 @@ describe('tool collections', () => {
 
     const toolsVar = env.getVariable('agentTools');
     const collection = toolsVar?.internal?.toolCollection as ToolCollection;
+    expect(isExecutableVariable(collection.send_email.mlld as any)).toBe(true);
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('send_email');
+    expect(getVisibleToolInputName(collection.send_email.inputs)).toBe('send_email_inputs');
     expect(collection.send_email).toMatchObject({
-      mlld: 'send_email',
-      inputs: 'send_email_inputs',
       labels: ['tool:w', 'comm:w'],
       description: 'Send mail',
       instructions: 'Prefer drafts first.',
@@ -168,11 +200,9 @@ describe('tool collections', () => {
     `);
 
     const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
-    expect(collection.send_email).toMatchObject({
-      mlld: 'runtime_send_email',
-      expose: ['recipients', 'cc', 'bcc', 'subject'],
-      controlArgs: ['recipients', 'cc', 'bcc']
-    });
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('runtime_send_email');
+    expect(collection.send_email.expose).toEqual(['recipients', 'cc', 'bcc', 'subject']);
+    expect(collection.send_email.controlArgs).toEqual(['recipients', 'cc', 'bcc']);
   });
 
   it('resolves imported record refs when a local tool collection uses inputs', async () => {
@@ -205,10 +235,8 @@ describe('tool collections', () => {
     );
 
     const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
-    expect(collection.send_email).toMatchObject({
-      mlld: 'send_email',
-      inputs: 'send_email_inputs'
-    });
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('send_email');
+    expect(getVisibleToolInputName(collection.send_email.inputs)).toBe('send_email_inputs');
   });
 
   it('resolves namespace field refs in mlld tool entries to the executable they point at', async () => {
@@ -270,10 +298,8 @@ describe('tool collections', () => {
     );
 
     const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
-    expect(collection.send_email).toMatchObject({
-      mlld: 'sendEmail',
-      expose: ['recipient']
-    });
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('sendEmail');
+    expect(collection.send_email.expose).toEqual(['recipient']);
 
     const resolved = await extractVariableValue(env.getVariable('result') as any, env);
     expect((resolved as any)?.text ?? resolved).toBe('sent:ada@example.com');
@@ -294,7 +320,7 @@ describe('tool collections', () => {
     expect(toolsVar?.internal?.isToolsCollection).toBe(true);
 
     const collection = toolsVar?.internal?.toolCollection as ToolCollection;
-    expect(collection.read.mlld).toBe('readData');
+    expect(getVisibleToolExecutableName(collection.read.mlld)).toBe('readData');
     expect(collection.delete.labels).toEqual(['destructive']);
     expect(collection.delete.expose).toEqual(['id']);
   });
@@ -384,7 +410,7 @@ describe('tool collections', () => {
     const toolsVar = env.getVariable('tools');
     expect(toolsVar?.internal?.isToolsCollection).toBe(true);
     const collection = toolsVar?.internal?.toolCollection as ToolCollection;
-    expect(collection.guardedFetch.mlld).toBe('guardedFetch');
+    expect(getVisibleToolExecutableName(collection.guardedFetch.mlld)).toBe('guardedFetch');
   });
 
   it('does not inherit tool labels into collection taint when passed as params', async () => {
@@ -1347,7 +1373,7 @@ describe('tool collections', () => {
 
     const collection = toolsVar?.internal?.toolCollection as ToolCollection;
     expect(Object.keys(collection)).toEqual(expect.arrayContaining(['echo', 'ping']));
-    expect(collection.echo.mlld).toMatch(/^__mcp_dynamicTools_echo/);
+    expect(getVisibleToolExecutableName(collection.echo.mlld)).toMatch(/^__mcp_dynamicTools_echo/);
 
     const router = new FunctionRouter({ environment: env, toolCollection: collection });
     await expect(router.executeFunction('ping', {})).resolves.toBe('pong');
@@ -1375,8 +1401,9 @@ describe('tool collections', () => {
     const collectionB = dynamicToolsB?.internal?.toolCollection as ToolCollection;
 
     expect(dynamicToolsA?.mx.labels).toContain('trusted');
-    expect(collectionA.echo.mlld).not.toBe(collectionB.echo.mlld);
-    expect(collectionA.echo.mlld).toMatch(/^__mcp_dynamicToolsA_echo/);
-    expect(collectionB.echo.mlld).toMatch(/^__mcp_dynamicToolsB_echo/);
+    expect(getVisibleToolExecutableName(collectionA.echo.mlld))
+      .not.toBe(getVisibleToolExecutableName(collectionB.echo.mlld));
+    expect(getVisibleToolExecutableName(collectionA.echo.mlld)).toMatch(/^__mcp_dynamicToolsA_echo/);
+    expect(getVisibleToolExecutableName(collectionB.echo.mlld)).toMatch(/^__mcp_dynamicToolsB_echo/);
   });
 });

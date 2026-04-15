@@ -53,11 +53,11 @@ async function extractShowInputs(
   const inlineInvocations: ExecInvocation[] = [];
   const invocation = directive.values?.invocation as ExecInvocation | undefined;
   if (invocation?.type === 'ExecInvocation') {
-    inlineInvocations.push(invocation);
+    inlineInvocations.push(withDirectiveInvocationContext(directive, invocation));
   }
   const execInvocation = directive.values?.execInvocation as ExecInvocation | undefined;
   if (execInvocation?.type === 'ExecInvocation') {
-    inlineInvocations.push(execInvocation);
+    inlineInvocations.push(withDirectiveInvocationContext(directive, execInvocation));
   }
 
   if (inlineInvocations.length > 0) {
@@ -172,7 +172,11 @@ async function extractOutputInputs(
   const execInvocation = findExecInvocation(sourceNode);
   if (execInvocation) {
     const guardValues = [
-      ...(await replayInlineExecInvocations(directive, env, [execInvocation])),
+      ...(await replayInlineExecInvocations(
+        directive,
+        env,
+        [withDirectiveInvocationContext(directive, execInvocation)]
+      )),
       ...extractExecInvocationArgs(execInvocation, env)
     ];
     if (guardValues.length > 0) {
@@ -327,6 +331,28 @@ async function extractRunInputs(
   }
 
   return [];
+}
+
+function withDirectiveInvocationContext(
+  directive: DirectiveNode,
+  invocation: ExecInvocation
+): ExecInvocation {
+  const withClause = (directive.meta?.withClause || directive.values?.withClause) as
+    | Record<string, unknown>
+    | undefined;
+
+  if (!withClause || (invocation as { withClause?: unknown }).withClause) {
+    return invocation;
+  }
+
+  return {
+    ...invocation,
+    withClause,
+    meta: {
+      ...((invocation as { meta?: Record<string, unknown> }).meta ?? {}),
+      withClause
+    }
+  } as ExecInvocation;
 }
 
 function resolveRunExecName(directive: DirectiveNode): string | undefined {

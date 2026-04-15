@@ -30,7 +30,11 @@ import {
   getCapturedModuleEnv,
   sealCapturedModuleEnv
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
-import { resolveToolCollectionEntryMetadata } from '@interpreter/eval/exec/tool-metadata';
+import {
+  normalizeToolExecutableReferenceName,
+  resolveToolCollectionExecutable,
+  resolveToolCollectionEntryMetadata
+} from '@interpreter/eval/exec/tool-metadata';
 
 export interface FunctionRouterOptions {
   environment: Environment;
@@ -99,33 +103,35 @@ export class FunctionRouter {
     try {
       if (this.toolCollection) {
         const definition = this.toolCollection[toolKey];
-        if (!definition?.mlld) {
+        const execName = normalizeToolExecutableReferenceName(definition?.mlld);
+        if (!execName) {
           throw this.createToolNotFoundError(toolName);
         }
-        const execName = definition.mlld;
-        const variable = this.environment.getVariable(execName) as Variable | undefined;
+        const variable =
+          resolveToolCollectionExecutable(this.environment, this.toolCollection, definition, definition?.mlld)
+          ?? this.environment.getVariable(execName) as Variable | undefined;
 
         if (!variable || variable.type !== 'executable') {
           throw this.createToolNotFoundError(toolName);
-      }
+        }
 
-      const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
-      const operationName = this.resolveOperationName(execVar, toolKey);
-      const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
-      const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
-      const invocation = this.buildInvocation(
-        execName,
-        execVar,
-        resolvedArgs,
-        operationName,
-        definition.labels,
-        this.shouldUseObjectArgs(execVar),
-        invocationSecurity.inputSecurityDescriptor,
-        invocationSecurity.argSecurityDescriptors,
-        invocationSecurity.argFactSourceDescriptors
-      );
-      const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
-      this.recordToolResultSecurity(result.value);
+        const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+        const operationName = this.resolveOperationName(execVar, toolKey);
+        const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
+        const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
+        const invocation = this.buildInvocation(
+          execName,
+          execVar,
+          resolvedArgs,
+          operationName,
+          definition.labels,
+          this.shouldUseObjectArgs(execVar),
+          invocationSecurity.inputSecurityDescriptor,
+          invocationSecurity.argSecurityDescriptors,
+          invocationSecurity.argFactSourceDescriptors
+        );
+        const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
+        this.recordToolResultSecurity(result.value);
 
         this.environment.recordToolCall({
           ...callRecord,

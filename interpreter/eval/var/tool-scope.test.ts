@@ -171,7 +171,7 @@ describe('tool scope helpers', () => {
     );
 
     expect(collection.issue).toEqual({
-      mlld: 'createIssue',
+      mlld: '@createIssue',
       description: 'Create an issue',
       labels: ['internal'],
       bind: {
@@ -214,13 +214,13 @@ describe('tool scope helpers', () => {
     );
 
     expect(collection.issue).toEqual({
-      mlld: 'createIssue',
+      mlld: '@createIssue',
       labels: ['execute:w'],
       bind: {
         owner: 'mlld',
         repo: 'mlld'
       },
-      inputs: 'create_issue_inputs'
+      inputs: '@create_issue_inputs'
     });
   });
 
@@ -254,7 +254,7 @@ describe('tool scope helpers', () => {
     );
 
     expect(collection.issue).toEqual({
-      mlld: 'updateIssue',
+      mlld: '@updateIssue',
       bind: {
         owner: 'mlld',
         repo: 'mlld'
@@ -401,8 +401,8 @@ describe('tool scope helpers', () => {
       )
     ).toEqual({
       issue: {
-        mlld: 'updateIssue',
-        inputs: 'update_issue_inputs',
+        mlld: '@updateIssue',
+        inputs: '@update_issue_inputs',
         labels: ['execute:w', 'update:w']
       }
     });

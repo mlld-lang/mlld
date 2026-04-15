@@ -626,19 +626,60 @@ async function ensureCapturedModuleEnvMap(
 async function resolveCollectionExecutableForDispatch(options: {
   env: Environment;
   execName: string;
+  executableRef?: unknown;
   collection?: ToolCollection;
   definition?: ToolDefinition;
   sourceVariable?:
     | ({ internal?: Record<string, unknown> } & Record<string, unknown>)
     | undefined;
 }): Promise<unknown> {
-  const { env, execName, collection, definition, sourceVariable } = options;
+  const { env, execName, executableRef, collection, definition, sourceVariable } = options;
+  if (executableRef && typeof executableRef === 'object') {
+    if (isExecutableVariable(executableRef as any)) {
+      return executableRef;
+    }
+    if (
+      '__executable' in (executableRef as Record<string, unknown>)
+      && Boolean((executableRef as { __executable?: unknown }).__executable)
+    ) {
+      return executableRef;
+    }
+  }
+
   return (
     env.getVariable(execName)
     ?? (await ensureCapturedModuleEnvMap(sourceVariable))?.get(execName)
     ?? (await ensureCapturedModuleEnvMap(collection as Record<string, unknown> | undefined))?.get(execName)
     ?? (await ensureCapturedModuleEnvMap(definition as Record<string, unknown> | undefined))?.get(execName)
   );
+}
+
+function normalizeCollectionExecutableReferenceName(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
+    const name = typeof (value as { name?: unknown }).name === 'string'
+      ? (value as { name: string }).name.trim()
+      : '';
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  if (
+    value
+    && typeof value === 'object'
+    && '__executable' in (value as Record<string, unknown>)
+    && Boolean((value as { __executable?: unknown }).__executable)
+  ) {
+    const name = typeof (value as { name?: unknown }).name === 'string'
+      ? (value as { name: string }).name.trim()
+      : '';
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  return '';
 }
 
 function isPassthroughVariableReferenceArg(
@@ -1216,6 +1257,32 @@ function matchesInputType(value: unknown, expected: string | undefined): boolean
   }
 }
 
+function unwrapPolicySetComparableValue(value: unknown): unknown {
+  let resolved = value;
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (isPlainObject(resolved) && Object.prototype.hasOwnProperty.call(resolved, 'value')) {
+    return unwrapPolicySetComparableValue((resolved as Record<string, unknown>).value);
+  }
+
+  if (isPlainObject(resolved) && Object.prototype.hasOwnProperty.call(resolved, 'eq')) {
+    return unwrapPolicySetComparableValue((resolved as Record<string, unknown>).eq);
+  }
+
+  if (isPlainObject(resolved) && Array.isArray((resolved as Record<string, unknown>).oneOf)) {
+    return ((resolved as Record<string, unknown>).oneOf as unknown[]).map(entry =>
+      unwrapPolicySetComparableValue(entry)
+    );
+  }
+
+  return resolved;
+}
+
 function validateToolInputSchema(options: {
   env: Environment;
   metadata: EffectiveToolMetadata;
@@ -1295,11 +1362,19 @@ function validateToolInputSchema(options: {
       return false;
     }
 
+    const matchesCandidate = (candidate: unknown): boolean => {
+      const comparable = unwrapPolicySetComparableValue(candidate);
+      if (Array.isArray(comparable)) {
+        return comparable.every(entry => matchesCandidate(entry));
+      }
+      return members.some(member => isTolerantMatch(comparable, member));
+    };
+
     if (Array.isArray(value)) {
-      return value.every(entry => members.some(member => isTolerantMatch(entry, member)));
+      return value.every(entry => matchesCandidate(entry));
     }
 
-    return members.some(member => isTolerantMatch(value, member));
+    return matchesCandidate(value);
   };
 
   for (const [fieldName, target] of Object.entries(inputSchema.allowlist ?? {})) {
@@ -2447,7 +2522,7 @@ async function evaluateExecInvocationInternal(
                 throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
               }
 
-              const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+              const execName = normalizeCollectionExecutableReferenceName(definition.mlld);
               if (!execName) {
                 throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
               }
@@ -2455,6 +2530,7 @@ async function evaluateExecInvocationInternal(
               const resolvedExecutable = await resolveCollectionExecutableForDispatch({
                 env,
                 execName,
+                executableRef: definition.mlld,
                 collection: toolCollection,
                 definition,
                 sourceVariable: fieldVariable as { internal?: Record<string, unknown> } | undefined
@@ -2493,7 +2569,7 @@ async function evaluateExecInvocationInternal(
               throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
             }
 
-            const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+            const execName = normalizeCollectionExecutableReferenceName(definition.mlld);
             if (!execName) {
               throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
             }
@@ -2501,6 +2577,7 @@ async function evaluateExecInvocationInternal(
             const resolvedExecutable = await resolveCollectionExecutableForDispatch({
               env,
               execName,
+              executableRef: definition.mlld,
               collection: toolCollection,
               definition,
               sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined
@@ -2542,7 +2619,7 @@ async function evaluateExecInvocationInternal(
               throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
             }
 
-            const execName = typeof definition.mlld === 'string' ? definition.mlld.trim() : '';
+            const execName = normalizeCollectionExecutableReferenceName(definition.mlld);
             if (!execName) {
               throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
             }
@@ -2550,6 +2627,7 @@ async function evaluateExecInvocationInternal(
             const resolvedExecutable = await resolveCollectionExecutableForDispatch({
               env,
               execName,
+              executableRef: definition.mlld,
               collection: toolCollection,
               definition,
               sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined

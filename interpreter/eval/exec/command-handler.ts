@@ -47,6 +47,7 @@ import {
   getSignatureContent
 } from '@interpreter/eval/sign-verify';
 import { cloneExecVariableWithNewValue } from '@interpreter/eval/exec/guard-policy';
+import { normalizeToolExecutableReferenceName } from '@interpreter/eval/exec/tool-metadata';
 import { isInstructionVariable } from '@interpreter/eval/auto-sign';
 
 const DEFAULT_VERIFY_INSTRUCTIONS =
@@ -525,7 +526,7 @@ function isPlainToolCollection(value: unknown): value is ToolCollection {
 }
 
 function isAutoverifyVerifyEntry(definition: ToolDefinition | undefined): boolean {
-  const mlld = definition?.mlld;
+  const mlld = normalizeToolExecutableReferenceName(definition?.mlld);
   return typeof mlld === 'string' && mlld.startsWith(AUTOVERIFY_VERIFY_EXEC_PREFIX);
 }
 
@@ -775,7 +776,10 @@ function injectAutoverifyVerifyTool(execEnv: Environment, vars: readonly string[
     return;
   }
 
-  const execName = resolveAutoverifyVerifyExecutableName(ownerEnv, existingVerify?.mlld);
+  const execName = resolveAutoverifyVerifyExecutableName(
+    ownerEnv,
+    normalizeToolExecutableReferenceName(existingVerify?.mlld)
+  );
   ownerEnv.setVariable(
     execName,
     buildAutoverifyVerifyExecutable({

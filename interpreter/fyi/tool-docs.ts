@@ -14,7 +14,11 @@ import {
 import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { isStructuredValue, wrapStructured, type StructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
-import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
+import {
+  isExecutableVariable,
+  isRecordVariable,
+  type ExecutableVariable
+} from '@core/types/variable';
 
 type FyiToolsFormat = 'text' | 'json';
 type FyiToolsIncludeHelpers = 'auto' | 'none' | 'all';
@@ -103,6 +107,66 @@ function normalizeToolCollectionAuthorizable(
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeToolCollectionExecutableRef(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
+    const name = value.name?.trim();
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  if (isPlainObject(value) && (value as { __executable?: unknown }).__executable === true) {
+    const name = typeof (value as { name?: unknown }).name === 'string'
+      ? (value as { name: string }).name.trim()
+      : '';
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  return undefined;
+}
+
+function normalizeToolCollectionInputRef(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (value && typeof value === 'object' && isRecordVariable(value as any)) {
+    const name = typeof (value as { name?: unknown }).name === 'string'
+      ? (value as { name: string }).name.trim()
+      : '';
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  if (isPlainObject(value) && typeof (value as { name?: unknown }).name === 'string') {
+    const name = (value as { name: string }).name.trim();
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  return undefined;
+}
+
 function buildToolCollectionMatchSignature(value: unknown): string | undefined {
   if (!isPlainObject(value)) {
     return undefined;
@@ -125,8 +189,12 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
       return [
         toolName,
         {
-          ...(typeof entry.mlld === 'string' ? { mlld: entry.mlld.trim() } : {}),
-          ...(typeof entry.inputs === 'string' ? { inputs: entry.inputs.trim() } : {}),
+          ...(normalizeToolCollectionExecutableRef(entry.mlld)
+            ? { mlld: normalizeToolCollectionExecutableRef(entry.mlld) }
+            : {}),
+          ...(normalizeToolCollectionInputRef(entry.inputs)
+            ? { inputs: normalizeToolCollectionInputRef(entry.inputs) }
+            : {}),
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
           controlArgs: normalizeToolCollectionStringList(entry.controlArgs),

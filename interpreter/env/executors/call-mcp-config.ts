@@ -21,8 +21,10 @@ import {
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import {
   buildCatalogPolicyDefaultsFromMetadata,
+  normalizeToolExecutableReferenceName,
   resolveEffectiveToolMetadata,
   resolveNamedOperationMetadata,
+  resolveToolCollectionExecutable,
   resolveToolCollectionEntryMetadata,
   shouldAutoExposeFyiKnown,
   type EffectiveToolMetadata
@@ -638,19 +640,14 @@ function buildCollectionFunctionToolSpec(
     throw new Error(`Tool '${toolName}' is missing its definition`);
   }
 
-  const execName = typeof definition.mlld === 'string' ? definition.mlld : '';
+  const execName = normalizeToolExecutableReferenceName(definition.mlld);
   if (!execName) {
     throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
   }
 
-  const executable =
-    env.getVariable(execName)
-    ?? resolveCapturedCollectionExecutable(collection, execName)
-    ?? resolveCapturedCollectionExecutable(definition, execName);
   const matchedExecutable =
-    executable && isExecutableVariable(executable)
-      ? executable
-      : resolveMatchingToolCollectionExecutable(env, collection, execName);
+    resolveToolCollectionExecutable(env, collection, definition, definition.mlld)
+    ?? resolveMatchingToolCollectionExecutable(env, collection, execName);
   if (!matchedExecutable) {
     throw new Error(`Tool '${toolName}' references non-executable '@${execName}'`);
   }

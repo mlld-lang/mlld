@@ -17,7 +17,11 @@ import {
   type ToolDefinition
 } from '@core/types/tools';
 import type { ExecutableOutputRecord } from '@core/types/executable';
-import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
+import {
+  isExecutableVariable,
+  isRecordVariable,
+  type ExecutableVariable
+} from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
@@ -95,6 +99,34 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+export function normalizeToolExecutableReferenceName(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
+    const name = value.name?.trim();
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  if (isPlainObject(value) && (value as { __executable?: unknown }).__executable === true) {
+    const name = normalizeTrimmedString((value as { name?: unknown }).name);
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  return undefined;
+}
+
 function resolveExecutableVariable(
   env: Environment,
   name: string
@@ -148,14 +180,24 @@ function resolveCapturedCollectionExecutable(
     : undefined;
 }
 
-function resolveCollectionExecutable(
+export function resolveToolCollectionExecutable(
   env: Environment,
   collection: ToolCollection,
   definition: ToolDefinition,
-  execName: string
+  executableRef: unknown
 ): ExecutableVariable | undefined {
+  if (isExecutableVariable(executableRef)) {
+    return executableRef as ExecutableVariable;
+  }
+
+  const execName = normalizeToolExecutableReferenceName(executableRef);
+  if (!execName) {
+    return undefined;
+  }
+
   return (
     resolveExecutableVariableCaseInsensitive(env, execName)
+    ?? resolveCapturedCollectionExecutable(executableRef, execName)
     ?? resolveCapturedCollectionExecutable(definition, execName)
     ?? resolveCapturedCollectionExecutable(collection, execName)
   );
@@ -390,12 +432,31 @@ function getRecordDefinitionForToolInput(options: {
   definition?: ToolDefinition;
   embeddedRecordDefinitions?: Record<string, RecordDefinition>;
 }): RecordDefinition | undefined {
-  const inputName = normalizeTrimmedString(options.definition?.inputs);
-  if (!inputName) {
+  const inputRef = options.definition?.inputs;
+  if (inputRef === undefined) {
     return undefined;
   }
-  return options.env.getRecordDefinition(inputName)
-    ?? options.embeddedRecordDefinitions?.[inputName];
+
+  if (typeof inputRef === 'string') {
+    const inputName = normalizeTrimmedString(inputRef);
+    if (!inputName) {
+      return undefined;
+    }
+    const normalizedName = inputName.startsWith('@') ? inputName.slice(1) : inputName;
+    return options.env.getRecordDefinition(normalizedName)
+      ?? options.embeddedRecordDefinitions?.[normalizedName];
+  }
+
+  if (isRecordVariable(inputRef as any)) {
+    return (inputRef as { value: RecordDefinition }).value;
+  }
+
+  if (isPlainObject(inputRef) && typeof (inputRef as { name?: unknown }).name === 'string') {
+    const recordDefinition = inputRef as RecordDefinition;
+    return Array.isArray(recordDefinition.fields) ? recordDefinition : undefined;
+  }
+
+  return undefined;
 }
 
 function resolveToolInputSchema(options: {
@@ -1103,12 +1164,7 @@ export function buildCanonicalAuthorizationToolContextForCollection(
   const contexts: ToolCollectionAuthorizationContext = {};
 
   for (const [toolName, definition] of Object.entries(collection)) {
-    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
-    if (!execName) {
-      continue;
-    }
-
-    const executable = resolveCollectionExecutable(env, collection, definition, execName);
+    const executable = resolveToolCollectionExecutable(env, collection, definition, definition?.mlld);
     if (!executable) {
       continue;
     }
@@ -1138,12 +1194,7 @@ function buildAuthorizationToolContextFromCollection(
       continue;
     }
 
-    const execName = typeof definition?.mlld === 'string' ? definition.mlld : '';
-    if (!execName) {
-      continue;
-    }
-
-    const executable = resolveCollectionExecutable(env, collection, definition, execName);
+    const executable = resolveToolCollectionExecutable(env, collection, definition, definition?.mlld);
     if (!executable) {
       continue;
     }
@@ -1264,16 +1315,13 @@ export function resolveToolCollectionEntryMetadata(
     return undefined;
   }
 
-  const execName = typeof definition.mlld === 'string' ? definition.mlld : '';
-  if (execName) {
-    const executable = resolveCollectionExecutable(env, collection, definition, execName);
-    if (executable) {
-      return applyToolDefinitionAuthMetadata(
-        buildToolContextFromExecutable(toolName, executable),
-        definition,
-        env
-      );
-    }
+  const executable = resolveToolCollectionExecutable(env, collection, definition, definition.mlld);
+  if (executable) {
+    return applyToolDefinitionAuthMetadata(
+      buildToolContextFromExecutable(toolName, executable),
+      definition,
+      env
+    );
   }
 
   const storedEntry = getToolCollectionAuthorizationContext(collection)?.[toolName];
@@ -1374,7 +1422,8 @@ export function resolveEffectiveToolMetadata(options: {
   }
 
   const directDefinition =
-    operationName && scopedTools[operationName]?.mlld === executableName
+    operationName
+      && normalizeToolExecutableReferenceName(scopedTools[operationName]?.mlld) === executableName
       ? scopedTools[operationName]
       : undefined;
 
@@ -1387,7 +1436,7 @@ export function resolveEffectiveToolMetadata(options: {
   }
 
   const matchingDefinitions = Object.values(scopedTools).filter(
-    definition => definition?.mlld === executableName
+    definition => normalizeToolExecutableReferenceName(definition?.mlld) === executableName
   );
   if (matchingDefinitions.length === 0) {
     return {

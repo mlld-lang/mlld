@@ -1,0 +1,32 @@
+/var @approvedRecipients = ["ada@example.com"]
+
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approvedRecipients },
+  validate: "strict"
+}
+
+/exe tool:w @sendEmail(recipient, subject) = `sent:@recipient:@subject`
+
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var @intent = {
+  known: {
+    sendEmail: {
+      recipient: {
+        value: "ada@example.com",
+        source: "user"
+      }
+    }
+  }
+}
+
+/var @built = @policy.build(@intent, @writeTools)
+/show @writeTools.sendEmail("mallory@example.com", "hello") with { policy: @built.policy }

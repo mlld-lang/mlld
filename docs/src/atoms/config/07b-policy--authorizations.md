@@ -389,7 +389,9 @@ Authorization denial reasons distinguish the cause:
 
 - `policy.authorizations.unlisted` — tool was never authorized
 - `policy.authorizations.compile_dropped` — tool was authorized but the entry was dropped during compilation (ambiguity, proof loss)
-- `policy.authorizations.args_mismatch` — tool was authorized but args don't match the constraint
+- `policy.authorizations.args_mismatch` — tool was authorized but the compiled authorization constraint did not match the dispatched control-arg values
+
+`args_mismatch` is the generic compiled-policy mismatch code. Input-record section checks such as `allowlist` and `blocklist` keep their section-specific reasons (`allowlist_mismatch`, `blocklist_match`) so runtime reports can tell "the policy constraint did not match" apart from "the dispatched value violated the input-record contract."
 
 When an array control arg has one ambiguous element, only that element is dropped — the rest of the array and the tool entry are preserved. Ambiguous matches that resolve to the same canonical value are treated as equivalent and kept.
 

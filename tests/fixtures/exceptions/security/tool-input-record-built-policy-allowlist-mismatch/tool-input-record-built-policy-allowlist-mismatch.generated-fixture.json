@@ -1,0 +1,1239 @@
+{
+  "name": "exceptions/security/tool-input-record-built-policy-allowlist-mismatch",
+  "description": "Test fixture for exceptions/security/tool-input-record-built-policy-allowlist-mismatch",
+  "category": "exceptions",
+  "subcategory": "tool-input-record-built-policy-allowlist-mismatch",
+  "input": "/var @approvedRecipients = [\"ada@example.com\"]\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  allowlist: { recipient: @approvedRecipients },\n  validate: \"strict\"\n}\n\n/exe tool:w @sendEmail(recipient, subject) = `sent:@recipient:@subject`\n\n/var tools @writeTools = {\n  sendEmail: {\n    mlld: @sendEmail,\n    inputs: @send_email_inputs,\n    labels: [\"tool:w\"]\n  }\n}\n\n/var @intent = {\n  known: {\n    sendEmail: {\n      recipient: {\n        value: \"ada@example.com\",\n        source: \"user\"\n      }\n    }\n  }\n}\n\n/var @built = @policy.build(@intent, @writeTools)\n/show @writeTools.sendEmail(\"mallory@example.com\", \"hello\") with { policy: @built.policy }\n",
+  "expected": null,
+  "expectedError": "must match its allowlist\n",
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 46,
+          "line": 1,
+          "column": 47
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 46,
+                "line": 1,
+                "column": 47
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "approvedRecipients"
+          }
+        ],
+        "value": [
+          {
+            "type": "array",
+            "items": [
+              {
+                "content": [
+                  {
+                    "type": "Text",
+                    "nodeId": "node-3",
+                    "location": {
+                      "start": {
+                        "offset": 29,
+                        "line": 1,
+                        "column": 30
+                      },
+                      "end": {
+                        "offset": 32,
+                        "line": 1,
+                        "column": 33
+                      }
+                    },
+                    "content": "ada"
+                  },
+                  {
+                    "type": "VariableReference",
+                    "nodeId": "node-4",
+                    "location": {
+                      "start": {
+                        "offset": 32,
+                        "line": 1,
+                        "column": 33
+                      },
+                      "end": {
+                        "offset": 44,
+                        "line": 1,
+                        "column": 45
+                      }
+                    },
+                    "valueType": "varIdentifier",
+                    "identifier": "example",
+                    "fields": [
+                      {
+                        "type": "field",
+                        "value": "com",
+                        "location": {
+                          "start": {
+                            "offset": 41,
+                            "line": 1,
+                            "column": 42
+                          },
+                          "end": {
+                            "offset": 44,
+                            "line": 1,
+                            "column": 45
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "wrapperType": "doubleQuote",
+                "hasInterpolation": true
+              }
+            ],
+            "location": {
+              "start": {
+                "offset": 27,
+                "line": 1,
+                "column": 28
+              },
+              "end": {
+                "offset": 46,
+                "line": 1,
+                "column": 47
+              }
+            }
+          }
+        ]
+      },
+      "raw": {},
+      "meta": {
+        "inferredType": "array",
+        "isEmptyArray": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 48,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 207,
+          "line": 8,
+          "column": 2
+        }
+      },
+      "kind": "record",
+      "subtype": "record",
+      "source": "record",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-6",
+            "location": {
+              "start": {
+                "offset": 48,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 207,
+                "line": 8,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "send_email_inputs"
+          }
+        ],
+        "facts": [
+          {
+            "kind": "input",
+            "name": "recipient",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-7",
+              "location": {
+                "start": {
+                  "offset": 89,
+                  "line": 4,
+                  "column": 11
+                },
+                "end": {
+                  "offset": 98,
+                  "line": 4,
+                  "column": 20
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "recipient"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "data": [
+          {
+            "kind": "input",
+            "name": "subject",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-8",
+              "location": {
+                "start": {
+                  "offset": 118,
+                  "line": 5,
+                  "column": 10
+                },
+                "end": {
+                  "offset": 125,
+                  "line": 5,
+                  "column": 17
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "subject"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "allowlist": {
+          "recipient": {
+            "type": "VariableReference",
+            "nodeId": "node-9",
+            "location": {
+              "start": {
+                "offset": 162,
+                "line": 6,
+                "column": 27
+              },
+              "end": {
+                "offset": 181,
+                "line": 6,
+                "column": 46
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "approvedRecipients"
+          }
+        },
+        "validate": "strict"
+      },
+      "raw": {
+        "identifier": "send_email_inputs"
+      },
+      "meta": {
+        "hasKey": false,
+        "fieldCount": 2,
+        "factCount": 1,
+        "dataCount": 1,
+        "hasCorrelate": false,
+        "hasWhen": false,
+        "validate": "strict"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-10",
+      "location": {
+        "start": {
+          "offset": 209,
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "offset": 280,
+          "line": 10,
+          "column": 72
+        }
+      },
+      "kind": "exe",
+      "subtype": "exeTemplate",
+      "source": "template",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-11",
+            "location": {
+              "start": {
+                "offset": 209,
+                "line": 10,
+                "column": 1
+              },
+              "end": {
+                "offset": 280,
+                "line": 10,
+                "column": 72
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "sendEmail"
+          }
+        ],
+        "params": [
+          {
+            "type": "Parameter",
+            "nodeId": "node-12",
+            "location": {
+              "start": {
+                "offset": 232,
+                "line": 10,
+                "column": 24
+              },
+              "end": {
+                "offset": 241,
+                "line": 10,
+                "column": 33
+              }
+            },
+            "name": "recipient"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-13",
+            "location": {
+              "start": {
+                "offset": 243,
+                "line": 10,
+                "column": 35
+              },
+              "end": {
+                "offset": 250,
+                "line": 10,
+                "column": 42
+              }
+            },
+            "name": "subject"
+          }
+        ],
+        "template": [
+          {
+            "type": "Text",
+            "nodeId": "node-14",
+            "location": {
+              "start": {
+                "offset": 255,
+                "line": 10,
+                "column": 47
+              },
+              "end": {
+                "offset": 260,
+                "line": 10,
+                "column": 52
+              }
+            },
+            "content": "sent:"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-15",
+            "location": {
+              "start": {
+                "offset": 260,
+                "line": 10,
+                "column": 52
+              },
+              "end": {
+                "offset": 270,
+                "line": 10,
+                "column": 62
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "recipient"
+          },
+          {
+            "type": "Text",
+            "nodeId": "node-16",
+            "location": {
+              "start": {
+                "offset": 270,
+                "line": 10,
+                "column": 62
+              },
+              "end": {
+                "offset": 271,
+                "line": 10,
+                "column": 63
+              }
+            },
+            "content": ":"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-17",
+            "location": {
+              "start": {
+                "offset": 271,
+                "line": 10,
+                "column": 63
+              },
+              "end": {
+                "offset": 279,
+                "line": 10,
+                "column": 71
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "subject"
+          }
+        ],
+        "securityLabels": [
+          "tool:w"
+        ]
+      },
+      "raw": {
+        "identifier": "sendEmail",
+        "params": [
+          "recipient",
+          "subject"
+        ],
+        "template": "sent:@recipient:@subject",
+        "securityLabels": "tool:w"
+      },
+      "meta": {
+        "parameterCount": 2,
+        "hasVariables": true,
+        "isTemplateContent": false,
+        "wrapperType": "backtick",
+        "securityLabels": [
+          "tool:w"
+        ]
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-18",
+      "location": {
+        "start": {
+          "offset": 282,
+          "line": 12,
+          "column": 1
+        },
+        "end": {
+          "offset": 406,
+          "line": 18,
+          "column": 2
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-19",
+            "location": {
+              "start": {
+                "offset": 282,
+                "line": 12,
+                "column": 1
+              },
+              "end": {
+                "offset": 406,
+                "line": 18,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "writeTools"
+          }
+        ],
+        "value": [
+          {
+            "type": "object",
+            "entries": [
+              {
+                "type": "pair",
+                "key": "sendEmail",
+                "value": {
+                  "type": "object",
+                  "entries": [
+                    {
+                      "type": "pair",
+                      "key": "mlld",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-20",
+                        "location": {
+                          "start": {
+                            "offset": 334,
+                            "line": 14,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 344,
+                            "line": 14,
+                            "column": 21
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "sendEmail"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "inputs",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-21",
+                        "location": {
+                          "start": {
+                            "offset": 358,
+                            "line": 15,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 376,
+                            "line": 15,
+                            "column": 31
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "send_email_inputs"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "labels",
+                      "value": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "content": [
+                              {
+                                "type": "Literal",
+                                "nodeId": "node-22",
+                                "location": {
+                                  "start": {
+                                    "offset": 391,
+                                    "line": 16,
+                                    "column": 14
+                                  },
+                                  "end": {
+                                    "offset": 399,
+                                    "line": 16,
+                                    "column": 22
+                                  }
+                                },
+                                "value": "tool:w",
+                                "valueType": "string"
+                              }
+                            ],
+                            "wrapperType": "doubleQuote",
+                            "hasInterpolation": false
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 390,
+                            "line": 16,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 400,
+                            "line": 16,
+                            "column": 23
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "location": {
+                    "start": {
+                      "offset": 322,
+                      "line": 13,
+                      "column": 14
+                    },
+                    "end": {
+                      "offset": 404,
+                      "line": 17,
+                      "column": 4
+                    }
+                  }
+                }
+              }
+            ],
+            "location": {
+              "start": {
+                "offset": 307,
+                "line": 12,
+                "column": 26
+              },
+              "end": {
+                "offset": 406,
+                "line": 18,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      "raw": {},
+      "meta": {
+        "inferredType": "object",
+        "isToolsCollection": true
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-23",
+      "location": {
+        "start": {
+          "offset": 408,
+          "line": 20,
+          "column": 1
+        },
+        "end": {
+          "offset": 548,
+          "line": 29,
+          "column": 2
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-24",
+            "location": {
+              "start": {
+                "offset": 408,
+                "line": 20,
+                "column": 1
+              },
+              "end": {
+                "offset": 548,
+                "line": 29,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "intent"
+          }
+        ],
+        "value": [
+          {
+            "type": "object",
+            "entries": [
+              {
+                "type": "pair",
+                "key": "known",
+                "value": {
+                  "type": "object",
+                  "entries": [
+                    {
+                      "type": "pair",
+                      "key": "sendEmail",
+                      "value": {
+                        "type": "object",
+                        "entries": [
+                          {
+                            "type": "pair",
+                            "key": "recipient",
+                            "value": {
+                              "type": "object",
+                              "entries": [
+                                {
+                                  "type": "pair",
+                                  "key": "value",
+                                  "value": {
+                                    "needsInterpolation": true,
+                                    "parts": [
+                                      {
+                                        "type": "Text",
+                                        "nodeId": "node-25",
+                                        "location": {
+                                          "start": {
+                                            "offset": 488,
+                                            "line": 24,
+                                            "column": 17
+                                          },
+                                          "end": {
+                                            "offset": 491,
+                                            "line": 24,
+                                            "column": 20
+                                          }
+                                        },
+                                        "content": "ada"
+                                      },
+                                      {
+                                        "type": "VariableReference",
+                                        "nodeId": "node-26",
+                                        "location": {
+                                          "start": {
+                                            "offset": 491,
+                                            "line": 24,
+                                            "column": 20
+                                          },
+                                          "end": {
+                                            "offset": 503,
+                                            "line": 24,
+                                            "column": 32
+                                          }
+                                        },
+                                        "valueType": "varIdentifier",
+                                        "identifier": "example",
+                                        "fields": [
+                                          {
+                                            "type": "field",
+                                            "value": "com",
+                                            "optional": false,
+                                            "location": {
+                                              "start": {
+                                                "offset": 500,
+                                                "line": 24,
+                                                "column": 29
+                                              },
+                                              "end": {
+                                                "offset": 503,
+                                                "line": 24,
+                                                "column": 32
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "type": "pair",
+                                  "key": "source",
+                                  "value": "user"
+                                }
+                              ],
+                              "location": {
+                                "start": {
+                                  "offset": 470,
+                                  "line": 23,
+                                  "column": 18
+                                },
+                                "end": {
+                                  "offset": 536,
+                                  "line": 26,
+                                  "column": 8
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 451,
+                            "line": 22,
+                            "column": 16
+                          },
+                          "end": {
+                            "offset": 542,
+                            "line": 27,
+                            "column": 6
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "location": {
+                    "start": {
+                      "offset": 434,
+                      "line": 21,
+                      "column": 10
+                    },
+                    "end": {
+                      "offset": 546,
+                      "line": 28,
+                      "column": 4
+                    }
+                  }
+                }
+              }
+            ],
+            "location": {
+              "start": {
+                "offset": 423,
+                "line": 20,
+                "column": 16
+              },
+              "end": {
+                "offset": 548,
+                "line": 29,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      "raw": {},
+      "meta": {
+        "inferredType": "object"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-27",
+      "location": {
+        "start": {
+          "offset": 550,
+          "line": 31,
+          "column": 1
+        },
+        "end": {
+          "offset": 599,
+          "line": 31,
+          "column": 50
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-28",
+            "location": {
+              "start": {
+                "offset": 550,
+                "line": 31,
+                "column": 1
+              },
+              "end": {
+                "offset": 599,
+                "line": 31,
+                "column": 50
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "built"
+          }
+        ],
+        "value": [
+          {
+            "type": "ExecInvocation",
+            "nodeId": "node-29",
+            "location": {
+              "start": {
+                "offset": 564,
+                "line": 31,
+                "column": 15
+              },
+              "end": {
+                "offset": 599,
+                "line": 31,
+                "column": 50
+              }
+            },
+            "commandRef": {
+              "name": "build",
+              "identifier": [
+                {
+                  "type": "VariableReference",
+                  "nodeId": "node-30",
+                  "location": {
+                    "start": {
+                      "offset": 564,
+                      "line": 31,
+                      "column": 15
+                    },
+                    "end": {
+                      "offset": 599,
+                      "line": 31,
+                      "column": 50
+                    }
+                  },
+                  "valueType": "varIdentifier",
+                  "identifier": "policy",
+                  "fields": [
+                    {
+                      "type": "field",
+                      "value": "build",
+                      "optional": false,
+                      "location": {
+                        "start": {
+                          "offset": 572,
+                          "line": 31,
+                          "column": 23
+                        },
+                        "end": {
+                          "offset": 577,
+                          "line": 31,
+                          "column": 28
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              "args": [
+                {
+                  "type": "VariableReference",
+                  "nodeId": "node-31",
+                  "location": {
+                    "start": {
+                      "offset": 578,
+                      "line": 31,
+                      "column": 29
+                    },
+                    "end": {
+                      "offset": 585,
+                      "line": 31,
+                      "column": 36
+                    }
+                  },
+                  "valueType": "varIdentifier",
+                  "identifier": "intent"
+                },
+                {
+                  "type": "VariableReference",
+                  "nodeId": "node-32",
+                  "location": {
+                    "start": {
+                      "offset": 587,
+                      "line": 31,
+                      "column": 38
+                    },
+                    "end": {
+                      "offset": 598,
+                      "line": 31,
+                      "column": 49
+                    }
+                  },
+                  "valueType": "varIdentifier",
+                  "identifier": "writeTools"
+                }
+              ],
+              "isCommandReference": true,
+              "objectReference": {
+                "type": "VariableReference",
+                "nodeId": "node-33",
+                "location": {
+                  "start": {
+                    "offset": 564,
+                    "line": 31,
+                    "column": 15
+                  },
+                  "end": {
+                    "offset": 599,
+                    "line": 31,
+                    "column": 50
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "policy"
+              }
+            },
+            "withClause": null
+          }
+        ]
+      },
+      "raw": {},
+      "meta": {
+        "inferredType": "unknown"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-34",
+      "location": {
+        "start": {
+          "offset": 600,
+          "line": 32,
+          "column": 1
+        },
+        "end": {
+          "offset": 691,
+          "line": 33,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showInvocation",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "ExecInvocation",
+          "nodeId": "node-35",
+          "location": {
+            "start": {
+              "offset": 606,
+              "line": 32,
+              "column": 7
+            },
+            "end": {
+              "offset": 690,
+              "line": 32,
+              "column": 91
+            }
+          },
+          "commandRef": {
+            "name": "sendEmail",
+            "identifier": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-36",
+                "location": {
+                  "start": {
+                    "offset": 606,
+                    "line": 32,
+                    "column": 7
+                  },
+                  "end": {
+                    "offset": 690,
+                    "line": 32,
+                    "column": 91
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "writeTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "sendEmail",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 618,
+                        "line": 32,
+                        "column": 19
+                      },
+                      "end": {
+                        "offset": 627,
+                        "line": 32,
+                        "column": 28
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "args": [
+              [
+                {
+                  "type": "Text",
+                  "nodeId": "node-37",
+                  "location": {
+                    "start": {
+                      "offset": 629,
+                      "line": 32,
+                      "column": 30
+                    },
+                    "end": {
+                      "offset": 636,
+                      "line": 32,
+                      "column": 37
+                    }
+                  },
+                  "content": "mallory"
+                },
+                {
+                  "type": "VariableReference",
+                  "nodeId": "node-38",
+                  "location": {
+                    "start": {
+                      "offset": 636,
+                      "line": 32,
+                      "column": 37
+                    },
+                    "end": {
+                      "offset": 648,
+                      "line": 32,
+                      "column": 49
+                    }
+                  },
+                  "valueType": "varIdentifier",
+                  "identifier": "example",
+                  "fields": [
+                    {
+                      "type": "field",
+                      "value": "com",
+                      "optional": false,
+                      "location": {
+                        "start": {
+                          "offset": 645,
+                          "line": 32,
+                          "column": 46
+                        },
+                        "end": {
+                          "offset": 648,
+                          "line": 32,
+                          "column": 49
+                        }
+                      }
+                    }
+                  ]
+                }
+              ],
+              {
+                "type": "Text",
+                "nodeId": "node-39",
+                "location": {
+                  "start": {
+                    "offset": 651,
+                    "line": 32,
+                    "column": 52
+                  },
+                  "end": {
+                    "offset": 658,
+                    "line": 32,
+                    "column": 59
+                  }
+                },
+                "content": "hello"
+              }
+            ],
+            "isCommandReference": true,
+            "objectReference": {
+              "type": "VariableReference",
+              "nodeId": "node-40",
+              "location": {
+                "start": {
+                  "offset": 606,
+                  "line": 32,
+                  "column": 7
+                },
+                "end": {
+                  "offset": 690,
+                  "line": 32,
+                  "column": 91
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "writeTools"
+            }
+          },
+          "withClause": [
+            {
+              "type": "inlineValue",
+              "value": {
+                "type": "object",
+                "entries": [
+                  {
+                    "type": "pair",
+                    "key": "policy",
+                    "value": {
+                      "type": "VariableReference",
+                      "nodeId": "node-41",
+                      "location": {
+                        "start": {
+                          "offset": 675,
+                          "line": 32,
+                          "column": 76
+                        },
+                        "end": {
+                          "offset": 688,
+                          "line": 32,
+                          "column": 89
+                        }
+                      },
+                      "valueType": "varIdentifier",
+                      "identifier": "built",
+                      "fields": [
+                        {
+                          "type": "field",
+                          "value": "policy",
+                          "optional": false,
+                          "location": {
+                            "start": {
+                              "offset": 682,
+                              "line": 32,
+                              "column": 83
+                            },
+                            "end": {
+                              "offset": 688,
+                              "line": 32,
+                              "column": 89
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "location": {
+                  "start": {
+                    "offset": 665,
+                    "line": 32,
+                    "column": 66
+                  },
+                  "end": {
+                    "offset": 690,
+                    "line": 32,
+                    "column": 91
+                  }
+                }
+              },
+              "rawIdentifier": "data-literal",
+              "location": {
+                "start": {
+                  "offset": 665,
+                  "line": 32,
+                  "column": 66
+                },
+                "end": {
+                  "offset": 690,
+                  "line": 32,
+                  "column": 91
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "invocation": "sendEmail",
+        "arguments": "[object Object],[object Object], hello"
+      },
+      "meta": {
+        "hasParentheses": true,
+        "argumentCount": 2
+      }
+    }
+  ],
+  "parseError": null,
+  "mlldMode": "strict"
+}

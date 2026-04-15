@@ -1338,7 +1338,42 @@ function resolvePolicySetTargetMembers(
 }
 
 function valueMatchesPolicySet(value: unknown, members: readonly unknown[]): boolean {
-  return members.some(member => isTolerantMatch(value, member));
+  const comparableValue = unwrapPolicySetComparableValue(value);
+  if (Array.isArray(comparableValue)) {
+    return comparableValue.every(entry => valueMatchesPolicySet(entry, members));
+  }
+
+  return members.some(member =>
+    isTolerantMatch(comparableValue, unwrapPolicySetComparableValue(member))
+  );
+}
+
+function unwrapPolicySetComparableValue(value: unknown): unknown {
+  let resolved = value;
+
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+  }
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (!resolved || typeof resolved !== 'object' || Array.isArray(resolved)) {
+    return resolved;
+  }
+
+  const record = resolved as Record<string, unknown>;
+  if (hasOwnProperty(record, 'eq')) {
+    return unwrapPolicySetComparableValue(record.eq);
+  }
+  if (Array.isArray(record.oneOf)) {
+    return record.oneOf.map(entry => unwrapPolicySetComparableValue(entry));
+  }
+  if (hasOwnProperty(record, 'value')) {
+    return unwrapPolicySetComparableValue(record.value);
+  }
+
+  return resolved;
 }
 
 function rewriteAuthorizationValueAgainstPolicySet(options: {

@@ -5,9 +5,11 @@
 import type {
   RecordDataTrustLevel,
   RecordFieldClassification,
+  RecordDefinition,
   RecordFieldValueType,
   RecordPolicySetTarget
 } from './record';
+import type { ExecutableVariable, RecordVariable } from './variable';
 
 export interface ToolInputFieldSchema {
   name: string;
@@ -35,15 +37,32 @@ export interface ToolInputSchema {
 
 export type ToolAuthorizableValue = false | string | string[];
 
-export interface ToolDefinition {
-  mlld?: string;
-  inputs?: string;
+export type ToolExecutableReference =
+  | string
+  | ExecutableVariable
+  | {
+      __executable?: boolean;
+      name?: string;
+      internal?: Record<string, unknown>;
+    };
+
+export type ToolInputReference =
+  | string
+  | RecordVariable
+  | RecordDefinition;
+
+export interface ToolCatalogEntry {
+  mlld?: ToolExecutableReference;
+  inputs?: ToolInputReference;
   labels?: string[];
   description?: string;
   instructions?: string;
   can_authorize?: ToolAuthorizableValue;
-  authorizable?: ToolAuthorizableValue;
   bind?: Record<string, unknown>;
+}
+
+export interface LegacyToolCatalogCompatibilityFields {
+  authorizable?: ToolAuthorizableValue;
   expose?: string[];
   optional?: string[];
   controlArgs?: string[];
@@ -52,6 +71,10 @@ export interface ToolDefinition {
   sourceArgs?: string[];
   correlateControlArgs?: boolean;
 }
+
+export type ToolDefinition =
+  ToolCatalogEntry
+  & Partial<LegacyToolCatalogCompatibilityFields>;
 
 export type ToolCollection = Record<string, ToolDefinition>;
 
@@ -68,7 +91,6 @@ export interface ToolAuthorizationContextEntry {
   description?: string;
   instructions?: string;
   can_authorize?: ToolAuthorizableValue;
-  authorizable?: ToolAuthorizableValue;
   correlateControlArgs?: boolean;
 }
 
@@ -83,8 +105,13 @@ const TOOL_COLLECTION_METADATA = Symbol.for('mlld.toolCollectionMetadata');
 export const TOOL_COLLECTION_METADATA_EXPORT_KEY = '__mlld_tool_collection_metadata__';
 export const TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY = '__mlld_tool_collection_captured_module_env__';
 
+type ToolCanAuthorizeCarrier = {
+  can_authorize?: ToolAuthorizableValue;
+  authorizable?: ToolAuthorizableValue;
+};
+
 function getToolCanAuthorizeValue(
-  value: Pick<ToolDefinition, 'can_authorize' | 'authorizable'>
+  value: ToolCanAuthorizeCarrier
 ): ToolAuthorizableValue | undefined {
   return value.can_authorize ?? value.authorizable;
 }

@@ -9,13 +9,12 @@ import {
   type DisplaySelection
 } from '@core/records/display-mode';
 import type { ToolCollection } from '@core/types/tools';
-import { isExecutableVariable } from '@core/types/variable';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { resolveFactRequirementsForOperation, type FactRequirement } from '@core/policy/fact-requirements';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import type { Environment } from '@interpreter/env/Environment';
 import {
-  resolveEffectiveToolMetadata,
+  resolveToolCollectionEntryMetadata,
   resolveNamedOperationMetadata
 } from '@interpreter/eval/exec/tool-metadata';
 import {
@@ -144,16 +143,9 @@ function collectActiveRequirementGroups(
   const groups: ActiveRequirementGroup[] = [];
 
   for (const [toolName, definition] of Object.entries(scopedTools)) {
-    const executableName = typeof definition?.mlld === 'string' ? definition.mlld : undefined;
-    const executable = executableName ? env.getVariable(executableName) : undefined;
     const metadata =
-      executable && isExecutableVariable(executable)
-        ? resolveEffectiveToolMetadata({
-            env,
-            executable,
-            operationName: toolName
-          })
-        : resolveNamedOperationMetadata(env, toolName);
+      resolveToolCollectionEntryMetadata(env, scopedTools, toolName)
+      ?? resolveNamedOperationMetadata(env, toolName);
     if (!metadata) {
       continue;
     }

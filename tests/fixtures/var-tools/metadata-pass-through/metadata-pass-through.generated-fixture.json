@@ -1,0 +1,1135 @@
+{
+  "name": "var-tools/metadata-pass-through",
+  "description": "Test fixture for var-tools/metadata-pass-through",
+  "category": "valid",
+  "subcategory": "metadata-pass-through",
+  "input": "/var known @recipient = \"ada@example.com\"\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  validate: \"strict\"\n}\n\n/exe @send_email(recipient, subject, retries, settings) = js {\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;\n}\n\n/exe @catalogSummary(keyed, entries) = js {\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);\n}\n\n/var tools @agentTools = {\n  send_email: {\n    mlld: @send_email,\n    inputs: @send_email_inputs,\n    labels: [\"execute:w\", \"comm:w\"],\n    description: \"Send mail\",\n    instructions: \"Prefer drafts first.\",\n    can_authorize: \"role:planner\",\n    bind: { retries: 3, settings: { mode: \"safe\" } }\n  }\n}\n\n/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries)\n/show @agentTools.send_email(@recipient, \"hello\")\n",
+  "expected": "{\n  \"keyed\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    }\n  },\n  \"entries\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    }\n  }\n}\nsent:ada@example.com:hello:3:safe\n",
+  "expectedError": null,
+  "expectedWarning": null,
+  "actualOutput": null,
+  "ast": [
+    {
+      "type": "Directive",
+      "nodeId": "node-1",
+      "location": {
+        "start": {
+          "offset": 0,
+          "line": 1,
+          "column": 1
+        },
+        "end": {
+          "offset": 41,
+          "line": 1,
+          "column": 42
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-2",
+            "location": {
+              "start": {
+                "offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "offset": 41,
+                "line": 1,
+                "column": 42
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "recipient"
+          }
+        ],
+        "value": [
+          {
+            "type": "Text",
+            "nodeId": "node-3",
+            "location": {
+              "start": {
+                "offset": 25,
+                "line": 1,
+                "column": 26
+              },
+              "end": {
+                "offset": 28,
+                "line": 1,
+                "column": 29
+              }
+            },
+            "content": "ada"
+          },
+          {
+            "type": "VariableReference",
+            "nodeId": "node-4",
+            "location": {
+              "start": {
+                "offset": 28,
+                "line": 1,
+                "column": 29
+              },
+              "end": {
+                "offset": 40,
+                "line": 1,
+                "column": 41
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "example",
+            "fields": [
+              {
+                "type": "field",
+                "value": "com",
+                "location": {
+                  "start": {
+                    "offset": 37,
+                    "line": 1,
+                    "column": 38
+                  },
+                  "end": {
+                    "offset": 40,
+                    "line": 1,
+                    "column": 41
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "securityLabels": [
+          "known"
+        ]
+      },
+      "raw": {
+        "securityLabels": "known"
+      },
+      "meta": {
+        "wrapperType": "doubleQuote",
+        "inferredType": "template",
+        "rawTemplate": "ada@example.com",
+        "securityLabels": [
+          "known"
+        ]
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-5",
+      "location": {
+        "start": {
+          "offset": 43,
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "offset": 153,
+          "line": 7,
+          "column": 2
+        }
+      },
+      "kind": "record",
+      "subtype": "record",
+      "source": "record",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-6",
+            "location": {
+              "start": {
+                "offset": 43,
+                "line": 3,
+                "column": 1
+              },
+              "end": {
+                "offset": 153,
+                "line": 7,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "send_email_inputs"
+          }
+        ],
+        "facts": [
+          {
+            "kind": "input",
+            "name": "recipient",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-7",
+              "location": {
+                "start": {
+                  "offset": 84,
+                  "line": 4,
+                  "column": 11
+                },
+                "end": {
+                  "offset": 93,
+                  "line": 4,
+                  "column": 20
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "recipient"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "data": [
+          {
+            "kind": "input",
+            "name": "subject",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-8",
+              "location": {
+                "start": {
+                  "offset": 113,
+                  "line": 5,
+                  "column": 10
+                },
+                "end": {
+                  "offset": 120,
+                  "line": 5,
+                  "column": 17
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "subject"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "validate": "strict"
+      },
+      "raw": {
+        "identifier": "send_email_inputs"
+      },
+      "meta": {
+        "hasKey": false,
+        "fieldCount": 2,
+        "factCount": 1,
+        "dataCount": 1,
+        "hasCorrelate": false,
+        "hasWhen": false,
+        "validate": "strict"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-9",
+      "location": {
+        "start": {
+          "offset": 155,
+          "line": 9,
+          "column": 1
+        },
+        "end": {
+          "offset": 288,
+          "line": 11,
+          "column": 2
+        }
+      },
+      "kind": "exe",
+      "subtype": "exeCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-10",
+            "location": {
+              "start": {
+                "offset": 155,
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "offset": 288,
+                "line": 11,
+                "column": 2
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "send_email"
+          }
+        ],
+        "params": [
+          {
+            "type": "Parameter",
+            "nodeId": "node-11",
+            "location": {
+              "start": {
+                "offset": 172,
+                "line": 9,
+                "column": 18
+              },
+              "end": {
+                "offset": 181,
+                "line": 9,
+                "column": 27
+              }
+            },
+            "name": "recipient"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-12",
+            "location": {
+              "start": {
+                "offset": 183,
+                "line": 9,
+                "column": 29
+              },
+              "end": {
+                "offset": 190,
+                "line": 9,
+                "column": 36
+              }
+            },
+            "name": "subject"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-13",
+            "location": {
+              "start": {
+                "offset": 192,
+                "line": 9,
+                "column": 38
+              },
+              "end": {
+                "offset": 199,
+                "line": 9,
+                "column": 45
+              }
+            },
+            "name": "retries"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-14",
+            "location": {
+              "start": {
+                "offset": 201,
+                "line": 9,
+                "column": 47
+              },
+              "end": {
+                "offset": 209,
+                "line": 9,
+                "column": 55
+              }
+            },
+            "name": "settings"
+          }
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "node-15",
+            "location": {
+              "start": {
+                "offset": 213,
+                "line": 9,
+                "column": 59
+              },
+              "end": {
+                "offset": 288,
+                "line": 11,
+                "column": 2
+              }
+            },
+            "content": "js"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "node-16",
+            "location": {
+              "start": {
+                "offset": 213,
+                "line": 9,
+                "column": 59
+              },
+              "end": {
+                "offset": 288,
+                "line": 11,
+                "column": 2
+              }
+            },
+            "content": "\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "send_email",
+        "params": [
+          "recipient",
+          "subject",
+          "retries",
+          "settings"
+        ],
+        "lang": "js",
+        "args": [],
+        "code": "\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;"
+      },
+      "meta": {
+        "parameterCount": 4,
+        "isMultiLine": true,
+        "language": "js",
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-17",
+      "location": {
+        "start": {
+          "offset": 290,
+          "line": 13,
+          "column": 1
+        },
+        "end": {
+          "offset": 914,
+          "line": 35,
+          "column": 2
+        }
+      },
+      "kind": "exe",
+      "subtype": "exeCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-18",
+            "location": {
+              "start": {
+                "offset": 290,
+                "line": 13,
+                "column": 1
+              },
+              "end": {
+                "offset": 914,
+                "line": 35,
+                "column": 2
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "catalogSummary"
+          }
+        ],
+        "params": [
+          {
+            "type": "Parameter",
+            "nodeId": "node-19",
+            "location": {
+              "start": {
+                "offset": 311,
+                "line": 13,
+                "column": 22
+              },
+              "end": {
+                "offset": 316,
+                "line": 13,
+                "column": 27
+              }
+            },
+            "name": "keyed"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-20",
+            "location": {
+              "start": {
+                "offset": 318,
+                "line": 13,
+                "column": 29
+              },
+              "end": {
+                "offset": 325,
+                "line": 13,
+                "column": 36
+              }
+            },
+            "name": "entries"
+          }
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "node-21",
+            "location": {
+              "start": {
+                "offset": 329,
+                "line": 13,
+                "column": 40
+              },
+              "end": {
+                "offset": 914,
+                "line": 35,
+                "column": 2
+              }
+            },
+            "content": "js"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "node-22",
+            "location": {
+              "start": {
+                "offset": 329,
+                "line": 13,
+                "column": 40
+              },
+              "end": {
+                "offset": 914,
+                "line": 35,
+                "column": 2
+              }
+            },
+            "content": "\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "catalogSummary",
+        "params": [
+          "keyed",
+          "entries"
+        ],
+        "lang": "js",
+        "args": [],
+        "code": "\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);"
+      },
+      "meta": {
+        "parameterCount": 2,
+        "isMultiLine": true,
+        "language": "js",
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-23",
+      "location": {
+        "start": {
+          "offset": 916,
+          "line": 37,
+          "column": 1
+        },
+        "end": {
+          "offset": 1216,
+          "line": 47,
+          "column": 2
+        }
+      },
+      "kind": "var",
+      "subtype": "var",
+      "source": null,
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-24",
+            "location": {
+              "start": {
+                "offset": 916,
+                "line": 37,
+                "column": 1
+              },
+              "end": {
+                "offset": 1216,
+                "line": 47,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "agentTools"
+          }
+        ],
+        "value": [
+          {
+            "type": "object",
+            "entries": [
+              {
+                "type": "pair",
+                "key": "send_email",
+                "value": {
+                  "type": "object",
+                  "entries": [
+                    {
+                      "type": "pair",
+                      "key": "mlld",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-25",
+                        "location": {
+                          "start": {
+                            "offset": 969,
+                            "line": 39,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 980,
+                            "line": 39,
+                            "column": 22
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "send_email"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "inputs",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-26",
+                        "location": {
+                          "start": {
+                            "offset": 994,
+                            "line": 40,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 1012,
+                            "line": 40,
+                            "column": 31
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "send_email_inputs"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "labels",
+                      "value": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "content": [
+                              {
+                                "type": "Literal",
+                                "nodeId": "node-27",
+                                "location": {
+                                  "start": {
+                                    "offset": 1027,
+                                    "line": 41,
+                                    "column": 14
+                                  },
+                                  "end": {
+                                    "offset": 1038,
+                                    "line": 41,
+                                    "column": 25
+                                  }
+                                },
+                                "value": "execute:w",
+                                "valueType": "string"
+                              }
+                            ],
+                            "wrapperType": "doubleQuote",
+                            "hasInterpolation": false
+                          },
+                          {
+                            "content": [
+                              {
+                                "type": "Literal",
+                                "nodeId": "node-28",
+                                "location": {
+                                  "start": {
+                                    "offset": 1040,
+                                    "line": 41,
+                                    "column": 27
+                                  },
+                                  "end": {
+                                    "offset": 1048,
+                                    "line": 41,
+                                    "column": 35
+                                  }
+                                },
+                                "value": "comm:w",
+                                "valueType": "string"
+                              }
+                            ],
+                            "wrapperType": "doubleQuote",
+                            "hasInterpolation": false
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 1026,
+                            "line": 41,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 1049,
+                            "line": 41,
+                            "column": 36
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "description",
+                      "value": "Send mail"
+                    },
+                    {
+                      "type": "pair",
+                      "key": "instructions",
+                      "value": "Prefer drafts first."
+                    },
+                    {
+                      "type": "pair",
+                      "key": "can_authorize",
+                      "value": "role:planner"
+                    },
+                    {
+                      "type": "pair",
+                      "key": "bind",
+                      "value": {
+                        "type": "object",
+                        "entries": [
+                          {
+                            "type": "pair",
+                            "key": "retries",
+                            "value": {
+                              "type": "Literal",
+                              "nodeId": "node-29",
+                              "location": {
+                                "start": {
+                                  "offset": 1179,
+                                  "line": 45,
+                                  "column": 22
+                                },
+                                "end": {
+                                  "offset": 1180,
+                                  "line": 45,
+                                  "column": 23
+                                }
+                              },
+                              "value": 3,
+                              "valueType": "number"
+                            }
+                          },
+                          {
+                            "type": "pair",
+                            "key": "settings",
+                            "value": {
+                              "type": "object",
+                              "entries": [
+                                {
+                                  "type": "pair",
+                                  "key": "mode",
+                                  "value": "safe"
+                                }
+                              ],
+                              "location": {
+                                "start": {
+                                  "offset": 1192,
+                                  "line": 45,
+                                  "column": 35
+                                },
+                                "end": {
+                                  "offset": 1208,
+                                  "line": 45,
+                                  "column": 51
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 1168,
+                            "line": 45,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 1210,
+                            "line": 45,
+                            "column": 53
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "location": {
+                    "start": {
+                      "offset": 957,
+                      "line": 38,
+                      "column": 15
+                    },
+                    "end": {
+                      "offset": 1214,
+                      "line": 46,
+                      "column": 4
+                    }
+                  }
+                }
+              }
+            ],
+            "location": {
+              "start": {
+                "offset": 941,
+                "line": 37,
+                "column": 26
+              },
+              "end": {
+                "offset": 1216,
+                "line": 47,
+                "column": 2
+              }
+            }
+          }
+        ]
+      },
+      "raw": {},
+      "meta": {
+        "inferredType": "object",
+        "isToolsCollection": true
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-30",
+      "location": {
+        "start": {
+          "offset": 1218,
+          "line": 49,
+          "column": 1
+        },
+        "end": {
+          "offset": 1288,
+          "line": 50,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showInvocation",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "ExecInvocation",
+          "nodeId": "node-31",
+          "location": {
+            "start": {
+              "offset": 1224,
+              "line": 49,
+              "column": 7
+            },
+            "end": {
+              "offset": 1287,
+              "line": 49,
+              "column": 70
+            }
+          },
+          "commandRef": {
+            "name": "catalogSummary",
+            "identifier": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-32",
+                "location": {
+                  "start": {
+                    "offset": 1224,
+                    "line": 49,
+                    "column": 7
+                  },
+                  "end": {
+                    "offset": 1287,
+                    "line": 49,
+                    "column": 70
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "catalogSummary"
+              }
+            ],
+            "args": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-33",
+                "location": {
+                  "start": {
+                    "offset": 1240,
+                    "line": 49,
+                    "column": 23
+                  },
+                  "end": {
+                    "offset": 1262,
+                    "line": 49,
+                    "column": 45
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "send_email",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 1252,
+                        "line": 49,
+                        "column": 35
+                      },
+                      "end": {
+                        "offset": 1262,
+                        "line": 49,
+                        "column": 45
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "VariableReference",
+                "nodeId": "node-34",
+                "location": {
+                  "start": {
+                    "offset": 1264,
+                    "line": 49,
+                    "column": 47
+                  },
+                  "end": {
+                    "offset": 1286,
+                    "line": 49,
+                    "column": 69
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "mx",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 1276,
+                        "line": 49,
+                        "column": 59
+                      },
+                      "end": {
+                        "offset": 1278,
+                        "line": 49,
+                        "column": 61
+                      }
+                    }
+                  },
+                  {
+                    "type": "field",
+                    "value": "entries",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 1279,
+                        "line": 49,
+                        "column": 62
+                      },
+                      "end": {
+                        "offset": 1286,
+                        "line": 49,
+                        "column": 69
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "isCommandReference": true
+          },
+          "withClause": null
+        }
+      },
+      "raw": {
+        "invocation": "catalogSummary",
+        "arguments": "@agentTools, @agentTools"
+      },
+      "meta": {
+        "hasParentheses": true,
+        "argumentCount": 2
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-35",
+      "location": {
+        "start": {
+          "offset": 1288,
+          "line": 50,
+          "column": 1
+        },
+        "end": {
+          "offset": 1338,
+          "line": 51,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showInvocation",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "ExecInvocation",
+          "nodeId": "node-36",
+          "location": {
+            "start": {
+              "offset": 1294,
+              "line": 50,
+              "column": 7
+            },
+            "end": {
+              "offset": 1337,
+              "line": 50,
+              "column": 50
+            }
+          },
+          "commandRef": {
+            "name": "send_email",
+            "identifier": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-37",
+                "location": {
+                  "start": {
+                    "offset": 1294,
+                    "line": 50,
+                    "column": 7
+                  },
+                  "end": {
+                    "offset": 1337,
+                    "line": 50,
+                    "column": 50
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "send_email",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 1306,
+                        "line": 50,
+                        "column": 19
+                      },
+                      "end": {
+                        "offset": 1316,
+                        "line": 50,
+                        "column": 29
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "args": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-38",
+                "location": {
+                  "start": {
+                    "offset": 1317,
+                    "line": 50,
+                    "column": 30
+                  },
+                  "end": {
+                    "offset": 1327,
+                    "line": 50,
+                    "column": 40
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "recipient"
+              },
+              {
+                "type": "Text",
+                "nodeId": "node-39",
+                "location": {
+                  "start": {
+                    "offset": 1329,
+                    "line": 50,
+                    "column": 42
+                  },
+                  "end": {
+                    "offset": 1336,
+                    "line": 50,
+                    "column": 49
+                  }
+                },
+                "content": "hello"
+              }
+            ],
+            "isCommandReference": true,
+            "objectReference": {
+              "type": "VariableReference",
+              "nodeId": "node-40",
+              "location": {
+                "start": {
+                  "offset": 1294,
+                  "line": 50,
+                  "column": 7
+                },
+                "end": {
+                  "offset": 1337,
+                  "line": 50,
+                  "column": 50
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "agentTools"
+            }
+          },
+          "withClause": null
+        }
+      },
+      "raw": {
+        "invocation": "send_email",
+        "arguments": "@recipient, hello"
+      },
+      "meta": {
+        "hasParentheses": true,
+        "argumentCount": 2
+      }
+    }
+  ],
+  "parseError": null,
+  "mlldMode": "strict"
+}

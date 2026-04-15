@@ -9,9 +9,12 @@
  */
 
 import type { Variable } from '@core/types/variable/VariableTypes';
+import { getToolCollectionMetadata } from '@core/types/tools';
+import { isExecutableVariable, isRecordVariable } from '@core/types/variable';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { wrapLoadContentValue, isFileLoadedValue } from '@interpreter/utils/load-content-structured';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
   if (input === undefined) {
@@ -52,6 +55,9 @@ function unwrapStructuredRecursively(
 
   // Unwrap Variables (e.g. elements inside array literals like [@a, @b])
   if (isVariable(value)) {
+    if (isExecutableVariable(value) || isRecordVariable(value)) {
+      return value;
+    }
     const inner = value.value;
     if (isStructuredValue(inner) && !(inner.internal as any)?.keepStructured) {
       return unwrapStructuredRecursively(asData(inner), seen);
@@ -73,6 +79,16 @@ function unwrapStructuredRecursively(
     descriptor => typeof descriptor.get === 'function' || typeof descriptor.set === 'function'
   );
   if (hasAccessor) {
+    return value;
+  }
+
+  // DATA.md boundary.identity: tool collections, tool entries with captured module
+  // env, and similar identity-bearing objects must cross JS/Node boundaries intact.
+  if (
+    getToolCollectionMetadata(value)
+    || getCapturedModuleEnv(value) !== undefined
+    || isIdentityBearingToolEntry(value)
+  ) {
     return value;
   }
 
@@ -117,6 +133,22 @@ function unwrapStructuredRecursively(
   }
 
   return normalized;
+}
+
+function isIdentityBearingToolEntry(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    !Object.prototype.hasOwnProperty.call(record, 'mlld')
+    && !Object.prototype.hasOwnProperty.call(record, 'inputs')
+  ) {
+    return false;
+  }
+
+  return isVariable(record.mlld) || isVariable(record.inputs);
 }
 
 /**

@@ -2772,6 +2772,49 @@ describe('@policy builtin', () => {
     });
   });
 
+  it('matches builder-shaped wrapped eq and oneOf constraints at runtime authorization evaluation', () => {
+    const decision = evaluatePolicyAuthorizationDecision({
+      authorizations: {
+        allow: {
+          sendEmail: {
+            kind: 'constrained',
+            args: {
+              recipient: [
+                {
+                  eq: {
+                    value: 'ada@example.com',
+                    source: 'user'
+                  },
+                  attestations: ['known']
+                },
+                {
+                  oneOf: [
+                    {
+                      value: 'ada@example.com',
+                      source: 'user'
+                    }
+                  ],
+                  oneOfAttestations: [['known']]
+                }
+              ]
+            }
+          }
+        }
+      },
+      operationName: 'sendEmail',
+      args: { recipient: 'ada@example.com' },
+      controlArgs: ['recipient']
+    });
+
+    expect(decision).toMatchObject({
+      decision: 'allow',
+      matched: true,
+      matchedAttestations: {
+        recipient: ['known']
+      }
+    });
+  });
+
   it('builds all three bucket types together without dropping entries', async () => {
     const env = await interpretWithEnv(`
       /record @contact = { facts: [email: string], data: [name: string] }

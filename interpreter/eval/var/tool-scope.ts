@@ -484,21 +484,18 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     }
 
     const normalizedDefinition = {
-      mlld: mlldName,
-      ...(inputSchema ? { inputs: inputSchema.recordName } : {}),
-      ...(labels ? { labels } : {}),
-      ...(description ? { description } : {}),
-      ...(instructions ? { instructions } : {}),
-      ...(canAuthorize !== undefined ? { can_authorize: canAuthorize } : {}),
-      ...(bind ? { bind } : {}),
-      ...(expose ? { expose } : {}),
-      ...(optional ? { optional } : {}),
-      ...(controlArgs ? { controlArgs } : {}),
-      ...(updateArgs ? { updateArgs } : {}),
-      ...(exactPayloadArgs ? { exactPayloadArgs } : {}),
-      ...(sourceArgs ? { sourceArgs } : {}),
-      ...(correlateControlArgs === true ? { correlateControlArgs: true } : {})
+      ...(toolValue as ToolCollection[string])
     };
+
+    // m-bb60 / spec §5.2 and §5.4: `var tools` is the catalog object itself.
+    // The collection binds dispatch and bridges the legacy `authorizable` rename,
+    // but otherwise returns entry metadata as authored instead of reshaping it.
+    if (canAuthorize !== undefined) {
+      normalizedDefinition.can_authorize = canAuthorize;
+    }
+    if (Object.prototype.hasOwnProperty.call(normalizedDefinition, 'authorizable')) {
+      delete normalizedDefinition.authorizable;
+    }
 
     const definitionCapturedModuleEnv = buildToolDefinitionCapturedModuleEnv(
       mlldName,

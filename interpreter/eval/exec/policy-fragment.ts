@@ -84,6 +84,18 @@ function mergeCompileReports(
   };
 }
 
+function hasMeaningfulAuthorizations(
+  authorizations: ReturnType<typeof normalizePolicyAuthorizations> | undefined
+): boolean {
+  if (!authorizations) {
+    return false;
+  }
+
+  const allowCount = authorizations.allow ? Object.keys(authorizations.allow).length : 0;
+  const denyCount = Array.isArray(authorizations.deny) ? authorizations.deny.length : 0;
+  return allowCount > 0 || denyCount > 0;
+}
+
 const policyAuthorizationCompileReports = new WeakMap<PolicyConfig, PolicyAuthorizationCompileReport>();
 
 async function resolveInvocationPolicyOptionValue(
@@ -202,6 +214,11 @@ export async function resolveInvocationPolicyFragment(
     compiledAuthorizations = undefined;
 
     for (const candidate of rawAuthorizationCandidates) {
+      const normalizedDirectAuthorizations = normalizePolicyAuthorizations(
+        candidate.authorizations,
+        undefined,
+        toolContext
+      );
       const compilation = await compilePolicyAuthorizations({
         rawAuthorizations: candidate.authorizations,
         rawSource: rawResolvedValue,
@@ -212,10 +229,17 @@ export async function resolveInvocationPolicyFragment(
         mode: 'runtime'
       });
 
-      if (compilation.authorizations) {
+      const effectiveAuthorizations =
+        hasMeaningfulAuthorizations(compilation.authorizations)
+          ? compilation.authorizations
+          : hasMeaningfulAuthorizations(normalizedDirectAuthorizations)
+            ? normalizedDirectAuthorizations
+            : compilation.authorizations;
+
+      if (effectiveAuthorizations) {
         compiledAuthorizations = mergePolicyAuthorizations(
           compiledAuthorizations,
-          compilation.authorizations
+          effectiveAuthorizations
         );
       }
       combinedCompileReport = combinedCompileReport

@@ -275,12 +275,14 @@ export async function prepareVarAssignment(
     resolvedValue = toolCollection;
   }
 
-  const resolvedValueDescriptor = isStructuredValue(resolvedValue)
-    ? extractSecurityDescriptor(resolvedValue)
-    : extractSecurityDescriptor(resolvedValue, {
-        recursive: true,
-        mergeArrayElements: true
-      });
+  const resolvedValueDescriptor = isToolsCollection
+    ? undefined
+    : isStructuredValue(resolvedValue)
+      ? extractSecurityDescriptor(resolvedValue)
+      : extractSecurityDescriptor(resolvedValue, {
+          recursive: true,
+          mergeArrayElements: true
+        });
   mergeResolvedDescriptor(resolvedValueDescriptor);
 
   const location = sourceLocation;
