@@ -1,0 +1,38 @@
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: {
+    trusted: [subject: string?],
+    untrusted: [body: string]
+  },
+  correlate: true,
+  validate: "strict"
+}
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"],
+    authorizable: "role:planner",
+    description: "Send a message",
+    instructions: "Prefer drafts first"
+  }
+}
+
+=== START TOKENS ===
+@send_email_inputs --> variable[declaration]
+facts --> property
+data --> property
+trusted --> property
+untrusted --> property
+validate --> property
+@agentTools --> variable[declaration]
+send_email --> property
+mlld --> property
+@send_email --> variable
+inputs --> property
+labels --> property
+authorizable --> property
+description --> property
+instructions --> property
+=== END TOKENS ===

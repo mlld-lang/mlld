@@ -219,6 +219,7 @@ export class ASTSemanticVisitor {
     this.textCache.clear();
     this.visitedNodeIds.clear();
     this.visitorCalls = [];
+    this.tokenBuilder.clear();
 
     // Initialize embedded language service if not already initialized
     await embeddedLanguageService.initialize();
@@ -226,6 +227,8 @@ export class ASTSemanticVisitor {
     for (const node of ast) {
       this.visitNode(node);
     }
+
+    this.tokenBuilder.flush();
   }
   
   visitNode(node: ASTNode, context?: VisitorContext): void {

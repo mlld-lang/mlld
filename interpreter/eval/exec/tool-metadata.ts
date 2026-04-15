@@ -4,10 +4,8 @@ import { mergePolicyConfigs } from '@core/policy/union';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import type { PolicyAuthorizableMap } from '@core/policy/authorizations';
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
-import {
-  resolveRecordFactCorrelation,
-  type RecordDefinition
-} from '@core/types/record';
+import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
+import { type RecordDefinition } from '@core/types/record';
 import {
   cloneToolInputSchema,
   getToolCollectionAuthorizationContext,
@@ -375,38 +373,10 @@ function resolveToolInputSchema(options: {
     return undefined;
   }
 
-  const paramSet = new Set(options.executableParams);
-  const visibleParams = options.executableParams.filter(paramName =>
-    recordDefinition.fields.some(field => field.name === paramName)
-  );
-  const fields = recordDefinition.fields
-    .filter(field => paramSet.has(field.name))
-    .map(field => ({
-      name: field.name,
-      classification: field.classification,
-      ...(field.valueType ? { valueType: field.valueType } : {}),
-      optional: field.optional === true,
-      ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
-    }));
-
-  return {
-    recordName: recordDefinition.name,
-    fields,
-    factFields: fields
-      .filter(field => field.classification === 'fact')
-      .map(field => field.name),
-    dataFields: fields
-      .filter(field => field.classification === 'data')
-      .map(field => field.name),
-    visibleParams,
-    optionalParams: fields
-      .filter(field => field.optional)
-      .map(field => field.name),
-    correlate: resolveRecordFactCorrelation(recordDefinition),
-    ...(typeof recordDefinition.correlate === 'boolean'
-      ? { declaredCorrelate: recordDefinition.correlate }
-      : {})
-  };
+  return buildToolInputSchemaFromRecordDefinition({
+    recordDefinition,
+    executableParamNames: options.executableParams
+  });
 }
 
 function hasWriteSurfaceLabel(labels: readonly string[]): boolean {
@@ -439,17 +409,19 @@ function buildDerivedInputMetadata(labels: readonly string[], inputSchema?: Tool
   const factFields = normalizeStringList(inputSchema.factFields);
   const writeSurface = hasWriteSurfaceLabel(labels);
   const readSurface = hasReadSurfaceLabel(labels);
-  const controlArgs = writeSurface || !readSurface ? factFields : [];
-  const sourceArgs = readSurface && !writeSurface ? factFields : [];
+  const treatAsWriteSurface = writeSurface || !readSurface;
+  const treatAsReadSurface = readSurface && !writeSurface;
+  const controlArgs = treatAsWriteSurface ? factFields : [];
+  const sourceArgs = treatAsReadSurface ? factFields : [];
 
   return {
     params: [...inputSchema.visibleParams],
     optionalParams: [...inputSchema.optionalParams],
     controlArgs,
-    hasControlArgsMetadata: controlArgs.length > 0,
+    hasControlArgsMetadata: treatAsWriteSurface,
     sourceArgs,
-    hasSourceArgsMetadata: sourceArgs.length > 0,
-    correlateControlArgs: controlArgs.length > 1 && inputSchema.correlate === true
+    hasSourceArgsMetadata: treatAsReadSurface,
+    correlateControlArgs: treatAsWriteSurface && controlArgs.length > 1 && inputSchema.correlate === true
   };
 }
 
@@ -930,11 +902,15 @@ function buildAuthorizationToolContextFromStoredContext(
   const contexts = new Map<string, AuthorizationToolContext>();
 
   for (const [toolName, entry] of Object.entries(stored)) {
+    const labels = normalizeStringList(entry.labels);
+    const derived = entry.inputSchema
+      ? buildDerivedInputMetadata(labels, entry.inputSchema)
+      : undefined;
     contexts.set(toolName, {
       name: toolName,
       params: new Set(entry.params),
-      controlArgs: new Set(entry.controlArgs ?? entry.inputSchema?.factFields ?? []),
-      hasControlArgsMetadata: entry.hasControlArgsMetadata === true || (entry.inputSchema?.factFields.length ?? 0) > 0,
+      controlArgs: new Set(entry.controlArgs ?? derived?.controlArgs ?? entry.inputSchema?.factFields ?? []),
+      hasControlArgsMetadata: entry.hasControlArgsMetadata === true || derived?.hasControlArgsMetadata === true,
       updateArgs: new Set(entry.updateArgs ?? []),
       hasUpdateArgsMetadata: entry.hasUpdateArgsMetadata === true,
       exactPayloadArgs: new Set(entry.exactPayloadArgs ?? [])
@@ -956,12 +932,16 @@ function buildToolContextFromStoredEntry(
   const optionalParams = getEffectiveToolOptionalParams(params, undefined, definition, inputSchema);
   const paramEntries = buildEffectiveToolParams(params, undefined, optionalParams);
   const labels = mergeStringLists(entry.labels, definition?.labels);
+  const derivedInputMetadata = inputSchema
+    ? buildDerivedInputMetadata(labels, inputSchema)
+    : undefined;
   const { controlArgs, hasControlArgsMetadata } = getEffectiveToolControlArgs({
     labels,
     inputSchema,
     params,
     baseControlArgs: entry.controlArgs ?? inputSchema?.factFields,
-    baseHasControlArgsMetadata: entry.hasControlArgsMetadata === true || (inputSchema?.factFields.length ?? 0) > 0,
+    baseHasControlArgsMetadata:
+      entry.hasControlArgsMetadata === true || derivedInputMetadata?.hasControlArgsMetadata === true,
     definition
   });
   const { updateArgs, hasUpdateArgsMetadata } = getEffectiveToolUpdateArgs({
@@ -980,7 +960,8 @@ function buildToolContextFromStoredEntry(
     inputSchema,
     params,
     baseSourceArgs: entry.sourceArgs ?? inputSchema?.factFields,
-    baseHasSourceArgsMetadata: Array.isArray(entry.sourceArgs) || (inputSchema?.factFields.length ?? 0) > 0,
+    baseHasSourceArgsMetadata:
+      Array.isArray(entry.sourceArgs) || derivedInputMetadata?.hasSourceArgsMetadata === true,
     definition
   });
   const description = normalizeTrimmedString(definition?.description) ?? normalizeTrimmedString(entry.description);

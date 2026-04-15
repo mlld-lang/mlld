@@ -7,18 +7,18 @@
 @name --> variable[declaration]
 = --> operator
 "World" --> string
-( --> operator
-) --> operator
-@name --> variable
-: --> operator
-/ --> string
-tmp --> string
 cmd --> label
 ( --> operator
-) --> operator
 @name --> variable
+) --> operator
 : --> operator
 / --> string
 tmp --> string
 sh --> label
+( --> operator
+@name --> variable
+) --> operator
+: --> operator
+/ --> string
+tmp --> string
 === END TOKENS ===

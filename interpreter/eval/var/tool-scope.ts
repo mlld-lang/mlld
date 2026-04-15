@@ -7,9 +7,9 @@ import {
 } from '@core/types/tools';
 import {
   canUseRecordForInput,
-  resolveRecordFactCorrelation,
   type RecordDefinition
 } from '@core/types/record';
+import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
@@ -272,7 +272,20 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       bindKeys: boundKeys
     });
 
-    if (!inputSchema) {
+    if (inputSchema) {
+      const mixedShapeFields = [
+        'expose',
+        'optional',
+        'controlArgs',
+        'sourceArgs',
+        'correlateControlArgs'
+      ].filter(field => (toolValue as Record<string, unknown>)[field] !== undefined);
+      if (mixedShapeFields.length > 0) {
+        throw new Error(
+          `Tool '${toolName}' inputs cannot be combined with ${mixedShapeFields.join(', ')}`
+        );
+      }
+    } else {
       if (expose) {
         const invalidExpose = expose.filter(name => !paramSet.has(name));
         if (invalidExpose.length > 0) {
@@ -510,31 +523,10 @@ function resolveToolInputSchema(options: {
       `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`
     );
   }
-  const optionalParams = recordDefinition.fields
-    .filter(field => field.optional)
-    .map(field => field.name);
-  return {
-    recordName: recordDefinition.name,
-    fields: recordDefinition.fields.map(field => ({
-      name: field.name,
-      classification: field.classification,
-      ...(field.valueType ? { valueType: field.valueType } : {}),
-      optional: field.optional === true,
-      ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
-    })),
-    factFields: recordDefinition.fields
-      .filter(field => field.classification === 'fact')
-      .map(field => field.name),
-    dataFields: recordDefinition.fields
-      .filter(field => field.classification === 'data')
-      .map(field => field.name),
-    visibleParams: executableParamNames.filter(paramName => fieldSet.has(paramName)),
-    optionalParams,
-    correlate: resolveRecordFactCorrelation(recordDefinition),
-    ...(typeof recordDefinition.correlate === 'boolean'
-      ? { declaredCorrelate: recordDefinition.correlate }
-      : {})
-  };
+  return buildToolInputSchemaFromRecordDefinition({
+    recordDefinition,
+    executableParamNames
+  });
 }
 
 function resolveToolInputRecordDefinition(

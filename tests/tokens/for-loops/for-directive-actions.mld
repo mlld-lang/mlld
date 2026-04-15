@@ -22,8 +22,8 @@ show --> keyword
 in --> keyword
 @files --> variable
 => --> operator
+output --> keyword
 @file --> variable
 to --> keyword
 "output.md" --> string
-output --> keyword
 === END TOKENS ===

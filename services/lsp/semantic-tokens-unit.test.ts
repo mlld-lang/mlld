@@ -322,6 +322,46 @@ describe('Semantic Tokens - Unit Tests', () => {
         tokenType: 'property'
       });
     });
+
+    it('highlights input-record catalog keys and trust sections', async () => {
+      const code = `/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: {
+    trusted: [subject: string?],
+    untrusted: [body: string]
+  },
+  correlate: true,
+  validate: "strict"
+}
+
+var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"],
+    authorizable: "role:planner",
+    description: "Send a message",
+    instructions: "Prefer drafts first"
+  }
+}`;
+      const tokens = await getSemanticTokens(code);
+
+      for (const text of [
+        'trusted',
+        'untrusted',
+        'validate',
+        'inputs',
+        'labels',
+        'authorizable',
+        'description',
+        'instructions'
+      ]) {
+        expectToken(tokens, {
+          text,
+          tokenType: 'property'
+        });
+      }
+    });
     
     it('highlights multiple directives', async () => {
       const code = `/var @x = 1

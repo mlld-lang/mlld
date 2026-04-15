@@ -484,8 +484,22 @@ guard @missingOpName before op:tool:w = when [
     expect(missingArgWarnings[0]?.message).toContain('@mx.args.cc');
   });
 
-  it('fails validation closed when policy.authorizations omits exe-level controlArgs constraints', async () => {
-    const contextPath = await writeModule('analyze-authz-context.mld', `exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
+  it('fails validation closed when policy.authorizations omits input-record fact constraints', async () => {
+    const contextPath = await writeModule('analyze-authz-context.mld', `record @send_email_inputs = {
+  facts: [recipients: array],
+  data: [cc: array?, bcc: array?, subject: string],
+  validate: "strict"
+}
+
+var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+exe tool:w @send_email(recipients, cc, bcc, subject) = cmd { echo "ok" }
 `);
     const modulePath = await writeModule('analyze-authz-invalid.mld', `policy @taskPolicy = {
   authorizations: {
@@ -508,13 +522,18 @@ show @taskPolicy
     );
   });
 
-  it('accepts policy.authorizations with exe-level controlArgs metadata and surfaces normalization warnings', async () => {
-    const modulePath = await writeModule('analyze-authz-valid.mld', `exe tool:w @create_file(title) = cmd { echo "ok" } with { controlArgs: [] }
+  it('accepts policy.authorizations with record-shaped tool metadata and surfaces normalization warnings', async () => {
+    const modulePath = await writeModule('analyze-authz-valid.mld', `record @create_file_inputs = {
+  data: [title: string],
+  validate: "strict"
+}
+
+exe tool:w @create_file(title) = cmd { echo "ok" }
 var tools @agentTools = {
   create_file: {
     mlld: @create_file,
-    expose: ["title"],
-    controlArgs: []
+    inputs: @create_file_inputs,
+    labels: ["execute:w"]
   }
 }
 policy @taskPolicy = {
@@ -543,8 +562,21 @@ show @taskPolicy
     );
   });
 
-  it('accepts exe-declared controlArgs without requiring a tools wrapper', async () => {
-    const modulePath = await writeModule('analyze-authz-exe-control-args.mld', `exe tool:w @send_money(recipient, amount) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+  it('accepts input-record tool constraints in the same module', async () => {
+    const modulePath = await writeModule('analyze-authz-exe-control-args.mld', `record @send_money_inputs = {
+  facts: [recipient: string],
+  data: [amount: string],
+  validate: "strict"
+}
+
+exe tool:w @send_money(recipient, amount) = cmd { echo "ok" }
+var tools @agentTools = {
+  send_money: {
+    mlld: @send_money,
+    inputs: @send_money_inputs,
+    labels: ["execute:w"]
+  }
+}
 policy @taskPolicy = {
   authorizations: {
     allow: {
@@ -591,12 +623,22 @@ show @decision
   });
 
   it('reports denied tools for statically analyzable @policy.build callsites with base policy overrides', async () => {
-    const modulePath = await writeModule('analyze-policy-build-denied.mld', `exe tool:w @create_draft(subject, body) = cmd { echo "ok" } with { controlArgs: [] }
-exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+    const modulePath = await writeModule('analyze-policy-build-denied.mld', `record @create_draft_inputs = {
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+record @delete_draft_inputs = {
+  facts: [id: string],
+  validate: "strict"
+}
+
+exe tool:w @create_draft(subject, body) = cmd { echo "ok" }
+exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" }
 
 var tools @writeTools = {
-  create_draft: { mlld: @create_draft, expose: ["subject", "body"], controlArgs: [] },
-  delete_draft: { mlld: @delete_draft, expose: ["id"], controlArgs: ["id"] }
+  create_draft: { mlld: @create_draft, inputs: @create_draft_inputs, labels: ["execute:w"] },
+  delete_draft: { mlld: @delete_draft, inputs: @delete_draft_inputs, labels: ["execute:w"] }
 }
 
 var @basePolicy = {
@@ -634,13 +676,19 @@ show @built
   });
 
   it('reports authorizable fields when statically analyzable policy.build intent includes them', async () => {
-    const modulePath = await writeModule('analyze-policy-build-authorizable-intent.mld', `exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+    const modulePath = await writeModule('analyze-policy-build-authorizable-intent.mld', `record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
 
 var tools @writeTools = {
   send_email: {
     mlld: @send_email,
-    expose: ["recipient", "subject", "body"],
-    controlArgs: ["recipient"]
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
   }
 }
 
@@ -674,13 +722,19 @@ show @built
   });
 
   it('validates task-backed known literals for statically analyzable policy builder calls', async () => {
-    const modulePath = await writeModule('analyze-policy-build-known-task.mld', `exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+    const modulePath = await writeModule('analyze-policy-build-known-task.mld', `record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
 
 var tools @writeTools = {
   send_email: {
     mlld: @send_email,
-    expose: ["recipient", "subject", "body"],
-    controlArgs: ["recipient"]
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
   }
 }
 
@@ -722,13 +776,19 @@ show @built
   });
 
   it('reports proofless resolved values for statically analyzable policy validator calls', async () => {
-    const modulePath = await writeModule('analyze-policy-validate-resolved.mld', `exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+    const modulePath = await writeModule('analyze-policy-validate-resolved.mld', `record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+exe exfil:send, tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
 
 var tools @writeTools = {
   send_email: {
     mlld: @send_email,
-    expose: ["recipient", "subject", "body"],
-    controlArgs: ["recipient"]
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
   }
 }
 
@@ -766,16 +826,21 @@ show @validated
   });
 
   it('reports no_update_fields for statically analyzable policy builder calls', async () => {
-    const modulePath = await writeModule('analyze-policy-build-update-args.mld', `exe finance:w, tool:w @update_scheduled_transaction(id, recipient, amount, date, subject) = cmd { echo "ok" } with {
-  controlArgs: ["id", "recipient"],
+    const modulePath = await writeModule('analyze-policy-build-update-args.mld', `record @update_scheduled_transaction_inputs = {
+  facts: [id: string, recipient: string],
+  data: [amount: string?, date: string?, subject: string?],
+  validate: "strict"
+}
+
+exe finance:w, tool:w @update_scheduled_transaction(id, recipient, amount, date, subject) = cmd { echo "ok" } with {
   updateArgs: ["amount", "date", "subject"]
 }
 
 var tools @writeTools = {
   update_scheduled_transaction: {
     mlld: @update_scheduled_transaction,
-    expose: ["id", "recipient", "amount", "date", "subject"],
-    controlArgs: ["id", "recipient"]
+    inputs: @update_scheduled_transaction_inputs,
+    labels: ["execute:w"]
   }
 }
 
@@ -809,10 +874,15 @@ show @built
   });
 
   it('skips policy call analysis when intent comes from a dynamic top-level binding', async () => {
-    const modulePath = await writeModule('analyze-policy-build-dynamic-skip.mld', `exe tool:w @create_draft(subject, body) = cmd { echo "ok" } with { controlArgs: [] }
+    const modulePath = await writeModule('analyze-policy-build-dynamic-skip.mld', `record @create_draft_inputs = {
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+exe tool:w @create_draft(subject, body) = cmd { echo "ok" }
 
 var tools @writeTools = {
-  create_draft: { mlld: @create_draft, expose: ["subject", "body"], controlArgs: [] }
+  create_draft: { mlld: @create_draft, inputs: @create_draft_inputs, labels: ["execute:w"] }
 }
 
 var @intent_json = '{"allow":["create_draft"]}'
@@ -909,6 +979,89 @@ show @built
     expect(messages).toContain('Executable updateArgs must be disjoint from controlArgs');
     expect(messages).toContain("Executable exactPayloadArgs entry 'missing' is not a declared parameter");
     expect(messages).toContain('Executable correlateControlArgs must be a boolean');
+  });
+
+  it('validates input-record tool catalogs against exe params and bind coverage', async () => {
+    const modulePath = await writeModule('analyze-input-record-tool-catalog.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe tool:w @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    bind: {
+      recipient: "ada@example.com"
+    }
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("Tool 'send_email' bind cannot include input-record fields: recipient");
+    expect(messages).toContain("Tool 'send_email' must cover all parameters of '@send_email' via inputs or bind: body");
+  });
+
+  it('rejects mixed legacy tool-shaping fields when inputs are declared', async () => {
+    const modulePath = await writeModule('analyze-input-record-mixed-shape.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+/exe tool:w @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    controlArgs: ["recipient"]
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message)).toContain(
+      "Tool 'send_email' inputs cannot be combined with controlArgs"
+    );
+  });
+
+  it('rejects invalid input-record catalog authorizable values', async () => {
+    const modulePath = await writeModule('analyze-input-record-authorizable-invalid.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+/exe tool:w @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    authorizable: "planner"
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message)).toContain(
+      "Tool 'send_email' authorizable entries must match role:*: planner"
+    );
   });
 
   it('catches statically knowable record definition errors', async () => {

@@ -35,6 +35,7 @@ import {
 import { isRoleDisplayModeName } from '@core/records/display-mode';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
+import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
 import * as yaml from 'js-yaml';
 import type {
   MlldNode,
@@ -47,7 +48,10 @@ import type {
   VariableReferenceNode
 } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
-import type { RecordDefinition } from '@core/types/record';
+import {
+  canUseRecordForInput,
+  type RecordDefinition
+} from '@core/types/record';
 import type {
   BoxDirectiveNode
 } from '@core/types/box';
@@ -2038,6 +2042,52 @@ function extractStaticValue(value: unknown): unknown {
   return undefined;
 }
 
+function extractStaticObjectKeys(value: unknown): string[] | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    const isSingleAstWrapper =
+      value.length === 1 &&
+      value[0] !== null &&
+      typeof value[0] === 'object' &&
+      !Array.isArray(value[0]) &&
+      'type' in (value[0] as Record<string, unknown>);
+
+    if (isSingleAstWrapper) {
+      return extractStaticObjectKeys(value[0]);
+    }
+    return null;
+  }
+
+  if (!isPlainObject(value)) {
+    return null;
+  }
+
+  const typedValue = value as Record<string, unknown>;
+  if (typedValue.type === 'object' && Array.isArray(typedValue.entries)) {
+    const keys: string[] = [];
+    for (const entry of typedValue.entries as Array<Record<string, unknown>>) {
+      if (entry.type !== 'pair' && entry.type !== 'conditionalPair') {
+        continue;
+      }
+      const key = getStaticObjectKey(entry.key);
+      if (key === undefined) {
+        return null;
+      }
+      keys.push(key);
+    }
+    return keys;
+  }
+
+  if (typedValue.type === 'ObjectExpression' && typedValue.properties && typeof typedValue.properties === 'object') {
+    return Object.keys(typedValue.properties as Record<string, unknown>);
+  }
+
+  return null;
+}
+
 function getObjectEntryValue(node: unknown, key: string): unknown {
   if (Array.isArray(node) && node.length === 1) {
     return getObjectEntryValue(node[0], key);
@@ -3572,6 +3622,82 @@ interface ValidationContextExecutable extends AuthorizationToolContext {
   labels: Set<string>;
 }
 
+const TOOL_CATALOG_FIELDS = new Set([
+  'mlld',
+  'inputs',
+  'labels',
+  'description',
+  'instructions',
+  'authorizable',
+  'bind',
+  'expose',
+  'optional',
+  'controlArgs',
+  'updateArgs',
+  'exactPayloadArgs',
+  'sourceArgs',
+  'correlateControlArgs'
+]);
+
+const INPUT_RECORD_MIXED_CATALOG_FIELDS = [
+  'expose',
+  'optional',
+  'controlArgs',
+  'sourceArgs',
+  'correlateControlArgs'
+] as const;
+
+function hasWriteSurfaceLabel(labels: ReadonlySet<string> | readonly string[]): boolean {
+  for (const label of labels) {
+    if (typeof label === 'string' && /(^|:)w$/i.test(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasReadSurfaceLabel(labels: ReadonlySet<string> | readonly string[]): boolean {
+  for (const label of labels) {
+    if (typeof label === 'string' && /(^|:)r$/i.test(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildRecordDefinitionsMapFromAst(ast: MlldNode[]): Map<string, RecordDefinition> {
+  const definitions = new Map<string, RecordDefinition>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'record') {
+      return;
+    }
+
+    const buildResult = buildRecordDefinitionFromDirective(node as any);
+    if (buildResult.definition) {
+      definitions.set(buildResult.definition.name, buildResult.definition);
+    }
+  });
+
+  return definitions;
+}
+
+function cloneValidationContextExecutable(
+  source: ValidationContextExecutable,
+  name: string
+): ValidationContextExecutable {
+  return {
+    name,
+    params: new Set(source.params),
+    labels: new Set(source.labels),
+    controlArgs: new Set(source.controlArgs),
+    hasControlArgsMetadata: source.hasControlArgsMetadata,
+    updateArgs: new Set(source.updateArgs),
+    hasUpdateArgsMetadata: source.hasUpdateArgsMetadata,
+    exactPayloadArgs: new Set(source.exactPayloadArgs)
+  };
+}
+
 function getOrCreateValidationExecutable(
   byName: Map<string, ValidationContextExecutable>,
   name: string
@@ -3599,6 +3725,8 @@ function mergeValidationContextAst(
   ast: MlldNode[],
   byName: Map<string, ValidationContextExecutable>
 ): void {
+  const recordDefinitions = buildRecordDefinitionsMapFromAst(ast);
+
   for (const executable of extractExecutables(ast)) {
     const target = getOrCreateValidationExecutable(byName, executable.name);
     for (const param of executable.params ?? []) {
@@ -3704,6 +3832,48 @@ function mergeValidationContextAst(
         }
       }
 
+      const bindNode = getObjectEntryValue(toolValue, 'bind');
+      const boundKeys =
+        (extractStaticObjectKeys(bindNode) ?? [])
+          .filter(key => executableTarget.params.has(key));
+
+      const inputsValue = extractStaticValue(getObjectEntryValue(toolValue, 'inputs'));
+      if (typeof inputsValue === 'string' && inputsValue.trim().length > 0) {
+        const recordName = inputsValue.trim().replace(/^@/, '');
+        const recordDefinition = recordDefinitions.get(recordName);
+        if (recordDefinition && canUseRecordForInput(recordDefinition)) {
+          const inputSchema = buildToolInputSchemaFromRecordDefinition({
+            recordDefinition,
+            executableParamNames: [...executableTarget.params]
+          });
+
+          target.params = new Set(inputSchema.visibleParams.filter(param => !boundKeys.includes(param)));
+          target.controlArgs.clear();
+          target.hasControlArgsMetadata = false;
+
+          const writeSurface = hasWriteSurfaceLabel(target.labels);
+          const readSurface = hasReadSurfaceLabel(target.labels);
+          if (writeSurface || !readSurface) {
+            target.hasControlArgsMetadata = true;
+            for (const factField of inputSchema.factFields) {
+              if (target.params.has(factField)) {
+                target.controlArgs.add(factField);
+              }
+            }
+          }
+
+          target.updateArgs = new Set(
+            [...target.updateArgs].filter(argName => target.params.has(argName))
+          );
+          if (target.updateArgs.size === 0) {
+            target.hasUpdateArgsMetadata = false;
+          }
+          target.exactPayloadArgs = new Set(
+            [...target.exactPayloadArgs].filter(argName => target.params.has(argName))
+          );
+        }
+      }
+
       const controlArgsNode = getObjectEntryValue(toolValue, 'controlArgs');
       if (controlArgsNode !== undefined) {
         const controlArgsValue = extractStaticValue(controlArgsNode);
@@ -3777,6 +3947,249 @@ async function buildValidationContextExecutables(
   }
 
   return byName;
+}
+
+function collectToolCatalogDiagnostics(
+  ast: MlldNode[],
+  executables: readonly ExecutableInfo[],
+  recordDefinitions: ReadonlyMap<string, RecordDefinition>
+): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+  const seen = new Set<string>();
+  const executableByName = new Map(executables.map(executable => [executable.name, executable]));
+
+  const pushError = (message: string, line?: number, column?: number): void => {
+    const key = `${line ?? 0}:${column ?? 0}:${message}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    errors.push({ message, line, column });
+  };
+
+  walkAST(ast, node => {
+    const directiveNode = node as any;
+    if (
+      directiveNode.type !== 'Directive'
+      || directiveNode.kind !== 'var'
+      || directiveNode.meta?.isToolsCollection !== true
+    ) {
+      return;
+    }
+
+    const toolObjectNode = Array.isArray(directiveNode.values?.value)
+      ? directiveNode.values.value[0]
+      : undefined;
+    if (!toolObjectNode || typeof toolObjectNode !== 'object' || (toolObjectNode as any).type !== 'object') {
+      return;
+    }
+
+    for (const entry of (toolObjectNode as any).entries as Array<Record<string, unknown>>) {
+      if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+        continue;
+      }
+
+      const toolName = entry.key;
+      const toolValue = entry.value;
+      const entryLine = (entry.location as any)?.start?.line ?? directiveNode.location?.start?.line;
+      const entryColumn = (entry.location as any)?.start?.column ?? directiveNode.location?.start?.column;
+
+      if (!toolValue || typeof toolValue !== 'object' || (toolValue as any).type !== 'object') {
+        pushError(`Tool '${toolName}' must be an object`, entryLine, entryColumn);
+        continue;
+      }
+
+      for (const fieldEntry of (toolValue as any).entries as Array<Record<string, unknown>>) {
+        if (fieldEntry.type !== 'pair' && fieldEntry.type !== 'conditionalPair') {
+          continue;
+        }
+        const fieldName = getStaticObjectKey(fieldEntry.key);
+        if (!fieldName || TOOL_CATALOG_FIELDS.has(fieldName)) {
+          continue;
+        }
+        const fieldLine = (fieldEntry.location as any)?.start?.line ?? entryLine;
+        const fieldColumn = (fieldEntry.location as any)?.start?.column ?? entryColumn;
+        pushError(
+          `Tool '${toolName}' has unknown field '${fieldName}'`,
+          fieldLine,
+          fieldColumn
+        );
+      }
+
+      const rawMlldValue = extractStaticValue(getObjectEntryValue(toolValue, 'mlld'));
+      if (typeof rawMlldValue !== 'string' || rawMlldValue.trim().length === 0) {
+        pushError(`Tool '${toolName}' is missing 'mlld' reference`, entryLine, entryColumn);
+        continue;
+      }
+
+      const executableName = rawMlldValue.trim().replace(/^@/, '');
+      const executable = executableByName.get(executableName);
+
+      const descriptionValue = extractStaticValue(getObjectEntryValue(toolValue, 'description'));
+      if (descriptionValue !== undefined && typeof descriptionValue !== 'string') {
+        pushError(`Tool '${toolName}' description must be a string`, entryLine, entryColumn);
+      }
+
+      const instructionsValue = extractStaticValue(getObjectEntryValue(toolValue, 'instructions'));
+      if (instructionsValue !== undefined && typeof instructionsValue !== 'string') {
+        pushError(`Tool '${toolName}' instructions must be a string`, entryLine, entryColumn);
+      }
+
+      const labelsValue = extractStaticValue(getObjectEntryValue(toolValue, 'labels'));
+      if (
+        labelsValue !== undefined
+        && (
+          !Array.isArray(labelsValue)
+          || labelsValue.some(label => typeof label !== 'string' || label.trim().length === 0)
+        )
+      ) {
+        pushError(`Tool '${toolName}' labels must be an array of strings`, entryLine, entryColumn);
+      }
+
+      const authorizableValue = extractStaticValue(getObjectEntryValue(toolValue, 'authorizable'));
+      if (authorizableValue !== undefined) {
+        const roleEntries =
+          authorizableValue === false
+            ? []
+            : typeof authorizableValue === 'string'
+              ? [authorizableValue]
+              : Array.isArray(authorizableValue)
+                ? authorizableValue
+                : null;
+        if (roleEntries === null) {
+          pushError(
+            `Tool '${toolName}' authorizable must be false, a role:* string, or an array of role:* strings`,
+            entryLine,
+            entryColumn
+          );
+        } else {
+          const invalidRoles = roleEntries.filter(
+            role => typeof role !== 'string' || !/^role:[a-z][a-z0-9_-]*$/i.test(role.trim())
+          );
+          if (invalidRoles.length > 0) {
+            pushError(
+              `Tool '${toolName}' authorizable entries must match role:*: ${invalidRoles.join(', ')}`,
+              entryLine,
+              entryColumn
+            );
+          }
+        }
+      }
+
+      const bindNode = getObjectEntryValue(toolValue, 'bind');
+      const bindValue = extractStaticValue(bindNode);
+      const bindKeys = extractStaticObjectKeys(bindNode);
+      if (bindValue !== undefined && !isPlainObject(bindValue) && bindKeys === null) {
+        pushError(`Tool '${toolName}' bind must be an object`, entryLine, entryColumn);
+      }
+
+      const resolvedBindKeys = bindKeys ?? (isPlainObject(bindValue) ? Object.keys(bindValue) : []);
+      if (executable && resolvedBindKeys.length > 0) {
+        const invalidBindKeys = resolvedBindKeys.filter(
+          key => !(executable.params ?? []).includes(key)
+        );
+        if (invalidBindKeys.length > 0) {
+          pushError(
+            `Tool '${toolName}' bind keys must match parameters of '@${executableName}': ${invalidBindKeys.join(', ')}`,
+            entryLine,
+            entryColumn
+          );
+        }
+      }
+
+      const rawInputsValue = extractStaticValue(getObjectEntryValue(toolValue, 'inputs'));
+      if (rawInputsValue === undefined) {
+        continue;
+      }
+
+      const mixedShapeFields = INPUT_RECORD_MIXED_CATALOG_FIELDS.filter(
+        field => getObjectEntryValue(toolValue, field) !== undefined
+      );
+      if (mixedShapeFields.length > 0) {
+        pushError(
+          `Tool '${toolName}' inputs cannot be combined with ${mixedShapeFields.join(', ')}`,
+          entryLine,
+          entryColumn
+        );
+      }
+
+      if (typeof rawInputsValue !== 'string' || rawInputsValue.trim().length === 0) {
+        pushError(`Tool '${toolName}' inputs must be a record reference`, entryLine, entryColumn);
+        continue;
+      }
+
+      const recordName = rawInputsValue.trim().replace(/^@/, '');
+      const recordDefinition = recordDefinitions.get(recordName);
+      if (!recordDefinition) {
+        pushError(
+          `Tool '${toolName}' inputs reference unknown record '@${recordName}'`,
+          entryLine,
+          entryColumn
+        );
+        continue;
+      }
+
+      if (!canUseRecordForInput(recordDefinition)) {
+        pushError(
+          `Tool '${toolName}' inputs must reference an input-capable record`,
+          entryLine,
+          entryColumn
+        );
+        continue;
+      }
+
+      if (recordDefinition.validate === 'demote') {
+        pushError(
+          `Tool '${toolName}' inputs cannot use record '@${recordName}' with validate: "demote"`,
+          entryLine,
+          entryColumn
+        );
+      }
+
+      if (!executable) {
+        continue;
+      }
+
+      const schema = buildToolInputSchemaFromRecordDefinition({
+        recordDefinition,
+        executableParamNames: executable.params ?? []
+      });
+      const fieldNames = schema.fields.map(field => field.name);
+      const fieldSet = new Set(fieldNames);
+
+      const boundFieldOverlap = resolvedBindKeys.filter(key => fieldSet.has(key));
+      if (boundFieldOverlap.length > 0) {
+        pushError(
+          `Tool '${toolName}' bind cannot include input-record fields: ${boundFieldOverlap.join(', ')}`,
+          entryLine,
+          entryColumn
+        );
+      }
+
+      const invalidParams = recordDefinition.fields
+        .map(field => field.name)
+        .filter(name => !(executable.params ?? []).includes(name));
+      if (invalidParams.length > 0) {
+        pushError(
+          `Tool '${toolName}' inputs for '@${executableName}' reference unknown parameters: ${invalidParams.join(', ')}`,
+          entryLine,
+          entryColumn
+        );
+      }
+
+      const coveredParams = new Set([...fieldNames, ...resolvedBindKeys]);
+      const orphanParams = (executable.params ?? []).filter(paramName => !coveredParams.has(paramName));
+      if (orphanParams.length > 0) {
+        pushError(
+          `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`,
+          entryLine,
+          entryColumn
+        );
+      }
+    }
+  });
+
+  return errors;
 }
 
 function detectGuardContextWarnings(
@@ -4556,9 +4969,16 @@ function resolveStaticExpression(
 
     if (
       currentObjectKey === 'mlld'
-      && (!Array.isArray(typedNode.fields) || typedNode.fields.length === 0)
+      || currentObjectKey === 'inputs'
     ) {
       return { ok: true, value: `@${typedNode.identifier}` };
+    }
+
+    if (
+      currentObjectKey === 'bind'
+      && (!Array.isArray(typedNode.fields) || typedNode.fields.length === 0)
+    ) {
+      return { ok: true, value: true };
     }
 
     const binding = bindings.get(typedNode.identifier);
@@ -4594,6 +5014,17 @@ function resolveStaticExpression(
   }
 
   if (typedNode.type === 'object' && Array.isArray(typedNode.entries)) {
+    if (currentObjectKey === 'bind') {
+      const result: Record<string, unknown> = {};
+      for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
+        if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
+          return { ok: false, failure: 'unsupported' };
+        }
+        result[entry.key] = true;
+      }
+      return { ok: true, value: result };
+    }
+
     const result: Record<string, unknown> = {};
     for (const entry of typedNode.entries as Array<Record<string, unknown>>) {
       if ((entry.type !== 'pair' && entry.type !== 'conditionalPair') || typeof entry.key !== 'string') {
@@ -4610,6 +5041,15 @@ function resolveStaticExpression(
   }
 
   if (typedNode.type === 'ObjectExpression' && typedNode.properties && typeof typedNode.properties === 'object') {
+    if (currentObjectKey === 'bind') {
+      return {
+        ok: true,
+        value: Object.fromEntries(
+          Object.keys(typedNode.properties as Record<string, unknown>).map(key => [key, true])
+        )
+      };
+    }
+
     const result: Record<string, unknown> = {};
     for (const [entryKey, entryValue] of Object.entries(typedNode.properties as Record<string, unknown>)) {
       const resolved = resolveStaticExpression(entryValue, bindings, stack, entryKey);
@@ -4656,19 +5096,6 @@ function mapResolutionFailureToSkipReason(
       : 'dynamic-source-task';
 }
 
-function createEmptyStaticToolContext(name: string): ValidationContextExecutable {
-  return {
-    name,
-    params: new Set<string>(),
-    labels: new Set<string>(),
-    controlArgs: new Set<string>(),
-    hasControlArgsMetadata: false,
-    updateArgs: new Set<string>(),
-    hasUpdateArgsMetadata: false,
-    exactPayloadArgs: new Set<string>()
-  };
-}
-
 function normalizeStaticStringList(value: unknown): string[] | null {
   if (!Array.isArray(value)) {
     return null;
@@ -4709,35 +5136,12 @@ function buildStaticToolContext(
     }
 
     const executableName = mlldValue.slice(1).trim();
-    const baseExecutable = contextExecutables.get(executableName);
+    const baseExecutable = contextExecutables.get(toolName) ?? contextExecutables.get(executableName);
     if (!baseExecutable) {
       return null;
     }
 
-    const target = createEmptyStaticToolContext(toolName);
-    for (const param of baseExecutable.params) {
-      target.params.add(param);
-    }
-    for (const label of baseExecutable.labels) {
-      target.labels.add(label);
-    }
-    if (baseExecutable.hasControlArgsMetadata) {
-      target.hasControlArgsMetadata = true;
-      for (const controlArg of baseExecutable.controlArgs) {
-        target.controlArgs.add(controlArg);
-      }
-    }
-    if (baseExecutable.hasUpdateArgsMetadata) {
-      target.hasUpdateArgsMetadata = true;
-      for (const updateArg of baseExecutable.updateArgs) {
-        target.updateArgs.add(updateArg);
-      }
-    }
-    if (baseExecutable.exactPayloadArgs) {
-      for (const payloadArg of baseExecutable.exactPayloadArgs) {
-        target.exactPayloadArgs.add(payloadArg);
-      }
-    }
+    const target = cloneValidationContextExecutable(baseExecutable, toolName);
 
     const labelsValue = rawToolEntry.labels;
     if (labelsValue !== undefined) {
@@ -6362,6 +6766,11 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const needs = extractNeeds(content, ast);
       const checkpointErrors = detectCheckpointDirectiveErrors(ast);
       const executableDefinitionErrors = collectExecutableDefinitionDiagnostics(ast);
+      const toolCatalogErrors = collectToolCatalogDiagnostics(
+        ast,
+        executables,
+        recordExtraction.definitions
+      );
       const outputRecordErrors = collectExecutableOutputRecordDiagnostics(
         ast,
         recordExtraction.definitions,
@@ -6424,6 +6833,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.errors = [
           ...(result.errors ?? []),
           ...executableDefinitionErrors
+        ];
+      }
+      if (toolCatalogErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...toolCatalogErrors
         ];
       }
       if (outputRecordErrors.length > 0) {

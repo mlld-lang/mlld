@@ -15,6 +15,13 @@ export class TokenBuilder {
   private emittedPositions = new Set<string>();
   private tokenAttempts: TokenAttempt[] = [];
   private currentSourceNode?: string;
+  private pendingTokens: Array<{
+    line: number;
+    char: number;
+    length: number;
+    typeIndex: number;
+    modifierMask: number;
+  }> = [];
 
   constructor(
     private builder: SemanticTokensBuilder,
@@ -27,6 +34,7 @@ export class TokenBuilder {
   clear(): void {
     this.emittedPositions.clear();
     this.tokenAttempts = [];
+    this.pendingTokens = [];
   }
 
   setSourceNode(nodeId: string): void {
@@ -121,13 +129,38 @@ export class TokenBuilder {
       }
     }
 
-    this.builder.push(
-      token.line,
-      token.char,
-      token.length,
+    this.pendingTokens.push({
+      line: token.line,
+      char: token.char,
+      length: token.length,
       typeIndex,
       modifierMask
-    );
+    });
+  }
+
+  flush(): void {
+    this.pendingTokens
+      .sort((a, b) => {
+        if (a.line !== b.line) {
+          return a.line - b.line;
+        }
+        if (a.char !== b.char) {
+          return a.char - b.char;
+        }
+        if (a.length !== b.length) {
+          return a.length - b.length;
+        }
+        return a.typeIndex - b.typeIndex;
+      })
+      .forEach(token => {
+        this.builder.push(
+          token.line,
+          token.char,
+          token.length,
+          token.typeIndex,
+          token.modifierMask
+        );
+      });
   }
   
   getTokenTypeIndex(type: string): number {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { RecordDefinition } from '@core/types/record';
 import type { Environment } from '@interpreter/env/Environment';
 import { createExecutableVariable } from '@core/types/variable';
 import {
@@ -25,7 +26,8 @@ function createEnvWithExecutables(
       exactPayloadArgs?: string[];
       sourceArgs?: string[];
     }
-  >
+  >,
+  records?: Record<string, RecordDefinition>
 ): Environment {
   const variables = new Map(
     Object.entries(paramsByName).map(([name, config]) => {
@@ -53,8 +55,46 @@ function createEnvWithExecutables(
   );
 
   return {
-    getVariable: vi.fn((name: string) => variables.get(name))
+    getVariable: vi.fn((name: string) => variables.get(name)),
+    getRecordDefinition: vi.fn((name: string) => records?.[name])
   } as unknown as Environment;
+}
+
+function createInputRecord(options: {
+  name: string;
+  facts?: Array<{ name: string; optional?: boolean; valueType?: string }>;
+  data?: Array<{ name: string; optional?: boolean; valueType?: string; dataTrust?: 'trusted' | 'untrusted' }>;
+  correlate?: boolean;
+}): RecordDefinition {
+  return {
+    name: options.name,
+    rootMode: 'object',
+    display: { kind: 'open' },
+    direction: 'input',
+    validate: 'strict',
+    ...(options.correlate !== undefined ? { correlate: options.correlate } : {}),
+    fields: [
+      ...(options.facts ?? []).map(field => ({
+        kind: 'input' as const,
+        name: field.name,
+        classification: 'fact' as const,
+        sourceRoot: 'input' as const,
+        source: { type: 'VariableReference', identifier: 'input', fields: [] } as any,
+        optional: field.optional === true,
+        ...(field.valueType ? { valueType: field.valueType as any } : {})
+      })),
+      ...(options.data ?? []).map(field => ({
+        kind: 'input' as const,
+        name: field.name,
+        classification: 'data' as const,
+        sourceRoot: 'input' as const,
+        source: { type: 'VariableReference', identifier: 'input', fields: [] } as any,
+        optional: field.optional === true,
+        ...(field.valueType ? { valueType: field.valueType as any } : {}),
+        ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+      }))
+    ]
+  };
 }
 
 describe('tool scope helpers', () => {
@@ -142,6 +182,46 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('normalizes tool collection entries that bind an input record', () => {
+    const env = createEnvWithExecutables(
+      {
+        createIssue: ['owner', 'repo', 'title', 'body']
+      },
+      {
+        create_issue_inputs: createInputRecord({
+          name: 'create_issue_inputs',
+          facts: [{ name: 'title', valueType: 'string' }],
+          data: [{ name: 'body', valueType: 'string', optional: true }]
+        })
+      }
+    );
+
+    const collection = normalizeToolCollection(
+      {
+        issue: {
+          mlld: '@createIssue',
+          labels: ['execute:w'],
+          bind: {
+            owner: 'mlld',
+            repo: 'mlld'
+          },
+          inputs: '@create_issue_inputs'
+        }
+      },
+      env
+    );
+
+    expect(collection.issue).toEqual({
+      mlld: 'createIssue',
+      labels: ['execute:w'],
+      bind: {
+        owner: 'mlld',
+        repo: 'mlld'
+      },
+      inputs: 'create_issue_inputs'
+    });
+  });
+
   it('accepts restrict-only overrides for controlArgs, updateArgs, exactPayloadArgs, and sourceArgs', () => {
     const env = createEnvWithExecutables({
       updateIssue: {
@@ -201,6 +281,38 @@ describe('tool scope helpers', () => {
         env
       )
     ).toThrow(/correlateControlArgs must be a boolean/i);
+  });
+
+  it('rejects legacy control metadata when inputs are declared', () => {
+    const env = createEnvWithExecutables(
+      {
+        createIssue: ['owner', 'repo', 'title', 'body']
+      },
+      {
+        create_issue_inputs: createInputRecord({
+          name: 'create_issue_inputs',
+          facts: [{ name: 'title', valueType: 'string' }],
+          data: [{ name: 'body', valueType: 'string' }]
+        })
+      }
+    );
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@createIssue',
+            bind: {
+              owner: 'mlld',
+              repo: 'mlld'
+            },
+            inputs: '@create_issue_inputs',
+            controlArgs: ['title']
+          }
+        },
+        env
+      )
+    ).toThrow(/inputs cannot be combined with controlArgs/i);
   });
 
   it('rejects non-executable tool references', () => {

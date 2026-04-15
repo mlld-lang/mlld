@@ -8,9 +8,9 @@
 ( --> operator
 "write" --> string
 ) --> operator
-) --> operator
 ! --> operator
 @isBanned --> variable
+) --> operator
 => --> operator
 @grantAccess --> variable
 ( --> operator

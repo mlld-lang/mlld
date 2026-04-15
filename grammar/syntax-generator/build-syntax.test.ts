@@ -45,7 +45,15 @@ describe('MlldSyntaxGenerator', () => {
     expect('max-retries: 3'.match(objectKeyRegex)?.[0]).toBe('max-retries');
     expect('facts: [email: string]'.match(objectKeyRegex)?.[0]).toBe('facts');
     expect('data: [notes: string?]'.match(objectKeyRegex)?.[0]).toBe('data');
+    expect('trusted: [subject: string?]'.match(objectKeyRegex)?.[0]).toBe('trusted');
+    expect('untrusted: [body: string]'.match(objectKeyRegex)?.[0]).toBe('untrusted');
     expect('display: [name, { mask: "email" }]'.match(objectKeyRegex)?.[0]).toBe('display');
+    expect('correlate: true'.match(objectKeyRegex)?.[0]).toBe('correlate');
+    expect('validate: "strict"'.match(objectKeyRegex)?.[0]).toBe('validate');
+    expect('inputs: @send_email_inputs'.match(objectKeyRegex)?.[0]).toBe('inputs');
+    expect('labels: ["execute:w"]'.match(objectKeyRegex)?.[0]).toBe('labels');
+    expect('description: "Send a message"'.match(objectKeyRegex)?.[0]).toBe('description');
+    expect('instructions: "Prefer drafts first"'.match(objectKeyRegex)?.[0]).toBe('instructions');
     expect('authorizable: { role:planner: [@sendEmail] }'.match(objectKeyRegex)?.[0]).toBe('authorizable');
     expect('role:planner: [name, { ref: "email" }]'.match(objectKeyRegex)?.[0]).toBe('role:planner');
     expect('{ mask: "email" }'.match(objectKeyRegex)?.[0]).toBe('mask');

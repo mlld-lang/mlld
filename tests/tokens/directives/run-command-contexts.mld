@@ -9,9 +9,9 @@
 = --> operator
 "World" --> string
 { --> operator
-} --> operator
 echo --> string
 @name --> variable
+} --> operator
 @step1 --> variable[declaration]
 ( --> operator
 var) --> parameter

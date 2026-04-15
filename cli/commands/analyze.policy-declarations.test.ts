@@ -28,7 +28,7 @@ describe('analyze policy declaration warnings', () => {
   }
 }
 
-exe tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+exe tool:w @delete_draft(id) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
@@ -50,7 +50,7 @@ exe tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
   }
 }
 
-exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
@@ -65,7 +65,21 @@ exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { co
   });
 
   it('validates policy authorizations reached through union references', async () => {
-    const modulePath = await writeModule('policy-union-authorizations-invalid.mld', `var @basePolicy = {
+    const modulePath = await writeModule('policy-union-authorizations-invalid.mld', `record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+var @basePolicy = {
   authorizations: {
     allow: {
       send_email: true
@@ -75,7 +89,7 @@ exe destructive:targeted, tool:w @delete_draft(id) = cmd { echo "ok" } with { co
 
 policy @task = union(@basePolicy)
 
-exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
@@ -87,7 +101,21 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { cont
   });
 
   it('accepts valid policy authorizable role declarations', async () => {
-    const modulePath = await writeModule('policy-authorizable-valid.mld', `policy @task = {
+    const modulePath = await writeModule('policy-authorizable-valid.mld', `record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+policy @task = {
   authorizations: {
     authorizable: {
       role:planner: [@send_email]
@@ -95,7 +123,7 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { cont
   }
 }
 
-exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { controlArgs: ["recipient"] }
+exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
@@ -108,7 +136,20 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { cont
   });
 
   it('diagnoses invalid authorizable role keys and denied tool conflicts', async () => {
-    const modulePath = await writeModule('policy-authorizable-invalid.mld', `policy @task = {
+    const modulePath = await writeModule('policy-authorizable-invalid.mld', `record @delete_file_inputs = {
+  facts: [id: string],
+  validate: "strict"
+}
+
+var tools @agentTools = {
+  delete_file: {
+    mlld: @delete_file,
+    inputs: @delete_file_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+policy @task = {
   authorizations: {
     deny: ["delete_file"],
     authorizable: {
@@ -117,7 +158,7 @@ exe tool:w @send_email(recipient, subject, body) = cmd { echo "ok" } with { cont
   }
 }
 
-exe destructive:targeted, tool:w @delete_file(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+exe destructive:targeted, tool:w @delete_file(id) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
@@ -139,7 +180,7 @@ exe destructive:targeted, tool:w @delete_file(id) = cmd { echo "ok" } with { con
   }
 }
 
-exe tool:w @delete_draft(id) = cmd { echo "ok" } with { controlArgs: ["id"] }
+exe tool:w @delete_draft(id) = cmd { echo "ok" }
 `);
 
     const result = await analyze(modulePath, { checkVariables: false });
