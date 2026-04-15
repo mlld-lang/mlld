@@ -8,7 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
-updated: 2026-04-14
+updated: 2026-04-15
 ---
 
 The `authorizations` section has two layers:
@@ -18,7 +18,7 @@ The `authorizations` section has two layers:
 
 Control arg values in runtime authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, and direct runtime policy fragments still fail closed.
 
-For surfaced tool catalogs, the canonical source of that metadata is usually `inputs: @record`: record `facts` become the tool's effective control args on write surfaces and effective source args on read surfaces. Legacy `controlArgs` / `sourceArgs` metadata still works, but it is no longer the preferred catalog shape.
+For surfaced tool catalogs, the trusted argument metadata lives on `inputs: @record`: record `facts` become the tool's effective control args on write surfaces and effective source args on read surfaces.
 
 ```mlld
 var known @approvedRecipient = "mark@example.com"
@@ -64,6 +64,8 @@ record @send_email_inputs = {
     trusted: [subject: string],
     untrusted: [body: string?]
   },
+  exact: [subject],
+  optional_benign: [cc, bcc],
   validate: "strict"
 }
 
@@ -92,11 +94,11 @@ For record-backed tool catalogs:
 - record `facts` become the tool's effective control args on write surfaces
 - record `facts` become the tool's effective source args on read-only surfaces
 - record `correlate: true` becomes the same-source check for multi-fact write tools
+- record `exact`, `update`, `allowlist`, `blocklist`, and `optional_benign` sections become dispatch-time and validate-time input policy checks
 - `data.trusted` and `data.untrusted` flow into runtime validation, `@toolDocs()`, MCP annotations, and injected tool notes
+- tool catalog `labels` are added to the invoked exe when the surfaced tool is called
 
 `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
-
-Direct exe metadata such as `with { controlArgs, sourceArgs, updateArgs, exactPayloadArgs }` still works and remains the fallback for direct executable surfaces or legacy tool catalogs.
 
 Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
 
@@ -223,7 +225,7 @@ Tolerant comparison (`~=`) handles string-vs-array, ordering, null equivalence, 
 
 ## Control-Arg Enforcement
 
-Tools have an effective set of security-relevant args. For record-backed tool catalogs, write-surface `facts` become the effective control args. For legacy or direct exe surfaces, that metadata comes from `controlArgs`. The runtime consumes whichever effective metadata exists and enforces that planners constrain all control args.
+Tools have an effective set of security-relevant args. For record-backed tool catalogs, write-surface `facts` are the effective control args. The runtime enforces that planners constrain all of them.
 
 **Two enforcement layers:**
 
@@ -231,7 +233,6 @@ Tools have an effective set of security-relevant args. For record-backed tool ca
 
 - An effective control arg that is NOT constrained in the `authorizations` entry is a **validation error**. The planner must pin it with a literal, `eq`, or `oneOf` constraint.
 - A tool with effective control args authorized as `true` (unconstrained) is a **validation error**. `true` is only valid for tools with no effective control args.
-- If trusted control-arg metadata is absent for a `tool:w` executable, validation fails closed by treating every declared parameter as a control arg.
 
 **Runtime (always):** Whether or not validation ran, the runtime enforces that args not mentioned in the constraint must be empty/null. If the planner doesn't mention `cc` on `send_email`, the runtime enforces that `cc` must be null, `[]`, or absent. This prevents silent omission from becoming an open hole.
 
@@ -295,66 +296,61 @@ The comparator prefers `instanceKey` when available, falling back to `(coercionI
 
 **What the rule does NOT defend against.** Single-control-arg tools are unaffected (one arg has nothing to correlate against). Tools with `correlate: false` (or unset) skip the check entirely. Values without `factsources` (constructed via mlld code without going through `=> record` coercion) cannot be correlated and the dispatch will be denied with a "missing factsource" reason.
 
-Legacy tool metadata can still opt in with `correlateControlArgs: true` when the tool is not record-backed.
-
 The runtime check fires on both dispatch paths: orchestrator-side direct exec calls and LLM-bridge dispatched tool calls. There is no path that bypasses it.
 
 The factsource identity behavior described here is covered in the record coercion test matrix for `js`, `cmd`, `sh`, `node`, `py`, inline `as record`, and imported MCP-backed wrapper exes.
 
-## Update and Payload Arg Enforcement
+## Input Policy Sections
 
-Two additional exe metadata fields refine write tool contracts:
+Input records can refine write-tool contracts with top-level policy sections:
 
-### `updateArgs`
+### `update`
 
-Declares which args are mutable fields on the target:
-
-```mlld
-exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, recurring) = [...]
-  with {
-    controlArgs: ["id", "recipient"],
-    updateArgs: ["amount", "date", "subject", "recurring"]
-  }
-```
-
-`controlArgs` identifies the target. `updateArgs` are the actual changes. The runtime rejects update calls with no non-null `updateArgs` values — "update with no changed fields." The builder drops update tools authorized with `allow: { "toolName": true }` when `updateArgs` is declared (issue: `no_update_fields`).
-
-`updateArgs` must be disjoint from `controlArgs`.
-
-### `exactPayloadArgs`
-
-Declares which payload fields must be explicitly user-provided text:
+`update: [field, ...]` declares the mutable fields on the target:
 
 ```mlld
-exe tool:w @sendDirectMessage(recipient, body) = [...]
-  with {
-    controlArgs: ["recipient"],
-    exactPayloadArgs: ["body"]
+record @update_scheduled_transaction_inputs = {
+  facts: [id: string, recipient: string],
+  data: [amount: number?, date: string?, subject: string?, recurring: boolean?],
+  update: [amount, date, subject, recurring],
+  validate: "strict"
+}
+
+var tools @writeTools = {
+  update_scheduled_transaction: {
+    mlld: @updateScheduledTransaction,
+    inputs: @update_scheduled_transaction_inputs,
+    labels: ["tool:w:update_scheduled_transaction", "bank:w", "update:w"]
   }
+}
 ```
 
-When `@policy.build(@intent, @tools, { task: @query })` is called, `exactPayloadArgs` values are checked against the task text (case-insensitive, trimmed). Values not in the task text are rejected (issue: `payload_not_in_task`). This applies to values in `resolved`, `known`, and flat intent.
+`facts` identify the target. `update` lists the actual changes. The runtime rejects update calls with no non-null `update` fields, and the validator requires the surfaced tool to carry `update:w` in `labels`.
 
-`exactPayloadArgs` must be a subset of non-control params. It may overlap with `updateArgs`.
+### `exact`
 
-### Combined example
+`exact: [field, ...]` declares payload fields that must come from the user's task text verbatim:
 
 ```mlld
-exe tool:w @updateScheduledTransaction(id, recipient, amount, date, subject, recurring) = [...]
-  with {
-    controlArgs: ["id", "recipient"],
-    updateArgs: ["amount", "date", "subject", "recurring"],
-    exactPayloadArgs: ["subject"]
-  }
+record @send_direct_message_inputs = {
+  facts: [recipient: string],
+  data: [body: string],
+  exact: [body],
+  validate: "strict"
+}
 ```
 
-- `id` and `recipient` need proof (handles)
-- At least one of `amount`, `date`, `subject`, `recurring` must have a value
-- `subject` must appear in the user's task text
+When `@policy.build(@intent, @tools, { task: @query })` is called, listed fields are checked against the task text (case-insensitive, trimmed). Values not found in the task text are rejected.
 
-All three metadata fields use restrict-only override semantics on tool collections.
+### `allowlist`, `blocklist`, and `optional_benign`
 
-**Example:** `send_email` declares `recipients`, `cc`, `bcc` as control args. `subject`, `body`, `attachments` are data args.
+- `allowlist: { field: @set }` restricts a field to a named set
+- `blocklist: { field: @set }` rejects values that appear in a named set
+- `optional_benign: [field, ...]` acknowledges optional fact fields whose omission is harmless and suppresses the validator advisory
+
+`allowlist` and `blocklist` can both apply to the same field. The value must satisfy both checks.
+
+**Example:** `send_email` treats `recipients`, `cc`, and `bcc` as control args because they are fact fields. `subject`, `body`, and `attachments` are data args.
 
 ```json
 {
@@ -373,9 +369,9 @@ All three metadata fields use restrict-only override semantics on tool collectio
 }
 ```
 
-This authorizes `send_email` with `recipients` pinned to `mark@example.com` and carries the required proof forward. Because `cc` and `bcc` are declared control args but omitted from the constraint, they are enforced as empty/null at runtime. The planner doesn't need to mention `subject` or `body` — those are data args.
+This authorizes `send_email` with `recipients` pinned to `mark@example.com` and carries the required proof forward. Because `cc` and `bcc` are also control args but omitted from the constraint, they are enforced as empty/null at runtime. The planner does not need to mention `subject` or `body` — those are data args.
 
-If the planner had written `"send_email": true`, validation would reject it because `send_email` has declared control args.
+If the planner had written `"send_email": true`, validation would reject it because `send_email` has effective control args.
 
 ## Enforcement
 
@@ -552,9 +548,9 @@ Three buckets:
 
 The entire bucketed intent must come from uninfluenced sources. The clean planner produces the intent. Influenced workers produce data for reasoning, not authorization. This is a hard invariant — the builder rejects intent from influenced sources.
 
-**Where user-typed payload values go.** User-provided literal values — update fields like `new_start_time: "14:00"`, payload values like `subject: "Q4 Review"` — belong in `known`, keyed by the tool they satisfy. If the user's task is "reschedule my 2pm meeting to 3pm," then `event_id: h_abc` (from a prior resolve phase) goes in `resolved.reschedule_calendar_event.event_id` and `new_start_time: "15:00"` (from the user's task text) goes in `known.reschedule_calendar_event.new_start_time`. The runtime validates both buckets against the tool's `controlArgs` / `updateArgs` / `exactPayloadArgs` metadata.
+**Where user-typed payload values go.** User-provided literal values — update fields like `new_start_time: "14:00"`, payload values like `subject: "Q4 Review"` — belong in `known`, keyed by the tool they satisfy. If the user's task is "reschedule my 2pm meeting to 3pm," then `event_id: h_abc` (from a prior resolve phase) goes in `resolved.reschedule_calendar_event.event_id` and `new_start_time: "15:00"` (from the user's task text) goes in `known.reschedule_calendar_event.new_start_time`. The runtime validates both buckets against the tool's input record: `facts` define control args, `update` defines the mutation set, and `exact` checks task-text grounding.
 
-If a planner produces a request with separate `authorizations` and `literal_inputs` (or equivalent) fields, merge `literal_inputs` into the `known` bucket before calling `@policy.build`. Without this merge, the builder sees control args (via `resolved`) but no payload values, and the `updateArgs` check fails with `no_update_fields`. The fix is not to read tool metadata in orchestration code and synthesize a richer intent — it's to put the user's literal values in the right bucket. `known` is the primitive for uninfluenced user-provided payloads; use it.
+If a planner produces a request with separate `authorizations` and `literal_inputs` (or equivalent) fields, merge `literal_inputs` into the `known` bucket before calling `@policy.build`. Without this merge, the builder sees control args (via `resolved`) but no payload values, and the `update` check fails with `no_update_fields`. The fix is not to read tool metadata in orchestration code and synthesize a richer intent — it's to put the user's literal values in the right bucket. `known` is the primitive for uninfluenced user-provided payloads; use it.
 
 The builder also accepts flat and nested runtime intent shapes:
 

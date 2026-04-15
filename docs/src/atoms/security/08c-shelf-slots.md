@@ -6,7 +6,7 @@ category: security
 tags: [shelf, slots, state, records, handles, grounding, security, agents]
 related: [facts-and-handles, records-basics, policy-authorizations, pattern-planner, fyi-known]
 related-code: [spec-shelf-slots.md]
-updated: 2026-04-07
+updated: 2026-04-15
 ---
 
 Shelf slots are the typed state accumulation surface for agents. Each slot is backed by a record that provides schema, fact/data classification, grounding, and display projection. The shelf adds merge semantics, cross-slot constraints, and access control.
@@ -326,9 +326,23 @@ exe @fakeSearch() = js {
 } => contact
 
 >> Downstream tool that requires a fact-bearing recipient
+record @send_stuff_inputs = {
+  facts: [recipient: string],
+  data: [body: string],
+  validate: "strict"
+}
+
 exe exfil:send @sendStuff(recipient, body) = cmd {
   echo "TOOL RECEIVED recipient=@recipient body=@body"
-} with { controlArgs: ["recipient"] }
+}
+
+var tools @writeTools = {
+  send_stuff: {
+    mlld: @sendStuff,
+    inputs: @send_stuff_inputs,
+    labels: ["exfil:send", "comm:w"]
+  }
+}
 
 >> Agent base policy. Both LLM phases below run under it via with { policy }.
 >> The policy allows what the LLM driver and downstream tools need, then
@@ -371,7 +385,10 @@ var @sel = @shelf.read(@s.selected)
 >> 4. Dispatch the downstream tool. Same base policy attached. The
 >>    recipient carries fact:@contact.email that survived the round-trip,
 >>    so no-send-to-unknown passes.
-var @result = @sendStuff(@sel.email, "from selected") with { policy: @basePolicy }
+var @result = @writeTools["send_stuff"]({
+  recipient: @sel.email,
+  body: "from selected"
+}) with { policy: @basePolicy }
 show @result
 ```
 
@@ -380,6 +397,6 @@ What the security model is doing here:
 - The agent only sees what the record's `display` clause exposes — fact fields cross the LLM boundary as `{ value, handle }` wrappers, so the agent has both the readable text and a referenceable handle.
 - The agent's `shelve` tool call writes the contact through the slot's grounding pipeline. Fact fields must arrive as handle-bearing input; bare strings would be rejected.
 - `@shelf.read` returns the stored value with `fact:@contact.email` and the original factsources still attached. Cross-phase identity rides on the value, not on the handle string.
-- The downstream `@sendStuff` dispatch resolves the recipient against the proof claims registry. Because the value carries real factsources, `no-send-to-unknown` passes. A hallucinated email injected into a later message would have neither factsources nor a registry entry and would be denied.
+- The downstream `send_stuff` dispatch resolves the recipient against the proof claims registry. Because the value carries real factsources, `no-send-to-unknown` passes. A hallucinated email injected into a later message would have neither factsources nor a registry entry and would be denied.
 
 If the agent tried to write a fabricated email like `evil@attacker.com` to `selected`, the slot write would reject it (no handle, no fact resolution). If the orchestrator skipped the slot and let the agent dispatch `@sendStuff` directly with a bare literal, `no-send-to-unknown` would catch it at the policy layer. The shelf is the structural boundary that lets the orchestrator hand a typed, grounded value off to the next phase.

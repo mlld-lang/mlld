@@ -6,7 +6,7 @@ category: security
 tags: [security, records, facts, handles, fyi, authorization, provenance, prompt-injection]
 related: [labels-attestations, security-getting-started, security-guards-basics, mcp-guards, policy-authorizations, pattern-planner]
 related-code: [core/policy/fact-requirements.ts, core/policy/fact-labels.ts, interpreter/fyi/facts-runtime.ts, interpreter/utils/handle-resolution.ts, interpreter/eval/records/coerce-record.ts, core/types/handle.ts]
-updated: 2026-04-14
+updated: 2026-04-15
 ---
 
 Records, fact labels, and opaque handles form mlld's provenance-based authorization model. Together they prevent prompt injection consequences by tracking which values came from trusted sources and giving LLMs safe references instead of copyable literals.
@@ -211,11 +211,11 @@ var @policyConfig = {
 |---|---|
 | `no-send-to-unknown` | Recipient must carry fact proof or `known` attestation |
 | `no-destroy-unknown` | Deletion target must carry fact proof or `known` attestation |
-| `no-unknown-extraction-sources` | Declared `sourceArgs` must carry fact proof or `known` attestation |
+| `no-unknown-extraction-sources` | Surfaced read-tool source args must carry fact proof or `known` attestation |
 | `no-untrusted-destructive` | Tainted data can't flow into write operations (scopes to control args when declared) |
 | `no-untrusted-privileged` | Tainted data can't flow into credential/account operations (scopes to control args when declared) |
 | `no-secret-exfil` | Secret-labeled data can't be sent to external destinations |
-| `correlate-control-args` | When a write tool with multiple effective control args opts into correlation — typically through `inputs: @record` with `correlate: true`, or legacy `correlateControlArgs: true` — all control arg values on a single dispatch must come from the same source record instance. See `policy-authorizations`. |
+| `correlate-control-args` | When a write tool with multiple effective control args opts into correlation — typically through `inputs: @record` with `correlate: true` — all control arg values on a single dispatch must come from the same source record instance. See `policy-authorizations`. |
 
 The first three are *positive checks* -- they require proof on specific values. `correlate-control-args` is a *cross-arg correlation check* -- it's per-tool opt-in via metadata, not a default rule. The rest are *negative checks* -- they block contamination.
 

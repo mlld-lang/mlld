@@ -7,7 +7,7 @@ parent: labels
 tags: [labels, facts, records, proof, security, authorization]
 related: [labels-overview, labels-attestations, records-basics, facts-and-handles, policy-authorizations]
 related-code: [core/policy/fact-labels.ts, core/policy/fact-requirements.ts, interpreter/eval/records/coerce-record.ts]
-updated: 2026-03-27
+updated: 2026-04-15
 qa_tier: 2
 ---
 
@@ -74,7 +74,7 @@ Built-in positive checks accept both `fact:` labels and `known` attestations:
 - `no-send-to-external` -- destination args must carry `fact:internal:*` or `known:internal`
 - `no-destroy-unknown` -- target args must carry fact proof or `known`
 
-When `controlArgs` is explicitly declared on the exe, any `fact:*` proof satisfies the check — the developer already asserted which args are destinations/targets. Without `controlArgs`, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes).
+When the runtime knows the surfaced tool's effective control args, any `fact:*` proof on those args satisfies the check — the developer already asserted which args are destinations/targets. On record-backed tool catalogs, those args come from input-record `facts`. Without that metadata, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes).
 
 ## Declarative fact requirements
 
@@ -104,7 +104,7 @@ Agents discover facts through display projections on tool results. When a record
 The fact requirement resolver powers both display projections and enforcement. It derives requirements from:
 
 1. Built-in symbolic specs (like `op:named:email_send`)
-2. Live operation metadata (`labels`, `controlArgs`)
+2. Live operation metadata (`labels`, effective control/source args)
 3. Declarative `policy.facts.requirements`
 
 If none resolve, discovery returns nothing. It never guesses from arg names.

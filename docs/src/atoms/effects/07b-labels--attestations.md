@@ -7,7 +7,7 @@ category: effects
 parent: labels
 tags: [labels, attestations, known, trust, security]
 related: [labels-overview, labels-trust, policy-operations, policy-authorizations, security-guards-basics, facts-and-handles]
-updated: 2026-03-24
+updated: 2026-04-15
 ---
 
 `known` and `known:*` form mlld's built-in attestation namespace.
@@ -58,6 +58,6 @@ If a planner pins `recipient: @approvedRecipient` and `@approvedRecipient` carri
 
 ## Facts
 
-Record-derived `fact:` labels also satisfy positive checks. When `controlArgs` is explicitly declared, any `fact:*` proof satisfies the check. Without `controlArgs`, field-name patterns apply (`fact:*.email` for sends, `fact:*.id` for deletes). `known` attestations also satisfy both checks.
+Record-derived `fact:` labels also satisfy positive checks. When the runtime knows the surfaced tool's effective control args, any `fact:*` proof on those args satisfies the check. On record-backed tool catalogs, those args come from input-record `facts`. Without that metadata, field-name patterns apply (`fact:*.email` for sends, `fact:*.id` for deletes). `known` attestations also satisfy both checks.
 
 Facts provide field-level proof from authoritative sources (contacts databases, CRM systems), while `known` attestations are value-scoped approvals. Both are valid proof for positive checks. See `facts-and-handles` for the full record/fact/handle model.

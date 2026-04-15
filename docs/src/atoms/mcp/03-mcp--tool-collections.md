@@ -7,7 +7,7 @@ parent: mcp
 tags: [mcp, tools, env, labels, collections]
 related: [mcp, mcp-export, tool-reshaping, mcp-guards, exe-metadata]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts]
-updated: 2026-04-14
+updated: 2026-04-15
 qa_tier: 2
 ---
 
@@ -46,7 +46,7 @@ var tools @agentTools = {
 - `authorizable` — catalog shorthand for default `role:*` authorization permissions, or `false` to default-deny this surfaced tool
 - `bind` — pre-fill parameters (see `tool-reshaping`)
 
-Legacy reshaping fields such as `expose`, `optional`, `controlArgs`, and `sourceArgs` still work when you are not using `inputs`, but `inputs: @record` is the primary shipped path for surfaced tool contracts.
+`inputs: @record` is the canonical shipped path for surfaced tool contracts.
 
 ## Record-backed tool inputs
 
@@ -58,8 +58,10 @@ When a tool entry uses `inputs: @record`, the collection derives its visible arg
 - on write surfaces, record `facts` become effective control args
 - on read-only surfaces, record `facts` become effective source args
 - record `correlate: true` becomes the same-source check for multi-fact write tools
+- top-level record policy sections such as `exact`, `update`, `allowlist`, `blocklist`, and `optional_benign` feed runtime validation, `@policy.build(...)`, `@toolDocs()`, and MCP descriptions from the same source definition
+- if the input record declares `update:`, the surfaced tool must include `update:w` in `labels`
 
-This keeps prompt docs, MCP schemas, runtime validation, and policy enforcement on one definition instead of splitting them across `expose`, `controlArgs`, and `sourceArgs`.
+This keeps prompt docs, MCP schemas, runtime validation, and policy enforcement on one definition.
 
 **Scope tools to an agent with `env`:**
 

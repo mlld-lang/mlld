@@ -4,6 +4,7 @@ import * as net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { interpret } from '@interpreter/index';
 import { Environment } from '@interpreter/env/Environment';
+import { createHandleWrapper } from '@core/types/handle';
 import { normalizePolicyConfig } from '@core/policy/union';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -237,12 +238,32 @@ describe('createCallMcpConfig', () => {
     const env = await createInterpretedEnv([
       '/record @contact = {',
       '  key: id,',
-      '  data: [id: string, email: string, name: string]',
+      '  facts: [id: string],',
+      '  data: [email: string, name: string]',
       '}',
+      '/exe @emitContact() = js {',
+      '  return {',
+      '    id: "c_1",',
+      '    email: "ada@example.com",',
+      '    name: "Ada"',
+      '  };',
+      '} => contact',
+      '/var @candidate = @emitContact()',
       '/shelf @outreach = {',
       '  recipients: contact[]',
       '}'
     ].join('\n'));
+
+    const candidate = env.getVariable('candidate')?.value;
+    if (!candidate) {
+      env.cleanup();
+      throw new Error('Expected @candidate to be defined');
+    }
+    const candidateId = await accessField(candidate, { type: 'field', value: 'id' } as any, { env });
+    const issuedId = env.issueHandle(candidateId, {
+      preview: 'Ada',
+      metadata: { field: 'id' }
+    });
 
     const outreach = env.getVariable('outreach');
     if (!outreach) {
@@ -301,7 +322,7 @@ describe('createCallMcpConfig', () => {
           arguments: {
             slot_alias: 'things',
             value: {
-              id: 'c_1',
+              id: createHandleWrapper(issuedId.handle),
               email: 'ada@example.com',
               name: 'Ada'
             }

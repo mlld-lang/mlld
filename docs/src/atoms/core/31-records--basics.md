@@ -6,11 +6,16 @@ category: core
 tags: [records, facts, data, schema, coercion, validation, structured-output]
 related: [exe-simple, labels-overview, labels-attestations, facts-and-handles, labels-facts]
 related-code: [core/types/record.ts, interpreter/eval/record.ts, interpreter/eval/records/coerce-record.ts, grammar/directives/record.peggy]
-updated: 2026-04-14
+updated: 2026-04-15
 qa_tier: 2
 ---
 
-Records declare which fields in structured data are authoritative facts and which are informational content. When an exe returns data through `=> record`, the record's classification applies automatically. The same record surface can also define the input contract of a tool collection entry with `inputs: @record`.
+Records declare which fields in structured data are authoritative facts and which are informational content. The same field syntax is used for two different directions:
+
+- **Output records** shape `=> record` / `as record` coercion and optional `display:` projections
+- **Input records** shape surfaced tools through `inputs: @record` on a tool collection entry
+
+Field syntax is the same in both directions: `name: type?` means an optional field. `name?: type` is not valid mlld syntax.
 
 For tool results, this is also the canonical secure data-plane return path to an LLM caller. Returning through `=> contact`, `=> record @schema`, or `=> @cast(@value, @schema)` turns on record-mediated return filtering at the bridge: the active `role:*` display projection shapes what the LLM sees.
 
@@ -52,17 +57,26 @@ record @issue = {
 `var tools` can point at an input-capable record with `inputs: @record`:
 
 ```mlld
+var @approvedRecipients = ["ada@example.com", "team@example.com"]
+
 record @send_email_inputs = {
-  facts: [recipient: string],
+  facts: [recipient: string, cc: string?, bcc: string?],
   data: {
     trusted: [subject: string],
     untrusted: [body: string?]
   },
+  exact: [subject],
+  allowlist: {
+    recipient: @approvedRecipients,
+    cc: @approvedRecipients,
+    bcc: @approvedRecipients
+  },
+  optional_benign: [cc, bcc],
   validate: "strict"
 }
 
-exe tool:w @sendEmail(recipient, subject, body) = run cmd {
-  mail-cli send --to @recipient --subject @subject --body @body
+exe tool:w @sendEmail(recipient, cc, bcc, subject, body) = run cmd {
+  mail-cli send --to @recipient --cc @cc --bcc @bcc --subject @subject --body @body
 }
 
 var tools @agentTools = {
@@ -82,6 +96,7 @@ For record-backed tool inputs:
 - `data.trusted` fields must stay trusted at dispatch time, but they do not carry fact proof
 - `data.untrusted` and plain `data` fields are payload fields, not authorization-grade identifiers
 - `validate: "strict"` enforces required fields and types before the executable body runs
+- `exact`, `update`, `allowlist`, `blocklist`, and `optional_benign` are top-level input-only policy sections for surfaced tools
 
 When a write-tool input record has more than one fact field, set `correlate: true` to require that those fact values came from the same source record instance:
 
@@ -94,7 +109,17 @@ record @send_payment_inputs = {
 }
 ```
 
-That turns on the same-source check used by `correlate-control-args` without writing `controlArgs` metadata by hand.
+That turns on the same-source check for multi-fact write inputs without any extra per-exe metadata.
+
+The input-only policy sections are:
+
+- `exact: [field, ...]` — listed data fields must appear verbatim in the task text supplied to `@policy.build(..., { task })`
+- `update: [field, ...]` — mutation fields for update-style tools; at least one must be present, and the surfaced tool must carry `update:w` in `labels`
+- `allowlist: { field: @set }` — values must be present in the named set
+- `blocklist: { field: @set }` — values must not be present in the named set
+- `optional_benign: [field, ...]` — acknowledges optional fact fields whose omission is benign and suppresses the validator advisory
+
+`display:` is output-only. Any record that declares `display:` is an output record, and any record that declares input-only sections such as `exact`, `update`, `allowlist`, `blocklist`, or `optional_benign` is an input record. Mixing the two directions is a validation error.
 
 The `when` clause can conditionally promote data fields to trusted:
 

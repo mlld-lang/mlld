@@ -3,7 +3,7 @@ id: security
 title: Security
 brief: Guards, labels, policies, records, shelf slots, signing, environments, audit logging, and tool provenance
 category: security
-updated: 2026-04-11
+updated: 2026-04-15
 ---
 
 mlld's security model prevents the consequences of prompt injection from manifesting. LLMs can be tricked — but labels track facts about data that the runtime enforces regardless of LLM intent.
@@ -20,7 +20,7 @@ Most detailed security atoms now live in:
 - **Restrict what a module or agent can do** → [policies](#policies): declarative capability rules, label flow restrictions, built-in rules
 - **Inspect, transform, or block data at operation time** → [guards](#guards): imperative per-operation logic with before/after hooks
 - **Track where data came from and what it contains** → [labels](#labels): automatic provenance, explicit sensitivity and trust classification
-- **Authorize specific tools and arguments for a task** → [authorizations](#authorizations): declarative per-tool authorization with control-arg enforcement
+- **Authorize specific tools and arguments for a task** → [authorizations](#authorizations): declarative per-tool authorization with input-record facts, `update`, and `exact` enforcement
 - **Accumulate grounded agent state with typed slots** → [shelf slots](#shelf-slots): record-backed state surfaces with merge semantics, cross-slot constraints, and grounding validation
 - **Create trust boundaries for LLM instructions** → [signing](#signing): integrity for templates and instructions
 - **Isolate execution with credentials and resource limits** → [environments](#environments): scoped contexts with filesystem, network, and tool restrictions
@@ -129,7 +129,7 @@ policy @p = {
 
 **Policy vs. guards:** Capability denials (`capabilities.deny`, environment constraints) are hard errors — immediate, uncatchable. Managed label-flow denials (`defaults.rules`, `labels` deny/allow) flow through the guard pipeline and can be overridden by explicit privileged guard `allow` decisions, or caught with `denied =>` handlers. To make a label-flow denial absolute, use `locked: true` on the policy. Use policy for broad restrictions; use privileged guards to punch specific holes.
 
-Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the named destination/target args to carry `known` (or `known:internal` for internal-only send destinations). For read/extract tools, declare `sourceArgs` and enable `no-unknown-extraction-sources` to require proof-bearing source selectors.
+Built-in send/destroy rules use the same model: label a send operation as `exfil:send` or a targeted destructive operation as `destructive:targeted`, and require the surfaced destination/target args to carry `known` (or `known:internal` for internal-only send destinations). For read/extract tools, use input-record `facts` on the surfaced read tool and enable `no-unknown-extraction-sources` to require proof-bearing source selectors.
 
 **Atoms:** `security-policies` (start here), `policy-capabilities`, `policy-operations`, `policy-label-flow`, `policy-authorizations`, `policy-composition`, `policy-auth`
 
@@ -158,13 +158,13 @@ var @result = @worker(@prompt) with { policy: @built.policy }
 
 **Argument constraints:** Literal values use tolerant comparison (`~=`), `eq` for explicit matching, `oneOf` for multiple candidates.
 
-**Control-arg enforcement:** Write executables declare security-relevant args with `with { controlArgs: [...] }`. Tool collections can restate or tighten that metadata for a specific exposure. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. If trusted control-arg metadata is missing for a `tool:w` executable, every declared parameter is treated as a control arg. Raw `tool: true` / flat `authorizations.allow.tool = true` is only valid for tools with no effective control args; builder bucketed `allow: { tool: true }` is explicit whole-tool authorization.
+**Control-arg enforcement:** Surfaced write tools derive security-relevant args from input-record `facts`. `mlld validate --context tools.mld` catches unconstrained control args as errors before execution. At runtime, args not mentioned in the constraint are always enforced as empty/null — silent omission never becomes an open hole. Raw `tool: true` / flat `authorizations.allow.tool = true` is only valid for tools with no effective control args; builder bucketed `allow: { tool: true }` is explicit whole-tool authorization.
 
 **Override behavior:** Authorization-generated guards are privileged, but they still inherit positive checks from active defaults rules. Matching calls must still satisfy requirements like `known` destinations or the absence of `untrusted` taint unless the base policy itself changes. Planner-pinned approved values can carry `known` attestations into that override path; raw literals cannot. `locked: true` still prevents all overrides.
 
 **Planner contract:** The planner produces bucketed authorization intent only. It must not produce `authorizable`, `defaults`, `rules`, `locked`, `labels`, or other developer-owned policy sections. `authorizable` stays in the base policy; runtime intent goes through `@policy.build`.
 
-**Atoms:** `policy-authorizations` (full syntax and control-arg enforcement)
+**Atoms:** `policy-authorizations` (full syntax and input-record-driven authorization enforcement)
 
 ## Shelf Slots
 
@@ -261,7 +261,7 @@ Composite patterns that combine multiple security primitives:
 6. `security-policies` — declaring policy objects
 7. `policy-operations` — semantic labels → risk categories
 8. `policy-label-flow` — deny/allow rules for data flow (includes hierarchical op:* matching)
-9. `policy-authorizations` — task-scoped per-tool authorization with control-arg enforcement
+9. `policy-authorizations` — task-scoped per-tool authorization with input-record-driven control-arg enforcement
 10. `security-guards-basics` — guard syntax, timing, triggers, and security context
 11. `facts-and-handles` — records, fact labels, handles, display projections, and positive checks
 12. `shelf-slots` — typed state accumulation with grounding and cross-slot constraints

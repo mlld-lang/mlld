@@ -8,7 +8,7 @@ parent: labels
 tags: [labels, trust, untrusted, security, policy]
 related: [labels-overview, labels-sensitivity, labels-source-auto, labels-attestations, policy-label-flow, policy-operations]
 related-code: [core/security/LabelTracker.ts, interpreter/eval/security.ts]
-updated: 2026-03-27
+updated: 2026-04-15
 ---
 
 Trust labels classify data reliability: `trusted` or `untrusted`.
@@ -131,6 +131,6 @@ After coercion on an `untrusted` exe result:
 
 `data: [fields]` is sugar for `data: { untrusted: [fields] }`. The `when` clause can conditionally promote data fields to trusted — see `records-basics`.
 
-When the operation has explicit `controlArgs`, `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to those control args only. Fact-bearing control args pass (trust refinement cleared `untrusted`). Tainted data args (body, title, description) are not checked — they're expected payload in the planner-worker model.
+When the runtime knows the operation's effective control args, `no-untrusted-destructive` and `no-untrusted-privileged` scope their taint checks to those args only. On surfaced tool catalogs, those control args come from input-record `facts`. Fact-bearing control args pass (trust refinement cleared `untrusted`). Tainted data args (body, title, description) are not checked — they're expected payload in the planner-worker model.
 
-Without `controlArgs`, behavior is unchanged — all args are checked. Use a policy-rule override such as `{ "rule": "no-untrusted-destructive", "taintFacts": true }` to force all-arg checking even when `controlArgs` is declared.
+Without effective control-arg metadata, behavior is unchanged — all args are checked. Use a policy-rule override such as `{ "rule": "no-untrusted-destructive", "taintFacts": true }` to force all-arg checking even when control args are known.

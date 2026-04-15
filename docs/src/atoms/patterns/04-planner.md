@@ -6,7 +6,7 @@ category: patterns
 tags: [patterns, planner, worker, authorization, agents, handles, facts, security]
 related: [facts-and-handles, policy-authorizations, tool-docs, security-getting-started, labels-attestations, security-guards-basics, exe-tool-return]
 related-code: [interpreter/eval/exec/policy-fragment.ts, interpreter/policy/authorization-compiler.ts, interpreter/env/builtins/policy.ts, interpreter/utils/handle-resolution.ts]
-updated: 2026-04-10
+updated: 2026-04-15
 ---
 
 The planner-worker pattern splits agent execution into two phases: a planner that decides what to do and authorizes specific tools and values, and a worker that executes under those constraints.
@@ -82,12 +82,26 @@ exe @searchContacts(query) = run cmd {
   contacts-cli search @query --format json
 } => contact
 
+record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
 exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
   email-cli send --to @recipient --subject @subject --body @body
-} with { controlArgs: ["recipient"] }
+}
+
+var tools @writeTools = {
+  send_email: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["exfil:send", "comm:w"]
+  }
+}
 ```
 
-The `controlArgs` declaration marks `recipient` as a security-relevant parameter. The `ref` on `email` means the LLM sees the value AND gets a handle — it can read the email for reasoning and reference it by handle for tool calls.
+The input record marks `recipient` as a security-relevant parameter because it is a fact field. The `ref` on `email` means the LLM sees the value AND gets a handle — it can read the email for reasoning and reference it by handle for tool calls.
 
 ### Planner phase
 
@@ -210,11 +224,11 @@ If the worker copies a masked preview that uniquely matches a projected contact,
 
 ### Control args are mandatory
 
-Declare control args on write executables with `with { controlArgs: [...] }`. If a `tool:w` exe has no `controlArgs` metadata, built-in send/destroy checks fail closed for that operation.
+Declare surfaced write-tool control args with `inputs: @record` and put every security-relevant field in `facts:`. Built-in send/destroy checks key off those fact fields.
 
 ### Data args are stripped from authorization
 
-The planner doesn't need to know which args are control args. If the planner includes data args (title, description, start_time, etc.) in the authorization, the runtime silently strips them at compilation time. Only declared `controlArgs` are compiled into authorization constraints.
+The planner doesn't need to know which args are control args. If the planner includes data args (title, description, start_time, etc.) in the authorization, the runtime silently strips them at compilation time. Only surfaced fact fields are compiled into authorization constraints.
 
 This avoids mismatches where the planner pins a data arg value and the worker produces a slightly different one. The planner can be thorough — the runtime only enforces what's security-relevant.
 
@@ -225,7 +239,7 @@ Authorization alone is not enough. Even with a planner-approved value, inherited
 - `no-send-to-unknown` requires fact proof or `known` on destination args
 - `no-destroy-unknown` requires fact proof or `known` on target args
 
-When `controlArgs` is explicitly declared, any `fact:*` label satisfies the check — the developer already asserted which args are destinations. If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the planner proposes a proofless literal, `@policy.build` drops it and hand-built `with { policy }` rejects it before dispatch.
+When the runtime knows the surfaced control args, any `fact:*` label on those args satisfies the check — the developer already asserted which args are destinations. If the planner pins a value that carried `known` or a matching `fact:` label at plan time, the authorization guard carries that proof forward. If the planner proposes a proofless literal, `@policy.build` drops it and hand-built `with { policy }` rejects it before dispatch.
 
 ### Tolerant comparison
 
@@ -242,7 +256,7 @@ The runtime does not rewrite arbitrary payloads or tool schemas. Tolerant bounda
 `mlld validate` catches authorization issues before execution:
 
 - Control args not constrained in the authorization
-- Tools authorized with `true` (unconstrained) when they have declared control args
+- Tools authorized with `true` (unconstrained) when they have effective control args
 - Missing control-arg metadata on `tool:w` executables
 
 ## Worker returns with handle field type
@@ -304,9 +318,23 @@ exe @searchContacts(query) = run cmd {
   contacts-cli search @query --format json
 } => contact
 
+record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
 exe exfil:send @sendEmail(recipient, subject, body) = run cmd {
   email-cli send --to @recipient --subject @subject --body @body
-} with { controlArgs: ["recipient"] }
+}
+
+var tools @writeTools = {
+  send_email: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["exfil:send", "comm:w"]
+  }
+}
 
 var @base = {
   defaults: {
@@ -370,7 +398,7 @@ exe exfil:send @sendEmail(recipient, subject, body) = [
   let @result = run cmd { email-cli send --to @recipient --subject @subject --body @body }
   -> { status: "sent", recipient: @recipient }
   => { ok: true, message_id: @result.id, full_response: @result }
-] with { controlArgs: ["recipient"] }
+]
 
 exe @getEmailById(id) = [
   let @email = run cmd { email-cli get @id --format json }
@@ -378,11 +406,45 @@ exe @getEmailById(id) = [
   => @parsed
 ]
 
+record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+record @search_contacts_inputs = {
+  data: [query: string],
+  validate: "strict"
+}
+
+record @get_email_by_id_inputs = {
+  facts: [id: string],
+  validate: "strict"
+}
+
+var tools @plannerTools = {
+  search_contacts: {
+    mlld: @searchContacts,
+    inputs: @search_contacts_inputs,
+    labels: ["resolve:r"]
+  },
+  get_email_by_id: {
+    mlld: @getEmailById,
+    inputs: @get_email_by_id_inputs,
+    labels: ["read:r"]
+  },
+  send_email: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["exfil:send", "comm:w"]
+  }
+}
+
 >> The "planner" is a single @claude call with the workers as its tool set.
 >> Its conversation history IS the execution log — no prior-step threading
 >> needed, no stateless re-rendering, no cumulative summary primitive.
 var @agentResult = @claude(@plannerPrompt(@task), {
-  tools: [@searchContacts, @getEmailById, @sendEmail]
+  tools: @plannerTools
 }) with {
   display: "role:planner",
   policy: @base

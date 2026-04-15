@@ -6,7 +6,7 @@ category: cli
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-04-14
+updated: 2026-04-15
 qa_tier: 2
 ---
 
@@ -107,7 +107,7 @@ Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform
 
 **Policy / guard validation:**
 
-`mlld validate --format json` now surfaces policy declarations, richer executable metadata, record and shelf declarations, and richer guard structure:
+`mlld validate --format json` now surfaces policy declarations, executable summaries, record and shelf declarations, and richer guard structure:
 
 ```json
 {
@@ -115,13 +115,12 @@ Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform
     "name": "send_email",
     "params": ["recipients", "subject", "body"],
     "labels": ["tool:w"],
-    "controlArgs": ["recipients"],
-    "updateArgs": ["subject"],
-    "exactPayloadArgs": ["body"],
-    "correlateControlArgs": true,
     "outputRecord": { "kind": "static", "name": "email_result" }
   }],
-  "records": [{ "name": "email_result", "key": "message_id", "display": "legacy" }],
+  "records": [
+    { "name": "send_email_inputs" },
+    { "name": "email_result", "key": "message_id", "display": "legacy" }
+  ],
   "shelves": [{ "name": "pipeline", "slots": [{ "name": "selected", "record": "email_result", "cardinality": "singular" }] }],
   "policies": [{ "name": "task", "rules": ["no-send-to-unknown"], "operations": { "destructive": ["tool:w"] }, "locked": false }],
   "policyCalls": [{
@@ -157,14 +156,16 @@ This is useful when validating LLM-generated policies/guards before execution.
 
 Skipped entries stay out of default text output so `mlld validate` only reports actionable issues.
 
-**Executable metadata validation:**
+**Record/input contract validation:**
 
-`mlld validate` now fails early for executable metadata mistakes that would otherwise fail only at runtime:
+`mlld validate` now fails early for input-record and surfaced-tool mistakes that would otherwise fail only at runtime:
 
-- unknown `with { ... }` keys such as `contolArgs`
-- `controlArgs` / `updateArgs` / `exactPayloadArgs` entries that are not declared params
-- overlap errors such as `updateArgs` intersecting `controlArgs`
-- non-boolean `correlateControlArgs`
+- field-attribute bag syntax such as `recipient: string { exact: true }`
+- unknown record sections
+- `key` fields that are missing from `facts`
+- `exact` / `update` fields that are not declared in `data`
+- invalid `allowlist` / `blocklist` targets
+- invalid `optional_benign` entries
 
 **Tool catalog validation:**
 
@@ -174,11 +175,10 @@ Skipped entries stay out of default text output so `mlld validate` only reports 
 - non-string `description` / `instructions`
 - invalid `authorizable` shapes (must be `false`, `role:*`, or an array of `role:*`)
 - `inputs` that do not reference an input-capable record
-- `inputs` mixed with legacy shaping fields such as `expose`, `optional`, `controlArgs`, `sourceArgs`, or `correlateControlArgs`
 - input-record fields that do not match executable params
 - executable params left uncovered by `inputs` or `bind`
 - `bind` keys that overlap the input record
-- legacy `bind` / `expose` / `optional` / `controlArgs` mistakes when not using `inputs`
+- surfaced tools with `update:` input sections that are missing `update:w` in `labels`
 
 **Record and shelf validation:**
 
@@ -204,8 +204,8 @@ It currently catches:
 - unconstrained control-arg authorizations
 - proofless `resolved` values that should be handle-backed
 - `known` literals not present in `options.task`
-- `exactPayloadArgs` literals not present in `options.task`
-- update authorizations that omit all declared `updateArgs`
+- `exact` literals not present in `options.task`
+- update authorizations that omit all declared `update` fields
 
 Dynamic callsites are skipped rather than guessed, and are surfaced only in JSON under `policyCalls`.
 

