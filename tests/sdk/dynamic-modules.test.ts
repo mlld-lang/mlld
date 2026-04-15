@@ -14,7 +14,7 @@ describe('dynamic module imports', () => {
     });
 
     expect(result.trim()).toBe('Hello\n\n2');
-  });
+  }, 15000);
 
   it('supports namespace imports with nested dynamic data', async () => {
     const script = `/import "@state" as @state

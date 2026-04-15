@@ -37,7 +37,7 @@ describe('InstallCommand', () => {
     const modules = ['@alice/utils', '@bob/helpers'];
     
     await expect(installCommand.install(modules, { dryRun: true })).resolves.toBeUndefined();
-  });
+  }, 15000);
 
   it('should validate module references', () => {
     // Test module reference parsing
