@@ -419,7 +419,73 @@ export async function evaluateArrayItem(
       }
 
       const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-      return resolveVariable(variable, env, ResolutionContext.ArrayElement);
+      const { accessFields } = await import('@interpreter/utils/field-access');
+      const resolvedVariable = await resolveVariable(variable, env, ResolutionContext.ArrayElement);
+      if (Array.isArray(item.fields) && item.fields.length > 0) {
+        const fieldResult = await accessFields(resolvedVariable, item.fields, {
+          preserveContext: true,
+          env,
+          sourceLocation
+        });
+        return (fieldResult as any).value;
+      }
+      return resolvedVariable;
+    }
+
+    case 'VariableReferenceWithTail': {
+      const baseReference = item.variable;
+      const identifier = baseReference?.identifier;
+      if (typeof identifier !== 'string' || identifier.length === 0) {
+        throw new Error('Variable reference is missing an identifier');
+      }
+
+      const variable = env.getVariable(identifier);
+      if (!variable) {
+        throw new Error(`Variable not found: ${identifier}`);
+      }
+
+      if (collectDescriptor && variable.mx) {
+        const varDescriptor = varMxToSecurityDescriptor(variable.mx);
+        if (varDescriptor) {
+          collectDescriptor(varDescriptor);
+        }
+      }
+
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      const { accessFields } = await import('@interpreter/utils/field-access');
+      const needsPipelineExtraction = Array.isArray(item.withClause?.pipeline) && item.withClause.pipeline.length > 0;
+      const hasFieldAccess = Array.isArray(baseReference?.fields) && baseReference.fields.length > 0;
+      const resolutionContext =
+        needsPipelineExtraction && !hasFieldAccess
+          ? ResolutionContext.PipelineInput
+          : ResolutionContext.FieldAccess;
+
+      let resolvedValue = await resolveVariable(variable, env, resolutionContext);
+      if (hasFieldAccess) {
+        const fieldResult = await accessFields(resolvedValue, baseReference.fields, {
+          preserveContext: true,
+          env,
+          sourceLocation
+        });
+        resolvedValue = (fieldResult as any).value;
+      }
+
+      if (needsPipelineExtraction) {
+        const { processPipeline } = await import('../pipeline/unified-processor');
+        resolvedValue = await processPipeline({
+          value: resolvedValue,
+          env,
+          node: item,
+          identifier,
+          location: sourceLocation,
+          descriptorHint: collectDescriptor ? extractSecurityDescriptor(variable, {
+            recursive: true,
+            mergeArrayElements: true
+          }) : undefined
+        });
+      }
+
+      return resolvedValue;
     }
 
     case 'path': {

@@ -176,6 +176,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
   }
 
   const collection: ToolCollection = {};
+  const collectionCapturedModuleEnv = new Map<string, unknown>();
 
   for (const [toolName, toolValue] of Object.entries(raw)) {
     if (!isPlainObject(toolValue)) {
@@ -187,8 +188,9 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
     }
 
-    const mlldName = resolveToolMlldName(mlldRef, toolName);
-    const execVar = env.getVariable(mlldName);
+    const { mlldName, executable: referencedExecutable, capturedModuleEnv } =
+      resolveToolMlldReference(mlldRef, toolName);
+    const execVar = referencedExecutable ?? env.getVariable(mlldName);
     if (!execVar || !isExecutableVariable(execVar)) {
       throw new Error(`Tool '${toolName}' references non-executable '@${mlldName}'`);
     }
@@ -196,6 +198,10 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     const paramSet = new Set(paramNames);
     const executableDef = execVar.internal?.executableDef ?? execVar.value;
+    const hasExecutableControlArgsMetadata = Array.isArray((executableDef as any)?.controlArgs);
+    const hasExecutableUpdateArgsMetadata = Array.isArray((executableDef as any)?.updateArgs);
+    const hasExecutableExactPayloadArgsMetadata = Array.isArray((executableDef as any)?.exactPayloadArgs);
+    const hasExecutableSourceArgsMetadata = Array.isArray((executableDef as any)?.sourceArgs);
     const executableControlArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.controlArgs);
     const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
     const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
@@ -355,32 +361,36 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
         toolName,
         values: controlArgs,
         visibleParams,
-        executableValues: executableControlArgs
+        executableValues: executableControlArgs,
+        hasExecutableMetadata: hasExecutableControlArgsMetadata
       });
       validateRestrictedArgOverride({
         field: 'updateArgs',
         toolName,
         values: updateArgs,
         visibleParams,
-        executableValues: executableUpdateArgs
+        executableValues: executableUpdateArgs,
+        hasExecutableMetadata: hasExecutableUpdateArgsMetadata
       });
       validateRestrictedArgOverride({
         field: 'exactPayloadArgs',
         toolName,
         values: exactPayloadArgs,
         visibleParams,
-        executableValues: executableExactPayloadArgs
+        executableValues: executableExactPayloadArgs,
+        hasExecutableMetadata: hasExecutableExactPayloadArgsMetadata
       });
       validateRestrictedArgOverride({
         field: 'sourceArgs',
         toolName,
         values: sourceArgs,
         visibleParams,
-        executableValues: executableSourceArgs
+        executableValues: executableSourceArgs,
+        hasExecutableMetadata: hasExecutableSourceArgsMetadata
       });
     }
 
-    collection[toolName] = {
+    const normalizedDefinition = {
       mlld: mlldName,
       ...(inputSchema ? { inputs: inputSchema.recordName } : {}),
       ...(labels ? { labels } : {}),
@@ -396,25 +406,118 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ...(sourceArgs ? { sourceArgs } : {}),
       ...(correlateControlArgs === true ? { correlateControlArgs: true } : {})
     };
+
+    const definitionCapturedModuleEnv = buildToolDefinitionCapturedModuleEnv(
+      mlldName,
+      execVar,
+      capturedModuleEnv
+    );
+    if (definitionCapturedModuleEnv !== undefined) {
+      sealCapturedModuleEnv(normalizedDefinition, definitionCapturedModuleEnv);
+      mergeCapturedModuleEnvEntries(collectionCapturedModuleEnv, definitionCapturedModuleEnv);
+    }
+
+    collection[toolName] = normalizedDefinition;
+  }
+
+  if (collectionCapturedModuleEnv.size > 0) {
+    sealCapturedModuleEnv(collection, collectionCapturedModuleEnv);
   }
 
   return collection;
 }
 
-function resolveToolMlldName(value: unknown, toolName: string): string {
+function resolveToolMlldReference(
+  value: unknown,
+  toolName: string
+): {
+  mlldName: string;
+  executable?: unknown;
+  capturedModuleEnv?: unknown;
+} {
   if (typeof value === 'string') {
-    return value.startsWith('@') ? value.slice(1) : value;
+    return {
+      mlldName: value.startsWith('@') ? value.slice(1) : value
+    };
   }
   if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
-    return (value as any).name;
+    const executable = value as { name?: unknown; internal?: Record<string, unknown> };
+    const rawName = typeof executable.name === 'string' ? executable.name : '';
+    const mlldName = rawName.startsWith('@') ? rawName.slice(1) : rawName;
+    if (!mlldName) {
+      throw new Error(`Tool '${toolName}' has invalid 'mlld' reference`);
+    }
+    return {
+      mlldName,
+      executable: value,
+      capturedModuleEnv:
+        getCapturedModuleEnv(executable.internal)
+        ?? getCapturedModuleEnv(value)
+        ?? buildSingleExecutableCapturedModuleEnv(mlldName, value)
+    };
   }
   if (value && typeof value === 'object' && '__executable' in (value as any)) {
     const name = (value as any).name;
     if (typeof name === 'string' && name.length > 0) {
-      return name.startsWith('@') ? name.slice(1) : name;
+      const mlldName = name.startsWith('@') ? name.slice(1) : name;
+      return {
+        mlldName,
+        capturedModuleEnv:
+          getCapturedModuleEnv((value as { internal?: Record<string, unknown> }).internal)
+          ?? getCapturedModuleEnv(value)
+      };
     }
   }
   throw new Error(`Tool '${toolName}' has invalid 'mlld' reference`);
+}
+
+function buildSingleExecutableCapturedModuleEnv(
+  executableName: string,
+  executable: unknown
+): Map<string, unknown> | undefined {
+  if (!executableName || !executable || typeof executable !== 'object') {
+    return undefined;
+  }
+
+  return new Map([[executableName, executable]]);
+}
+
+function buildToolDefinitionCapturedModuleEnv(
+  executableName: string,
+  executable: unknown,
+  capturedModuleEnv: unknown
+): Map<string, unknown> | undefined {
+  const merged = new Map<string, unknown>();
+  mergeCapturedModuleEnvEntries(merged, capturedModuleEnv);
+  mergeCapturedModuleEnvEntries(
+    merged,
+    buildSingleExecutableCapturedModuleEnv(executableName, executable)
+  );
+  return merged.size > 0 ? merged : undefined;
+}
+
+function mergeCapturedModuleEnvEntries(
+  target: Map<string, unknown>,
+  capturedModuleEnv: unknown
+): void {
+  if (capturedModuleEnv instanceof Map) {
+    for (const [name, variable] of capturedModuleEnv.entries()) {
+      if (typeof name === 'string' && name.trim().length > 0 && !target.has(name)) {
+        target.set(name, variable);
+      }
+    }
+    return;
+  }
+
+  if (!capturedModuleEnv || typeof capturedModuleEnv !== 'object' || Array.isArray(capturedModuleEnv)) {
+    return;
+  }
+
+  for (const [name, variable] of Object.entries(capturedModuleEnv as Record<string, unknown>)) {
+    if (name.trim().length > 0 && !target.has(name)) {
+      target.set(name, variable);
+    }
+  }
 }
 
 function normalizeStringArray(
@@ -540,6 +643,10 @@ function resolveToolInputRecordDefinition(
     if (recordDefinition) {
       return recordDefinition;
     }
+    const recordVariable = env.getVariable(recordName);
+    if (recordVariable && isRecordVariable(recordVariable)) {
+      return (recordVariable as { value: RecordDefinition }).value;
+    }
     throw new Error(`Tool '${toolName}' inputs reference unknown record '@${recordName}'`);
   }
   if (isRecordVariable(value as any)) {
@@ -557,8 +664,9 @@ function validateRestrictedArgOverride(options: {
   values: string[] | undefined;
   visibleParams: readonly string[];
   executableValues: readonly string[];
+  hasExecutableMetadata: boolean;
 }): void {
-  const { field, toolName, values, visibleParams, executableValues } = options;
+  const { field, toolName, values, visibleParams, executableValues, hasExecutableMetadata } = options;
   if (!values) {
     return;
   }
@@ -569,6 +677,10 @@ function validateRestrictedArgOverride(options: {
     throw new Error(
       `Tool '${toolName}' ${field} must reference visible parameters: ${invalidVisibleValues.join(', ')}`
     );
+  }
+
+  if (!hasExecutableMetadata) {
+    return;
   }
 
   const executableSet = new Set(executableValues);

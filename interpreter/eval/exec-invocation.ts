@@ -622,6 +622,24 @@ async function ensureCapturedModuleEnvMap(
   return moduleEnvMap;
 }
 
+async function resolveCollectionExecutableForDispatch(options: {
+  env: Environment;
+  execName: string;
+  collection?: ToolCollection;
+  definition?: ToolDefinition;
+  sourceVariable?:
+    | ({ internal?: Record<string, unknown> } & Record<string, unknown>)
+    | undefined;
+}): Promise<unknown> {
+  const { env, execName, collection, definition, sourceVariable } = options;
+  return (
+    env.getVariable(execName)
+    ?? (await ensureCapturedModuleEnvMap(sourceVariable))?.get(execName)
+    ?? (await ensureCapturedModuleEnvMap(collection as Record<string, unknown> | undefined))?.get(execName)
+    ?? (await ensureCapturedModuleEnvMap(definition as Record<string, unknown> | undefined))?.get(execName)
+  );
+}
+
 function isPassthroughVariableReferenceArg(
   value: unknown,
   paramName: string | undefined
@@ -2371,10 +2389,13 @@ async function evaluateExecInvocationInternal(
                 throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
               }
 
-              let resolvedExecutable =
-                env.getVariable(execName)
-                ?? (await ensureCapturedModuleEnvMap(fieldVariable as { internal?: Record<string, unknown> } | undefined))
-                  ?.get(execName);
+              const resolvedExecutable = await resolveCollectionExecutableForDispatch({
+                env,
+                execName,
+                collection: toolCollection,
+                definition,
+                sourceVariable: fieldVariable as { internal?: Record<string, unknown> } | undefined
+              });
               const isSerializedExecutable =
                 typeof resolvedExecutable === 'object'
                 && resolvedExecutable !== null
@@ -2414,10 +2435,13 @@ async function evaluateExecInvocationInternal(
               throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
             }
 
-            let resolvedExecutable =
-              env.getVariable(execName)
-              ?? (await ensureCapturedModuleEnvMap(objectVar as { internal?: Record<string, unknown> } | undefined))
-                ?.get(execName);
+            const resolvedExecutable = await resolveCollectionExecutableForDispatch({
+              env,
+              execName,
+              collection: toolCollection,
+              definition,
+              sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined
+            });
             const isSerializedExecutable =
               typeof resolvedExecutable === 'object'
               && resolvedExecutable !== null
@@ -2460,10 +2484,13 @@ async function evaluateExecInvocationInternal(
               throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
             }
 
-            let resolvedExecutable =
-              env.getVariable(execName)
-              ?? (await ensureCapturedModuleEnvMap(objectVar as { internal?: Record<string, unknown> } | undefined))
-                ?.get(execName);
+            const resolvedExecutable = await resolveCollectionExecutableForDispatch({
+              env,
+              execName,
+              collection: toolCollection,
+              definition,
+              sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined
+            });
             const isSerializedExecutable =
               typeof resolvedExecutable === 'object'
               && resolvedExecutable !== null

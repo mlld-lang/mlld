@@ -1064,6 +1064,38 @@ show @built
     );
   });
 
+  it('resolves imported input records when validating tool catalogs', async () => {
+    await writeModule('records.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+/export { @send_email_inputs }
+`);
+
+    const modulePath = await writeModule('analyze-input-record-imported.mld', `
+/import { @send_email_inputs } from "./records.mld"
+
+/exe tool:w @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(entry => entry.message)).not.toContain(
+      "Tool 'send_email' inputs reference unknown record '@send_email_inputs'"
+    );
+  });
+
   it('catches statically knowable record definition errors', async () => {
     const modulePath = await writeModule('analyze-invalid-records.mld', `
 /record @deal = {

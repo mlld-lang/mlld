@@ -3682,6 +3682,65 @@ function buildRecordDefinitionsMapFromAst(ast: MlldNode[]): Map<string, RecordDe
   return definitions;
 }
 
+async function buildAvailableRecordDefinitionsForValidation(
+  filepath: string,
+  ast: MlldNode[],
+  localDefinitions: ReadonlyMap<string, RecordDefinition>
+): Promise<Map<string, RecordDefinition>> {
+  const definitions = new Map(localDefinitions);
+  const projectRoot = await resolveProjectRootForDeepValidation([filepath]);
+  const visited = new Set<string>();
+
+  const visitModule = async (modulePath: string): Promise<void> => {
+    const normalizedPath = path.resolve(modulePath);
+    if (visited.has(normalizedPath)) {
+      return;
+    }
+    visited.add(normalizedPath);
+
+    const moduleAst = await parseModuleAstForDeepTraversal(normalizedPath);
+    if (!moduleAst) {
+      return;
+    }
+
+    for (const [recordName, recordDefinition] of buildRecordDefinitionsMapFromAst(moduleAst)) {
+      if (!definitions.has(recordName)) {
+        definitions.set(recordName, recordDefinition);
+      }
+    }
+
+    for (const importInfo of extractImports(moduleAst)) {
+      if (typeof importInfo.from !== 'string' || importInfo.from.trim().length === 0) {
+        continue;
+      }
+      const resolvedImport = await resolveModuleImportForDeepValidation(
+        importInfo.from,
+        normalizedPath,
+        projectRoot
+      );
+      if (resolvedImport) {
+        await visitModule(resolvedImport);
+      }
+    }
+  };
+
+  for (const importInfo of extractImports(ast)) {
+    if (typeof importInfo.from !== 'string' || importInfo.from.trim().length === 0) {
+      continue;
+    }
+    const resolvedImport = await resolveModuleImportForDeepValidation(
+      importInfo.from,
+      filepath,
+      projectRoot
+    );
+    if (resolvedImport) {
+      await visitModule(resolvedImport);
+    }
+  }
+
+  return definitions;
+}
+
 function cloneValidationContextExecutable(
   source: ValidationContextExecutable,
   name: string
@@ -6758,9 +6817,14 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const guards = extractGuards(ast, content);
       const policies = extractPolicies(ast);
       const recordExtraction = extractRecordsAndDiagnostics(ast, filepath);
+      const availableRecordDefinitions = await buildAvailableRecordDefinitionsForValidation(
+        filepath,
+        ast,
+        recordExtraction.definitions
+      );
       const recordsForShelfValidation = new Map<string, Pick<RecordDefinition, 'key'>>();
-      for (const recordName of recordExtraction.declaredNames) {
-        recordsForShelfValidation.set(recordName, { key: recordExtraction.definitions.get(recordName)?.key });
+      for (const [recordName, recordDefinition] of availableRecordDefinitions) {
+        recordsForShelfValidation.set(recordName, { key: recordDefinition.key });
       }
       const shelfExtraction = extractShelvesAndDiagnostics(ast, filepath, recordsForShelfValidation);
       const needs = extractNeeds(content, ast);
@@ -6769,16 +6833,16 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       const toolCatalogErrors = collectToolCatalogDiagnostics(
         ast,
         executables,
-        recordExtraction.definitions
+        availableRecordDefinitions
       );
       const outputRecordErrors = collectExecutableOutputRecordDiagnostics(
         ast,
-        recordExtraction.definitions,
+        availableRecordDefinitions,
         recordExtraction.declaredNames
       );
       const castErrors = collectCastDiagnostics(
         ast,
-        recordExtraction.definitions,
+        availableRecordDefinitions,
         recordExtraction.declaredNames
       );
       const boxShelfScopeErrors = collectBoxShelfScopeDiagnostics(

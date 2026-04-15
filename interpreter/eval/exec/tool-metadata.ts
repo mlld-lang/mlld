@@ -19,6 +19,7 @@ import {
 import type { ExecutableOutputRecord } from '@core/types/executable';
 import { isExecutableVariable, type ExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 export interface EffectiveToolMetadata {
@@ -123,6 +124,41 @@ function resolveExecutableVariableCaseInsensitive(
   }
 
   return undefined;
+}
+
+function resolveCapturedCollectionExecutable(
+  target: unknown,
+  execName: string
+): ExecutableVariable | undefined {
+  const captured = getCapturedModuleEnv(target);
+  if (captured instanceof Map) {
+    const variable = captured.get(execName);
+    return variable && isExecutableVariable(variable)
+      ? variable as ExecutableVariable
+      : undefined;
+  }
+
+  if (!captured || typeof captured !== 'object' || Array.isArray(captured)) {
+    return undefined;
+  }
+
+  const variable = (captured as Record<string, unknown>)[execName];
+  return variable && isExecutableVariable(variable)
+    ? variable as ExecutableVariable
+    : undefined;
+}
+
+function resolveCollectionExecutable(
+  env: Environment,
+  collection: ToolCollection,
+  definition: ToolDefinition,
+  execName: string
+): ExecutableVariable | undefined {
+  return (
+    resolveExecutableVariableCaseInsensitive(env, execName)
+    ?? resolveCapturedCollectionExecutable(definition, execName)
+    ?? resolveCapturedCollectionExecutable(collection, execName)
+  );
 }
 
 function getExecutableParamNames(executable: ExecutableVariable): string[] {
@@ -1036,7 +1072,7 @@ export function buildCanonicalAuthorizationToolContextForCollection(
       continue;
     }
 
-    const executable = resolveExecutableVariable(env, execName);
+    const executable = resolveCollectionExecutable(env, collection, definition, execName);
     if (!executable) {
       continue;
     }
@@ -1071,7 +1107,7 @@ function buildAuthorizationToolContextFromCollection(
       continue;
     }
 
-    const executable = resolveExecutableVariable(env, execName);
+    const executable = resolveCollectionExecutable(env, collection, definition, execName);
     if (!executable) {
       continue;
     }
@@ -1194,7 +1230,7 @@ export function resolveToolCollectionEntryMetadata(
 
   const execName = typeof definition.mlld === 'string' ? definition.mlld : '';
   if (execName) {
-    const executable = resolveExecutableVariableCaseInsensitive(env, execName);
+    const executable = resolveCollectionExecutable(env, collection, definition, execName);
     if (executable) {
       return applyToolDefinitionAuthMetadata(
         buildToolContextFromExecutable(toolName, executable),

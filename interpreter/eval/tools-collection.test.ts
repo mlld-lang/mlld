@@ -7,6 +7,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 import { fileURLToPath } from 'url';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
@@ -149,6 +150,133 @@ describe('tool collections', () => {
         }
       `)
     ).rejects.toThrow(/bind cannot include input-record fields/i);
+  });
+
+  it('allows legacy control arg metadata to live on the tool entry when the wrapper exe is metadata-free', async () => {
+    const env = await interpretWithEnv(`
+      /exe @runtime_send_email(recipients, cc, bcc, subject) = js {
+        return { recipients, cc, bcc, subject };
+      }
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @runtime_send_email,
+          expose: ["recipients", "cc", "bcc", "subject"],
+          controlArgs: ["recipients", "cc", "bcc"]
+        }
+      }
+    `);
+
+    const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.send_email).toMatchObject({
+      mlld: 'runtime_send_email',
+      expose: ['recipients', 'cc', 'bcc', 'subject'],
+      controlArgs: ['recipients', 'cc', 'bcc']
+    });
+  });
+
+  it('resolves imported record refs when a local tool collection uses inputs', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @send_email_inputs } from "/records.mld"
+
+        /exe @send_email(recipient, subject, body) = js {
+          return { recipient, subject, body };
+        }
+
+        /var tools @writeTools = {
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs
+          }
+        }
+      `,
+      {
+        '/records.mld': `
+          /record @send_email_inputs = {
+            facts: [recipient: string],
+            data: [subject: string, body: string],
+            validate: "strict"
+          }
+
+          /export { @send_email_inputs }
+        `
+      }
+    );
+
+    const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.send_email).toMatchObject({
+      mlld: 'send_email',
+      inputs: 'send_email_inputs'
+    });
+  });
+
+  it('resolves namespace field refs in mlld tool entries to the executable they point at', async () => {
+    const normalizedEnv = await interpretWithEnvAndFiles(
+      `
+        /import { @workspaceTools } from "/provider.mld"
+
+        /var tools @writeTools = {
+          send_email: {
+            mlld: @workspaceTools.sendEmail,
+            expose: ["recipient"]
+          }
+        }
+      `,
+      {
+        '/provider.mld': `
+          /exe @sendEmail(recipient) = \`sent:@recipient\`
+
+          /var @workspaceTools = {
+            sendEmail: @sendEmail
+          }
+
+          /export { @workspaceTools }
+        `
+      }
+    );
+
+    const normalizedCollection =
+      normalizedEnv.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const definitionCaptured = getCapturedModuleEnv(normalizedCollection.send_email);
+    const collectionCaptured = getCapturedModuleEnv(normalizedCollection);
+    expect(definitionCaptured instanceof Map && definitionCaptured.has('sendEmail')).toBe(true);
+    expect(collectionCaptured instanceof Map && collectionCaptured.has('sendEmail')).toBe(true);
+
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @workspaceTools } from "/provider.mld"
+
+        /var tools @writeTools = {
+          send_email: {
+            mlld: @workspaceTools.sendEmail,
+            expose: ["recipient"]
+          }
+        }
+
+        /var @result = @writeTools["send_email"]("ada@example.com")
+      `,
+      {
+        '/provider.mld': `
+          /exe @sendEmail(recipient) = \`sent:@recipient\`
+
+          /var @workspaceTools = {
+            sendEmail: @sendEmail
+          }
+
+          /export { @workspaceTools }
+        `
+      }
+    );
+
+    const collection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.send_email).toMatchObject({
+      mlld: 'sendEmail',
+      expose: ['recipient']
+    });
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env);
+    expect((resolved as any)?.text ?? resolved).toBe('sent:ada@example.com');
   });
 
   it('creates tool collection variables with validated entries', async () => {
