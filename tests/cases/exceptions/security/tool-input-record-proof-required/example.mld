@@ -1,0 +1,17 @@
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+
+/exe tool:w @sendEmail(recipient, subject) = `sent:@subject`
+
+/var tools @agentTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/show @agentTools.sendEmail("user@example.com", "hello")

@@ -1,0 +1,33 @@
+/var known @recipient = "acct-1"
+
+/record @send_money_inputs = {
+  facts: [recipient: string],
+  data: [amount: number],
+  validate: "strict"
+}
+
+/exe tool:w @sendMoney(recipient, amount) = `sent:@amount`
+
+/var tools @agentTools = {
+  sendMoney: {
+    mlld: @sendMoney,
+    inputs: @send_money_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var @taskPolicy = {
+  defaults: { rules: ["no-send-to-unknown"] },
+  operations: { "exfil:send": ["tool:w"] },
+  authorizations: {
+    allow: {
+      sendMoney: {
+        args: {
+          recipient: @recipient
+        }
+      }
+    }
+  }
+}
+
+/show @agentTools.sendMoney(@recipient, 5) with { policy: @taskPolicy }

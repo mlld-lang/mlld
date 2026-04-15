@@ -1,0 +1,37 @@
+/record @payment = {
+  facts: [recipient: string, tx_id: string],
+  data: [body: string],
+  validate: "strict"
+}
+
+/record @send_payment_inputs = {
+  facts: [recipient: string, tx_id: string],
+  data: [body: string],
+  validate: "strict"
+}
+
+/exe @paymentA() = {
+  recipient: "acct-1",
+  tx_id: "tx-001",
+  body: "same"
+} => payment
+
+/exe @paymentB() = {
+  recipient: "acct-2",
+  tx_id: "tx-999",
+  body: "same"
+} => payment
+
+/exe tool:w @sendPayment(recipient, tx_id, body) = `sent:@tx_id:@body`
+
+/var tools @agentTools = {
+  sendPayment: {
+    mlld: @sendPayment,
+    inputs: @send_payment_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var @a = @paymentA()
+/var @b = @paymentB()
+/show @agentTools.sendPayment(@a.recipient, @b.tx_id, @a.body)

@@ -254,6 +254,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function isVariable(value: unknown): value is Variable {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'name' in value &&
+    'value' in value &&
+    'source' in value
+  );
+}
+
 function getToolCollectionFromValue(value: unknown): ToolCollection | undefined {
   if (!isPlainObject(value)) {
     return undefined;
@@ -873,6 +884,210 @@ function hasAcceptedProofForInput(value: unknown): boolean {
   return proofLabels.some(label =>
     DECLARED_CONTROL_ARG_KNOWN_PATTERNS.some(pattern => matchesLabelPattern(pattern, label))
   );
+}
+
+function cloneFactSources(
+  factsources: readonly FactSourceHandle[] | undefined
+): readonly FactSourceHandle[] | undefined {
+  return Array.isArray(factsources) && factsources.length > 0
+    ? [...factsources]
+    : undefined;
+}
+
+function collectInvocationArgDescriptor(
+  candidate: unknown
+): SecurityDescriptor | undefined {
+  if (isVariable(candidate)) {
+    return getVariableSecurityDescriptor(candidate);
+  }
+  if (isStructuredValue(candidate)) {
+    return getStructuredSecurityDescriptor(candidate);
+  }
+  return extractSecurityDescriptor(candidate, {
+    recursive: true,
+    mergeArrayElements: true
+  });
+}
+
+function collectInvocationArgFactSources(
+  candidate: unknown
+): readonly FactSourceHandle[] | undefined {
+  if (isVariable(candidate)) {
+    return cloneFactSources(candidate.mx?.factsources);
+  }
+  if (isStructuredValue(candidate)) {
+    return cloneFactSources(candidate.metadata?.factsources ?? candidate.mx?.factsources);
+  }
+  if (!candidate || typeof candidate !== 'object') {
+    return undefined;
+  }
+
+  const recordCandidate = candidate as {
+    mx?: { factsources?: readonly FactSourceHandle[] };
+    metadata?: { factsources?: readonly FactSourceHandle[] };
+  };
+  return cloneFactSources(recordCandidate.metadata?.factsources ?? recordCandidate.mx?.factsources);
+}
+
+function mergeInvocationArgDescriptors(options: {
+  env: Environment;
+  evaluatedArgs: readonly unknown[];
+  originalVariables: readonly (Variable | undefined)[];
+  guardVariableCandidates: readonly (Variable | undefined)[];
+  expressionSourceVariables: readonly (Variable | undefined)[];
+  argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+}): readonly (SecurityDescriptor | undefined)[] | undefined {
+  const {
+    env,
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argSecurityDescriptors
+  } = options;
+  const descriptorCount = Math.max(
+    evaluatedArgs.length,
+    originalVariables.length,
+    guardVariableCandidates.length,
+    expressionSourceVariables.length,
+    argSecurityDescriptors?.length ?? 0
+  );
+  if (descriptorCount === 0) {
+    return argSecurityDescriptors;
+  }
+
+  const descriptors = Array.from(
+    { length: descriptorCount },
+    (_unused, index) => argSecurityDescriptors?.[index]
+  );
+  let changed = false;
+
+  for (let index = 0; index < descriptorCount; index += 1) {
+    const sourceDescriptors = [
+      collectInvocationArgDescriptor(originalVariables[index]),
+      collectInvocationArgDescriptor(guardVariableCandidates[index]),
+      collectInvocationArgDescriptor(evaluatedArgs[index])
+    ].filter((descriptor): descriptor is SecurityDescriptor => Boolean(descriptor));
+    if (sourceDescriptors.length === 0) {
+      continue;
+    }
+
+    const merged =
+      sourceDescriptors.length === 1
+        ? sourceDescriptors[0]
+        : env.mergeSecurityDescriptors(...sourceDescriptors);
+    descriptors[index] = descriptors[index]
+      ? env.mergeSecurityDescriptors(descriptors[index]!, merged)
+      : merged;
+    changed = true;
+  }
+
+  return changed ? descriptors : argSecurityDescriptors;
+}
+
+function mergeInvocationArgFactSources(options: {
+  evaluatedArgs: readonly unknown[];
+  originalVariables: readonly (Variable | undefined)[];
+  guardVariableCandidates: readonly (Variable | undefined)[];
+  expressionSourceVariables: readonly (Variable | undefined)[];
+  argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
+}): readonly (readonly FactSourceHandle[] | undefined)[] | undefined {
+  const {
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argFactSourceDescriptors
+  } = options;
+  const descriptorCount = Math.max(
+    evaluatedArgs.length,
+    originalVariables.length,
+    guardVariableCandidates.length,
+    expressionSourceVariables.length,
+    argFactSourceDescriptors?.length ?? 0
+  );
+  if (descriptorCount === 0) {
+    return argFactSourceDescriptors;
+  }
+
+  const factsourceDescriptors = Array.from(
+    { length: descriptorCount },
+    (_unused, index) => cloneFactSources(argFactSourceDescriptors?.[index])
+  );
+  let changed = false;
+
+  for (let index = 0; index < descriptorCount; index += 1) {
+    const merged = new Map<string, FactSourceHandle>();
+    const push = (factsources: readonly FactSourceHandle[] | undefined): void => {
+      for (const handle of factsources ?? []) {
+        const key = `${handle.instanceKey ?? ''}::${handle.coercionId ?? ''}::${handle.position ?? ''}::${handle.ref}`;
+        if (!merged.has(key)) {
+          merged.set(key, handle);
+        }
+      }
+    };
+
+    push(argFactSourceDescriptors?.[index]);
+    push(collectInvocationArgFactSources(originalVariables[index]));
+    push(collectInvocationArgFactSources(guardVariableCandidates[index]));
+    push(collectInvocationArgFactSources(evaluatedArgs[index]));
+
+    if (merged.size === 0) {
+      continue;
+    }
+
+    const nextFactsources = Array.from(merged.values());
+    const current = factsourceDescriptors[index];
+    if (
+      !Array.isArray(current)
+      || current.length !== nextFactsources.length
+      || current.some((entry, entryIndex) => entry !== nextFactsources[entryIndex])
+    ) {
+      factsourceDescriptors[index] = nextFactsources;
+      changed = true;
+    }
+  }
+
+  return changed ? factsourceDescriptors : argFactSourceDescriptors;
+}
+
+function buildToolInputValidationArguments(options: {
+  paramNames: readonly string[];
+  evaluatedArgs: readonly unknown[];
+  argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
+  argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
+}): Record<string, unknown> | undefined {
+  const {
+    paramNames,
+    evaluatedArgs,
+    argSecurityDescriptors,
+    argFactSourceDescriptors
+  } = options;
+
+  const validationArgs = evaluatedArgs.map((value, index) => {
+    const descriptor = argSecurityDescriptors?.[index];
+    const factsources = argFactSourceDescriptors?.[index];
+    if (!descriptor && (!Array.isArray(factsources) || factsources.length === 0)) {
+      return value;
+    }
+
+    const structured = isStructuredValue(value)
+      ? wrapStructured(value, value.type, value.text, value.metadata)
+      : wrapStructured(value as any);
+    if (descriptor) {
+      applySecurityDescriptorToStructuredValue(structured, descriptor);
+    }
+    if (Array.isArray(factsources) && factsources.length > 0) {
+      structured.metadata = {
+        ...(structured.metadata ?? {}),
+        factsources: [...factsources]
+      };
+      structured.mx.factsources = [...factsources];
+    }
+    return structured;
+  });
+
+  return buildToolCallArguments(paramNames, validationArgs);
 }
 
 function collectInputFactSources(value: unknown, seen = new Set<unknown>()): FactSourceHandle[] {
@@ -3647,18 +3862,25 @@ async function evaluateExecInvocationInternal(
     isToolWriteLabelSet(toolLabels) &&
     authorizationSurfaceOperation;
   const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
-  validateToolInputSchema({
-    metadata: effectiveToolMetadata,
-    args: authorizationArgs
-  });
-  enforceUpdateToolArguments({
-    metadata: effectiveToolMetadata,
-    args: authorizationArgs
-  });
-  let effectiveArgSecurityDescriptors = mergeResolvedArgValueDescriptors({
+  let effectiveArgSecurityDescriptors = mergeInvocationArgDescriptors({
     env: runtimeEnv,
     evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
     argSecurityDescriptors
+  });
+  effectiveArgSecurityDescriptors = mergeResolvedArgValueDescriptors({
+    env: runtimeEnv,
+    evaluatedArgs,
+    argSecurityDescriptors: effectiveArgSecurityDescriptors
+  });
+  const effectiveArgFactSourceDescriptors = mergeInvocationArgFactSources({
+    evaluatedArgs,
+    originalVariables,
+    guardVariableCandidates,
+    expressionSourceVariables,
+    argFactSourceDescriptors
   });
   if (shouldValidatePolicyAuthorizations) {
     const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
@@ -3676,11 +3898,25 @@ async function evaluateExecInvocationInternal(
       effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
         env: runtimeEnv,
         paramNames: params,
-        argSecurityDescriptors,
+        argSecurityDescriptors: effectiveArgSecurityDescriptors,
         matchedAttestations: authorizationDecision.matchedAttestations
       });
     }
   }
+  const validationArgs = buildToolInputValidationArguments({
+    paramNames: params,
+    evaluatedArgs,
+    argSecurityDescriptors: effectiveArgSecurityDescriptors,
+    argFactSourceDescriptors: effectiveArgFactSourceDescriptors
+  });
+  validateToolInputSchema({
+    metadata: effectiveToolMetadata,
+    args: validationArgs
+  });
+  enforceUpdateToolArguments({
+    metadata: effectiveToolMetadata,
+    args: authorizationArgs
+  });
   const trackedMcpName =
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
       ? (mcpTool as any).name.trim()
@@ -3786,7 +4022,7 @@ async function evaluateExecInvocationInternal(
       expressionSourceVariables,
       inputSecurityDescriptor,
       argSecurityDescriptors: effectiveArgSecurityDescriptors,
-      argFactSourceDescriptors,
+      argFactSourceDescriptors: effectiveArgFactSourceDescriptors,
       mcpSecurityDescriptor,
       argNames: params
     });

@@ -1,0 +1,29 @@
+/record @send_money_inputs = {
+  facts: [recipient: string],
+  data: [amount: number],
+  validate: "strict"
+}
+
+/exe tool:w @sendMoney(recipient, amount) = `sent:@amount`
+
+/var tools @agentTools = {
+  sendMoney: {
+    mlld: @sendMoney,
+    inputs: @send_money_inputs,
+    labels: ["tool:w"]
+  }
+}
+
+/var @intent = {
+  known: {
+    sendMoney: {
+      recipient: {
+        value: "acct-1",
+        source: "user asked to send to acct-1"
+      }
+    }
+  }
+}
+
+/var @built = @policy.build(@intent, @agentTools)
+/show @agentTools.sendMoney("acct-1", 5) with { policy: @built.policy }

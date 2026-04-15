@@ -1,0 +1,22 @@
+/var known @itemId = "item-1"
+/var untrusted @title = "hello"
+
+/record @update_item_inputs = {
+  facts: [itemId: string],
+  data: {
+    trusted: [title: string]
+  },
+  validate: "strict"
+}
+
+/exe tool:w @updateItem(itemId, title) = `updated:@itemId:@title`
+
+/var tools @agentTools = {
+  updateItem: {
+    mlld: @updateItem,
+    inputs: @update_item_inputs,
+    labels: ["tool:w", "update:w"]
+  }
+}
+
+/show @agentTools.updateItem(@itemId, @title)
