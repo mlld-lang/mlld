@@ -6,22 +6,35 @@ category: config
 tags: [tools, docs, prompts, agents, authorization]
 related: [pattern-planner, policy-authorizations, facts-and-handles]
 related-code: [interpreter/fyi/tool-docs.ts, interpreter/eval/exec/tool-metadata.ts, interpreter/env/builtins/fyi.ts]
-updated: 2026-04-11
+updated: 2026-04-14
 ---
 
-`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, control args, source args, classification, and output fields — that the runtime will validate against.
+`@toolDocs()` renders the tool metadata mlld already enforces at runtime into prompt-ready text or JSON. Use it when you are assembling a system prompt by hand and need the LLM to see the same tool surface — names, args, record-derived facts/payload sections, control/source args, classification, and output fields — that the runtime will validate against.
 
 When a tool returns `=> record`, `@toolDocs()` renders its visible output fields through the same display-projection path used at runtime. There is no separate `audience` switch. The active display selection (`with { display }`, box config, or a matching `role:*` llm label) is the shaping mechanism. Role identity and display shaping stay separate: the exe's `role:*` label determines authorization identity, while display only chooses the projection.
 
 ## Basic usage
 
 ```mlld
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: {
+    trusted: [subject: string],
+    untrusted: [body: string]
+  },
+  validate: "strict"
+}
+
 /exe execute:w @sendEmail(recipient, subject, body) = run cmd {
   email-cli send --to @recipient --subject @subject --body @body
-} with { controlArgs: ["recipient"] }
+}
 
 /var tools @writeTools = {
-  send_email: { mlld: @sendEmail }
+  send_email: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w", "exfil:send", "comm:w"]
+  }
 }
 
 /var @docs = @toolDocs(@writeTools)
@@ -34,13 +47,18 @@ Output:
 Write tools (require authorization):
 
 ### send_email
-Args:
-- `recipient` (string, **control arg**)
+Routing: execute (write)
+Risk: exfil (send)
+Domain: communication (write)
+Facts:
+- `recipient` (string)
+Trusted payload:
 - `subject` (string)
+Untrusted payload:
 - `body` (string)
 ```
 
-Each tool renders under its read/write section header, with one bullet per parameter. Control args are flagged inline with `**control arg**`. Source-selection args are flagged inline with `**source arg**`. Tools are classified read vs write from the active policy (see "Classification" below).
+Record-backed tools render fact and payload sections from the input record. Legacy tool metadata still renders an `Args:` list with inline `**control arg**` / `**source arg**` annotations. Tools are classified read vs write from the active policy (see "Classification" below).
 
 ## Output fields from `=> record`
 
@@ -132,10 +150,12 @@ For programmatic consumers (custom renderers, validators, schema generation), pa
 
 The JSON form is richer than the text form. Per-tool entries include:
 
-- `name`, `kind` (`"write"` or `"read"`), `description`
+- `name`, `kind` (`"write"` or `"read"`), `description`, `instructions`
+- `inputRecord` — source record name when the tool uses `inputs: @record`
 - `params` — full parameter list
 - `output` — visible output fields under the current display, when the tool returns `=> record`
 - `controlArgs`, `sourceArgs`, `updateArgs`, `exactPayloadArgs`, `dataArgs` — partition by metadata kind
+- `factArgs`, `trustedDataArgs`, `untrustedDataArgs` — record-derived input partitions when available
 - `multiControlArgCorrelation` — boolean from `correlateControlArgs`
 - `discoveryCall` — the `@fyi.known(...)` call to surface available handles, when applicable
 - `operationLabels` — populated when `includeOperationLabels: true`
@@ -166,7 +186,7 @@ The no-arg form reads scoped tool collections, scoped executable arrays, or acti
 
 A tool renders under "Write tools (require authorization)" if **any** of:
 
-1. It declares `controlArgs` (the runtime gates it per-arg regardless of labels)
+1. It has effective control args, either declared directly or derived from record `facts`
 2. Its labels intersect any category in the active policy's `operations` map
 3. It appears in `policy.authorizations.deny`
 
@@ -182,7 +202,7 @@ A consequence: when you add a custom write label like `iot:trigger` and map it v
 - `<tool_notes>` is the injected form mlld appends automatically to the system message of any `exe llm` call that surfaces callable tools, for example `@claude(...)`.
 - `<authorization_notes>` is the injected form mlld appends automatically when the active base policy grants the caller role any `authorizable` tools.
 
-All three use the same per-tool sections, output-field shaping, and policy-derived classification for the same tools under the same policy. Explicit `@toolDocs()` can additionally opt into features such as `includeAuthIntentShape: true` or `format: "json"`. Injected notes use the default text form. When all injected blocks are present, the order is `<tool_notes>`, then `<authorization_notes>`, then `<shelf_notes>`.
+All three use the same classification, label summaries, record shaping, and output-field shaping for the same tools under the same policy. Explicit `@toolDocs()` includes freeform `Description:` and `Instructions:` lines and can opt into `includeAuthIntentShape: true` or `format: "json"`. Injected notes stay compact: they keep the structural sections but omit description/instructions. When all injected blocks are present, the order is `<tool_notes>`, then `<authorization_notes>`, then `<shelf_notes>`.
 
 ## Options
 

@@ -402,8 +402,6 @@ describe('createCallMcpConfig', () => {
       expect(result.toolNotes).toContain('Routing: execute (write)');
       expect(result.toolNotes).toContain('Risk: exfil (send)');
       expect(result.toolNotes).toContain('Domain: communication (write)');
-      expect(result.toolNotes).toContain('Description: Send an outbound email');
-      expect(result.toolNotes).toContain('Instructions: Prefer update_draft for in-progress composition.');
       expect(result.toolNotes).toContain('Facts:');
       expect(result.toolNotes).toContain('- `recipient` (string)');
       expect(result.toolNotes).toContain('Trusted payload:');
@@ -414,10 +412,12 @@ describe('createCallMcpConfig', () => {
       expect(result.toolNotes).toContain('### mcp__mlld_tools__search_contacts_by_name');
       expect(result.toolNotes).toContain('Routing: resolve (read)');
       expect(result.toolNotes).toContain('Domain: communication (read)');
-      expect(result.toolNotes).toContain('Description: Search contacts by name');
       expect(result.toolNotes).toContain('Untrusted payload:');
       expect(result.toolNotes).toContain('- `query` (string)');
       expect(result.toolNotes).not.toContain('@fyi.known("outbound_email")');
+      expect(result.toolNotes).not.toContain('Description: Send an outbound email');
+      expect(result.toolNotes).not.toContain('Instructions: Prefer update_draft for in-progress composition.');
+      expect(result.toolNotes).not.toContain('Description: Search contacts by name');
 
       const socketPath = await getFunctionBridgeSocketPath(result.mcpConfigPath);
       const listed = await sendJsonRpc(socketPath, {

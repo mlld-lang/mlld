@@ -741,15 +741,25 @@ function buildInputSchemaSectionLines(entry: EffectiveToolMetadata): string[] {
 function buildToolSectionLines(
   env: Environment,
   heading: string,
-  entries: readonly EffectiveToolMetadata[]
+  entries: readonly EffectiveToolMetadata[],
+  options?: {
+    includeDescriptions?: boolean;
+    includeInstructions?: boolean;
+  }
 ): string[] {
-  return [`${heading}:`, '', ...buildToolEntryLines(env, entries)];
+  return [`${heading}:`, '', ...buildToolEntryLines(env, entries, options)];
 }
 
 function buildToolEntryLines(
   env: Environment,
-  entries: readonly EffectiveToolMetadata[]
+  entries: readonly EffectiveToolMetadata[],
+  options?: {
+    includeDescriptions?: boolean;
+    includeInstructions?: boolean;
+  }
 ): string[] {
+  const includeDescriptions = options?.includeDescriptions !== false;
+  const includeInstructions = options?.includeInstructions !== false;
   const lines: string[] = [];
 
   for (const [index, entry] of entries.entries()) {
@@ -759,10 +769,10 @@ function buildToolEntryLines(
 
     lines.push(`### ${getRenderedToolName(entry)}`);
     lines.push(...buildToolLabelSummaryLines(entry));
-    if (entry.description) {
+    if (includeDescriptions && entry.description) {
       lines.push(`Description: ${entry.description}`);
     }
-    if (entry.instructions) {
+    if (includeInstructions && entry.instructions) {
       lines.push(`Instructions: ${entry.instructions}`);
     }
 
@@ -816,8 +826,16 @@ function buildTextLines(options: {
   env: Environment;
   entries: readonly EffectiveToolMetadata[];
   includeAuthIntentShape: boolean;
+  includeDescriptions?: boolean;
+  includeInstructions?: boolean;
 }): string[] {
-  const { env, entries, includeAuthIntentShape } = options;
+  const {
+    env,
+    entries,
+    includeAuthIntentShape,
+    includeDescriptions,
+    includeInstructions
+  } = options;
   const writeEntries = resolveWriteEntries(env, entries);
   const readEntries = resolveReadEntries(env, entries);
   if (writeEntries.length === 0 && readEntries.length === 0) {
@@ -827,14 +845,24 @@ function buildTextLines(options: {
   const lines: string[] = [];
 
   if (writeEntries.length > 0) {
-    lines.push(...buildToolSectionLines(env, 'Write tools (require authorization)', writeEntries));
+    lines.push(
+      ...buildToolSectionLines(env, 'Write tools (require authorization)', writeEntries, {
+        includeDescriptions,
+        includeInstructions
+      })
+    );
   }
 
   if (readEntries.length > 0) {
     if (lines.length > 0) {
       lines.push('');
     }
-    lines.push(...buildToolSectionLines(env, 'Read tools', readEntries));
+    lines.push(
+      ...buildToolSectionLines(env, 'Read tools', readEntries, {
+        includeDescriptions,
+        includeInstructions
+      })
+    );
   }
 
   if (includeAuthIntentShape) {
@@ -847,6 +875,8 @@ function buildTextLines(options: {
 function buildAuthorizationTextLines(options: {
   env: Environment;
   entries: readonly EffectiveToolMetadata[];
+  includeDescriptions?: boolean;
+  includeInstructions?: boolean;
 }): string[] {
   const entries = options.entries.filter(entry => entry.name !== 'known');
   if (entries.length === 0) {
@@ -857,7 +887,10 @@ function buildAuthorizationTextLines(options: {
     'Tools you can authorize workers to use (you cannot call these directly):',
     'See <tool_notes> for tools you can call directly.',
     '',
-    ...buildToolEntryLines(options.env, entries),
+    ...buildToolEntryLines(options.env, entries, {
+      includeDescriptions: options.includeDescriptions,
+      includeInstructions: options.includeInstructions
+    }),
     '',
     'To authorize, pass authorization intent to your worker tool:',
     '  { resolved: { tool_name: { control_arg: handle } } }'
@@ -1095,7 +1128,9 @@ export async function evaluateFyiTools(
     renderText({
       env,
       entries,
-      includeAuthIntentShape: options.includeAuthIntentShape
+      includeAuthIntentShape: options.includeAuthIntentShape,
+      includeDescriptions: true,
+      includeInstructions: true
     }),
     'text'
   );
@@ -1114,7 +1149,9 @@ export function renderInjectedToolNotes(options: {
   const lines = buildTextLines({
     env: options.env,
     entries,
-    includeAuthIntentShape: options.includeAuthIntentShape === true
+    includeAuthIntentShape: options.includeAuthIntentShape === true,
+    includeDescriptions: false,
+    includeInstructions: false
   });
   return wrapNotesBlock('tool_notes', lines);
 }
@@ -1128,7 +1165,9 @@ export function renderInjectedAuthorizationNotes(options: {
     'authorization_notes',
     buildAuthorizationTextLines({
       env: options.env,
-      entries
+      entries,
+      includeDescriptions: false,
+      includeInstructions: false
     })
   );
 }

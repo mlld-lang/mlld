@@ -1,16 +1,16 @@
 ---
 id: records-basics
 title: Records
-brief: Declare field-level data classification for structured tool output
+brief: Declare field-level classification for structured tool input and output
 category: core
 tags: [records, facts, data, schema, coercion, validation, structured-output]
 related: [exe-simple, labels-overview, labels-attestations, facts-and-handles, labels-facts]
 related-code: [core/types/record.ts, interpreter/eval/record.ts, interpreter/eval/records/coerce-record.ts, grammar/directives/record.peggy]
-updated: 2026-04-10
+updated: 2026-04-14
 qa_tier: 2
 ---
 
-Records declare which fields in structured data are authoritative facts and which are informational content. When an exe returns data through `=> record`, the record's classification applies automatically.
+Records declare which fields in structured data are authoritative facts and which are informational content. When an exe returns data through `=> record`, the record's classification applies automatically. The same record surface can also define the input contract of a tool collection entry with `inputs: @record`.
 
 For tool results, this is also the canonical secure data-plane return path to an LLM caller. Returning through `=> contact`, `=> record @schema`, or `=> @cast(@value, @schema)` turns on record-mediated return filtering at the bridge: the active `role:*` display projection shapes what the LLM sees.
 
@@ -46,6 +46,55 @@ record @issue = {
 ```
 
 `data.trusted` fields get taint cleared during trust refinement (like facts) but carry no `fact:` labels -- they're safe to read but not authorization-grade. `data.untrusted` fields stay tainted. `data: [fields]` is sugar for `data: { untrusted: [fields] }` -- safe by default.
+
+## Use records as tool input contracts
+
+`var tools` can point at an input-capable record with `inputs: @record`:
+
+```mlld
+record @send_email_inputs = {
+  facts: [recipient: string],
+  data: {
+    trusted: [subject: string],
+    untrusted: [body: string?]
+  },
+  validate: "strict"
+}
+
+exe tool:w @sendEmail(recipient, subject, body) = run cmd {
+  mail-cli send --to @recipient --subject @subject --body @body
+}
+
+var tools @agentTools = {
+  send_email: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w", "exfil:send", "comm:w"]
+  }
+}
+```
+
+For record-backed tool inputs:
+
+- visible tool args are the record fields that match executable params, after any `bind` keys are removed
+- on write surfaces, record `facts` become the tool's effective control args
+- on read-only surfaces, record `facts` become the tool's effective source args
+- `data.trusted` fields must stay trusted at dispatch time, but they do not carry fact proof
+- `data.untrusted` and plain `data` fields are payload fields, not authorization-grade identifiers
+- `validate: "strict"` enforces required fields and types before the executable body runs
+
+When a write-tool input record has more than one fact field, set `correlate: true` to require that those fact values came from the same source record instance:
+
+```mlld
+record @send_payment_inputs = {
+  facts: [recipient: string, tx_id: string],
+  data: [body: string],
+  correlate: true,
+  validate: "strict"
+}
+```
+
+That turns on the same-source check used by `correlate-control-args` without writing `controlArgs` metadata by hand.
 
 The `when` clause can conditionally promote data fields to trusted:
 

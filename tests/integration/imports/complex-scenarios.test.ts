@@ -5,7 +5,7 @@ const IMPORT_TEST_TIMEOUT = 10000;
 
 describe('Complex Import Scenarios', () => {
   describe('Import Chains', () => {
-    it('should handle linear import chain (A→B→C)', async () => {
+    it('should handle linear import chain (A→B→C)', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const runner = new ImportTestRunner();
       await runner.setup();
       
@@ -44,7 +44,7 @@ HELLO FROM C`
       }
     });
     
-    it('should handle diamond import pattern', async () => {
+    it('should handle diamond import pattern', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const runner = new ImportTestRunner();
       await runner.setup();
       
@@ -85,7 +85,7 @@ HELLO FROM C`
   });
   
   describe('Re-exports', () => {
-    it('should handle simple re-export', async () => {
+    it('should handle simple re-export', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { utils } from "./wrapper.mld"
 /var @result = @utils.helper()
@@ -103,7 +103,7 @@ HELLO FROM C`
       expect(result.exitCode).toBe(0);
     });
 
-    it('preserves sibling executable scope through a wrapped namespace re-export', async () => {
+    it('preserves sibling executable scope through a wrapped namespace re-export', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 import { @ns } from "./checkfix-idx.mld"
 show @ns.run("hi")`, {
@@ -217,7 +217,7 @@ HELLO
   });
   
   describe('Complex Nested Access', () => {
-    it('should handle deep property access chains', async () => {
+    it('should handle deep property access chains', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import { api } from "./deep-api.mld"
 /var @result = @api.v1.users.actions.create("Alice", "admin")

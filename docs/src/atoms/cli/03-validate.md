@@ -6,7 +6,7 @@ category: cli
 tags: [validation, warnings, static-analysis, undefined-variables, templates]
 related: [config-files, config-cli-run]
 related-code: [cli/commands/analyze.ts, core/registry/ConfigFile.ts]
-updated: 2026-04-06
+updated: 2026-04-14
 qa_tier: 2
 ---
 
@@ -166,6 +166,20 @@ Skipped entries stay out of default text output so `mlld validate` only reports 
 - overlap errors such as `updateArgs` intersecting `controlArgs`
 - non-boolean `correlateControlArgs`
 
+**Tool catalog validation:**
+
+`mlld validate` also checks `var tools` object literals before runtime:
+
+- unknown tool-entry keys
+- non-string `description` / `instructions`
+- invalid `authorizable` shapes (must be `false`, `role:*`, or an array of `role:*`)
+- `inputs` that do not reference an input-capable record
+- `inputs` mixed with legacy shaping fields such as `expose`, `optional`, `controlArgs`, `sourceArgs`, or `correlateControlArgs`
+- input-record fields that do not match executable params
+- executable params left uncovered by `inputs` or `bind`
+- `bind` keys that overlap the input record
+- legacy `bind` / `expose` / `optional` / `controlArgs` mistakes when not using `inputs`
+
 **Record and shelf validation:**
 
 `mlld validate` now catches statically knowable record and shelf definition errors before execution:
@@ -185,6 +199,7 @@ Skipped entries stay out of default text output so `mlld validate` only reports 
 It currently catches:
 
 - unknown tools and args
+- surfaced tool catalogs that use `inputs: @record`, including record-derived control/source args
 - denied tools from `with { policy: ... }` overrides
 - unconstrained control-arg authorizations
 - proofless `resolved` values that should be handle-backed

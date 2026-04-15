@@ -8,7 +8,7 @@ parent: policy
 tags: [policy, authorizations, allow, guards, security, planner, agent]
 related-code: [core/policy/authorizations.ts, interpreter/policy/authorization-compiler.ts, interpreter/eval/exec/policy-fragment.ts, interpreter/env/builtins/policy.ts, interpreter/hooks/guard-pre-hook.ts]
 related: [security-policies, policy-label-flow, guards-privileged, policy-composition, labels-source-auto, facts-and-handles, pattern-planner, tool-docs]
-updated: 2026-04-10
+updated: 2026-04-14
 ---
 
 The `authorizations` section has two layers:
@@ -17,6 +17,8 @@ The `authorizations` section has two layers:
 - Runtime task policy carries compiled `authorizations.allow` / `authorizations.deny` constraints that the worker actually runs under.
 
 Control arg values in runtime authorization entries must carry proof (handle, fact label, or `known` attestation). Proofless literals are rejected — the builder soft-drops them with feedback, and direct runtime policy fragments still fail closed.
+
+For surfaced tool catalogs, the canonical source of that metadata is usually `inputs: @record`: record `facts` become the tool's effective control args on write surfaces and effective source args on read surfaces. Legacy `controlArgs` / `sourceArgs` metadata still works, but it is no longer the preferred catalog shape.
 
 ```mlld
 var known @approvedRecipient = "mark@example.com"
@@ -53,37 +55,48 @@ The framework reads `authorizable` from the base policy, validates planner inten
 
 ## Tool Metadata
 
-The base trusted metadata now lives on the executable declaration itself:
+For surfaced tool catalogs, the trusted metadata usually lives on the tool entry through `inputs: @record`:
 
 ```mlld
-exe tool:w @send_email(recipients, cc, bcc, subject) = @sendMailApi(
+record @send_email_inputs = {
+  facts: [recipients: array, cc: array?, bcc: array?],
+  data: {
+    trusted: [subject: string],
+    untrusted: [body: string?]
+  },
+  validate: "strict"
+}
+
+exe tool:w @send_email(recipients, cc, bcc, subject, body) = @sendMailApi(
   @recipients,
   @cc,
   @bcc,
-  @subject
-) with { controlArgs: ["recipients", "cc", "bcc"] }
-```
+  @subject,
+  @body
+)
 
-Tool collections can restate or tighten that metadata for a specific exposure:
-
-```mlld
 var tools @agentTools = {
   send_email: {
     mlld: @send_email,
-    labels: ["tool:w:send_email"],
-    expose: ["recipients", "cc", "bcc", "subject"],
-    controlArgs: ["recipients", "cc", "bcc"]
-  },
-  create_file: {
-    mlld: @create_file,
-    labels: ["tool:w:create_file"],
-    expose: ["title"],
-    controlArgs: []
+    inputs: @send_email_inputs,
+    labels: ["tool:w:send_email", "exfil:send", "comm:w"],
+    authorizable: "role:planner"
   }
 }
 ```
 
-`controlArgs` must reference visible tool parameters. `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
+For record-backed tool catalogs:
+
+- record fields must match the surfaced executable params
+- executable params must be covered by either `inputs` or `bind`
+- record `facts` become the tool's effective control args on write surfaces
+- record `facts` become the tool's effective source args on read-only surfaces
+- record `correlate: true` becomes the same-source check for multi-fact write tools
+- `data.trusted` and `data.untrusted` flow into runtime validation, `@toolDocs()`, MCP annotations, and injected tool notes
+
+`mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
+
+Direct exe metadata such as `with { controlArgs, sourceArgs, updateArgs, exactPayloadArgs }` still works and remains the fallback for direct executable surfaces or legacy tool catalogs.
 
 Planner-pinned values can also carry attestation requirements. If a planner pins a `known` recipient or a `known:internal` destination, that requirement is compiled into the authorization guard and reused when inherited positive checks run later.
 
@@ -111,6 +124,25 @@ Rules:
 
 Authorization identity comes from the caller exe's `role:*` label, not from `with { display }`. Display can shape projected values and tool docs, but it does not change which `authorizable` entry applies.
 
+Tool catalogs can provide shorthand defaults for that base policy:
+
+```mlld
+var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    authorizable: "role:planner"
+  },
+  update_password: {
+    mlld: @update_password,
+    inputs: @update_password_inputs,
+    authorizable: false
+  }
+}
+```
+
+When `@policy.build(...)` or `@policy.validate(...)` runs against `@agentTools`, the builder merges catalog `authorizable` entries into the active base policy for that surfaced tool set. `false` is shorthand for adding the surfaced tool to `policy.authorizations.deny`.
+
 ## Entries
 
 Keys under `authorizations.allow` are exact operation names matching `@mx.op.name`. For MCP-backed tools, use the mlld-side canonical name, not the provider's raw tool name.
@@ -120,7 +152,7 @@ At runtime, this allowlist applies only to the active surfaced tool set from `to
 | Form | Meaning |
 |---|---|
 | Omitted (but in scope) | Denied. Default-deny for unlisted `tool:w` operations. |
-| `create_file: true` | Authorized with no argument constraints. Only valid for tools with no declared control args. |
+| `create_file: true` | Authorized with no argument constraints. Only valid for tools with no effective control args. |
 | `send_email: { args: { ... } }` | Authorized. Listed args must satisfy constraints. |
 
 `{}` and `{ args: {} }` are accepted but normalized to `true` with a warning. The canonical form for unconstrained authorization is `true`.
@@ -191,34 +223,44 @@ Tolerant comparison (`~=`) handles string-vs-array, ordering, null equivalence, 
 
 ## Control-Arg Enforcement
 
-Tools declare which arguments are security-relevant (control args) via `controlArgs`. The runtime consumes exe metadata plus any active tool-collection overrides to enforce that planners constrain all control args.
+Tools have an effective set of security-relevant args. For record-backed tool catalogs, write-surface `facts` become the effective control args. For legacy or direct exe surfaces, that metadata comes from `controlArgs`. The runtime consumes whichever effective metadata exists and enforces that planners constrain all control args.
 
 **Two enforcement layers:**
 
 **Validation:** `mlld validate --context tools.mld` catches missing constraints before execution:
 
-- A declared control arg that is NOT constrained in the `authorizations` entry is a **validation error**. The planner must pin it with a literal, `eq`, or `oneOf` constraint.
-- A tool with declared control args authorized as `true` (unconstrained) is a **validation error**. `true` is only valid for tools with no effective control args.
+- An effective control arg that is NOT constrained in the `authorizations` entry is a **validation error**. The planner must pin it with a literal, `eq`, or `oneOf` constraint.
+- A tool with effective control args authorized as `true` (unconstrained) is a **validation error**. `true` is only valid for tools with no effective control args.
 - If trusted control-arg metadata is absent for a `tool:w` executable, validation fails closed by treating every declared parameter as a control arg.
 
 **Runtime (always):** Whether or not validation ran, the runtime enforces that args not mentioned in the constraint must be empty/null. If the planner doesn't mention `cc` on `send_email`, the runtime enforces that `cc` must be null, `[]`, or absent. This prevents silent omission from becoming an open hole.
 
 - Arguments not declared as control args are unconstrained data args — the worker fills them freely.
-- If the planner includes data args in the authorization (title, description, etc.), the runtime strips them at compilation time. Only declared control args are compiled into constraints. The planner doesn't need to know which args are control args vs data args.
+- If the planner includes data args in the authorization (title, description, etc.), the runtime strips them at compilation time. Only effective control args are compiled into constraints. The planner doesn't need to know which args are control args vs data args.
 
-## Cross-Arg Correlation: `correlateControlArgs`
+## Cross-Arg Correlation: `correlate`
 
 When a write tool has more than one control arg, the runtime can require that all of them came from the same source record. This blocks an attack class where the planner mixes a fact-bearing arg from one record with a fact-bearing arg from a different record — both args have proof, but together they target the wrong thing.
 
 ```mlld
+record @update_scheduled_transaction_inputs = {
+  facts: [id: string, recipient: string],
+  data: [amount: number, date: string],
+  correlate: true,
+  validate: "strict"
+}
+
 exe tool:w @updateScheduledTransaction(id, recipient, amount, date) = [...]
-  with {
-    controlArgs: ["id", "recipient"],
-    correlateControlArgs: true
+
+var tools @writeTools = {
+  update_scheduled_transaction: {
+    mlld: @updateScheduledTransaction,
+    inputs: @update_scheduled_transaction_inputs
   }
+}
 ```
 
-When `correlateControlArgs: true` is set on a tool with multiple `controlArgs`, the runtime checks at dispatch time that every control arg value's `factsources` provenance points to the **same source record instance**. If they don't, the dispatch is denied with `Rule 'correlate-control-args': control args on @<tool> must come from the same source record`.
+When `correlate: true` is set on a write-tool input record with multiple fact fields, the runtime checks at dispatch time that every control arg value's `factsources` provenance points to the **same source record instance**. If they don't, the dispatch is denied with `Rule 'correlate-control-args': control args on @<tool> must come from the same source record`.
 
 **The attack this defends against:**
 
@@ -229,13 +271,13 @@ User has two scheduled transactions in their account:
 
 User says "update transaction A's amount to $600."
 
-Without correlateControlArgs:
+Without correlation:
   Planner authorizes update_scheduled_transaction(A.id, B.recipient, 600)
   Both args have fact proof — A.id and B.recipient are real fact-bearing values
   no-send-to-unknown sees proof on both, allows the call
   Bank updates transaction A's recipient to attacker@evil.com
 
-With correlateControlArgs: true:
+With `correlate: true`:
   Same dispatch attempted
   Runtime checks A.id and B.recipient — different source record instances
   Rule 'correlate-control-args' fires: DENIED
@@ -249,9 +291,11 @@ With correlateControlArgs: true:
 
 The comparator prefers `instanceKey` when available, falling back to `(coercionId, position)` for keyless records. This means **re-fetching the same record from a separate tool call still correlates correctly** — two `@getTransactionById("tx_001")` calls produce values with different `coercionId`s but the same `instanceKey`, and dispatching control args mixed across the two fetches is allowed because they refer to the same logical record.
 
-**When to use it.** Set `correlateControlArgs: true` on any write tool whose control args together identify a single logical target. Account updates, transaction modifications, message replies, file moves — anywhere multiple args must agree on which entity they're operating on. The framework default for multi-`controlArg` tools should be `true`; opt out only when the tool genuinely takes unrelated control args.
+**When to use it.** Set `correlate: true` on any write-tool input record whose fact fields together identify a single logical target. Account updates, transaction modifications, message replies, file moves — anywhere multiple args must agree on which entity they're operating on. The framework default for multi-fact write inputs should be `true`; opt out only when the tool genuinely takes unrelated control args.
 
-**What the rule does NOT defend against.** Single-control-arg tools are unaffected (one arg has nothing to correlate against). Tools with `correlateControlArgs: false` (or unset) skip the check entirely. Values without `factsources` (constructed via mlld code without going through `=> record` coercion) cannot be correlated and the dispatch will be denied with a "missing factsource" reason.
+**What the rule does NOT defend against.** Single-control-arg tools are unaffected (one arg has nothing to correlate against). Tools with `correlate: false` (or unset) skip the check entirely. Values without `factsources` (constructed via mlld code without going through `=> record` coercion) cannot be correlated and the dispatch will be denied with a "missing factsource" reason.
+
+Legacy tool metadata can still opt in with `correlateControlArgs: true` when the tool is not record-backed.
 
 The runtime check fires on both dispatch paths: orchestrator-side direct exec calls and LLM-bridge dispatched tool calls. There is no path that bypasses it.
 
@@ -337,7 +381,7 @@ If the planner had written `"send_email": true`, validation would reject it beca
 
 `authorizations` compiles to internal privileged guards. These are the same guards that `defaults.rules` and `labels` produce — they participate in the standard guard override mechanism:
 
-- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires destination args to carry fact proof or `known`. `no-untrusted-destructive` and `no-untrusted-privileged` scope to control args when `controlArgs` is declared — tainted data args (body, title) don't block the authorized operation.
+- Matching `allow` can override managed label-flow denials from `defaults.rules` and `labels` only after inherited positive checks still pass. For example, `no-send-to-unknown` still requires destination args to carry fact proof or `known`. `no-untrusted-destructive` and `no-untrusted-privileged` scope to control args when effective control-arg metadata exists — tainted data args (body, title) don't block the authorized operation.
 - `locked: true` disables all overrides — authorization entries are still checked, but a matching entry cannot punch through locked denials
 - Capability denials (`capabilities.allow/deny/danger`), `env` restrictions, `auth`, and `limits` are separate enforcement paths and are not affected by `authorizations`
 
@@ -385,7 +429,7 @@ var @auth = @policy.build(@step.authorizations, @writeTools)
 show @writeTools[@step.write_tool](@step.args) with { policy: @auth.policy }
 ```
 
-No generated dispatch shims or routing exes needed. The tool collection metadata (params, controlArgs, expose/bind shaping) is the source of truth for both policy matching and arg spreading.
+No generated dispatch shims or routing exes needed. The tool collection metadata (`inputs`, params, bind shaping, or legacy control/source arg overrides) is the source of truth for both policy matching and arg spreading.
 
 Handle-bearing values inside `@step.args` are preserved through collection dispatch and arg spreading. Objects such as `{ handle: "h_abc123" }` or `{ preview: "m***@example.com", handle: "h_abc123" }` stay intact until dispatch-time resolution, so planner-selected collection calls behave the same way as direct tool calls.
 
@@ -442,7 +486,7 @@ What the builder checks:
 - Denied tools → dropped (`denied_by_policy`)
 - Unknown tools → dropped (`unknown_tool`)
 - Bucketed intent from influenced sources → rejected (`bucketed_intent_from_influenced_source`)
-- `true` for tools with `controlArgs` in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
+- `true` for tools with effective control args in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
 - `allow: { tool: true }` in bucketed intent → explicit tool-level authorization
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `known` values from influenced sources → dropped (`known_from_influenced_source`)
@@ -502,7 +546,7 @@ Three buckets:
 
 - **`resolved`** — values from tool results. Every non-empty control arg value must be either a resolvable handle or a direct fact-bearing value carrying `fact:*` proof. Bare proofless literals are rejected.
 - **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
-- **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has `controlArgs`, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
+- **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has effective control args, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
 
 `authorizable` is not a fourth bucket. It stays on the developer-owned base policy and never belongs in planner-produced runtime intent.
 
@@ -554,13 +598,13 @@ The planner's output should contain only runtime authorization intent — not `a
 
 `mlld validate --context tools.mld` checks authorizations fragments:
 
-- Every `authorizations.allow` key must resolve to a known exe in context
-- Every constrained arg name must exist on that exe's parameter list
-- A declared control arg omitted from the `args` constraint is an error
-- A tool with declared control args authorized as `true` is an error
+- Every `authorizations.allow` key must resolve to a known surfaced tool or exe in context
+- Every constrained arg name must exist on that tool's surfaced parameter list
+- An effective control arg omitted from the `args` constraint is an error
+- A tool with effective control args authorized as `true` is an error
 
 That validation is scoped to actual policy surfaces: `/policy` declarations and statically analyzable `@policy.build(...)` / `@policy.validate(...)` callsites. Ordinary data objects may still use a field named `authorizations`; they stay plain data until framework code passes them to the policy builder or validator.
-- If trusted `controlArgs` are missing for a `tool:w` exe, every declared parameter is treated as a control arg
+- If trusted control-arg metadata is missing for a `tool:w` exe, every declared parameter is treated as a control arg
 - `{}` and `{ args: {} }` produce normalization warnings
 
 Invalid fragments fail closed: if validation fails, the policy is not activated, the exe call fails with a structured error, and the host decides recovery.
