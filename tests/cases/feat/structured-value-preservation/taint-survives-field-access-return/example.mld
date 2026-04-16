@@ -1,0 +1,7 @@
+exe @extract(container) = [
+  let @entry = @container
+  => @entry.value
+]
+
+var untrusted @data = { value: "attacker payload" }
+show @extract(@data).mx.labels

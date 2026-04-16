@@ -50,6 +50,13 @@ export async function evaluateAssignmentValue(
   let handledByRunEvaluator = false;
   const wrapperType = (entry as any).meta?.wrapperType;
   const firstValue = Array.isArray(entry.value) && entry.value.length > 0 ? entry.value[0] : entry.value;
+  const preserveLetVariableReference =
+    entry.type === 'LetAssignment' &&
+    firstValue &&
+    typeof firstValue === 'object' &&
+    (firstValue as { type?: string }).type === 'VariableReference' &&
+    (!Array.isArray((firstValue as { pipes?: unknown[] }).pipes) ||
+      ((firstValue as { pipes?: unknown[] }).pipes?.length ?? 0) === 0);
 
   if (firstValue && typeof firstValue === 'object' && (firstValue as any).type === 'code') {
     const { evaluateCodeExecution } = await import('@interpreter/eval/code-execution');
@@ -134,6 +141,12 @@ export async function evaluateAssignmentValue(
     } else if (isExpressionNode(firstValue)) {
       const { evaluateUnifiedExpression } = await import('@interpreter/eval/expressions');
       const valueResult = await evaluateUnifiedExpression(firstValue, env, { isExpression: true });
+      value = valueResult.value;
+    } else if (preserveLetVariableReference) {
+      const valueResult = await evaluate(entry.value, env, {
+        isExpression: true,
+        preserveBareVariableReference: true
+      });
       value = valueResult.value;
     } else {
       const valueResult = await evaluate(entry.value, env, { isExpression: true });

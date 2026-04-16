@@ -1,0 +1,10 @@
+record @contact = { facts: [email: string] }
+exe @coerce(v) = js { return v; } => contact
+
+exe @getField(container) = [
+  let @entry = @container
+  => @entry.email
+]
+
+var @rec = @coerce({ email: "a@b.com" })
+show @getField(@rec).mx.labels[0]

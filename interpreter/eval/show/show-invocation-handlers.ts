@@ -99,6 +99,20 @@ function toInvocationDisplayValue(value: unknown): string {
   if (isStructuredValue(value)) {
     return asText(value);
   }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    (
+      isExecutableVariable(value as any) ||
+      isTextLike(value as any) ||
+      isRecord(value as any) ||
+      isObject(value as any) ||
+      isArray(value as any)
+    )
+  ) {
+    return variableToString(value);
+  }
   if (typeof value === 'string') {
     return value;
   }
@@ -120,6 +134,9 @@ function hasErrorMetadata(value: unknown): boolean {
 }
 
 function variableToString(variable: any): string {
+  if (isExecutableVariable(variable)) {
+    return `[executable: ${variable.name}]`;
+  }
   if (isTextLike(variable)) {
     return variable.value;
   }

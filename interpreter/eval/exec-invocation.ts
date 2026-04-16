@@ -2296,11 +2296,57 @@ async function evaluateExecInvocationInternal(
     return structured;
   };
 
+  const cloneExecutableResult = (value: Variable): Variable =>
+    cloneExecVariableWithNewValue(value, value.value, stringifyExecGuardArg(value.value));
+
+  const applyDescriptorToExecutableResult = (
+    value: Variable,
+    descriptor?: SecurityDescriptor
+  ): Variable => {
+    const cloned = cloneExecutableResult(value);
+    if (!descriptor) {
+      return cloned;
+    }
+
+    const existing = getVariableSecurityDescriptor(cloned);
+    const merged = existing
+      ? runtimeEnv.mergeSecurityDescriptors(existing, descriptor)
+      : descriptor;
+
+    cloned.metadata = VariableMetadataUtils.applySecurityMetadata(cloned.metadata, {
+      existingDescriptor: merged
+    });
+
+    if (!cloned.mx) {
+      cloned.mx = {};
+    }
+    updateVarMxFromDescriptor(cloned.mx as VariableContext, merged);
+    if ((cloned.mx as any).mxCache) {
+      delete (cloned.mx as any).mxCache;
+    }
+
+    VariableMetadataUtils.attachContext(cloned);
+    return cloned;
+  };
+
+  const isExecutableResult = (value: unknown): value is Variable =>
+    !!value && typeof value === 'object' && isExecutableVariable(value as any);
+
   const createEvalResult = (
     value: unknown,
     targetEnv: Environment,
     options?: { type?: string; text?: string }
   ): EvalResult => {
+    if (isExecutableResult(value)) {
+      return {
+        value,
+        env: targetEnv,
+        stdout: `[executable: ${value.name}]`,
+        stderr: '',
+        exitCode: 0
+      };
+    }
+
     const wrapped = attachLlmSessionIdMetadata(wrapExecResult(value, options));
     if (resultSecurityDescriptor) {
       const existing = getStructuredSecurityDescriptor(wrapped);
@@ -4665,13 +4711,15 @@ async function evaluateExecInvocationInternal(
     const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
     if (isVariable(result)) {
       if (isExecutableVariable(result)) {
-        result = wrapStructured(result as any, 'object');
+        result = cloneExecutableResult(result);
       } else {
         let extracted = await extractVariableValue(result, execEnv);
         while (isVariable(extracted) && !isExecutableVariable(extracted)) {
           extracted = await extractVariableValue(extracted, execEnv);
         }
-        if (isStructuredValue(extracted)) {
+        if (isExecutableResult(extracted)) {
+          result = cloneExecutableResult(extracted);
+        } else if (isStructuredValue(extracted)) {
           // Preserve the original wrapper so record projection/internal field
           // metadata survives returned variable normalization.
           result = wrapStructured(extracted as any);
@@ -4728,13 +4776,17 @@ async function evaluateExecInvocationInternal(
   }
 
   if (resultSecurityDescriptor) {
-    const structured = wrapExecResult(result);
-    const existing = getStructuredSecurityDescriptor(structured);
-    const merged = existing
-      ? runtimeEnv.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
-      : resultSecurityDescriptor;
-    setStructuredSecurityDescriptor(structured, merged);
-    result = structured;
+    if (isExecutableResult(result)) {
+      result = applyDescriptorToExecutableResult(result, resultSecurityDescriptor);
+    } else {
+      const structured = wrapExecResult(result);
+      const existing = getStructuredSecurityDescriptor(structured);
+      const merged = existing
+        ? runtimeEnv.mergeSecurityDescriptors(existing, resultSecurityDescriptor)
+        : resultSecurityDescriptor;
+      setStructuredSecurityDescriptor(structured, merged);
+      result = structured;
+    }
   }
 
   // Clean up resolution tracking after executable body completes, before pipeline/with clause processing

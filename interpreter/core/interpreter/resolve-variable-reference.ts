@@ -60,6 +60,18 @@ function isCommandVariable(variable: unknown): boolean {
   return definitionType === 'command' || definitionType === 'code';
 }
 
+const NON_PRESERVING_TOP_LEVEL_FIELDS = new Set([
+  'mx',
+  'type',
+  'text',
+  'data',
+  'internal',
+  'raw',
+  'metadata',
+  'source',
+  'isComplex'
+]);
+
 export async function resolveVariableReference({
   node,
   env,
@@ -161,6 +173,18 @@ export async function resolveVariableReference({
   const isInExpression = context && context.isExpression;
   const preserveBareVariableReference = context?.preserveBareVariableReference === true;
   const hasFieldAccess = Array.isArray(node.fields) && node.fields.length > 0;
+  const firstFieldName =
+    hasFieldAccess &&
+    node.fields &&
+    node.fields[0] &&
+    typeof node.fields[0] === 'object' &&
+    (node.fields[0] as { type?: string }).type === 'field'
+      ? String((node.fields[0] as { value?: unknown }).value)
+      : undefined;
+  const shouldPreserveFieldAccessReference =
+    preserveBareVariableReference &&
+    node.identifier !== 'mx' &&
+    (!firstFieldName || !NON_PRESERVING_TOP_LEVEL_FIELDS.has(firstFieldName));
   const resolutionContext =
     hasFieldAccess ? ResolutionContext.FieldAccess
     : preserveBareVariableReference ? ResolutionContext.FieldAccess
@@ -170,7 +194,7 @@ export async function resolveVariableReference({
   let resolvedValue = await resolveVariable(variable, env, resolutionContext);
 
   if (node.fields && node.fields.length > 0) {
-    const { accessFields } = await import('@interpreter/utils/field-access');
+    const { accessFields, createFieldAccessVariable } = await import('@interpreter/utils/field-access');
     const fieldAccessLocation = astLocationToSourceLocation(node.location, env.getCurrentFilePath());
 
     const fieldResult = await accessFields(resolvedValue, node.fields, {
@@ -179,7 +203,9 @@ export async function resolveVariableReference({
       env,
       sourceLocation: fieldAccessLocation
     });
-    resolvedValue = (fieldResult as any).value;
+    resolvedValue = shouldPreserveFieldAccessReference
+      ? createFieldAccessVariable(fieldResult as any, variable)
+      : (fieldResult as any).value;
   }
 
   if (node.pipes && node.pipes.length > 0) {

@@ -1,0 +1,12 @@
+exe @search(query, sender) = js { return []; }
+
+exe @getExe(entry) = [
+  let @e = @entry
+  => @e.mlld
+]
+
+var tools @tools = {
+  search: { mlld: @search, labels: ["resolve:r"] }
+}
+
+show @getExe(@tools.search).mx.params.length

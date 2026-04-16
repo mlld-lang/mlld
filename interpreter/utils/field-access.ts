@@ -1507,12 +1507,21 @@ export function createFieldAccessVariable(
   if (result.isVariable && isVariable(result.value)) {
     return result.value;
   }
-  const internalSource = source ?? result.parentVariable?.source;
+  const sourceVariable = isVariable(source) ? source : undefined;
+  const variableSource =
+    sourceVariable?.source ??
+    (isVariable(result.parentVariable) ? result.parentVariable.source : undefined) ??
+    source;
+  const internalSource = sourceVariable ?? result.parentVariable;
+  const now = Date.now();
   // Create a computed Variable to preserve context
   return {
     type: 'computed',
     name: result.accessPath.join('.'),
     value: result.value,
+    source: variableSource,
+    createdAt: now,
+    modifiedAt: now,
     internal: {
       source: internalSource,
       parentVariable: result.parentVariable,

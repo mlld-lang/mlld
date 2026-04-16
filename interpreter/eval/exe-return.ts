@@ -4,6 +4,18 @@ import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security'
 import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
 
+const NON_PRESERVING_TOP_LEVEL_FIELDS = new Set([
+  'mx',
+  'type',
+  'text',
+  'data',
+  'internal',
+  'raw',
+  'metadata',
+  'source',
+  'isComplex'
+]);
+
 export interface ExeReturnControl {
   __exeReturn: true;
   value: unknown;
@@ -128,13 +140,23 @@ export async function resolveExeReturnValue(
   if (returnNodes.length === 0) {
     return { value: undefined, env };
   }
+  const topLevelFieldName =
+    returnNodes.length === 1 &&
+    returnNodes[0] &&
+    typeof returnNodes[0] === 'object' &&
+    Array.isArray((returnNodes[0] as { fields?: unknown[] }).fields) &&
+    ((returnNodes[0] as { fields?: unknown[] }).fields?.length ?? 0) > 0 &&
+    typeof ((returnNodes[0] as { fields?: Array<{ type?: string; value?: unknown }> }).fields?.[0]) === 'object' &&
+    ((returnNodes[0] as { fields?: Array<{ type?: string; value?: unknown }> }).fields?.[0]?.type === 'field')
+      ? String((returnNodes[0] as { fields?: Array<{ type?: string; value?: unknown }> }).fields?.[0]?.value)
+      : undefined;
   const preserveBareVariableReference =
     returnNodes.length === 1 &&
     returnNodes[0] &&
     typeof returnNodes[0] === 'object' &&
     (returnNodes[0] as { type?: string }).type === 'VariableReference' &&
-    (!Array.isArray((returnNodes[0] as { fields?: unknown[] }).fields) ||
-      ((returnNodes[0] as { fields?: unknown[] }).fields?.length ?? 0) === 0) &&
+    (returnNodes[0] as { identifier?: string }).identifier !== 'mx' &&
+    (!topLevelFieldName || !NON_PRESERVING_TOP_LEVEL_FIELDS.has(topLevelFieldName)) &&
     (!Array.isArray((returnNodes[0] as { pipes?: unknown[] }).pipes) ||
       ((returnNodes[0] as { pipes?: unknown[] }).pipes?.length ?? 0) === 0);
   const evaluationEnv = options.isolateSecurityDescriptor ? env.createChild() : env;

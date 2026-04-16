@@ -1,0 +1,10 @@
+record @s = { facts: [email: string], validate: "demote" }
+exe @coerce(v) = js { return v; } => s
+
+exe @wrapAndReturn(item) = [
+  let @w = @coerce(@item)
+  let @wrap = { payload: @w }
+  => @wrap
+]
+
+show @wrapAndReturn({ email: "a@b.com" }).payload.mx.schema.valid

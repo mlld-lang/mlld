@@ -52,4 +52,50 @@ describe('Executable Reference Preservation', () => {
       '10'
     ]);
   });
+
+  it('preserves executable references returned from block helpers', async () => {
+    const source = [
+      '/exe @search(query, sender) = js { return []; }',
+      '/exe @getExe(entry) = [',
+      '  let @e = @entry',
+      '  => @e.mlld',
+      ']',
+      '/var tools @tools = {',
+      '  search: { mlld: @search, labels: ["resolve:r"] }',
+      '}',
+      '/var @result = @getExe(@tools.search)',
+      '/show @typeof(@result)',
+      '/show @result.mx.params.length',
+      '/show @getExe(@tools.search).mx.params.length',
+      '/show @getExe(@tools.search)'
+    ].join('\n');
+
+    const output = await run(source);
+    expect(output.split('\n').filter(Boolean)).toEqual([
+      'executable',
+      '2',
+      '2',
+      '[executable: search]'
+    ]);
+  });
+
+  it('preserves executable references returned from when branches inside block helpers', async () => {
+    const source = [
+      '/exe @search(query, sender) = js { return []; }',
+      '/exe @toolExe(toolEntry) = [',
+      '  let @entry = @toolEntry',
+      '  => when [',
+      '    @typeof(@entry.mlld) == "executable" => @entry.mlld',
+      '    * => null',
+      '  ]',
+      ']',
+      '/var tools @tools = {',
+      '  search: { mlld: @search, labels: ["resolve:r"] }',
+      '}',
+      '/show @toolExe(@tools.search).mx.params.length'
+    ].join('\n');
+
+    const output = await run(source);
+    expect(output.split('\n').filter(Boolean)).toEqual(['2']);
+  });
 });

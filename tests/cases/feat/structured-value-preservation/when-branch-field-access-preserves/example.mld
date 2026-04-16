@@ -1,0 +1,15 @@
+exe @search(query, sender) = js { return []; }
+
+exe @toolExe(toolEntry) = [
+  let @entry = @toolEntry
+  => when [
+    @typeof(@entry.mlld) == "executable" => @entry.mlld
+    * => null
+  ]
+]
+
+var tools @tools = {
+  search: { mlld: @search, labels: ["resolve:r"] }
+}
+
+show @toolExe(@tools.search).mx.params.length
