@@ -29,6 +29,18 @@ describe('migrate-state', () => {
     expect(await readFile(moved, 'utf8')).toBe('hello\n');
   });
 
+  it('defaults to migrating the project scope when no scope flag is given', async () => {
+    const legacy = path.join(tmp, '.mlld');
+    await mkdir(path.join(legacy, 'sec'), { recursive: true });
+    await writeFile(path.join(legacy, 'sec', 'audit.jsonl'), 'payload\n');
+
+    // no project/user flags -- must still rename the project-scope legacy dir
+    await migrateStateCommand({ basePath: tmp });
+
+    expect(existsSync(legacy)).toBe(false);
+    expect(existsSync(path.join(tmp, '.llm', 'sec', 'audit.jsonl'))).toBe(true);
+  });
+
   it('leaves things alone when no legacy dir is present', async () => {
     await migrateStateCommand({ basePath: tmp, project: true, user: false });
     expect(existsSync(path.join(tmp, '.mlld'))).toBe(false);

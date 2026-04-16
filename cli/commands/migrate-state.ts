@@ -25,8 +25,9 @@ function collectPlans(options: MigrateStateOptions): { plans: MigrationPlan[]; s
   const plans: MigrationPlan[] = [];
   const skipped: string[] = [];
   const root = options.basePath ?? process.cwd();
-  const wantProject = options.project !== false && !options.user;
-  const wantUser = options.user !== false && !options.project;
+  const both = !options.project && !options.user;
+  const wantProject = both || Boolean(options.project);
+  const wantUser = both || Boolean(options.user);
 
   if (wantProject) {
     const legacy = legacyProjectStateDir(root);

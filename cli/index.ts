@@ -396,11 +396,15 @@ console.error = function(...args: any[]) {
 
 export async function main(customArgs?: string[]): Promise<void> {
   seenErrors.clear();
-  try {
-    const { warnIfLegacyStateDirPresent } = await import('./utils/state-migration-warning');
-    warnIfLegacyStateDirPresent(process.cwd());
-  } catch {
-    // warning is advisory; never block the CLI on a lookup failure
+  const args = customArgs ?? process.argv.slice(2);
+  const firstCommand = args.find(arg => !arg.startsWith('-')) ?? '';
+  if (firstCommand !== 'migrate-state') {
+    try {
+      const { warnIfLegacyStateDirPresent } = await import('./utils/state-migration-warning');
+      warnIfLegacyStateDirPresent(process.cwd());
+    } catch {
+      // warning is advisory; never block the CLI on a lookup failure
+    }
   }
   const orchestrator = new CLIOrchestrator();
   await orchestrator.main(customArgs);
