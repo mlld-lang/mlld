@@ -1,3 +1,8 @@
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  isEnvironmentTagged
+} from '@core/utils/environment-identity';
+
 interface ValueSanitizerOptions {
   maxDepth?: number;
   maxObjectKeys?: number;
@@ -124,6 +129,10 @@ function sanitizeValueInternal(
 
   if (typeof value !== 'object') {
     return value;
+  }
+
+  if (isEnvironmentTagged(value)) {
+    return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
   }
 
   if (value instanceof Date) {

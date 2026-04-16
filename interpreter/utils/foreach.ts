@@ -2,7 +2,7 @@ import type { Environment } from '../env/Environment';
 import { evaluateForeachCommand, evaluateForeachSection } from '../eval/foreach';
 import { interpolate } from '../core/interpreter';
 import type { SecurityDescriptor } from '@core/types/security';
-import { isStructuredValue } from './structured-value';
+import { isStructuredValue, stringifyStructured } from './structured-value';
 
 /**
  * Configuration options for foreach output formatting
@@ -67,7 +67,7 @@ export async function evaluateForeachAsText(
       return normalized;
     }
     if (typeof normalized === 'object') {
-      return JSON.stringify(normalized, null, 2);
+      return stringifyStructured(normalized, 2);
     }
     return String(normalized);
   });

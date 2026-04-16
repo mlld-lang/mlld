@@ -4,6 +4,10 @@ import {
   enforceAuditRecordCap,
   AUDIT_DEFAULT_MAX_RECORD_BYTES
 } from './AuditValueSummarizer';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@core/utils/environment-identity';
 
 describe('summarizeAuditValue', () => {
   it('passes through small primitives and short strings', () => {
@@ -66,14 +70,14 @@ describe('summarizeAuditValue', () => {
     expect(result).toEqual({ __ast: 'ExeBlock' });
   });
 
-  it('replaces Environment-class instances with a sentinel', () => {
-    class Environment {
-      huge = new Array(1000).fill('x');
-      variables = new Map([['a', 1]]);
-    }
-    const env = new Environment();
+  it('replaces tagged environment objects with a sentinel', () => {
+    const env: Record<string, unknown> = {
+      huge: new Array(1000).fill('x'),
+      variables: new Map([['a', 1]])
+    };
+    markEnvironment(env);
     const result = summarizeAuditValue({ env, other: 'value' }) as Record<string, unknown>;
-    expect(result.env).toBe('[Environment]');
+    expect(result.env).toBe(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
     expect(result.other).toBe('value');
   });
 

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
 import { isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 
 describe('wrapLoadContentValue JSON/JSONL auto-parse', () => {
   it('parses .json into structured data', () => {
@@ -164,5 +168,18 @@ describe('per-item parse resilience in glob arrays', () => {
       relative: './bad.json',
       absolute: '/tmp/bad.json'
     })).toThrow('Failed to parse JSON');
+  });
+});
+
+describe('environment opacity', () => {
+  it('does not serialize tagged environments when wrapping plain objects', () => {
+    const envLike: Record<string, unknown> = {
+      secret: 'top-secret'
+    };
+    markEnvironment(envLike);
+
+    const result = wrapLoadContentValue({ env: envLike });
+    expect(result.text).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+    expect(result.text).not.toContain('top-secret');
   });
 });

@@ -16,6 +16,7 @@
 
 import { expandAnsiCodes, stripAnsiMarkers } from '@core/utils/ansi-processor';
 import { extractPath } from './jsonpath';
+import { stringifyStructured } from '@interpreter/utils/structured-value';
 
 export type TemplateFormat = 'text' | 'ansi' | 'json';
 
@@ -110,7 +111,7 @@ function formatValue(value: unknown, format: TemplateFormat): string {
 
   if (Array.isArray(value) || typeof value === 'object') {
     // Objects and arrays: always stringify
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   }
 
   return String(value);

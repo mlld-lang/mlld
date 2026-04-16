@@ -7,6 +7,10 @@ import {
   createFieldTemplate,
   DEFAULT_TEMPLATES
 } from '@interpreter/streaming/template-interpolator';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 
 describe('template-interpolator', () => {
   describe('interpolateTemplate', () => {
@@ -127,6 +131,18 @@ describe('template-interpolator', () => {
     it('should stringify arrays', () => {
       const data = { arr: [1, 2, 3] };
       expect(interpolateTemplate('@evt.arr', data, 'json')).toBe('[1,2,3]');
+    });
+
+    it('treats tagged environments as opaque when formatting json values', () => {
+      const envLike: Record<string, unknown> = {
+        nested: {
+          secret: 'top-secret'
+        }
+      };
+      markEnvironment(envLike);
+
+      const data = { env: envLike };
+      expect(interpolateTemplate('@evt.env', data, 'json')).toBe(`"${ENVIRONMENT_SERIALIZE_PLACEHOLDER}"`);
     });
 
     it('should strip ANSI markers', () => {

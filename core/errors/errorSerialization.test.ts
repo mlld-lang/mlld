@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { cloneErrorForTransport, sanitizeSerializableValue, serializeError, truncateText } from './errorSerialization';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@core/utils/environment-identity';
 
 describe('errorSerialization', () => {
   it('does not truncate normal payload strings by default', () => {
@@ -22,6 +26,19 @@ describe('errorSerialization', () => {
     const serialized = serializeError(new Error(long), { includeStack: false }) as { message: string };
 
     expect(serialized.message).toBe(long);
+  });
+
+  it('treats tagged environments as opaque even when they look like plain objects', () => {
+    const envLike: Record<string, unknown> = {
+      nested: {
+        secret: 'top-secret'
+      }
+    };
+    markEnvironment(envLike);
+
+    expect(sanitizeSerializableValue({ holder: envLike })).toEqual({
+      holder: ENVIRONMENT_SERIALIZE_PLACEHOLDER
+    });
   });
 
   it('truncateText preserves explicit truncation behavior', () => {

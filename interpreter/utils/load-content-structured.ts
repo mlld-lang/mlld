@@ -16,6 +16,7 @@ import {
 import {
   wrapStructured,
   isStructuredValue,
+  stringifyStructured,
   type StructuredValue,
   type StructuredValueMetadata,
   type StructuredValueType
@@ -220,7 +221,7 @@ function deriveArrayText(value: any[]): string {
   }
 
   try {
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   } catch {
     return value.map(item => String(item)).join('\n');
   }
@@ -321,9 +322,9 @@ export function wrapLoadContentValue(value: any): StructuredValue {
   const fallbackText =
     typeof value === 'string'
       ? value
-      : (() => {
+        : (() => {
           try {
-            return JSON.stringify(value);
+            return stringifyStructured(value);
           } catch {
             return String(value ?? '');
           }

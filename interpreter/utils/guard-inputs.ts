@@ -17,6 +17,7 @@ import {
   isStructuredValue
 } from './structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
+import { createASTAwareJSONReplacer } from './ast-evaluation';
 
 const FALLBACK_SOURCE: VariableSource = {
   directive: 'var',
@@ -86,7 +87,7 @@ function formatGuardInputValue(value: unknown): string {
   }
   if (typeof value === 'object') {
     try {
-      return JSON.stringify(value);
+      return JSON.stringify(value, createASTAwareJSONReplacer());
     } catch {
       return '[object]';
     }

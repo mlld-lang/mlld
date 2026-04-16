@@ -5,6 +5,7 @@ import {
   wrapStructured,
   isStructuredValue,
   ensureStructuredValue,
+  stringifyStructured,
   type StructuredValue,
   type StructuredValueType,
   type StructuredValueMetadata
@@ -83,7 +84,7 @@ export class ContentLoaderFinalizationAdapter {
     }
 
     try {
-      return JSON.stringify(value);
+      return stringifyStructured(value);
     } catch {
       return String(value ?? '');
     }

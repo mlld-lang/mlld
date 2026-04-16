@@ -4,6 +4,7 @@ import { LiveStdioServer } from './live-stdio-server';
 import type { SDKEvent, SDKEventHandler, StreamExecution, StructuredResult } from '@sdk/types';
 import { ExecuteError } from '@sdk/types';
 import { MlldDirectiveError } from '@core/errors/MlldDirectiveError';
+import { markEnvironment, ENVIRONMENT_SERIALIZE_PLACEHOLDER } from '@interpreter/env/EnvironmentIdentity';
 
 class FakeStreamExecution implements StreamExecution {
   private readonly listeners = new Map<SDKEvent['type'], Set<SDKEventHandler>>();
@@ -473,6 +474,50 @@ describe('LiveStdioServer', () => {
     expect(eventLine).not.toContain('resolverManager');
     expect(eventLine).not.toContain('variableManager');
     expect(eventLine).not.toContain('top-secret');
+
+    await harness.close();
+  });
+
+  it('renders tagged environments as opaque placeholders in streamed results', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({ method: 'execute', id: 41, params: { filepath: '/tmp/env-heavy.mld' } })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const envLike: Record<string, unknown> = {
+      frame: {
+        planner: {
+          retry: 2,
+          secret: 'top-secret'
+        }
+      }
+    };
+    markEnvironment(envLike);
+
+    handle.resolve({
+      output: 'ok',
+      effects: [],
+      exports: {},
+      stateWrites: [],
+      diagnostic: {
+        holder: envLike
+      }
+    } as any);
+
+    await harness.waitForLineCount(1);
+    const [line] = harness.jsonLines();
+
+    expect(line.result.id).toBe(41);
+    expect(line.result.diagnostic).toEqual({
+      holder: ENVIRONMENT_SERIALIZE_PLACEHOLDER
+    });
+    expect(harness.lines[0]).not.toContain('top-secret');
 
     await harness.close();
   });

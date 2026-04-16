@@ -3,6 +3,10 @@ import { makeSecurityDescriptor } from '@core/types/security';
 import { wrapStructured, isStructuredValue } from '@interpreter/utils/structured-value';
 import { LoadContentResultImpl } from '../load-content';
 import { ContentLoaderFinalizationAdapter } from './finalization-adapter';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 
 describe('ContentLoaderFinalizationAdapter', () => {
   const adapter = new ContentLoaderFinalizationAdapter();
@@ -75,6 +79,21 @@ describe('ContentLoaderFinalizationAdapter', () => {
       expect(result.metadata?.filename).toBe('merged.txt');
       expect(result.metadata?.security?.labels).toEqual(expect.arrayContaining(['base', 'extra']));
       expect(result.metadata?.security?.sources).toEqual(expect.arrayContaining(['source:base', 'source:extra']));
+    }
+  });
+
+  it('renders tagged environments opaquely when finalizing plain objects', () => {
+    const envLike: Record<string, unknown> = {
+      secret: 'top-secret'
+    };
+    markEnvironment(envLike);
+
+    const result = adapter.finalizeLoaderResult({ env: envLike });
+    expect(isStructuredValue(result)).toBe(true);
+    if (isStructuredValue(result)) {
+      expect(result.type).toBe('object');
+      expect(result.text).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+      expect(result.text).not.toContain('top-secret');
     }
   });
 });

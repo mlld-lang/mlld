@@ -1,4 +1,5 @@
 import type { RuntimeTraceEvent } from '@core/types/trace';
+import { sanitizeSerializableValue } from '@core/errors/errorSerialization';
 
 export function formatRuntimeTraceLine(event: RuntimeTraceEvent): string {
   const scopeTokens = Object.entries(event.scope)
@@ -30,7 +31,7 @@ function formatRuntimeTraceScalar(value: unknown): string {
     return 'undefined';
   }
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(sanitizeSerializableValue(value));
   } catch {
     return String(value);
   }

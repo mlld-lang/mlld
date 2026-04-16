@@ -1,3 +1,4 @@
+import { createASTAwareJSONReplacer } from './ast-evaluation';
 import type { StructuredValueType } from './structured-value';
 import { isStructuredValue } from './structured-value';
 
@@ -21,7 +22,7 @@ function inferStructuredType(value: unknown): StructuredValueType | undefined {
 
 function safeStringify(value: unknown): string {
   try {
-    return JSON.stringify(value, null, 2);
+    return JSON.stringify(value, createASTAwareJSONReplacer(), 2);
   } catch {
     return String(value ?? '');
   }

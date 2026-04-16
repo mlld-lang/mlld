@@ -8,6 +8,11 @@
  * and security-relevant identifiers.
  */
 
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  isEnvironmentTagged
+} from '@core/utils/environment-identity';
+
 export interface AuditSummarizeOptions {
   maxDepth?: number;
   maxArrayLength?: number;
@@ -46,12 +51,7 @@ const DROPPED_KEYS = new Set([
   'environment'
 ]);
 
-/**
- * Class-name check via duck typing so we don't import Environment (which would
- * introduce a cycle: core/security -> interpreter/env -> core/security).
- */
 const DROPPED_CLASS_NAMES = new Set([
-  'Environment',
   'RuntimeTraceManager',
   'ContextManager',
   'PolicyEnforcer',
@@ -123,6 +123,10 @@ function summarize(
 
   if (value instanceof Date) {
     return value.toISOString();
+  }
+
+  if (isEnvironmentTagged(value)) {
+    return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
   }
 
   if (value instanceof Error) {
