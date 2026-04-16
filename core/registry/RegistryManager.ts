@@ -42,9 +42,10 @@ export class RegistryManager {
     const stateDir = isServerless
       ? path.join('/tmp', PROJECT_STATE_DIR)
       : projectStateDir(projectRoot);
-    
+    const projectRootForLock = isServerless ? '/tmp' : projectRoot;
+
     this.lockFile = new LockFile(
-      config.lockFile || path.join(stateDir, 'mlld.lock.json')
+      config.lockFile || path.join(projectRootForLock, 'mlld-lock.json')
     );
 
     this.cache = new Cache(
