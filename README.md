@@ -327,7 +327,7 @@ Sign templates at authoring time to create a trust boundary between authentic in
 
 ### Audit Ledger
 
-Every security-relevant event is recorded in `.mlld/sec/audit.jsonl` — signing, verification, label changes, and file write taint. When labeled data is written to disk and read back, the audit ledger restores those labels, closing what would otherwise be an obvious evasion path.
+Every security-relevant event is recorded in `.llm/sec/audit.jsonl` — signing, verification, label changes, and file write taint. When labeled data is written to disk and read back, the audit ledger restores those labels, closing what would otherwise be an obvious evasion path.
 
 ### Deny Handlers
 

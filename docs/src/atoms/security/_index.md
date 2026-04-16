@@ -237,7 +237,7 @@ Environments encapsulate execution contexts with credentials, isolation, tool re
 ## Audit Logging
 
 Two JSONL ledgers record security events:
-- `.mlld/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint, and `toolCall` events
+- `.llm/sec/audit.jsonl` — label changes, blessings, trust conflicts, file writes with taint, and `toolCall` events
 - `.sig/audit.jsonl` — signing, verification, and mutable file updates
 
 Every audit event carries a stable `id`. File reads consult the audit log to restore taint from prior writes, and tool provenance entries keep `auditRef` pointers back to the `toolCall` records. Inside guards, `@mx.tools.history` exposes that value-level lineage alongside the existing execution-level `@mx.tools.calls`.

@@ -91,8 +91,7 @@ export class ModuleWorkspace {
     this.pathService = new PathService();
 
     const fallbackPaths = [
-      path.join(this.projectRoot, 'mlld.lock.json'),
-      path.join(this.projectRoot, '.mlld', 'mlld.lock.json')
+      path.join(this.projectRoot, 'mlld.lock.json')
     ];
 
     this.lockFile = options.lockFile ?? new LockFile(

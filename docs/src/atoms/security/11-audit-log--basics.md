@@ -13,7 +13,7 @@ qa_tier: 2
 
 mlld records security events in two JSONL audit ledgers:
 
-- `.mlld/sec/audit.jsonl` for label and taint events managed by mlld
+- `.llm/sec/audit.jsonl` for label and taint events managed by mlld
 - `.sig/audit.jsonl` for signing and verification events managed by `@disreguard/sig`
 
 Each line is a JSON object with a stable `id`, timestamp, and event type.
@@ -30,7 +30,7 @@ Each line is a JSON object with a stable `id`, timestamp, and event type.
 | `ts` | ISO timestamp of the event |
 | `event` | Event type |
 
-**mlld audit log (`.mlld/sec/audit.jsonl`):**
+**mlld audit log (`.llm/sec/audit.jsonl`):**
 
 | Event | Fields | Notes |
 | --- | --- | --- |
@@ -68,17 +68,17 @@ Each line is a JSON object with a stable `id`, timestamp, and event type.
 **Inspecting the ledger:**
 
 ```sh
-tail -n 20 .mlld/sec/audit.jsonl
-jq 'select(.event == "write")' .mlld/sec/audit.jsonl
-jq 'select(.event == "toolCall")' .mlld/sec/audit.jsonl
-jq 'select(.event == "label")' .mlld/sec/audit.jsonl
+tail -n 20 .llm/sec/audit.jsonl
+jq 'select(.event == "write")' .llm/sec/audit.jsonl
+jq 'select(.event == "toolCall")' .llm/sec/audit.jsonl
+jq 'select(.event == "label")' .llm/sec/audit.jsonl
 jq 'select(.event == "verify" or .event == "verify-fail")' .sig/audit.jsonl
 ```
 
 **Programmatic querying in mlld:**
 
 ```mlld
-var @audit = <@root/.mlld/sec/audit.jsonl>
+var @audit = <@root/.llm/sec/audit.jsonl>
 exe @findToolCalls(events) = js {
   return events.filter(e => e.event === "toolCall");
 }

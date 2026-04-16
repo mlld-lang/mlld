@@ -13,6 +13,7 @@ import type { JSONRPCRequest, JSONRPCResponse, MCPToolSchema } from './types';
 import { MCPErrorCode } from './types';
 import { FunctionRouter } from './FunctionRouter';
 import { mcpNameToMlldName } from './SchemaGenerator';
+import { projectRunDir } from '@core/paths/state-dirs';
 
 export interface McpConfig {
   servers?: McpServerConfig[];
@@ -850,7 +851,7 @@ async function removePidFile(pidFilePath: string): Promise<void> {
 }
 
 async function ensureRunDir(): Promise<string> {
-  const dir = path.join(process.cwd(), '.mlld', 'run');
+  const dir = projectRunDir(process.cwd());
   await fs.mkdir(dir, { recursive: true });
   return dir;
 }

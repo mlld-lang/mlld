@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import * as os from 'os';
+import { userPythonCacheDir } from '@core/paths/state-dirs';
 
 /**
  * Metadata for a cached Python package
@@ -72,7 +72,7 @@ export class PythonModuleCache {
   private indexDirty: boolean = false;
 
   constructor(options: CacheOptions = {}) {
-    this.cacheDir = options.cacheDir ?? path.join(os.homedir(), '.mlld', 'cache', 'python');
+    this.cacheDir = options.cacheDir ?? userPythonCacheDir();
     this.indexPath = path.join(this.cacheDir, 'index.json');
   }
 

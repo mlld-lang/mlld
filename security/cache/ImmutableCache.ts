@@ -1,13 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createHash } from 'crypto';
+import { importCacheDir } from '@core/paths/state-dirs';
 
 export class ImmutableCache {
   private cacheDir: string;
-  
+
   constructor(projectPath: string) {
-    // Store cache in .mlld/cache directory
-    this.cacheDir = path.join(projectPath, '.mlld', 'cache', 'imports');
+    this.cacheDir = importCacheDir(projectPath);
   }
 
   /**

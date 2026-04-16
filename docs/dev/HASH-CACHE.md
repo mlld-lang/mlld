@@ -27,7 +27,7 @@ core/registry/
 ### Storage Layout
 
 ```
-~/.mlld/cache/
+~/.llm/cache/
 └── sha256/
     ├── ab/                         # First 2 chars of hash
     │   └── cdef1234.../           # Rest of hash

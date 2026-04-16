@@ -5,8 +5,8 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as os from 'os';
 import { MlldError, ErrorSeverity } from '@core/errors';
+import { userAuthPath } from '@core/paths/state-dirs';
 
 export interface AuthConfig {
   clientId?: string;
@@ -62,7 +62,7 @@ export class GitHubAuthService {
     this.clientId = this.config.clientId!;
     this.serviceName = this.config.serviceName!;
     this.accountName = this.config.accountName!;
-    this.fallbackTokenPath = path.join(os.homedir(), '.mlld', 'auth.json');
+    this.fallbackTokenPath = userAuthPath();
   }
 
   /**

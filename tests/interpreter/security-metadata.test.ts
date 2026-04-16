@@ -28,7 +28,7 @@ async function readAuditEvents(
   fileSystem: MemoryFileSystem,
   projectRoot: string
 ): Promise<Record<string, unknown>[]> {
-  const auditPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  const auditPath = path.join(projectRoot, '.llm', 'sec', 'audit.jsonl');
   if (!(await fileSystem.exists(auditPath))) {
     return [];
   }

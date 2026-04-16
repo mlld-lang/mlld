@@ -127,9 +127,9 @@ export interface SingleFileModuleSource {
 export type ModuleSource = DirectoryModuleSource | SingleFileModuleSource;
 
 export const MODULE_TYPE_PATHS: Record<ModuleType, { local: string; global: string }> = {
-  library: { local: 'llm/lib', global: '.mlld/lib' },
-  app: { local: 'llm/run', global: '.mlld/run' },
+  library: { local: 'llm/lib', global: '.llm/lib' },
+  app: { local: 'llm/run', global: '.llm/run' },
   command: { local: '.claude/commands', global: '.claude/commands' },
   skill: { local: '.claude/skills', global: '.claude/skills' },
-  environment: { local: '.mlld/env', global: '.mlld/env' },
+  environment: { local: '.llm/env', global: '.llm/env' },
 };

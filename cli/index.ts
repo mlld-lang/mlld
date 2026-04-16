@@ -396,6 +396,12 @@ console.error = function(...args: any[]) {
 
 export async function main(customArgs?: string[]): Promise<void> {
   seenErrors.clear();
+  try {
+    const { warnIfLegacyStateDirPresent } = await import('./utils/state-migration-warning');
+    warnIfLegacyStateDirPresent(process.cwd());
+  } catch {
+    // warning is advisory; never block the CLI on a lookup failure
+  }
   const orchestrator = new CLIOrchestrator();
   await orchestrator.main(customArgs);
 }

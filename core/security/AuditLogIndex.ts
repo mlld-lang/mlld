@@ -2,6 +2,7 @@ import path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
+import { auditLogPath } from '@core/paths/state-dirs';
 
 export type AuditFileRecord = {
   taint: string[];
@@ -16,7 +17,7 @@ type AuditIndexState = {
 const auditIndex = new Map<string, AuditIndexState>();
 
 function getAuditLogPath(projectRoot: string): string {
-  return path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  return auditLogPath(projectRoot);
 }
 
 function normalizePath(value: string): string {

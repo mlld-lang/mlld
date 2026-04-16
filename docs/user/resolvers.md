@@ -490,7 +490,7 @@ mlld --allow-absolute script.mld
 Different resolvers cache differently:
 
 ### Registry Modules
-- Content-addressed cache in `.mlld/cache/`
+- Content-addressed cache in `.llm/cache/`
 - Keyed by SHA256 hash
 - Never expires (immutable)
 - Offline-capable after install

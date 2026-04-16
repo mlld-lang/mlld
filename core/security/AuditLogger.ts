@@ -2,6 +2,13 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { logger } from '@core/utils/logger';
+import { auditLogPath } from '@core/paths/state-dirs';
+import {
+  summarizeAuditValue,
+  enforceAuditRecordCap
+} from './AuditValueSummarizer';
+
+const MAX_DETAIL_STRING_BYTES = 4096;
 
 export type AuditEvent = {
   id?: string;
@@ -35,7 +42,10 @@ export async function appendAuditEvent(
   event: AuditEvent
 ): Promise<string> {
   const id = event.id ?? randomUUID();
-  const record = {
+  const summarizedArgs =
+    event.args !== undefined ? summarizeAuditValue(event.args) : undefined;
+  const summarizedDetail = capDetail(event.detail);
+  const record: Record<string, unknown> = {
     id,
     ts: event.ts ?? new Date().toISOString(),
     event: event.event,
@@ -53,20 +63,31 @@ export async function appendAuditEvent(
     ...(event.labels ? { labels: event.labels } : {}),
     ...(event.sources !== undefined ? { sources: event.sources } : {}),
     ...(event.resolved ? { resolved: event.resolved } : {}),
-    ...(event.detail ? { detail: event.detail } : {}),
+    ...(summarizedDetail !== undefined ? { detail: summarizedDetail } : {}),
     ...(event.tool ? { tool: event.tool } : {}),
-    ...(event.args !== undefined ? { args: event.args } : {}),
+    ...(summarizedArgs !== undefined ? { args: summarizedArgs } : {}),
     ...(event.resultLength !== undefined ? { resultLength: event.resultLength } : {}),
     ...(event.duration !== undefined ? { duration: event.duration } : {}),
     ...(event.ok !== undefined ? { ok: event.ok } : {})
   };
-  const logPath = path.join(projectRoot, '.mlld', 'sec', 'audit.jsonl');
+  const capped = enforceAuditRecordCap(record);
+  const logPath = auditLogPath(projectRoot);
   const dirPath = path.dirname(logPath);
   try {
     await fileSystem.mkdir(dirPath, { recursive: true });
-    await fileSystem.appendFile(logPath, `${JSON.stringify(record)}\n`);
+    await fileSystem.appendFile(logPath, `${JSON.stringify(capped)}\n`);
   } catch (error) {
     logger.warn('Audit log write failed', { error });
   }
   return id;
+}
+
+function capDetail(detail: string | undefined): string | undefined {
+  if (detail === undefined) {
+    return undefined;
+  }
+  if (detail.length <= MAX_DETAIL_STRING_BYTES) {
+    return detail;
+  }
+  return `${detail.slice(0, MAX_DETAIL_STRING_BYTES)}… [truncated ${detail.length - MAX_DETAIL_STRING_BYTES} chars]`;
 }

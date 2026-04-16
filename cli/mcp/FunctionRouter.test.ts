@@ -11,7 +11,7 @@ import { accessField } from '@interpreter/utils/field-access';
 const HANDLE_RE = /^h_[a-z0-9]{6}$/;
 
 async function readAuditEvents(environment: Environment): Promise<Array<Record<string, unknown>>> {
-  const contents = await environment.getFileSystemService().readFile('/.mlld/sec/audit.jsonl');
+  const contents = await environment.getFileSystemService().readFile('/.llm/sec/audit.jsonl');
   return contents
     .trim()
     .split('\n')

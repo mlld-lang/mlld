@@ -26,7 +26,7 @@ async function createFileSystem(): Promise<MemoryFileSystem> {
 }
 
 async function readAuditEvents(fileSystem: MemoryFileSystem): Promise<Record<string, unknown>[]> {
-  const auditPath = '/project/.mlld/sec/audit.jsonl';
+  const auditPath = '/project/.llm/sec/audit.jsonl';
   const exists = await fileSystem.exists(auditPath).catch(() => false);
   if (!exists) {
     return [];

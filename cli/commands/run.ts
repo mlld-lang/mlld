@@ -18,6 +18,7 @@ import { ExecuteError, type StructuredResult } from '@sdk/types';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { isRuntimeTraceLevel, type RuntimeTraceLevel } from '@core/types/trace';
+import { checkpointsDir, userRunDir } from '@core/paths/state-dirs';
 import { parseInjectOptions, type DynamicModuleMap } from '../utils/inject-parser';
 import { analyzeDeep, type AnalyzeResult } from './analyze';
 import {
@@ -213,7 +214,7 @@ export class RunCommand {
   }
 
   private getGlobalScriptDirectory(): string {
-    return path.join(os.homedir(), '.mlld', 'run');
+    return userRunDir();
   }
 
   private async collectScriptsFromDir(dir: string, scripts: Set<string>): Promise<void> {
@@ -315,7 +316,7 @@ export class RunCommand {
   async run(scriptName: string, options: RunOptions = {}): Promise<void> {
     const scriptPath = await this.findScript(scriptName);
     const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
-    const checkpointCacheRootDir = path.join(projectRoot, '.mlld', 'checkpoints');
+    const checkpointCacheRootDir = checkpointsDir(projectRoot);
 
     if (!scriptPath) {
       const availableScripts = await this.listScripts();

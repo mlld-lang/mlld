@@ -23,8 +23,7 @@ export class ProjectConfig {
     this.configFile = new ConfigFile(path.join(this.projectRoot, 'mlld-config.json'));
     this.lockFile = new LockFile(path.join(this.projectRoot, 'mlld-lock.json'), {
       fallbackPaths: [
-        path.join(this.projectRoot, 'mlld.lock.json'),
-        path.join(this.projectRoot, '.mlld', 'mlld.lock.json')
+        path.join(this.projectRoot, 'mlld.lock.json')
       ]
     });
   }

@@ -244,7 +244,7 @@ See `docs/src/atoms/core/32-builtins--ambient-mx.md` for the accessor shapes and
 | **Purpose** | Debug how effects propagate | Record what happened for compliance |
 | **When** | On-demand, during development | Always on |
 | **Scope** | All security-relevant effects | Tool calls, label changes, file writes |
-| **Output** | Structured events, stderr, JSONL | `.mlld/sec/audit.jsonl` |
+| **Output** | Structured events, stderr, JSONL | `.llm/sec/audit.jsonl` |
 | **Overhead** | Only when enabled | Minimal, always active |
 
 Use tracing to understand *why* something happened. Use audit logging to prove *that* it happened.

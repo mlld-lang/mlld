@@ -10,7 +10,7 @@ async function createCheckpointFixture(
   root: string,
   scriptName: string
 ): Promise<{ scriptDir: string }> {
-  const scriptDir = path.join(root, '.mlld', 'checkpoints', scriptName);
+  const scriptDir = path.join(root, '.llm', 'checkpoints', scriptName);
   const resultsDir = path.join(scriptDir, 'results');
   await mkdir(resultsDir, { recursive: true });
   await writeFile(

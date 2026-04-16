@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0]
 
 ### Changed
+- Gitignored state directories moved from `.mlld/` to `.llm/` at both project and user scope. Project audit log, caches, checkpoints, run registry, box, and env dirs now live at `<projectRoot>/.llm/...`. User-level auth token and shared module/python caches now live at `~/.llm/...`. `mlld-config.json` and `mlld-lock.json` remain at the project root (committed). No read fallback — run `mlld migrate-state` once to rename existing `.mlld/` state. When mlld detects a legacy `.mlld/` directory it prints a one-time warning.
 - `/show`, `/output`, and `/append` now keep field-level labels and proofs through field access, then render only at the final text/JSON boundary.
 - `with { policy }`, `@policy.build(...)`, and `@policy.validate(...)` now accept policy fragments composed through variables, field access, imports, and object spread while preserving proof-bearing leaves used for authorization matching.
 - Tool collections now preserve surfaced metadata and identity across imports, exports, exe parameters, and box/tool APIs. Direct keyed collection calls authorize against the surfaced collection key.
@@ -59,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld validate` / `mlld analyze` now statically validate record declarations, shelf declarations, executable metadata (`controlArgs`, `updateArgs`, `exactPayloadArgs`, `correlateControlArgs`, output records), `resume` guard arms, and statically obvious `box.shelf` binding conflicts before runtime.
 
 ### Fixed
+- `.llm/sec/audit.jsonl` tool-call records are now summarized before write: captured module envs, executableDef / codeTemplate plumbing, AST nodes, and Environment-like instances are replaced with sentinels; long strings are previewed with their length; each record is capped at 64 KB as a final backstop. Security-critical fields (`taint`, `labels`, `sources`, `writer`, `path`, `tool`, `ok`, timestamps) are kept intact. Prior logs could grow to hundreds of GB when exes received large tool catalogs.
+- Lock-file discovery no longer falls back to `.mlld/mlld.lock.json`. Only `mlld-lock.json` (canonical) and the legacy `mlld.lock.json` (sibling) are consulted.
 - Var-bound catalog-shaped tool subsets now stay stable when passed through policy and tool walkers. Reusing one `var tools` declaration for metadata reads, subset vars, imported subsets, and runtime dispatch no longer explodes heap or strips nested tool-entry identity.
 - Direct surfaced-tool dispatch denials now route cleanly through `when [ denied => ... ]`, including record-backed input enforcement (`allowlist`, `blocklist`, `update`, proof checks) and default policy-rule denials such as `no-send-to-external`. `@mx.denial` now carries structured `code`, `phase`, `tool`, and `field` details for those paths.
 - `MlldWhenExpression.details.originalError` now preserves the wrapped error snapshot instead of collapsing to `{}`. Callers can inspect the inner class and structured denial fields when a `when` action fails uncaught.

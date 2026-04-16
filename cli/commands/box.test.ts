@@ -59,7 +59,7 @@ describe('boxCommand', () => {
     tempDirs.push(root);
     process.cwd = vi.fn(() => root);
 
-    const envDir = path.join(root, '.mlld/box/bad-env');
+    const envDir = path.join(root, '.llm/box/bad-env');
     await fs.mkdir(envDir, { recursive: true });
     await fs.writeFile(
       path.join(envDir, 'module.yml'),
@@ -119,7 +119,7 @@ describe('boxCommand', () => {
     tempDirs.push(root);
     process.cwd = vi.fn(() => root);
 
-    const envDir = path.join(root, '.mlld/box/good-env');
+    const envDir = path.join(root, '.llm/box/good-env');
     await fs.mkdir(envDir, { recursive: true });
     await fs.writeFile(
       path.join(envDir, 'module.yml'),
@@ -181,7 +181,7 @@ describe('boxCommand', () => {
       await boxCommand({ _: ['capture', 'test-env'] });
 
       // Check skills were copied
-      const targetSkillsDir = path.join(root, '.mlld/box/test-env/.claude/skills');
+      const targetSkillsDir = path.join(root, '.llm/box/test-env/.claude/skills');
       const mySkill = await fs.readFile(path.join(targetSkillsDir, 'my-skill.md'), 'utf8');
       expect(mySkill).toBe('# My Skill\nDoes stuff');
 
@@ -189,13 +189,13 @@ describe('boxCommand', () => {
       expect(otherSkill).toBe('# Other Skill');
 
       const pulledBase = await fs.readFile(
-        path.join(root, '.mlld/box/test-env/agents/base.mld'),
+        path.join(root, '.llm/box/test-env/agents/base.mld'),
         'utf8'
       );
       expect(pulledBase).toContain('/export { @keychainRef, @emptyMcpConfig }');
 
       const indexMld = await fs.readFile(
-        path.join(root, '.mlld/box/test-env/index.mld'),
+        path.join(root, '.llm/box/test-env/index.mld'),
         'utf8'
       );
       expect(indexMld).toContain('Pulled module: @mlld/agents/claude');
@@ -227,13 +227,13 @@ describe('boxCommand', () => {
 
       // Check local config was used (not global)
       const settings = await fs.readFile(
-        path.join(root, '.mlld/box/local-env/.claude/settings.json'),
+        path.join(root, '.llm/box/local-env/.claude/settings.json'),
         'utf8'
       );
       expect(JSON.parse(settings)).toEqual({ local: true });
 
       const claudeMd = await fs.readFile(
-        path.join(root, '.mlld/box/local-env/.claude/CLAUDE.md'),
+        path.join(root, '.llm/box/local-env/.claude/CLAUDE.md'),
         'utf8'
       );
       expect(claudeMd).toBe('# Local Config');
@@ -258,14 +258,14 @@ describe('boxCommand', () => {
 
       // Check .codex directory was created and used
       const settings = await fs.readFile(
-        path.join(root, '.mlld/box/codex-env/.codex/settings.json'),
+        path.join(root, '.llm/box/codex-env/.codex/settings.json'),
         'utf8'
       );
       expect(JSON.parse(settings)).toEqual({ codex: true });
 
       // Check index.mld references codex
       const pulledCodex = await fs.readFile(
-        path.join(root, '.mlld/box/codex-env/agents/codex.mld'),
+        path.join(root, '.llm/box/codex-env/agents/codex.mld'),
         'utf8'
       );
       expect(pulledCodex).toContain('codex -p @prompt');
@@ -288,16 +288,16 @@ describe('boxCommand', () => {
 
       await boxCommand({ _: ['capture', 'autodetect-env'] });
 
-      const codexSettingsPath = path.join(root, '.mlld/box/autodetect-env/.codex/settings.json');
-      const claudeSettingsPath = path.join(root, '.mlld/box/autodetect-env/.claude/settings.json');
-      const codexModulePath = path.join(root, '.mlld/box/autodetect-env/agents/codex.mld');
+      const codexSettingsPath = path.join(root, '.llm/box/autodetect-env/.codex/settings.json');
+      const claudeSettingsPath = path.join(root, '.llm/box/autodetect-env/.claude/settings.json');
+      const codexModulePath = path.join(root, '.llm/box/autodetect-env/agents/codex.mld');
 
       expect(await fs.access(codexSettingsPath).then(() => true).catch(() => false)).toBe(true);
       expect(await fs.access(claudeSettingsPath).then(() => true).catch(() => false)).toBe(false);
       expect(await fs.access(codexModulePath).then(() => true).catch(() => false)).toBe(true);
     });
 
-    it('stores in global .mlld/box with --global flag', async () => {
+    it('stores in global .llm/box with --global flag', async () => {
       const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-box-capture-global-'));
       tempDirs.push(root);
       process.cwd = vi.fn(() => root);
@@ -313,9 +313,9 @@ describe('boxCommand', () => {
 
       await boxCommand({ _: ['capture', 'global-env', '--global'] });
 
-      // Should be in fake-home/.mlld/box, not root/.mlld/box
-      const globalEnvPath = path.join(fakeHome, '.mlld/box/global-env/module.yml');
-      const localEnvPath = path.join(root, '.mlld/box/global-env/module.yml');
+      // Should be in fake-home/.llm/box, not root/.llm/box
+      const globalEnvPath = path.join(fakeHome, '.llm/box/global-env/module.yml');
+      const localEnvPath = path.join(root, '.llm/box/global-env/module.yml');
 
       expect(await fs.access(globalEnvPath).then(() => true).catch(() => false)).toBe(true);
       expect(await fs.access(localEnvPath).then(() => true).catch(() => false)).toBe(false);

@@ -72,7 +72,7 @@ describe('filesystem integrity Phase 2', () => {
   it('stores verified sig metadata on single-file reads and prefers sig taint over audit fallback', async () => {
     await fileSystem.writeFile('/project/docs/note.txt', 'hello world');
     await fileSystem.writeFile(
-      '/project/.mlld/sec/audit.jsonl',
+      '/project/.llm/sec/audit.jsonl',
       JSON.stringify({
         event: 'write',
         path: '/project/docs/note.txt',

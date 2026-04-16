@@ -114,8 +114,8 @@ async function loadManifest(manifestPath: string): Promise<ModuleManifest | null
 }
 
 async function findBoxModule(name: string): Promise<BoxModuleLocation | null> {
-  const localPath = path.join(process.cwd(), '.mlld/box', name);
-  const globalPath = path.join(os.homedir(), '.mlld/box', name);
+  const localPath = path.join(process.cwd(), '.llm/box', name);
+  const globalPath = path.join(os.homedir(), '.llm/box', name);
   const candidates: Array<{ path: string; scope: 'local' | 'global' }> = [
     { path: localPath, scope: 'local' },
     { path: globalPath, scope: 'global' }
@@ -440,8 +440,8 @@ export async function boxCommand(options: BoxCommandOptions): Promise<void> {
 async function listBoxCommand(args: string[]): Promise<void> {
   const isJson = args.includes('--json');
 
-  const localPath = path.join(process.cwd(), '.mlld/box');
-  const globalPath = path.join(os.homedir(), '.mlld/box');
+  const localPath = path.join(process.cwd(), '.llm/box');
+  const globalPath = path.join(os.homedir(), '.llm/box');
 
   const localEnvs = await scanBoxDir(localPath);
   const globalEnvs = await scanBoxDir(globalPath);
@@ -669,8 +669,8 @@ async function captureBoxCommand(args: string[]): Promise<void> {
   const agent = getAgentDefinition(agentType);
 
   const targetDir = storeGlobal
-    ? path.join(os.homedir(), '.mlld/box', name)
-    : path.join(process.cwd(), '.mlld/box', name);
+    ? path.join(os.homedir(), '.llm/box', name)
+    : path.join(process.cwd(), '.llm/box', name);
 
   // Check if environment already exists
   if (await exists(path.join(targetDir, 'module.yml'))) {
@@ -902,7 +902,7 @@ ${chalk.bold('Capture options:')}
   --local           Read agent config from current project first
   --claude          Force Claude capture
   --codex           Force Codex capture
-  --global          Store environment in ~/.mlld/box/ instead of .mlld/box/
+  --global          Store environment in ~/.llm/box/ instead of .llm/box/
 
 ${chalk.bold('Examples:')}
   mlld box capture claude-dev

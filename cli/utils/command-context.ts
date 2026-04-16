@@ -45,8 +45,7 @@ export async function getCommandContext(
   let lockFile: LockFile | null = null;
   const canonicalPath = path.join(projectRoot, 'mlld-lock.json');
   const fallbackPaths = [
-    path.join(projectRoot, 'mlld.lock.json'),
-    path.join(projectRoot, '.mlld', 'mlld.lock.json')
+    path.join(projectRoot, 'mlld.lock.json')
   ];
 
   try {

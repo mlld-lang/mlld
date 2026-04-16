@@ -75,7 +75,7 @@ function createWorkspace(backing?: IFileSystemService): WorkspaceValue {
 }
 
 async function readAuditEvents(fileSystem: IFileSystemService): Promise<Record<string, unknown>[]> {
-  const auditPath = '/project/.mlld/sec/audit.jsonl';
+  const auditPath = '/project/.llm/sec/audit.jsonl';
   const exists = await fileSystem.exists(auditPath).catch(() => false);
   if (!exists) {
     return [];
@@ -218,12 +218,12 @@ describe('executeWrite', () => {
     });
     await executeWrite({
       env,
-      targetPath: '/project/.mlld/sec/audit.jsonl',
+      targetPath: '/project/.llm/sec/audit.jsonl',
       content: '[]'
     });
 
     expect(await fileSystem.exists('/project/.sig/sigs/.sig/config.json.sig.json')).toBe(false);
-    expect(await fileSystem.exists('/project/.sig/sigs/.mlld/sec/audit.jsonl.sig.json')).toBe(false);
+    expect(await fileSystem.exists('/project/.sig/sigs/.llm/sec/audit.jsonl.sig.json')).toBe(false);
   });
 
   it('captures signing context for VFS writes and signs on flush', async () => {

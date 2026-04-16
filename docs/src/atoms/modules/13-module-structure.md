@@ -45,8 +45,8 @@ Keep shared identity fields (`name`, `author`, `version`, `about`) aligned betwe
 <module_types>
 | Type | Purpose | Local Path | Global Path |
 |------|---------|------------|-------------|
-| library | Importable code | llm/lib/{name}/ | ~/.mlld/lib/{name}/ |
-| app | Runnable scripts | llm/run/{name}/ | ~/.mlld/run/{name}/ |
+| library | Importable code | llm/lib/{name}/ | ~/.llm/lib/{name}/ |
+| app | Runnable scripts | llm/run/{name}/ | ~/.llm/run/{name}/ |
 | command | Claude slash cmd | .claude/commands/{name}/ | ~/.claude/commands/{name}/ |
 | skill | Claude skill | .claude/skills/{name}/ | ~/.claude/skills/{name}/ |
 </module_types>
@@ -57,7 +57,7 @@ mlld module app myapp              # Create app in llm/run/myapp/
 mlld module library utils          # Create library in llm/lib/utils/
 mlld module command review         # Create command in .claude/commands/review/
 mlld module skill helper           # Create skill in .claude/skills/helper/
-mlld module app myapp --global     # Create in ~/.mlld/run/myapp/
+mlld module app myapp --global     # Create in ~/.llm/run/myapp/
 ```
 </scaffold_commands>
 
@@ -71,8 +71,8 @@ Use `index.mld` as the module entry point convention.
 
 <install_global>
 ```bash
-mlld install @author/my-app --global    # Install to ~/.mlld/run/my-app/
-mlld install @author/my-lib -g          # Install to ~/.mlld/lib/my-lib/
+mlld install @author/my-app --global    # Install to ~/.llm/run/my-app/
+mlld install @author/my-lib -g          # Install to ~/.llm/lib/my-lib/
 ```
 </install_global>
 

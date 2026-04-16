@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { ModuleWorkspace, type ModuleLockEntry } from '@core/registry';
 import { OutputFormatter } from '../utils/output';
 import { getCommandContext } from '../utils/command-context';
+import { importCacheDir } from '@core/paths/state-dirs';
 
 export interface CleanOptions {
   all?: boolean;
@@ -142,7 +143,7 @@ export class CleanCommand {
   }
 
   private async cleanLegacyImportCache(resolvedUrl: string): Promise<void> {
-    const importCachePath = path.join(this.basePath, '.mlld', 'cache', 'imports');
+    const importCachePath = importCacheDir(this.basePath);
 
     try {
       const hash = crypto.createHash('sha256').update(resolvedUrl).digest('hex');

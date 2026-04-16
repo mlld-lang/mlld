@@ -744,8 +744,8 @@ mlld box list --json
 ```
 
 Shows boxes from:
-- `.mlld/box/` (project-local)
-- `~/.mlld/box/` (global)
+- `.llm/box/` (project-local)
+- `~/.llm/box/` (global)
 
 **Options:**
 - `--json` - Output as JSON
@@ -767,7 +767,7 @@ mlld box capture my-codex --codex
 
 **What it does:**
 1. Discovers agent type (`claude`/`codex`) from config dirs (or uses explicit flag)
-2. Pulls registry module templates into `.mlld/box/<name>/agents/`
+2. Pulls registry module templates into `.llm/box/<name>/agents/`
    - `@mlld/agents/base`
    - `@mlld/agents/<agent>`
 3. Imports OAuth token from `.credentials.json` into keychain (`mlld-box/<name>`)
@@ -776,13 +776,13 @@ mlld box capture my-codex --codex
 
 **Options:**
 - `--local` - Prefer project-local config dirs (`./.claude`, `./.codex`)
-- `--global` - Create in `~/.mlld/box/` instead of `.mlld/box/`
+- `--global` - Create in `~/.llm/box/` instead of `.llm/box/`
 - `--claude` - Force Claude module capture
 - `--codex` - Force Codex module capture
 
 **Output structure:**
 ```
-.mlld/box/my-claude/
+.llm/box/my-claude/
 ├── module.yml                 # Module manifest (type: environment)
 ├── index.mld                  # Local wrapper module
 ├── agents/

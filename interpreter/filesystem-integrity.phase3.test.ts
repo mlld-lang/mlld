@@ -66,7 +66,7 @@ describe('filesystem integrity Phase 3', () => {
 
     await fileSystem.writeFile('/project/docs/legacy.txt', 'legacy');
     await fileSystem.writeFile(
-      '/project/.mlld/sec/audit.jsonl',
+      '/project/.llm/sec/audit.jsonl',
       JSON.stringify({
         event: 'write',
         path: '/project/docs/legacy.txt',

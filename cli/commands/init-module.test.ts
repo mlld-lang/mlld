@@ -178,8 +178,8 @@ show @response
     });
 
     it('global paths use home directory', () => {
-      expect(MODULE_TYPE_PATHS.app.global).toBe('.mlld/run');
-      expect(MODULE_TYPE_PATHS.library.global).toBe('.mlld/lib');
+      expect(MODULE_TYPE_PATHS.app.global).toBe('.llm/run');
+      expect(MODULE_TYPE_PATHS.library.global).toBe('.llm/lib');
       expect(MODULE_TYPE_PATHS.command.global).toBe('.claude/commands');
       expect(MODULE_TYPE_PATHS.skill.global).toBe('.claude/skills');
     });

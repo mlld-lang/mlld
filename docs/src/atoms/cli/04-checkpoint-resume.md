@@ -75,7 +75,7 @@ mlld checkpoint inspect <script>    # full JSON dump (manifest + records)
 mlld checkpoint clean <script>      # delete cache for a script
 ```
 
-Cache lives in `.mlld/checkpoints/<script-name>/`.
+Cache lives in `.llm/checkpoints/<script-name>/`.
 
 ## Named Checkpoints & Policies
 

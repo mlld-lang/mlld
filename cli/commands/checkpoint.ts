@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { readFile, rm } from 'fs/promises';
 import path from 'path';
 import { resolveCheckpointScriptCandidates } from '@interpreter/checkpoint/script-name';
+import { checkpointsDir } from '@core/paths/state-dirs';
 
 interface CheckpointRecord {
   key: string;
@@ -55,7 +56,7 @@ class CheckpointCommand {
 
   constructor(options: CheckpointCommandOptions = {}) {
     const root = options.basePath ?? process.cwd();
-    this.cacheRoot = path.resolve(root, '.mlld', 'checkpoints');
+    this.cacheRoot = path.resolve(checkpointsDir(root));
   }
 
   async list(scriptRef: string): Promise<void> {

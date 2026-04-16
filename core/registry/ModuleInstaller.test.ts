@@ -32,16 +32,16 @@ describe('ModuleInstaller type-based routing', () => {
       expect(MODULE_TYPE_PATHS.app.local).toBe('llm/run');
     });
 
-    it('app global path is .mlld/run', () => {
-      expect(MODULE_TYPE_PATHS.app.global).toBe('.mlld/run');
+    it('app global path is .llm/run', () => {
+      expect(MODULE_TYPE_PATHS.app.global).toBe('.llm/run');
     });
 
     it('library local path is llm/lib', () => {
       expect(MODULE_TYPE_PATHS.library.local).toBe('llm/lib');
     });
 
-    it('library global path is .mlld/lib', () => {
-      expect(MODULE_TYPE_PATHS.library.global).toBe('.mlld/lib');
+    it('library global path is .llm/lib', () => {
+      expect(MODULE_TYPE_PATHS.library.global).toBe('.llm/lib');
     });
 
     it('command local path is .claude/commands', () => {
@@ -80,7 +80,7 @@ describe('ModuleInstaller type-based routing', () => {
       const typePaths = MODULE_TYPE_PATHS[moduleType];
       const targetDir = path.join(os.homedir(), typePaths.global, moduleName);
 
-      expect(targetDir).toBe(path.join(os.homedir(), '.mlld', 'run', 'test-app'));
+      expect(targetDir).toBe(path.join(os.homedir(), '.llm', 'run', 'test-app'));
     });
 
     it('computes correct local library path', () => {

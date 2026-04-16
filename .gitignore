@@ -175,7 +175,7 @@ tmp
 
 __pycache__/
 
-.mlld
+.llm
 .fray
 
 # QA testing output

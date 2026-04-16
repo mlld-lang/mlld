@@ -2,10 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { WorkspaceCheckpointSnapshot } from '@core/types/workspace';
+import { PROJECT_STATE_DIR } from '@core/paths/state-dirs';
 
 const CURRENT_MANIFEST_VERSION = 1;
 const DEFAULT_ARGS_PREVIEW_LIMIT = 160;
-const DEFAULT_CACHE_ROOT = path.join('.mlld', 'checkpoints');
+const DEFAULT_CACHE_ROOT = path.join(PROJECT_STATE_DIR, 'checkpoints');
 const RESULT_WRAPPER_VERSION = 1;
 
 const MANIFEST_CORE_KEYS = new Set([

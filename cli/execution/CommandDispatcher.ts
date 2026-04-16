@@ -20,6 +20,7 @@ import { createCheckpointCommand } from '../commands/checkpoint';
 import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createCleanCommand } from '../commands/clean';
+import { createMigrateStateCommand } from '../commands/migrate-state';
 import { createNvimSetupCommand } from '../commands/nvim-setup';
 import { createNvimDoctorCommand } from '../commands/nvim-doctor';
 import { createUpdateCommand } from '../commands/update';
@@ -74,6 +75,7 @@ export class CommandDispatcher {
     this.commandMap.set('error-test', errorTestCommand);
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('clean', createCleanCommand());
+    this.commandMap.set('migrate-state', createMigrateStateCommand());
     this.commandMap.set('update', createUpdateCommand());
     this.commandMap.set('outdated', createOutdatedCommand());
     const mcpCommand = createMcpCommand();

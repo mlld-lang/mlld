@@ -170,8 +170,8 @@ export class SigService {
     return (
       normalized === '.sig' ||
       normalized.startsWith('.sig/') ||
-      normalized === '.mlld/sec' ||
-      normalized.startsWith('.mlld/sec/') ||
+      normalized === '.llm/sec' ||
+      normalized.startsWith('.llm/sec/') ||
       normalized === 'node_modules' ||
       normalized.startsWith('node_modules/')
     );

@@ -103,7 +103,7 @@ describe('RunCommand', () => {
     it('should list directory scripts with index.mld', async () => {
       vi.mocked(existsSync).mockImplementation((p) => {
         const pathStr = p.toString();
-        if (pathStr.includes('llm/run') && !pathStr.includes('.mlld')) return true;
+        if (pathStr.includes('llm/run') && !pathStr.includes('.llm/run')) return true;
         if (pathStr.endsWith('myapp/index.mld')) return true;
         return false;
       });
@@ -353,7 +353,7 @@ describe('RunCommand', () => {
         expect.any(String),
         undefined,
         expect.objectContaining({
-          checkpointCacheRootDir: path.join('/test/project', '.mlld', 'checkpoints')
+          checkpointCacheRootDir: path.join('/test/project', '.llm', 'checkpoints')
         })
       );
 
@@ -374,7 +374,7 @@ describe('RunCommand', () => {
       vi.mocked(existsSync).mockImplementation((p) => {
         const value = p.toString();
         if (value.endsWith('script.mld')) return true;
-        if (value.endsWith(path.join('.mlld', 'checkpoints', 'script'))) return true;
+        if (value.endsWith(path.join('.llm', 'checkpoints', 'script'))) return true;
         return false;
       });
       vi.mocked(fs.readFile).mockImplementation(async (filePath: any) => {
@@ -382,7 +382,7 @@ describe('RunCommand', () => {
         if (value.endsWith('script.mld')) {
           return '>> test script\nvar @x = "ok"';
         }
-        if (value.endsWith(path.join('.mlld', 'checkpoints', 'script', 'manifest.json'))) {
+        if (value.endsWith(path.join('.llm', 'checkpoints', 'script', 'manifest.json'))) {
           return JSON.stringify({ totalCached: 3 });
         }
         const error = new Error('ENOENT') as NodeJS.ErrnoException;

@@ -94,8 +94,8 @@ Keep shared identity fields (`name`, `author`, `version`, `about`) aligned in bo
 
 | Type | Local | Global |
 |------|-------|--------|
-| `library` | `llm/lib/` | `~/.mlld/lib/` |
-| `app` | `llm/run/` | `~/.mlld/run/` |
+| `library` | `llm/lib/` | `~/.llm/lib/` |
+| `app` | `llm/run/` | `~/.llm/run/` |
 | `command` | `.claude/commands/` | `~/.claude/commands/` |
 | `skill` | `.claude/skills/` | `~/.claude/skills/` |
 
@@ -105,7 +105,7 @@ mlld module app myapp              # → llm/run/myapp/
 mlld module library utils          # → llm/lib/utils/
 mlld module command review         # → .claude/commands/review/
 mlld module skill helper           # → .claude/skills/helper/
-mlld module app myapp --global     # → ~/.mlld/run/myapp/
+mlld module app myapp --global     # → ~/.llm/run/myapp/
 ```
 
 **Run directory apps:**

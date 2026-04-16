@@ -6,6 +6,7 @@ import { RegistryResolver } from './RegistryResolver';
 import { StatsCollector } from './StatsCollector';
 import { MlldImportError } from '@core/errors';
 import type { PathContext } from '@core/services/PathContextService';
+import { projectStateDir, PROJECT_STATE_DIR } from '@core/paths/state-dirs';
 
 export interface RegistryConfig {
   enabled?: boolean;
@@ -38,17 +39,16 @@ export class RegistryManager {
                         process.env.VERCEL || 
                         process.env.AWS_LAMBDA_FUNCTION_NAME;
     
-    const mlldDir = isServerless 
-      ? path.join('/tmp', '.mlld')
-      : path.join(projectRoot, '.mlld');
+    const stateDir = isServerless
+      ? path.join('/tmp', PROJECT_STATE_DIR)
+      : projectStateDir(projectRoot);
     
-    // Initialize components
     this.lockFile = new LockFile(
-      config.lockFile || path.join(mlldDir, 'mlld.lock.json')
+      config.lockFile || path.join(stateDir, 'mlld.lock.json')
     );
-    
+
     this.cache = new Cache(
-      config.cacheDir || path.join(mlldDir, 'cache')
+      config.cacheDir || path.join(stateDir, 'cache')
     );
     
     this.resolver = new RegistryResolver(
@@ -58,7 +58,7 @@ export class RegistryManager {
     );
     
     this.stats = new StatsCollector(
-      mlldDir,
+      stateDir,
       config.telemetry?.enabled ?? false
     );
   }

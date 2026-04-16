@@ -14,6 +14,7 @@ import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
+import { checkpointsDir } from '@core/paths/state-dirs';
 import { URLLoader } from '../utils/url-loader';
 import { parseInjectOptions } from '../utils/inject-parser';
 import { parseStateOptions } from '../utils/state-parser';
@@ -448,7 +449,7 @@ export class FileProcessor {
       cliOptions.input !== '-';
 
     if (shouldInspectCheckpointCache) {
-      const checkpointCacheRoot = path.join(pathContext.projectRoot, '.mlld', 'checkpoints');
+      const checkpointCacheRoot = checkpointsDir(pathContext.projectRoot);
       const checkpointSummary = await getCheckpointSummaryByFilePath(checkpointCacheRoot, effectivePath);
       if (checkpointSummary) {
         console.log(chalk.yellow(formatCheckpointResumeHint('file', checkpointSummary.cachedCount)));

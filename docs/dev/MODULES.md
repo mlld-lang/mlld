@@ -31,11 +31,11 @@ Source of truth: `core/registry/types.ts` (`MODULE_TYPE_PATHS`).
 
 | Module Type | Local Path Root | Global Path Root |
 | --- | --- | --- |
-| `library` | `llm/lib` | `.mlld/lib` |
-| `app` | `llm/run` | `.mlld/run` |
+| `library` | `llm/lib` | `.llm/lib` |
+| `app` | `llm/run` | `.llm/run` |
 | `command` | `.claude/commands` | `.claude/commands` |
 | `skill` | `.claude/skills` | `.claude/skills` |
-| `environment` | `.mlld/env` | `.mlld/env` |
+| `environment` | `.llm/env` | `.llm/env` |
 
 ### Import Evaluator Composition Boundaries
 

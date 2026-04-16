@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createHash } from 'crypto';
+import { importCacheDir, PROJECT_STATE_DIR } from '@core/paths/state-dirs';
 
 interface CacheEntry {
   content: string;
@@ -36,11 +37,9 @@ export class ImmutableCache {
                         process.env.AWS_LAMBDA_FUNCTION_NAME;
     
     if (isServerless) {
-      // Use /tmp which is writable in serverless environments
-      this.cacheDir = path.join('/tmp', '.mlld', 'cache', 'imports');
+      this.cacheDir = path.join('/tmp', PROJECT_STATE_DIR, 'cache', 'imports');
     } else {
-      // Store cache in .mlld/cache directory
-      this.cacheDir = path.join(projectPath, '.mlld', 'cache', 'imports');
+      this.cacheDir = importCacheDir(projectPath);
     }
   }
 

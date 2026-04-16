@@ -46,7 +46,7 @@ Use `[*]` to project a field across all entries and check with `.includes()`. Th
 
 - `name` — tool name
 - `args` — parameter names only
-- `auditRef` — UUID of the matching `toolCall` event in `.mlld/sec/audit.jsonl`
+- `auditRef` — UUID of the matching `toolCall` event in `.llm/sec/audit.jsonl`
 
 Outside guards, inspect the same lineage directly on values with `@value.mx.tools`.
 

@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { HashUtils, ModuleContent } from './utils/HashUtils';
 import { MlldError } from '@core/errors';
 import type { ModuleNeeds, ModuleNeedsNormalized } from './types';
 import { moduleNeedsToSerializable } from './utils/ModuleNeeds';
+import { userModuleCacheDir } from '@core/paths/state-dirs';
 
 /**
  * Cache entry metadata
@@ -38,14 +38,14 @@ export interface ModuleCacheStoreOptions {
 
 /**
  * Content-addressed module cache implementation
- * Stores modules by their SHA-256 hash in ~/.mlld/cache/sha256/
+ * Stores modules by their SHA-256 hash in ~/.llm/cache/sha256/
  */
 export class ModuleCache {
   private readonly cacheRoot: string;
   private readonly indexPath: string;
 
   constructor(cacheRoot?: string) {
-    this.cacheRoot = cacheRoot || path.join(os.homedir(), '.mlld', 'cache', 'sha256');
+    this.cacheRoot = cacheRoot || userModuleCacheDir();
     this.indexPath = path.join(this.cacheRoot, 'index.json');
   }
 

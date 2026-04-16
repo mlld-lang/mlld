@@ -36,7 +36,7 @@ That lineage is separate from taint:
 
 - `src:mcp` answers "did any MCP-sourced data touch this value?"
 - `.mx.tools` answers "which tool calls produced this value?"
-- The provenance chain keeps an `auditRef` pointing back to `.mlld/sec/audit.jsonl`
+- The provenance chain keeps an `auditRef` pointing back to `.llm/sec/audit.jsonl`
 
 **Taint propagates through all transformations:**
 
