@@ -284,6 +284,71 @@ describe('tool collections', () => {
     expect(getVisibleToolInputName(collection.send_email.inputs)).toBe('send_email_inputs');
   });
 
+  it('preserves imported read-entry metadata inside a mixed local tool collection', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @tools } from "/provider.mld"
+
+        /record @send_email_inputs = {
+          facts: [recipient: string],
+          data: [subject: string],
+          validate: "strict"
+        }
+
+        /exe @send_email(recipient, subject) = js {
+          return \`sent:\${recipient}:\${subject}\`;
+        }
+
+        /var tools @agentTools = {
+          get_contacts: @tools.get_contacts,
+          send_email: {
+            mlld: @send_email,
+            inputs: @send_email_inputs,
+            labels: ["execute:w"],
+            can_authorize: "role:planner"
+          }
+        }
+
+        /var @readResult = @agentTools.get_contacts()
+      `,
+      {
+        '/provider.mld': `
+          /record @contact = {
+            facts: [email: string],
+            data: [name: string]
+          }
+
+          /exe resolve:r @get_contacts() = [
+            => [{ email: "alice@example.com", name: "Alice" }]
+          ] => record @contact
+
+          /var @tools = {
+            get_contacts: {
+              kind: "read",
+              mlld: @get_contacts,
+              returns: @contact,
+              labels: ["resolve:r"],
+              expose: [],
+              semantics: "Load contacts."
+            }
+          }
+
+          /export { @tools }
+        `
+      }
+    );
+
+    const collection = env.getVariable('agentTools')?.internal?.toolCollection as ToolCollection;
+    expect(getVisibleToolExecutableName(collection.get_contacts.mlld)).toBe('get_contacts');
+    expect(getVisibleToolInputName(collection.get_contacts.returns as any)).toBe('contact');
+    expect((collection.get_contacts as Record<string, unknown>).kind).toBe('read');
+    expect((collection.get_contacts as Record<string, unknown>).semantics).toBe('Load contacts.');
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('send_email');
+    expect(getVisibleToolInputName(collection.send_email.inputs)).toBe('send_email_inputs');
+
+    expect(env.getVariable('readResult')).toBeDefined();
+  });
+
   it('resolves namespace field refs in mlld tool entries to the executable they point at', async () => {
     const normalizedEnv = await interpretWithEnvAndFiles(
       `
