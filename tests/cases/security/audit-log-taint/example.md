@@ -6,7 +6,7 @@
 /var @loaded = <audit-log-taint.txt>
 /show `Labels: @loaded.mx.labels`
 
-/var @audit = <@base/.mlld/sec/audit.jsonl>
+/var @audit = <@base/.llm/sec/audit.jsonl>
 /exe @findWrite(events) = js {
   return events.find(event => event.event === "write" && event.path.endsWith("audit-log-taint.txt"));
 }

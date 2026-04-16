@@ -36,6 +36,7 @@ export class ObjectImportStrategy {
         ?? getCapturedModuleEnv(request.value),
       request.importPath
     );
+    this.reconnectToolCollectionExecutables(normalizedObject, toolCollectionCapturedModuleEnv);
     const toolCollectionMetadata =
       takeSerializedToolCollectionMetadata(normalizedObject)
       ?? getToolCollectionMetadata(request.value);
@@ -119,4 +120,73 @@ export class ObjectImportStrategy {
         ])
     );
   }
+
+  private reconnectToolCollectionExecutables(
+    normalizedObject: unknown,
+    capturedModuleEnv: unknown
+  ): void {
+    if (!(capturedModuleEnv instanceof Map) || !isPlainObject(normalizedObject)) {
+      return;
+    }
+
+    for (const [toolName, rawEntry] of Object.entries(normalizedObject)) {
+      if (!isPlainObject(rawEntry) || !Object.prototype.hasOwnProperty.call(rawEntry, 'mlld')) {
+        continue;
+      }
+
+      const executableVariable = this.resolveToolExecutableVariable(
+        rawEntry.mlld,
+        toolName,
+        capturedModuleEnv
+      );
+      if (executableVariable) {
+        rawEntry.mlld = executableVariable;
+      }
+    }
+  }
+
+  private resolveToolExecutableVariable(
+    mlldValue: unknown,
+    toolName: string,
+    capturedModuleEnv: Map<string, unknown>
+  ): unknown {
+    const candidateKeys = new Set<string>();
+
+    const addCandidate = (value: unknown) => {
+      if (typeof value !== 'string') {
+        return;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return;
+      }
+      candidateKeys.add(trimmed);
+      if (trimmed.startsWith('@') && trimmed.length > 1) {
+        candidateKeys.add(trimmed.slice(1));
+      }
+    };
+
+    if (typeof mlldValue === 'string') {
+      addCandidate(mlldValue);
+    } else if (isVariable(mlldValue)) {
+      addCandidate(mlldValue.name);
+    } else if (isPlainObject(mlldValue)) {
+      addCandidate(mlldValue.name);
+    }
+
+    addCandidate(toolName);
+
+    for (const key of candidateKeys) {
+      const candidate = capturedModuleEnv.get(key);
+      if (isVariable(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

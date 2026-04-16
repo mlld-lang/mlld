@@ -1,0 +1,21 @@
+/import { @tools, @search, @get_day, @send } from "./support/tools.mld"
+
+/var @directSearchParams = @search.mx.params
+/var @directGetDayParams = @get_day.mx.params
+/var @directSendParams = @send.mx.params
+
+/var @toolsSearchParams = @tools.search.mlld.mx.params
+/var @toolsGetDayParams = @tools.get_day.mlld.mx.params
+/var @toolsSendParams = @tools.send.mlld.mx.params
+
+/var @searchParamsMatch = @directSearchParams.length == @toolsSearchParams.length
+/var @getDayParamsMatch = @directGetDayParams.length == @toolsGetDayParams.length
+/var @sendParamsMatch = @directSendParams.length == @toolsSendParams.length
+
+/show @searchParamsMatch
+/show @getDayParamsMatch
+/show @sendParamsMatch
+
+/show @toolsSearchParams.length
+/show @toolsGetDayParams.length
+/show @toolsSendParams.length

@@ -3,7 +3,7 @@
 
 /var @fetched = @fetch("item-1")
 /var @verified = @verify(@fetched)
-/var @audit = <@root/.mlld/sec/audit.jsonl>
+/var @audit = <@root/.llm/sec/audit.jsonl>
 /var @fetchedHasOneTool = @fetched.mx.tools.length() == 1
 /var @verifiedHasTwoTools = @verified.mx.tools.length() == 2
 /var @firstVerifiedTool = @verified.mx.tools[0].name == "fetch"

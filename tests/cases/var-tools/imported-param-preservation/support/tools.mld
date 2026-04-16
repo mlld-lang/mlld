@@ -1,0 +1,11 @@
+/exe @search(query, sender) = js { return []; }
+/exe @get_day(day) = js { return "2024-01-01"; }
+/exe @send(recipient, subject, body) = js { return "sent"; }
+
+/var tools @tools = {
+  search: { mlld: @search, labels: ["resolve:r"] },
+  get_day: { mlld: @get_day, labels: ["resolve:r"] },
+  send: { mlld: @send, labels: ["execute:w"], can_authorize: "role:planner" }
+}
+
+/export { @tools, @search, @get_day, @send }
