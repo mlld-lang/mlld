@@ -3,8 +3,8 @@
   "description": "Test fixture for var-tools/metadata-pass-through",
   "category": "valid",
   "subcategory": "metadata-pass-through",
-  "input": "/var known @recipient = \"ada@example.com\"\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  validate: \"strict\"\n}\n\n/record @search_contacts_inputs = {\n  data: [query: string],\n  validate: \"strict\"\n}\n\n/record @contact = {\n  facts: [email: string],\n  data: [name: string]\n}\n\n/exe @send_email(recipient, subject, retries, settings) = js {\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;\n}\n\n/exe @search_contacts(query) = js {\n  return `found:${query}`;\n}\n\n/exe @catalogSummary(keyed, entries, targetName) = js {\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);\n}\n\n/var tools @agentTools = {\n  send_email: {\n    mlld: @send_email,\n    inputs: @send_email_inputs,\n    labels: [\"execute:w\", \"comm:w\"],\n    description: \"Send mail\",\n    instructions: \"Prefer drafts first.\",\n    can_authorize: \"role:planner\",\n    bind: { retries: 3, settings: { mode: \"safe\" } }\n  },\n  search_contacts: {\n    mlld: @search_contacts,\n    inputs: @search_contacts_inputs,\n    returns: @contact,\n    labels: [\"resolve:r\"],\n    kind: \"read\",\n    semantics: \"Search contacts.\",\n    description: \"Search contacts.\",\n    can_authorize: false,\n    custom_meta: { x: 1 }\n  }\n}\n\n/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries, \"send_email\")\n/show @catalogSummary(@agentTools.search_contacts, @agentTools.mx.entries, \"search_contacts\")\n/show @agentTools.search_contacts.returns.name\n/show @agentTools.search_contacts.kind\n/show @agentTools.search_contacts.semantics\n/show @agentTools.search_contacts.description\n/show @agentTools.search_contacts.inputs.name\n/show @agentTools.search_contacts.custom_meta.x\n/show @agentTools.send_email(@recipient, \"hello\")\n/show @agentTools.search_contacts(\"Ada\")\n",
-  "expected": "{\n  \"keyed\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_meta\": null\n  },\n  \"entries\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_meta\": null\n  }\n}\n{\n  \"keyed\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_meta\": {\n      \"x\": 1\n    }\n  },\n  \"entries\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_meta\": {\n      \"x\": 1\n    }\n  }\n}\ncontact\nread\nSearch contacts.\nSearch contacts.\nsearch_contacts_inputs\n1\nsent:ada@example.com:hello:3:safe\nfound:Ada\n",
+  "input": "/var known @recipient = \"ada@example.com\"\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  validate: \"strict\"\n}\n\n/record @search_contacts_inputs = {\n  data: [query: string],\n  validate: \"strict\"\n}\n\n/record @contact = {\n  facts: [email: string],\n  data: [name: string]\n}\n\n/exe @send_email(recipient, subject, retries, settings) = js {\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;\n}\n\n/exe @search_contacts(query) = js {\n  return `found:${query}`;\n}\n\n/exe @catalogSummary(keyed, entries, targetName) = js {\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_field: keyed.custom_field ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_field: entry.custom_field ?? null\n    }\n  }, null, 2);\n}\n\n/var tools @agentTools = {\n  send_email: {\n    mlld: @send_email,\n    inputs: @send_email_inputs,\n    labels: [\"execute:w\", \"comm:w\"],\n    description: \"Send mail\",\n    instructions: \"Prefer drafts first.\",\n    can_authorize: \"role:planner\",\n    bind: { retries: 3, settings: { mode: \"safe\" } }\n  },\n  search_contacts: {\n    mlld: @search_contacts,\n    inputs: @search_contacts_inputs,\n    returns: @contact,\n    labels: [\"resolve:r\"],\n    kind: \"read\",\n    semantics: \"Search contacts.\",\n    description: \"Search contacts.\",\n    can_authorize: false,\n    custom_field: { x: 1 }\n  }\n}\n\n/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries, \"send_email\")\n/show @catalogSummary(@agentTools.search_contacts, @agentTools.mx.entries, \"search_contacts\")\n/show @agentTools.search_contacts.returns.name\n/show @agentTools.search_contacts.kind\n/show @agentTools.search_contacts.semantics\n/show @agentTools.search_contacts.description\n/show @agentTools.search_contacts.inputs.name\n/show @agentTools.search_contacts.custom_field.x\n/show @agentTools.send_email(@recipient, \"hello\")\n/show @agentTools.search_contacts(\"Ada\")\n",
+  "expected": "{\n  \"keyed\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_field\": null\n  },\n  \"entries\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_field\": null\n  }\n}\n{\n  \"keyed\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_field\": {\n      \"x\": 1\n    }\n  },\n  \"entries\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_field\": {\n      \"x\": 1\n    }\n  }\n}\ncontact\nread\nSearch contacts.\nSearch contacts.\nsearch_contacts_inputs\n1\nsent:ada@example.com:hello:3:safe\nfound:Ada\n",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
@@ -737,7 +737,7 @@
           "column": 1
         },
         "end": {
-          "offset": 1533,
+          "offset": 1537,
           "line": 57,
           "column": 2
         }
@@ -757,7 +757,7 @@
                 "column": 1
               },
               "end": {
-                "offset": 1533,
+                "offset": 1537,
                 "line": 57,
                 "column": 2
               }
@@ -830,7 +830,7 @@
                 "column": 52
               },
               "end": {
-                "offset": 1533,
+                "offset": 1537,
                 "line": 57,
                 "column": 2
               }
@@ -850,12 +850,12 @@
                 "column": 52
               },
               "end": {
-                "offset": 1533,
+                "offset": 1537,
                 "line": 57,
                 "column": 2
               }
             },
-            "content": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);"
+            "content": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_field: keyed.custom_field ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_field: entry.custom_field ?? null\n    }\n  }, null, 2);"
           }
         ]
       },
@@ -868,7 +868,7 @@
         ],
         "lang": "js",
         "args": [],
-        "code": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);"
+        "code": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_field: keyed.custom_field ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_field: entry.custom_field ?? null\n    }\n  }, null, 2);"
       },
       "meta": {
         "parameterCount": 3,
@@ -882,12 +882,12 @@
       "nodeId": "node-36",
       "location": {
         "start": {
-          "offset": 1535,
+          "offset": 1539,
           "line": 59,
           "column": 1
         },
         "end": {
-          "offset": 2118,
+          "offset": 2123,
           "line": 80,
           "column": 2
         }
@@ -902,12 +902,12 @@
             "nodeId": "node-37",
             "location": {
               "start": {
-                "offset": 1535,
+                "offset": 1539,
                 "line": 59,
                 "column": 1
               },
               "end": {
-                "offset": 2118,
+                "offset": 2123,
                 "line": 80,
                 "column": 2
               }
@@ -934,12 +934,12 @@
                         "nodeId": "node-38",
                         "location": {
                           "start": {
-                            "offset": 1588,
+                            "offset": 1592,
                             "line": 61,
                             "column": 11
                           },
                           "end": {
-                            "offset": 1599,
+                            "offset": 1603,
                             "line": 61,
                             "column": 22
                           }
@@ -956,12 +956,12 @@
                         "nodeId": "node-39",
                         "location": {
                           "start": {
-                            "offset": 1613,
+                            "offset": 1617,
                             "line": 62,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1631,
+                            "offset": 1635,
                             "line": 62,
                             "column": 31
                           }
@@ -983,12 +983,12 @@
                                 "nodeId": "node-40",
                                 "location": {
                                   "start": {
-                                    "offset": 1646,
+                                    "offset": 1650,
                                     "line": 63,
                                     "column": 14
                                   },
                                   "end": {
-                                    "offset": 1657,
+                                    "offset": 1661,
                                     "line": 63,
                                     "column": 25
                                   }
@@ -1007,12 +1007,12 @@
                                 "nodeId": "node-41",
                                 "location": {
                                   "start": {
-                                    "offset": 1659,
+                                    "offset": 1663,
                                     "line": 63,
                                     "column": 27
                                   },
                                   "end": {
-                                    "offset": 1667,
+                                    "offset": 1671,
                                     "line": 63,
                                     "column": 35
                                   }
@@ -1027,12 +1027,12 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 1645,
+                            "offset": 1649,
                             "line": 63,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1668,
+                            "offset": 1672,
                             "line": 63,
                             "column": 36
                           }
@@ -1068,12 +1068,12 @@
                               "nodeId": "node-42",
                               "location": {
                                 "start": {
-                                  "offset": 1798,
+                                  "offset": 1802,
                                   "line": 67,
                                   "column": 22
                                 },
                                 "end": {
-                                  "offset": 1799,
+                                  "offset": 1803,
                                   "line": 67,
                                   "column": 23
                                 }
@@ -1096,12 +1096,12 @@
                               ],
                               "location": {
                                 "start": {
-                                  "offset": 1811,
+                                  "offset": 1815,
                                   "line": 67,
                                   "column": 35
                                 },
                                 "end": {
-                                  "offset": 1827,
+                                  "offset": 1831,
                                   "line": 67,
                                   "column": 51
                                 }
@@ -1111,12 +1111,12 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 1787,
+                            "offset": 1791,
                             "line": 67,
                             "column": 11
                           },
                           "end": {
-                            "offset": 1829,
+                            "offset": 1833,
                             "line": 67,
                             "column": 53
                           }
@@ -1126,12 +1126,12 @@
                   ],
                   "location": {
                     "start": {
-                      "offset": 1576,
+                      "offset": 1580,
                       "line": 60,
                       "column": 15
                     },
                     "end": {
-                      "offset": 1833,
+                      "offset": 1837,
                       "line": 68,
                       "column": 4
                     }
@@ -1152,12 +1152,12 @@
                         "nodeId": "node-43",
                         "location": {
                           "start": {
-                            "offset": 1866,
+                            "offset": 1870,
                             "line": 70,
                             "column": 11
                           },
                           "end": {
-                            "offset": 1882,
+                            "offset": 1886,
                             "line": 70,
                             "column": 27
                           }
@@ -1174,12 +1174,12 @@
                         "nodeId": "node-44",
                         "location": {
                           "start": {
-                            "offset": 1896,
+                            "offset": 1900,
                             "line": 71,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1919,
+                            "offset": 1923,
                             "line": 71,
                             "column": 36
                           }
@@ -1196,12 +1196,12 @@
                         "nodeId": "node-45",
                         "location": {
                           "start": {
-                            "offset": 1934,
+                            "offset": 1938,
                             "line": 72,
                             "column": 14
                           },
                           "end": {
-                            "offset": 1942,
+                            "offset": 1946,
                             "line": 72,
                             "column": 22
                           }
@@ -1223,12 +1223,12 @@
                                 "nodeId": "node-46",
                                 "location": {
                                   "start": {
-                                    "offset": 1957,
+                                    "offset": 1961,
                                     "line": 73,
                                     "column": 14
                                   },
                                   "end": {
-                                    "offset": 1968,
+                                    "offset": 1972,
                                     "line": 73,
                                     "column": 25
                                   }
@@ -1243,12 +1243,12 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 1956,
+                            "offset": 1960,
                             "line": 73,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1969,
+                            "offset": 1973,
                             "line": 73,
                             "column": 26
                           }
@@ -1278,12 +1278,12 @@
                         "nodeId": "node-47",
                         "location": {
                           "start": {
-                            "offset": 2080,
+                            "offset": 2084,
                             "line": 77,
                             "column": 20
                           },
                           "end": {
-                            "offset": 2085,
+                            "offset": 2089,
                             "line": 77,
                             "column": 25
                           }
@@ -1294,7 +1294,7 @@
                     },
                     {
                       "type": "pair",
-                      "key": "custom_meta",
+                      "key": "custom_field",
                       "value": {
                         "type": "object",
                         "entries": [
@@ -1306,14 +1306,14 @@
                               "nodeId": "node-48",
                               "location": {
                                 "start": {
-                                  "offset": 2109,
-                                  "line": 78,
-                                  "column": 23
-                                },
-                                "end": {
-                                  "offset": 2110,
+                                  "offset": 2114,
                                   "line": 78,
                                   "column": 24
+                                },
+                                "end": {
+                                  "offset": 2115,
+                                  "line": 78,
+                                  "column": 25
                                 }
                               },
                               "value": 1,
@@ -1323,14 +1323,14 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 2104,
+                            "offset": 2109,
                             "line": 78,
-                            "column": 18
+                            "column": 19
                           },
                           "end": {
-                            "offset": 2112,
+                            "offset": 2117,
                             "line": 78,
-                            "column": 26
+                            "column": 27
                           }
                         }
                       }
@@ -1338,12 +1338,12 @@
                   ],
                   "location": {
                     "start": {
-                      "offset": 1854,
+                      "offset": 1858,
                       "line": 69,
                       "column": 20
                     },
                     "end": {
-                      "offset": 2116,
+                      "offset": 2121,
                       "line": 79,
                       "column": 4
                     }
@@ -1353,12 +1353,12 @@
             ],
             "location": {
               "start": {
-                "offset": 1560,
+                "offset": 1564,
                 "line": 59,
                 "column": 26
               },
               "end": {
-                "offset": 2118,
+                "offset": 2123,
                 "line": 80,
                 "column": 2
               }
@@ -1377,12 +1377,12 @@
       "nodeId": "node-49",
       "location": {
         "start": {
-          "offset": 2120,
+          "offset": 2125,
           "line": 82,
           "column": 1
         },
         "end": {
-          "offset": 2204,
+          "offset": 2209,
           "line": 83,
           "column": 1
         }
@@ -1396,12 +1396,12 @@
           "nodeId": "node-50",
           "location": {
             "start": {
-              "offset": 2126,
+              "offset": 2131,
               "line": 82,
               "column": 7
             },
             "end": {
-              "offset": 2203,
+              "offset": 2208,
               "line": 82,
               "column": 84
             }
@@ -1414,12 +1414,12 @@
                 "nodeId": "node-51",
                 "location": {
                   "start": {
-                    "offset": 2126,
+                    "offset": 2131,
                     "line": 82,
                     "column": 7
                   },
                   "end": {
-                    "offset": 2203,
+                    "offset": 2208,
                     "line": 82,
                     "column": 84
                   }
@@ -1434,12 +1434,12 @@
                 "nodeId": "node-52",
                 "location": {
                   "start": {
-                    "offset": 2142,
+                    "offset": 2147,
                     "line": 82,
                     "column": 23
                   },
                   "end": {
-                    "offset": 2164,
+                    "offset": 2169,
                     "line": 82,
                     "column": 45
                   }
@@ -1453,12 +1453,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2154,
+                        "offset": 2159,
                         "line": 82,
                         "column": 35
                       },
                       "end": {
-                        "offset": 2164,
+                        "offset": 2169,
                         "line": 82,
                         "column": 45
                       }
@@ -1471,12 +1471,12 @@
                 "nodeId": "node-53",
                 "location": {
                   "start": {
-                    "offset": 2166,
+                    "offset": 2171,
                     "line": 82,
                     "column": 47
                   },
                   "end": {
-                    "offset": 2188,
+                    "offset": 2193,
                     "line": 82,
                     "column": 69
                   }
@@ -1490,12 +1490,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2178,
+                        "offset": 2183,
                         "line": 82,
                         "column": 59
                       },
                       "end": {
-                        "offset": 2180,
+                        "offset": 2185,
                         "line": 82,
                         "column": 61
                       }
@@ -1507,12 +1507,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2181,
+                        "offset": 2186,
                         "line": 82,
                         "column": 62
                       },
                       "end": {
-                        "offset": 2188,
+                        "offset": 2193,
                         "line": 82,
                         "column": 69
                       }
@@ -1525,12 +1525,12 @@
                 "nodeId": "node-54",
                 "location": {
                   "start": {
-                    "offset": 2190,
+                    "offset": 2195,
                     "line": 82,
                     "column": 71
                   },
                   "end": {
-                    "offset": 2202,
+                    "offset": 2207,
                     "line": 82,
                     "column": 83
                   }
@@ -1557,12 +1557,12 @@
       "nodeId": "node-55",
       "location": {
         "start": {
-          "offset": 2204,
+          "offset": 2209,
           "line": 83,
           "column": 1
         },
         "end": {
-          "offset": 2298,
+          "offset": 2303,
           "line": 84,
           "column": 1
         }
@@ -1576,12 +1576,12 @@
           "nodeId": "node-56",
           "location": {
             "start": {
-              "offset": 2210,
+              "offset": 2215,
               "line": 83,
               "column": 7
             },
             "end": {
-              "offset": 2297,
+              "offset": 2302,
               "line": 83,
               "column": 94
             }
@@ -1594,12 +1594,12 @@
                 "nodeId": "node-57",
                 "location": {
                   "start": {
-                    "offset": 2210,
+                    "offset": 2215,
                     "line": 83,
                     "column": 7
                   },
                   "end": {
-                    "offset": 2297,
+                    "offset": 2302,
                     "line": 83,
                     "column": 94
                   }
@@ -1614,12 +1614,12 @@
                 "nodeId": "node-58",
                 "location": {
                   "start": {
-                    "offset": 2226,
+                    "offset": 2231,
                     "line": 83,
                     "column": 23
                   },
                   "end": {
-                    "offset": 2253,
+                    "offset": 2258,
                     "line": 83,
                     "column": 50
                   }
@@ -1633,12 +1633,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2238,
+                        "offset": 2243,
                         "line": 83,
                         "column": 35
                       },
                       "end": {
-                        "offset": 2253,
+                        "offset": 2258,
                         "line": 83,
                         "column": 50
                       }
@@ -1651,12 +1651,12 @@
                 "nodeId": "node-59",
                 "location": {
                   "start": {
-                    "offset": 2255,
+                    "offset": 2260,
                     "line": 83,
                     "column": 52
                   },
                   "end": {
-                    "offset": 2277,
+                    "offset": 2282,
                     "line": 83,
                     "column": 74
                   }
@@ -1670,12 +1670,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2267,
+                        "offset": 2272,
                         "line": 83,
                         "column": 64
                       },
                       "end": {
-                        "offset": 2269,
+                        "offset": 2274,
                         "line": 83,
                         "column": 66
                       }
@@ -1687,12 +1687,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2270,
+                        "offset": 2275,
                         "line": 83,
                         "column": 67
                       },
                       "end": {
-                        "offset": 2277,
+                        "offset": 2282,
                         "line": 83,
                         "column": 74
                       }
@@ -1705,12 +1705,12 @@
                 "nodeId": "node-60",
                 "location": {
                   "start": {
-                    "offset": 2279,
+                    "offset": 2284,
                     "line": 83,
                     "column": 76
                   },
                   "end": {
-                    "offset": 2296,
+                    "offset": 2301,
                     "line": 83,
                     "column": 93
                   }
@@ -1737,12 +1737,12 @@
       "nodeId": "node-61",
       "location": {
         "start": {
-          "offset": 2298,
+          "offset": 2303,
           "line": 84,
           "column": 1
         },
         "end": {
-          "offset": 2345,
+          "offset": 2350,
           "line": 85,
           "column": 1
         }
@@ -1756,12 +1756,12 @@
           "nodeId": "node-62",
           "location": {
             "start": {
-              "offset": 2304,
+              "offset": 2309,
               "line": 84,
               "column": 7
             },
             "end": {
-              "offset": 2344,
+              "offset": 2349,
               "line": 84,
               "column": 47
             }
@@ -1775,12 +1775,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2316,
+                  "offset": 2321,
                   "line": 84,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2331,
+                  "offset": 2336,
                   "line": 84,
                   "column": 34
                 }
@@ -1792,12 +1792,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2332,
+                  "offset": 2337,
                   "line": 84,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2339,
+                  "offset": 2344,
                   "line": 84,
                   "column": 42
                 }
@@ -1809,12 +1809,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2340,
+                  "offset": 2345,
                   "line": 84,
                   "column": 43
                 },
                 "end": {
-                  "offset": 2344,
+                  "offset": 2349,
                   "line": 84,
                   "column": 47
                 }
@@ -1836,12 +1836,12 @@
       "nodeId": "node-63",
       "location": {
         "start": {
-          "offset": 2345,
+          "offset": 2350,
           "line": 85,
           "column": 1
         },
         "end": {
-          "offset": 2384,
+          "offset": 2389,
           "line": 86,
           "column": 1
         }
@@ -1855,12 +1855,12 @@
           "nodeId": "node-64",
           "location": {
             "start": {
-              "offset": 2351,
+              "offset": 2356,
               "line": 85,
               "column": 7
             },
             "end": {
-              "offset": 2383,
+              "offset": 2388,
               "line": 85,
               "column": 39
             }
@@ -1874,12 +1874,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2363,
+                  "offset": 2368,
                   "line": 85,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2378,
+                  "offset": 2383,
                   "line": 85,
                   "column": 34
                 }
@@ -1891,12 +1891,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2379,
+                  "offset": 2384,
                   "line": 85,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2383,
+                  "offset": 2388,
                   "line": 85,
                   "column": 39
                 }
@@ -1918,12 +1918,12 @@
       "nodeId": "node-65",
       "location": {
         "start": {
-          "offset": 2384,
+          "offset": 2389,
           "line": 86,
           "column": 1
         },
         "end": {
-          "offset": 2428,
+          "offset": 2433,
           "line": 87,
           "column": 1
         }
@@ -1937,12 +1937,12 @@
           "nodeId": "node-66",
           "location": {
             "start": {
-              "offset": 2390,
+              "offset": 2395,
               "line": 86,
               "column": 7
             },
             "end": {
-              "offset": 2427,
+              "offset": 2432,
               "line": 86,
               "column": 44
             }
@@ -1956,12 +1956,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2402,
+                  "offset": 2407,
                   "line": 86,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2417,
+                  "offset": 2422,
                   "line": 86,
                   "column": 34
                 }
@@ -1973,12 +1973,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2418,
+                  "offset": 2423,
                   "line": 86,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2427,
+                  "offset": 2432,
                   "line": 86,
                   "column": 44
                 }
@@ -2000,12 +2000,12 @@
       "nodeId": "node-67",
       "location": {
         "start": {
-          "offset": 2428,
+          "offset": 2433,
           "line": 87,
           "column": 1
         },
         "end": {
-          "offset": 2474,
+          "offset": 2479,
           "line": 88,
           "column": 1
         }
@@ -2019,12 +2019,12 @@
           "nodeId": "node-68",
           "location": {
             "start": {
-              "offset": 2434,
+              "offset": 2439,
               "line": 87,
               "column": 7
             },
             "end": {
-              "offset": 2473,
+              "offset": 2478,
               "line": 87,
               "column": 46
             }
@@ -2038,12 +2038,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2446,
+                  "offset": 2451,
                   "line": 87,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2461,
+                  "offset": 2466,
                   "line": 87,
                   "column": 34
                 }
@@ -2055,12 +2055,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2462,
+                  "offset": 2467,
                   "line": 87,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2473,
+                  "offset": 2478,
                   "line": 87,
                   "column": 46
                 }
@@ -2082,12 +2082,12 @@
       "nodeId": "node-69",
       "location": {
         "start": {
-          "offset": 2474,
+          "offset": 2479,
           "line": 88,
           "column": 1
         },
         "end": {
-          "offset": 2520,
+          "offset": 2525,
           "line": 89,
           "column": 1
         }
@@ -2101,12 +2101,12 @@
           "nodeId": "node-70",
           "location": {
             "start": {
-              "offset": 2480,
+              "offset": 2485,
               "line": 88,
               "column": 7
             },
             "end": {
-              "offset": 2519,
+              "offset": 2524,
               "line": 88,
               "column": 46
             }
@@ -2120,12 +2120,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2492,
+                  "offset": 2497,
                   "line": 88,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2507,
+                  "offset": 2512,
                   "line": 88,
                   "column": 34
                 }
@@ -2137,12 +2137,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2508,
+                  "offset": 2513,
                   "line": 88,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2514,
+                  "offset": 2519,
                   "line": 88,
                   "column": 41
                 }
@@ -2154,12 +2154,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2515,
+                  "offset": 2520,
                   "line": 88,
                   "column": 42
                 },
                 "end": {
-                  "offset": 2519,
+                  "offset": 2524,
                   "line": 88,
                   "column": 46
                 }
@@ -2181,12 +2181,12 @@
       "nodeId": "node-71",
       "location": {
         "start": {
-          "offset": 2520,
+          "offset": 2525,
           "line": 89,
           "column": 1
         },
         "end": {
-          "offset": 2568,
+          "offset": 2574,
           "line": 90,
           "column": 1
         }
@@ -2200,14 +2200,14 @@
           "nodeId": "node-72",
           "location": {
             "start": {
-              "offset": 2526,
+              "offset": 2531,
               "line": 89,
               "column": 7
             },
             "end": {
-              "offset": 2567,
+              "offset": 2573,
               "line": 89,
-              "column": 48
+              "column": 49
             }
           },
           "valueType": "varIdentifier",
@@ -2219,12 +2219,12 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2538,
+                  "offset": 2543,
                   "line": 89,
                   "column": 19
                 },
                 "end": {
-                  "offset": 2553,
+                  "offset": 2558,
                   "line": 89,
                   "column": 34
                 }
@@ -2232,18 +2232,18 @@
             },
             {
               "type": "field",
-              "value": "custom_meta",
+              "value": "custom_field",
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2554,
+                  "offset": 2559,
                   "line": 89,
                   "column": 35
                 },
                 "end": {
-                  "offset": 2565,
+                  "offset": 2571,
                   "line": 89,
-                  "column": 46
+                  "column": 47
                 }
               }
             },
@@ -2253,14 +2253,14 @@
               "optional": false,
               "location": {
                 "start": {
-                  "offset": 2566,
-                  "line": 89,
-                  "column": 47
-                },
-                "end": {
-                  "offset": 2567,
+                  "offset": 2572,
                   "line": 89,
                   "column": 48
+                },
+                "end": {
+                  "offset": 2573,
+                  "line": 89,
+                  "column": 49
                 }
               }
             }
@@ -2268,7 +2268,7 @@
         }
       },
       "raw": {
-        "variable": "@agentTools.search_contacts.custom_meta.x"
+        "variable": "@agentTools.search_contacts.custom_field.x"
       },
       "meta": {
         "hasParentheses": false,
@@ -2280,12 +2280,12 @@
       "nodeId": "node-73",
       "location": {
         "start": {
-          "offset": 2568,
+          "offset": 2574,
           "line": 90,
           "column": 1
         },
         "end": {
-          "offset": 2618,
+          "offset": 2624,
           "line": 91,
           "column": 1
         }
@@ -2299,12 +2299,12 @@
           "nodeId": "node-74",
           "location": {
             "start": {
-              "offset": 2574,
+              "offset": 2580,
               "line": 90,
               "column": 7
             },
             "end": {
-              "offset": 2617,
+              "offset": 2623,
               "line": 90,
               "column": 50
             }
@@ -2317,12 +2317,12 @@
                 "nodeId": "node-75",
                 "location": {
                   "start": {
-                    "offset": 2574,
+                    "offset": 2580,
                     "line": 90,
                     "column": 7
                   },
                   "end": {
-                    "offset": 2617,
+                    "offset": 2623,
                     "line": 90,
                     "column": 50
                   }
@@ -2336,12 +2336,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2586,
+                        "offset": 2592,
                         "line": 90,
                         "column": 19
                       },
                       "end": {
-                        "offset": 2596,
+                        "offset": 2602,
                         "line": 90,
                         "column": 29
                       }
@@ -2356,12 +2356,12 @@
                 "nodeId": "node-76",
                 "location": {
                   "start": {
-                    "offset": 2597,
+                    "offset": 2603,
                     "line": 90,
                     "column": 30
                   },
                   "end": {
-                    "offset": 2607,
+                    "offset": 2613,
                     "line": 90,
                     "column": 40
                   }
@@ -2374,12 +2374,12 @@
                 "nodeId": "node-77",
                 "location": {
                   "start": {
-                    "offset": 2609,
+                    "offset": 2615,
                     "line": 90,
                     "column": 42
                   },
                   "end": {
-                    "offset": 2616,
+                    "offset": 2622,
                     "line": 90,
                     "column": 49
                   }
@@ -2393,12 +2393,12 @@
               "nodeId": "node-78",
               "location": {
                 "start": {
-                  "offset": 2574,
+                  "offset": 2580,
                   "line": 90,
                   "column": 7
                 },
                 "end": {
-                  "offset": 2617,
+                  "offset": 2623,
                   "line": 90,
                   "column": 50
                 }
@@ -2424,12 +2424,12 @@
       "nodeId": "node-79",
       "location": {
         "start": {
-          "offset": 2618,
+          "offset": 2624,
           "line": 91,
           "column": 1
         },
         "end": {
-          "offset": 2659,
+          "offset": 2665,
           "line": 92,
           "column": 1
         }
@@ -2443,12 +2443,12 @@
           "nodeId": "node-80",
           "location": {
             "start": {
-              "offset": 2624,
+              "offset": 2630,
               "line": 91,
               "column": 7
             },
             "end": {
-              "offset": 2658,
+              "offset": 2664,
               "line": 91,
               "column": 41
             }
@@ -2461,12 +2461,12 @@
                 "nodeId": "node-81",
                 "location": {
                   "start": {
-                    "offset": 2624,
+                    "offset": 2630,
                     "line": 91,
                     "column": 7
                   },
                   "end": {
-                    "offset": 2658,
+                    "offset": 2664,
                     "line": 91,
                     "column": 41
                   }
@@ -2480,12 +2480,12 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 2636,
+                        "offset": 2642,
                         "line": 91,
                         "column": 19
                       },
                       "end": {
-                        "offset": 2651,
+                        "offset": 2657,
                         "line": 91,
                         "column": 34
                       }
@@ -2500,12 +2500,12 @@
                 "nodeId": "node-82",
                 "location": {
                   "start": {
-                    "offset": 2652,
+                    "offset": 2658,
                     "line": 91,
                     "column": 35
                   },
                   "end": {
-                    "offset": 2657,
+                    "offset": 2663,
                     "line": 91,
                     "column": 40
                   }
@@ -2519,12 +2519,12 @@
               "nodeId": "node-83",
               "location": {
                 "start": {
-                  "offset": 2624,
+                  "offset": 2630,
                   "line": 91,
                   "column": 7
                 },
                 "end": {
-                  "offset": 2658,
+                  "offset": 2664,
                   "line": 91,
                   "column": 41
                 }

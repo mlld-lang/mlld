@@ -1010,7 +1010,7 @@ show @built
     expect(messages).toContain("Tool 'send_email' must cover all parameters of '@send_email' via inputs or bind: body");
   });
 
-  it('rejects mixed legacy tool-shaping fields when inputs are declared', async () => {
+  it('rejects removed legacy tool-shaping fields even when inputs are declared', async () => {
     const modulePath = await writeModule('analyze-input-record-mixed-shape.mld', `
 /record @send_email_inputs = {
   facts: [recipient: string],
@@ -1033,7 +1033,7 @@ show @built
 
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message)).toContain(
-      "Tool 'send_email' inputs cannot be combined with controlArgs"
+      "Tool 'send_email' uses removed field 'controlArgs'. Declare control args as `facts:` fields in the tool's input record (`inputs:`)."
     );
   });
 
@@ -1175,6 +1175,81 @@ show @built
     expect(result.valid).toBe(false);
     expect((result.errors ?? []).map(entry => entry.message)).toContain(
       "Tool 'send_email' can_authorize entries must match role:*: planner"
+    );
+  });
+
+  it('accepts returns and surfaces arbitrary tool catalog metadata as warnings', async () => {
+    const modulePath = await writeModule('analyze-tool-catalog-unknown-fields.mld', `
+/record @search_contacts_inputs = {
+  data: [query: string],
+  validate: "strict"
+}
+
+/record @contact = {
+  facts: [email: string],
+  data: [name: string?]
+}
+
+/exe @search(query) = js { return { email: "test@example.com", name: "Test" }; }
+
+/var tools @catalog = {
+  search_contacts: {
+    mlld: @search,
+    returns: @contact,
+    inputs: @search_contacts_inputs,
+    labels: ["resolve:r"],
+    description: "Search contacts.",
+    can_authorize: false,
+    custom_field: { arbitrary: true }
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors ?? []).toEqual([]);
+
+    const warnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'tool-catalog-unknown-field'
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings.map(entry => entry.message)).toEqual([
+      "Tool 'search_contacts' has unrecognized field 'custom_field'. Unrecognized fields are preserved but not validated."
+    ]);
+    expect(warnings.some(entry => entry.message.includes("'returns'"))).toBe(false);
+  });
+
+  it('rejects removed legacy tool catalog fields with replacement guidance', async () => {
+    const modulePath = await writeModule('analyze-tool-catalog-legacy-fields.mld', `
+/exe @send_email(recipient, subject, body) = js { return "ok"; }
+
+/var tools @catalog = {
+  send_email: {
+    mlld: @send_email,
+    controlArgs: ["recipient"],
+    kind: "write",
+    semantics: "Send an outbound email.",
+    authorizable: "role:planner"
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message);
+    expect(messages).toContain(
+      "Tool 'send_email' uses removed field 'controlArgs'. Declare control args as `facts:` fields in the tool's input record (`inputs:`)."
+    );
+    expect(messages).toContain(
+      "Tool 'send_email' uses removed field 'kind'. Use routing labels in `labels:` (for example, `resolve:r`, `execute:w`)."
+    );
+    expect(messages).toContain(
+      "Tool 'send_email' uses removed field 'semantics'. Renamed to `description:`."
+    );
+    expect(messages).toContain(
+      "Tool 'send_email' uses removed field 'authorizable'. Renamed to `can_authorize:`."
     );
   });
 

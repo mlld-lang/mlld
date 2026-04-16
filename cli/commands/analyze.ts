@@ -3655,30 +3655,30 @@ interface ValidationContextExecutable extends AuthorizationToolContext {
 const TOOL_CATALOG_FIELDS = new Set([
   'mlld',
   'inputs',
+  'returns',
   'labels',
+  'can_authorize',
   'description',
   'instructions',
-  'can_authorize',
-  'authorizable',
   'bind',
-  'expose',
-  'optional',
-  'controlArgs',
-  'updateArgs',
-  'exactPayloadArgs',
-  'sourceArgs',
-  'correlateControlArgs'
 ]);
 
-const INPUT_RECORD_MIXED_CATALOG_FIELDS = [
-  'expose',
-  'optional',
-  'controlArgs',
-  'updateArgs',
-  'exactPayloadArgs',
-  'sourceArgs',
-  'correlateControlArgs'
-] as const;
+const LEGACY_TOOL_CATALOG_FIELD_REPLACEMENTS: Record<string, string> = {
+  controlArgs: "Declare control args as `facts:` fields in the tool's input record (`inputs:`).",
+  sourceArgs: "Declare source args as `facts:` fields in the tool's input record (`inputs:`).",
+  updateArgs: "Declare update fields in the input record's `update:` section.",
+  exactPayloadArgs: "Declare exact-match fields in the input record's `exact:` section.",
+  correlateControlArgs: 'Declare `correlate: true` on the input record.',
+  expose: "The input record's field list (`facts:` + `data:`) replaces `expose:`.",
+  optional: 'Mark optional fields with `?` in the input record (for example, `cc: array?`).',
+  kind: 'Use routing labels in `labels:` (for example, `resolve:r`, `execute:w`).',
+  risk: 'Use risk labels in `labels:` (for example, `exfil:send`, `destructive`).',
+  semantics: 'Renamed to `description:`.',
+  operation: 'Split into top-level fields: `inputs:`, `labels:`, `can_authorize:`, `description:`, `instructions:`.',
+  payloadRecord: 'Unified into the `inputs:` record (`data:` section).',
+  payloadArgs: 'Declare payload args as `data:` fields in the input record (`inputs:`).',
+  authorizable: 'Renamed to `can_authorize:`.'
+};
 
 function hasWriteSurfaceLabel(labels: ReadonlySet<string> | readonly string[]): boolean {
   for (const label of labels) {
@@ -4140,11 +4140,22 @@ function collectToolCatalogDiagnostics(
         }
         const fieldLine = (fieldEntry.location as any)?.start?.line ?? entryLine;
         const fieldColumn = (fieldEntry.location as any)?.start?.column ?? entryColumn;
-        pushError(
-          `Tool '${toolName}' has unknown field '${fieldName}'`,
-          fieldLine,
-          fieldColumn
-        );
+        const replacement = LEGACY_TOOL_CATALOG_FIELD_REPLACEMENTS[fieldName];
+        if (replacement) {
+          pushError(
+            `Tool '${toolName}' uses removed field '${fieldName}'. ${replacement}`,
+            fieldLine,
+            fieldColumn
+          );
+          continue;
+        }
+        pushWarning({
+          code: 'tool-catalog-unknown-field',
+          message: `Tool '${toolName}' has unrecognized field '${fieldName}'. Unrecognized fields are preserved but not validated.`,
+          line: fieldLine,
+          column: fieldColumn,
+          suggestion: 'Unrecognized fields are preserved but not validated.'
+        });
       }
 
       const rawMlldValue = extractStaticValue(getObjectEntryValue(toolValue, 'mlld'));
@@ -4177,18 +4188,8 @@ function collectToolCatalogDiagnostics(
         pushError(`Tool '${toolName}' labels must be an array of strings`, entryLine, entryColumn);
       }
 
-      const canAuthorizeNode = getFirstObjectEntryValue(toolValue, 'can_authorize', 'authorizable');
+      const canAuthorizeNode = getObjectEntryValue(toolValue, 'can_authorize');
       const canAuthorizeValue = extractStaticValue(canAuthorizeNode);
-      if (getObjectEntryValue(toolValue, 'authorizable') !== undefined) {
-        const { line, column } = getObjectEntryLocation(toolValue, 'authorizable');
-        pushWarning({
-          code: 'legacy-authorizable-field',
-          message: `Tool '${toolName}' uses legacy field 'authorizable'; rename it to 'can_authorize'`,
-          line,
-          column,
-          suggestion: `Replace 'authorizable' with 'can_authorize' on tool '${toolName}'.`
-        });
-      }
       if (canAuthorizeValue !== undefined) {
         const roleEntries =
           canAuthorizeValue === false
@@ -4242,17 +4243,6 @@ function collectToolCatalogDiagnostics(
       const rawInputsValue = extractStaticValue(getObjectEntryValue(toolValue, 'inputs'));
       if (rawInputsValue === undefined) {
         continue;
-      }
-
-      const mixedShapeFields = INPUT_RECORD_MIXED_CATALOG_FIELDS.filter(
-        field => getObjectEntryValue(toolValue, field) !== undefined
-      );
-      if (mixedShapeFields.length > 0) {
-        pushError(
-          `Tool '${toolName}' inputs cannot be combined with ${mixedShapeFields.join(', ')}`,
-          entryLine,
-          entryColumn
-        );
       }
 
       if (typeof rawInputsValue !== 'string' || rawInputsValue.trim().length === 0) {

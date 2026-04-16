@@ -18,7 +18,7 @@
     },
     "kind": null,
     "semantics": null,
-    "custom_meta": null
+    "custom_field": null
   },
   "entries": {
     "mlld": "send_email",
@@ -39,7 +39,7 @@
     },
     "kind": null,
     "semantics": null,
-    "custom_meta": null
+    "custom_field": null
   }
 }
 {
@@ -54,7 +54,7 @@
     "can_authorize": false,
     "kind": "read",
     "semantics": "Search contacts.",
-    "custom_meta": {
+    "custom_field": {
       "x": 1
     }
   },
@@ -69,7 +69,7 @@
     "can_authorize": false,
     "kind": "read",
     "semantics": "Search contacts.",
-    "custom_meta": {
+    "custom_field": {
       "x": 1
     }
   }

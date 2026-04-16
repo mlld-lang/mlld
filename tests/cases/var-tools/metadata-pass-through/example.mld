@@ -38,7 +38,7 @@
       bind: keyed.bind,
       kind: keyed.kind ?? null,
       semantics: keyed.semantics ?? null,
-      custom_meta: keyed.custom_meta ?? null
+      custom_field: keyed.custom_field ?? null
     },
     entries: {
       mlld: entry.mlld.name,
@@ -51,7 +51,7 @@
       bind: entry.bind,
       kind: entry.kind ?? null,
       semantics: entry.semantics ?? null,
-      custom_meta: entry.custom_meta ?? null
+      custom_field: entry.custom_field ?? null
     }
   }, null, 2);
 }
@@ -75,7 +75,7 @@
     semantics: "Search contacts.",
     description: "Search contacts.",
     can_authorize: false,
-    custom_meta: { x: 1 }
+    custom_field: { x: 1 }
   }
 }
 
@@ -86,6 +86,6 @@
 /show @agentTools.search_contacts.semantics
 /show @agentTools.search_contacts.description
 /show @agentTools.search_contacts.inputs.name
-/show @agentTools.search_contacts.custom_meta.x
+/show @agentTools.search_contacts.custom_field.x
 /show @agentTools.send_email(@recipient, "hello")
 /show @agentTools.search_contacts("Ada")

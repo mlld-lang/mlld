@@ -21,7 +21,7 @@ describe('Import Edge Cases and Error Scenarios', () => {
       expect(result.exitCode).toBe(1);
     });
     
-    it('should allow same name in different namespaces', async () => {
+    it('should allow same name in different namespaces', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
       const result = await testImport(`
 /import "./module1.mld" as @m1
 /import "./module2.mld" as @m2
