@@ -11,6 +11,7 @@ import { createSimpleTextVariable } from '@core/types/variable';
 import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
+import { ENVIRONMENT_SERIALIZE_PLACEHOLDER } from '@interpreter/env/EnvironmentIdentity';
 import { executeCommandVariable, resolveCommandReference } from './command-execution';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 
@@ -231,6 +232,23 @@ describe('command-execution phase-0 characterization', () => {
     expect(capturedParams).toBeTruthy();
     expect(capturedParams?.input).toEqual({ count: 9 });
     expect(capturedParams?.extra).toBe('ARG-EXTRA');
+  });
+
+  it('routes structured pipeline input through serialize for @pretty', async () => {
+    const env = createEnv();
+    const prettyVar = env.getVariable('pretty');
+    expect(prettyVar?.internal?.isBuiltinTransformer).toBe(true);
+
+    const structuredInput = wrapStructured(
+      { env },
+      'object',
+      'NOT-THE-STRUCTURED-VALUE'
+    );
+
+    const result = await runCommand(prettyVar, [], env, 'NOT-THE-STRUCTURED-VALUE', structuredInput);
+
+    expect(asText(result)).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+    expect(asText(result)).not.toContain('NOT-THE-STRUCTURED-VALUE');
   });
 
   it('propagates policy output descriptors on code branch outputs', async () => {

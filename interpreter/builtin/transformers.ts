@@ -2,11 +2,14 @@ import JSON5 from 'json5';
 
 import type { MlldVariable } from '@core/types';
 import type { ExecutableDefinition } from '@core/types/executable';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 
 // Import existing utilities
+import { JSONFormatter } from '../core/json-formatter';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { normalizeOutput } from '../output/normalizer';
 import { jsonToXml } from '../utils/json-to-xml';
+import { isStructuredValue } from '../utils/structured-value';
 
 export interface TransformerDefinition {
   name: string;
@@ -112,6 +115,43 @@ function extractJsonFromLLMResponse(input: string): string | null {
   }
 
   return null;
+}
+
+function unwrapPrettyInput(input: unknown): unknown {
+  if (isStructuredValue(input) || isShelfSlotRefValue(input)) {
+    return input.data;
+  }
+
+  return input;
+}
+
+async function prettyPrintSerializedValue(input: unknown): Promise<string> {
+  const candidate = unwrapPrettyInput(input);
+
+  if (candidate === undefined) {
+    return '';
+  }
+
+  if (typeof candidate === 'string') {
+    try {
+      return JSONFormatter.stringify(JSON.parse(candidate), { pretty: true, indent: 2 });
+    } catch {
+      return candidate;
+    }
+  }
+
+  const { boundary } = await import('../utils/boundary');
+  const serialized = boundary.serialize(candidate);
+
+  if (typeof serialized === 'string') {
+    try {
+      return JSONFormatter.stringify(JSON.parse(serialized), { pretty: true, indent: 2 });
+    } catch {
+      return serialized;
+    }
+  }
+
+  return JSONFormatter.stringify(serialized, { pretty: true, indent: 2 });
 }
 
 /**
@@ -309,14 +349,7 @@ export const builtinTransformers: TransformerDefinition[] = [
     name: 'pretty',
     uppercase: 'PRETTY',
     description: 'Pretty-print JSON with indentation',
-    implementation: (input: string) => {
-      try {
-        const parsed = JSON.parse(input);
-        return JSON.stringify(parsed, null, 2);
-      } catch {
-        return input;
-      }
-    }
+    implementation: async (input: unknown) => prettyPrintSerializedValue(input)
   },
   {
     name: 'sort',

@@ -108,6 +108,32 @@ describe('Variable Resolution Strategy', () => {
       }
     });
 
+    it('keeps complex object ASTs deferred in field access context', async () => {
+      const complexVar = createObjectVariable('complex', {
+        type: 'object',
+        entries: [
+          {
+            type: 'pair',
+            key: 'safe',
+            value: { type: 'Literal', value: 'ok' }
+          },
+          {
+            type: 'pair',
+            key: 'boom',
+            value: {
+              type: 'VariableReference',
+              identifier: 'missing',
+              valueType: 'varIdentifier'
+            }
+          }
+        ]
+      } as any, true, mockSource);
+
+      const result = await resolveVariable(complexVar, mockEnv, ResolutionContext.FieldAccess);
+
+      expect(result).toBe(complexVar);
+    });
+
     it('should preserve already materialized complex Variables without re-evaluating', async () => {
       const structuredLeaf = wrapStructured({ ok: true }, 'object');
       const materializedVar = createObjectVariable(

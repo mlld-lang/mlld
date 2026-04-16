@@ -3448,7 +3448,11 @@ async function evaluateExecInvocationInternal(
         arg = await evaluateDataValue(arg as any, env);
       }
       const transformerName = (variable.name ?? commandName ?? '').toLowerCase();
-      if (transformerName === 'keep' || transformerName === 'keepstructured') {
+      if (
+        transformerName === 'keep'
+        || transformerName === 'keepstructured'
+        || transformerName === 'pretty'
+      ) {
         inputValue = arg as any;
       } else if (typeof arg === 'string') {
         inputValue = arg;
@@ -4362,7 +4366,7 @@ async function evaluateExecInvocationInternal(
         preDecision
       });
       postHookInputs = nextPostHookInputs;
-      bindExecParameterVariables({
+      await bindExecParameterVariables({
         params,
         evaluatedArgs,
         evaluatedArgStrings,

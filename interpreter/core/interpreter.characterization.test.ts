@@ -11,6 +11,10 @@ import {
   interpolate
 } from '@interpreter/core/interpreter';
 import { Environment } from '@interpreter/env/Environment';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
@@ -84,6 +88,31 @@ describe('interpreter phase-0 characterization', () => {
     expect(typeof cleanNamespaceForDisplay).toBe('function');
     expect(cleanNamespaceForDisplay.length).toBe(1);
     expect(await interpolate('plain-text' as any, env)).toBe('plain-text');
+  });
+
+  it('interpolates tagged environment values as opaque placeholders', async () => {
+    const { env } = createEnv();
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    env.setVariable(
+      'payload',
+      createObjectVariable(
+        'payload',
+        { env: envLike },
+        false,
+        OBJECT_SOURCE
+      )
+    );
+
+    const rendered = await interpolate([variableReferenceNode('payload')], env);
+    expect(rendered).toBe(JSON.stringify({ env: ENVIRONMENT_SERIALIZE_PLACEHOLDER }));
   });
 
   it('captures array evaluation vs single-node evaluation behavior', async () => {

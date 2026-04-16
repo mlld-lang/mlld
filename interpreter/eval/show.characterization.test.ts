@@ -3,6 +3,10 @@ import type { DirectiveNode } from '@core/types';
 import { parseSync } from '@grammar/parser';
 import { createObjectVariable, createSimpleTextVariable } from '@core/types/variable';
 import { Environment } from '../env/Environment';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '../env/EnvironmentIdentity';
 import { evaluate } from '../core/interpreter';
 import { evaluateShow } from './show';
 import { asText, isStructuredValue } from '../utils/structured-value';
@@ -161,6 +165,32 @@ describe('evaluateShow (characterization)', () => {
     expect(displayed).toContain('"exports"');
     expect(displayed).toContain('"answer": 42');
     expect(displayed).toContain('<function(name)>');
+  });
+
+  it('shows tagged environment values without walking their internals', async () => {
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    env.setVariable(
+      'payload',
+      createObjectVariable(
+        'payload',
+        { env: envLike },
+        false,
+        SOURCE_INFO
+      )
+    );
+
+    const [showDirective] = parseDirectives('/show @payload');
+    const result = await evaluateShow(toShowDirective(showDirective), env);
+
+    expect(asText(result.value)).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
   });
 
   it('shows record variables as readable record definitions', async () => {

@@ -69,6 +69,31 @@ function isAstLikeComplexValue(value: unknown): boolean {
   );
 }
 
+function canDeferComplexFieldAccess(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    record.type === 'object' &&
+    (Array.isArray((record as { entries?: unknown[] }).entries)
+      || isPlainObjectRecord((record as { properties?: unknown }).properties))
+  ) {
+    return true;
+  }
+
+  if (
+    record.type === 'array' &&
+    (Array.isArray((record as { items?: unknown[] }).items)
+      || Array.isArray((record as { elements?: unknown[] }).elements))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 async function shouldEvaluateComplexStructuredValue(value: unknown): Promise<boolean> {
   const evaluatorModule = await import('@interpreter/eval/data-value-evaluator');
   const hasUnevaluatedDirectives =
@@ -202,6 +227,13 @@ export async function resolveVariable(
     if (isStructured(variable)) {
       const complexFlag = (variable as any).isComplex;
       if (complexFlag) {
+        if (
+          context === ResolutionContext.FieldAccess &&
+          canDeferComplexFieldAccess(variable.value)
+        ) {
+          return variable;
+        }
+
         if (!(await shouldEvaluateComplexStructuredValue(variable.value))) {
           return variable;
         }

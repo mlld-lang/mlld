@@ -74,7 +74,51 @@ function hasDescriptorSignals(descriptor: SecurityDescriptor | undefined): boole
   );
 }
 
-export function bindExecParameterVariables(options: {
+function stringifyParameterBindingValue(
+  value: unknown,
+  fallback: string | undefined
+): string {
+  if (value === undefined) {
+    return fallback ?? 'undefined';
+  }
+  if (isStructuredValue(value)) {
+    return asText(value);
+  }
+  if (typeof value === 'object' && value !== null) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+async function shouldMaterializeStructuredParameterValue(
+  variable: Variable | undefined
+): Promise<boolean> {
+  if (!variable) {
+    return false;
+  }
+  if (variable.internal?.isToolsCollection === true) {
+    return false;
+  }
+  if (!(variable.type === 'object' || variable.type === 'array')) {
+    return false;
+  }
+  if (!(variable as any).isComplex) {
+    return false;
+  }
+  const rawValue = variable.value;
+  if (!rawValue || typeof rawValue !== 'object') {
+    return false;
+  }
+
+  const { hasUnevaluatedDirectives } = await import('@interpreter/eval/data-value-evaluator');
+  return hasUnevaluatedDirectives(rawValue as any);
+}
+
+export async function bindExecParameterVariables(options: {
   params: string[];
   evaluatedArgs: unknown[];
   evaluatedArgStrings: string[];
@@ -84,7 +128,7 @@ export function bindExecParameterVariables(options: {
   execEnv: Environment;
   transformedGuardSet?: ReadonlySet<Variable> | null;
   createParameterMetadata: ParameterMetadataFactory;
-}): void {
+}): Promise<void> {
   const {
     params,
     evaluatedArgs,
@@ -97,10 +141,20 @@ export function bindExecParameterVariables(options: {
     createParameterMetadata
   } = options;
 
+  const resolvedBindings: Array<{
+    paramName: string;
+    argValue: unknown;
+    argStringValue: string | undefined;
+    originalVariable?: Variable;
+    guardCandidate?: Variable;
+    allowOriginalReuse: boolean;
+    preferGuardReplacement: boolean;
+  }> = [];
+
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
-    const argValue = evaluatedArgs[i];
-    const argStringValue = evaluatedArgStrings[i];
+    let argValue = evaluatedArgs[i];
+    let argStringValue = evaluatedArgStrings[i];
     const originalVar = originalVariables[i];
     const guardCandidate = guardVariableCandidates[i];
     const resolvedOriginalVar = originalVar ?? (isVariable(argValue) ? argValue : undefined);
@@ -109,10 +163,42 @@ export function bindExecParameterVariables(options: {
       typeof definition.language === 'string' &&
       (definition.language === 'bash' || definition.language === 'sh');
     const preferGuardReplacement = transformedGuardSet?.has(guardCandidate as Variable) ?? false;
-    const allowOriginalReuse =
+    let allowOriginalReuse =
       !preferGuardReplacement && Boolean(resolvedOriginalVar) && !isShellCode && definition.type !== 'command';
 
-    if (guardCandidate && (!resolvedOriginalVar || !allowOriginalReuse || preferGuardReplacement)) {
+    if (
+      resolvedOriginalVar &&
+      await shouldMaterializeStructuredParameterValue(resolvedOriginalVar)
+    ) {
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+      argValue = await extractVariableValue(resolvedOriginalVar, execEnv);
+      argStringValue = stringifyParameterBindingValue(argValue, argStringValue);
+      allowOriginalReuse = false;
+    }
+
+    resolvedBindings.push({
+      paramName,
+      argValue,
+      argStringValue,
+      originalVariable: resolvedOriginalVar,
+      guardCandidate,
+      allowOriginalReuse,
+      preferGuardReplacement
+    });
+  }
+
+  for (const binding of resolvedBindings) {
+    const {
+      paramName,
+      argValue,
+      argStringValue,
+      originalVariable,
+      guardCandidate,
+      allowOriginalReuse,
+      preferGuardReplacement
+    } = binding;
+
+    if (guardCandidate && (!originalVariable || !allowOriginalReuse || preferGuardReplacement)) {
       const candidateClone = cloneGuardCandidateForParameter(
         paramName,
         guardCandidate,
@@ -126,9 +212,9 @@ export function bindExecParameterVariables(options: {
     if (argValue !== undefined) {
       const paramVar = createParameterVariable({
         name: paramName,
-        value: evaluatedArgs[i],
+        value: argValue,
         stringValue: argStringValue,
-        originalVariable: resolvedOriginalVar,
+        originalVariable,
         allowOriginalReuse,
         metadataFactory: createParameterMetadata,
         origin: 'exec-param'

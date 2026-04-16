@@ -7,11 +7,7 @@ import {
   TOOL_COLLECTION_METADATA_EXPORT_KEY
 } from '@core/types/tools';
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
-import {
-  getCapturedModuleEnv,
-  sealCapturedModuleEnv,
-  stashCapturedModuleEnv
-} from './executable/CapturedModuleEnvKeychain';
+import { getCapturedModuleEnv } from './executable/CapturedModuleEnvKeychain';
 import {
   type ExecutableVariable,
   type RecordVariable,
@@ -22,6 +18,7 @@ import {
 } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { serializeShelfDefinition } from '@interpreter/shelf/runtime';
+import { serializeModuleBoundaryValue } from '@interpreter/utils/module-boundary-serialization';
 
 type SerializedMetadata = ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
 
@@ -275,16 +272,21 @@ export class ModuleExportSerializer {
       if (!execName || Object.prototype.hasOwnProperty.call(serializedExecutables, execName)) {
         continue;
       }
-      const resolvedExecutable = this.objectResolver.resolveObjectReferences(
-        `@${execName}`,
-        context.childVars,
-        {
-          resolveStrings: true,
-          resolveVariable: name => context.childEnv?.getVariable(name),
-          serializingEnvs: context.serializingEnvs,
-          serializedModuleEnvCache: context.serializedModuleEnvCache
-        }
-      );
+      const referencedVariable =
+        context.childVars.get(execName)
+        ?? context.childEnv?.getVariable(execName);
+      const resolvedExecutable = referencedVariable
+        ? this.serializeWithModuleBoundaryContext(referencedVariable, context)
+        : this.objectResolver.resolveObjectReferences(
+            `@${execName}`,
+            context.childVars,
+            {
+              resolveStrings: true,
+              resolveVariable: name => context.childEnv?.getVariable(name),
+              serializingEnvs: context.serializingEnvs,
+              serializedModuleEnvCache: context.serializedModuleEnvCache
+            }
+          );
       if (
         resolvedExecutable
         && typeof resolvedExecutable === 'object'
@@ -303,64 +305,56 @@ export class ModuleExportSerializer {
     execVar: ExecutableVariable,
     context: ModuleExportSerializationContext
   ): Record<string, unknown> {
-    const isImported = Boolean(execVar.mx?.isImported);
-    let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
-    const existingCapturedEnv = getCapturedModuleEnv(execVar.internal);
+    return this.serializeWithModuleBoundaryContext(execVar, context) as Record<string, unknown>;
+  }
 
-    if (serializedInternal.capturedShadowEnvs) {
-      serializedInternal = {
-        ...serializedInternal,
-        capturedShadowEnvs: context.serializeShadowEnvs(serializedInternal.capturedShadowEnvs)
-      };
-    }
+  private serializeWithModuleBoundaryContext(
+    value: unknown,
+    context: ModuleExportSerializationContext
+  ): unknown {
+    return serializeModuleBoundaryValue(value, {
+      resolveStrings: context.options?.resolveStrings,
+      resolveVariable: name => context.childEnv?.getVariable(name),
+      serializeShadowEnvs: context.serializeShadowEnvs,
+      serializeModuleEnv: (moduleEnv, seen) => context.serializeModuleEnv(moduleEnv, seen),
+      resolveExecutableCapturedModuleEnv: (execVar, defaultCapturedEnv) =>
+        this.resolveExecutableCapturedModuleEnv(execVar, defaultCapturedEnv, context),
+      serializingEnvs: context.serializingEnvs,
+      serializedModuleEnvCache: context.serializedModuleEnvCache
+    });
+  }
+
+  private resolveExecutableCapturedModuleEnv(
+    execVar: ExecutableVariable,
+    defaultCapturedEnv: unknown,
+    context: ModuleExportSerializationContext
+  ): unknown {
+    const isImported = Boolean(execVar.mx?.isImported);
+    const existingCapturedEnv = defaultCapturedEnv;
 
     if (context.shouldSerializeModuleEnv) {
-      const capturedEnv = !isImported
+      return !isImported
         ? context.getModuleEnvSnapshot()
         : existingCapturedEnv !== undefined
           ? existingCapturedEnv
           : context.getModuleEnvSnapshot();
-      if (capturedEnv instanceof Map) {
-        sealCapturedModuleEnv(
-          serializedInternal,
-          context.serializeModuleEnv(capturedEnv, context.serializingEnvs)
-        );
-      } else {
-        sealCapturedModuleEnv(serializedInternal, capturedEnv);
-      }
-    } else {
-      const existingCapture = existingCapturedEnv;
-      if (!isImported) {
-        sealCapturedModuleEnv(serializedInternal, undefined);
-      } else if (existingCapture instanceof Map) {
-        if (
-          (context.currentSerializationTarget && existingCapture === context.currentSerializationTarget) ||
-          (context.serializingEnvs && context.serializingEnvs.has(existingCapture))
-        ) {
-          sealCapturedModuleEnv(serializedInternal, undefined);
-        } else {
-          sealCapturedModuleEnv(
-            serializedInternal,
-            context.serializeModuleEnv(existingCapture, context.serializingEnvs)
-          );
-        }
-      } else if (existingCapture !== undefined) {
-        sealCapturedModuleEnv(serializedInternal, existingCapture);
-      }
     }
 
-    const result = {
-      __executable: true,
-      name: execVar.name,
-      value: execVar.value,
-      paramNames: execVar.paramNames,
-      paramTypes: execVar.paramTypes,
-      description: execVar.description,
-      executableDef: execVar.internal?.executableDef,
-      internal: serializedInternal
-    };
-    stashCapturedModuleEnv(result, getCapturedModuleEnv(serializedInternal));
-    return result;
+    if (!isImported) {
+      return undefined;
+    }
+
+    if (existingCapturedEnv instanceof Map) {
+      if (
+        (context.currentSerializationTarget && existingCapturedEnv === context.currentSerializationTarget) ||
+        (context.serializingEnvs && context.serializingEnvs.has(existingCapturedEnv))
+      ) {
+        return undefined;
+      }
+      return existingCapturedEnv;
+    }
+
+    return existingCapturedEnv;
   }
 
   private getEnvironmentDescriptor(childEnv?: Environment): SecurityDescriptor | undefined {

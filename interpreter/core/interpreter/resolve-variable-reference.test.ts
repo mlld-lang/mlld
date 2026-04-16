@@ -67,6 +67,46 @@ describe('interpreter variable reference resolver', () => {
     expect(result.value).toBe('Ada');
   });
 
+  it('does not evaluate unrelated complex object siblings during field access', async () => {
+    const { env } = createEnv();
+    env.setVariable(
+      'profile',
+      createObjectVariable(
+        'profile',
+        {
+          type: 'object',
+          entries: [
+            {
+              type: 'pair',
+              key: 'user',
+              value: { type: 'Literal', value: 'Ada' }
+            },
+            {
+              type: 'pair',
+              key: 'boom',
+              value: {
+                type: 'VariableReference',
+                identifier: 'missingVar',
+                valueType: 'varIdentifier'
+              }
+            }
+          ]
+        } as any,
+        true,
+        OBJECT_SOURCE
+      )
+    );
+
+    const result = await evaluate(
+      variableReferenceNode('profile', {
+        fields: [{ type: 'field', value: 'user' }]
+      }),
+      env
+    );
+
+    expect(result.value).toBe('Ada');
+  });
+
   it('returns null for missing fields in non-condition contexts', async () => {
     const { env } = createEnv();
     env.setVariable(

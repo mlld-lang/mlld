@@ -19,6 +19,10 @@ import {
   materializeDisplayValue,
   type MaterializedDisplayValue
 } from './display-materialization';
+import {
+  serializeModuleBoundaryValue,
+  type BoundarySerializeOptions
+} from './module-boundary-serialization';
 import { classifyShellValue } from './shell-value';
 import { asText, isStructuredValue } from './structured-value';
 import { extractVariableValue, isVariable } from './variable-resolution';
@@ -226,6 +230,30 @@ function containsStructuredChildren(value: unknown, seen: WeakSet<object> = new 
   return Object.values(value).some(entry => containsStructuredChildren(entry, seen));
 }
 
+function containsVariableWrappers(value: unknown, seen: WeakSet<object> = new WeakSet()): boolean {
+  if (isVariable(value)) {
+    return true;
+  }
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (isStructuredValue(value) || isShelfSlotRefValue(value) || isLoadContentResult(value)) {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.some(entry => containsVariableWrappers(entry, seen));
+  }
+
+  return Object.values(value as Record<string, unknown>).some(entry =>
+    containsVariableWrappers(entry, seen)
+  );
+}
+
 function collectIdentityMarkers(value: unknown): {
   toolCollection?: unknown;
   capturedModuleEnv: boolean;
@@ -291,6 +319,10 @@ function assertBoundaryContract(
 
   if (profile === 'interpolate' && typeof result !== 'string') {
     throw new BoundaryViolation(profile, 'wrong_field_path', options.siteHint, result);
+  }
+
+  if (profile === 'serialize' && containsVariableWrappers(result)) {
+    throw new BoundaryViolation(profile, 'wrapper_survived_serialize', options.siteHint, result);
   }
 }
 
@@ -506,11 +538,26 @@ export function interpolate(
   return result;
 }
 
+export function serialize<T = unknown>(
+  value: unknown,
+  options?: BoundarySerializeOptions
+): T {
+  const serializeInput =
+    isVariable(value)
+      && (value.type === 'object' || value.type === 'array' || value.type === 'structured')
+      ? value.value
+      : value;
+  const result = serializeModuleBoundaryValue<T>(serializeInput, options);
+  assertBoundaryContract('serialize', result);
+  return result;
+}
+
 export const boundary = {
   plainData,
   config,
   field,
   identity,
   display,
-  interpolate
+  interpolate,
+  serialize
 };

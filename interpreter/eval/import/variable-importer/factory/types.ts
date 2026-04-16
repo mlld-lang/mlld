@@ -6,6 +6,8 @@ import type {
   VariableSource,
   VariableTypeDiscriminator
 } from '@core/types/variable';
+import { VariableMetadataUtils } from '@core/types/variable';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface ImportVariableMetadataContext {
   source: VariableSource;
@@ -42,4 +44,20 @@ export interface ImportValueComplexityHelpers {
 
 export interface ImportValueTypeInference {
   inferVariableType: (value: any) => VariableTypeDiscriminator;
+}
+
+export interface ImportNestedVariableFactoryOptions {
+  securityLabels?: DataLabel[];
+  serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined;
+  env?: Environment;
+}
+
+export interface ImportNestedVariableFactory {
+  createVariableFromValue: (
+    name: string,
+    value: any,
+    importPath: string,
+    originalName?: string,
+    options?: ImportNestedVariableFactoryOptions
+  ) => Variable;
 }

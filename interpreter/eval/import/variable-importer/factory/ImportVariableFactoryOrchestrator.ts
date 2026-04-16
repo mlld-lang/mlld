@@ -45,7 +45,10 @@ export class ImportVariableFactoryOrchestrator {
     this.executableStrategy = new ExecutableImportStrategy(this.dependencies);
     this.templateStrategy = new TemplateImportStrategy();
     this.arrayStrategy = new ArrayImportStrategy(this.dependencies);
-    this.objectStrategy = new ObjectImportStrategy(this.dependencies);
+    this.objectStrategy = new ObjectImportStrategy(this.dependencies, {
+      createVariableFromValue: (name, value, importPath, originalName, options) =>
+        this.createVariableFromValue(name, value, importPath, originalName, options)
+    });
     this.primitiveStrategy = new PrimitiveImportStrategy();
   }
 

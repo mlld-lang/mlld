@@ -6,6 +6,7 @@ import {
   isTemplateValue,
   isPrimitiveValue
 } from '@core/types/var';
+import { isEnvironment } from '@interpreter/env/EnvironmentIdentity';
 import { DataValueEvaluator } from './data-values/DataValueEvaluator';
 import { logger } from '@core/utils/logger';
 
@@ -124,6 +125,10 @@ export function isFullyEvaluated(value: DataValue): boolean {
  */
 export function hasUnevaluatedDirectives(value: DataValue): boolean {
   if (isPrimitiveValue(value)) {
+    return false;
+  }
+
+  if (isEnvironment(value)) {
     return false;
   }
 

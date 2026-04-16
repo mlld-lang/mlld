@@ -389,7 +389,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             stringValue = value.text;
           }
         } else if (typeof value === 'object') {
-          stringValue = JSON.stringify(value);
+          const { JSONFormatter } = await import('../core/json-formatter');
+          stringValue = JSONFormatter.stringify(value);
           if (process.env.MLLD_DEBUG === 'true') {
           }
         } else {
@@ -718,7 +719,8 @@ export function createInterpolator(getDeps: () => InterpolationDependencies): In
             } else if (isLoadContentResult(value)) {
               stringValue = asText(value);
             } else {
-              stringValue = JSON.stringify(value);
+              const { JSONFormatter } = await import('../core/json-formatter');
+              stringValue = JSONFormatter.stringify(value);
             }
           }
         } else if (Array.isArray(value)) {
@@ -1145,5 +1147,9 @@ export async function processFileFields(
   if (isStructuredValue(result)) {
     return asText(result);
   }
-  return typeof result === 'string' ? result : JSON.stringify(result);
+  if (typeof result === 'string') {
+    return result;
+  }
+  const { JSONFormatter } = await import('../core/json-formatter');
+  return JSONFormatter.stringify(result);
 }

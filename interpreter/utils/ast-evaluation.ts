@@ -5,6 +5,10 @@
 import type { MlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  isEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { isStructuredValue } from './structured-value';
 import { getStaticObjectKey } from './object-compat';
 
@@ -75,6 +79,10 @@ export function createASTAwareJSONReplacer() {
 
     if (val instanceof Set) {
       return Array.from(val.values());
+    }
+
+    if (isEnvironment(val)) {
+      return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
     }
 
     if (isStructuredValue(val)) {

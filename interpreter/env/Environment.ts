@@ -88,6 +88,7 @@ import { PythonShadowEnvironment } from './PythonShadowEnvironment';
 import { CacheManager } from './CacheManager';
 import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
+import { markEnvironment } from './EnvironmentIdentity';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import {
   CommandExecutorFactory,
@@ -467,6 +468,7 @@ export class Environment
     parent?: Environment,
     effectHandler?: EffectHandler
   ) {
+    markEnvironment(this);
     const normalizedPathContext = normalizeEnvironmentPathContext(basePathOrContext);
     this.basePath = normalizedPathContext.basePath;
     this.pathContext = normalizedPathContext.pathContext;

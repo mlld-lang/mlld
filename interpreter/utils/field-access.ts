@@ -327,22 +327,26 @@ async function resolveDeferredObjectFieldValue(
     return value;
   }
 
+  if (isVariable(value)) {
+    return value;
+  }
+
   const node = value as Record<string, unknown>;
   const refNode =
     node.type === 'VariableReferenceWithTail' && node.variable && typeof node.variable === 'object'
       ? node.variable as Record<string, unknown>
       : node;
 
+  const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+
   if (refNode.type !== 'VariableReference' || typeof refNode.identifier !== 'string') {
-    return value;
+    return evaluateDataValue(value as DataObjectValue, env);
   }
 
   const variable = env.getVariable(refNode.identifier);
   if (!variable) {
     throw new Error(`Variable not found: ${refNode.identifier}`);
   }
-
-  const { evaluateDataValue } = await import('../eval/data-value-evaluator');
   const hasFields = Array.isArray(refNode.fields) && refNode.fields.length > 0;
 
   if (!hasFields) {

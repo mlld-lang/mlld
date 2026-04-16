@@ -9,10 +9,18 @@ import {
   getCapturedModuleEnv,
   sealCapturedModuleEnv
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
-import type { ImportValueComplexityHelpers, ImportVariableFactoryRequest } from './types';
+import { isVariable } from '@interpreter/utils/variable-resolution';
+import type {
+  ImportNestedVariableFactory,
+  ImportValueComplexityHelpers,
+  ImportVariableFactoryRequest
+} from './types';
 
 export class ObjectImportStrategy {
-  constructor(private readonly complexityHelpers: ImportValueComplexityHelpers) {}
+  constructor(
+    private readonly complexityHelpers: ImportValueComplexityHelpers,
+    private readonly nestedVariableFactory: ImportNestedVariableFactory
+  ) {}
 
   create(
     request: ImportVariableFactoryRequest,
@@ -25,7 +33,8 @@ export class ObjectImportStrategy {
     const normalizedObject = this.complexityHelpers.unwrapArraySnapshots(request.value, request.importPath);
     const toolCollectionCapturedModuleEnv = this.normalizeToolCollectionCapturedModuleEnv(
       takeSerializedToolCollectionCapturedModuleEnv(normalizedObject)
-        ?? getCapturedModuleEnv(request.value)
+        ?? getCapturedModuleEnv(request.value),
+      request.importPath
     );
     const toolCollectionMetadata =
       takeSerializedToolCollectionMetadata(normalizedObject)
@@ -75,13 +84,39 @@ export class ObjectImportStrategy {
     return variable;
   }
 
-  private normalizeToolCollectionCapturedModuleEnv(value: unknown): unknown {
+  private normalizeToolCollectionCapturedModuleEnv(
+    value: unknown,
+    importPath: string
+  ): unknown {
     if (!value || typeof value !== 'object' || value instanceof Map) {
       return value;
     }
 
+    const rawCapturedEnv = value as Record<string, unknown>;
+    const metadataMap =
+      rawCapturedEnv.__metadata__
+      && typeof rawCapturedEnv.__metadata__ === 'object'
+      && !Array.isArray(rawCapturedEnv.__metadata__)
+        ? rawCapturedEnv.__metadata__ as Record<string, ReturnType<typeof import('@core/types/variable').VariableMetadataUtils.serializeSecurityMetadata> | undefined>
+        : {};
+
     return new Map(
-      Object.entries(value as Record<string, unknown>).filter(([name]) => name !== '__metadata__')
+      Object.entries(rawCapturedEnv)
+        .filter(([name]) => name !== '__metadata__')
+        .map(([name, entry]) => [
+          name,
+          isVariable(entry)
+            ? entry
+            : this.nestedVariableFactory.createVariableFromValue(
+                name,
+                entry,
+                importPath,
+                name,
+                {
+                  serializedMetadata: metadataMap[name]
+                }
+              )
+        ])
     );
   }
 }

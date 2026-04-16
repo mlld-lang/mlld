@@ -192,7 +192,15 @@ Use the boundary helpers by contract, not by convenience:
 - `plainData`: explicit recursive materialization. Use when the value is already resolved and the boundary intentionally wants plain arrays/objects/primitives.
 - `display`: final output rendering. Use for document/output/show-style text emission after the read/materialization step is done.
 - `interpolate`: template and shell string boundaries. Use when escaping rules are part of the contract.
-- `serialize`: module/import/export vocabulary only. This remains a separate boundary family; do not treat it as a generic unwrap path.
+- `serialize`: module/import/export boundary helper. Use for module-boundary export/import serialization; do not treat it as a generic unwrap path or a catch-all for unrelated serializers.
+
+The generated function MCP bridge is not a `serialize` surface. It is an identity-preserving transport of live executables/tool collections, so bridge setup and bridge-local cloning stay in the `identity` family.
+
+### Debugging Heuristics
+
+- Imported executable parameters are not a plain-data boundary by default. A complex object/array argument may still be caller-owned AST or a wrapper-backed value when it reaches the callee.
+- If a bug appears only through an imported helper or only after forwarding an object argument through another exe, inspect parameter rebinding before blaming display, `@pretty`, or generic serialization.
+- When a callee needs detached plain data, materialize once at the boundary (`boundary.config`, `boundary.plainData`, or an intentional object spread). Do not rely on downstream field access or stringification to perform that separation implicitly.
 
 ### Where Values Flow
 

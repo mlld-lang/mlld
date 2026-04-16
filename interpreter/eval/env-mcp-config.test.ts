@@ -1224,6 +1224,57 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported string-ref tool collections across the llm bridge', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/tools.mld', [
+      '/exe exfil:send, tool:w @send_email(recipient, subject) = `sent:@recipient:@subject`',
+      '  with { controlArgs: ["recipient"] }',
+      '/var tools @writeTools = {',
+      '  send_email: {',
+      '    mlld: "send_email",',
+      '    expose: ["recipient", "subject"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/export { @writeTools }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @writeTools } from "/tools.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" send_email '{"recipient":"approved@example.com","subject":"hi"}' }`,
+      '/var @taskPolicy = {',
+      '  capabilities: { allow: ["cmd:node:*"] },',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_email: {',
+      '        args: {',
+      '          recipient: { eq: "approved@example.com", attestations: ["known"] }',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/show @agent("Send the email", { tools: @writeTools }) with { policy: @taskPolicy }'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toContain('sent:approved@example.com:hi');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves ambient @mx.llm bridge context through imported llm wrappers that omit inner config.tools', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/provider.mld', [

@@ -13,7 +13,10 @@ import {
   isExecutableVariable,
   isRecordVariable
 } from '@core/types/variable';
+import { attachToolCollectionMetadata, type ToolCollection } from '@core/types/tools';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { resolveToolCollectionExecutable } from '@interpreter/eval/exec/tool-metadata';
+import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { VariableMetadataUtils } from '@core/types/variable';
 import { getCapturedModuleEnv } from './variable-importer/executable/CapturedModuleEnvKeychain';
 
@@ -231,6 +234,41 @@ describe('VariableImporter characterization', () => {
     expect(restoredCapturedEnv.get('dep')?.value).toBe('ok');
   });
 
+  it('includes executable mx metadata on direct module exports', () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const childVars = new Map<string, any>([
+      [
+        'sendEmail',
+        createExecutableVariable('sendEmail', 'command', 'echo send', ['recipient'], 'sh', SOURCE, {
+          mx: {
+            labels: ['exfil:send', 'tool:w'],
+            taint: ['exfil:send', 'tool:w'],
+            attestations: ['known']
+          },
+          internal: {
+            executableDef: {
+              type: 'command',
+              template: 'echo send',
+              language: 'sh',
+              paramNames: ['recipient'],
+              controlArgs: ['recipient']
+            } as any
+          }
+        })
+      ]
+    ]);
+
+    const { moduleObject } = importer.processModuleExports(childVars, {}, false, null);
+    const exportedExecutable = moduleObject.sendEmail as {
+      __executable?: boolean;
+      mx?: { labels?: string[]; attestations?: string[] };
+    };
+
+    expect(exportedExecutable.__executable).toBe(true);
+    expect(exportedExecutable.mx?.labels).toEqual(expect.arrayContaining(['exfil:send', 'tool:w']));
+    expect(exportedExecutable.mx?.attestations).toEqual(expect.arrayContaining(['known']));
+  });
+
   it('shares one serialized captured env across direct executable exports from the same module', () => {
     const importer = new VariableImporter(new ObjectReferenceResolver());
     const childVars = new Map<string, any>([
@@ -249,6 +287,97 @@ describe('VariableImporter characterization', () => {
     expect(env1).toBe(env2);
     expect(env1).toBe(env3);
     expect((env1 as Record<string, unknown>).dep).toBe('ok');
+  });
+
+  it('rehydrates imported tool collection captured env entries as executable variables for string refs', async () => {
+    const importer = new VariableImporter(new ObjectReferenceResolver());
+    const targetEnv = createEnv();
+    const childEnv = targetEnv.createChild('/project/tools.mld');
+    childEnv.setCurrentFilePath('/project/tools.mld');
+
+    const sendEmail = createExecutableVariable(
+      'sendEmail',
+      'command',
+      'echo send',
+      ['recipient', 'subject'],
+      'sh',
+      SOURCE,
+      {
+        internal: {
+          executableDef: {
+            type: 'command',
+            template: 'echo send',
+            language: 'sh',
+            paramNames: ['recipient', 'subject'],
+            controlArgs: ['recipient']
+          } as any
+        }
+      }
+    );
+    childEnv.setVariable('sendEmail', sendEmail);
+
+    const writeTools = normalizeToolCollection(
+      {
+        send_email: {
+          mlld: 'sendEmail',
+          expose: ['recipient', 'subject'],
+          controlArgs: ['recipient']
+        }
+      },
+      childEnv
+    );
+    attachToolCollectionMetadata(writeTools, {
+      auth: {
+        send_email: {
+          params: ['recipient', 'subject'],
+          controlArgs: ['recipient'],
+          hasControlArgsMetadata: true,
+          hasUpdateArgsMetadata: false
+        }
+      }
+    });
+
+    const childVars = new Map<string, any>([
+      ['sendEmail', sendEmail],
+      [
+        'writeTools',
+        createObjectVariable('writeTools', writeTools, true, SOURCE, {
+          internal: {
+            isToolsCollection: true,
+            toolCollection: writeTools
+          }
+        })
+      ]
+    ]);
+
+    const exportsResult = importer.processModuleExports(childVars, {}, false, null, childEnv);
+    const directive = createDirective('importSelected', {
+      imports: [{ identifier: 'writeTools', location: LOCATION }]
+    });
+
+    await importer.importVariables(
+      {
+        moduleObject: exportsResult.moduleObject,
+        frontmatter: null,
+        childEnvironment: childEnv,
+        guardDefinitions: []
+      },
+      directive,
+      targetEnv
+    );
+
+    const importedCollectionVar = targetEnv.getVariable('writeTools');
+    const importedCollection = importedCollectionVar?.value as ToolCollection;
+    const resolvedExecutable = resolveToolCollectionExecutable(
+      targetEnv,
+      importedCollection,
+      importedCollection.send_email,
+      importedCollection.send_email.mlld
+    );
+
+    expect(importedCollectionVar?.internal?.isToolsCollection).toBe(true);
+    expect(isExecutableVariable(resolvedExecutable)).toBe(true);
+    expect(resolvedExecutable?.name).toBe('sendEmail');
   });
 
   it('rehydrates top-level record exports as record variables and registers their definitions', () => {

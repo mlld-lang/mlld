@@ -9,6 +9,10 @@ import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-
 import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import { isLoadContentResult } from '@core/types/load-content';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  isEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { getExpressionProvenance } from './expression-provenance';
 import type { RecordProjectionMetadata, RecordSchemaMetadata } from '@core/types/record';
 import type { FactSourceHandle } from '@core/types/handle';
@@ -203,6 +207,9 @@ function stringifyTextValue(value: unknown): string {
 }
 
 function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
+  if (isEnvironment(val)) {
+    return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
+  }
   if (isStructuredValue(val)) {
     return val.data;
   }
@@ -802,6 +809,10 @@ function extractDescriptorInternal(
     getExpressionProvenance(value),
     options.normalize
   );
+
+  if (isEnvironment(value)) {
+    return provenanceDescriptor;
+  }
 
   if (isShelfSlotRefValue(value)) {
     const currentDescriptor = extractDescriptorInternal(value.current, options, seen);

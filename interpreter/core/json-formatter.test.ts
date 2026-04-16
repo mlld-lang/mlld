@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { formatForDisplay } from '@interpreter/utils/display-formatter';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { wrapStructured } from '@interpreter/utils/structured-value';
 import { JSONFormatter } from '@interpreter/core/json-formatter';
 
@@ -73,5 +77,19 @@ describe('formatForDisplay', () => {
 
     const rendered = JSONFormatter.stringify(value, { pretty: false });
     expect(rendered).toBe(JSON.stringify({ message: 'Hello @name!' }));
+  });
+
+  it('treats tagged environment values as opaque during JSON formatting', () => {
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    const rendered = JSONFormatter.stringify({ env: envLike }, { pretty: false });
+    expect(rendered).toBe(JSON.stringify({ env: ENVIRONMENT_SERIALIZE_PLACEHOLDER }));
   });
 });

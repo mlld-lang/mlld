@@ -127,6 +127,49 @@ export { @ns }`
       expect(result.success).toBe(true);
       expect(result.exitCode).toBe(0);
     });
+
+    it('materializes complex object args before imported passthrough rebinding', { timeout: IMPORT_TEST_TIMEOUT }, async () => {
+      const result = await testImport(`
+/import { @tools } from "./provider.mld"
+/import { @toolCatalogObject } from "./helper.mld"
+/var @localTools = {
+  create_note: @tools.create_note
+}
+/show @toolCatalogObject(@localTools).create_note.description`, {
+        files: {
+          'provider.mld': `
+/record @create_note_inputs = {
+  facts: [],
+  data: [content: string],
+  validate: "strict"
+}
+
+/exe @create_note(content) = [
+  => { ok: true, content: @content }
+]
+
+/var @tools = {
+  create_note: {
+    mlld: @create_note,
+    inputs: @create_note_inputs,
+    labels: ["execute:w", "tool:w", "file:w"],
+    can_authorize: "role:planner",
+    description: "Create a brand-new note with freeform content."
+  }
+}
+`,
+          'helper.mld': `
+/exe @toolCatalogObject(tools) = [
+  => @tools
+]
+`
+        },
+        expectedOutput: 'Create a brand-new note with freeform content.'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+    });
     
     it.skip('should handle aggregate re-exports', async () => {
       // TODO: Implement aggregate re-export functionality (https://github.com/mlld-lang/modules/issues/7)

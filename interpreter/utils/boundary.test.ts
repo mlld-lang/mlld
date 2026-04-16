@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { DirectiveNode } from '@core/types';
 import { parseSync } from '@grammar/parser';
-import { createObjectVariable, createStructuredValueVariable } from '@core/types/variable/VariableFactories';
+import {
+  createExecutableVariable,
+  createObjectVariable,
+  createSimpleTextVariable,
+  createStructuredValueVariable
+} from '@core/types/variable/VariableFactories';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { PathService } from '@services/fs/PathService';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { Environment } from '@interpreter/env/Environment';
+import { ENVIRONMENT_SERIALIZE_PLACEHOLDER } from '@interpreter/env/EnvironmentIdentity';
 import { wrapStructured } from './structured-value';
 import { boundary, BoundaryViolation } from './boundary';
 
@@ -140,5 +147,60 @@ describe('boundary helpers', () => {
     expect(boundary.display(structured).text).toContain('hello world');
     expect(boundary.interpolate('hello world', 'shell')).toBe("'hello world'");
     expect(boundary.interpolate(structured, 'plain')).toBe('{"text":"hello world"}');
+  });
+
+  it('serialize preserves structured values across AST variable references', () => {
+    const structured = wrapStructured(
+      {
+        answer: 42
+      },
+      'json'
+    );
+    const ast = parseSync('/var @tmp = { payload: @payload }') as DirectiveNode[];
+    const source = ast[0]?.values?.value?.[0];
+    const variableMap = new Map([
+      ['payload', createStructuredValueVariable('payload', structured, SOURCE)]
+    ]);
+
+    const result = boundary.serialize<{ payload: typeof structured }>(source, { variableMap });
+
+    expect(result.payload).toBe(structured);
+  });
+
+  it('serialize converts executable references into sealed module-boundary payloads', () => {
+    const ast = parseSync('/var @tmp = { run: @run }') as DirectiveNode[];
+    const source = ast[0]?.values?.value?.[0];
+    const variableMap = new Map([
+      ['dep', createSimpleTextVariable('dep', 'ok', SOURCE)],
+      [
+        'run',
+        createExecutableVariable('run', 'command', 'echo hi', [], 'sh', SOURCE, {
+          internal: {
+            capturedShadowEnvs: {
+              js: new Map([['helper', () => 'ok']])
+            },
+            capturedModuleEnv: new Map([['dep', createSimpleTextVariable('dep', 'ok', SOURCE)]])
+          }
+        })
+      ]
+    ]);
+
+    const result = boundary.serialize<{ run: { internal: Record<string, unknown>; __executable: boolean } }>(
+      source,
+      { variableMap }
+    );
+    const capturedModuleEnv = getCapturedModuleEnv(result.run.internal);
+
+    expect(result.run.__executable).toBe(true);
+    expect(Object.keys(result.run.internal)).not.toContain('capturedModuleEnv');
+    expect(capturedModuleEnv).toEqual({ dep: 'ok' });
+  });
+
+  it('serialize replaces Environment instances with the stable placeholder', () => {
+    const env = createEnv();
+
+    expect(boundary.serialize({ env })).toEqual({
+      env: ENVIRONMENT_SERIALIZE_PLACEHOLDER
+    });
   });
 });

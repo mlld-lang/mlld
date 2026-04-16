@@ -78,7 +78,13 @@ export async function executeCommandVariable(
   // Built-in transformer handling
   if (commandVar && commandVar.internal?.isBuiltinTransformer && commandVar.internal?.transformerImplementation) {
     try {
-      const result = await commandVar.internal.transformerImplementation(stdinInput || '');
+      const normalizedBuiltinName =
+        typeof commandVar.name === 'string' ? commandVar.name.toLowerCase() : '';
+      const transformerInput =
+        normalizedBuiltinName === 'pretty'
+          ? (structuredInput ?? stdinInput ?? '')
+          : (stdinInput || '');
+      const result = await commandVar.internal.transformerImplementation(transformerInput);
       const normalized = normalizeTransformerResult(commandVar?.name, result);
       return finalizeResult(normalized.value, normalized.options);
     } catch (error) {
