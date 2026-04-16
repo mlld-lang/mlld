@@ -585,17 +585,22 @@ describe('resolveInvocationPolicyFragment', () => {
     });
   });
 
-  it('strips non-control args using scoped tool collection metadata', async () => {
+  it('strips non-control args using scoped tool collection input records', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe exfil:send, tool:w @send_email(recipient, subject, body) = `sent`')[0] as any,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/record @send_email_inputs = { facts: [recipient: string], data: [subject: string, body: string], validate: "strict" }')[0] as any,
       env
     );
     env.setScopedEnvironmentConfig({
       tools: {
         send_email: {
           mlld: 'send_email',
-          controlArgs: ['recipient']
+          inputs: '@send_email_inputs',
+          labels: ['tool:w']
         }
       }
     } as any);
@@ -632,17 +637,22 @@ describe('resolveInvocationPolicyFragment', () => {
     });
   });
 
-  it('normalizes stripped-all entries to true when scoped metadata declares no control args', async () => {
+  it('normalizes stripped-all entries to true when scoped input records declare no control args', async () => {
     const env = createEnv();
     await evaluateDirective(
       parseSync('/exe tool:w @create_file(title, body) = `sent`')[0] as any,
+      env
+    );
+    await evaluateDirective(
+      parseSync('/record @create_file_inputs = { data: [title: string, body: string], validate: "strict" }')[0] as any,
       env
     );
     env.setScopedEnvironmentConfig({
       tools: {
         create_file: {
           mlld: 'create_file',
-          controlArgs: []
+          inputs: '@create_file_inputs',
+          labels: ['tool:w']
         }
       }
     } as any);

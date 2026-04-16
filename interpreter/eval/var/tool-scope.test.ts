@@ -257,7 +257,7 @@ describe('tool scope helpers', () => {
     });
   });
 
-  it('accepts restrict-only overrides for controlArgs, updateArgs, exactPayloadArgs, and sourceArgs', () => {
+  it('passes through legacy control metadata fields without interpreting them', () => {
     const env = createEnvWithExecutables({
       updateIssue: {
         params: ['owner', 'repo', 'id', 'title', 'body'],
@@ -300,12 +300,12 @@ describe('tool scope helpers', () => {
     });
   });
 
-  it('rejects non-boolean correlateControlArgs values', () => {
+  it('passes through correlateControlArgs as inert metadata', () => {
     const env = createEnvWithExecutables({
       createIssue: ['owner', 'repo', 'title']
     });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -315,10 +315,15 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/correlateControlArgs must be a boolean/i);
+    ).toEqual({
+      issue: {
+        mlld: '@createIssue',
+        correlateControlArgs: 'yes'
+      }
+    });
   });
 
-  it('rejects legacy control metadata when inputs are declared', () => {
+  it('passes through legacy control metadata even when inputs are declared', () => {
     const env = createEnvWithExecutables(
       {
         createIssue: ['owner', 'repo', 'title', 'body']
@@ -332,7 +337,7 @@ describe('tool scope helpers', () => {
       }
     );
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -347,10 +352,20 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/inputs cannot be combined with controlArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@createIssue',
+        bind: {
+          owner: 'mlld',
+          repo: 'mlld'
+        },
+        inputs: '@create_issue_inputs',
+        controlArgs: ['title']
+      }
+    });
   });
 
-  it('rejects updateArgs and exactPayloadArgs when inputs are declared', () => {
+  it('passes through updateArgs and exactPayloadArgs even when inputs are declared', () => {
     const env = createEnvWithExecutables(
       {
         updateIssue: ['id', 'subject', 'body']
@@ -364,7 +379,7 @@ describe('tool scope helpers', () => {
       }
     );
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -375,9 +390,15 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/inputs cannot be combined with updateArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        inputs: '@update_issue_inputs',
+        updateArgs: ['subject']
+      }
+    });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -388,7 +409,13 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/inputs cannot be combined with exactPayloadArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        inputs: '@update_issue_inputs',
+        exactPayloadArgs: ['subject']
+      }
+    });
   });
 
   it('requires update:w when an input record declares update fields', () => {
@@ -514,12 +541,12 @@ describe('tool scope helpers', () => {
     ).toThrow(/bind keys must match parameters/i);
   });
 
-  it('rejects expose lists that skip required parameters', () => {
+  it('passes through legacy expose metadata without coverage checks', () => {
     const env = createEnvWithExecutables({
       createIssue: ['owner', 'repo', 'title']
     });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -529,15 +556,20 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/cover required parameters/i);
+    ).toEqual({
+      issue: {
+        mlld: '@createIssue',
+        expose: ['title']
+      }
+    });
   });
 
-  it('rejects controlArgs that are not visible parameters', () => {
+  it('passes through legacy controlArgs metadata without visible-param checks', () => {
     const env = createEnvWithExecutables({
       createIssue: ['owner', 'repo', 'title']
     });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -551,10 +583,19 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/controlArgs must reference visible parameters/i);
+    ).toEqual({
+      issue: {
+        mlld: '@createIssue',
+        bind: {
+          owner: 'mlld'
+        },
+        expose: ['repo', 'title'],
+        controlArgs: ['owner']
+      }
+    });
   });
 
-  it('rejects controlArgs, updateArgs, exactPayloadArgs, and sourceArgs overrides that widen executable metadata', () => {
+  it('passes through legacy override metadata without executable subset checks', () => {
     const env = createEnvWithExecutables({
       updateIssue: {
         params: ['id', 'title', 'body'],
@@ -565,7 +606,7 @@ describe('tool scope helpers', () => {
       }
     });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -576,9 +617,15 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/controlArgs must be a subset of executable controlArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        expose: ['id', 'title', 'body'],
+        controlArgs: ['id', 'title']
+      }
+    });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -589,9 +636,15 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/updateArgs must be a subset of executable updateArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        expose: ['id', 'title', 'body'],
+        updateArgs: ['body']
+      }
+    });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -602,9 +655,15 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/exactPayloadArgs must be a subset of executable exactPayloadArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        expose: ['id', 'title', 'body'],
+        exactPayloadArgs: ['body']
+      }
+    });
 
-    expect(() =>
+    expect(
       normalizeToolCollection(
         {
           issue: {
@@ -615,7 +674,13 @@ describe('tool scope helpers', () => {
         },
         env
       )
-    ).toThrow(/sourceArgs must be a subset of executable sourceArgs/i);
+    ).toEqual({
+      issue: {
+        mlld: '@updateIssue',
+        expose: ['id', 'title', 'body'],
+        sourceArgs: ['title']
+      }
+    });
   });
 
   it('returns literal tools values unchanged when withClause.tools is not an AST node', async () => {

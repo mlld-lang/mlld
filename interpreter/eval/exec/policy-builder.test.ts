@@ -701,7 +701,7 @@ describe('@policy builtin', () => {
     });
   });
 
-  it('preserves explicit empty control-arg metadata for imported tool collections', async () => {
+  it('derives empty control-arg metadata from no-fact input records for imported tool collections', async () => {
     const env = await interpretWithEnvAndFiles(
       `
         /import { @writeTools } from "/tool-module.mld"
@@ -714,13 +714,17 @@ describe('@policy builtin', () => {
       `,
       {
         '/tool-module.mld': `
+          /record @createDraftInputs = {
+            data: [subject: string, body: string],
+            validate: "strict"
+          }
+
           /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: ["subject"] }
 
           /var tools @writeTools = {
             createDraft: {
               mlld: @createDraft,
-              expose: ["subject", "body"],
-              controlArgs: []
+              inputs: @createDraftInputs
             }
           }
 
@@ -749,7 +753,7 @@ describe('@policy builtin', () => {
     });
   });
 
-  it('preserves explicit empty control-arg metadata for imported tool collections during validation', async () => {
+  it('derives empty control-arg metadata from no-fact input records for imported tool collections during validation', async () => {
     const env = await interpretWithEnvAndFiles(
       `
         /import { @writeTools } from "/tool-module.mld"
@@ -762,13 +766,17 @@ describe('@policy builtin', () => {
       `,
       {
         '/tool-module.mld': `
+          /record @createDraftInputs = {
+            data: [subject: string, body: string],
+            validate: "strict"
+          }
+
           /exe tool:w @createDraft(subject, body) = js { return subject; } with { controlArgs: ["subject"] }
 
           /var tools @writeTools = {
             createDraft: {
               mlld: @createDraft,
-              expose: ["subject", "body"],
-              controlArgs: []
+              inputs: @createDraftInputs
             }
           }
 

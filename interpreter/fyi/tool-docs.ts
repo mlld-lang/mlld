@@ -185,6 +185,7 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
               Object.entries(entry.bind).sort(([left], [right]) => left.localeCompare(right))
             )
           : undefined;
+      const canAuthorize = normalizeToolCollectionAuthorizable(entry.can_authorize);
 
       return [
         toolName,
@@ -198,12 +199,6 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           ...(normalizeToolCollectionRecordRef(entry.returns)
             ? { returns: normalizeToolCollectionRecordRef(entry.returns) }
             : {}),
-          expose: normalizeToolCollectionStringList(entry.expose),
-          optional: normalizeToolCollectionStringList(entry.optional),
-          controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
-          updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
-          exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
-          sourceArgs: normalizeToolCollectionStringList(entry.sourceArgs),
           labels: normalizeToolCollectionStringList(entry.labels),
           ...(typeof entry.description === 'string' && entry.description.trim().length > 0
             ? { description: entry.description.trim() }
@@ -211,8 +206,8 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           ...(typeof entry.instructions === 'string' && entry.instructions.trim().length > 0
             ? { instructions: entry.instructions.trim() }
             : {}),
-          ...(normalizeToolCollectionAuthorizable(entry.can_authorize ?? entry.authorizable) !== undefined
-            ? { can_authorize: normalizeToolCollectionAuthorizable(entry.can_authorize ?? entry.authorizable) }
+          ...(canAuthorize !== undefined
+            ? { can_authorize: canAuthorize }
             : {}),
           ...(bind ? { bind } : {})
         }

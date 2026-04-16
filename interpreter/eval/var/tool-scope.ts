@@ -28,10 +28,6 @@ export type ToolScopeValue = {
   isWildcard: boolean;
 };
 
-function readToolCanAuthorizeValue(value: Record<string, unknown>): unknown {
-  return value.can_authorize ?? value.authorizable;
-}
-
 function unwrapToolScopeValue(value: unknown): unknown {
   const directCollection = resolveDirectToolCollection(value);
   if (directCollection) {
@@ -283,15 +279,6 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     const paramSet = new Set(paramNames);
-    const executableDef = execVar.internal?.executableDef ?? execVar.value;
-    const hasExecutableControlArgsMetadata = Array.isArray((executableDef as any)?.controlArgs);
-    const hasExecutableUpdateArgsMetadata = Array.isArray((executableDef as any)?.updateArgs);
-    const hasExecutableExactPayloadArgsMetadata = Array.isArray((executableDef as any)?.exactPayloadArgs);
-    const hasExecutableSourceArgsMetadata = Array.isArray((executableDef as any)?.sourceArgs);
-    const executableControlArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.controlArgs);
-    const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
-    const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
-    const executableSourceArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.sourceArgs);
     const description = toolValue.description;
     if (description !== undefined && typeof description !== 'string') {
       throw new Error(`Tool '${toolName}' description must be a string`);
@@ -302,17 +289,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     }
 
     const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
-    const canAuthorize = normalizeToolAuthorizable(readToolCanAuthorizeValue(toolValue), toolName);
-    const expose = normalizeLegacyStringArray(toolValue.expose, toolName, 'expose');
-    const optional = normalizeLegacyStringArray(toolValue.optional, toolName, 'optional');
-    const controlArgs = normalizeLegacyStringArray(toolValue.controlArgs, toolName, 'controlArgs');
-    const updateArgs = normalizeLegacyStringArray(toolValue.updateArgs, toolName, 'updateArgs');
-    const exactPayloadArgs = normalizeLegacyStringArray(toolValue.exactPayloadArgs, toolName, 'exactPayloadArgs');
-    const sourceArgs = normalizeLegacyStringArray(toolValue.sourceArgs, toolName, 'sourceArgs');
-    const correlateControlArgs = (toolValue as Record<string, unknown>).correlateControlArgs;
-    if (correlateControlArgs !== undefined && typeof correlateControlArgs !== 'boolean') {
-      throw new Error(`Tool '${toolName}' correlateControlArgs must be a boolean`);
-    }
+    const canAuthorize = normalizeToolAuthorizable(toolValue.can_authorize, toolName);
     const bind = toolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
@@ -331,7 +308,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       }
     }
 
-    const inputSchema = resolveToolInputSchema({
+    resolveToolInputSchema({
       toolName,
       rawInputRef: (toolValue as Record<string, unknown>).inputs,
       env,
@@ -344,132 +321,14 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       ]
     });
 
-    if (inputSchema) {
-      const mixedShapeFields = [
-        'expose',
-        'optional',
-        'controlArgs',
-        'updateArgs',
-        'exactPayloadArgs',
-        'sourceArgs',
-        'correlateControlArgs'
-      ].filter(field => (toolValue as Record<string, unknown>)[field] !== undefined);
-      if (mixedShapeFields.length > 0) {
-        throw new Error(
-          `Tool '${toolName}' inputs cannot be combined with ${mixedShapeFields.join(', ')}`
-        );
-      }
-    } else {
-      if (expose) {
-        const invalidExpose = expose.filter(name => !paramSet.has(name));
-        if (invalidExpose.length > 0) {
-          throw new Error(
-            `Tool '${toolName}' expose values must match parameters of '@${mlldName}': ${invalidExpose.join(', ')}`
-          );
-        }
-      }
-
-      if (optional) {
-        const invalidOptional = optional.filter(name => !paramSet.has(name));
-        if (invalidOptional.length > 0) {
-          throw new Error(
-            `Tool '${toolName}' optional values must match parameters of '@${mlldName}': ${invalidOptional.join(', ')}`
-          );
-        }
-      }
-
-      if (expose) {
-        const overlap = boundKeys.filter(key => expose.includes(key));
-        if (overlap.length > 0) {
-          throw new Error(
-            `Tool '${toolName}' expose values cannot include bound parameters: ${overlap.join(', ')}`
-          );
-        }
-
-        const covered = new Set([...boundKeys, ...expose]);
-        let lastCoveredIndex = -1;
-        for (let i = 0; i < paramNames.length; i += 1) {
-          if (covered.has(paramNames[i])) {
-            lastCoveredIndex = i;
-          }
-        }
-        if (lastCoveredIndex >= 0) {
-          const missing: string[] = [];
-          for (let i = 0; i <= lastCoveredIndex; i += 1) {
-            const paramName = paramNames[i];
-            if (!covered.has(paramName)) {
-              missing.push(paramName);
-            }
-          }
-          if (missing.length > 0) {
-            throw new Error(
-              `Tool '${toolName}' bind and expose must cover required parameters: ${missing.join(', ')}`
-            );
-          }
-        }
-      }
-
-      if (optional) {
-        if (!expose) {
-          throw new Error(`Tool '${toolName}' optional values require expose to be set`);
-        }
-        const optionalOutsideExpose = optional.filter(name => !expose.includes(name));
-        if (optionalOutsideExpose.length > 0) {
-          throw new Error(
-            `Tool '${toolName}' optional values must be a subset of expose: ${optionalOutsideExpose.join(', ')}`
-          );
-        }
-      }
-
-      const visibleParams = expose
-        ? expose
-        : paramNames.filter(paramName => !boundKeys.includes(paramName));
-      validateRestrictedArgOverride({
-        field: 'controlArgs',
-        toolName,
-        values: controlArgs,
-        visibleParams,
-        executableValues: executableControlArgs,
-        hasExecutableMetadata: hasExecutableControlArgsMetadata
-      });
-      validateRestrictedArgOverride({
-        field: 'updateArgs',
-        toolName,
-        values: updateArgs,
-        visibleParams,
-        executableValues: executableUpdateArgs,
-        hasExecutableMetadata: hasExecutableUpdateArgsMetadata
-      });
-      validateRestrictedArgOverride({
-        field: 'exactPayloadArgs',
-        toolName,
-        values: exactPayloadArgs,
-        visibleParams,
-        executableValues: executableExactPayloadArgs,
-        hasExecutableMetadata: hasExecutableExactPayloadArgsMetadata
-      });
-      validateRestrictedArgOverride({
-        field: 'sourceArgs',
-        toolName,
-        values: sourceArgs,
-        visibleParams,
-        executableValues: executableSourceArgs,
-        hasExecutableMetadata: hasExecutableSourceArgsMetadata
-      });
-    }
-
     const normalizedDefinition = {
       ...(toolValue as ToolCollection[string])
     };
 
-    // m-bb60 / spec §5.2 and §5.4: `var tools` is the catalog object itself.
-    // The collection binds dispatch and bridges the legacy `authorizable` rename,
-    // but otherwise returns entry metadata as authored instead of reshaping it.
+    // `var tools` binds dispatch and validates canonical runtime fields, but otherwise
+    // returns entry metadata as authored instead of reshaping it.
     if (canAuthorize !== undefined) {
       normalizedDefinition.can_authorize = canAuthorize;
-    }
-    if (Object.prototype.hasOwnProperty.call(normalizedDefinition, 'authorizable')) {
-      delete normalizedDefinition.authorizable;
     }
 
     const definitionCapturedModuleEnv = buildToolDefinitionCapturedModuleEnv(
@@ -624,28 +483,6 @@ function normalizeToolAuthorizable(
   return normalized;
 }
 
-function normalizeLegacyStringArray(
-  value: unknown,
-  toolName: string,
-  field: 'expose' | 'optional' | 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs'
-): string[] | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-    throw new Error(`Tool '${toolName}' ${field} must be an array of strings`);
-  }
-  return value;
-}
-
-function normalizeExecutableMetadataStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((entry): entry is string => typeof entry === 'string');
-}
-
 function resolveToolInputSchema(options: {
   toolName: string;
   rawInputRef: unknown;
@@ -748,38 +585,4 @@ function resolveToolInputRecordDefinition(
     return (value as { value: RecordDefinition }).value;
   }
   throw new Error(`Tool '${toolName}' inputs must be a record reference`);
-}
-
-function validateRestrictedArgOverride(options: {
-  field: 'controlArgs' | 'updateArgs' | 'exactPayloadArgs' | 'sourceArgs';
-  toolName: string;
-  values: string[] | undefined;
-  visibleParams: readonly string[];
-  executableValues: readonly string[];
-  hasExecutableMetadata: boolean;
-}): void {
-  const { field, toolName, values, visibleParams, executableValues, hasExecutableMetadata } = options;
-  if (!values) {
-    return;
-  }
-
-  const visibleSet = new Set(visibleParams);
-  const invalidVisibleValues = values.filter(name => !visibleSet.has(name));
-  if (invalidVisibleValues.length > 0) {
-    throw new Error(
-      `Tool '${toolName}' ${field} must reference visible parameters: ${invalidVisibleValues.join(', ')}`
-    );
-  }
-
-  if (!hasExecutableMetadata) {
-    return;
-  }
-
-  const executableSet = new Set(executableValues);
-  const widenedValues = values.filter(name => !executableSet.has(name));
-  if (widenedValues.length > 0) {
-    throw new Error(
-      `Tool '${toolName}' ${field} must be a subset of executable ${field}: ${widenedValues.join(', ')}`
-    );
-  }
 }

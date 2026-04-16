@@ -3991,46 +3991,6 @@ function mergeValidationContextAst(
         }
       }
 
-      const controlArgsNode = getObjectEntryValue(toolValue, 'controlArgs');
-      if (controlArgsNode !== undefined) {
-        const controlArgsValue = extractStaticValue(controlArgsNode);
-        if (Array.isArray(controlArgsValue)) {
-          target.hasControlArgsMetadata = true;
-          for (const controlArg of controlArgsValue) {
-            if (typeof controlArg === 'string' && controlArg.trim().length > 0) {
-              target.controlArgs.add(controlArg.trim());
-            }
-          }
-        }
-      }
-
-      const updateArgsNode = getObjectEntryValue(toolValue, 'updateArgs');
-      if (updateArgsNode !== undefined) {
-        const updateArgsValue = extractStaticValue(updateArgsNode);
-        if (Array.isArray(updateArgsValue)) {
-          target.hasUpdateArgsMetadata = true;
-          for (const updateArg of updateArgsValue) {
-            if (typeof updateArg === 'string' && updateArg.trim().length > 0) {
-              target.updateArgs.add(updateArg.trim());
-            }
-          }
-        }
-      }
-
-      const exactPayloadArgsNode = getObjectEntryValue(toolValue, 'exactPayloadArgs');
-      if (exactPayloadArgsNode !== undefined) {
-        const exactPayloadArgsValue = extractStaticValue(exactPayloadArgsNode);
-        if (Array.isArray(exactPayloadArgsValue)) {
-          if (!target.exactPayloadArgs) {
-            target.exactPayloadArgs = new Set<string>();
-          }
-          for (const payloadArg of exactPayloadArgsValue) {
-            if (typeof payloadArg === 'string' && payloadArg.trim().length > 0) {
-              target.exactPayloadArgs.add(payloadArg.trim());
-            }
-          }
-        }
-      }
     }
   });
 }
@@ -5368,32 +5328,6 @@ function buildStaticToolContext(
       for (const label of labels) {
         target.labels.add(label);
       }
-    }
-
-    if (rawToolEntry.controlArgs !== undefined) {
-      const controlArgs = normalizeStaticStringList(rawToolEntry.controlArgs);
-      if (!controlArgs) {
-        return null;
-      }
-      target.hasControlArgsMetadata = true;
-      target.controlArgs = new Set(controlArgs);
-    }
-
-    if (rawToolEntry.updateArgs !== undefined) {
-      const updateArgs = normalizeStaticStringList(rawToolEntry.updateArgs);
-      if (!updateArgs) {
-        return null;
-      }
-      target.hasUpdateArgsMetadata = true;
-      target.updateArgs = new Set(updateArgs);
-    }
-
-    if (rawToolEntry.exactPayloadArgs !== undefined) {
-      const exactPayloadArgs = normalizeStaticStringList(rawToolEntry.exactPayloadArgs);
-      if (!exactPayloadArgs) {
-        return null;
-      }
-      target.exactPayloadArgs = new Set(exactPayloadArgs);
     }
 
     byName.set(toolName, target);

@@ -446,37 +446,41 @@ describe('tool collections', () => {
     ).rejects.toThrow(/bind keys/i);
   });
 
-  it('rejects invalid expose values', async () => {
-    await expect(
-      interpretWithEnv(`
-        /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
-        /var tools @badTools = {
-          createIssue: { mlld: @createIssue, expose: ["title", "missing"] }
-        }
-      `)
-    ).rejects.toThrow(/expose values/i);
+  it('passes through legacy expose metadata without runtime validation', async () => {
+    const env = await interpretWithEnv(`
+      /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
+      /var tools @badTools = {
+        createIssue: { mlld: @createIssue, expose: ["title", "missing"] }
+      }
+    `);
+
+    const collection = env.getVariable('badTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.createIssue.expose).toEqual(['title', 'missing']);
   });
 
-  it('rejects expose values that overlap bind', async () => {
-    await expect(
-      interpretWithEnv(`
-        /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
-        /var tools @badTools = {
-          createIssue: { mlld: @createIssue, bind: { owner: "mlld" }, expose: ["owner", "title"] }
-        }
-      `)
-    ).rejects.toThrow(/expose values cannot include bound/i);
+  it('passes through legacy expose metadata even when it overlaps bind', async () => {
+    const env = await interpretWithEnv(`
+      /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
+      /var tools @badTools = {
+        createIssue: { mlld: @createIssue, bind: { owner: "mlld" }, expose: ["owner", "title"] }
+      }
+    `);
+
+    const collection = env.getVariable('badTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.createIssue.bind).toEqual({ owner: 'mlld' });
+    expect(collection.createIssue.expose).toEqual(['owner', 'title']);
   });
 
-  it('rejects expose values that skip required parameters', async () => {
-    await expect(
-      interpretWithEnv(`
-        /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
-        /var tools @badTools = {
-          createIssue: { mlld: @createIssue, expose: ["title"] }
-        }
-      `)
-    ).rejects.toThrow(/cover required parameters/i);
+  it('passes through legacy expose metadata that skips required parameters', async () => {
+    const env = await interpretWithEnv(`
+      /exe @createIssue(owner: string, repo: string, title: string) = js { return title; }
+      /var tools @badTools = {
+        createIssue: { mlld: @createIssue, expose: ["title"] }
+      }
+    `);
+
+    const collection = env.getVariable('badTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.createIssue.expose).toEqual(['title']);
   });
 
   it('accepts optional values when they are exposed parameters', async () => {
@@ -492,15 +496,16 @@ describe('tool collections', () => {
     expect(collection.verify.optional).toEqual(['vars']);
   });
 
-  it('rejects optional values that are not exposed', async () => {
-    await expect(
-      interpretWithEnv(`
-        /exe @verify(vars: string) = js { return vars; }
-        /var tools @badTools = {
-          verify: { mlld: @verify, optional: ["vars"] }
-        }
-      `)
-    ).rejects.toThrow(/optional values require expose/i);
+  it('passes through legacy optional metadata without runtime validation', async () => {
+    const env = await interpretWithEnv(`
+      /exe @verify(vars: string) = js { return vars; }
+      /var tools @badTools = {
+        verify: { mlld: @verify, optional: ["vars"] }
+      }
+    `);
+
+    const collection = env.getVariable('badTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection.verify.optional).toEqual(['vars']);
   });
 
   it('does not evaluate net:r guards during var tools normalization', async () => {

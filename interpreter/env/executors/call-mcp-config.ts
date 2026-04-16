@@ -561,6 +561,10 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
           )
         : undefined;
 
+    const canAuthorize = normalizeToolCollectionAuthorizable(
+      (entry as { can_authorize?: unknown }).can_authorize
+    );
+
     return [
       toolName,
       {
@@ -571,12 +575,6 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
         ...(normalizeToolCollectionRecordRef((entry as { returns?: unknown }).returns)
           ? { returns: normalizeToolCollectionRecordRef((entry as { returns?: unknown }).returns) }
           : {}),
-        expose: normalizeToolCollectionStringList(entry.expose),
-        optional: normalizeToolCollectionStringList(entry.optional),
-        controlArgs: normalizeToolCollectionStringList(entry.controlArgs),
-        updateArgs: normalizeToolCollectionStringList(entry.updateArgs),
-        exactPayloadArgs: normalizeToolCollectionStringList(entry.exactPayloadArgs),
-        sourceArgs: normalizeToolCollectionStringList((entry as { sourceArgs?: unknown }).sourceArgs),
         labels: normalizeToolCollectionStringList(entry.labels),
         ...(typeof entry.description === 'string' && entry.description.trim().length > 0
           ? { description: entry.description.trim() }
@@ -585,15 +583,9 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
           && (entry as { instructions: string }).instructions.trim().length > 0
           ? { instructions: (entry as { instructions: string }).instructions.trim() }
           : {}),
-        ...(normalizeToolCollectionAuthorizable(
-          (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
-          ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
-        ) !== undefined
+        ...(canAuthorize !== undefined
           ? {
-              can_authorize: normalizeToolCollectionAuthorizable(
-                (entry as { can_authorize?: unknown; authorizable?: unknown }).can_authorize
-                ?? (entry as { can_authorize?: unknown; authorizable?: unknown }).authorizable
-              )
+              can_authorize: canAuthorize
             }
           : {}),
         ...(bind ? { bind } : {})

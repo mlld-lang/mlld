@@ -63,20 +63,7 @@ export interface ToolCatalogEntry {
   [key: string]: unknown;
 }
 
-export interface LegacyToolCatalogCompatibilityFields {
-  authorizable?: ToolAuthorizableValue;
-  expose?: string[];
-  optional?: string[];
-  controlArgs?: string[];
-  updateArgs?: string[];
-  exactPayloadArgs?: string[];
-  sourceArgs?: string[];
-  correlateControlArgs?: boolean;
-}
-
-export type ToolDefinition =
-  ToolCatalogEntry
-  & Partial<LegacyToolCatalogCompatibilityFields>;
+export type ToolDefinition = ToolCatalogEntry;
 
 export type ToolCollection = Record<string, ToolDefinition>;
 
@@ -106,17 +93,6 @@ const TOOL_COLLECTION_METADATA = Symbol.for('mlld.toolCollectionMetadata');
 
 export const TOOL_COLLECTION_METADATA_EXPORT_KEY = '__mlld_tool_collection_metadata__';
 export const TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY = '__mlld_tool_collection_captured_module_env__';
-
-type ToolCanAuthorizeCarrier = {
-  can_authorize?: ToolAuthorizableValue;
-  authorizable?: ToolAuthorizableValue;
-};
-
-function getToolCanAuthorizeValue(
-  value: ToolCanAuthorizeCarrier
-): ToolAuthorizableValue | undefined {
-  return value.can_authorize ?? value.authorizable;
-}
 
 function cloneStringList(values: readonly string[]): string[] {
   return values
@@ -275,7 +251,7 @@ function isAuthorizationContextEntry(value: unknown): value is ToolAuthorization
   }
 
   const candidate = value as Partial<ToolAuthorizationContextEntry>;
-  const canAuthorize = getToolCanAuthorizeValue(candidate);
+  const canAuthorize = candidate.can_authorize;
   return (
     Array.isArray(candidate.params)
     && candidate.params.every(entry => typeof entry === 'string')
@@ -319,7 +295,7 @@ export function cloneToolCollectionAuthorizationContext(
 ): ToolCollectionAuthorizationContext {
   return Object.fromEntries(
     Object.entries(context).map(([toolName, entry]) => {
-      const canAuthorize = getToolCanAuthorizeValue(entry);
+      const canAuthorize = entry.can_authorize;
       return [
         toolName,
         {
