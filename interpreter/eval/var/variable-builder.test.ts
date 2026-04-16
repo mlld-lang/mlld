@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DirectiveNode } from '@core/types';
 import type { SecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { createVariableBuilder } from './variable-builder';
 
 const baseSource = {
@@ -145,5 +149,34 @@ describe('variable builder', () => {
     expect(result.type).toBe('object');
     expect(result.internal?.isToolsCollection).toBe(true);
     expect(result.internal?.toolCollection).toEqual(toolCollection);
+  });
+
+  it('stringifies opaque environment placeholders for text-default object values', async () => {
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    const builder = createVariableBuilder({
+      directive: createDirective({ wrapperType: 'singleQuote' }),
+      extractSecurityFromValue: () => undefined,
+      identifier: 'textified',
+      interpolateWithSecurity: vi.fn().mockResolvedValue('unused'),
+      location: { filePath: '/test/module.mld' },
+      resolvedValueDescriptor: descriptor(['textified']),
+      securityLabels: ['textified'],
+      source: baseSource,
+      valueNode: undefined
+    });
+
+    const result = await builder.build({ resolvedValue: { env: envLike } });
+
+    expect(result.type).toBe('simple-text');
+    expect(result.value).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+    expect(result.value).not.toContain('danger');
   });
 });

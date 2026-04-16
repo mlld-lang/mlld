@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { DirectiveNode } from '@core/types';
+import { createObjectVariable } from '@core/types/variable';
 import { interpret } from '@interpreter/index';
+import { Environment } from '@interpreter/env/Environment';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { evaluateBail } from './bail';
 
 describe('bail directive evaluation', () => {
   let fileSystem: MemoryFileSystem;
@@ -60,5 +68,53 @@ describe('bail directive evaluation', () => {
 
     const source = 'import { value } from "./module.mld"\nshow @value';
     await expect(run(source)).rejects.toThrow('module stop');
+  });
+
+  it('stringifies object messages with opaque environment placeholders', async () => {
+    const env = new Environment(fileSystem, pathService, '/project');
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    env.setVariable(
+      'payload',
+      createObjectVariable(
+        'payload',
+        { env: envLike },
+        false,
+        {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }
+      )
+    );
+
+    const directive = {
+      type: 'Directive',
+      kind: 'bail',
+      values: {
+        message: [{ type: 'VariableReference', identifier: 'payload', fields: [] }]
+      },
+      location: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 5, offset: 4 },
+        filePath: '/project/main.mld'
+      }
+    } as unknown as DirectiveNode;
+
+    try {
+      await evaluateBail(directive, env);
+      throw new Error('expected bail to throw');
+    } catch (error) {
+      expect(String(error)).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+      expect(String(error)).not.toContain('danger');
+    }
   });
 });

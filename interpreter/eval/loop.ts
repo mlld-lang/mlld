@@ -5,7 +5,13 @@ import { evaluate, type EvalResult } from '../core/interpreter';
 import type { Environment } from '../env/Environment';
 import type { OperationContext } from '../env/ContextManager';
 import { createStructuredValueVariable, type VariableSource } from '@core/types/variable';
-import { asData, isStructuredValue, wrapStructured, type StructuredValue } from '../utils/structured-value';
+import {
+  asData,
+  isStructuredValue,
+  stringifyStructured,
+  wrapStructured,
+  type StructuredValue
+} from '../utils/structured-value';
 import { resolveControlValue } from './control-flow';
 import { evaluateCondition } from './when';
 import { evaluateWhenExpression } from './when-expression';
@@ -46,7 +52,7 @@ function normalizeState(value: unknown): StructuredValue {
     return wrapStructured('', 'text', '');
   }
 
-  const textValue = typeof value === 'string' ? value : JSON.stringify(value);
+  const textValue = typeof value === 'string' ? value : stringifyStructured(value);
   const kind: StructuredValue['type'] =
     Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : 'text';
   return wrapStructured(value as any, kind, textValue);

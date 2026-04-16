@@ -3,7 +3,7 @@ import { MlldBailError } from '@core/errors';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { evaluate } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
-import { asData, asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 
 const DEFAULT_BAIL_MESSAGE = 'Script terminated by bail directive.';
@@ -35,7 +35,7 @@ function stringifyBailMessage(value: unknown): string {
 
   if (typeof value === 'object') {
     try {
-      return JSON.stringify(value);
+      return stringifyStructured(value);
     } catch {
       return String(value);
     }
@@ -78,4 +78,3 @@ export async function evaluateBail(
   const message = await resolveBailMessage((directive.values as any)?.message, env);
   throw new MlldBailError(message, toSourceLocation(directive.location));
 }
-

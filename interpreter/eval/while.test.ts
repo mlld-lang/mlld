@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { WhilePipelineStage } from '@core/types';
 import { Environment } from '@interpreter/env/Environment';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from '@interpreter/env/EnvironmentIdentity';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { wrapStructured } from '@interpreter/utils/structured-value';
@@ -36,5 +40,45 @@ describe('evaluateWhileStage', () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  it('normalizes plain object state with opaque environment placeholders', async () => {
+    const env = createEnv();
+    const stage: WhilePipelineStage = {
+      type: 'whileStage',
+      cap: 1,
+      rateMs: null,
+      processor: { type: 'VariableReference', identifier: 'processor', fields: [] } as any,
+      rawIdentifier: 'while'
+    };
+
+    const envLike: Record<string, unknown> = {};
+    markEnvironment(envLike);
+    Object.defineProperty(envLike, 'danger', {
+      enumerable: true,
+      get() {
+        throw new Error('environment getter should not be walked');
+      }
+    });
+
+    const result = await evaluateWhileStage(
+      stage,
+      { holder: envLike } as any,
+      env,
+      async (_processor, state, iterEnv) => {
+        expect(state.text).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+        expect(state.text).not.toContain('danger');
+        return {
+          value: {
+            type: 'Literal',
+            valueType: 'done',
+            value: [{ type: 'Literal', valueType: 'string', value: state.text }]
+          },
+          env: iterEnv
+        };
+      }
+    );
+
+    expect(result).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
   });
 });

@@ -23,6 +23,7 @@ import { MlldSecurityError } from '@core/errors';
 import { evaluateExecInvocation } from './exec-invocation';
 import type { ExecInvocation, CommandReference } from '@core/types';
 import { readFileWithPolicy } from '@interpreter/policy/filesystem-policy';
+import { stringifyStructured } from '@interpreter/utils/structured-value';
 import {
   maskPlainMlldTemplateFences,
   restorePlainMlldTemplateFenceText,
@@ -391,7 +392,7 @@ async function interpolateProseTemplate(
       }
 
       if (value !== undefined) {
-        const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+        const stringValue = typeof value === 'string' ? value : stringifyStructured(value);
         result = result.replace(new RegExp(`@${varPath.replace('.', '\\.')}`, 'g'), stringValue);
       }
     }

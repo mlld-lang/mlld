@@ -1,7 +1,12 @@
 import type { WhilePipelineStage } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
-import { wrapStructured, isStructuredValue, type StructuredValue } from '../utils/structured-value';
+import {
+  stringifyStructured,
+  wrapStructured,
+  isStructuredValue,
+  type StructuredValue
+} from '../utils/structured-value';
 import { createStructuredValueVariable, type VariableSource } from '@core/types/variable';
 import { resolveControlValue } from './control-flow';
 import { isExeReturnControl } from './exe-return';
@@ -27,7 +32,7 @@ function normalizeState(value: unknown): StructuredValue {
     return value;
   }
 
-  const textValue = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  const textValue = typeof value === 'string' ? value : stringifyStructured(value ?? '');
   const kind: StructuredValue['type'] =
     Array.isArray(value) ? 'array' : typeof value === 'object' && value !== null ? 'object' : 'text';
   return wrapStructured(value as any, kind, textValue);

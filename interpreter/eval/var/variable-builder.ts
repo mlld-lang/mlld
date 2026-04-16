@@ -24,7 +24,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { logger } from '@core/utils/logger';
 import { wrapLoadContentValue } from '@interpreter/utils/load-content-structured';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { hasComplexArrayItems, hasComplexValues } from './collection-evaluator';
 
 type StrategyKey =
@@ -84,7 +84,7 @@ function valueToString(value: unknown): string {
   if (value === undefined) return 'undefined';
   if (typeof value === 'string') return value;
   if (isStructuredValue(value)) return value.text;
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object') return stringifyStructured(value);
   return String(value);
 }
 

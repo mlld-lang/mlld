@@ -8,7 +8,12 @@
 
 import { AsyncLocalStorage } from 'async_hooks';
 import { isLoadContentResult, LoadContentResult } from '@core/types/load-content';
-import { isStructuredValue, StructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
+import {
+  isStructuredValue,
+  stringifyStructured,
+  StructuredValue,
+  wrapStructured
+} from '@interpreter/utils/structured-value';
 
 /**
  * Thread-local storage for metadata shelves
@@ -146,7 +151,7 @@ class MetadataShelf {
           return data.toString();
         }
         try {
-          return JSON.stringify(data);
+          return stringifyStructured(data);
         } catch {
           return data.map(item => String(item)).join('\n');
         }
@@ -159,7 +164,7 @@ class MetadataShelf {
     }
 
     try {
-      return JSON.stringify(data);
+      return stringifyStructured(data);
     } catch {
       return String(data ?? '');
     }
