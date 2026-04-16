@@ -6,30 +6,52 @@
   validate: "strict"
 }
 
+/record @search_contacts_inputs = {
+  data: [query: string],
+  validate: "strict"
+}
+
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+
 /exe @send_email(recipient, subject, retries, settings) = js {
   return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;
 }
 
-/exe @catalogSummary(keyed, entries) = js {
-  const entry = entries[0][1];
+/exe @search_contacts(query) = js {
+  return `found:${query}`;
+}
+
+/exe @catalogSummary(keyed, entries, targetName) = js {
+  const entry = entries.find(([name]) => name === targetName)?.[1];
   return JSON.stringify({
     keyed: {
       mlld: keyed.mlld.name,
-      inputs: keyed.inputs.name,
+      inputs: keyed.inputs?.name ?? null,
+      returns: keyed.returns?.name ?? null,
       labels: keyed.labels,
       description: keyed.description,
       instructions: keyed.instructions,
       can_authorize: keyed.can_authorize,
-      bind: keyed.bind
+      bind: keyed.bind,
+      kind: keyed.kind ?? null,
+      semantics: keyed.semantics ?? null,
+      custom_meta: keyed.custom_meta ?? null
     },
     entries: {
       mlld: entry.mlld.name,
-      inputs: entry.inputs.name,
+      inputs: entry.inputs?.name ?? null,
+      returns: entry.returns?.name ?? null,
       labels: entry.labels,
       description: entry.description,
       instructions: entry.instructions,
       can_authorize: entry.can_authorize,
-      bind: entry.bind
+      bind: entry.bind,
+      kind: entry.kind ?? null,
+      semantics: entry.semantics ?? null,
+      custom_meta: entry.custom_meta ?? null
     }
   }, null, 2);
 }
@@ -43,8 +65,27 @@
     instructions: "Prefer drafts first.",
     can_authorize: "role:planner",
     bind: { retries: 3, settings: { mode: "safe" } }
+  },
+  search_contacts: {
+    mlld: @search_contacts,
+    inputs: @search_contacts_inputs,
+    returns: @contact,
+    labels: ["resolve:r"],
+    kind: "read",
+    semantics: "Search contacts.",
+    description: "Search contacts.",
+    can_authorize: false,
+    custom_meta: { x: 1 }
   }
 }
 
-/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries)
+/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries, "send_email")
+/show @catalogSummary(@agentTools.search_contacts, @agentTools.mx.entries, "search_contacts")
+/show @agentTools.search_contacts.returns.name
+/show @agentTools.search_contacts.kind
+/show @agentTools.search_contacts.semantics
+/show @agentTools.search_contacts.description
+/show @agentTools.search_contacts.inputs.name
+/show @agentTools.search_contacts.custom_meta.x
 /show @agentTools.send_email(@recipient, "hello")
+/show @agentTools.search_contacts("Ada")

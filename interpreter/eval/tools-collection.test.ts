@@ -145,6 +145,51 @@ describe('tool collections', () => {
     });
   });
 
+  it('preserves returns and arbitrary metadata keys on var tools entries while keeping dispatch callable', async () => {
+    const env = await interpretWithEnv(`
+      /record @search_contacts_inputs = {
+        data: [query: string],
+        validate: "strict"
+      }
+
+      /record @contact = {
+        facts: [email: string],
+        data: [name: string]
+      }
+
+      /exe @search_contacts(query) = js {
+        return \`found:\${query}\`;
+      }
+
+      /var tools @catalog = {
+        search_contacts: {
+          mlld: @search_contacts,
+          inputs: @search_contacts_inputs,
+          returns: @contact,
+          labels: ["resolve:r"],
+          kind: "read",
+          semantics: "Search contacts.",
+          description: "Search contacts.",
+          can_authorize: false,
+          custom_meta: { x: 1 }
+        }
+      }
+
+      /var @result = @catalog.search_contacts("Ada")
+    `);
+
+    const collection = env.getVariable('catalog')?.internal?.toolCollection as ToolCollection;
+    expect(getVisibleToolExecutableName(collection.search_contacts.mlld)).toBe('search_contacts');
+    expect(getVisibleToolInputName(collection.search_contacts.inputs)).toBe('search_contacts_inputs');
+    expect(getVisibleToolInputName(collection.search_contacts.returns as any)).toBe('contact');
+    expect((collection.search_contacts as Record<string, unknown>).kind).toBe('read');
+    expect((collection.search_contacts as Record<string, unknown>).semantics).toBe('Search contacts.');
+    expect((collection.search_contacts as Record<string, any>).custom_meta).toEqual({ x: 1 });
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env);
+    expect((resolved as any)?.text ?? resolved).toBe('found:Ada');
+  });
+
   it('rejects orphan executable parameters when inputs records leave them uncovered', async () => {
     await expect(
       interpretWithEnv(`

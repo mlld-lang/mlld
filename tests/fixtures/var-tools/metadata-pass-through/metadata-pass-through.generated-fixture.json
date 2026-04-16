@@ -3,8 +3,8 @@
   "description": "Test fixture for var-tools/metadata-pass-through",
   "category": "valid",
   "subcategory": "metadata-pass-through",
-  "input": "/var known @recipient = \"ada@example.com\"\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  validate: \"strict\"\n}\n\n/exe @send_email(recipient, subject, retries, settings) = js {\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;\n}\n\n/exe @catalogSummary(keyed, entries) = js {\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);\n}\n\n/var tools @agentTools = {\n  send_email: {\n    mlld: @send_email,\n    inputs: @send_email_inputs,\n    labels: [\"execute:w\", \"comm:w\"],\n    description: \"Send mail\",\n    instructions: \"Prefer drafts first.\",\n    can_authorize: \"role:planner\",\n    bind: { retries: 3, settings: { mode: \"safe\" } }\n  }\n}\n\n/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries)\n/show @agentTools.send_email(@recipient, \"hello\")\n",
-  "expected": "{\n  \"keyed\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    }\n  },\n  \"entries\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    }\n  }\n}\nsent:ada@example.com:hello:3:safe\n",
+  "input": "/var known @recipient = \"ada@example.com\"\n\n/record @send_email_inputs = {\n  facts: [recipient: string],\n  data: [subject: string],\n  validate: \"strict\"\n}\n\n/record @search_contacts_inputs = {\n  data: [query: string],\n  validate: \"strict\"\n}\n\n/record @contact = {\n  facts: [email: string],\n  data: [name: string]\n}\n\n/exe @send_email(recipient, subject, retries, settings) = js {\n  return `sent:${recipient}:${subject}:${retries}:${settings.mode}`;\n}\n\n/exe @search_contacts(query) = js {\n  return `found:${query}`;\n}\n\n/exe @catalogSummary(keyed, entries, targetName) = js {\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);\n}\n\n/var tools @agentTools = {\n  send_email: {\n    mlld: @send_email,\n    inputs: @send_email_inputs,\n    labels: [\"execute:w\", \"comm:w\"],\n    description: \"Send mail\",\n    instructions: \"Prefer drafts first.\",\n    can_authorize: \"role:planner\",\n    bind: { retries: 3, settings: { mode: \"safe\" } }\n  },\n  search_contacts: {\n    mlld: @search_contacts,\n    inputs: @search_contacts_inputs,\n    returns: @contact,\n    labels: [\"resolve:r\"],\n    kind: \"read\",\n    semantics: \"Search contacts.\",\n    description: \"Search contacts.\",\n    can_authorize: false,\n    custom_meta: { x: 1 }\n  }\n}\n\n/show @catalogSummary(@agentTools.send_email, @agentTools.mx.entries, \"send_email\")\n/show @catalogSummary(@agentTools.search_contacts, @agentTools.mx.entries, \"search_contacts\")\n/show @agentTools.search_contacts.returns.name\n/show @agentTools.search_contacts.kind\n/show @agentTools.search_contacts.semantics\n/show @agentTools.search_contacts.description\n/show @agentTools.search_contacts.inputs.name\n/show @agentTools.search_contacts.custom_meta.x\n/show @agentTools.send_email(@recipient, \"hello\")\n/show @agentTools.search_contacts(\"Ada\")\n",
+  "expected": "{\n  \"keyed\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_meta\": null\n  },\n  \"entries\": {\n    \"mlld\": \"send_email\",\n    \"inputs\": \"send_email_inputs\",\n    \"returns\": null,\n    \"labels\": [\n      \"execute:w\",\n      \"comm:w\"\n    ],\n    \"description\": \"Send mail\",\n    \"instructions\": \"Prefer drafts first.\",\n    \"can_authorize\": \"role:planner\",\n    \"bind\": {\n      \"retries\": 3,\n      \"settings\": {\n        \"mode\": \"safe\"\n      }\n    },\n    \"kind\": null,\n    \"semantics\": null,\n    \"custom_meta\": null\n  }\n}\n{\n  \"keyed\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_meta\": {\n      \"x\": 1\n    }\n  },\n  \"entries\": {\n    \"mlld\": \"search_contacts\",\n    \"inputs\": \"search_contacts_inputs\",\n    \"returns\": \"contact\",\n    \"labels\": [\n      \"resolve:r\"\n    ],\n    \"description\": \"Search contacts.\",\n    \"can_authorize\": false,\n    \"kind\": \"read\",\n    \"semantics\": \"Search contacts.\",\n    \"custom_meta\": {\n      \"x\": 1\n    }\n  }\n}\ncontact\nread\nSearch contacts.\nSearch contacts.\nsearch_contacts_inputs\n1\nsent:ada@example.com:hello:3:safe\nfound:Ada\n",
   "expectedError": null,
   "expectedWarning": null,
   "actualOutput": null,
@@ -249,14 +249,14 @@
           "column": 1
         },
         "end": {
-          "offset": 288,
-          "line": 11,
+          "offset": 238,
+          "line": 12,
           "column": 2
         }
       },
-      "kind": "exe",
-      "subtype": "exeCode",
-      "source": "code",
+      "kind": "record",
+      "subtype": "record",
+      "source": "record",
       "values": {
         "identifier": [
           {
@@ -269,8 +269,214 @@
                 "column": 1
               },
               "end": {
-                "offset": 288,
-                "line": 11,
+                "offset": 238,
+                "line": 12,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "search_contacts_inputs"
+          }
+        ],
+        "data": [
+          {
+            "kind": "input",
+            "name": "query",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-11",
+              "location": {
+                "start": {
+                  "offset": 200,
+                  "line": 10,
+                  "column": 10
+                },
+                "end": {
+                  "offset": 205,
+                  "line": 10,
+                  "column": 15
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "query"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "validate": "strict"
+      },
+      "raw": {
+        "identifier": "search_contacts_inputs"
+      },
+      "meta": {
+        "hasKey": false,
+        "fieldCount": 1,
+        "factCount": 0,
+        "dataCount": 1,
+        "hasCorrelate": false,
+        "hasWhen": false,
+        "validate": "strict"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-12",
+      "location": {
+        "start": {
+          "offset": 240,
+          "line": 14,
+          "column": 1
+        },
+        "end": {
+          "offset": 311,
+          "line": 17,
+          "column": 2
+        }
+      },
+      "kind": "record",
+      "subtype": "record",
+      "source": "record",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-13",
+            "location": {
+              "start": {
+                "offset": 240,
+                "line": 14,
+                "column": 1
+              },
+              "end": {
+                "offset": 311,
+                "line": 17,
+                "column": 2
+              }
+            },
+            "valueType": "identifier",
+            "identifier": "contact"
+          }
+        ],
+        "facts": [
+          {
+            "kind": "input",
+            "name": "email",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-14",
+              "location": {
+                "start": {
+                  "offset": 271,
+                  "line": 15,
+                  "column": 11
+                },
+                "end": {
+                  "offset": 276,
+                  "line": 15,
+                  "column": 16
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "email"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ],
+        "data": [
+          {
+            "kind": "input",
+            "name": "name",
+            "sourceRoot": "input",
+            "source": {
+              "type": "VariableReference",
+              "nodeId": "node-15",
+              "location": {
+                "start": {
+                  "offset": 296,
+                  "line": 16,
+                  "column": 10
+                },
+                "end": {
+                  "offset": 300,
+                  "line": 16,
+                  "column": 14
+                }
+              },
+              "valueType": "identifier",
+              "identifier": "input",
+              "fields": [
+                {
+                  "type": "field",
+                  "value": "name"
+                }
+              ]
+            },
+            "valueType": "string",
+            "optional": false
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "contact"
+      },
+      "meta": {
+        "hasKey": false,
+        "fieldCount": 2,
+        "factCount": 1,
+        "dataCount": 1,
+        "hasCorrelate": false,
+        "hasWhen": false,
+        "validate": "demote"
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-16",
+      "location": {
+        "start": {
+          "offset": 313,
+          "line": 19,
+          "column": 1
+        },
+        "end": {
+          "offset": 446,
+          "line": 21,
+          "column": 2
+        }
+      },
+      "kind": "exe",
+      "subtype": "exeCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-17",
+            "location": {
+              "start": {
+                "offset": 313,
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "offset": 446,
+                "line": 21,
                 "column": 2
               }
             },
@@ -281,16 +487,16 @@
         "params": [
           {
             "type": "Parameter",
-            "nodeId": "node-11",
+            "nodeId": "node-18",
             "location": {
               "start": {
-                "offset": 172,
-                "line": 9,
+                "offset": 330,
+                "line": 19,
                 "column": 18
               },
               "end": {
-                "offset": 181,
-                "line": 9,
+                "offset": 339,
+                "line": 19,
                 "column": 27
               }
             },
@@ -298,16 +504,16 @@
           },
           {
             "type": "Parameter",
-            "nodeId": "node-12",
+            "nodeId": "node-19",
             "location": {
               "start": {
-                "offset": 183,
-                "line": 9,
+                "offset": 341,
+                "line": 19,
                 "column": 29
               },
               "end": {
-                "offset": 190,
-                "line": 9,
+                "offset": 348,
+                "line": 19,
                 "column": 36
               }
             },
@@ -315,16 +521,16 @@
           },
           {
             "type": "Parameter",
-            "nodeId": "node-13",
+            "nodeId": "node-20",
             "location": {
               "start": {
-                "offset": 192,
-                "line": 9,
+                "offset": 350,
+                "line": 19,
                 "column": 38
               },
               "end": {
-                "offset": 199,
-                "line": 9,
+                "offset": 357,
+                "line": 19,
                 "column": 45
               }
             },
@@ -332,16 +538,16 @@
           },
           {
             "type": "Parameter",
-            "nodeId": "node-14",
+            "nodeId": "node-21",
             "location": {
               "start": {
-                "offset": 201,
-                "line": 9,
+                "offset": 359,
+                "line": 19,
                 "column": 47
               },
               "end": {
-                "offset": 209,
-                "line": 9,
+                "offset": 367,
+                "line": 19,
                 "column": 55
               }
             },
@@ -351,16 +557,16 @@
         "lang": [
           {
             "type": "Text",
-            "nodeId": "node-15",
+            "nodeId": "node-22",
             "location": {
               "start": {
-                "offset": 213,
-                "line": 9,
+                "offset": 371,
+                "line": 19,
                 "column": 59
               },
               "end": {
-                "offset": 288,
-                "line": 11,
+                "offset": 446,
+                "line": 21,
                 "column": 2
               }
             },
@@ -371,16 +577,16 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "node-16",
+            "nodeId": "node-23",
             "location": {
               "start": {
-                "offset": 213,
-                "line": 9,
+                "offset": 371,
+                "line": 19,
                 "column": 59
               },
               "end": {
-                "offset": 288,
-                "line": 11,
+                "offset": 446,
+                "line": 21,
                 "column": 2
               }
             },
@@ -409,16 +615,16 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-17",
+      "nodeId": "node-24",
       "location": {
         "start": {
-          "offset": 290,
-          "line": 13,
+          "offset": 448,
+          "line": 23,
           "column": 1
         },
         "end": {
-          "offset": 914,
-          "line": 35,
+          "offset": 512,
+          "line": 25,
           "column": 2
         }
       },
@@ -429,72 +635,55 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "node-18",
+            "nodeId": "node-25",
             "location": {
               "start": {
-                "offset": 290,
-                "line": 13,
+                "offset": 448,
+                "line": 23,
                 "column": 1
               },
               "end": {
-                "offset": 914,
-                "line": 35,
+                "offset": 512,
+                "line": 25,
                 "column": 2
               }
             },
             "valueType": "varIdentifier",
-            "identifier": "catalogSummary"
+            "identifier": "search_contacts"
           }
         ],
         "params": [
           {
             "type": "Parameter",
-            "nodeId": "node-19",
+            "nodeId": "node-26",
             "location": {
               "start": {
-                "offset": 311,
-                "line": 13,
-                "column": 22
+                "offset": 470,
+                "line": 23,
+                "column": 23
               },
               "end": {
-                "offset": 316,
-                "line": 13,
-                "column": 27
+                "offset": 475,
+                "line": 23,
+                "column": 28
               }
             },
-            "name": "keyed"
-          },
-          {
-            "type": "Parameter",
-            "nodeId": "node-20",
-            "location": {
-              "start": {
-                "offset": 318,
-                "line": 13,
-                "column": 29
-              },
-              "end": {
-                "offset": 325,
-                "line": 13,
-                "column": 36
-              }
-            },
-            "name": "entries"
+            "name": "query"
           }
         ],
         "lang": [
           {
             "type": "Text",
-            "nodeId": "node-21",
+            "nodeId": "node-27",
             "location": {
               "start": {
-                "offset": 329,
-                "line": 13,
-                "column": 40
+                "offset": 479,
+                "line": 23,
+                "column": 32
               },
               "end": {
-                "offset": 914,
-                "line": 35,
+                "offset": 512,
+                "line": 25,
                 "column": 2
               }
             },
@@ -505,35 +694,34 @@
         "code": [
           {
             "type": "Text",
-            "nodeId": "node-22",
+            "nodeId": "node-28",
             "location": {
               "start": {
-                "offset": 329,
-                "line": 13,
-                "column": 40
+                "offset": 479,
+                "line": 23,
+                "column": 32
               },
               "end": {
-                "offset": 914,
-                "line": 35,
+                "offset": 512,
+                "line": 25,
                 "column": 2
               }
             },
-            "content": "\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);"
+            "content": "\n  return `found:${query}`;"
           }
         ]
       },
       "raw": {
-        "identifier": "catalogSummary",
+        "identifier": "search_contacts",
         "params": [
-          "keyed",
-          "entries"
+          "query"
         ],
         "lang": "js",
         "args": [],
-        "code": "\n  const entry = entries[0][1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs.name,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs.name,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind\n    }\n  }, null, 2);"
+        "code": "\n  return `found:${query}`;"
       },
       "meta": {
-        "parameterCount": 2,
+        "parameterCount": 1,
         "isMultiLine": true,
         "language": "js",
         "hasVariables": false
@@ -541,16 +729,166 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-23",
+      "nodeId": "node-29",
       "location": {
         "start": {
-          "offset": 916,
-          "line": 37,
+          "offset": 514,
+          "line": 27,
           "column": 1
         },
         "end": {
-          "offset": 1216,
-          "line": 47,
+          "offset": 1533,
+          "line": 57,
+          "column": 2
+        }
+      },
+      "kind": "exe",
+      "subtype": "exeCode",
+      "source": "code",
+      "values": {
+        "identifier": [
+          {
+            "type": "VariableReference",
+            "nodeId": "node-30",
+            "location": {
+              "start": {
+                "offset": 514,
+                "line": 27,
+                "column": 1
+              },
+              "end": {
+                "offset": 1533,
+                "line": 57,
+                "column": 2
+              }
+            },
+            "valueType": "varIdentifier",
+            "identifier": "catalogSummary"
+          }
+        ],
+        "params": [
+          {
+            "type": "Parameter",
+            "nodeId": "node-31",
+            "location": {
+              "start": {
+                "offset": 535,
+                "line": 27,
+                "column": 22
+              },
+              "end": {
+                "offset": 540,
+                "line": 27,
+                "column": 27
+              }
+            },
+            "name": "keyed"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-32",
+            "location": {
+              "start": {
+                "offset": 542,
+                "line": 27,
+                "column": 29
+              },
+              "end": {
+                "offset": 549,
+                "line": 27,
+                "column": 36
+              }
+            },
+            "name": "entries"
+          },
+          {
+            "type": "Parameter",
+            "nodeId": "node-33",
+            "location": {
+              "start": {
+                "offset": 551,
+                "line": 27,
+                "column": 38
+              },
+              "end": {
+                "offset": 561,
+                "line": 27,
+                "column": 48
+              }
+            },
+            "name": "targetName"
+          }
+        ],
+        "lang": [
+          {
+            "type": "Text",
+            "nodeId": "node-34",
+            "location": {
+              "start": {
+                "offset": 565,
+                "line": 27,
+                "column": 52
+              },
+              "end": {
+                "offset": 1533,
+                "line": 57,
+                "column": 2
+              }
+            },
+            "content": "js"
+          }
+        ],
+        "args": [],
+        "code": [
+          {
+            "type": "Text",
+            "nodeId": "node-35",
+            "location": {
+              "start": {
+                "offset": 565,
+                "line": 27,
+                "column": 52
+              },
+              "end": {
+                "offset": 1533,
+                "line": 57,
+                "column": 2
+              }
+            },
+            "content": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);"
+          }
+        ]
+      },
+      "raw": {
+        "identifier": "catalogSummary",
+        "params": [
+          "keyed",
+          "entries",
+          "targetName"
+        ],
+        "lang": "js",
+        "args": [],
+        "code": "\n  const entry = entries.find(([name]) => name === targetName)?.[1];\n  return JSON.stringify({\n    keyed: {\n      mlld: keyed.mlld.name,\n      inputs: keyed.inputs?.name ?? null,\n      returns: keyed.returns?.name ?? null,\n      labels: keyed.labels,\n      description: keyed.description,\n      instructions: keyed.instructions,\n      can_authorize: keyed.can_authorize,\n      bind: keyed.bind,\n      kind: keyed.kind ?? null,\n      semantics: keyed.semantics ?? null,\n      custom_meta: keyed.custom_meta ?? null\n    },\n    entries: {\n      mlld: entry.mlld.name,\n      inputs: entry.inputs?.name ?? null,\n      returns: entry.returns?.name ?? null,\n      labels: entry.labels,\n      description: entry.description,\n      instructions: entry.instructions,\n      can_authorize: entry.can_authorize,\n      bind: entry.bind,\n      kind: entry.kind ?? null,\n      semantics: entry.semantics ?? null,\n      custom_meta: entry.custom_meta ?? null\n    }\n  }, null, 2);"
+      },
+      "meta": {
+        "parameterCount": 3,
+        "isMultiLine": true,
+        "language": "js",
+        "hasVariables": false
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-36",
+      "location": {
+        "start": {
+          "offset": 1535,
+          "line": 59,
+          "column": 1
+        },
+        "end": {
+          "offset": 2118,
+          "line": 80,
           "column": 2
         }
       },
@@ -561,16 +899,16 @@
         "identifier": [
           {
             "type": "VariableReference",
-            "nodeId": "node-24",
+            "nodeId": "node-37",
             "location": {
               "start": {
-                "offset": 916,
-                "line": 37,
+                "offset": 1535,
+                "line": 59,
                 "column": 1
               },
               "end": {
-                "offset": 1216,
-                "line": 47,
+                "offset": 2118,
+                "line": 80,
                 "column": 2
               }
             },
@@ -593,16 +931,16 @@
                       "key": "mlld",
                       "value": {
                         "type": "VariableReference",
-                        "nodeId": "node-25",
+                        "nodeId": "node-38",
                         "location": {
                           "start": {
-                            "offset": 969,
-                            "line": 39,
+                            "offset": 1588,
+                            "line": 61,
                             "column": 11
                           },
                           "end": {
-                            "offset": 980,
-                            "line": 39,
+                            "offset": 1599,
+                            "line": 61,
                             "column": 22
                           }
                         },
@@ -615,16 +953,16 @@
                       "key": "inputs",
                       "value": {
                         "type": "VariableReference",
-                        "nodeId": "node-26",
+                        "nodeId": "node-39",
                         "location": {
                           "start": {
-                            "offset": 994,
-                            "line": 40,
+                            "offset": 1613,
+                            "line": 62,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1012,
-                            "line": 40,
+                            "offset": 1631,
+                            "line": 62,
                             "column": 31
                           }
                         },
@@ -642,16 +980,16 @@
                             "content": [
                               {
                                 "type": "Literal",
-                                "nodeId": "node-27",
+                                "nodeId": "node-40",
                                 "location": {
                                   "start": {
-                                    "offset": 1027,
-                                    "line": 41,
+                                    "offset": 1646,
+                                    "line": 63,
                                     "column": 14
                                   },
                                   "end": {
-                                    "offset": 1038,
-                                    "line": 41,
+                                    "offset": 1657,
+                                    "line": 63,
                                     "column": 25
                                   }
                                 },
@@ -666,16 +1004,16 @@
                             "content": [
                               {
                                 "type": "Literal",
-                                "nodeId": "node-28",
+                                "nodeId": "node-41",
                                 "location": {
                                   "start": {
-                                    "offset": 1040,
-                                    "line": 41,
+                                    "offset": 1659,
+                                    "line": 63,
                                     "column": 27
                                   },
                                   "end": {
-                                    "offset": 1048,
-                                    "line": 41,
+                                    "offset": 1667,
+                                    "line": 63,
                                     "column": 35
                                   }
                                 },
@@ -689,13 +1027,13 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 1026,
-                            "line": 41,
+                            "offset": 1645,
+                            "line": 63,
                             "column": 13
                           },
                           "end": {
-                            "offset": 1049,
-                            "line": 41,
+                            "offset": 1668,
+                            "line": 63,
                             "column": 36
                           }
                         }
@@ -727,16 +1065,16 @@
                             "key": "retries",
                             "value": {
                               "type": "Literal",
-                              "nodeId": "node-29",
+                              "nodeId": "node-42",
                               "location": {
                                 "start": {
-                                  "offset": 1179,
-                                  "line": 45,
+                                  "offset": 1798,
+                                  "line": 67,
                                   "column": 22
                                 },
                                 "end": {
-                                  "offset": 1180,
-                                  "line": 45,
+                                  "offset": 1799,
+                                  "line": 67,
                                   "column": 23
                                 }
                               },
@@ -758,13 +1096,13 @@
                               ],
                               "location": {
                                 "start": {
-                                  "offset": 1192,
-                                  "line": 45,
+                                  "offset": 1811,
+                                  "line": 67,
                                   "column": 35
                                 },
                                 "end": {
-                                  "offset": 1208,
-                                  "line": 45,
+                                  "offset": 1827,
+                                  "line": 67,
                                   "column": 51
                                 }
                               }
@@ -773,13 +1111,13 @@
                         ],
                         "location": {
                           "start": {
-                            "offset": 1168,
-                            "line": 45,
+                            "offset": 1787,
+                            "line": 67,
                             "column": 11
                           },
                           "end": {
-                            "offset": 1210,
-                            "line": 45,
+                            "offset": 1829,
+                            "line": 67,
                             "column": 53
                           }
                         }
@@ -788,13 +1126,225 @@
                   ],
                   "location": {
                     "start": {
-                      "offset": 957,
-                      "line": 38,
+                      "offset": 1576,
+                      "line": 60,
                       "column": 15
                     },
                     "end": {
-                      "offset": 1214,
-                      "line": 46,
+                      "offset": 1833,
+                      "line": 68,
+                      "column": 4
+                    }
+                  }
+                }
+              },
+              {
+                "type": "pair",
+                "key": "search_contacts",
+                "value": {
+                  "type": "object",
+                  "entries": [
+                    {
+                      "type": "pair",
+                      "key": "mlld",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-43",
+                        "location": {
+                          "start": {
+                            "offset": 1866,
+                            "line": 70,
+                            "column": 11
+                          },
+                          "end": {
+                            "offset": 1882,
+                            "line": 70,
+                            "column": 27
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "search_contacts"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "inputs",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-44",
+                        "location": {
+                          "start": {
+                            "offset": 1896,
+                            "line": 71,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 1919,
+                            "line": 71,
+                            "column": 36
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "search_contacts_inputs"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "returns",
+                      "value": {
+                        "type": "VariableReference",
+                        "nodeId": "node-45",
+                        "location": {
+                          "start": {
+                            "offset": 1934,
+                            "line": 72,
+                            "column": 14
+                          },
+                          "end": {
+                            "offset": 1942,
+                            "line": 72,
+                            "column": 22
+                          }
+                        },
+                        "valueType": "varIdentifier",
+                        "identifier": "contact"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "labels",
+                      "value": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "content": [
+                              {
+                                "type": "Literal",
+                                "nodeId": "node-46",
+                                "location": {
+                                  "start": {
+                                    "offset": 1957,
+                                    "line": 73,
+                                    "column": 14
+                                  },
+                                  "end": {
+                                    "offset": 1968,
+                                    "line": 73,
+                                    "column": 25
+                                  }
+                                },
+                                "value": "resolve:r",
+                                "valueType": "string"
+                              }
+                            ],
+                            "wrapperType": "doubleQuote",
+                            "hasInterpolation": false
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 1956,
+                            "line": 73,
+                            "column": 13
+                          },
+                          "end": {
+                            "offset": 1969,
+                            "line": 73,
+                            "column": 26
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "kind",
+                      "value": "read"
+                    },
+                    {
+                      "type": "pair",
+                      "key": "semantics",
+                      "value": "Search contacts."
+                    },
+                    {
+                      "type": "pair",
+                      "key": "description",
+                      "value": "Search contacts."
+                    },
+                    {
+                      "type": "pair",
+                      "key": "can_authorize",
+                      "value": {
+                        "type": "Literal",
+                        "nodeId": "node-47",
+                        "location": {
+                          "start": {
+                            "offset": 2080,
+                            "line": 77,
+                            "column": 20
+                          },
+                          "end": {
+                            "offset": 2085,
+                            "line": 77,
+                            "column": 25
+                          }
+                        },
+                        "value": false,
+                        "valueType": "boolean"
+                      }
+                    },
+                    {
+                      "type": "pair",
+                      "key": "custom_meta",
+                      "value": {
+                        "type": "object",
+                        "entries": [
+                          {
+                            "type": "pair",
+                            "key": "x",
+                            "value": {
+                              "type": "Literal",
+                              "nodeId": "node-48",
+                              "location": {
+                                "start": {
+                                  "offset": 2109,
+                                  "line": 78,
+                                  "column": 23
+                                },
+                                "end": {
+                                  "offset": 2110,
+                                  "line": 78,
+                                  "column": 24
+                                }
+                              },
+                              "value": 1,
+                              "valueType": "number"
+                            }
+                          }
+                        ],
+                        "location": {
+                          "start": {
+                            "offset": 2104,
+                            "line": 78,
+                            "column": 18
+                          },
+                          "end": {
+                            "offset": 2112,
+                            "line": 78,
+                            "column": 26
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "location": {
+                    "start": {
+                      "offset": 1854,
+                      "line": 69,
+                      "column": 20
+                    },
+                    "end": {
+                      "offset": 2116,
+                      "line": 79,
                       "column": 4
                     }
                   }
@@ -803,13 +1353,13 @@
             ],
             "location": {
               "start": {
-                "offset": 941,
-                "line": 37,
+                "offset": 1560,
+                "line": 59,
                 "column": 26
               },
               "end": {
-                "offset": 1216,
-                "line": 47,
+                "offset": 2118,
+                "line": 80,
                 "column": 2
               }
             }
@@ -824,16 +1374,16 @@
     },
     {
       "type": "Directive",
-      "nodeId": "node-30",
+      "nodeId": "node-49",
       "location": {
         "start": {
-          "offset": 1218,
-          "line": 49,
+          "offset": 2120,
+          "line": 82,
           "column": 1
         },
         "end": {
-          "offset": 1288,
-          "line": 50,
+          "offset": 2204,
+          "line": 83,
           "column": 1
         }
       },
@@ -843,17 +1393,17 @@
       "values": {
         "invocation": {
           "type": "ExecInvocation",
-          "nodeId": "node-31",
+          "nodeId": "node-50",
           "location": {
             "start": {
-              "offset": 1224,
-              "line": 49,
+              "offset": 2126,
+              "line": 82,
               "column": 7
             },
             "end": {
-              "offset": 1287,
-              "line": 49,
-              "column": 70
+              "offset": 2203,
+              "line": 82,
+              "column": 84
             }
           },
           "commandRef": {
@@ -861,17 +1411,17 @@
             "identifier": [
               {
                 "type": "VariableReference",
-                "nodeId": "node-32",
+                "nodeId": "node-51",
                 "location": {
                   "start": {
-                    "offset": 1224,
-                    "line": 49,
+                    "offset": 2126,
+                    "line": 82,
                     "column": 7
                   },
                   "end": {
-                    "offset": 1287,
-                    "line": 49,
-                    "column": 70
+                    "offset": 2203,
+                    "line": 82,
+                    "column": 84
                   }
                 },
                 "valueType": "varIdentifier",
@@ -881,16 +1431,16 @@
             "args": [
               {
                 "type": "VariableReference",
-                "nodeId": "node-33",
+                "nodeId": "node-52",
                 "location": {
                   "start": {
-                    "offset": 1240,
-                    "line": 49,
+                    "offset": 2142,
+                    "line": 82,
                     "column": 23
                   },
                   "end": {
-                    "offset": 1262,
-                    "line": 49,
+                    "offset": 2164,
+                    "line": 82,
                     "column": 45
                   }
                 },
@@ -903,13 +1453,13 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 1252,
-                        "line": 49,
+                        "offset": 2154,
+                        "line": 82,
                         "column": 35
                       },
                       "end": {
-                        "offset": 1262,
-                        "line": 49,
+                        "offset": 2164,
+                        "line": 82,
                         "column": 45
                       }
                     }
@@ -918,16 +1468,16 @@
               },
               {
                 "type": "VariableReference",
-                "nodeId": "node-34",
+                "nodeId": "node-53",
                 "location": {
                   "start": {
-                    "offset": 1264,
-                    "line": 49,
+                    "offset": 2166,
+                    "line": 82,
                     "column": 47
                   },
                   "end": {
-                    "offset": 1286,
-                    "line": 49,
+                    "offset": 2188,
+                    "line": 82,
                     "column": 69
                   }
                 },
@@ -940,13 +1490,13 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 1276,
-                        "line": 49,
+                        "offset": 2178,
+                        "line": 82,
                         "column": 59
                       },
                       "end": {
-                        "offset": 1278,
-                        "line": 49,
+                        "offset": 2180,
+                        "line": 82,
                         "column": 61
                       }
                     }
@@ -957,18 +1507,35 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 1279,
-                        "line": 49,
+                        "offset": 2181,
+                        "line": 82,
                         "column": 62
                       },
                       "end": {
-                        "offset": 1286,
-                        "line": 49,
+                        "offset": 2188,
+                        "line": 82,
                         "column": 69
                       }
                     }
                   }
                 ]
+              },
+              {
+                "type": "Text",
+                "nodeId": "node-54",
+                "location": {
+                  "start": {
+                    "offset": 2190,
+                    "line": 82,
+                    "column": 71
+                  },
+                  "end": {
+                    "offset": 2202,
+                    "line": 82,
+                    "column": 83
+                  }
+                },
+                "content": "send_email"
               }
             ],
             "isCommandReference": true
@@ -978,25 +1545,25 @@
       },
       "raw": {
         "invocation": "catalogSummary",
-        "arguments": "@agentTools, @agentTools"
+        "arguments": "@agentTools, @agentTools, send_email"
       },
       "meta": {
         "hasParentheses": true,
-        "argumentCount": 2
+        "argumentCount": 3
       }
     },
     {
       "type": "Directive",
-      "nodeId": "node-35",
+      "nodeId": "node-55",
       "location": {
         "start": {
-          "offset": 1288,
-          "line": 50,
+          "offset": 2204,
+          "line": 83,
           "column": 1
         },
         "end": {
-          "offset": 1338,
-          "line": 51,
+          "offset": 2298,
+          "line": 84,
           "column": 1
         }
       },
@@ -1006,16 +1573,739 @@
       "values": {
         "invocation": {
           "type": "ExecInvocation",
-          "nodeId": "node-36",
+          "nodeId": "node-56",
           "location": {
             "start": {
-              "offset": 1294,
-              "line": 50,
+              "offset": 2210,
+              "line": 83,
               "column": 7
             },
             "end": {
-              "offset": 1337,
-              "line": 50,
+              "offset": 2297,
+              "line": 83,
+              "column": 94
+            }
+          },
+          "commandRef": {
+            "name": "catalogSummary",
+            "identifier": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-57",
+                "location": {
+                  "start": {
+                    "offset": 2210,
+                    "line": 83,
+                    "column": 7
+                  },
+                  "end": {
+                    "offset": 2297,
+                    "line": 83,
+                    "column": 94
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "catalogSummary"
+              }
+            ],
+            "args": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-58",
+                "location": {
+                  "start": {
+                    "offset": 2226,
+                    "line": 83,
+                    "column": 23
+                  },
+                  "end": {
+                    "offset": 2253,
+                    "line": 83,
+                    "column": 50
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "search_contacts",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 2238,
+                        "line": 83,
+                        "column": 35
+                      },
+                      "end": {
+                        "offset": 2253,
+                        "line": 83,
+                        "column": 50
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "VariableReference",
+                "nodeId": "node-59",
+                "location": {
+                  "start": {
+                    "offset": 2255,
+                    "line": 83,
+                    "column": 52
+                  },
+                  "end": {
+                    "offset": 2277,
+                    "line": 83,
+                    "column": 74
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "mx",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 2267,
+                        "line": 83,
+                        "column": 64
+                      },
+                      "end": {
+                        "offset": 2269,
+                        "line": 83,
+                        "column": 66
+                      }
+                    }
+                  },
+                  {
+                    "type": "field",
+                    "value": "entries",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 2270,
+                        "line": 83,
+                        "column": 67
+                      },
+                      "end": {
+                        "offset": 2277,
+                        "line": 83,
+                        "column": 74
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "Text",
+                "nodeId": "node-60",
+                "location": {
+                  "start": {
+                    "offset": 2279,
+                    "line": 83,
+                    "column": 76
+                  },
+                  "end": {
+                    "offset": 2296,
+                    "line": 83,
+                    "column": 93
+                  }
+                },
+                "content": "search_contacts"
+              }
+            ],
+            "isCommandReference": true
+          },
+          "withClause": null
+        }
+      },
+      "raw": {
+        "invocation": "catalogSummary",
+        "arguments": "@agentTools, @agentTools, search_contacts"
+      },
+      "meta": {
+        "hasParentheses": true,
+        "argumentCount": 3
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-61",
+      "location": {
+        "start": {
+          "offset": 2298,
+          "line": 84,
+          "column": 1
+        },
+        "end": {
+          "offset": 2345,
+          "line": 85,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-62",
+          "location": {
+            "start": {
+              "offset": 2304,
+              "line": 84,
+              "column": 7
+            },
+            "end": {
+              "offset": 2344,
+              "line": 84,
+              "column": 47
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2316,
+                  "line": 84,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2331,
+                  "line": 84,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "returns",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2332,
+                  "line": 84,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2339,
+                  "line": 84,
+                  "column": 42
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "name",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2340,
+                  "line": 84,
+                  "column": 43
+                },
+                "end": {
+                  "offset": 2344,
+                  "line": 84,
+                  "column": 47
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.returns.name"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-63",
+      "location": {
+        "start": {
+          "offset": 2345,
+          "line": 85,
+          "column": 1
+        },
+        "end": {
+          "offset": 2384,
+          "line": 86,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-64",
+          "location": {
+            "start": {
+              "offset": 2351,
+              "line": 85,
+              "column": 7
+            },
+            "end": {
+              "offset": 2383,
+              "line": 85,
+              "column": 39
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2363,
+                  "line": 85,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2378,
+                  "line": 85,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "kind",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2379,
+                  "line": 85,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2383,
+                  "line": 85,
+                  "column": 39
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.kind"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-65",
+      "location": {
+        "start": {
+          "offset": 2384,
+          "line": 86,
+          "column": 1
+        },
+        "end": {
+          "offset": 2428,
+          "line": 87,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-66",
+          "location": {
+            "start": {
+              "offset": 2390,
+              "line": 86,
+              "column": 7
+            },
+            "end": {
+              "offset": 2427,
+              "line": 86,
+              "column": 44
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2402,
+                  "line": 86,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2417,
+                  "line": 86,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "semantics",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2418,
+                  "line": 86,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2427,
+                  "line": 86,
+                  "column": 44
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.semantics"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-67",
+      "location": {
+        "start": {
+          "offset": 2428,
+          "line": 87,
+          "column": 1
+        },
+        "end": {
+          "offset": 2474,
+          "line": 88,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-68",
+          "location": {
+            "start": {
+              "offset": 2434,
+              "line": 87,
+              "column": 7
+            },
+            "end": {
+              "offset": 2473,
+              "line": 87,
+              "column": 46
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2446,
+                  "line": 87,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2461,
+                  "line": 87,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "description",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2462,
+                  "line": 87,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2473,
+                  "line": 87,
+                  "column": 46
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.description"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-69",
+      "location": {
+        "start": {
+          "offset": 2474,
+          "line": 88,
+          "column": 1
+        },
+        "end": {
+          "offset": 2520,
+          "line": 89,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-70",
+          "location": {
+            "start": {
+              "offset": 2480,
+              "line": 88,
+              "column": 7
+            },
+            "end": {
+              "offset": 2519,
+              "line": 88,
+              "column": 46
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2492,
+                  "line": 88,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2507,
+                  "line": 88,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "inputs",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2508,
+                  "line": 88,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2514,
+                  "line": 88,
+                  "column": 41
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "name",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2515,
+                  "line": 88,
+                  "column": 42
+                },
+                "end": {
+                  "offset": 2519,
+                  "line": 88,
+                  "column": 46
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.inputs.name"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-71",
+      "location": {
+        "start": {
+          "offset": 2520,
+          "line": 89,
+          "column": 1
+        },
+        "end": {
+          "offset": 2568,
+          "line": 90,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showVariable",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "VariableReference",
+          "nodeId": "node-72",
+          "location": {
+            "start": {
+              "offset": 2526,
+              "line": 89,
+              "column": 7
+            },
+            "end": {
+              "offset": 2567,
+              "line": 89,
+              "column": 48
+            }
+          },
+          "valueType": "varIdentifier",
+          "identifier": "agentTools",
+          "fields": [
+            {
+              "type": "field",
+              "value": "search_contacts",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2538,
+                  "line": 89,
+                  "column": 19
+                },
+                "end": {
+                  "offset": 2553,
+                  "line": 89,
+                  "column": 34
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "custom_meta",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2554,
+                  "line": 89,
+                  "column": 35
+                },
+                "end": {
+                  "offset": 2565,
+                  "line": 89,
+                  "column": 46
+                }
+              }
+            },
+            {
+              "type": "field",
+              "value": "x",
+              "optional": false,
+              "location": {
+                "start": {
+                  "offset": 2566,
+                  "line": 89,
+                  "column": 47
+                },
+                "end": {
+                  "offset": 2567,
+                  "line": 89,
+                  "column": 48
+                }
+              }
+            }
+          ]
+        }
+      },
+      "raw": {
+        "variable": "@agentTools.search_contacts.custom_meta.x"
+      },
+      "meta": {
+        "hasParentheses": false,
+        "argumentCount": 0
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-73",
+      "location": {
+        "start": {
+          "offset": 2568,
+          "line": 90,
+          "column": 1
+        },
+        "end": {
+          "offset": 2618,
+          "line": 91,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showInvocation",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "ExecInvocation",
+          "nodeId": "node-74",
+          "location": {
+            "start": {
+              "offset": 2574,
+              "line": 90,
+              "column": 7
+            },
+            "end": {
+              "offset": 2617,
+              "line": 90,
               "column": 50
             }
           },
@@ -1024,16 +2314,16 @@
             "identifier": [
               {
                 "type": "VariableReference",
-                "nodeId": "node-37",
+                "nodeId": "node-75",
                 "location": {
                   "start": {
-                    "offset": 1294,
-                    "line": 50,
+                    "offset": 2574,
+                    "line": 90,
                     "column": 7
                   },
                   "end": {
-                    "offset": 1337,
-                    "line": 50,
+                    "offset": 2617,
+                    "line": 90,
                     "column": 50
                   }
                 },
@@ -1046,13 +2336,13 @@
                     "optional": false,
                     "location": {
                       "start": {
-                        "offset": 1306,
-                        "line": 50,
+                        "offset": 2586,
+                        "line": 90,
                         "column": 19
                       },
                       "end": {
-                        "offset": 1316,
-                        "line": 50,
+                        "offset": 2596,
+                        "line": 90,
                         "column": 29
                       }
                     }
@@ -1063,16 +2353,16 @@
             "args": [
               {
                 "type": "VariableReference",
-                "nodeId": "node-38",
+                "nodeId": "node-76",
                 "location": {
                   "start": {
-                    "offset": 1317,
-                    "line": 50,
+                    "offset": 2597,
+                    "line": 90,
                     "column": 30
                   },
                   "end": {
-                    "offset": 1327,
-                    "line": 50,
+                    "offset": 2607,
+                    "line": 90,
                     "column": 40
                   }
                 },
@@ -1081,16 +2371,16 @@
               },
               {
                 "type": "Text",
-                "nodeId": "node-39",
+                "nodeId": "node-77",
                 "location": {
                   "start": {
-                    "offset": 1329,
-                    "line": 50,
+                    "offset": 2609,
+                    "line": 90,
                     "column": 42
                   },
                   "end": {
-                    "offset": 1336,
-                    "line": 50,
+                    "offset": 2616,
+                    "line": 90,
                     "column": 49
                   }
                 },
@@ -1100,16 +2390,16 @@
             "isCommandReference": true,
             "objectReference": {
               "type": "VariableReference",
-              "nodeId": "node-40",
+              "nodeId": "node-78",
               "location": {
                 "start": {
-                  "offset": 1294,
-                  "line": 50,
+                  "offset": 2574,
+                  "line": 90,
                   "column": 7
                 },
                 "end": {
-                  "offset": 1337,
-                  "line": 50,
+                  "offset": 2617,
+                  "line": 90,
                   "column": 50
                 }
               },
@@ -1127,6 +2417,132 @@
       "meta": {
         "hasParentheses": true,
         "argumentCount": 2
+      }
+    },
+    {
+      "type": "Directive",
+      "nodeId": "node-79",
+      "location": {
+        "start": {
+          "offset": 2618,
+          "line": 91,
+          "column": 1
+        },
+        "end": {
+          "offset": 2659,
+          "line": 92,
+          "column": 1
+        }
+      },
+      "kind": "show",
+      "subtype": "showInvocation",
+      "source": "invocation",
+      "values": {
+        "invocation": {
+          "type": "ExecInvocation",
+          "nodeId": "node-80",
+          "location": {
+            "start": {
+              "offset": 2624,
+              "line": 91,
+              "column": 7
+            },
+            "end": {
+              "offset": 2658,
+              "line": 91,
+              "column": 41
+            }
+          },
+          "commandRef": {
+            "name": "search_contacts",
+            "identifier": [
+              {
+                "type": "VariableReference",
+                "nodeId": "node-81",
+                "location": {
+                  "start": {
+                    "offset": 2624,
+                    "line": 91,
+                    "column": 7
+                  },
+                  "end": {
+                    "offset": 2658,
+                    "line": 91,
+                    "column": 41
+                  }
+                },
+                "valueType": "varIdentifier",
+                "identifier": "agentTools",
+                "fields": [
+                  {
+                    "type": "field",
+                    "value": "search_contacts",
+                    "optional": false,
+                    "location": {
+                      "start": {
+                        "offset": 2636,
+                        "line": 91,
+                        "column": 19
+                      },
+                      "end": {
+                        "offset": 2651,
+                        "line": 91,
+                        "column": 34
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "args": [
+              {
+                "type": "Text",
+                "nodeId": "node-82",
+                "location": {
+                  "start": {
+                    "offset": 2652,
+                    "line": 91,
+                    "column": 35
+                  },
+                  "end": {
+                    "offset": 2657,
+                    "line": 91,
+                    "column": 40
+                  }
+                },
+                "content": "Ada"
+              }
+            ],
+            "isCommandReference": true,
+            "objectReference": {
+              "type": "VariableReference",
+              "nodeId": "node-83",
+              "location": {
+                "start": {
+                  "offset": 2624,
+                  "line": 91,
+                  "column": 7
+                },
+                "end": {
+                  "offset": 2658,
+                  "line": 91,
+                  "column": 41
+                }
+              },
+              "valueType": "varIdentifier",
+              "identifier": "agentTools"
+            }
+          },
+          "withClause": null
+        }
+      },
+      "raw": {
+        "invocation": "search_contacts",
+        "arguments": "Ada"
+      },
+      "meta": {
+        "hasParentheses": true,
+        "argumentCount": 1
       }
     }
   ],

@@ -224,6 +224,39 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('preserves returns and arbitrary authored entry keys without gating them', () => {
+    const env = createEnvWithExecutables({
+      searchContacts: ['query']
+    });
+
+    const collection = normalizeToolCollection(
+      {
+        search_contacts: {
+          mlld: '@searchContacts',
+          returns: '@contact',
+          labels: ['resolve:r'],
+          kind: 'read',
+          semantics: 'Search contacts.',
+          description: 'Search contacts.',
+          can_authorize: false,
+          custom_meta: { x: 1 }
+        }
+      },
+      env
+    );
+
+    expect(collection.search_contacts).toEqual({
+      mlld: '@searchContacts',
+      returns: '@contact',
+      labels: ['resolve:r'],
+      kind: 'read',
+      semantics: 'Search contacts.',
+      description: 'Search contacts.',
+      can_authorize: false,
+      custom_meta: { x: 1 }
+    });
+  });
+
   it('accepts restrict-only overrides for controlArgs, updateArgs, exactPayloadArgs, and sourceArgs', () => {
     const env = createEnvWithExecutables({
       updateIssue: {

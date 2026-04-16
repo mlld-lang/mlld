@@ -137,7 +137,7 @@ function normalizeToolCollectionExecutableRef(value: unknown): string | undefine
   return undefined;
 }
 
-function normalizeToolCollectionInputRef(value: unknown): string | undefined {
+function normalizeToolCollectionRecordRef(value: unknown): string | undefined {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -192,8 +192,11 @@ function buildToolCollectionMatchSignature(value: unknown): string | undefined {
           ...(normalizeToolCollectionExecutableRef(entry.mlld)
             ? { mlld: normalizeToolCollectionExecutableRef(entry.mlld) }
             : {}),
-          ...(normalizeToolCollectionInputRef(entry.inputs)
-            ? { inputs: normalizeToolCollectionInputRef(entry.inputs) }
+          ...(normalizeToolCollectionRecordRef(entry.inputs)
+            ? { inputs: normalizeToolCollectionRecordRef(entry.inputs) }
+            : {}),
+          ...(normalizeToolCollectionRecordRef(entry.returns)
+            ? { returns: normalizeToolCollectionRecordRef(entry.returns) }
             : {}),
           expose: normalizeToolCollectionStringList(entry.expose),
           optional: normalizeToolCollectionStringList(entry.optional),
@@ -566,7 +569,16 @@ function resolveToolOutputRecordDefinition(
   }
 
   if (typeof outputRecord === 'string') {
-    return env.getRecordDefinition(outputRecord) ?? entry.embeddedRecordDefinitions?.[outputRecord];
+    const normalizedName = outputRecord.startsWith('@') ? outputRecord.slice(1) : outputRecord;
+    return env.getRecordDefinition(normalizedName) ?? entry.embeddedRecordDefinitions?.[normalizedName];
+  }
+
+  if (outputRecord && typeof outputRecord === 'object' && isRecordVariable(outputRecord as any)) {
+    return (outputRecord as { value: RecordDefinition }).value;
+  }
+
+  if (isPlainObject(outputRecord) && Array.isArray((outputRecord as { fields?: unknown }).fields)) {
+    return outputRecord as RecordDefinition;
   }
 
   return undefined;

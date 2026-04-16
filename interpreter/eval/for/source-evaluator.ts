@@ -11,6 +11,7 @@ import { evaluate } from '@interpreter/core/interpreter';
 import { extractDescriptorsFromDataAst } from '@interpreter/eval/var/security-descriptor';
 import { toIterable, type ForSourceIterable } from '@interpreter/eval/for-utils';
 import { extractSecurityDescriptor } from '@interpreter/utils/structured-value';
+import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 
 function formatForSourcePreview(value: unknown): string {
   const receivedType = typeof value;
@@ -45,6 +46,54 @@ function toIterableOrThrow(sourceValue: unknown, location?: SourceLocation): For
 function resolveForExpressionSourceName(expr: ForExpression): string | undefined {
   const sourceNode = Array.isArray(expr.source) ? (expr.source as any)[0] : expr.source;
   return sourceNode?.identifier ?? sourceNode?.name;
+}
+
+function isAstIterableNode(value: unknown): value is {
+  type: 'array' | 'object';
+  items?: unknown[];
+  elements?: unknown[];
+  entries?: unknown[];
+  properties?: unknown;
+} {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as {
+    type?: unknown;
+    items?: unknown[];
+    elements?: unknown[];
+    entries?: unknown[];
+    properties?: unknown;
+  };
+
+  if (
+    candidate.type === 'array' &&
+    (Array.isArray(candidate.items) || Array.isArray(candidate.elements))
+  ) {
+    return true;
+  }
+
+  return (
+    candidate.type === 'object' &&
+    (Array.isArray(candidate.entries) || !!candidate.properties)
+  );
+}
+
+async function materializeForSourceValue(
+  sourceValue: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (isVariable(sourceValue)) {
+    return extractVariableValue(sourceValue, env);
+  }
+
+  if (!isAstIterableNode(sourceValue)) {
+    return sourceValue;
+  }
+
+  const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+  return evaluateDataValue(sourceValue as any, env);
 }
 
 function resolveSourceDescriptor(
@@ -86,9 +135,10 @@ export async function evaluateForDirectiveSource(
     ? directive.values.source[0]
     : directive.values.source;
   const sourceResult = await evaluate(sourceNode, env);
+  const sourceValue = await materializeForSourceValue(sourceResult.value, env);
   const sourceVarName = (sourceNode as any)?.identifier ?? (sourceNode as any)?.name;
   return {
-    iterable: toIterableOrThrow(sourceResult.value, directive.location),
+    iterable: toIterableOrThrow(sourceValue, directive.location),
     sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceResult.value, sourceNode)
   };
 }
@@ -98,10 +148,10 @@ export async function evaluateForExpressionSource(
   env: Environment
 ): Promise<{ iterable: ForSourceIterable; sourceDescriptor?: SecurityDescriptor }> {
   const sourceResult = await evaluate(expr.source, env, { isExpression: true });
-  const sourceValue = sourceResult.value;
+  const sourceValue = await materializeForSourceValue(sourceResult.value, env);
   const sourceVarName = resolveForExpressionSourceName(expr);
   return {
     iterable: toIterableOrThrow(sourceValue, expr.location),
-    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceValue, expr.source)
+    sourceDescriptor: resolveSourceDescriptor(sourceVarName, env, sourceResult.value, expr.source)
   };
 }

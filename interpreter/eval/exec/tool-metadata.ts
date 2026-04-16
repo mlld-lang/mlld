@@ -14,6 +14,7 @@ import {
   type ToolAuthorizationContextEntry,
   type ToolCollection,
   type ToolCollectionAuthorizationContext,
+  type ToolRecordReference,
   type ToolDefinition
 } from '@core/types/tools';
 import type { ExecutableOutputRecord } from '@core/types/executable';
@@ -46,7 +47,7 @@ export interface EffectiveToolMetadata {
   hasSourceArgsMetadata: boolean;
   correlateControlArgs: boolean;
   taintFacts: boolean;
-  outputRecord?: ExecutableOutputRecord;
+  outputRecord?: ExecutableOutputRecord | ToolRecordReference;
   embeddedRecordDefinitions?: Record<string, RecordDefinition>;
 }
 
@@ -427,33 +428,68 @@ function getToolDefinitionBindKeys(definition?: ToolDefinition): string[] {
   );
 }
 
+function getRecordDefinitionForToolRecord(options: {
+  env: Environment;
+  recordRef: unknown;
+  embeddedRecordDefinitions?: Record<string, RecordDefinition>;
+}): RecordDefinition | undefined {
+  const { recordRef } = options;
+  if (recordRef === undefined) {
+    return undefined;
+  }
+
+  if (typeof recordRef === 'string') {
+    const recordName = normalizeTrimmedString(recordRef);
+    if (!recordName) {
+      return undefined;
+    }
+    const normalizedName = recordName.startsWith('@') ? recordName.slice(1) : recordName;
+    return options.env.getRecordDefinition(normalizedName)
+      ?? options.embeddedRecordDefinitions?.[normalizedName];
+  }
+
+  if (isRecordVariable(recordRef as any)) {
+    return (recordRef as { value: RecordDefinition }).value;
+  }
+
+  if (isPlainObject(recordRef) && typeof (recordRef as { name?: unknown }).name === 'string') {
+    const recordDefinition = recordRef as RecordDefinition;
+    return Array.isArray(recordDefinition.fields) ? recordDefinition : undefined;
+  }
+
+  return undefined;
+}
+
 function getRecordDefinitionForToolInput(options: {
   env: Environment;
   definition?: ToolDefinition;
   embeddedRecordDefinitions?: Record<string, RecordDefinition>;
 }): RecordDefinition | undefined {
-  const inputRef = options.definition?.inputs;
-  if (inputRef === undefined) {
+  return getRecordDefinitionForToolRecord({
+    env: options.env,
+    recordRef: options.definition?.inputs,
+    embeddedRecordDefinitions: options.embeddedRecordDefinitions
+  });
+}
+
+function getToolDefinitionOutputRecord(
+  definition?: ToolDefinition
+): ToolRecordReference | undefined {
+  const outputRecord = definition?.returns;
+  if (outputRecord === undefined) {
     return undefined;
   }
 
-  if (typeof inputRef === 'string') {
-    const inputName = normalizeTrimmedString(inputRef);
-    if (!inputName) {
-      return undefined;
-    }
-    const normalizedName = inputName.startsWith('@') ? inputName.slice(1) : inputName;
-    return options.env.getRecordDefinition(normalizedName)
-      ?? options.embeddedRecordDefinitions?.[normalizedName];
+  if (typeof outputRecord === 'string') {
+    return normalizeTrimmedString(outputRecord);
   }
 
-  if (isRecordVariable(inputRef as any)) {
-    return (inputRef as { value: RecordDefinition }).value;
+  if (isRecordVariable(outputRecord as any)) {
+    return outputRecord as ToolRecordReference;
   }
 
-  if (isPlainObject(inputRef) && typeof (inputRef as { name?: unknown }).name === 'string') {
-    const recordDefinition = inputRef as RecordDefinition;
-    return Array.isArray(recordDefinition.fields) ? recordDefinition : undefined;
+  if (isPlainObject(outputRecord) && Array.isArray((outputRecord as { fields?: unknown }).fields)) {
+    return outputRecord as ToolRecordReference;
   }
 
   return undefined;
@@ -769,6 +805,7 @@ function applyToolDefinitionAuthMetadata(
   });
   const description = normalizeTrimmedString(definition.description) ?? base.description;
   const instructions = normalizeTrimmedString(definition.instructions) ?? base.instructions;
+  const outputRecord = getToolDefinitionOutputRecord(definition) ?? base.outputRecord;
 
   return {
     ...base,
@@ -787,7 +824,8 @@ function applyToolDefinitionAuthMetadata(
     ...(exactPayloadArgs !== undefined ? { exactPayloadArgs } : {}),
     ...(hasSourceArgsMetadata ? { sourceArgs } : {}),
     hasSourceArgsMetadata,
-    correlateControlArgs: getEffectiveToolCorrelateControlArgs(labels, inputSchema, base.correlateControlArgs, definition)
+    correlateControlArgs: getEffectiveToolCorrelateControlArgs(labels, inputSchema, base.correlateControlArgs, definition),
+    ...(outputRecord ? { outputRecord } : {})
   };
 }
 
@@ -804,6 +842,7 @@ function mergeToolDefinitionMetadata(
   const paramEntries = buildEffectiveParamEntries(base.params, base.paramEntries, optionalParams);
   const description = base.description ?? normalizeTrimmedString(definition.description);
   const instructions = base.instructions ?? normalizeTrimmedString(definition.instructions);
+  const outputRecord = base.outputRecord ?? getToolDefinitionOutputRecord(definition);
 
   return {
     ...base,
@@ -813,7 +852,8 @@ function mergeToolDefinitionMetadata(
     ...(description ? { description } : {}),
     ...(instructions ? { instructions } : {}),
     ...(base.can_authorize !== undefined ? { can_authorize: base.can_authorize } : {}),
-    correlateControlArgs: base.correlateControlArgs
+    correlateControlArgs: base.correlateControlArgs,
+    ...(outputRecord ? { outputRecord } : {})
   };
 }
 
@@ -1099,6 +1139,7 @@ function buildToolContextFromStoredEntry(
   });
   const description = normalizeTrimmedString(definition?.description) ?? normalizeTrimmedString(entry.description);
   const instructions = normalizeTrimmedString(definition?.instructions) ?? normalizeTrimmedString(entry.instructions);
+  const outputRecord = getToolDefinitionOutputRecord(definition);
 
   return {
     name: toolName,
@@ -1118,7 +1159,8 @@ function buildToolContextFromStoredEntry(
     ...(hasSourceArgsMetadata ? { sourceArgs } : {}),
     hasSourceArgsMetadata,
     correlateControlArgs: getEffectiveToolCorrelateControlArgs(labels, inputSchema, false, definition),
-    taintFacts: false
+    taintFacts: false,
+    ...(outputRecord ? { outputRecord } : {})
   };
 }
 
@@ -1361,6 +1403,7 @@ export function resolveToolCollectionEntryMetadata(
   });
   const description = normalizeTrimmedString(definition.description);
   const instructions = normalizeTrimmedString(definition.instructions);
+  const outputRecord = getToolDefinitionOutputRecord(definition);
 
   return {
     name: toolName,
@@ -1385,7 +1428,8 @@ export function resolveToolCollectionEntryMetadata(
       false,
       definition
     ),
-    taintFacts: false
+    taintFacts: false,
+    ...(outputRecord ? { outputRecord } : {})
   };
 }
 

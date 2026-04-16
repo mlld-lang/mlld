@@ -46,19 +46,21 @@ export type ToolExecutableReference =
       internal?: Record<string, unknown>;
     };
 
-export type ToolInputReference =
+export type ToolRecordReference =
   | string
   | RecordVariable
   | RecordDefinition;
 
 export interface ToolCatalogEntry {
   mlld?: ToolExecutableReference;
-  inputs?: ToolInputReference;
+  inputs?: ToolRecordReference;
+  returns?: ToolRecordReference;
   labels?: string[];
   description?: string;
   instructions?: string;
   can_authorize?: ToolAuthorizableValue;
   bind?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface LegacyToolCatalogCompatibilityFields {

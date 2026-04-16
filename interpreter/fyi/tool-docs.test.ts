@@ -304,6 +304,51 @@ describe('@fyi.tools', () => {
     }
   });
 
+  it('shapes output-field docs from collection returns metadata when the executable has no output record', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [email: string],
+        data: [name: string],
+        display: {
+          role:planner: [name, { ref: "email" }]
+        }
+      }
+
+      /record @search_contacts_inputs = {
+        data: [query: string],
+        validate: "strict"
+      }
+
+      /exe tool:r @searchContacts(query) = js {
+        return { email: "ada@example.com", name: "Ada" };
+      }
+
+      /var tools @tools = {
+        search_contacts: {
+          mlld: @searchContacts,
+          inputs: @search_contacts_inputs,
+          returns: @contact,
+          labels: ["resolve:r"],
+          description: "Search contacts"
+        }
+      }
+    `);
+
+    try {
+      env.setScopedEnvironmentConfig({
+        display: 'role:planner',
+        tools: env.getVariable('tools')?.internal?.toolCollection as any
+      } as any);
+
+      const docs = await evaluateFyiTools(env.getVariable('tools')?.value, env);
+      expect(docs.text).toContain('Returns:');
+      expect(docs.text).toContain('- `name` (value, data)');
+      expect(docs.text).toContain('- `email` (value + handle, fact)');
+    } finally {
+      env.cleanup();
+    }
+  });
+
   it('appends the auth intent shape only when explicitly requested', async () => {
     const env = await interpretWithEnv(`
       /exe tool:w @sendEmail(recipient, subject, body) = "sent" with {

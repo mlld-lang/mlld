@@ -292,31 +292,6 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const executableUpdateArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.updateArgs);
     const executableExactPayloadArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.exactPayloadArgs);
     const executableSourceArgs = normalizeExecutableMetadataStringArray((executableDef as any)?.sourceArgs);
-    const unknownFields = Object.keys(toolValue).filter(key =>
-      ![
-        'mlld',
-        'inputs',
-        'labels',
-        'description',
-        'instructions',
-        'can_authorize',
-        'authorizable',
-        'bind',
-        'expose',
-        'optional',
-        'controlArgs',
-        'updateArgs',
-        'exactPayloadArgs',
-        'sourceArgs',
-        'correlateControlArgs'
-      ].includes(key)
-    );
-    if (unknownFields.length > 0) {
-      throw new Error(
-        `Tool '${toolName}' has unknown fields: ${unknownFields.join(', ')}`
-      );
-    }
-
     const description = toolValue.description;
     if (description !== undefined && typeof description !== 'string') {
       throw new Error(`Tool '${toolName}' description must be a string`);

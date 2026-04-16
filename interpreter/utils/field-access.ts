@@ -989,18 +989,36 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle normalized AST objects (with entries or properties)
       if (isObjectAST(rawValue)) {
         // Access the field using helper that handles both formats
-        if (!hasObjectField(rawValue, name)) {
-          accessedValue = missingValue;
+        if (hasObjectField(rawValue, name)) {
+          accessedValue = getObjectField(rawValue, name);
+          if (options?.env) {
+            accessedValue = await resolveDeferredObjectFieldValue(
+              accessedValue,
+              options.env,
+              options?.sourceLocation
+            );
+          }
           break;
         }
-        accessedValue = getObjectField(rawValue, name);
+
         if (options?.env) {
-          accessedValue = await resolveDeferredObjectFieldValue(
-            accessedValue,
+          const evaluatedObject = await resolveDeferredObjectFieldValue(
+            rawValue,
             options.env,
             options?.sourceLocation
           );
+          if (
+            evaluatedObject &&
+            typeof evaluatedObject === 'object' &&
+            !Array.isArray(evaluatedObject) &&
+            name in (evaluatedObject as Record<string, unknown>)
+          ) {
+            accessedValue = (evaluatedObject as Record<string, unknown>)[name];
+            break;
+          }
         }
+
+        accessedValue = missingValue;
         break;
       }
 
@@ -1112,6 +1130,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     case 'numericField': {
       // Handle numeric property access (obj.123)
       const numKey = String(fieldValue);
+      const index = Number(fieldValue);
       
       if (rawValue === null || rawValue === undefined) {
         accessedValue = missingValue;
@@ -1133,6 +1152,24 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Recommend bracket access instead (arr[1])
       // Historically this path emitted a deprecation warning for array access
       // like obj.0. Property style access is now supported, so we skip the warning.
+
+      // Handle normalized AST arrays with numeric property access (arr.0)
+      if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && rawValue.items) {
+        const items = rawValue.items;
+        if (index < 0 || index >= items.length) {
+          accessedValue = missingValue;
+          break;
+        }
+        accessedValue = items[index];
+        if (options?.env) {
+          accessedValue = await resolveDeferredObjectFieldValue(
+            accessedValue,
+            options.env,
+            options?.sourceLocation
+          );
+        }
+        break;
+      }
 
       // Handle normalized AST objects (with entries or properties)
       if (isObjectAST(rawValue)) {
@@ -1171,6 +1208,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         accessedValue = items[index];
+        if (options?.env) {
+          accessedValue = await resolveDeferredObjectFieldValue(
+            accessedValue,
+            options.env,
+            options?.sourceLocation
+          );
+        }
         break;
       }
       

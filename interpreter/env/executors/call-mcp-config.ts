@@ -9,7 +9,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection, ToolDefinition } from '@core/types/tools';
 import type { ExecutableVariable } from '@core/types/variable';
-import { isExecutableVariable } from '@core/types/variable';
+import { isExecutableVariable, isRecordVariable } from '@core/types/variable';
 import { mlldNameToMCPName } from '@core/mcp/names';
 import { createFunctionMcpBridge } from './function-mcp-bridge';
 import { isStructuredValue, asData } from '@interpreter/utils/structured-value';
@@ -512,6 +512,36 @@ function normalizeToolCollectionStringList(value: unknown): string[] | undefined
     .map(entry => entry.trim());
 }
 
+function normalizeToolCollectionRecordRef(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  if (value && typeof value === 'object' && isRecordVariable(value as any)) {
+    const name = typeof (value as { name?: unknown }).name === 'string'
+      ? (value as { name: string }).name.trim()
+      : '';
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  if (value && typeof value === 'object' && typeof (value as { name?: unknown }).name === 'string') {
+    const name = (value as { name: string }).name.trim();
+    if (!name) {
+      return undefined;
+    }
+    return name.startsWith('@') ? name.slice(1) : name;
+  }
+
+  return undefined;
+}
+
 function buildToolCollectionMatchSignature(rawTools: unknown): string | undefined {
   if (!isPlainObject(rawTools)) {
     return undefined;
@@ -535,8 +565,11 @@ function buildToolCollectionMatchSignature(rawTools: unknown): string | undefine
       toolName,
       {
         mlld: typeof entry.mlld === 'string' ? entry.mlld : '',
-        ...(typeof entry.inputs === 'string' && entry.inputs.trim().length > 0
-          ? { inputs: entry.inputs.trim() }
+        ...(normalizeToolCollectionRecordRef(entry.inputs)
+          ? { inputs: normalizeToolCollectionRecordRef(entry.inputs) }
+          : {}),
+        ...(normalizeToolCollectionRecordRef((entry as { returns?: unknown }).returns)
+          ? { returns: normalizeToolCollectionRecordRef((entry as { returns?: unknown }).returns) }
           : {}),
         expose: normalizeToolCollectionStringList(entry.expose),
         optional: normalizeToolCollectionStringList(entry.optional),
