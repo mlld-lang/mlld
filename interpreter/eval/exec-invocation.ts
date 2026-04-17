@@ -32,6 +32,7 @@ import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   asData,
   asText,
+  ensureStructuredValue,
   isStructuredValue,
   wrapStructured,
   collectAndMergeParameterDescriptors,
@@ -105,6 +106,7 @@ import {
   prepareExecGuardInputs,
   runExecPostGuards,
   runExecPreGuards,
+  previewExecGuardArg,
   stringifyExecGuardArg
 } from './exec/guard-policy';
 import {
@@ -1133,7 +1135,12 @@ function buildToolInputValidationArguments(options: {
     }
 
     const structured = isStructuredValue(value)
-      ? wrapStructured(value, value.type, value.text, value.metadata)
+      ? ensureStructuredValue(
+          value.data,
+          value.type,
+          getMaterializedStructuredText(value),
+          value.metadata
+        )
       : wrapStructured(value as any);
     if (descriptor) {
       applySecurityDescriptorToStructuredValue(structured, descriptor);
@@ -2048,17 +2055,66 @@ async function repairSecurityRelevantExecArgs(options: {
 }
 
 function getToolResultLength(value: unknown): number | undefined {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  if (typeof value === 'string') {
+    return value.length;
+  }
+
+  if (isStructuredValue(value)) {
+    if (typeof value.metadata?.length === 'number') {
+      return value.metadata.length;
+    }
+
+    const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
+    if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
+      return textDescriptor.value.length;
+    }
+    return undefined;
+  }
+
   try {
-    return asText(value).length;
+    return String(value).length;
   } catch {
-    if (value === null || value === undefined) {
-      return 0;
-    }
-    try {
-      return String(value).length;
-    } catch {
+    return undefined;
+  }
+}
+
+function getMaterializedStructuredText(value: StructuredValue): string | undefined {
+  const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
+  return textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string'
+    ? textDescriptor.value
+    : undefined;
+}
+
+function getEvalResultStdout(value: unknown): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  if (!isStructuredValue(value)) {
+    return undefined;
+  }
+
+  switch (value.type) {
+    case 'text':
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+    case 'json':
+      return asText(value);
+    default:
       return undefined;
-    }
   }
 }
 
@@ -2079,6 +2135,29 @@ function isStructuredInteropCodeExecutable(definition: ExecutableDefinition): bo
     || definition.language === 'py'
     || definition.language === 'python'
   );
+}
+
+function shouldMaterializeExecArgumentStrings(definition: ExecutableDefinition): boolean {
+  return (
+    definition.type === 'command'
+    || (
+      definition.type === 'code'
+      && (definition.language === 'bash' || definition.language === 'sh')
+    )
+  );
+}
+
+function stringifyDispatchArg(definition: ExecutableDefinition, value: unknown): string {
+  return shouldMaterializeExecArgumentStrings(definition)
+    ? stringifyExecGuardArg(value)
+    : previewExecGuardArg(value);
+}
+
+function stringifyDispatchArgs(
+  definition: ExecutableDefinition,
+  values: readonly unknown[]
+): string[] {
+  return values.map(arg => stringifyDispatchArg(definition, arg));
 }
 
 function shouldResolveHandlesBeforeExecutableDispatch(options: {
@@ -2358,7 +2437,7 @@ async function evaluateExecInvocationInternal(
     return {
       value: wrapped,
       env: targetEnv,
-      stdout: asText(wrapped),
+      stdout: getEvalResultStdout(wrapped),
       stderr: '',
       exitCode: 0
     };
@@ -3612,6 +3691,7 @@ async function evaluateExecInvocationInternal(
     args,
     env: runtimeEnv,
     commandName,
+    definition,
     services: {
       interpolate: interpolateWithResultDescriptor,
       evaluateExecInvocation,
@@ -3857,7 +3937,7 @@ async function evaluateExecInvocationInternal(
   }
 
   if (boundArgs.length > 0) {
-    const boundArgStrings = boundArgs.map(arg => stringifyExecGuardArg(arg));
+    const boundArgStrings = stringifyDispatchArgs(definition, boundArgs);
     evaluatedArgs.unshift(...boundArgs);
     evaluatedArgStrings.unshift(...boundArgStrings);
     originalVariables.unshift(...Array.from({ length: boundArgs.length }, () => undefined));
@@ -3904,7 +3984,7 @@ async function evaluateExecInvocationInternal(
         : arg
     )
   );
-  evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+  evaluatedArgStrings = stringifyDispatchArgs(definition, evaluatedArgs);
   synchronizeGuardVariableCandidates({
     guardVariableCandidates,
     evaluatedArgs,
@@ -3925,7 +4005,7 @@ async function evaluateExecInvocationInternal(
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';
-    evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+    evaluatedArgStrings = stringifyDispatchArgs(definition, evaluatedArgs);
     synchronizeGuardVariableCandidates({
       guardVariableCandidates,
       evaluatedArgs,
@@ -4037,7 +4117,7 @@ async function evaluateExecInvocationInternal(
 
       if (didUpdateConfigArg) {
         evaluatedArgs[1] = nextConfig;
-        evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+        evaluatedArgStrings = stringifyDispatchArgs(definition, evaluatedArgs);
         synchronizeGuardVariableCandidates({
           guardVariableCandidates,
           env: runtimeEnv,
@@ -4109,7 +4189,7 @@ async function evaluateExecInvocationInternal(
             ? remainingDescriptors[0]
             : runtimeEnv.mergeSecurityDescriptors(...remainingDescriptors);
     }
-    evaluatedArgStrings = evaluatedArgs.map(arg => stringifyExecGuardArg(arg));
+    evaluatedArgStrings = stringifyDispatchArgs(definition, evaluatedArgs);
     synchronizeGuardVariableCandidates({
       guardVariableCandidates,
       env: runtimeEnv,
@@ -4305,6 +4385,7 @@ async function evaluateExecInvocationInternal(
       env: runtimeEnv,
       evaluatedArgs,
       evaluatedArgStrings,
+      stringifyArg: value => stringifyDispatchArg(definition, value),
       guardVariableCandidates,
       expressionSourceVariables,
       inputSecurityDescriptor,
@@ -4404,7 +4485,8 @@ async function evaluateExecInvocationInternal(
         guardInputsWithMapping,
         guardVariableCandidates,
         evaluatedArgs,
-        evaluatedArgStrings
+        evaluatedArgStrings,
+        stringifyArg: value => stringifyDispatchArg(definition, value)
       });
       emitResolvedAuthorizationTrace({
         env: runtimeEnv,

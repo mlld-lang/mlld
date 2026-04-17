@@ -175,12 +175,15 @@ function varMxToSecurityDescriptor(
 }
 
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
+  const record = value as Record<string, unknown> | null;
   return Boolean(
     value &&
       typeof value === 'object' &&
-      (value as Record<string, unknown>)[STRUCTURED_VALUE_SYMBOL] === true &&
-      typeof (value as Record<string, unknown>).text === 'string' &&
-      typeof (value as Record<string, unknown>).type === 'string'
+      record &&
+      record[STRUCTURED_VALUE_SYMBOL] === true &&
+      typeof record.type === 'string' &&
+      Object.prototype.hasOwnProperty.call(record, 'text') &&
+      Object.prototype.hasOwnProperty.call(record, 'data')
   );
 }
 
@@ -349,7 +352,14 @@ export function wrapStructured<T>(
   }
 
   const resolvedType = type ?? 'text';
-  const resolvedText = text ?? deriveText(value);
+  const shouldDeferDerivedText =
+    text === undefined &&
+    value !== null &&
+    typeof value === 'object';
+  const resolvedText =
+    shouldDeferDerivedText
+      ? undefined
+      : text ?? deriveText(value);
   return createStructuredValue(value, resolvedType, resolvedText, metadata);
 }
 
@@ -421,29 +431,66 @@ export function ensureStructuredValue(
 function createStructuredValue<T>(
   data: T,
   type: StructuredValueType,
-  text: string,
+  text: string | undefined,
   metadata?: StructuredValueMetadata
 ): StructuredValue<T> {
-  const resolvedText = text ?? '';
-  const resolvedMetadata = cloneMetadataWithDerivedUrls(data, resolvedText, metadata);
+  let cachedText = text;
+  let cachedMetadata = cloneMetadataWithDerivedUrls(data, text, metadata);
+  let hasMaterializedText = typeof text === 'string';
+
   const structuredValue = {
     type,
-    text: resolvedText,
     data,
-    metadata: resolvedMetadata,
+    metadata: cachedMetadata,
     [STRUCTURED_VALUE_SYMBOL]: true as const,
     toString() {
-      return resolvedText;
+      return this.text;
     },
     valueOf() {
-      return resolvedText;
+      return this.text;
     },
     [Symbol.toPrimitive]() {
-      return resolvedText;
+      return this.text;
     }
   } as StructuredValue<T>;
 
-  defineStructuredCtx(structuredValue, resolvedMetadata, type);
+  const syncMetadataAfterTextMaterialization = (resolvedText: string): void => {
+    const nextMetadata = cloneMetadataWithDerivedUrls(data, resolvedText, metadata);
+    if (nextMetadata !== undefined) {
+      cachedMetadata = nextMetadata;
+      structuredValue.metadata = nextMetadata;
+    }
+  };
+
+  const defineMaterializedText = (resolvedText: string): void => {
+    cachedText = resolvedText;
+    hasMaterializedText = true;
+    syncMetadataAfterTextMaterialization(resolvedText);
+    Object.defineProperty(structuredValue, 'text', {
+      value: resolvedText,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  };
+
+  if (hasMaterializedText) {
+    defineMaterializedText(cachedText ?? '');
+  } else {
+    Object.defineProperty(structuredValue, 'text', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        defineMaterializedText(deriveText(data));
+        return cachedText ?? '';
+      },
+      set(nextValue: unknown) {
+        defineMaterializedText(typeof nextValue === 'string' ? nextValue : String(nextValue ?? ''));
+      }
+    });
+  }
+
+  defineStructuredCtx(structuredValue, cachedMetadata, type);
   defineStructuredInternal(structuredValue, {});
   markStructuredValueInitialized(structuredValue);
   return structuredValue;
@@ -451,10 +498,10 @@ function createStructuredValue<T>(
 
 function cloneMetadataWithDerivedUrls(
   data: unknown,
-  text: string,
+  text: string | undefined,
   metadata?: StructuredValueMetadata
 ): StructuredValueMetadata | undefined {
-  const urls = extractUrlsFromValue([data, text]);
+  const urls = extractUrlsFromValue(text === undefined ? [data] : [data, text]);
   const normalizedDescriptor = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
   const security = replaceDescriptorUrls(normalizedDescriptor, urls);
 
@@ -507,8 +554,13 @@ export function applySecurityDescriptorToStructuredValue(
   descriptor: SecurityDescriptor
 ): void {
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
+  const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
+  const urlSources: unknown[] = [value.data];
+  if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
+    urlSources.push(textDescriptor.value);
+  }
   const resolvedDescriptor =
-    replaceDescriptorUrls(normalized, extractUrlsFromValue([value.data, value.text])) ?? normalized;
+    replaceDescriptorUrls(normalized, extractUrlsFromValue(urlSources)) ?? normalized;
   value.metadata = {
     ...(value.metadata ?? {}),
     security: resolvedDescriptor

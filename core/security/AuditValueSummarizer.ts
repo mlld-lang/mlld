@@ -182,14 +182,21 @@ function summarize(
       return { __ast: record.type };
     }
 
-    const entries = Object.entries(record);
+    const descriptors = Object.getOwnPropertyDescriptors(record);
+    const entries = Object.entries(descriptors);
     const out: Record<string, unknown> = {};
     let kept = 0;
 
-    for (const [key, entry] of entries) {
+    for (const [key, descriptor] of entries) {
       if (kept >= opts.maxObjectKeys) {
         out.__truncatedKeys = entries.length - kept;
         break;
+      }
+
+      if ('get' in descriptor || 'set' in descriptor) {
+        out[key] = '[getter]';
+        kept += 1;
+        continue;
       }
 
       if (DROPPED_KEYS.has(key)) {
@@ -197,6 +204,8 @@ function summarize(
         kept += 1;
         continue;
       }
+
+      const entry = descriptor.value;
 
       // Special-case the mlld wrapper that exec tools attach to structured
       // values. Keep the identifying bits; drop the .internal plumbing.

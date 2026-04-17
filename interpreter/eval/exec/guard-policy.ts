@@ -90,6 +90,7 @@ export type PrepareExecGuardInputsOptions = {
   env: Environment;
   evaluatedArgs: unknown[];
   evaluatedArgStrings: string[];
+  stringifyArg?: (value: unknown) => string;
   guardVariableCandidates: (Variable | undefined)[];
   expressionSourceVariables: (Variable | undefined)[];
   inputSecurityDescriptor?: SecurityDescriptor;
@@ -139,6 +140,7 @@ export type RunExecPreGuardsOptions = {
   guardVariableCandidates: (Variable | undefined)[];
   evaluatedArgs: unknown[];
   evaluatedArgStrings: string[];
+  stringifyArg?: (value: unknown) => string;
 };
 
 export type ExecPreGuardResult = {
@@ -256,6 +258,38 @@ export function stringifyExecGuardArg(value: unknown): string {
   }
 }
 
+export function previewExecGuardArg(value: unknown): string {
+  if (isStructuredValue(value)) {
+    if (value.data === null || typeof value.data !== 'object') {
+      return asText(value);
+    }
+    const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
+    if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
+      return textDescriptor.value;
+    }
+    if (Array.isArray(value.data)) {
+      return `[${value.type}:${value.data.length}]`;
+    }
+    return `[${value.type}]`;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return `[array:${value.length}]`;
+  }
+  if (typeof value === 'object') {
+    return '[object]';
+  }
+  return String(value);
+}
+
 function hasStructuredRuntimeSignals(value: unknown, seen = new Set<unknown>()): boolean {
   if (isVariable(value)) {
     return hasStructuredRuntimeSignals(value.value, seen);
@@ -303,8 +337,16 @@ function applyGuardTransformsToExecArgs(options: {
   guardVariableCandidates: (Variable | undefined)[];
   evaluatedArgs: unknown[];
   evaluatedArgStrings: string[];
+  stringifyArg: (value: unknown) => string;
 }): void {
-  const { guardInputEntries, transformedInputs, guardVariableCandidates, evaluatedArgs, evaluatedArgStrings } =
+  const {
+    guardInputEntries,
+    transformedInputs,
+    guardVariableCandidates,
+    evaluatedArgs,
+    evaluatedArgStrings,
+    stringifyArg
+  } =
     options;
   const limit = Math.min(transformedInputs.length, guardInputEntries.length);
   for (let i = 0; i < limit; i++) {
@@ -325,7 +367,7 @@ function applyGuardTransformsToExecArgs(options: {
       ? originalValue
       : replacement.value;
     evaluatedArgs[argIndex] = normalizedValue;
-    evaluatedArgStrings[argIndex] = stringifyExecGuardArg(normalizedValue);
+    evaluatedArgStrings[argIndex] = stringifyArg(normalizedValue);
   }
 }
 
@@ -334,6 +376,7 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
     env,
     evaluatedArgs,
     evaluatedArgStrings,
+    stringifyArg = previewExecGuardArg,
     guardVariableCandidates,
     expressionSourceVariables,
     inputSecurityDescriptor,
@@ -446,7 +489,11 @@ export function prepareExecGuardInputs(options: PrepareExecGuardInputsOptions): 
       if (!mergedDescriptor && (!factsourceOverride || factsourceOverride.length === 0)) {
         continue;
       }
-      const cloned = cloneExecVariableWithNewValue(base, base.value, stringifyExecGuardArg(base.value));
+      const fallback =
+        entry.index >= 0 && entry.index < evaluatedArgStrings.length
+          ? evaluatedArgStrings[entry.index] ?? stringifyArg(base.value)
+          : stringifyArg(base.value);
+      const cloned = cloneExecVariableWithNewValue(base, base.value, fallback);
       if (!cloned.mx) {
         cloned.mx = {};
       }
@@ -735,7 +782,8 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
     guardInputsWithMapping,
     guardVariableCandidates,
     evaluatedArgs,
-    evaluatedArgStrings
+    evaluatedArgStrings,
+    stringifyArg = previewExecGuardArg
   } = options;
   const hookManager = env.getHookManager();
   const userHookInputs = await runUserBeforeHooks(node, guardInputs, env, operationContext);
@@ -754,7 +802,8 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
       transformedInputs: preHookInputs,
       guardVariableCandidates,
       evaluatedArgs,
-      evaluatedArgStrings
+      evaluatedArgStrings,
+      stringifyArg
     });
   }
 
@@ -774,7 +823,8 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
       transformedInputs: transformedGuardInputs,
       guardVariableCandidates,
       evaluatedArgs,
-      evaluatedArgStrings
+      evaluatedArgStrings,
+      stringifyArg
     });
   }
   return {

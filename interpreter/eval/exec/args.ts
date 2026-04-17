@@ -9,6 +9,7 @@ import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpret
 import { boundary } from '@interpreter/utils/boundary';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { previewExecGuardArg, stringifyExecGuardArg } from './guard-policy';
 
 export type EvaluatedExecArguments = {
   evaluatedArgStrings: string[];
@@ -25,6 +26,26 @@ export type ExecArgEvaluationServices = {
   evaluateExecInvocation: (node: ExecInvocation, env: Environment) => Promise<EvalResult>;
   mergeResultDescriptor: (descriptor?: SecurityDescriptor) => void;
 };
+
+function shouldMaterializeExecArgumentStrings(definition: ExecutableDefinition): boolean {
+  return (
+    definition.type === 'command' ||
+    (
+      definition.type === 'code' &&
+      typeof definition.language === 'string' &&
+      (definition.language === 'bash' || definition.language === 'sh')
+    )
+  );
+}
+
+function stringifyEvaluatedArgument(
+  value: unknown,
+  materializeStructuredStrings: boolean
+): string {
+  return materializeStructuredStrings
+    ? stringifyExecGuardArg(value)
+    : previewExecGuardArg(value);
+}
 
 type ParameterMetadataFactory = (value: unknown) => {
   metadata?: Record<string, unknown>;
@@ -231,11 +252,13 @@ export async function evaluateExecInvocationArgs(options: {
   args: any[];
   env: Environment;
   commandName: string;
+  definition: ExecutableDefinition;
   services: ExecArgEvaluationServices;
 }): Promise<EvaluatedExecArguments> {
-  const { args, env, commandName, services } = options;
+  const { args, env, commandName, definition, services } = options;
   const evaluatedArgStrings: string[] = [];
   const evaluatedArgs: unknown[] = [];
+  const materializeStructuredStrings = shouldMaterializeExecArgumentStrings(definition);
 
   for (const arg of args) {
     let argValue: string;
@@ -243,7 +266,7 @@ export async function evaluateExecInvocationArgs(options: {
 
     if (isStructuredValue(arg)) {
       argValueAny = arg;
-      argValue = asText(arg);
+      argValue = stringifyEvaluatedArgument(arg, materializeStructuredStrings);
     } else if (arg && typeof arg === 'object' && (arg as any).type === 'RegexLiteral') {
       const pattern = (arg as any).pattern || '';
       const flags = (arg as any).flags || '';
@@ -293,16 +316,8 @@ export async function evaluateExecInvocationArgs(options: {
           argValueAny = exprResult.value;
           if (argValueAny === undefined) {
             argValue = 'undefined';
-          } else if (isStructuredValue(argValueAny)) {
-            argValue = asText(argValueAny);
-          } else if (typeof argValueAny === 'object') {
-            try {
-              argValue = JSON.stringify(argValueAny);
-            } catch {
-              argValue = String(argValueAny);
-            }
           } else {
-            argValue = String(argValueAny);
+            argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
           }
           break;
         }
@@ -319,14 +334,8 @@ export async function evaluateExecInvocationArgs(options: {
           argValueAny = whenRes.value;
           if (argValueAny === undefined) {
             argValue = 'undefined';
-          } else if (typeof argValueAny === 'object') {
-            try {
-              argValue = JSON.stringify(argValueAny);
-            } catch {
-              argValue = String(argValueAny);
-            }
           } else {
-            argValue = String(argValueAny);
+            argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
           }
           break;
         }
@@ -335,13 +344,13 @@ export async function evaluateExecInvocationArgs(options: {
           const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
           const arr = await evaluateForeachCommand(arg as any, env);
           argValueAny = arr;
-          argValue = JSON.stringify(arr);
+          argValue = stringifyEvaluatedArgument(arr, materializeStructuredStrings);
           break;
         }
         case 'object': {
           const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
           argValueAny = await evaluateDataValue(arg, env);
-          argValue = JSON.stringify(argValueAny);
+          argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
           const { extractDescriptorsFromDataAst } = await import('@interpreter/eval/var');
           const objDescriptor = extractDescriptorsFromDataAst(arg, env);
           if (objDescriptor) {
@@ -352,7 +361,7 @@ export async function evaluateExecInvocationArgs(options: {
         case 'array': {
           const { evaluateDataValue: evaluateArrayValue } = await import('@interpreter/eval/data-value-evaluator');
           argValueAny = await evaluateArrayValue(arg, env);
-          argValue = JSON.stringify(argValueAny);
+          argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
           const { extractDescriptorsFromDataAst } = await import('@interpreter/eval/var');
           const arrDescriptor = extractDescriptorsFromDataAst(arg, env);
           if (arrDescriptor) {
@@ -438,19 +447,13 @@ export async function evaluateExecInvocationArgs(options: {
 
             if (isStructuredValue(value)) {
               argValueAny = preserveVariableAsArgument ? variable : value;
-              argValue = asText(value);
+              argValue = stringifyEvaluatedArgument(value, materializeStructuredStrings);
             } else {
               argValueAny = preserveVariableAsArgument ? variable : value;
               if (value === undefined) {
                 argValue = 'undefined';
-              } else if (typeof value === 'object' && value !== null) {
-                try {
-                  argValue = JSON.stringify(value);
-                } catch {
-                  argValue = String(value);
-                }
               } else {
-                argValue = String(value);
+                argValue = stringifyEvaluatedArgument(value, materializeStructuredStrings);
               }
             }
           } else {
@@ -464,7 +467,7 @@ export async function evaluateExecInvocationArgs(options: {
           const loadResult = await processContentLoader(arg as any, env);
           const structured = wrapLoadContentValue(loadResult);
           argValueAny = structured;
-          argValue = asText(structured);
+          argValue = stringifyEvaluatedArgument(structured, materializeStructuredStrings);
           break;
         }
         case 'ExecInvocation': {
@@ -479,16 +482,8 @@ export async function evaluateExecInvocationArgs(options: {
 
           if (argValueAny === undefined) {
             argValue = 'undefined';
-          } else if (isStructuredValue(argValueAny)) {
-            argValue = asText(argValueAny);
-          } else if (typeof argValueAny === 'object') {
-            try {
-              argValue = JSON.stringify(argValueAny);
-            } catch {
-              argValue = String(argValueAny);
-            }
           } else {
-            argValue = String(argValueAny);
+            argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
           }
           break;
         }
@@ -511,7 +506,7 @@ export async function evaluateExecInvocationArgs(options: {
     }
 
     if (isStructuredValue(argValueAny)) {
-      argValue = asText(argValueAny);
+      argValue = stringifyEvaluatedArgument(argValueAny, materializeStructuredStrings);
     }
 
     evaluatedArgStrings.push(argValue);

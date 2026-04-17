@@ -11,6 +11,7 @@ import { evaluate } from '../core/interpreter';
 import { createHandleWrapper } from '@core/types/handle';
 import { evaluateExecInvocation } from './exec-invocation';
 import {
+  applySecurityDescriptorToStructuredValue,
   asText,
   extractSecurityDescriptor,
   getRecordProjectionMetadata,
@@ -172,6 +173,64 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(result.value.type).toBe('text');
     expect(asText(result.value)).toBe('hello');
     expect(result.stdout).toBe('hello');
+  });
+
+  it('keeps labeled structured object args lazy when returned directly', async () => {
+    const source = `
+/exe @identity(value) = [ => @value ]
+`;
+    const { ast } = await parse(source);
+    await evaluate(ast, env);
+
+    const payload = wrapStructured({ nested: { value: 1 } }, 'object');
+    applySecurityDescriptorToStructuredValue(
+      payload,
+      makeSecurityDescriptor({ labels: ['secret'], sources: ['test'] })
+    );
+    env.setVariable(
+      'securePayload',
+      {
+        type: 'structured',
+        name: 'securePayload',
+        value: payload,
+        source: {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        createdAt: Date.now(),
+        modifiedAt: Date.now(),
+        mx: payload.mx,
+        internal: {}
+      } as any
+    );
+
+    const invocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      nodeId: 'identity-secure',
+      commandRef: {
+        type: 'CommandReference',
+        nodeId: 'identity-secure-ref',
+        identifier: 'identity',
+        args: [
+          {
+            type: 'VariableReference',
+            nodeId: 'secure-payload-ref',
+            identifier: 'securePayload',
+            fields: []
+          } as any
+        ]
+      }
+    };
+
+    const result = await evaluateExecInvocation(invocation, env);
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect(result.value.data).toEqual({ nested: { value: 1 } });
+    const textDescriptor = Object.getOwnPropertyDescriptor(result.value, 'text');
+    expect(textDescriptor).toBeDefined();
+    expect(textDescriptor && 'get' in textDescriptor ? typeof textDescriptor.get : 'value').toBe('function');
+    expect(result.stdout).toBeUndefined();
   });
 
   it('preserves structured pipeline output via with-clause', async () => {

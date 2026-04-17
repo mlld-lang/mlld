@@ -52,6 +52,13 @@ interface NormalizedFactoryState {
   internal: VariableInternalMetadata;
 }
 
+function getMaterializedStructuredText(value: StructuredValue): string | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
+
 function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {
   const legacyMetadata = variable.metadata;
   const securityWithUrls = replaceDescriptorUrls(
@@ -982,7 +989,7 @@ export class VariableFactory {
       isFactoryInitOptions(enrichedInput)
         ? { ...enrichedInput, metadata: securityAwareMetadata }
         : securityAwareMetadata,
-      structuredValue.text
+      getMaterializedStructuredText(structuredValue)
     );
 
     return finalizeVariable({

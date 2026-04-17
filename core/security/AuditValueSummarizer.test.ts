@@ -81,6 +81,30 @@ describe('summarizeAuditValue', () => {
     expect(result.other).toBe('value');
   });
 
+  it('does not invoke getter-backed fields while summarizing', () => {
+    let textReads = 0;
+    const wrapped: Record<string, unknown> = {
+      type: 'object',
+      data: { ok: true },
+      metadata: { isStructuredValue: true }
+    };
+    Object.defineProperty(wrapped, 'text', {
+      enumerable: true,
+      configurable: true,
+      get() {
+        textReads += 1;
+        return '{"ok":true}';
+      }
+    });
+
+    const result = summarizeAuditValue({ wrapped }) as Record<string, unknown>;
+    expect(textReads).toBe(0);
+    expect(result.wrapped).toMatchObject({
+      type: 'object',
+      text: '[getter]'
+    });
+  });
+
   it('caps arrays at maxArrayLength with __omitted marker', () => {
     const arr = new Array(100).fill(0).map((_, i) => i);
     const result = summarizeAuditValue(arr, { maxArrayLength: 10 }) as unknown[];

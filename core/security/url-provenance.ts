@@ -152,8 +152,9 @@ function extractUrlsFromValueInternal(
 
   if (isStructuredLike(record)) {
     extractUrlsFromValueInternal(record.data, seenObjects, urls, seenUrls);
-    if (typeof record.text === 'string') {
-      extractUrlsFromValueInternal(record.text, seenObjects, urls, seenUrls);
+    const textDescriptor = Object.getOwnPropertyDescriptor(record, 'text');
+    if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
+      extractUrlsFromValueInternal(textDescriptor.value, seenObjects, urls, seenUrls);
     }
     return;
   }

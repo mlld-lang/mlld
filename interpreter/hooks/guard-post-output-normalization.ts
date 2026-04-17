@@ -7,13 +7,31 @@ import {
 } from '../utils/structured-value';
 import { isVariable } from '../utils/variable-resolution';
 
+function getOwnValue(
+  candidate: unknown,
+  key: 'text' | 'data'
+): unknown {
+  if (!candidate || typeof candidate !== 'object') {
+    return undefined;
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(candidate, key);
+  if (!descriptor || !('value' in descriptor)) {
+    return undefined;
+  }
+  return descriptor.value;
+}
+
 export function normalizeRawOutput(value: unknown): unknown {
   if (value && typeof value === 'object') {
-    if ((value as any).text !== undefined) {
-      return (value as any).text;
+    const textValue = getOwnValue(value, 'text');
+    if (textValue !== undefined) {
+      return textValue;
     }
-    if ((value as any).data !== undefined) {
-      return (value as any).data;
+
+    const dataValue = getOwnValue(value, 'data');
+    if (dataValue !== undefined) {
+      return dataValue;
     }
   }
   return value;

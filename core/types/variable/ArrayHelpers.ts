@@ -337,9 +337,33 @@ function formatQuantifierText(value: unknown): string {
     return String(value);
   }
   if (value && typeof value === 'object') {
-    const candidate = value as { text?: unknown; data?: unknown };
-    if (typeof candidate.text === 'string' && 'data' in candidate) {
-      return candidate.text;
+    const candidate = value as { text?: unknown; data?: unknown; type?: unknown };
+    if ('data' in candidate) {
+      const textDescriptor = Object.getOwnPropertyDescriptor(candidate, 'text');
+      if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
+        return textDescriptor.value;
+      }
+
+      const structuredData = candidate.data;
+      if (
+        typeof structuredData === 'string'
+        || typeof structuredData === 'number'
+        || typeof structuredData === 'boolean'
+        || typeof structuredData === 'bigint'
+      ) {
+        return String(structuredData);
+      }
+      if (structuredData === null || structuredData === undefined) {
+        return '';
+      }
+      if (Array.isArray(structuredData)) {
+        const type = typeof candidate.type === 'string' ? candidate.type : 'array';
+        return `[${type}:${structuredData.length}]`;
+      }
+      if (typeof structuredData === 'object') {
+        const type = typeof candidate.type === 'string' ? candidate.type : 'object';
+        return `[${type}]`;
+      }
     }
     try {
       return JSON.stringify(value);

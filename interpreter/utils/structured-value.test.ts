@@ -113,6 +113,25 @@ describe('collectParameterDescriptors helpers', () => {
 });
 
 describe('text serialization fallbacks', () => {
+  it('defers derived object text until a caller actually asks for it', () => {
+    let toJsonCalls = 0;
+    const value = {
+      name: 'Ada',
+      toJSON() {
+        toJsonCalls += 1;
+        return { name: 'Ada' };
+      }
+    };
+
+    const wrapped = wrapStructured(value, 'object');
+    expect(toJsonCalls).toBe(0);
+
+    expect(wrapped.text).toBe('{"name":"Ada"}');
+    expect(toJsonCalls).toBe(1);
+    expect(wrapped.text).toBe('{"name":"Ada"}');
+    expect(toJsonCalls).toBe(1);
+  });
+
   it('serializes plain objects as JSON instead of [object Object]', () => {
     expect(asText({ name: 'Ada', active: true })).toBe('{"name":"Ada","active":true}');
   });

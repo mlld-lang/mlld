@@ -64,6 +64,26 @@ async function registerDirectives(env: Environment, source: string): Promise<voi
 }
 
 describe('guard post-hook integration', () => {
+  it('does not materialize lazy structured output when no after guards match', async () => {
+    const env = createEnv();
+    const output = wrapStructured({ nested: { value: 1 } }, 'object');
+    const result = { value: output, env };
+    const node: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: { type: 'CommandReference', identifier: 'emit', args: [] }
+    };
+
+    const next = await guardPostHook(node, result, [output], env, {
+      type: 'exe',
+      name: 'emit'
+    });
+
+    expect(next).toBe(result);
+    const textDescriptor = Object.getOwnPropertyDescriptor(output, 'text');
+    expect(textDescriptor).toBeDefined();
+    expect(textDescriptor && 'get' in textDescriptor ? typeof textDescriptor.get : 'value').toBe('function');
+  });
+
   it('denies after guards and exposes output context', async () => {
     const env = createEnv();
     const guardDirective = parseSync(

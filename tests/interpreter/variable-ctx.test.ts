@@ -8,12 +8,14 @@ import { evaluateDirective } from '@interpreter/eval/directive';
 import {
   createPipelineInputVariable,
   createSimpleTextVariable,
-  createArrayVariable
+  createArrayVariable,
+  createStructuredValueVariable
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
+import { wrapStructured } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
   return new Environment(new MemoryFileSystem(), new PathService(), '/');
@@ -124,5 +126,18 @@ describe('guard input helper', () => {
     expect(helper.mx.tokens[0]).toBe(3);
     expect(helper.mx.totalTokens()).toBe(3);
     expect(helper.mx.maxTokens()).toBe(3);
+  });
+
+  it('keeps lazy structured object text deferred while building text helpers', () => {
+    const source = VariableMetadataUtils.createSource('quoted', false, false);
+    const structured = wrapStructured({ nested: { value: 1 } }, 'object');
+    const variable = createStructuredValueVariable('payload', structured, source);
+
+    const helper = createGuardInputHelper([variable]);
+
+    expect(helper.any.text.includes('object')).toBe(true);
+    const textDescriptor = Object.getOwnPropertyDescriptor(structured, 'text');
+    expect(textDescriptor).toBeDefined();
+    expect(textDescriptor && 'get' in textDescriptor ? typeof textDescriptor.get : 'value').toBe('function');
   });
 });

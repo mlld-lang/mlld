@@ -5,6 +5,7 @@ import {
 } from '@core/types/tools';
 import type { Environment } from '@interpreter/env/Environment';
 import {
+  ensureStructuredValue,
   isStructuredValue,
   wrapStructured
 } from '@interpreter/utils/structured-value';
@@ -26,6 +27,13 @@ function cloneWithOwnDescriptors<T extends object>(value: T): T {
 
 function isBareHandleToken(value: string): boolean {
   return /^h_[a-z0-9]+$/.test(value.trim());
+}
+
+function getMaterializedStructuredText(value: { text: string }): string | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 export function extractProjectedHandleToken(value: unknown): string | undefined {
@@ -75,10 +83,10 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     if (resolvedData === value.data) {
       return value;
     }
-    const resolved = wrapStructured(
+    const resolved = ensureStructuredValue(
       resolvedData as any,
       value.type,
-      value.text,
+      getMaterializedStructuredText(value),
       value.metadata
     );
     if (value.internal) {

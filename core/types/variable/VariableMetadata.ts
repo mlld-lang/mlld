@@ -24,6 +24,16 @@ import { matchesLabelPattern } from '@core/policy/fact-labels';
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 
+function getMaterializedStructuredText(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
+
 // =========================================================================
 // METADATA UTILITY FUNCTIONS
 // =========================================================================
@@ -467,7 +477,7 @@ export class VariableMetadataUtils {
       return metrics;
     }
 
-    const text = (variable.value as any)?.text;
+    const text = getMaterializedStructuredText(variable.value);
     if (typeof text === 'string') {
       const metrics = buildTokenMetrics(text);
       VariableMetadataUtils.assignMetrics(variable, metrics);

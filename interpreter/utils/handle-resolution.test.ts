@@ -36,4 +36,15 @@ describe('resolveValueHandles', () => {
       resolveValueHandles(projected, env)
     ).resolves.toEqual(projected);
   });
+
+  it('keeps lazy structured object text deferred when no handle changes are needed', async () => {
+    const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+    const structured = wrapStructured({ nested: { value: 1 } }, 'object');
+
+    const resolved = await resolveValueHandles(structured, env);
+
+    const textDescriptor = Object.getOwnPropertyDescriptor(resolved as object, 'text');
+    expect(textDescriptor).toBeDefined();
+    expect(textDescriptor && 'get' in textDescriptor ? typeof textDescriptor.get : 'value').toBe('function');
+  });
 });

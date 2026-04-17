@@ -211,8 +211,11 @@ function createObjectUtilityMxView(
     : Object.create(null)) as Record<string, unknown>;
 
   if (structured) {
+    const textDescriptor = Object.getOwnPropertyDescriptor(structured, 'text');
     Object.defineProperty(view, 'text', {
-      value: structured.text,
+      ...(textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string'
+        ? { value: textDescriptor.value }
+        : { get: () => structured.text }),
       enumerable: true,
       configurable: true
     });

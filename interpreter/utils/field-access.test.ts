@@ -341,6 +341,40 @@ describe('guard args field access', () => {
 });
 
 describe('structured value mx accessors', () => {
+  it('does not materialize wrapper text when reading other .mx helpers', async () => {
+    let toJsonCalls = 0;
+    const structured = wrapStructured(
+      {
+        stance: 'approved',
+        toJSON() {
+          toJsonCalls += 1;
+          return { stance: 'approved' };
+        }
+      },
+      'object'
+    );
+    const variable = createStructuredValueVariable('result', structured, source);
+
+    const mxEntries = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'entries' } as const
+    ], { preserveContext: false });
+    expect(mxEntries).toEqual([['stance', 'approved'], ['toJSON', expect.any(Function)]]);
+    expect(toJsonCalls).toBe(0);
+
+    const mxView = await accessField(variable, { type: 'field', value: 'mx' }, { preserveContext: false });
+    const textDescriptor = Object.getOwnPropertyDescriptor(mxView as object, 'text');
+    expect(textDescriptor?.get).toBeTypeOf('function');
+    expect(toJsonCalls).toBe(0);
+
+    const mxText = await accessFields(variable, [
+      { type: 'field', value: 'mx' } as const,
+      { type: 'field', value: 'text' } as const
+    ], { preserveContext: false });
+    expect(mxText).toBe('{"stance":"approved"}');
+    expect(toJsonCalls).toBe(1);
+  });
+
   it('maps .mx.text and .mx.data to wrapper-level views', async () => {
     const payload = { stance: 'approved', mx: 'user-mx' };
     const structured = wrapStructured(payload, 'object', 'RAW-PAYLOAD');
