@@ -88,7 +88,10 @@ import { PythonShadowEnvironment } from './PythonShadowEnvironment';
 import { CacheManager } from './CacheManager';
 import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
-import { markEnvironment } from './EnvironmentIdentity';
+import {
+  ENVIRONMENT_SERIALIZE_PLACEHOLDER,
+  markEnvironment
+} from './EnvironmentIdentity';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import {
   CommandExecutorFactory,
@@ -628,6 +631,10 @@ export class Environment
     if (!parent) {
       this.commandExecutorFactory = this.getCommandExecutorFactory();
     }
+  }
+
+  toJSON(): string {
+    return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
   }
   
   /**

@@ -12,6 +12,7 @@ import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/st
 import { GuardError } from '@core/errors/GuardError';
 import { GuardRetrySignal } from '@core/errors/GuardRetrySignal';
 import { ENVIRONMENT_SERIALIZE_PLACEHOLDER } from '@interpreter/env/EnvironmentIdentity';
+import { boundary } from '@interpreter/utils/boundary';
 import { executeCommandVariable, resolveCommandReference } from './command-execution';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
 
@@ -234,10 +235,11 @@ describe('command-execution phase-0 characterization', () => {
     expect(capturedParams?.extra).toBe('ARG-EXTRA');
   });
 
-  it('routes structured pipeline input through serialize for @pretty', async () => {
+  it('routes structured pipeline input through display formatting for @pretty', async () => {
     const env = createEnv();
     const prettyVar = env.getVariable('pretty');
     expect(prettyVar?.internal?.isBuiltinTransformer).toBe(true);
+    const serializeSpy = vi.spyOn(boundary, 'serialize');
 
     const structuredInput = wrapStructured(
       { env },
@@ -245,10 +247,15 @@ describe('command-execution phase-0 characterization', () => {
       'NOT-THE-STRUCTURED-VALUE'
     );
 
-    const result = await runCommand(prettyVar, [], env, 'NOT-THE-STRUCTURED-VALUE', structuredInput);
+    try {
+      const result = await runCommand(prettyVar, [], env, 'NOT-THE-STRUCTURED-VALUE', structuredInput);
 
-    expect(asText(result)).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
-    expect(asText(result)).not.toContain('NOT-THE-STRUCTURED-VALUE');
+      expect(asText(result)).toContain(ENVIRONMENT_SERIALIZE_PLACEHOLDER);
+      expect(asText(result)).not.toContain('NOT-THE-STRUCTURED-VALUE');
+      expect(serializeSpy).not.toHaveBeenCalled();
+    } finally {
+      serializeSpy.mockRestore();
+    }
   });
 
   it('propagates policy output descriptors on code branch outputs', async () => {

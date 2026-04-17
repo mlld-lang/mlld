@@ -112,4 +112,95 @@ describe('AuditLogger', () => {
     const body = args.body as Record<string, unknown>;
     expect(body.len).toBe(huge.length);
   });
+
+  it('keeps tool-call agent payloads compact without dropping key identifiers', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+
+    const heavyRecord = {
+      type: 'record',
+      name: 'contact',
+      value: {
+        name: 'contact',
+        fields: new Array(20).fill({
+          kind: 'input',
+          name: 'email',
+          source: { type: 'VariableReference', nodeId: 'abc', location: { line: 1, column: 1 } }
+        })
+      },
+      internal: {
+        recordDefinition: {
+          fields: new Array(20).fill({ deep: 'x'.repeat(200) })
+        }
+      }
+    };
+    const heavyTool = {
+      mlld: {
+        type: 'executable',
+        name: 'send_email',
+        paramNames: ['recipients', 'subject', 'body'],
+        internal: {
+          executableDef: {
+            codeTemplate: new Array(40).fill({
+              type: 'ExeBlock',
+              nodeId: 'xyz',
+              location: { source: '/project/agent.mld' }
+            })
+          }
+        }
+      },
+      inputs: heavyRecord,
+      labels: ['execute:w', 'tool:w', 'exfil:send'],
+      description: 'Send the same email body to one or more recipients.'
+    };
+
+    await appendAuditEvent(fileSystem, projectRoot, {
+      event: 'toolCall',
+      tool: 'phaseToolDocs',
+      args: {
+        agent: {
+          text: 'x'.repeat(50_000),
+          data: {
+            suite: 'derive-max-flow',
+            defense: 'defended',
+            records: {
+              contact: heavyRecord,
+              note_entry: heavyRecord
+            },
+            tools: {
+              send_email: heavyTool,
+              create_note: heavyTool
+            },
+            routedTools: {
+              execute: {
+                send_email: heavyTool
+              }
+            }
+          },
+          metadata: {
+            security: {
+              labels: ['resolve:r'],
+              taint: ['resolve:r', 'tool:r']
+            }
+          }
+        },
+        phase: 'execute'
+      }
+    });
+
+    const [record] = await readAuditLog(fileSystem, projectRoot);
+    const serialized = JSON.stringify(record);
+    expect(serialized.length).toBeLessThan(4096);
+
+    const args = record.args as Record<string, unknown>;
+    const agent = args.agent as Record<string, unknown>;
+    const data = agent.data as Record<string, unknown>;
+
+    expect(data.suite).toBe('derive-max-flow');
+    expect(data.defense).toBe('defended');
+    expect(data.records).toBe('[Object]');
+    expect(data.tools).toBe('[Object]');
+    expect(data.routedTools).toBe('[Object]');
+    expect(args.phase).toBe('execute');
+  });
 });

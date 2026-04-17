@@ -6,6 +6,7 @@ import { TestEffectHandler } from './EffectHandler';
 import { breakIntent } from '@interpreter/output/intent';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { createSimpleTextVariable } from '@core/types/variable/VariableFactories';
+import { ENVIRONMENT_SERIALIZE_PLACEHOLDER } from './EnvironmentIdentity';
 
 const mockSource = {
   directive: 'var' as const,
@@ -19,6 +20,16 @@ function createEnvironment(basePath: string = '/tmp/mlld-characterization'): Env
 }
 
 describe('Environment characterization', () => {
+  describe('serialization safety', () => {
+    it('collapses raw JSON serialization to an opaque placeholder', () => {
+      const env = createEnvironment();
+
+      expect(JSON.stringify({ env })).toBe(
+        JSON.stringify({ env: ENVIRONMENT_SERIALIZE_PLACEHOLDER })
+      );
+    });
+  });
+
   describe('root/child inheritance and scope boundaries', () => {
     it('inherits reserved names, allowed tools, and policy context while keeping import guard local', async () => {
       const env = createEnvironment();

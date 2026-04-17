@@ -140,18 +140,8 @@ async function prettyPrintSerializedValue(input: unknown): Promise<string> {
     }
   }
 
-  const { boundary } = await import('../utils/boundary');
-  const serialized = boundary.serialize(candidate);
-
-  if (typeof serialized === 'string') {
-    try {
-      return JSONFormatter.stringify(JSON.parse(serialized), { pretty: true, indent: 2 });
-    } catch {
-      return serialized;
-    }
-  }
-
-  return JSONFormatter.stringify(serialized, { pretty: true, indent: 2 });
+  // @pretty is a display transform, not a module-boundary serializer.
+  return JSONFormatter.stringify(candidate, { pretty: true, indent: 2 });
 }
 
 /**

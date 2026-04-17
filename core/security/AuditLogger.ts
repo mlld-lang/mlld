@@ -9,6 +9,12 @@ import {
 } from './AuditValueSummarizer';
 
 const MAX_DETAIL_STRING_BYTES = 4096;
+const TOOL_CALL_ARG_SUMMARIZE_OPTIONS = {
+  maxDepth: 3,
+  maxArrayLength: 20,
+  maxObjectKeys: 12,
+  maxStringLength: 160
+} as const;
 
 export type AuditEvent = {
   id?: string;
@@ -43,7 +49,12 @@ export async function appendAuditEvent(
 ): Promise<string> {
   const id = event.id ?? randomUUID();
   const summarizedArgs =
-    event.args !== undefined ? summarizeAuditValue(event.args) : undefined;
+    event.args !== undefined
+      ? summarizeAuditValue(
+          event.args,
+          event.event === 'toolCall' ? TOOL_CALL_ARG_SUMMARIZE_OPTIONS : undefined
+        )
+      : undefined;
   const summarizedDetail = capDetail(event.detail);
   const record: Record<string, unknown> = {
     id,
