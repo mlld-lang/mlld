@@ -201,6 +201,11 @@ The generated function MCP bridge is not a `serialize` surface. It is an identit
 - Imported executable parameters are not a plain-data boundary by default. A complex object/array argument may still be caller-owned AST or a wrapper-backed value when it reaches the callee.
 - If a bug appears only through an imported helper or only after forwarding an object argument through another exe, inspect parameter rebinding before blaming display, `@pretty`, or generic serialization.
 - When a callee needs detached plain data, materialize once at the boundary (`boundary.config`, `boundary.plainData`, or an intentional object spread). Do not rely on downstream field access or stringification to perform that separation implicitly.
+- If a wrapper/perf bug smells like "somewhere this became huge" or "somewhere labels disappeared", ask who asked for text before asking who serialized the object. On object/array wrappers, `.text` is effectively a materialization boundary.
+- Check the `text` property descriptor first: `Object.getOwnPropertyDescriptor(value, 'text')`. A `get` means the wrapper is still lazy; a `value` means some earlier path already materialized it.
+- Trace these seams in order when a repro only appears in full runtime flows: arg evaluation -> guard input prep -> hook helper injection -> parameter binding -> result normalization -> audit/logging. The failure usually shows up after the boundary that actually caused it.
+- Grep for accidental display/materialization paths, not just `JSON.stringify`: `.text`, `asText(`, `String(`, template interpolation, pretty/log helpers, token/length metrics, and audit summarizers.
+- Tool collections, routed tool entries, and imported agent objects are identity-bearing and large. Prefer keyed access on the existing wrapper/object surface. Rebuilding them into fresh plain objects is a real materialization step with both perf and metadata risk.
 
 ### Where Values Flow
 
@@ -373,9 +378,33 @@ Top-level dotted access does not expose wrapper metadata like `@val.filename`, `
 **Problem**: When-expression returns wrapped value to pipeline
 **Fix**: Convert StructuredValue results to primitives before tail modifiers
 
+## Serialization Rules
+
+### Never use raw `JSON.stringify` on values that may carry runtime references
+
+Use `stringifyStructured()` (from `interpreter/utils/structured-value.ts`) instead of raw `JSON.stringify` for any path that may encounter StructuredValues, Variables, Environment references, or other runtime wrappers. `stringifyStructured()` uses a replacer that handles StructuredValue unwrapping and Environment opacity.
+
+Raw `JSON.stringify` is acceptable ONLY for known-plain-data objects: parsed JSON literals, config objects you constructed yourself, primitive arrays. If there is any possibility the value transited through the runtime (came from a variable, an exe return, a tool result, an import, a field access on a runtime object), use `stringifyStructured()`.
+
+### Environment is never serialized
+
+The Environment class implements `toJSON()` returning `'[Environment]'`. This makes ALL `JSON.stringify` calls — including the 100+ existing raw calls and any future ones — automatically safe. `JSON.stringify` natively calls `toJSON()` before recursing, so Environment subtrees are collapsed to the placeholder without requiring a custom replacer at every call site.
+
+This is the primary defense. `stringifyStructured()`'s replacer also checks `isEnvironment()` as belt-and-suspenders, but `toJSON()` on the class is the invariant that prevents unbounded serialization walks regardless of which stringify path is used.
+
+Environment is a capability/runtime reference (same category as `ShelfSlotRefValue`), not data. It is not serializable content. The only sanctioned path for inspecting Environment internals is `@debug.environment`.
+
+### Why both `toJSON()` and `stringifyStructured()`
+
+- `toJSON()` on Environment handles the catastrophic case (unbounded recursion into runtime capsules). It makes every `JSON.stringify` call safe automatically.
+- `stringifyStructured()` handles the StructuredValue case (unwrapping `.data` from wrappers for clean serialized output). It also checks `isEnvironment()` as a redundant safety layer.
+- Use `stringifyStructured()` as the default serialization path. Rely on `toJSON()` as the safety net for any call site that hasn't been migrated yet or that calls raw `JSON.stringify` for a legitimate reason on known-plain data that unexpectedly contains a runtime ref.
+
 ## Gotchas
 
 - NEVER call builtin array methods directly on wrappers—use `asData()` first
+- NEVER use raw `JSON.stringify` on values that may carry runtime references—use `stringifyStructured()` (see Serialization Rules above)
+- Reading `.text` on object/array `StructuredValue`s is a real materialization boundary. Do not use `.text` for summaries, helper setup, metrics, or logging unless you are intentionally at a display/interpolate boundary.
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers
