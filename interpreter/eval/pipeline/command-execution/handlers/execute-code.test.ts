@@ -267,4 +267,53 @@ describe('executeCodeHandler branch extraction', () => {
     expect((result as any).data).toEqual({ ok: true });
     expect(asText(result as any)).toBe('{"ok":true}');
   });
+
+  it('unwraps quoted scalar string transport results for structured pipeline stages', async () => {
+    interpolateMock.mockResolvedValue('return "15";');
+
+    const env = createEnv();
+    const execEnv = env.createChild();
+    const executeCodeSpy = vi.spyOn(env, 'executeCode').mockResolvedValue('"15"');
+
+    const result = await executeCodeHandler({
+      env,
+      execEnv,
+      execDef: {
+        type: 'code',
+        language: 'javascript',
+        codeTemplate: [{ type: 'Text', content: 'noop' }],
+        paramNames: ['input']
+      },
+      pipelineCtx: { stage: 1 },
+      stageLanguage: 'javascript',
+      finalizeResult: value => value
+    });
+
+    expect(executeCodeSpy).toHaveBeenCalledTimes(1);
+    expect(result).toBe('15');
+  });
+
+  it('preserves unquoted scalar code results as text in structured pipeline stages', async () => {
+    interpolateMock.mockResolvedValue('return 6;');
+
+    const env = createEnv();
+    const execEnv = env.createChild();
+    const executeCodeSpy = vi.spyOn(env, 'executeCode').mockResolvedValue('6');
+
+    const result = await executeCodeHandler({
+      env,
+      execEnv,
+      execDef: {
+        type: 'code',
+        language: 'javascript',
+        codeTemplate: [{ type: 'Text', content: 'noop' }]
+      },
+      pipelineCtx: { stage: 1 },
+      stageLanguage: 'javascript',
+      finalizeResult: value => value
+    });
+
+    expect(executeCodeSpy).toHaveBeenCalledTimes(1);
+    expect(result).toBe('6');
+  });
 });

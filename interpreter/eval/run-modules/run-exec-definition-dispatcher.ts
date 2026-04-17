@@ -17,6 +17,7 @@ import { wrapExecResult } from '@interpreter/utils/structured-exec';
 import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
 import {
   applySecurityDescriptorToStructuredValue,
+  asText,
   extractSecurityDescriptor,
   normalizeWhenShowEffect
 } from '@interpreter/utils/structured-value';
@@ -146,6 +147,15 @@ function mergeRunArgumentDescriptors(
   return env.mergeSecurityDescriptors(...descriptors);
 }
 
+function shouldMaterializeInlineRunArgumentString(arg: unknown): boolean {
+  if (!arg || typeof arg !== 'object' || !('type' in arg)) {
+    return false;
+  }
+
+  const type = (arg as { type?: unknown }).type;
+  return type === 'object' || type === 'array';
+}
+
 export async function extractRunExecArguments(params: {
   directive: DirectiveNode;
   definition: ExecutableDefinition;
@@ -212,7 +222,9 @@ export async function extractRunExecArguments(params: {
       continue;
     }
 
-    argValues[paramName] = evaluatedString;
+    argValues[paramName] = shouldMaterializeInlineRunArgumentString(arg)
+      ? asText(evaluatedRuntime)
+      : evaluatedString;
     argRuntimeValues[paramName] = evaluatedRuntime;
     argOriginalVariables[paramName] = await resolveRunArgumentOriginalVariable(arg, env, evaluatedRuntime);
 

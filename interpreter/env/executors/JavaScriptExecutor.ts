@@ -13,6 +13,24 @@ export interface ShadowEnvironment {
   getShadowEnv(language: string): Map<string, any> | undefined;
 }
 
+const AMBIGUOUS_SCALAR_STRING_RESULT = /^(?:null|true|false|-?\d+(?:\.\d+)?)$/;
+
+function serializeExplicitJavaScriptResult(result: unknown): string {
+  if (typeof result === 'string') {
+    return AMBIGUOUS_SCALAR_STRING_RESULT.test(result)
+      ? JSON.stringify(result)
+      : result;
+  }
+  if (typeof result === 'object') {
+    try {
+      return JSON.stringify(result);
+    } catch {
+      return String(result);
+    }
+  }
+  return String(result);
+}
+
 /**
  * Executes JavaScript code in-process with shadow environment support
  */
@@ -166,15 +184,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       
       // If there's an explicit return value, use it
       if (result !== undefined && result !== null) {
-        if (typeof result === 'object') {
-          try {
-            output = JSON.stringify(result);
-          } catch {
-            output = String(result);
-          }
-        } else {
-          output = String(result);
-        }
+        output = serializeExplicitJavaScriptResult(result);
       } else if (consoleOutput) {
         // If no return value but there's console output, use that as the result
         // This maintains backward compatibility with existing tests

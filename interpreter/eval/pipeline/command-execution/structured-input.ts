@@ -31,7 +31,7 @@ export function parseStructuredJson(text: string): ParsedJsonResult | null {
   const firstChar = trimmed[0];
   const scalarJsonPattern = /^(?:null|true|false|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/;
   const shouldAttemptScalarParse = scalarJsonPattern.test(trimmed);
-  if (firstChar !== '{' && firstChar !== '[' && !shouldAttemptScalarParse) {
+  if (firstChar !== '{' && firstChar !== '[' && firstChar !== '"' && !shouldAttemptScalarParse) {
     return null;
   }
   try {
@@ -40,6 +40,7 @@ export function parseStructuredJson(text: string): ParsedJsonResult | null {
       return { parsed: true, value: parsed };
     }
     if (
+      typeof parsed === 'string' ||
       parsed === null ||
       typeof parsed === 'number' ||
       typeof parsed === 'boolean'
@@ -55,6 +56,7 @@ export function parseStructuredJson(text: string): ParsedJsonResult | null {
           return { parsed: true, value: reparsed };
         }
         if (
+          typeof reparsed === 'string' ||
           reparsed === null ||
           typeof reparsed === 'number' ||
           typeof reparsed === 'boolean'

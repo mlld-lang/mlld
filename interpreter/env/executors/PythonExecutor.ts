@@ -33,6 +33,20 @@ export interface PythonShadowEnvironmentProvider {
   getOrCreatePythonShadowEnv(): PythonShadowEnvironment;
 }
 
+const AMBIGUOUS_SCALAR_STRING_RESULT = /^(?:null|true|false|-?\d+(?:\.\d+)?)$/;
+
+function serializeExplicitPythonResult(result: unknown): string {
+  if (typeof result === 'string') {
+    return AMBIGUOUS_SCALAR_STRING_RESULT.test(result)
+      ? JSON.stringify(result)
+      : result;
+  }
+  if (typeof result === 'object') {
+    return JSON.stringify(result, null, 2);
+  }
+  return String(result);
+}
+
 /**
  * Executes Python code using temporary files and python3 subprocess,
  * or using the shadow environment when available.
@@ -308,11 +322,7 @@ export class PythonExecutor extends BaseCommandExecutor {
       // Format result
       let output = '';
       if (result !== undefined && result !== null) {
-        if (typeof result === 'object') {
-          output = JSON.stringify(result, null, 2);
-        } else {
-          output = String(result);
-        }
+        output = serializeExplicitPythonResult(result);
       }
 
       return {

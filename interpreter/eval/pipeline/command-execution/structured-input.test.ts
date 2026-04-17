@@ -22,6 +22,7 @@ describe('command-execution structured input helpers', () => {
     expect(parseStructuredJson('true')).toEqual({ parsed: true, value: true });
     expect(parseStructuredJson('false')).toEqual({ parsed: true, value: false });
     expect(parseStructuredJson('null')).toEqual({ parsed: true, value: null });
+    expect(parseStructuredJson('"15"')).toEqual({ parsed: true, value: '15' });
     expect(parseStructuredJson('001')).toBeNull();
   });
 

@@ -5,6 +5,7 @@ import {
   normalizeWhenShowEffect
 } from '@interpreter/utils/structured-value';
 import {
+  parseStructuredJson,
   shouldAutoParsePipelineInput,
   wrapJsonLikeString
 } from '@interpreter/eval/pipeline/command-execution/structured-input';
@@ -214,6 +215,14 @@ export async function executeCodeHandler(
     !format &&
     shouldAutoParsePipelineInput(stageLanguage)
   ) {
+    const trimmed = result.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      const parsed = parseStructuredJson(result);
+      if (parsed) {
+        return finalizeResult(parsed.value);
+      }
+    }
+
     const wrapped = wrapJsonLikeString(result);
     if (wrapped) {
       return finalizeResult(wrapped);

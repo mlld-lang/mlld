@@ -163,6 +163,37 @@ describe('MCP tool imports', () => {
     }
   });
 
+  it('preserves numeric-looking strings returned from js helpers when passed to MCP tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    const cases = ['25', '0', '007', '1.5', 'true', '-1'];
+
+    let environment: Environment | undefined;
+    try {
+      for (const value of cases) {
+        const source = [
+          `/import tools from mcp "${serverSpec}" as @mcp`,
+          '/exe @asString(inputValue) = js { if (inputValue == null) return ""; return String(inputValue); }',
+          `/show @mcp.typeMirror(@asString(${JSON.stringify(value)}))`
+        ].join('\n');
+
+        const output = await interpret(source, {
+          fileSystem,
+          pathService,
+          pathContext,
+          format: 'markdown',
+          captureEnvironment: env => {
+            environment = env;
+          }
+        });
+
+        expect(output.trim()).toBe(`str_arg:string=${JSON.stringify(value)}`);
+      }
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('rejects MCP tool imports that collide with local bindings', async () => {
     const fileSystem = new MemoryFileSystem();
     const serverSpec = `${process.execPath} ${fakeServerPath}`;

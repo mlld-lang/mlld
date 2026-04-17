@@ -8,7 +8,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { parse } from '@grammar/parser';
 import { evaluate } from '../core/interpreter';
-import { createHandleWrapper } from '@core/types/handle';
+import { createFactSourceHandle, createHandleWrapper } from '@core/types/handle';
 import { evaluateExecInvocation } from './exec-invocation';
 import {
   applySecurityDescriptorToStructuredValue,
@@ -1283,6 +1283,59 @@ print(json.dumps(value))
 
     expect(asText(result.value)).toBe('ada@example.com:hi');
     expect(isStructuredValue(result.value)).toBe(true);
+  });
+
+  it('resolves planner-style value+handle objects for collection-dispatched security-relevant string args', async () => {
+    const src = `
+/record @get_file_by_id_inputs = {
+  facts: [value: string],
+  validate: "strict"
+}
+/exe tool:r @getFileById(value) = js {
+  return typeof value + ":" + value;
+} with { controlArgs: ["value"] }
+/var tools @readTools = {
+  get_file_by_id: {
+    mlld: @getFileById,
+    expose: ["value"],
+    inputs: @get_file_by_id_inputs,
+    labels: ["read:r"],
+    controlArgs: ["value"]
+  }
+}
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    for (const rawValue of ['25', '0', '007', '1.5', 'true', '-1']) {
+      const liveValue = wrapStructured(rawValue, 'text', rawValue, {
+        factsources: [
+          createFactSourceHandle({
+            sourceRef: '@file_entry',
+            field: 'value',
+            coercionId: `case-${rawValue}`,
+            position: 0
+          })
+        ]
+      });
+      applySecurityDescriptorToStructuredValue(
+        liveValue,
+        makeSecurityDescriptor({ labels: ['fact:@file_entry.value'] })
+      );
+
+      const issued = env.issueHandle(liveValue, {
+        preview: rawValue,
+        metadata: { field: 'value' }
+      });
+
+      const invocation = await parseSingleInvocation(
+        `/show @readTools["get_file_by_id"]({ value: { value: "${rawValue}", handle: "${issued.handle}" } })`
+      );
+      const result = await evaluateExecInvocation(invocation, env);
+
+      expect(asText(result.value)).toBe(`string:${rawValue}`);
+      expect(isStructuredValue(result.value)).toBe(true);
+    }
   });
 
   it('uses registry-backed @fyi.known inside exec invocations', async () => {

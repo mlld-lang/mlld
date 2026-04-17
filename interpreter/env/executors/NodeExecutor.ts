@@ -29,6 +29,24 @@ export interface NodeShadowEnvironmentProvider {
   getCurrentFilePath(): string | undefined;
 }
 
+const AMBIGUOUS_SCALAR_STRING_RESULT = /^(?:null|true|false|-?\d+(?:\.\d+)?)$/;
+
+function serializeExplicitNodeResult(result: unknown): string {
+  if (typeof result === 'string') {
+    return AMBIGUOUS_SCALAR_STRING_RESULT.test(result)
+      ? JSON.stringify(result)
+      : result;
+  }
+  if (typeof result === 'object') {
+    try {
+      return JSON.stringify(result);
+    } catch {
+      return String(result);
+    }
+  }
+  return String(result);
+}
+
 /**
  * Executes Node.js code using VM-based shadow environment or subprocess fallback
  */
@@ -206,11 +224,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Format result (same as subprocess version)
       let output = '';
       if (result !== undefined) {
-        if (typeof result === 'object') {
-          output = JSON.stringify(result);
-        } else {
-          output = String(result);
-        }
+        output = serializeExplicitNodeResult(result);
       }
 
       const duration = Date.now() - startTime;
@@ -246,9 +260,25 @@ export class NodeExecutor extends BaseCommandExecutor {
     const shadowParams = params ? prepareParamsForShadow(params) : undefined;
     const paramJson = shadowParams ? JSON.stringify(shadowParams) : '{}';
 
-    const script = `
+const script = `
 const __mlldParams = ${paramJson};
 Object.assign(global, __mlldParams);
+const __mlldAmbiguousScalarStringResult = /^(?:null|true|false|-?\\d+(?:\\.\\d+)?)$/;
+const __mlldSerializeResult = (value) => {
+  if (typeof value === 'string') {
+    return __mlldAmbiguousScalarStringResult.test(value)
+      ? JSON.stringify(value)
+      : value;
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+};
 
 (async () => {
   try {
@@ -256,7 +286,7 @@ Object.assign(global, __mlldParams);
 ${code}
     })();
     if (typeof __mlldResult !== 'undefined') {
-      const out = typeof __mlldResult === 'object' ? JSON.stringify(__mlldResult) : String(__mlldResult);
+      const out = __mlldSerializeResult(__mlldResult);
       if (out) process.stdout.write(out);
     }
   } catch (err) {
