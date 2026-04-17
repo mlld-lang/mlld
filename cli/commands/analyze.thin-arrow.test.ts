@@ -64,6 +64,29 @@ describe('analyze thin-arrow return channel warnings', () => {
     expect(notSurfacedWarnings).toHaveLength(0);
   });
 
+  it('does not warn when a thin-arrow exe is surfaced via bare executable shorthand', async () => {
+    const modulePath = await writeModule('thin-arrow-surfaced-bare-entry.mld', `/exe @send_email(to, subject, body) = [
+  -> "sent"
+] => record @SendEmailResult
+
+/record @SendEmailResult = {
+  facts: [channel],
+  data: [body]
+}
+
+/var tools @writeTools = {
+  send_email: @send_email
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    const notSurfacedWarnings = (result.antiPatterns ?? []).filter(
+      entry => entry.code === 'thin-arrow-exe-not-surfaced'
+    );
+    expect(notSurfacedWarnings).toHaveLength(0);
+  });
+
   it('warns when a thin-arrow exe declares no static output record', async () => {
     const modulePath = await writeModule('thin-arrow-missing-record.mld', `/exe @send_email(to, subject) = [
   -> "sent"

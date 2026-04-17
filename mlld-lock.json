@@ -66,10 +66,18 @@
       "fetchedAt": "2026-03-04T18:33:29.656Z",
       "registryVersion": "1.0.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/3439100511477bf013577ce2bb518b63bba715cf/md-fetch/index.mld"
+    },
+    "@mlld/opencode": {
+      "version": "latest",
+      "resolved": "5e8bdfc096b1e1a07df35680fd0014cf6b730c9cfe0057e5bcddd0da4cf8cb53",
+      "source": "registry://@mlld/opencode@1.0.0",
+      "integrity": "sha256:5e8bdfc096b1e1a07df35680fd0014cf6b730c9cfe0057e5bcddd0da4cf8cb53",
+      "fetchedAt": "2026-04-13T21:54:16.971Z",
+      "registryVersion": "1.0.0"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-03-09T19:28:32.518Z"
+    "updatedAt": "2026-04-13T21:54:16.972Z"
   }
 }

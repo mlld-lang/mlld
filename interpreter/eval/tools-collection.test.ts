@@ -145,6 +145,26 @@ describe('tool collections', () => {
     });
   });
 
+  it('supports bare executable shorthand entries in var tools', async () => {
+    const env = await interpretWithEnv(`
+      /exe @send_email(recipient, subject) = js {
+        return \`sent:\${recipient}:\${subject}\`;
+      }
+
+      /var tools @agentTools = {
+        send_email: @send_email
+      }
+
+      /var @result = @agentTools.send_email("ada@example.com", "Hello")
+    `);
+
+    const collection = env.getVariable('agentTools')?.internal?.toolCollection as ToolCollection;
+    expect(getVisibleToolExecutableName(collection.send_email.mlld)).toBe('send_email');
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env);
+    expect((resolved as any)?.text ?? resolved).toBe('sent:ada@example.com:Hello');
+  });
+
   it('preserves returns and arbitrary metadata keys on var tools entries while keeping dispatch callable', async () => {
     const env = await interpretWithEnv(`
       /record @search_contacts_inputs = {

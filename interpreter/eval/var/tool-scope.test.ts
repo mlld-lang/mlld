@@ -184,6 +184,24 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('normalizes bare executable shorthand entries', () => {
+    const env = createEnvWithExecutables({
+      createIssue: ['owner', 'repo', 'title']
+    });
+
+    const executable = env.getVariable('createIssue');
+    const collection = normalizeToolCollection(
+      {
+        issue: executable
+      },
+      env
+    );
+
+    expect(collection.issue).toEqual({
+      mlld: executable
+    });
+  });
+
   it('normalizes tool collection entries that bind an input record', () => {
     const env = createEnvWithExecutables(
       {

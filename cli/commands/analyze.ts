@@ -2321,6 +2321,54 @@ function formatVariableReference(
   return `@${ref.identifier}${suffix}`;
 }
 
+function extractStaticVariableReference(value: unknown): string | undefined {
+  const unwrapped = unwrapSingleNodeArray(value);
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return undefined;
+  }
+
+  const typedNode = unwrapped as Record<string, unknown>;
+  if (typedNode.type !== 'VariableReference' || typeof typedNode.identifier !== 'string') {
+    return undefined;
+  }
+
+  return formatVariableReference(typedNode as { identifier?: string; fields?: unknown[] });
+}
+
+function isStaticToolEntryReference(value: unknown): boolean {
+  return extractStaticVariableReference(value) !== undefined;
+}
+
+function extractStaticBareToolExecutableReference(value: unknown): string | undefined {
+  const explicit = extractStaticValue(getObjectEntryValue(value, 'mlld'));
+  if (typeof explicit === 'string' && explicit.trim().length > 0) {
+    return explicit.trim();
+  }
+
+  const reference = extractStaticVariableReference(value);
+  if (!reference) {
+    return undefined;
+  }
+
+  const trimmed = reference.trim();
+  const bareName = trimmed.replace(/^@/, '');
+  if (!bareName || /[.\[]/.test(bareName)) {
+    return undefined;
+  }
+
+  return trimmed;
+}
+
+function isStaticInlineToolCatalogEntry(value: unknown): boolean {
+  const unwrapped = unwrapSingleNodeArray(value);
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return false;
+  }
+
+  const nodeType = (unwrapped as Record<string, unknown>).type;
+  return nodeType === 'object' || nodeType === 'ObjectExpression';
+}
+
 function extractStaticExecutableArgList(
   raw: unknown,
   paramNames: readonly string[],
@@ -2779,7 +2827,7 @@ function collectSurfacedToolExeNames(ast: MlldNode[]): Set<string> {
         continue;
       }
 
-      const mlldValue = extractStaticValue(getObjectEntryValue(entry.value, 'mlld'));
+      const mlldValue = extractStaticBareToolExecutableReference(entry.value);
       if (typeof mlldValue !== 'string') {
         continue;
       }
@@ -3882,7 +3930,7 @@ function mergeValidationContextAst(
       }
 
       const toolValue = entry.value;
-      const mlldValue = extractStaticValue(getObjectEntryValue(toolValue, 'mlld'));
+      const mlldValue = extractStaticBareToolExecutableReference(toolValue);
       if (typeof mlldValue !== 'string' || mlldValue.trim().length === 0) {
         continue;
       }
@@ -4085,12 +4133,15 @@ function collectToolCatalogDiagnostics(
       const entryLine = (entry.location as any)?.start?.line ?? directiveNode.location?.start?.line;
       const entryColumn = (entry.location as any)?.start?.column ?? directiveNode.location?.start?.column;
 
-      if (!toolValue || typeof toolValue !== 'object' || (toolValue as any).type !== 'object') {
+      if (!isStaticInlineToolCatalogEntry(toolValue)) {
+        if (isStaticToolEntryReference(toolValue)) {
+          continue;
+        }
         pushError(`Tool '${toolName}' must be an object`, entryLine, entryColumn);
         continue;
       }
 
-      for (const fieldEntry of (toolValue as any).entries as Array<Record<string, unknown>>) {
+      for (const fieldEntry of getObjectNodeEntries(toolValue)) {
         if (fieldEntry.type !== 'pair' && fieldEntry.type !== 'conditionalPair') {
           continue;
         }

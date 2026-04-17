@@ -261,11 +261,12 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
   const collectionCapturedModuleEnv = new Map<string, unknown>();
 
   for (const [toolName, toolValue] of Object.entries(raw)) {
-    if (!isPlainObject(toolValue)) {
+    const normalizedToolValue = normalizeToolCollectionEntryValue(toolValue);
+    if (!isPlainObject(normalizedToolValue)) {
       throw new Error(`Tool '${toolName}' must be an object`);
     }
 
-    const mlldRef = (toolValue as Record<string, unknown>).mlld;
+    const mlldRef = (normalizedToolValue as Record<string, unknown>).mlld;
     if (mlldRef === undefined || mlldRef === null) {
       throw new Error(`Tool '${toolName}' is missing 'mlld' reference`);
     }
@@ -279,18 +280,18 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
     const paramSet = new Set(paramNames);
-    const description = toolValue.description;
+    const description = normalizedToolValue.description;
     if (description !== undefined && typeof description !== 'string') {
       throw new Error(`Tool '${toolName}' description must be a string`);
     }
-    const instructions = toolValue.instructions;
+    const instructions = normalizedToolValue.instructions;
     if (instructions !== undefined && typeof instructions !== 'string') {
       throw new Error(`Tool '${toolName}' instructions must be a string`);
     }
 
-    const labels = normalizeStringArray(toolValue.labels, toolName, 'labels');
-    const canAuthorize = normalizeToolAuthorizable(toolValue.can_authorize, toolName);
-    const bind = toolValue.bind;
+    const labels = normalizeStringArray(normalizedToolValue.labels, toolName, 'labels');
+    const canAuthorize = normalizeToolAuthorizable(normalizedToolValue.can_authorize, toolName);
+    const bind = normalizedToolValue.bind;
     const boundKeys =
       bind && isPlainObject(bind)
         ? Object.keys(bind)
@@ -310,7 +311,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
     resolveToolInputSchema({
       toolName,
-      rawInputRef: (toolValue as Record<string, unknown>).inputs,
+      rawInputRef: (normalizedToolValue as Record<string, unknown>).inputs,
       env,
       executableName: mlldName,
       executableParamNames: paramNames,
@@ -322,7 +323,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     });
 
     const normalizedDefinition = {
-      ...(toolValue as ToolCollection[string])
+      ...(normalizedToolValue as ToolCollection[string])
     };
 
     // `var tools` binds dispatch and validates canonical runtime fields, but otherwise
@@ -349,6 +350,24 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
   }
 
   return collection;
+}
+
+function normalizeToolCollectionEntryValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return { mlld: value };
+  }
+
+  if (value && typeof value === 'object') {
+    if (isExecutableVariable(value as any)) {
+      return { mlld: value };
+    }
+
+    if ((value as { __executable?: unknown }).__executable === true) {
+      return { mlld: value };
+    }
+  }
+
+  return value;
 }
 
 function resolveToolMlldReference(

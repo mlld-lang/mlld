@@ -1178,6 +1178,45 @@ show @built
     );
   });
 
+  it('accepts bare executable shorthand entries in var tools', async () => {
+    const modulePath = await writeModule('analyze-tool-catalog-bare-executable-entry.mld', `
+/exe @send_email(recipient, subject) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: @send_email
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(entry => entry.message)).not.toContain(
+      "Tool 'send_email' must be an object"
+    );
+  });
+
+  it('accepts referenced tool catalog entries without requiring inline object literals', async () => {
+    const modulePath = await writeModule('analyze-tool-catalog-referenced-entry.mld', `
+/exe @send_email(recipient, subject) = js { return "ok"; }
+
+/var @baseTool = {
+  mlld: @send_email,
+  description: "Send mail"
+}
+
+/var tools @agentTools = {
+  send_email: @baseTool
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(entry => entry.message)).not.toContain(
+      "Tool 'send_email' must be an object"
+    );
+  });
+
   it('accepts returns and surfaces arbitrary tool catalog metadata as warnings', async () => {
     const modulePath = await writeModule('analyze-tool-catalog-unknown-fields.mld', `
 /record @search_contacts_inputs = {
