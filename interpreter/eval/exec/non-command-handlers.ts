@@ -29,6 +29,10 @@ import {
 } from '@interpreter/utils/structured-value';
 import { wrapExecResult } from '@interpreter/utils/structured-exec';
 import { isEventEmitter, isLegacyStream, toJsValue, wrapNodeValue } from '@interpreter/utils/node-interop';
+import {
+  getCapturedModuleEnv,
+  sealCapturedModuleEnv
+} from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 
 export type NonCommandExecutableHandlerServices = {
   interpolateWithResultDescriptor: (
@@ -162,10 +166,14 @@ async function tryEvaluateSingleTemplateValue(
 }
 
 async function getCapturedModuleEnvMap(
-  variableLike: { internal?: Record<string, unknown> } | undefined,
+  variableLike:
+    | ({ internal?: Record<string, unknown> } & Record<string, unknown>)
+    | undefined,
   targetEnv?: Environment
 ): Promise<Map<string, Variable> | undefined> {
-  const rawCaptured = variableLike?.internal?.capturedModuleEnv;
+  const rawCaptured =
+    getCapturedModuleEnv(variableLike?.internal)
+    ?? getCapturedModuleEnv(variableLike);
   if (!rawCaptured) {
     return undefined;
   }
@@ -182,8 +190,9 @@ async function getCapturedModuleEnvMap(
   const moduleEnvMap = importer.deserializeModuleEnv(rawCaptured, targetEnv);
 
   if (variableLike?.internal) {
-    variableLike.internal.capturedModuleEnv = moduleEnvMap;
+    sealCapturedModuleEnv(variableLike.internal, moduleEnvMap);
   }
+  sealCapturedModuleEnv(variableLike, moduleEnvMap);
 
   return moduleEnvMap;
 }

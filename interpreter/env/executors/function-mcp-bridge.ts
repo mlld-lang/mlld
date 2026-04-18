@@ -9,7 +9,7 @@ import type {
   CallMcpConfig
 } from '@interpreter/env/executors/call-mcp-config';
 import type { ToolDefinition } from '@core/types/tools';
-import type { ExecutableVariable } from '@core/types/variable';
+import type { ExecutableVariable, Variable } from '@core/types/variable';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { ToolCollection } from '@core/types/tools';
 import { FunctionRouter } from '@cli/mcp/FunctionRouter';
@@ -20,6 +20,8 @@ import {
   getCapturedModuleEnv,
   sealCapturedModuleEnv
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
+import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
+import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
 import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -44,12 +46,12 @@ interface JsonRpcResponse {
 }
 
 function cloneExecutableForToolBridge(
+  env: Environment,
   executable: ExecutableVariable,
   tempName: string
 ): ExecutableVariable {
   const executableDef = (executable.internal?.executableDef ?? executable.value) as any;
-  const capturedModuleEnv =
-    getCapturedModuleEnv(executable.internal) ?? getCapturedModuleEnv(executable);
+  const capturedModuleEnv = normalizeCapturedModuleEnvForToolBridge(env, executable);
   const clonedInternal: Record<string, unknown> = {
     ...(executable.internal ?? {}),
     executableDef,
@@ -78,6 +80,26 @@ function cloneExecutableForToolBridge(
   }
 
   return cloned;
+}
+
+function normalizeCapturedModuleEnvForToolBridge(
+  env: Environment,
+  executable: ExecutableVariable
+): Map<string, Variable> | undefined {
+  const capturedModuleEnv =
+    getCapturedModuleEnv(executable.internal) ?? getCapturedModuleEnv(executable);
+  if (!capturedModuleEnv) {
+    return undefined;
+  }
+  if (capturedModuleEnv instanceof Map) {
+    return capturedModuleEnv as Map<string, Variable>;
+  }
+  if (typeof capturedModuleEnv !== 'object') {
+    return undefined;
+  }
+
+  const importer = new VariableImporter(new ObjectReferenceResolver());
+  return importer.deserializeModuleEnv(capturedModuleEnv, env);
 }
 
 export interface FunctionMcpBridgeOptions {
@@ -146,7 +168,7 @@ class FunctionMcpBridgeServer {
     for (const [mcpName, executable] of this.functions.entries()) {
       index += 1;
       const tempName = `__toolbridge_fn_${sanitizeIdentifier(mcpName)}_${index}`;
-      const cloned = cloneExecutableForToolBridge(executable, tempName);
+      const cloned = cloneExecutableForToolBridge(this.toolEnv, executable, tempName);
       this.toolEnv.setVariable(tempName, cloned as any);
       const clonedExecutableDef = (cloned.internal?.executableDef ?? cloned.value) as any;
       const providedDefinition = this.toolDefinitions?.get(mcpName);

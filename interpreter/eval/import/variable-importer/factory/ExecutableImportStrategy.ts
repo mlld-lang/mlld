@@ -13,7 +13,8 @@ export class ExecutableImportStrategy implements ImportValueFamilyStrategy {
       request.value,
       request.metadata.source,
       request.metadata.buildMetadata(),
-      request.metadata.securityLabels
+      request.metadata.securityLabels,
+      request.env
     );
   }
 }

@@ -64,8 +64,8 @@ export class VariableImporter {
     this.capturedEnvRehydrator = new CapturedEnvRehydrator();
     this.executableImportRehydrator = new ExecutableImportRehydrator(this.capturedEnvRehydrator);
     this.importUtilities = new VariableImportUtilities({
-      createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
-        this.createExecutableFromImport(name, value, source, metadata, securityLabels)
+      createExecutableFromImport: (name, value, source, metadata, securityLabels, env) =>
+        this.createExecutableFromImport(name, value, source, metadata, securityLabels, env)
     });
     this.policyImportHandler = new PolicyImportHandler();
     this.namespaceSelectedImportHandler = new NamespaceSelectedImportHandler({
@@ -94,8 +94,8 @@ export class VariableImporter {
       policyImportHandler: this.policyImportHandler
     });
     this.variableFactoryOrchestrator = new ImportVariableFactoryOrchestrator({
-      createExecutableFromImport: (name, value, source, metadata, securityLabels) =>
-        this.createExecutableFromImport(name, value, source, metadata, securityLabels),
+      createExecutableFromImport: (name, value, source, metadata, securityLabels, env) =>
+        this.createExecutableFromImport(name, value, source, metadata, securityLabels, env),
       hasComplexContent: value => this.importUtilities.hasComplexContent(value),
       unwrapArraySnapshots: (value, importPath) => this.importUtilities.unwrapArraySnapshots(value, importPath),
       inferVariableType: value => this.importUtilities.inferVariableType(value)
@@ -429,7 +429,8 @@ export class VariableImporter {
     value: any,
     source: VariableSource,
     metadata: VariableMetadata,
-    securityLabels?: DataLabel[]
+    securityLabels?: DataLabel[],
+    env?: Environment
   ): ExecutableVariable {
     return this.executableImportRehydrator.create({
       name,
@@ -437,6 +438,7 @@ export class VariableImporter {
       source,
       metadata,
       securityLabels,
+      env,
       createVariableFromValue: (variableName, variableValue, importPath, originalName, options) =>
         this.createVariableFromValue(variableName, variableValue, importPath, originalName, options)
     });

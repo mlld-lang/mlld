@@ -856,6 +856,131 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported planner callback context fields across sequential llm bridge tool calls', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/session.mld', [
+      '/record @planner_query_slot = {',
+      '  data: [value: string],',
+      '  validate: "strict"',
+      '}',
+      '/record @planner_state_slot = {',
+      '  data: [value: object],',
+      '  validate: "strict"',
+      '}',
+      '/shelf @plannerSession = {',
+      '  query: planner_query_slot?,',
+      '  state: planner_state_slot?',
+      '}',
+      '/exe @slotValue(slotRef) = [',
+      '  let @value = @shelf.read(@slotRef)',
+      '  => when [',
+      '    !@value.isDefined() => null',
+      '    @value.value.isDefined() => @value.value',
+      '    @value.mx.data.value.isDefined() => @value.mx.data.value',
+      '    * => @value',
+      '  ]',
+      ']',
+      '/exe @initializePlannerSession() = [',
+      '  @shelf.clear(@plannerSession.query)',
+      '  @shelf.clear(@plannerSession.state)',
+      '  @shelf.write(@plannerSession.query, { value: "original-query" })',
+      '  @shelf.write(@plannerSession.state, { value: { kind: "state", resolved_handle: null } })',
+      '  => true',
+      ']',
+      '/exe @plannerQuery() = [',
+      '  => @slotValue(@plannerSession.query)',
+      ']',
+      '/exe @plannerState() = [',
+      '  => @slotValue(@plannerSession.state)',
+      ']',
+      '/exe @writePlannerState(state) = [',
+      '  @shelf.write(@plannerSession.state, { value: @state })',
+      '  => @state',
+      ']',
+      '/export { @initializePlannerSession, @plannerQuery, @plannerState, @writePlannerState }'
+    ].join('\n'));
+
+    await fileSystem.writeFile('/extract.mld', [
+      '/exe @dispatchExtract(agent, state, decision, query) = [',
+      '  => {',
+      '    agent_kind: @agent.kind,',
+      '    agent_tool_type: @typeof(@agent.toolsCollection.search_contacts.mlld),',
+      '    state_kind: @state.kind,',
+      '    state_handle: @state.resolved_handle,',
+      '    decision_phase: @decision.phase,',
+      '    decision_handle: @decision.requested_handle,',
+      '    query: @query',
+      '  }',
+      ']',
+      '/export { @dispatchExtract }'
+    ].join('\n'));
+
+    await fileSystem.writeFile('/planner.mld', [
+      '/import { @initializePlannerSession, @plannerQuery, @plannerState, @writePlannerState } from "/session.mld"',
+      '/import { @dispatchExtract } from "/extract.mld"',
+      '/exe tool:r @searchContacts(query) = "noop"',
+      '/var tools @plannerTools = {',
+      '  search_contacts: {',
+      '    mlld: @searchContacts,',
+      '    expose: ["query"]',
+      '  }',
+      '}',
+      '/var @plannerAgentConfig = {',
+      '  kind: "agent",',
+      '  toolsCollection: @plannerTools',
+      '}',
+      '/exe @plannerToolContext() = [',
+      '  => {',
+      '    agent: @plannerAgentConfig,',
+      '    state: @plannerState(),',
+      '    query: @plannerQuery()',
+      '  }',
+      ']',
+      '/exe @plannerResolve() = [',
+      '  @initializePlannerSession()',
+      '  @writePlannerState({ kind: "state", resolved_handle: "r_calendar_evt_13" })',
+      '  => { status: "resolved" }',
+      ']',
+      '/exe @plannerExtract() = [',
+      '  let @toolCtx = @plannerToolContext()',
+      '  let @decision = { phase: "extract", requested_handle: "r_calendar_evt_13" }',
+      '  => @dispatchExtract(@toolCtx.agent, @toolCtx.state, @decision, @toolCtx.query)',
+      ']',
+      '/export { @plannerResolve, @plannerExtract }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @plannerResolve, @plannerExtract } from "/planner.mld"',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolSequenceFromConfigPath}" "@mx.llm.config" '[{"name":"planner_resolve","arguments":{}},{"name":"planner_extract","arguments":{}}]' }`,
+      '/show @agent("Run planner extract", { tools: [@plannerResolve, @plannerExtract] })'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(JSON.parse(output.trim())).toEqual({
+        agent_kind: 'agent',
+        agent_tool_type: 'executable',
+        state_kind: 'state',
+        state_handle: 'r_calendar_evt_13',
+        decision_phase: 'extract',
+        decision_handle: 'r_calendar_evt_13',
+        query: 'original-query'
+      });
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves cross-module tool collections for llm bridge policy validation', async () => {
     const fileSystem = new MemoryFileSystem();
     await fileSystem.writeFile('/framework.mld', [

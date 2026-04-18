@@ -65,7 +65,8 @@ export class ImportVariableFactoryOrchestrator {
       value,
       importPath,
       originalName,
-      metadata
+      metadata,
+      env: options?.env
     };
 
     const pretypedResult =

@@ -6,6 +6,7 @@ import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security'
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { CapturedEnvRehydrator, type CapturedEnvVariableFactory } from './CapturedEnvRehydrator';
 import { getCapturedModuleEnv } from './CapturedModuleEnvKeychain';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface ExecutableImportRehydrationRequest {
   name: string;
@@ -13,6 +14,7 @@ export interface ExecutableImportRehydrationRequest {
   source: VariableSource;
   metadata: VariableMetadata;
   securityLabels?: DataLabel[];
+  env?: Environment;
   createVariableFromValue: CapturedEnvVariableFactory;
 }
 
@@ -54,7 +56,8 @@ export class ExecutableImportRehydrator {
       this.capturedEnvRehydrator.rehydrateNestedCapturedModuleScope(
         capturedModuleEnv,
         new WeakMap<object, Map<string, Variable>>(),
-        request.createVariableFromValue
+        request.createVariableFromValue,
+        request.env
       );
     }
 

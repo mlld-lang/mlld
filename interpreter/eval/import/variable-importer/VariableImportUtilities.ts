@@ -32,7 +32,8 @@ export interface VariableImportUtilitiesDependencies {
     value: any,
     source: VariableSource,
     metadata: VariableMetadata,
-    securityLabels?: DataLabel[]
+    securityLabels?: DataLabel[],
+    env?: Environment
   ) => ExecutableVariable;
 }
 
