@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { attachToolCollectionMetadata } from '@core/types/tools';
 import { formatForDisplay } from '@interpreter/utils/display-formatter';
 import {
   ENVIRONMENT_SERIALIZE_PLACEHOLDER,
@@ -91,5 +92,32 @@ describe('formatForDisplay', () => {
 
     const rendered = JSONFormatter.stringify({ env: envLike }, { pretty: false });
     expect(rendered).toBe(JSON.stringify({ env: ENVIRONMENT_SERIALIZE_PLACEHOLDER }));
+  });
+
+  it('summarizes executable definitions while preserving tool collection surface fields', () => {
+    const tool = {
+      type: 'code',
+      sourceDirective: 'exec',
+      language: 'js',
+      paramNames: ['payload'],
+      codeTemplate: [{ type: 'Text', content: 'noop' }],
+      description: 'Search contacts.'
+    };
+    const tools = attachToolCollectionMetadata({
+      build: { mlld: tool, description: 'Build tool.' }
+    }, {});
+
+    const rendered = JSONFormatter.stringify({ tool, tools }, { pretty: false });
+    expect(rendered).toBe(
+      JSON.stringify({
+        tool: '<function(payload)>',
+        tools: {
+          build: {
+            mlld: '<function(payload)>',
+            description: 'Build tool.'
+          }
+        }
+      })
+    );
   });
 });

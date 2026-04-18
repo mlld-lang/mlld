@@ -42,6 +42,24 @@ function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurit
   };
 }
 
+function createCodeExecutable(params: string[] = []) {
+  return {
+    type: 'code',
+    sourceDirective: 'exec',
+    language: 'js',
+    paramNames: params,
+    codeTemplate: [
+      {
+        type: 'Text',
+        content: 'curl https://internal.example.com/private',
+        metadata: {
+          security: makeSecurityDescriptor({ labels: ['fact:@should.not.propagate'] })
+        }
+      }
+    ]
+  };
+}
+
 describe('parseAndWrapJson', () => {
   it('wraps JSON strings and preserves metadata', () => {
     const metadata = { source: 'test-helper' };
@@ -142,6 +160,13 @@ describe('text serialization fallbacks', () => {
 
     expect(asText(value)).toBe('[unserializable object]');
     expect(wrapStructured(value, 'object').text).toBe('[unserializable object]');
+  });
+
+  it('summarizes executable definitions instead of materializing their codeTemplate', () => {
+    const executable = createCodeExecutable(['payload']);
+
+    expect(wrapStructured(executable, 'object').text).toBe('<function(payload)>');
+    expect(asText({ tool: executable })).toBe(JSON.stringify({ tool: '<function(payload)>' }));
   });
 });
 
@@ -265,5 +290,23 @@ describe('extractSecurityDescriptor with refined record metadata', () => {
     expect(recursive?.labels).toEqual(
       expect.arrayContaining(['src:mcp', 'fact:@transaction.recipient', 'untrusted'])
     );
+  });
+
+  it('does not recurse into executable definitions during recursive extraction', () => {
+    const structured = wrapStructured(
+      { tool: createCodeExecutable(['payload']) },
+      'object',
+      undefined,
+      {
+        security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+      }
+    );
+
+    const recursive = extractSecurityDescriptor(structured, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+
+    expect(recursive?.labels).toEqual(['src:mcp']);
   });
 });

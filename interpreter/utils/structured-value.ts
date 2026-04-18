@@ -5,6 +5,10 @@ import {
   mergeDescriptors,
   normalizeSecurityDescriptor
 } from '@core/types/security';
+import {
+  isOpaqueRuntimeValue,
+  summarizeOpaqueRuntimeValue
+} from '@core/security/opaque-runtime-values';
 import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
 import { VariableMetadataUtils, type Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
@@ -192,6 +196,11 @@ export function stringifyStructured(value: unknown, space?: number): string {
 }
 
 function stringifyTextValue(value: unknown): string {
+  const opaqueSummary = summarizeOpaqueRuntimeValue(value);
+  if (opaqueSummary) {
+    return opaqueSummary;
+  }
+
   try {
     const text = stringifyStructured(value);
     if (typeof text === 'string') {
@@ -210,15 +219,15 @@ function stringifyTextValue(value: unknown): string {
 }
 
 function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
-  if (isEnvironment(val)) {
-    return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
-  }
   if (isStructuredValue(val)) {
     return val.data;
   }
-  if (isShelfSlotRefValue(val)) {
-    return val.data;
+
+  const opaqueSummary = summarizeOpaqueRuntimeValue(val);
+  if (opaqueSummary) {
+    return opaqueSummary;
   }
+
   return val;
 }
 
@@ -886,6 +895,10 @@ function extractDescriptorInternal(
     }
     seen.add(value);
 
+    if (isOpaqueRuntimeValue(value.data)) {
+      return normalizeIfNeeded(metadataDescriptor, options.normalize);
+    }
+
     const nestedDescriptors = getStructuredChildValues(value)
       .map(item => extractDescriptorInternal(item, options, seen))
       .filter(isSecurityDescriptor);
@@ -921,6 +934,11 @@ function extractDescriptorInternal(
     return provenanceDescriptor;
   }
 
+  const metadataDescriptor = directObjectDescriptor(value, provenanceDescriptor, options.normalize);
+  if (isOpaqueRuntimeValue(value)) {
+    return metadataDescriptor;
+  }
+
   if (seen.has(value)) {
     return undefined;
   }
@@ -939,23 +957,6 @@ function extractDescriptorInternal(
     return descriptors[0];
   }
 
-  const candidate = value as {
-    metadata?: { security?: SecurityDescriptor };
-    mx?: {
-      labels?: readonly DataLabel[];
-      taint?: string;
-      attestations?: readonly DataLabel[];
-      sources?: readonly string[];
-      tools?: readonly ToolProvenance[];
-      policy?: Readonly<Record<string, unknown>> | null;
-    };
-  };
-  const metadataDescriptor = mergeDescriptorSources(
-    provenanceDescriptor,
-    candidate.mx
-      ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), options.normalize)
-      : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, options.normalize)
-  );
   const nestedDescriptors = Object.values(value as Record<string, unknown>)
     .map(item => extractDescriptorInternal(item, options, seen))
     .filter(isSecurityDescriptor);
@@ -977,6 +978,31 @@ function candidateMetadataSecurity(
   value: { metadata?: { security?: SecurityDescriptor } }
 ): SecurityDescriptor | undefined {
   return value.metadata?.security;
+}
+
+function directObjectDescriptor(
+  value: unknown,
+  provenanceDescriptor: SecurityDescriptor | undefined,
+  normalize: boolean
+): SecurityDescriptor | undefined {
+  const candidate = value as {
+    metadata?: { security?: SecurityDescriptor };
+    mx?: {
+      labels?: readonly DataLabel[];
+      taint?: string;
+      attestations?: readonly DataLabel[];
+      sources?: readonly string[];
+      tools?: readonly ToolProvenance[];
+      policy?: Readonly<Record<string, unknown>> | null;
+    };
+  };
+
+  return mergeDescriptorSources(
+    provenanceDescriptor,
+    candidate.mx
+      ? normalizeIfNeeded(varMxToSecurityDescriptor(candidate.mx as any), normalize)
+      : normalizeIfNeeded(candidate.metadata?.security as SecurityDescriptor | undefined, normalize)
+  );
 }
 
 function getStructuredNamespaceMetadata(
@@ -1038,6 +1064,10 @@ export function getStructuredChildValues(value: StructuredValue): unknown[] {
   }
 
   if (!value.data || typeof value.data !== 'object' || Array.isArray(value.data)) {
+    return [];
+  }
+
+  if (isOpaqueRuntimeValue(value.data)) {
     return [];
   }
 

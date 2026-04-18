@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { attachToolCollectionMetadata } from '@core/types/tools';
 import {
   extractUrlsFromText,
   extractUrlsFromValue,
@@ -64,6 +65,72 @@ describe('url provenance utilities', () => {
       'https://example.com/a'
     ]);
     expect(getterReads).toBe(0);
+  });
+
+  it('skips executable definitions and tool collections while scanning nested values', () => {
+    const toolCollection = attachToolCollectionMetadata({
+      build: {
+        mlld: {
+          type: 'code',
+          sourceDirective: 'exec',
+          language: 'js',
+          paramNames: ['payload'],
+          codeTemplate: [
+            { type: 'Text', content: 'curl https://internal.example.com/private' }
+          ]
+        }
+      }
+    }, {});
+    const value = {
+      body: 'look at https://example.com/a',
+      tool: {
+        type: 'code',
+        sourceDirective: 'exec',
+        language: 'js',
+        paramNames: ['payload'],
+        codeTemplate: [
+          { type: 'Text', content: 'curl https://hidden.example.com/trace' }
+        ]
+      },
+      tools: toolCollection
+    };
+
+    expect(extractUrlsFromValue(value)).toEqual([
+      'https://example.com/a'
+    ]);
+  });
+
+  it('does not descriptor-walk large executable ASTs while scanning nested values', () => {
+    const descriptorSpy = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+    const toolCollection = attachToolCollectionMetadata({
+      build: {
+        mlld: {
+          type: 'code',
+          sourceDirective: 'exec',
+          language: 'js',
+          paramNames: ['payload'],
+          codeTemplate: Array.from({ length: 2_000 }, (_, index) => ({
+            type: 'Text',
+            content: `curl https://hidden.example.com/trace/${index}`
+          }))
+        },
+        description: 'visible docs https://example.com/docs'
+      }
+    }, {});
+    const value = {
+      body: 'look at https://example.com/a',
+      tools: toolCollection
+    };
+
+    try {
+      expect(extractUrlsFromValue(value)).toEqual([
+        'https://example.com/a',
+        'https://example.com/docs'
+      ]);
+      expect(descriptorSpy.mock.calls.length).toBeLessThan(10);
+    } finally {
+      descriptorSpy.mockRestore();
+    }
   });
 
   it('matches exact-domain and wildcard construction allowlists', () => {

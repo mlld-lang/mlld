@@ -3,6 +3,7 @@
  */
 
 import type { MlldNode } from '@core/types';
+import { summarizeOpaqueRuntimeValue } from '@core/security/opaque-runtime-values';
 import type { Environment } from '../env/Environment';
 import type { SecurityDescriptor } from '@core/types/security';
 import {
@@ -81,12 +82,17 @@ export function createASTAwareJSONReplacer() {
       return Array.from(val.values());
     }
 
-    if (isEnvironment(val)) {
-      return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
-    }
-
     if (isStructuredValue(val)) {
       return val.data;
+    }
+
+    const opaqueSummary = summarizeOpaqueRuntimeValue(val);
+    if (opaqueSummary) {
+      return opaqueSummary;
+    }
+
+    if (isEnvironment(val)) {
+      return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
     }
 
     // Handle LoadContentResult - return content for string representation

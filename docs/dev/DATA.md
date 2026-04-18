@@ -250,6 +250,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 | JS/Node interop | ✓ | ◐ | ◐ | ◐ | ✗ | ◐ | ✗ | ✗ | ◐ | ✗ |
 
 **Key caveats:**
+- The `.text` column means the wrapper has a text view, not that the full underlying graph is always materialized. See [Opaque runtime carriers stay opaque in recursive walkers](#opaque-runtime-carriers-stay-opaque-in-recursive-walkers).
 - **`R` for shelf**: preserved only because `object`-typed record fields pass through without deep-rebuild. Any intermediate transform that deep-clones (spread, JSON round-trip, `plainData`) breaks this before it reaches the shelf.
 - **Spread is destructive.** `{...value}` has `plainData` semantics. If you need metadata through an object construction, build fields explicitly via `field` or `identity` access.
 - **`keepStructured` does not cross mlld→mlld boundaries.** It is an embedded-language escape hatch (JS/Node/Py/Sh), not a parameter-passing mechanism. Use `preserveStructuredArgs` on the exe or explicit `boundary.identity()` at the call site for mlld-to-mlld identity.
@@ -461,7 +462,7 @@ The two contracts preserve different things. Module export explicitly preserves 
 
 ### Never use raw `JSON.stringify` on values that may carry runtime references
 
-Use `stringifyStructured()` (from `interpreter/utils/structured-value.ts`) instead of raw `JSON.stringify` for any path that may encounter StructuredValues, Variables, Environment references, or other runtime wrappers. `stringifyStructured()` uses a replacer that handles StructuredValue unwrapping and Environment opacity.
+Use `stringifyStructured()` (from `interpreter/utils/structured-value.ts`) instead of raw `JSON.stringify` for any path that may encounter StructuredValues, Variables, Environment references, executable definitions, tool collections, shelf refs, or other runtime wrappers. `stringifyStructured()` uses a replacer that unwraps StructuredValues and summarizes identity-bearing executable/runtime carriers instead of descending into their internal graphs.
 
 Raw `JSON.stringify` is acceptable ONLY for known-plain-data objects: parsed JSON literals, config objects you constructed yourself, primitive arrays. If there is any possibility the value transited through the runtime (came from a variable, an exe return, a tool result, an import, a field access on a runtime object), use `stringifyStructured()`.
 
@@ -469,21 +470,28 @@ Raw `JSON.stringify` is acceptable ONLY for known-plain-data objects: parsed JSO
 
 The Environment class implements `toJSON()` returning `'[Environment]'`. This makes ALL `JSON.stringify` calls — including the 100+ existing raw calls and any future ones — automatically safe. `JSON.stringify` natively calls `toJSON()` before recursing, so Environment subtrees are collapsed to the placeholder without requiring a custom replacer at every call site.
 
-This is the primary defense. `stringifyStructured()`'s replacer also checks `isEnvironment()` as belt-and-suspenders, but `toJSON()` on the class is the invariant that prevents unbounded serialization walks regardless of which stringify path is used.
+This is the primary defense for raw `JSON.stringify`. `stringifyStructured()`'s replacer also checks `isEnvironment()` as belt-and-suspenders, but `toJSON()` on the class is the invariant that prevents unbounded serialization walks regardless of which stringify path is used.
 
 Environment is a capability/runtime reference (same category as `ShelfSlotRefValue`), not data. It is not serializable content. The only sanctioned path for inspecting Environment internals is `@debug.environment`.
 
+### Opaque runtime carriers stay opaque in recursive walkers too
+
+Opacity is not only a `JSON.stringify` concern. Recursive URL provenance extraction, recursive security-descriptor extraction, and `.text` materialization on object/array wrappers must also stop at identity-bearing runtime carriers instead of treating them as plain data.
+
+Today that means Environment and executable definitions/wrappers are summarized or skipped before any deep property walk. Tool collections remain displayable as plain objects, but their executable entries must stay opaque. Shelf refs are treated as opaque for display/URL materialization and only recurse where the caller explicitly wants the current slot descriptor. If a future recursive walker does not share the appropriate early-out behavior for these carriers, it is a bug even if `JSON.stringify` itself would have been safe.
+
 ### Why both `toJSON()` and `stringifyStructured()`
 
-- `toJSON()` on Environment handles the catastrophic case (unbounded recursion into runtime capsules). It makes every `JSON.stringify` call safe automatically.
-- `stringifyStructured()` handles the StructuredValue case (unwrapping `.data` from wrappers for clean serialized output). It also checks `isEnvironment()` as a redundant safety layer.
+- `toJSON()` on Environment handles the catastrophic case for raw `JSON.stringify` calls.
+- `stringifyStructured()` handles the StructuredValue case (unwrapping `.data` from wrappers for clean serialized output) and summarizes opaque executable/runtime carriers instead of traversing them.
+- Recursive walkers such as URL provenance and recursive descriptor extraction must apply the same opacity rule via type-aware early-outs; `toJSON()` does not protect property enumeration.
 - Use `stringifyStructured()` as the default serialization path. Rely on `toJSON()` as the safety net for any call site that hasn't been migrated yet or that calls raw `JSON.stringify` for a legitimate reason on known-plain data that unexpectedly contains a runtime ref.
 
 ## Gotchas
 
 - NEVER call builtin array methods directly on wrappers—use `asData()` first
 - NEVER use raw `JSON.stringify` on values that may carry runtime references—use `stringifyStructured()` (see Serialization Rules above)
-- Reading `.text` on object/array `StructuredValue`s is a real materialization boundary. Do not use `.text` for summaries, helper setup, metrics, or logging unless you are intentionally at a display/interpolate boundary.
+- Reading `.text` on object/array `StructuredValue`s is a real materialization boundary. Do not use `.text` for summaries, helper setup, metrics, or logging unless you are intentionally at a display/interpolate boundary. When `.data` is an identity-bearing runtime carrier, `.text` now returns a short placeholder instead of materializing the full graph.
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers

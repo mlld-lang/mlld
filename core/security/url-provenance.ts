@@ -1,3 +1,4 @@
+import { isOpaqueRuntimeValue } from '@core/security/opaque-runtime-values';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { SecurityDescriptor } from '@core/types/security';
 
@@ -129,6 +130,10 @@ function extractUrlsFromValueInternal(
   }
 
   if (typeof value !== 'object') {
+    return;
+  }
+
+  if (isOpaqueRuntimeValue(value)) {
     return;
   }
 
