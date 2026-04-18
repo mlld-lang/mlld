@@ -11,6 +11,7 @@ import type {
   NodeClassExecutable,
   NodeFunctionExecutable
 } from '@core/types/executable';
+import { markExecutableDefinition } from '@core/types/executable';
 import { isLoadContentResult } from '@core/types/load-content';
 import { isExecutableVariable } from '@core/types/variable';
 import { isStructuredValue, wrapStructured } from './structured-value';
@@ -188,11 +189,12 @@ function isClassLike(fn: Function): boolean {
 function createExecutableExport(
   execDef: ExecutableDefinition
 ): Record<string, unknown> {
+  const taggedExecDef = markExecutableDefinition(execDef);
   return {
     __executable: true,
-    value: execDef,
-    executableDef: execDef,
-    paramNames: execDef.paramNames
+    value: taggedExecDef,
+    executableDef: taggedExecDef,
+    paramNames: taggedExecDef.paramNames
   };
 }
 

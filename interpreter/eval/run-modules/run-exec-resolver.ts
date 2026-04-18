@@ -1,5 +1,9 @@
 import type { DirectiveNode, VariableReference } from '@core/types';
-import type { ExecutableDefinition, ExecutableVariable } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type ExecutableDefinition,
+  type ExecutableVariable
+} from '@core/types/executable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import { isExecutableVariable } from '@core/types/variable';
@@ -59,7 +63,10 @@ function rehydrateSerializedExecutable(
 ): ExecutableVariable {
   const fullName = buildFieldPath(varRef);
   const capturedShadowEnvs = deserializeCapturedShadowEnvs(value.internal?.capturedShadowEnvs);
-  const executableDef = value.executableDef ?? value.value;
+  const rawExecutableDef = value.executableDef ?? value.value;
+  const executableDef = rawExecutableDef
+    ? markExecutableDefinition(rawExecutableDef as ExecutableDefinition)
+    : rawExecutableDef;
 
   return {
     type: 'executable',

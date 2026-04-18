@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { markExecutableDefinition } from '@core/types/executable';
 import { attachToolCollectionMetadata } from '@core/types/tools';
 import { formatForDisplay } from '@interpreter/utils/display-formatter';
 import {
@@ -95,14 +96,14 @@ describe('formatForDisplay', () => {
   });
 
   it('summarizes executable definitions while preserving tool collection surface fields', () => {
-    const tool = {
+    const tool = markExecutableDefinition({
       type: 'code',
       sourceDirective: 'exec',
       language: 'js',
       paramNames: ['payload'],
       codeTemplate: [{ type: 'Text', content: 'noop' }],
       description: 'Search contacts.'
-    };
+    });
     const tools = attachToolCollectionMetadata({
       build: { mlld: tool, description: 'Build tool.' }
     }, {});

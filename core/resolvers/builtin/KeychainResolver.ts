@@ -4,6 +4,7 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldInterpreterError } from '@core/errors';
+import { markExecutableDefinition } from '@core/types/executable';
 
 export interface KeychainProvider {
   get(service: string, account: string): Promise<string | null>;
@@ -145,22 +146,17 @@ export class KeychainResolver implements Resolver {
     paramNames: string[],
     implementation: (args: any[]) => Promise<any>
   ): any {
+    const executableDef = markExecutableDefinition({
+      type: 'code',
+      codeTemplate: [{ type: 'Text', content: `// keychain.${name}` }],
+      language: 'javascript',
+      paramNames,
+      sourceDirective: 'exec'
+    });
     return {
       __executable: true,
-      value: {
-        type: 'code',
-        codeTemplate: [{ type: 'Text', content: `// keychain.${name}` }],
-        language: 'javascript',
-        paramNames,
-        sourceDirective: 'exec'
-      },
-      executableDef: {
-        type: 'code',
-        codeTemplate: [{ type: 'Text', content: `// keychain.${name}` }],
-        language: 'javascript',
-        paramNames,
-        sourceDirective: 'exec'
-      },
+      value: executableDef,
+      executableDef,
       internal: {
         isBuiltinTransformer: true,
         transformerImplementation: implementation,

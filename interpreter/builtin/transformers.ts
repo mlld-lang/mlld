@@ -1,7 +1,10 @@
 import JSON5 from 'json5';
 
 import type { MlldVariable } from '@core/types';
-import type { ExecutableDefinition } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type ExecutableDefinition
+} from '@core/types/executable';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 
 // Import existing utilities
@@ -375,13 +378,13 @@ export function createTransformerVariable(
   description: string,
   isUppercase: boolean
 ): MlldVariable {
-  const executableDef: ExecutableDefinition = {
+  const executableDef = markExecutableDefinition({
     type: 'code',
     codeTemplate: [{ type: 'Text', content: '// Built-in transformer' }],
     language: 'javascript',
     paramNames: ['input'],
     sourceDirective: 'exec'
-  };
+  } satisfies ExecutableDefinition);
 
   return {
     type: 'executable',

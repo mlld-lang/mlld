@@ -2,7 +2,10 @@ import type { DirectiveNode } from '@core/types';
 import { astLocationToSourceLocation } from '@core/types';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
-import type { ExecutableDefinition } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type ExecutableDefinition
+} from '@core/types/executable';
 import type { RecordDefinition } from '@core/types/record';
 import {
   createExecutableVariable,
@@ -66,7 +69,8 @@ export function createExeSecurityContext(
 export async function materializeExecutableVariable(
   input: MaterializeExecutableVariableInput
 ): Promise<EvalResult> {
-  const { directive, env, identifier, executableDef, descriptor, capabilityContext } = input;
+  const { directive, env, identifier, descriptor, capabilityContext } = input;
+  const executableDef = markExecutableDefinition(input.executableDef);
   const source = buildVariableSource(executableDef);
   const language = resolveCodeExecutableLanguage(executableDef);
   const location = astLocationToSourceLocation(

@@ -1,4 +1,7 @@
-import type { NodeFunctionExecutable } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type NodeFunctionExecutable
+} from '@core/types/executable';
 import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
 import type { RecordDefinition, RecordFieldDefinition, RecordFieldProjectionMetadata, RecordObjectProjectionMetadata } from '@core/types/record';
 import type {
@@ -1298,7 +1301,7 @@ function looksLikeEnvironment(value: unknown): value is Environment {
 
 function createShelfWriteDefinition(env: Environment, name: 'shelve' | 'write'): NodeFunctionExecutable {
   const callLabel = name === 'shelve' ? '@shelve' : '@shelf.write';
-  return {
+  return markExecutableDefinition({
     type: 'nodeFunction',
     name,
     fn: async (slotOrEnv?: unknown, valueOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1314,11 +1317,11 @@ function createShelfWriteDefinition(env: Environment, name: 'shelve' | 'write'):
     sourceDirective: 'exec',
     paramNames: ['slot', 'value'],
     description: `Write typed shelf slots. Writable slots: ${describeWritableSlots(env)}`
-  };
+  });
 }
 
 function createShelfReadDefinition(env: Environment, callLabel = '@shelf.read'): NodeFunctionExecutable {
-  return {
+  return markExecutableDefinition({
     type: 'nodeFunction',
     name: 'read',
     fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1332,11 +1335,11 @@ function createShelfReadDefinition(env: Environment, callLabel = '@shelf.read'):
     sourceDirective: 'exec',
     paramNames: ['slot'],
     description: `Read current shelf slot contents. Readable slots: ${describeReadableSlots(env)}`
-  };
+  });
 }
 
 function createShelfClearDefinition(env: Environment, callLabel = '@shelf.clear'): NodeFunctionExecutable {
-  return {
+  return markExecutableDefinition({
     type: 'nodeFunction',
     name: 'clear',
     fn: async (slotOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1350,11 +1353,11 @@ function createShelfClearDefinition(env: Environment, callLabel = '@shelf.clear'
     sourceDirective: 'exec',
     paramNames: ['slot'],
     description: `Clear writable shelf slots. Writable slots: ${describeWritableSlots(env)}`
-  };
+  });
 }
 
 function createShelfRemoveDefinition(env: Environment, callLabel = '@shelf.remove'): NodeFunctionExecutable {
-  return {
+  return markExecutableDefinition({
     type: 'nodeFunction',
     name: 'remove',
     fn: async (slotOrEnv?: unknown, refOrEnv?: unknown, boundEnv?: Environment) => {
@@ -1370,7 +1373,7 @@ function createShelfRemoveDefinition(env: Environment, callLabel = '@shelf.remov
     sourceDirective: 'exec',
     paramNames: ['slot', 'ref'],
     description: `Remove entities from writable collection slots. Writable slots: ${describeWritableSlots(env)}`
-  };
+  });
 }
 
 function createShelfBuiltinExecutable(

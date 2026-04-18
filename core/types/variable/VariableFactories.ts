@@ -30,7 +30,10 @@ import {
   VariableInternalMetadata
 } from './VariableTypes';
 import type { RecordDefinition } from '@core/types/record';
-import type { ExecutableDefinition } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type ExecutableDefinition
+} from '@core/types/executable';
 import type { StructuredValue, StructuredValueType } from '@interpreter/utils/structured-value';
 import { ensureStructuredValue, applySecurityDescriptorToStructuredValue } from '@interpreter/utils/structured-value';
 import { legacyMetadataToVarMx, legacyMetadataToInternal } from './VarMxHelpers';
@@ -872,12 +875,21 @@ export class VariableFactory {
     metadataOrOptions?: VariableMetadata | VariableFactoryInitOptions
   ): ExecutableVariable {
     const init = normalizeFactoryOptions(metadataOrOptions);
-    const explicitExecutableDef = init.internal?.executableDef as ExecutableDefinition | undefined;
-    const executableDefinition = {
+    const explicitExecutableDef =
+      init.internal?.executableDef !== undefined
+        ? markExecutableDefinition(init.internal.executableDef as ExecutableDefinition)
+        : undefined;
+    const internal = explicitExecutableDef
+      ? {
+          ...init.internal,
+          executableDef: explicitExecutableDef
+        }
+      : init.internal;
+    const executableDefinition = markExecutableDefinition({
       type,
       template,
       language
-    };
+    });
     const mx = {
       ...init.mx,
       ...buildExecutableMxMetadata(paramNames, explicitExecutableDef)
@@ -891,9 +903,9 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       mx,
-      internal: init.internal
+      internal
     });
-    if (init.internal?.executableDef === undefined) {
+    if (internal?.executableDef === undefined) {
       variable.internal = {
         ...(variable.internal ?? {}),
         executableDef: executableDefinition

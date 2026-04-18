@@ -1,6 +1,10 @@
 import type { NewExpression } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { ExecutableDefinition, PartialExecutable } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type ExecutableDefinition,
+  type PartialExecutable
+} from '@core/types/executable';
 import { MlldInterpreterError } from '@core/errors';
 import { astLocationToSourceLocation } from '@core/types';
 import { isExecutableVariable } from '@core/types/variable';
@@ -16,11 +20,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function createExecutableExport(execDef: ExecutableDefinition): Record<string, unknown> {
+  const taggedExecDef = markExecutableDefinition(execDef);
   return {
     __executable: true,
-    value: execDef,
-    executableDef: execDef,
-    paramNames: execDef.paramNames
+    value: taggedExecDef,
+    executableDef: taggedExecDef,
+    paramNames: taggedExecDef.paramNames
   };
 }
 
@@ -30,13 +35,13 @@ function buildPartialExecutable(
 ): PartialExecutable {
   const baseParams = Array.isArray(base.paramNames) ? base.paramNames : [];
   const remainingParams = baseParams.length > 0 ? baseParams.slice(boundArgs.length) : [];
-  return {
+  return markExecutableDefinition({
     type: 'partial',
     base,
     boundArgs,
     paramNames: remainingParams,
     sourceDirective: base.sourceDirective
-  };
+  });
 }
 
 function extractExecutableDefinition(value: unknown): ExecutableDefinition | undefined {

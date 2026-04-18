@@ -12,6 +12,8 @@ import type { DataValue } from './var';
 import type { PathMeta } from './meta';
 import type { CommandReference, ExecInvocation, VariableReferenceNode } from './primitives';
 
+const EXECUTABLE_DEFINITION_RUNTIME_TAG = Symbol.for('mlld.executableDefinition');
+
 export interface DynamicExecutableOutputRecord {
   kind: 'dynamic';
   ref: VariableReferenceNode;
@@ -203,6 +205,29 @@ export type ExecutableDefinition =
   | NodeClassExecutable
   | PartialExecutable;
 
+export function markExecutableDefinition<T extends object>(value: T): T {
+  if ((value as Record<PropertyKey, unknown>)[EXECUTABLE_DEFINITION_RUNTIME_TAG] === true) {
+    return value;
+  }
+
+  Object.defineProperty(value, EXECUTABLE_DEFINITION_RUNTIME_TAG, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
+
+  return value;
+}
+
+export function isExecutableDefinitionTagged(value: unknown): value is ExecutableDefinition {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as Record<PropertyKey, unknown>)[EXECUTABLE_DEFINITION_RUNTIME_TAG] === true
+  );
+}
+
 /**
  * Variable that stores an executable definition
  */
@@ -285,10 +310,11 @@ export function createExecutableVariable(
   definition: ExecutableDefinition,
   options?: { mx?: Partial<VariableContext>; internal?: Partial<VariableInternal> }
 ): ExecutableVariable {
+  const taggedDefinition = markExecutableDefinition(definition);
   return {
     type: 'executable',
     name,
-    value: definition,
+    value: taggedDefinition,
     mx: {
       ...options?.mx
     },

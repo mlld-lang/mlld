@@ -1,4 +1,5 @@
 import { isShelfSlotRefValue } from '@core/types/shelf';
+import { isExecutableDefinitionTagged } from '@core/types/executable';
 import { getToolCollectionMetadata } from '@core/types/tools';
 import {
   ENVIRONMENT_SERIALIZE_PLACEHOLDER,
@@ -12,20 +13,6 @@ export type OpaqueRuntimeValueKind =
   | 'executable-variable'
   | 'imported-executable'
   | 'executable-definition';
-
-const EXECUTABLE_DEFINITION_TYPES = new Set([
-  'command',
-  'commandRef',
-  'code',
-  'template',
-  'resolver',
-  'pipeline',
-  'data',
-  'prose',
-  'nodeFunction',
-  'nodeClass',
-  'partial'
-]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -71,23 +58,7 @@ function isToolCollectionLike(value: unknown): boolean {
 }
 
 function isExecutableDefinitionLike(record: Record<string, unknown>): boolean {
-  const type = getOwnDataProperty(record, 'type');
-  if (typeof type !== 'string' || !EXECUTABLE_DEFINITION_TYPES.has(type)) {
-    return false;
-  }
-
-  if (typeof getOwnDataProperty(record, 'sourceDirective') === 'string') {
-    return true;
-  }
-
-  return (
-    hasOwn(record, 'commandTemplate') ||
-    hasOwn(record, 'codeTemplate') ||
-    hasOwn(record, 'template') ||
-    hasOwn(record, 'pipeline') ||
-    hasOwn(record, 'dataTemplate') ||
-    hasOwn(record, 'configRef')
-  );
+  return isExecutableDefinitionTagged(record);
 }
 
 function isExecutableVariableLike(record: Record<string, unknown>): boolean {
@@ -111,10 +82,7 @@ function isImportedExecutableLike(record: Record<string, unknown>): boolean {
   const internal = getOwnDataProperty(record, 'internal');
   return Boolean(
     isRecord(internal) &&
-    (
-      hasOwn(internal, 'executableDef') ||
-      hasOwn(internal, 'capturedModuleEnv')
-    )
+    isExecutableDefinitionLike(internal.executableDef as Record<string, unknown>)
   );
 }
 

@@ -3,6 +3,7 @@ import type {
   RecordVariable,
   Variable
 } from '@core/types/variable';
+import { markExecutableDefinition } from '@core/types/executable';
 import { serializeRecordVariable } from '@core/types/record';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 import {
@@ -174,6 +175,14 @@ function serializeExecutableVariable(
   execVar: ExecutableVariable,
   context: BoundarySerializeContext
 ): Record<string, unknown> {
+  const serializedValue =
+    execVar.value && typeof execVar.value === 'object'
+      ? markExecutableDefinition(execVar.value)
+      : execVar.value;
+  const serializedExecutableDef =
+    execVar.internal?.executableDef && typeof execVar.internal.executableDef === 'object'
+      ? markExecutableDefinition(execVar.internal.executableDef)
+      : execVar.internal?.executableDef;
   let serializedInternal: Record<string, unknown> = { ...(execVar.internal ?? {}) };
   const defaultCapturedModuleEnv =
     getCapturedModuleEnv(execVar.internal)
@@ -201,11 +210,11 @@ function serializeExecutableVariable(
   const result = {
     __executable: true,
     name: execVar.name,
-    value: execVar.value,
+    value: serializedValue,
     paramNames: execVar.paramNames,
     paramTypes: execVar.paramTypes,
     description: execVar.description,
-    executableDef: execVar.internal?.executableDef,
+    executableDef: serializedExecutableDef,
     mx: { ...(execVar.mx ?? {}) },
     internal: serializedInternal
   };

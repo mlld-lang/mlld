@@ -5,7 +5,10 @@ import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
 import { ExportManifest } from './ExportManifest';
 import { parse } from '@grammar/parser';
-import type { TemplateExecutable } from '@core/types/executable';
+import {
+  markExecutableDefinition,
+  type TemplateExecutable
+} from '@core/types/executable';
 import { interpolate, evaluate } from '../../core/interpreter';
 import { MlldError, MlldImportError } from '@core/errors';
 import { logger } from '@core/utils/logger';
@@ -672,13 +675,13 @@ export class ModuleContentProcessor {
 
     this.validateTemplateParameters(templateNodes, paramNames, displayPath);
 
-    const execDef: TemplateExecutable = {
+    const execDef = markExecutableDefinition({
       type: 'template',
       template: templateNodes,
       templateFileDirectory: path.dirname(filePath),
       paramNames,
       sourceDirective: 'exec'
-    };
+    } satisfies TemplateExecutable);
 
     return {
       __executable: true,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { markExecutableDefinition } from '@core/types/executable';
 import { attachToolCollectionMetadata } from '@core/types/tools';
 import {
   extractUrlsFromText,
@@ -70,7 +71,7 @@ describe('url provenance utilities', () => {
   it('skips executable definitions and tool collections while scanning nested values', () => {
     const toolCollection = attachToolCollectionMetadata({
       build: {
-        mlld: {
+        mlld: markExecutableDefinition({
           type: 'code',
           sourceDirective: 'exec',
           language: 'js',
@@ -78,12 +79,12 @@ describe('url provenance utilities', () => {
           codeTemplate: [
             { type: 'Text', content: 'curl https://internal.example.com/private' }
           ]
-        }
+        }),
       }
     }, {});
     const value = {
       body: 'look at https://example.com/a',
-      tool: {
+      tool: markExecutableDefinition({
         type: 'code',
         sourceDirective: 'exec',
         language: 'js',
@@ -91,7 +92,7 @@ describe('url provenance utilities', () => {
         codeTemplate: [
           { type: 'Text', content: 'curl https://hidden.example.com/trace' }
         ]
-      },
+      }),
       tools: toolCollection
     };
 
@@ -104,7 +105,7 @@ describe('url provenance utilities', () => {
     const descriptorSpy = vi.spyOn(Object, 'getOwnPropertyDescriptors');
     const toolCollection = attachToolCollectionMetadata({
       build: {
-        mlld: {
+        mlld: markExecutableDefinition({
           type: 'code',
           sourceDirective: 'exec',
           language: 'js',
@@ -113,7 +114,7 @@ describe('url provenance utilities', () => {
             type: 'Text',
             content: `curl https://hidden.example.com/trace/${index}`
           }))
-        },
+        }),
         description: 'visible docs https://example.com/docs'
       }
     }, {});
@@ -131,6 +132,26 @@ describe('url provenance utilities', () => {
     } finally {
       descriptorSpy.mockRestore();
     }
+  });
+
+  it('treats untagged executable lookalikes as ordinary data', () => {
+    const value = {
+      body: 'look at https://example.com/a',
+      tool: {
+        type: 'code',
+        sourceDirective: 'exec',
+        language: 'js',
+        paramNames: ['payload'],
+        codeTemplate: [
+          { type: 'Text', content: 'curl https://hidden.example.com/trace' }
+        ]
+      }
+    };
+
+    expect(extractUrlsFromValue(value)).toEqual([
+      'https://example.com/a',
+      'https://hidden.example.com/trace'
+    ]);
   });
 
   it('matches exact-domain and wildcard construction allowlists', () => {

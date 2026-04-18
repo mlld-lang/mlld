@@ -1,4 +1,5 @@
 import { createExecutableVariable, VariableMetadataUtils } from '@core/types/variable';
+import { markExecutableDefinition } from '@core/types/executable';
 import type { DataLabel } from '@core/types/security';
 import type { ExecutableVariable, Variable, VariableMetadata, VariableSource } from '@core/types/variable';
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
@@ -26,7 +27,10 @@ export class ExecutableImportRehydrator {
   }
 
   create(request: ExecutableImportRehydrationRequest): ExecutableVariable {
-    const executableDef = request.value.executableDef;
+    const rawExecutableDef = request.value.executableDef ?? request.value.value;
+    const executableDef = rawExecutableDef
+      ? markExecutableDefinition(rawExecutableDef)
+      : rawExecutableDef;
     const paramNames = executableDef?.paramNames || [];
     let originalInternal = request.value.internal || request.value.metadata || {};
     const originalCapturedModuleEnv = getCapturedModuleEnv(originalInternal);

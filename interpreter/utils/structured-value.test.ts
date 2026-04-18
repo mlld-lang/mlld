@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { markExecutableDefinition } from '@core/types/executable';
 import {
   asText,
   parseAndWrapJson,
@@ -43,7 +44,7 @@ function createVariable(name: string, descriptor?: ReturnType<typeof makeSecurit
 }
 
 function createCodeExecutable(params: string[] = []) {
-  return {
+  return markExecutableDefinition({
     type: 'code',
     sourceDirective: 'exec',
     language: 'js',
@@ -57,7 +58,7 @@ function createCodeExecutable(params: string[] = []) {
         }
       }
     ]
-  };
+  });
 }
 
 describe('parseAndWrapJson', () => {
