@@ -19,6 +19,7 @@ import {
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import { serializeShelfDefinition } from '@interpreter/shelf/runtime';
 import { serializeModuleBoundaryValue } from '@interpreter/utils/module-boundary-serialization';
+import { stashCapturedModuleOwnerEnv } from './executable/CapturedModuleEnvKeychain';
 
 type SerializedMetadata = ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
 
@@ -65,6 +66,9 @@ export class ModuleExportSerializer {
     const getModuleEnvSnapshot = (): Map<string, Variable> => {
       if (!moduleEnvSnapshot) {
         moduleEnvSnapshot = new Map(request.childVars);
+        if (request.childEnv) {
+          stashCapturedModuleOwnerEnv(moduleEnvSnapshot, request.childEnv);
+        }
       }
       return moduleEnvSnapshot;
     };

@@ -3,7 +3,9 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvironmentCapture';
 import {
   getCapturedModuleEnv,
-  sealCapturedModuleEnv
+  getCapturedModuleOwnerEnv,
+  sealCapturedModuleEnv,
+  stashCapturedModuleOwnerEnv
 } from './CapturedModuleEnvKeychain';
 
 export type CapturedEnvVariableFactory = (
@@ -14,6 +16,7 @@ export type CapturedEnvVariableFactory = (
   options?: {
     serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata>;
     env?: Environment;
+    capturedModuleOwnerEnv?: Environment;
   }
 ) => Variable;
 
@@ -45,15 +48,21 @@ export class CapturedEnvRehydrator {
       return result;
     }
 
+    const capturedModuleOwnerEnv = getCapturedModuleOwnerEnv(moduleEnv) as Environment | undefined;
     const metadataMap = this.extractMetadataMap(moduleEnv);
     const moduleEnvEntries = Object.entries(moduleEnv).filter(([name]) => name !== '__metadata__');
 
     for (const [name, varData] of moduleEnvEntries) {
       const variable = createVariableFromValue(name, varData, 'module-env', name, {
         serializedMetadata: metadataMap?.[name],
-        ...(env ? { env } : {})
+        ...(env ? { env } : {}),
+        ...(capturedModuleOwnerEnv ? { capturedModuleOwnerEnv } : {})
       });
       result.set(name, variable);
+    }
+
+    if (capturedModuleOwnerEnv) {
+      stashCapturedModuleOwnerEnv(result, capturedModuleOwnerEnv);
     }
 
     return result;

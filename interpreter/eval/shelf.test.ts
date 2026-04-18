@@ -8,7 +8,8 @@ import { PathService } from '@services/fs/PathService';
 import { accessField } from '@interpreter/utils/field-access';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractShelfSlotRef, normalizeScopedShelfConfig } from '@interpreter/shelf/runtime';
-import { interpret } from '@interpreter/index';
+import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
+import { FunctionRouter } from '@cli/mcp/FunctionRouter';
 
 async function createEnvironment(source: string, filePath = '/main.mld'): Promise<Environment> {
   const fs = new MemoryFileSystem();
@@ -109,6 +110,101 @@ describe('shelf runtime', () => {
     expect((firstRecipient as any).mx?.taint ?? []).toEqual(
       expect.arrayContaining(['src:shelf:@outreach.recipients'])
     );
+  });
+
+  it('preserves nested tool collections through shelf-backed object slots', async () => {
+    const env = await createEnvironment(`
+/record @agent_slot = {
+  data: [value: object],
+  validate: "strict"
+}
+/shelf @planner = {
+  agent: agent_slot?
+}
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+/exe tool:w @send_email(recipient, subject) = \`sent:@recipient:@subject\` with {
+  controlArgs: ["recipient"]
+}
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["tool:w"]
+  }
+}
+/var @agent = {
+  tools: @agentTools,
+  toolsCollection: @agentTools
+}
+/var @written = @shelf.write(@planner.agent, { value: @agent })
+/var @readBack = @shelf.read(@planner.agent)
+`);
+
+    const readBack = env.getVariable('readBack')?.value;
+    expect(readBack).toBeDefined();
+
+    const storedAgent = await accessField(readBack, { type: 'field', value: 'value' } as any, { env });
+    const storedTools = await accessField(storedAgent, { type: 'field', value: 'tools' } as any, { env });
+    const toolCollection = resolveDirectToolCollection(storedTools);
+
+    expect(toolCollection).toBeDefined();
+    expect(Object.keys(toolCollection ?? {})).toEqual(['send_email']);
+    expect((toolCollection as any)?.send_email?.mlld).toMatchObject({
+      type: 'executable',
+      name: 'send_email'
+    });
+  });
+
+  it('preserves nested tool collections when an executable wraps the agent object before shelf write', async () => {
+    const env = await createEnvironment(`
+/record @agent_slot = {
+  data: [value: object],
+  validate: "strict"
+}
+/shelf @planner = {
+  agent: agent_slot?
+}
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+/exe tool:w @send_email(recipient, subject) = \`sent:@recipient:@subject\` with {
+  controlArgs: ["recipient"]
+}
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["tool:w"]
+  }
+}
+/exe @wrapAgent(tools) = {
+  tools: @tools,
+  toolsCollection: @tools
+}
+/var @agent = @wrapAgent(@agentTools)
+/var @written = @shelf.write(@planner.agent, { value: @agent })
+/var @readBack = @shelf.read(@planner.agent)
+`);
+
+    const readBack = env.getVariable('readBack')?.value;
+    expect(readBack).toBeDefined();
+
+    const storedAgent = await accessField(readBack, { type: 'field', value: 'value' } as any, { env });
+    const storedTools = await accessField(storedAgent, { type: 'field', value: 'tools' } as any, { env });
+    const toolCollection = resolveDirectToolCollection(storedTools);
+
+    expect(toolCollection).toBeDefined();
+    expect(Object.keys(toolCollection ?? {})).toEqual(['send_email']);
+    expect((toolCollection as any)?.send_email?.mlld).toMatchObject({
+      type: 'executable',
+      name: 'send_email'
+    });
   });
 
   it('supports append and replace merge semantics alongside keyed upsert', async () => {
@@ -1831,6 +1927,80 @@ describe('shelf runtime', () => {
 
     const id = await accessField(env.getVariable('result')?.value, { type: 'field', value: 'id' } as any, { env });
     expect(asData(id)).toBe('c_1');
+  });
+
+  it('preserves module-local shelf state across imported executable calls', async () => {
+    const fs = new MemoryFileSystem();
+    await fs.writeFile('/tools.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  validate: "strict"
+}
+/exe tool:w @send_email(recipient, subject) = \`sent:@recipient:@subject\` with {
+  controlArgs: ["recipient"]
+}
+/var tools @writeTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["tool:w"]
+  }
+}
+/export { @writeTools }
+`);
+    await fs.writeFile('/session.mld', `
+/record @planner_agent_slot = {
+  data: [value: object],
+  validate: "strict"
+}
+/shelf @plannerSession = {
+  agent: planner_agent_slot?
+}
+/exe @slotValue(slotRef) = [
+  let @value = @shelf.read(@slotRef)
+  => when [
+    !@value.isDefined() => null
+    @value.value.isDefined() => @value.value
+    @value.mx.data.value.isDefined() => @value.mx.data.value
+    * => @value
+  ]
+]
+/exe @initializePlannerSession(agent) = [
+  @shelf.clear(@plannerSession.agent)
+  @shelf.write(@plannerSession.agent, { value: @agent })
+  => true
+]
+/exe @plannerAgent() = [
+  => @slotValue(@plannerSession.agent)
+]
+/export { @initializePlannerSession, @plannerAgent }
+`);
+    await fs.writeFile('/app.mld', `
+/import { @writeTools } from "/tools.mld"
+/import { @initializePlannerSession, @plannerAgent } from "/session.mld"
+/var @agent = {
+  tools: @writeTools
+}
+/var @ok = @initializePlannerSession(@agent)
+/var @stored = @plannerAgent()
+`);
+
+    const { ast } = await parse(await fs.readFile('/app.mld'), { mode: 'markdown' });
+    const env = new Environment(fs, new PathService(), '/');
+    env.setCurrentFilePath('/app.mld');
+    await evaluate(ast, env);
+
+    const stored = env.getVariable('stored')?.value;
+    const storedTools = await accessField(stored, { type: 'field', value: 'tools' } as any, { env });
+    const toolCollection = resolveDirectToolCollection(storedTools);
+
+    expect(toolCollection).toBeDefined();
+    expect(Object.keys(toolCollection ?? {})).toEqual(['send_email']);
+    expect((toolCollection as any)?.send_email?.mlld).toMatchObject({
+      type: 'executable',
+      name: 'send_email'
+    });
   });
 
   it('preserves imported shelf slot references through nested local wrapper executables', async () => {

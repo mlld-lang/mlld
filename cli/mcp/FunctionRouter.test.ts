@@ -329,6 +329,50 @@ describe('FunctionRouter', () => {
     await expect(router.executeFunction('greet', { name: 'Charlie' })).resolves.toBe('Hello Charlie');
   });
 
+  it('preserves missing optional middle params for collection-backed tools', async () => {
+    const environment = await createEnvironment(`
+      /record @planner_resolve_inputs = {
+        data: [tool: string, args: object?, purpose: string?],
+        validate: "strict"
+      }
+
+      /exe @plannerResolve(tool, args, purpose) = js {
+        return JSON.stringify({
+          tool,
+          hasArgs: args !== undefined,
+          purpose
+        });
+      }
+
+      /var tools @plannerTools = {
+        resolve: {
+          mlld: @plannerResolve,
+          inputs: @planner_resolve_inputs,
+          labels: ["tool:w"]
+        }
+      }
+    `);
+
+    const collection = environment.getVariable('plannerTools')?.internal?.toolCollection as ToolCollection;
+    expect(collection).toBeDefined();
+
+    const router = new FunctionRouter({
+      environment,
+      toolCollection: collection
+    });
+
+    await expect(
+      router.executeFunction('resolve', {
+        tool: 'get_current_datetime',
+        purpose: 'Get current datetime'
+      })
+    ).resolves.toEqual(JSON.stringify({
+      tool: 'get_current_datetime',
+      hasArgs: false,
+      purpose: 'Get current datetime'
+    }));
+  });
+
   it('preserves object arguments', async () => {
     const environment = await createEnvironment(`
       /exe @inspect(value) = js {

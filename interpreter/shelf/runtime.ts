@@ -13,8 +13,10 @@ import type {
 } from '@core/types/shelf';
 import {
   createShelfSlotRefValue,
+  getShelfSlotRefOwner,
   isNormalizedShelfScope,
-  isShelfSlotRefValue
+  isShelfSlotRefValue,
+  stashShelfSlotRefOwner
 } from '@core/types/shelf';
 import { createExecutableVariable, createObjectVariable, createStructuredValueVariable, type Variable, type VariableSource } from '@core/types/variable';
 import { makeSecurityDescriptor, mergeDescriptors, removeLabelsFromDescriptor, serializeSecurityDescriptor, type SecurityDescriptor } from '@core/types/security';
@@ -819,17 +821,35 @@ export function extractShelfSlotRef(value: unknown): ShelfScopeSlotRef | undefin
   };
 }
 
+function resolveShelfTargetEnv(
+  value: unknown,
+  fallbackEnv: Environment
+): Environment {
+  if (isVariable(value)) {
+    return resolveShelfTargetEnv(value.value, fallbackEnv);
+  }
+
+  const ownerEnv = getShelfSlotRefOwner(value);
+  return ownerEnv && typeof ownerEnv === 'object'
+    ? ownerEnv as Environment
+    : fallbackEnv;
+}
+
 function createShelfSlotReferenceValue(
   env: Environment,
   shelfName: string,
   slotName: string,
   options: {
     traceScope?: Partial<RuntimeTraceScope>;
+    traceEnv?: Environment;
   } = {}
 ): ShelfSlotRefValue {
   const definition = env.getShelfDefinition(shelfName);
   const slot = definition?.slots[slotName];
-  const stored = env.readShelfSlot(shelfName, slotName, { traceScope: options.traceScope });
+  const stored = env.readShelfSlot(shelfName, slotName, {
+    traceScope: options.traceScope,
+    traceEnv: options.traceEnv
+  });
   const wrapped = stored === undefined
     ? (
         slot?.cardinality === 'collection'
@@ -838,7 +858,9 @@ function createShelfSlotReferenceValue(
       )
     : createStructuredSnapshot(stored);
 
-  return createShelfSlotRefValue({ shelfName, slotName }, wrapped);
+  const refValue = createShelfSlotRefValue({ shelfName, slotName }, wrapped);
+  stashShelfSlotRefOwner(refValue, env);
+  return refValue;
 }
 
 function createReadableShelfSlotReferenceValue(
@@ -848,10 +870,12 @@ function createReadableShelfSlotReferenceValue(
 ): ShelfSlotRefValue {
   const live = createShelfSlotReferenceValue(env, shelfName, slotName);
   const projected = renderDisplayProjectionSync(live.current, env);
-  return createShelfSlotRefValue(
+  const refValue = createShelfSlotRefValue(
     { shelfName, slotName },
     createStructuredSnapshot(projected)
   );
+  stashShelfSlotRefOwner(refValue, env);
+  return refValue;
 }
 
 function getAllWritableSlots(env: Environment): ShelfScopeSlotRef[] {
@@ -973,9 +997,10 @@ async function writeToShelfSlot(
   }
 
   assertShelfWriteAllowed(env, ref);
-  ensureShelfSlotAvailable(env, ref);
+  const storageEnv = resolveShelfTargetEnv(target, env);
+  ensureShelfSlotAvailable(storageEnv, ref);
 
-  const shelf = env.getShelfDefinition(ref.shelfName);
+  const shelf = storageEnv.getShelfDefinition(ref.shelfName);
   const slot = shelf?.slots[ref.slotName];
   if (!shelf || !slot) {
     throw new MlldInterpreterError(`Unknown shelf slot '@${ref.shelfName}.${ref.slotName}'`, 'shelf', undefined, {
@@ -983,7 +1008,7 @@ async function writeToShelfSlot(
     });
   }
 
-  const recordDefinition = env.getRecordDefinition(slot.record);
+  const recordDefinition = storageEnv.getRecordDefinition(slot.record);
   if (!recordDefinition) {
     throw new MlldInterpreterError(`Record '@${slot.record}' is not defined`, 'shelf', slot.location, {
       code: 'UNKNOWN_SHELF_RECORD'
@@ -1024,14 +1049,26 @@ async function writeToShelfSlot(
 
   const traceScope = { exe: callLabel };
   if (slot.cardinality === 'collection') {
-    const current = normalizeStoredCollection(env.readShelfSlot(ref.shelfName, ref.slotName, { traceScope }));
+    const current = normalizeStoredCollection(storageEnv.readShelfSlot(ref.shelfName, ref.slotName, {
+      traceScope,
+      traceEnv: env
+    }));
     const next = mergeCollectionItems(current, validatedItems, recordDefinition, slot.merge);
-    env.writeShelfSlot(ref.shelfName, ref.slotName, next, { traceScope });
+    storageEnv.writeShelfSlot(ref.shelfName, ref.slotName, next, {
+      traceScope,
+      traceEnv: env
+    });
   } else {
-    env.writeShelfSlot(ref.shelfName, ref.slotName, validatedItems[0], { traceScope });
+    storageEnv.writeShelfSlot(ref.shelfName, ref.slotName, validatedItems[0], {
+      traceScope,
+      traceEnv: env
+    });
   }
 
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope });
+  return createShelfSlotReferenceValue(storageEnv, ref.shelfName, ref.slotName, {
+    traceScope,
+    traceEnv: env
+  });
 }
 
 async function readShelfSlot(
@@ -1046,10 +1083,14 @@ async function readShelfSlot(
     });
   }
 
-  ensureShelfSlotAvailable(env, ref);
+  const storageEnv = resolveShelfTargetEnv(target, env);
+  ensureShelfSlotAvailable(storageEnv, ref);
   const traceScope = { exe: callLabel };
 
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope }).current;
+  return createShelfSlotReferenceValue(storageEnv, ref.shelfName, ref.slotName, {
+    traceScope,
+    traceEnv: env
+  }).current;
 }
 
 async function clearShelfSlot(
@@ -1063,10 +1104,17 @@ async function clearShelfSlot(
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
-  ensureShelfSlotAvailable(env, ref);
+  const storageEnv = resolveShelfTargetEnv(target, env);
+  ensureShelfSlotAvailable(storageEnv, ref);
   assertShelfWriteAllowed(env, ref);
-  env.clearShelfSlot(ref.shelfName, ref.slotName, { traceScope: { exe: callLabel } });
-  return createShelfSlotReferenceValue(env, ref.shelfName, ref.slotName, { traceScope: { exe: callLabel } });
+  storageEnv.clearShelfSlot(ref.shelfName, ref.slotName, {
+    traceScope: { exe: callLabel },
+    traceEnv: env
+  });
+  return createShelfSlotReferenceValue(storageEnv, ref.shelfName, ref.slotName, {
+    traceScope: { exe: callLabel },
+    traceEnv: env
+  });
 }
 
 async function removeFromShelfSlot(
@@ -1081,10 +1129,11 @@ async function removeFromShelfSlot(
       code: 'INVALID_SHELF_REFERENCE'
     });
   }
-  ensureShelfSlotAvailable(env, slotRef);
+  const storageEnv = resolveShelfTargetEnv(target, env);
+  ensureShelfSlotAvailable(storageEnv, slotRef);
   assertShelfWriteAllowed(env, slotRef);
 
-  const shelf = env.getShelfDefinition(slotRef.shelfName);
+  const shelf = storageEnv.getShelfDefinition(slotRef.shelfName);
   const slot = shelf?.slots[slotRef.slotName];
   if (!shelf || !slot || slot.cardinality !== 'collection') {
     throw new MlldInterpreterError(
@@ -1095,7 +1144,7 @@ async function removeFromShelfSlot(
     );
   }
 
-  const recordDefinition = env.getRecordDefinition(slot.record);
+  const recordDefinition = storageEnv.getRecordDefinition(slot.record);
   if (!recordDefinition) {
     throw new MlldInterpreterError(`Record '@${slot.record}' is not defined`, 'shelf', slot.location, {
       code: 'UNKNOWN_SHELF_RECORD'
@@ -1103,7 +1152,10 @@ async function removeFromShelfSlot(
   }
 
   const traceScope = { exe: callLabel };
-  const current = normalizeStoredCollection(env.readShelfSlot(slotRef.shelfName, slotRef.slotName, { traceScope }));
+  const current = normalizeStoredCollection(storageEnv.readShelfSlot(slotRef.shelfName, slotRef.slotName, {
+    traceScope,
+    traceEnv: env
+  }));
   const resolvedRef = await resolveShelfFactInputHandles(refValue, env);
   let next = current;
 
@@ -1131,16 +1183,20 @@ async function removeFromShelfSlot(
       : current;
   }
 
-  env.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next, {
+  storageEnv.writeShelfSlot(slotRef.shelfName, slotRef.slotName, next, {
     traceEvent: 'shelf.remove',
     action: 'remove',
     traceScope,
+    traceEnv: env,
     traceData: {
       removedCount: Math.max(0, current.length - next.length),
       ref: env.summarizeTraceValue(resolvedRef)
     }
   });
-  return createShelfSlotReferenceValue(env, slotRef.shelfName, slotRef.slotName, { traceScope });
+  return createShelfSlotReferenceValue(storageEnv, slotRef.shelfName, slotRef.slotName, {
+    traceScope,
+    traceEnv: env
+  });
 }
 
 function defineEnumerableGetter(

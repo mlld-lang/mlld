@@ -33,6 +33,7 @@ import {
 import {
   normalizeToolExecutableReferenceName,
   resolveToolCollectionExecutable,
+  type EffectiveToolMetadata,
   resolveToolCollectionEntryMetadata
 } from '@interpreter/eval/exec/tool-metadata';
 
@@ -116,19 +117,27 @@ export class FunctionRouter {
         }
 
         const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+        const metadata = resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName);
+        const optionalParamNames = metadata?.optionalParams ?? definition.optional ?? [];
         const operationName = this.resolveOperationName(execVar, toolKey);
-        const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName);
-        const invocationSecurity = this.buildInvocationSecurity(execVar, resolvedArgs, this.shouldUseObjectArgs(execVar));
+        const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName, metadata);
+        const argsAsObject = this.shouldUseObjectInvocationArgs(execVar, resolvedArgs, optionalParamNames, definition);
+        const invocationSecurity = this.buildInvocationSecurity(
+          execVar,
+          resolvedArgs,
+          this.shouldUseObjectArgs(execVar, definition)
+        );
         const invocation = this.buildInvocation(
           execName,
           execVar,
           resolvedArgs,
           operationName,
           definition.labels,
-          this.shouldUseObjectArgs(execVar),
+          argsAsObject,
           invocationSecurity.inputSecurityDescriptor,
           invocationSecurity.argSecurityDescriptors,
-          invocationSecurity.argFactSourceDescriptors
+          invocationSecurity.argFactSourceDescriptors,
+          optionalParamNames
         );
         const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
         this.recordToolResultSecurity(result.value);
@@ -149,7 +158,9 @@ export class FunctionRouter {
       }
 
       const execVar = this.normalizeExecutableVariable(variable as ExecutableVariable);
+      const optionalParamNames = this.resolveExecutableOptionalParams(execVar);
       const operationName = this.resolveOperationName(execVar, toolKey);
+      const argsAsObject = this.shouldUseObjectInvocationArgs(execVar, args, optionalParamNames);
       const invocationSecurity = this.buildInvocationSecurity(execVar, args, this.shouldUseObjectArgs(execVar));
       const invocation = this.buildInvocation(
         execName,
@@ -157,10 +168,11 @@ export class FunctionRouter {
         args,
         operationName,
         undefined,
-        this.shouldUseObjectArgs(execVar),
+        argsAsObject,
         invocationSecurity.inputSecurityDescriptor,
         invocationSecurity.argSecurityDescriptors,
-        invocationSecurity.argFactSourceDescriptors
+        invocationSecurity.argFactSourceDescriptors,
+        optionalParamNames
       );
       const result = (await evaluateExecInvocation(invocation, this.environment)) as ExecResult;
       this.recordToolResultSecurity(result.value);
@@ -315,13 +327,18 @@ export class FunctionRouter {
     argsAsObject?: boolean,
     inputSecurityDescriptor?: SecurityDescriptor,
     argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[],
-    argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[]
+    argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[],
+    optionalParamNames: readonly string[] = []
   ): ExecInvocation {
     const location = this.createLocation();
     const identifierNode = this.createVariableReferenceNode(name, location);
     const argNodes = argsAsObject
       ? [this.createDataValue(args, location)]
       : this.createArgumentNodes(execVar, args, location);
+    const routerNamedObjectDispatch =
+      argsAsObject === true
+      && !this.shouldUseObjectArgs(execVar)
+      && optionalParamNames.length > 0;
 
     const commandRef: SyntheticCommandReference = {
       type: 'CommandReference',
@@ -345,6 +362,12 @@ export class FunctionRouter {
         ...(argSecurityDescriptors?.some(Boolean) ? { argSecurityDescriptors } : {}),
         ...(argFactSourceDescriptors?.some(entry => Array.isArray(entry) && entry.length > 0)
           ? { argFactSourceDescriptors }
+          : {}),
+        ...(routerNamedObjectDispatch
+          ? {
+              routerNamedObjectDispatch: true,
+              routerOptionalParamNames: [...optionalParamNames]
+            }
           : {})
       }
     } as ExecInvocation;
@@ -584,27 +607,85 @@ export class FunctionRouter {
     return parts.length === 1 ? parts[0] : this.environment.mergeSecurityDescriptors(...parts);
   }
 
-  private shouldUseObjectArgs(execVar: ExecutableVariable): boolean {
-    return execVar.internal?.mcpTool?.argumentMode === 'object';
+  private shouldUseObjectArgs(
+    execVar: ExecutableVariable,
+    definition?: ToolDefinition
+  ): boolean {
+    return execVar.internal?.mcpTool?.argumentMode === 'object' || definition?.direct === true;
+  }
+
+  private shouldUseObjectInvocationArgs(
+    execVar: ExecutableVariable,
+    args: Record<string, unknown>,
+    optionalParamNames: readonly string[] = [],
+    definition?: ToolDefinition
+  ): boolean {
+    if (this.shouldUseObjectArgs(execVar, definition)) {
+      return true;
+    }
+
+    const params = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
+    if (params.length === 0) {
+      return false;
+    }
+
+    let lastProvidedIndex = -1;
+    for (let index = params.length - 1; index >= 0; index -= 1) {
+      if (Object.prototype.hasOwnProperty.call(args, params[index])) {
+        lastProvidedIndex = index;
+        break;
+      }
+    }
+    if (lastProvidedIndex === -1) {
+      return false;
+    }
+
+    const optionalSet = new Set(
+      optionalParamNames.filter(
+        (param): param is string => typeof param === 'string' && param.trim().length > 0
+      )
+    );
+    for (let index = 0; index <= lastProvidedIndex; index += 1) {
+      const paramName = params[index];
+      if (!Object.prototype.hasOwnProperty.call(args, paramName) && optionalSet.has(paramName)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private resolveExecutableOptionalParams(execVar: ExecutableVariable): string[] {
+    const optionalParams = (execVar.internal?.executableDef as { optionalParams?: unknown } | undefined)?.optionalParams;
+    if (!Array.isArray(optionalParams)) {
+      return [];
+    }
+    return optionalParams.filter(
+      (param): param is string => typeof param === 'string' && param.trim().length > 0
+    );
   }
 
   private async resolveToolArgs(
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     definition: ToolDefinition,
-    toolName: string
+    toolName: string,
+    metadata?: Pick<EffectiveToolMetadata, 'params' | 'optionalParams'>
   ): Promise<Record<string, unknown>> {
     const paramNames = Array.isArray(execVar.paramNames) ? execVar.paramNames : [];
-    const metadata = this.toolCollection
-      ? resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName)
-      : undefined;
+    const resolvedMetadata = metadata
+      ?? (
+        this.toolCollection
+          ? resolveToolCollectionEntryMetadata(this.environment, this.toolCollection, toolName)
+          : undefined
+      );
     const bound =
       definition.bind && typeof definition.bind === 'object' && !Array.isArray(definition.bind)
         ? definition.bind
         : undefined;
     const boundKeys = bound ? Object.keys(bound) : [];
-    const exposed = metadata?.params ?? paramNames.filter(param => !boundKeys.includes(param));
-    const optionalSet = new Set(metadata?.optionalParams ?? definition.optional ?? []);
+    const exposed = resolvedMetadata?.params ?? paramNames.filter(param => !boundKeys.includes(param));
+    const optionalSet = new Set(resolvedMetadata?.optionalParams ?? definition.optional ?? []);
     const exposedSet = new Set(exposed);
 
     for (const key of Object.keys(args)) {

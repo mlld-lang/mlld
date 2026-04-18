@@ -40,6 +40,7 @@ export interface VariableManagerDependencies {
   getCurrentFilePath(): string | undefined;
   getReservedNames(): Set<string>;
   getParent(): VariableManagerContext | undefined;
+  findVisibleParentVariableOwner?(name: string): VariableManagerContext | undefined;
   getCapturedModuleEnv(): Map<string, Variable> | undefined;
   isModuleIsolated?(): boolean;
   getResolverManager(): ResolverManager | undefined;
@@ -225,9 +226,14 @@ export class VariableManager implements IVariableManager {
     // See mlld-1e23 for the original bug report.
     const isModuleIsolated = this.deps.isModuleIsolated?.() ?? false;
     if (!isModuleIsolated) {
-      const parent = this.deps.getParent();
-      if (parent?.hasVariable(name)) {
-        const existing = parent.getVariable(name)!;
+      const visibleParentOwner = this.deps.findVisibleParentVariableOwner
+        ? this.deps.findVisibleParentVariableOwner(name)
+        : (() => {
+            const parent = this.deps.getParent();
+            return parent?.hasVariable(name) ? parent : undefined;
+          })();
+      if (visibleParentOwner) {
+        const existing = visibleParentOwner.getVariable(name)!;
         const existingIsLegitimate = this.isLegitimateVariableType(existing);
 
         // Only throw collision errors if both variables are legitimate mlld types

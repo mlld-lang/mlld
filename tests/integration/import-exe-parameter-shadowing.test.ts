@@ -104,6 +104,202 @@ describe('imported executable parameter shadowing', () => {
     expect((output as string).trim()).toBe('outer:42\ninner:7');
   });
 
+  it('allows imported executable locals to shadow imported module bindings from their own captured env', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-module-shadowing-'));
+    tempDirs.push(root);
+
+    const basePath = path.join(root, 'base.mld');
+    const helperPath = path.join(root, 'helper.mld');
+    const mainPath = path.join(root, 'main.mld');
+
+    await fs.writeFile(
+      basePath,
+      [
+        '/var @value = "shared"',
+        '/var @entry = "shared-entry"',
+        '/export { value, entry }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      helperPath,
+      [
+        `/import { value, entry } from "${basePath}"`,
+        '/exe @run() = [',
+        '  let @value = "local"',
+        '  let @pairs = for @entry in [1] => @entry',
+        '  => `value:@value pair:@pairs[0]`',
+        ']',
+        '/export { run }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { run } from "${helperPath}"`,
+        '/show @run()'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('value:local pair:1');
+  });
+
+  it('keeps nested imported executable locals isolated from caller locals in the same module', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-nested-let-isolation-'));
+    tempDirs.push(root);
+
+    const helperPath = path.join(root, 'helper-nested-let.mld');
+    const mainPath = path.join(root, 'main-nested-let.mld');
+
+    await fs.writeFile(
+      helperPath,
+      [
+        '/exe @slotValue() = [',
+        '  let @value = "inner"',
+        '  => @value',
+        ']',
+        '/exe @plannerState() = [',
+        '  let @value = @slotValue()',
+        '  => `planner:@value`',
+        ']',
+        '/export { @plannerState }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { @plannerState } from "${helperPath}"`,
+        '/var @value = "caller"',
+        '/show @plannerState()',
+        '/show `caller:@value`'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('planner:inner\ncaller:caller');
+  });
+
+  it('keeps nested imported executable loop bindings isolated from caller locals', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-nested-loop-isolation-'));
+    tempDirs.push(root);
+
+    const helperPath = path.join(root, 'helper-nested-loop.mld');
+    const mainPath = path.join(root, 'main-nested-loop.mld');
+
+    await fs.writeFile(
+      helperPath,
+      [
+        '/exe @select(items) = [',
+        '  let @entry = { kind: "selected" }',
+        '  let @picked = for @entry in @items => @entry',
+        '  => `entry:@entry.kind picked:@picked[0]`',
+        ']',
+        '/exe @run() = [',
+        '  let @entry = { kind: "caller" }',
+        '  => @select([7])',
+        ']',
+        '/export { @run }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { @run } from "${helperPath}"`,
+        '/show @run()'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('entry:selected picked:7');
+  });
+
+  it('treats let aliases of imported variables as local bindings', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-let-alias-local-'));
+    tempDirs.push(root);
+
+    const basePath = path.join(root, 'base.mld');
+    const helperPath = path.join(root, 'helper-alias.mld');
+    const mainPath = path.join(root, 'main-alias.mld');
+
+    await fs.writeFile(
+      basePath,
+      [
+        '/var @source = { kind: "imported" }',
+        '/export { @source }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      helperPath,
+      [
+        `/import { @source } from "${basePath}"`,
+        '/exe @run() = [',
+        '  let @entry = @source',
+        '  let @picked = for @entry in [1] => @entry',
+        '  => `kind:@entry.kind picked:@picked[0]`',
+        ']',
+        '/export { @run }'
+      ].join('\n'),
+      'utf8'
+    );
+
+    await fs.writeFile(
+      mainPath,
+      [
+        `/import { @run } from "${helperPath}"`,
+        '/show @run()'
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = await interpret(await fs.readFile(mainPath, 'utf8'), {
+      filePath: mainPath,
+      fileSystem: new NodeFileSystem(),
+      pathService: new PathService(),
+      approveAllImports: true,
+      useMarkdownFormatter: false,
+      normalizeBlankLines: true
+    });
+
+    expect((output as string).trim()).toBe('kind:imported picked:1');
+  });
+
   it('unwraps nested structured arrays when passed to imported js executables', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-import-array-unwrap-'));
     tempDirs.push(root);

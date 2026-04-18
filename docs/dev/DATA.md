@@ -1,8 +1,8 @@
 ---
-updated: 2026-04-08
+updated: 2026-04-18
 tags: #arch, #data, #pipeline
 related-docs: docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
-related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/eval/pipeline/*.ts
+related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/shelf/runtime.ts, interpreter/eval/import/variable-importer/ModuleExportSerializer.ts, interpreter/utils/boundary.ts, interpreter/eval/pipeline/*.ts
 related-types: core/types { StructuredValue, PipelineInput, ShelfSlotRefValue }
 ---
 
@@ -11,7 +11,8 @@ related-types: core/types { StructuredValue, PipelineInput, ShelfSlotRefValue }
 ## tldr
 
 mlld treats structured data (arrays, objects, JSON) as first-class values via `StructuredValue` wrappers. Most pipeline stages, variables, and content loaders preserve both `.text` (string view) and `.data` (parsed structure). Templates and display automatically stringify; computations access native values. Some runtime values are capabilities or references rather than pure data, such as shelf slot refs, but they still project through the same `asText()` / `asData()` helpers.
-mlld-to-mlld boundaries are now named explicitly: `boundary.field` preserves wrappers during reads, `boundary.identity` preserves identity-bearing values such as tool collections and shelf refs, `boundary.display` renders output text, `boundary.interpolate` handles template/shell string boundaries, `boundary.config` materializes env-aware config inputs, and `boundary.plainData` is the explicit recursive unwrap/materialization boundary.
+mlld-to-mlld boundaries are named explicitly: `boundary.field` preserves wrappers during reads, `boundary.identity` preserves identity-bearing values such as tool collections and shelf refs, `boundary.display` renders output text, `boundary.interpolate` handles template/shell string boundaries, `boundary.config` materializes env-aware config inputs, `boundary.plainData` is the explicit recursive unwrap/materialization boundary, and `boundary.serialize` is the module export/import helper.
+Values travel in four carrier layers (StructuredValue, Variable, ExpressionProvenance, capability/reference values) that are not interchangeable; identifying which carrier reached the failing consumer is the first step in every boundary bug. The Cross-Boundary Survivability matrix below is the primary debugging reference.
 Angle-bracket content loading (`<...>`, alligator syntax) is part of this same data model.
 
 ## Principles
@@ -123,6 +124,17 @@ StructuredValueVariable {
 }
 ```
 
+### Carriers
+
+Runtime values travel in four carrier layers. They are **not interchangeable**. Boundary bugs almost always start with a consumer treating one carrier as another.
+
+1. **`StructuredValue`** — `.data`, `.text`, `.mx`, `internal`. The universal wrapper for data values.
+2. **`Variable`** — named binding with `mx`, `internal`, import/export metadata, and a `value` that holds a StructuredValue or a capability value. Adds provenance the StructuredValue layer cannot.
+3. **`ExpressionProvenance`** — `WeakMap<object, SecurityDescriptor>` attached to plain objects so descriptors survive wrapper removal. In-memory only; does not serialize.
+4. **Capability / reference values** — `ShelfSlotRefValue`, imported executable wrappers with `capturedModuleEnv`, tool collections with `isToolsCollection`/Symbol metadata, `LoadContentResult`. These carry authority or live references; flattening them to plain data erases meaning, not just shape.
+
+When debugging, identify which carrier arrived at the failing site, then walk backward to find which boundary changed the carrier.
+
 ### Capability / Reference Values
 
 Some runtime values are not plain data wrappers. The main current example is `ShelfSlotRefValue`, which represents access to a shelf slot while still exposing the slot's current contents for normal reads:
@@ -196,16 +208,72 @@ Use the boundary helpers by contract, not by convenience:
 
 The generated function MCP bridge is not a `serialize` surface. It is an identity-preserving transport of live executables/tool collections, so bridge setup and bridge-local cloning stay in the `identity` family.
 
+### Tool Collection Identity
+
+Tool collections are an identity-preservation hot spot architecturally — they are dispatched through, not just read, so losing the marker silently breaks invocation rather than display. They are marked at two layers and must survive any transform whose result the runtime will later dispatch through.
+
+**Markers (both are authoritative):**
+- **Variable-level**: `variable.internal.isToolsCollection === true` with `variable.internal.toolCollection` holding the plain collection object. Set by `prepareVarAssignment` and `normalizeToolCollection` (`interpreter/eval/var/tool-scope.ts`).
+- **Plain-object Symbol**: `Symbol.for('mlld.toolCollectionMetadata')` attached directly to the plain object via `attachToolCollectionMetadata`. Used for shape-based detection when a Variable wrapper was unwrapped.
+
+**Detection:** `resolveDirectToolCollection(value)` tries both markers. It does **not** re-attach; it only finds a marker that was preserved. Missing marker → `undefined` → dispatch fails with "not a tool collection."
+
+**Co-travel with `capturedModuleEnv`:** imported tool collections need their source module's env to resolve sibling exes. `sealCapturedModuleEnv` attaches the env alongside the tool collection marker. If either is lost separately, dispatch fails — tool collection without env cannot resolve siblings; env without tool collection has no dispatch surface.
+
+**What preserves identity:**
+- Field access and parameter binding (when `boundary.identity()` is used explicitly)
+- Module export/import (via dedicated `TOOL_COLLECTION_METADATA_EXPORT_KEY` and `TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY` in `ModuleExportSerializer`)
+- Shelf write/read for nested object-typed fields — but **by reference only**; the shelf validator does not explicitly preserve the Symbol marker, it survives because `object`-typed fields pass through without deep-rebuild
+- Runtime-aware JS interop paths (`toJsValue` in `interpreter/utils/node-interop.ts`) that explicitly reattach the Symbol marker to the cloned plain-object result
+
+**What drops identity:**
+- Object spread (`{ ...tools }`), `boundary.plainData()`, raw `JSON.stringify`
+- Any intermediate deep-clone between a shelf write and its later read
+- JS interop paths that bypass `toJsValue` reattachment, or any host-side JS that reconstructs the object without forwarding Symbol-keyed properties (the default for `JSON.parse(JSON.stringify(x))` and similar)
+
+The architectural framing here is descriptive: this is where identity *can* be lost. Whether it has been lost in any given runtime path is empirical — verify with a host-backed repro before treating identity loss as the diagnosed root cause of a downstream symptom.
+
+### Cross-Boundary Survivability
+
+Use this matrix when a value arrived wrong and you need to know which transform dropped metadata. Rows are transforms; columns are metadata/identity. ✓ = preserved, ✗ = dropped, ◐ = conditional, `R` = preserved by reference only (fragile across deep-clone).
+
+| Transform | `.data` | `.text` | `.mx.labels` | `.mx.factsources` | Projection | Tool collection | `capturedModuleEnv` | ShelfSlotRef | `keepStructured` | `ExpressionProvenance` |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| Field access | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Object spread | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Array spread | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Parameter binding | ✓ | ✓ | ✓ | ✓ | ◐ | ✓ | ◐ | ✓ | ✗ | ◐ |
+| `let` rebind (block body) | ✓ | ✓ | ✓ | ✓ | ◐ | ✓ | ✓ | ✓ | ✗ | ✓ |
+| Shelf write→read | ✓ | ✓ | ◐ | ◐ | ✓ | R | R | ✓ (live ref) | ✗ | ✗ |
+| Module export→import | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| `=> record` coercion | ✓ | ✓ | ✓ | ✓ (minted) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| JS/Node interop | ✓ | ◐ | ◐ | ◐ | ✗ | ◐ | ✗ | ✗ | ◐ | ✗ |
+
+**Key caveats:**
+- **`R` for shelf**: preserved only because `object`-typed record fields pass through without deep-rebuild. Any intermediate transform that deep-clones (spread, JSON round-trip, `plainData`) breaks this before it reaches the shelf.
+- **Spread is destructive.** `{...value}` has `plainData` semantics. If you need metadata through an object construction, build fields explicitly via `field` or `identity` access.
+- **`keepStructured` does not cross mlld→mlld boundaries.** It is an embedded-language escape hatch (JS/Node/Py/Sh), not a parameter-passing mechanism. Use `preserveStructuredArgs` on the exe or explicit `boundary.identity()` at the call site for mlld-to-mlld identity.
+- **ExpressionProvenance is in-memory only.** Does not serialize. Lost at module boundaries. Consumers that need descriptor information after a serialization round-trip must materialize into Variable `.mx` first.
+
 ### Debugging Heuristics
+
+**Diagnostic procedure when a value arrived wrong:**
+
+1. **Identify the carrier at the failing site.** Is it a StructuredValue, a Variable, a capability value, or a plain object? `Object.getOwnPropertyDescriptor(value, 'text')` — a `get` means a lazy wrapper; a `value` means something already materialized `.text`.
+2. **Look up the consumer's contract in the boundary taxonomy** (§Boundary Taxonomy above). If consumer expects identity-preserved but got plain, the bug is upstream.
+3. **Walk seams backward** in this order: arg evaluation → guard input prep → hook helper injection → parameter binding → result normalization → audit/logging. The failure usually appears one or two seams *after* the boundary that actually dropped the metadata.
+4. **Cross-check the survivability matrix** (§Cross-Boundary Survivability). If every transform on the value's path preserves the missing field, the bug is a transform the matrix doesn't list — most likely a manual property access or an ad hoc `JSON.stringify` / `.text` materialization.
+5. **Silent fallback is the worst failure mode in this family.** A consumer that silently normalizes a wrong-shape input produces far-downstream bugs. Prefer throwing at the boundary.
+
+**Specific traps:**
 
 - Imported executable parameters are not a plain-data boundary by default. A complex object/array argument may still be caller-owned AST or a wrapper-backed value when it reaches the callee.
 - If a bug appears only through an imported helper or only after forwarding an object argument through another exe, inspect parameter rebinding before blaming display, `@pretty`, or generic serialization.
 - When a callee needs detached plain data, materialize once at the boundary (`boundary.config`, `boundary.plainData`, or an intentional object spread). Do not rely on downstream field access or stringification to perform that separation implicitly.
-- If a wrapper/perf bug smells like "somewhere this became huge" or "somewhere labels disappeared", ask who asked for text before asking who serialized the object. On object/array wrappers, `.text` is effectively a materialization boundary.
-- Check the `text` property descriptor first: `Object.getOwnPropertyDescriptor(value, 'text')`. A `get` means the wrapper is still lazy; a `value` means some earlier path already materialized it.
-- Trace these seams in order when a repro only appears in full runtime flows: arg evaluation -> guard input prep -> hook helper injection -> parameter binding -> result normalization -> audit/logging. The failure usually shows up after the boundary that actually caused it.
+- On object/array wrappers, `.text` is effectively a materialization boundary. If a wrapper bug smells like "somewhere this became huge" or "somewhere labels disappeared", ask who asked for text before asking who serialized the object.
 - Grep for accidental display/materialization paths, not just `JSON.stringify`: `.text`, `asText(`, `String(`, template interpolation, pretty/log helpers, token/length metrics, and audit summarizers.
 - Tool collections, routed tool entries, and imported agent objects are identity-bearing and large. Prefer keyed access on the existing wrapper/object surface. Rebuilding them into fresh plain objects is a real materialization step with both perf and metadata risk.
+- Shelf round-trip identity preservation is **by reference only** (see matrix note `R`). If a deep-clone happens anywhere upstream of a shelf write, identity is lost before it reaches storage and cannot be recovered on read.
 
 ### Where Values Flow
 
@@ -379,6 +447,17 @@ Top-level dotted access does not expose wrapper metadata like `@val.filename`, `
 **Fix**: Convert StructuredValue results to primitives before tail modifiers
 
 ## Serialization Rules
+
+### Two membranes, not one
+
+There are **two distinct value-leaves-runtime contracts**; treating them as one is a common source of confusion:
+
+1. **Module export/import** (`interpreter/eval/import/variable-importer/ModuleExportSerializer.ts`, `interpreter/utils/module-boundary-serialization.ts`). Values pass through `serializeModuleBoundaryValue()`. Variables are converted to marker-bearing forms (`__executable`, `__recordVariable`), tool collections get dedicated export keys for metadata and captured-env, record and shelf definitions serialize with their full schema. This is a real serialize/deserialize round-trip across a module boundary.
+2. **Shelf I/O** (`interpreter/shelf/runtime.ts`). Values are stored in the Environment's in-memory `shelfState` Map. Writes go through `validateShelfRecordValue()`, which builds a fresh StructuredValue field-by-field from the record definition, but **object-typed record fields pass through without deep-rebuild**. Reads return a live StructuredValue snapshot. This is reference-handoff with schema validation, not serialization.
+
+The two contracts preserve different things. Module export explicitly preserves tool collection identity via dedicated keys. Shelf I/O preserves nested object identity only by virtue of not deep-cloning — anything upstream that deep-clones will erase identity before it reaches the shelf, and shelf cannot recover it.
+
+`boundary.serialize(value)` is the module-boundary helper. It is a thin wrapper around `serializeModuleBoundaryValue` that asserts no Variable wrappers survive in the output. It is not a generic unwrap path and it is not what shelf uses.
 
 ### Never use raw `JSON.stringify` on values that may carry runtime references
 

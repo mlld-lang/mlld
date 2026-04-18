@@ -352,6 +352,167 @@ describe('createFunctionMcpBridge', () => {
     }
   });
 
+  it('accepts direct object-input tool calls on the bridge path', async () => {
+    const env = await createInterpretedEnv([
+      '/record @resolve_inputs = { data: [tool: string, args: object?, purpose: string?], validate: "strict" }',
+      '/exe @plannerResolveTool(input) = [',
+      '  => @input.tool',
+      ']'
+    ].join('\n'));
+    const functionTool = env.getVariable('plannerResolveTool') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['resolve', functionTool]]),
+      toolDefinitions: new Map([[
+        'resolve',
+        {
+          mlld: 'plannerResolveTool',
+          inputs: '@resolve_inputs',
+          direct: true,
+          description: 'Resolve records'
+        }
+      ]]),
+      sessionId: 'test-session'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'tools/call',
+        params: {
+          name: 'resolve',
+          arguments: {
+            tool: 'get_current_datetime',
+            args: {},
+            purpose: 'Get current time'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe('get_current_datetime');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('preserves top-level array fields for direct object-input tool calls on the bridge path', async () => {
+    const env = await createInterpretedEnv([
+      '/record @derive_inputs = { data: [sources: array, goal: string, name: string, purpose: string?], validate: "strict" }',
+      '/exe @plannerDeriveTool(input) = [',
+      '  => `count=@input.sources.length first=@input.sources[0].record second=@input.sources[1].field goal=@input.goal name=@input.name`',
+      ']'
+    ].join('\n'));
+    const functionTool = env.getVariable('plannerDeriveTool') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['derive', functionTool]]),
+      toolDefinitions: new Map([[
+        'derive',
+        {
+          mlld: 'plannerDeriveTool',
+          inputs: '@derive_inputs',
+          direct: true,
+          description: 'Derive a result'
+        }
+      ]]),
+      sessionId: 'test-session'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 101,
+        method: 'tools/call',
+        params: {
+          name: 'derive',
+          arguments: {
+            sources: [
+              {
+                source: 'resolved',
+                record: 'datetime_context',
+                handle: 'r_datetime_context_2026-04-18 08:00',
+                field: 'value'
+              },
+              {
+                source: 'resolved',
+                record: 'calendar_evt',
+                handle: 'r_calendar_evt_9',
+                field: 'start_time'
+              }
+            ],
+            goal: 'Calculate the time difference',
+            name: 'time_until_lunch',
+            purpose: 'Determine how much time remains until lunch'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe(
+        'count=2 first=datetime_context second=start_time goal=Calculate the time difference name=time_until_lunch'
+      );
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('preserves top-level object fields for direct object-input tool calls on the bridge path', async () => {
+    const env = await createInterpretedEnv([
+      '/record @extract_inputs = { data: [tool: string?, args: object?, source: object?, schema_name: string?, schema: object?, name: string, purpose: string?], validate: "strict" }',
+      '/exe @plannerExtractTool(input) = [',
+      '  => `source=@input.source.record handle=@input.source.handle schema=@input.schema_name name=@input.name`',
+      ']'
+    ].join('\n'));
+    const functionTool = env.getVariable('plannerExtractTool') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['extract', functionTool]]),
+      toolDefinitions: new Map([[
+        'extract',
+        {
+          mlld: 'plannerExtractTool',
+          inputs: '@extract_inputs',
+          direct: true,
+          description: 'Extract a result'
+        }
+      ]]),
+      sessionId: 'test-session'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 102,
+        method: 'tools/call',
+        params: {
+          name: 'extract',
+          arguments: {
+            source: {
+              source: 'resolved',
+              record: 'calendar_evt',
+              handle: 'r_calendar_evt_9'
+            },
+            schema_name: 'text',
+            name: 'lunch_start_time',
+            purpose: 'Extract lunch start time for calculation'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe(
+        'source=calendar_evt handle=r_calendar_evt_9 schema=text name=lunch_start_time'
+      );
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('does not respond to notifications', async () => {
     const env = createEnv();
     const functionTool = createFunctionTool('sayHi');

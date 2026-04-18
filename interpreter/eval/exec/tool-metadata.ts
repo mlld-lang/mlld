@@ -508,7 +508,8 @@ function resolveToolInputSchema(options: {
 
   return buildToolInputSchemaFromRecordDefinition({
     recordDefinition,
-    executableParamNames: options.executableParams
+    executableParamNames: options.executableParams,
+    wholeObjectInput: options.definition?.direct === true
   });
 }
 

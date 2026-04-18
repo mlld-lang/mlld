@@ -3992,9 +3992,12 @@ function mergeValidationContextAst(
         const recordName = inputsValue.trim().replace(/^@/, '');
         const recordDefinition = recordDefinitions.get(recordName);
         if (recordDefinition && canUseRecordForInput(recordDefinition)) {
+          const directValue = extractStaticValue(getObjectEntryValue(toolValue, 'direct'));
+          const wholeObjectInput = directValue === true && resolvedBindKeys.length === 0 && executableTarget.params.size === 1;
           const inputSchema = buildToolInputSchemaFromRecordDefinition({
             recordDefinition,
-            executableParamNames: [...executableTarget.params]
+            executableParamNames: [...executableTarget.params],
+            ...(wholeObjectInput ? { wholeObjectInput: true } : {})
           });
 
           target.inputSchema = inputSchema;
@@ -4293,9 +4296,12 @@ function collectToolCatalogDiagnostics(
         continue;
       }
 
+      const directValue = extractStaticValue(getObjectEntryValue(toolValue, 'direct'));
+      const wholeObjectInput = directValue === true && resolvedBindKeys.length === 0 && (executable.params ?? []).length === 1;
       const schema = buildToolInputSchemaFromRecordDefinition({
         recordDefinition,
-        executableParamNames: executable.params ?? []
+        executableParamNames: executable.params ?? [],
+        ...(wholeObjectInput ? { wholeObjectInput: true } : {})
       });
       const fieldNames = schema.fields.map(field => field.name);
       const fieldSet = new Set(fieldNames);
@@ -4319,15 +4325,32 @@ function collectToolCatalogDiagnostics(
         );
       }
 
-      const invalidParams = recordDefinition.fields
-        .map(field => field.name)
-        .filter(name => !(executable.params ?? []).includes(name));
+      const invalidParams = wholeObjectInput
+        ? []
+        : recordDefinition.fields
+          .map(field => field.name)
+          .filter(name => !(executable.params ?? []).includes(name));
       if (invalidParams.length > 0) {
         pushError(
           `Tool '${toolName}' inputs for '@${executableName}' reference unknown parameters: ${invalidParams.join(', ')}`,
           entryLine,
           entryColumn
         );
+      }
+
+      if (!wholeObjectInput) {
+        const covered = new Set([
+          ...recordDefinition.fields.map(field => field.name),
+          ...resolvedBindKeys
+        ]);
+        const orphanParams = (executable.params ?? []).filter(name => !covered.has(name));
+        if (orphanParams.length > 0) {
+          pushError(
+            `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`,
+            entryLine,
+            entryColumn
+          );
+        }
       }
 
       if (schema.updateFields.length > 0 && !hasUpdateWriteLabel(effectiveLabels)) {
@@ -4396,15 +4419,6 @@ function collectToolCatalogDiagnostics(
         }
       }
 
-      const coveredParams = new Set([...fieldNames, ...resolvedBindKeys]);
-      const orphanParams = (executable.params ?? []).filter(paramName => !coveredParams.has(paramName));
-      if (orphanParams.length > 0) {
-        pushError(
-          `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`,
-          entryLine,
-          entryColumn
-        );
-      }
     }
   });
 

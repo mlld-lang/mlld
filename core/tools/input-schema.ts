@@ -4,10 +4,14 @@ import type { ToolInputSchema } from '@core/types/tools';
 export function buildToolInputSchemaFromRecordDefinition(options: {
   recordDefinition: RecordDefinition;
   executableParamNames: readonly string[];
+  wholeObjectInput?: boolean;
 }): ToolInputSchema {
-  const { recordDefinition, executableParamNames } = options;
-  const fieldNames = new Set(recordDefinition.fields.map(field => field.name));
-  const visibleParams = executableParamNames.filter(paramName => fieldNames.has(paramName));
+  const { recordDefinition, executableParamNames, wholeObjectInput = false } = options;
+  const orderedFieldNames = recordDefinition.fields.map(field => field.name);
+  const fieldNames = new Set(orderedFieldNames);
+  const visibleParams = wholeObjectInput
+    ? orderedFieldNames
+    : executableParamNames.filter(paramName => fieldNames.has(paramName));
   const visibleParamSet = new Set(visibleParams);
   const fields = recordDefinition.fields
     .filter(field => visibleParamSet.has(field.name))
@@ -29,6 +33,7 @@ export function buildToolInputSchemaFromRecordDefinition(options: {
       .filter(field => field.classification === 'data')
       .map(field => field.name),
     visibleParams,
+    ...(wholeObjectInput ? { wholeObjectInput: true } : {}),
     optionalParams: fields
       .filter(field => field.optional)
       .map(field => field.name),

@@ -64,9 +64,11 @@ function cloneGuardCandidateForParameter(
   const resolvedValue =
     argValue !== undefined
       ? argValue
-      : fallback !== undefined
-        ? fallback
-        : candidate.value;
+      : fallback === 'undefined'
+        ? undefined
+        : fallback !== undefined
+          ? fallback
+          : candidate.value;
   const cloned: Variable = {
     ...candidate,
     name,

@@ -505,6 +505,110 @@ describe('MCPServer', () => {
     });
   });
 
+  it('lists direct object-input tool fields from input records', async () => {
+    const { environment, exports } = await createEnvironmentWithExports(`
+      /record @planner_derive_inputs = {
+        data: [
+          sources: array,
+          goal: string,
+          schema_name: string?,
+          schema: object?,
+          name: string,
+          purpose: string?
+        ],
+        validate: "strict"
+      }
+
+      /exe @plannerDeriveTool(input) = js {
+        return JSON.stringify(input);
+      }
+
+      /var tools @plannerTools = {
+        derive: {
+          mlld: @plannerDeriveTool,
+          inputs: @planner_derive_inputs,
+          direct: true,
+          description: "Compute a typed named result from grounded inputs."
+        }
+      }
+
+      /export { @plannerDeriveTool }
+    `, ['plannerDeriveTool']);
+
+    const toolsVar = environment.getVariable('plannerTools');
+    const toolCollection = toolsVar?.internal?.toolCollection;
+    if (!toolCollection) {
+      throw new Error('Tool collection missing from environment');
+    }
+
+    const server = new MCPServer({ environment, exportedFunctions: exports, toolCollection });
+    await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0' },
+      },
+    } satisfies JSONRPCRequest);
+
+    const listResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    } satisfies JSONRPCRequest);
+
+    expect((listResponse.result as any).tools).toHaveLength(1);
+    expect((listResponse.result as any).tools[0]).toMatchObject({
+      name: 'derive',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sources: { type: 'array' },
+          goal: { type: 'string' },
+          schema_name: { type: 'string' },
+          schema: { type: 'object' },
+          name: { type: 'string' },
+          purpose: { type: 'string' }
+        },
+        required: ['sources', 'goal', 'name']
+      },
+    });
+    expect((listResponse.result as any).tools[0].description).toContain(
+      'Compute a typed named result from grounded inputs.'
+    );
+
+    const callResponse = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'derive',
+        arguments: {
+          sources: [{ source: 'resolved', record: 'datetime_context', handle: 'r_1' }],
+          goal: 'Summarize the time delta',
+          schema_name: 'time_duration',
+          name: 'time_remaining'
+        },
+      },
+    } satisfies JSONRPCRequest);
+
+    expect(callResponse.result).toMatchObject({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            sources: [{ source: 'resolved', record: 'datetime_context', handle: 'r_1' }],
+            goal: 'Summarize the time delta',
+            schema_name: 'time_duration',
+            name: 'time_remaining'
+          }),
+        },
+      ],
+    });
+  });
+
   it('resolves bound variables to raw values', async () => {
     const { environment, exports } = await createEnvironmentWithExports(`
       /var @org = "mlld"

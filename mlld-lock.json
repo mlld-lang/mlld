@@ -19,12 +19,11 @@
     },
     "@mlld/claude": {
       "version": "2.1.0",
-      "resolved": "a96a9b4839d2f21eedac1f5139f28058140d00d8c731de685f6a512bee1370c3",
-      "source": "registry://@mlld/claude@2.1.0",
-      "integrity": "sha256:a96a9b4839d2f21eedac1f5139f28058140d00d8c731de685f6a512bee1370c3",
-      "fetchedAt": "2026-02-25T02:28:40.297Z",
-      "registryVersion": "2.1.0",
-      "sourceUrl": "registry://@mlld/claude@2.1.0"
+      "resolved": "7dbf35be5331d9959eb73feaf93d3edb081b8bffd9ccd0c61eed6ca33c35b89a",
+      "source": "registry://@mlld/claude@3.3.3",
+      "integrity": "sha256:7dbf35be5331d9959eb73feaf93d3edb081b8bffd9ccd0c61eed6ca33c35b89a",
+      "fetchedAt": "2026-04-17T19:57:08.874Z",
+      "registryVersion": "3.3.3"
     },
     "@mlld/gh-issues": {
       "version": "1.0.0",
@@ -78,6 +77,6 @@
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-04-13T21:54:16.972Z"
+    "updatedAt": "2026-04-17T19:57:08.874Z"
   }
 }

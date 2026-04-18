@@ -8,6 +8,7 @@ export type ShelfMergeMode = 'replace' | 'append' | 'upsert';
 const SHELF_SLOT_REF_VALUE_SYMBOL = Symbol.for('mlld.ShelfSlotRefValue');
 const SHELF_SLOT_REF_METADATA = Symbol('mlld.ShelfSlotRefMetadata');
 const SHELF_SLOT_REF_CURRENT = Symbol('mlld.ShelfSlotRefCurrent');
+const shelfSlotRefOwnerKeychain = new WeakMap<object, unknown>();
 
 export interface ShelfScopeSlotRef {
   shelfName: string;
@@ -104,6 +105,32 @@ export function createShelfSlotRefValue<T = unknown>(
   current: ShelfSlotRefSnapshot<T>
 ): ShelfSlotRefValue<T> {
   return new ShelfSlotRefValue(ref, current);
+}
+
+export function stashShelfSlotRefOwner(
+  value: unknown,
+  owner: unknown
+): void {
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  if (owner === undefined) {
+    shelfSlotRefOwnerKeychain.delete(value);
+    return;
+  }
+
+  shelfSlotRefOwnerKeychain.set(value, owner);
+}
+
+export function getShelfSlotRefOwner(
+  value: unknown
+): unknown {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  return shelfSlotRefOwnerKeychain.get(value);
 }
 
 export function isShelfSlotRefValue<T = unknown>(value: unknown): value is ShelfSlotRefValue<T> {

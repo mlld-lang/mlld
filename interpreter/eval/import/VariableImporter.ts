@@ -20,6 +20,10 @@ import { NamespaceSelectedImportHandler } from './variable-importer/NamespaceSel
 import { VariableImportUtilities } from './variable-importer/VariableImportUtilities';
 import { serializeShadowEnvironmentMaps } from './ShadowEnvSerializer';
 import {
+  getCapturedModuleOwnerEnv,
+  stashCapturedModuleOwnerEnv
+} from './variable-importer/executable/CapturedModuleEnvKeychain';
+import {
   isSerializedRecordDefinition,
   isSerializedRecordVariable
 } from '@core/types/record';
@@ -137,6 +141,10 @@ export class VariableImporter {
       serializedModuleEnvCache
     );
     const serialized = tempResult.moduleObject;
+    const capturedModuleOwnerEnv = getCapturedModuleOwnerEnv(moduleEnv);
+    if (capturedModuleOwnerEnv !== undefined) {
+      stashCapturedModuleOwnerEnv(serialized, capturedModuleOwnerEnv);
+    }
     serializedModuleEnvCache?.set(moduleEnv, serialized);
     return serialized;
   }
@@ -154,6 +162,10 @@ export class VariableImporter {
           ...(env ? { env } : {})
         })
     );
+    const capturedModuleOwnerEnv = getCapturedModuleOwnerEnv(moduleEnv);
+    if (capturedModuleOwnerEnv !== undefined) {
+      stashCapturedModuleOwnerEnv(deserialized, capturedModuleOwnerEnv);
+    }
     this.rehydrateCapturedModuleScope(deserialized, env);
     return deserialized;
   }
@@ -285,6 +297,7 @@ export class VariableImporter {
       securityLabels?: DataLabel[];
       serializedMetadata?: ReturnType<typeof VariableMetadataUtils.serializeSecurityMetadata> | undefined;
       env?: Environment;
+      capturedModuleOwnerEnv?: Environment;
     }
   ): Variable {
     const buildImportedRecordMetadata = () => {
@@ -304,9 +317,16 @@ export class VariableImporter {
     };
 
     if (options?.env && isSerializedShelfDefinition(value)) {
+      const shelfOwnerEnv = options.capturedModuleOwnerEnv ?? options.env;
+      const registrationEnvs = Array.from(new Set(
+        [options.env, shelfOwnerEnv].filter((entry): entry is Environment => Boolean(entry))
+      ));
+
       for (const [recordName, definition] of Object.entries(value.records ?? {})) {
-        if (!options.env.getRecordDefinition(recordName)) {
-          options.env.registerRecordDefinition(recordName, definition);
+        for (const registrationEnv of registrationEnvs) {
+          if (!registrationEnv.getRecordDefinition(recordName)) {
+            registrationEnv.registerRecordDefinition(recordName, definition);
+          }
         }
       }
 
@@ -314,8 +334,12 @@ export class VariableImporter {
         ...value.definition,
         name
       };
-      options.env.registerShelfDefinition(name, definition);
-      return createShelfVariable(options.env, definition);
+      for (const registrationEnv of registrationEnvs) {
+        if (!registrationEnv.getShelfDefinition(name)) {
+          registrationEnv.registerShelfDefinition(name, definition);
+        }
+      }
+      return createShelfVariable(shelfOwnerEnv, definition);
     }
 
     if (isSerializedRecordDefinition(value)) {

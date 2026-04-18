@@ -927,6 +927,30 @@ function buildToolCallArguments(
   return argsRecord;
 }
 
+function buildEffectiveToolCallArguments(options: {
+  paramNames: readonly string[];
+  evaluatedArgs: readonly unknown[];
+  metadata?: Pick<EffectiveToolMetadata, 'params' | 'inputSchema'>;
+}): Record<string, unknown> | undefined {
+  const { paramNames, evaluatedArgs, metadata } = options;
+  const inputSchema = metadata?.inputSchema;
+  if (
+    inputSchema?.wholeObjectInput === true &&
+    evaluatedArgs.length === 1 &&
+    isPlainObject(evaluatedArgs[0])
+  ) {
+    const visibleParams = new Set(
+      (metadata?.params?.length ? metadata.params : inputSchema.visibleParams)
+        .filter((param): param is string => typeof param === 'string' && param.trim().length > 0)
+    );
+    return Object.fromEntries(
+      Object.entries(evaluatedArgs[0] as Record<string, unknown>)
+        .filter(([key]) => visibleParams.size === 0 || visibleParams.has(key))
+    );
+  }
+  return buildToolCallArguments(paramNames, evaluatedArgs);
+}
+
 function hasUntrustedDescriptor(value: unknown): boolean {
   const descriptor = extractSecurityDescriptor(value, {
     recursive: true,
@@ -1117,17 +1141,19 @@ function mergeInvocationArgFactSources(options: {
 function buildToolInputValidationArguments(options: {
   paramNames: readonly string[];
   evaluatedArgs: readonly unknown[];
+  metadata?: Pick<EffectiveToolMetadata, 'params' | 'inputSchema'>;
   argSecurityDescriptors?: readonly (SecurityDescriptor | undefined)[];
   argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
 }): Record<string, unknown> | undefined {
   const {
     paramNames,
     evaluatedArgs,
+    metadata,
     argSecurityDescriptors,
     argFactSourceDescriptors
   } = options;
 
-  const validationArgs = evaluatedArgs.map((value, index) => {
+  const withInvocationMetadata = (value: unknown, index: number): unknown => {
     const descriptor = argSecurityDescriptors?.[index];
     const factsources = argFactSourceDescriptors?.[index];
     if (!descriptor && (!Array.isArray(factsources) || factsources.length === 0)) {
@@ -1153,7 +1179,30 @@ function buildToolInputValidationArguments(options: {
       structured.mx.factsources = [...factsources];
     }
     return structured;
-  });
+  };
+
+  if (
+    metadata?.inputSchema?.wholeObjectInput === true &&
+    evaluatedArgs.length === 1 &&
+    isPlainObject(evaluatedArgs[0])
+  ) {
+    const flattened = buildEffectiveToolCallArguments({
+      paramNames,
+      evaluatedArgs,
+      metadata
+    });
+    if (!flattened) {
+      return undefined;
+    }
+    return Object.fromEntries(
+      Object.entries(flattened).map(([key, value]) => [
+        key,
+        withInvocationMetadata(value, 0)
+      ])
+    );
+  }
+
+  const validationArgs = evaluatedArgs.map((value, index) => withInvocationMetadata(value, index));
 
   return buildToolCallArguments(paramNames, validationArgs);
 }
@@ -3676,12 +3725,12 @@ async function evaluateExecInvocationInternal(
     invocationWithClause
   });
   const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
-  if (
-    importedExecutableSourcePath
-    && runtimeEnv.getCurrentFilePath() !== importedExecutableSourcePath
-  ) {
+  if (importedExecutableSourcePath) {
     const sourceScopedEnv = runtimeEnv.createChild();
-    sourceScopedEnv.setCurrentFilePath(importedExecutableSourcePath);
+    sourceScopedEnv.setModuleIsolated(true);
+    if (runtimeEnv.getCurrentFilePath() !== importedExecutableSourcePath) {
+      sourceScopedEnv.setCurrentFilePath(importedExecutableSourcePath);
+    }
     runtimeEnv = sourceScopedEnv;
   }
 
@@ -3734,6 +3783,9 @@ async function evaluateExecInvocationInternal(
 
   // Create a child environment for parameter substitution
   let execEnv = runtimeEnv.createChild();
+  if (importedExecutableSourcePath) {
+    execEnv.setFunctionScopeBoundary(true);
+  }
 
   // Set captured module environment for variable lookup fallback
   const capturedModuleEnv = await ensureCapturedModuleEnvMap(
@@ -3877,6 +3929,43 @@ async function evaluateExecInvocationInternal(
         : [],
       definition: collectionDispatchContext.definition,
       metadata: collectionMetadata,
+      preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
+      evaluatedArgs,
+      originalVariables,
+      guardVariableCandidates,
+      expressionSourceVariables,
+      argSourceNames
+    });
+    evaluatedArgs = normalizedArgs.evaluatedArgs;
+    evaluatedArgStrings = normalizedArgs.evaluatedArgStrings;
+    originalVariables.splice(0, originalVariables.length, ...normalizedArgs.originalVariables);
+    guardVariableCandidates.splice(
+      0,
+      guardVariableCandidates.length,
+      ...normalizedArgs.guardVariableCandidates
+    );
+    expressionSourceVariables.splice(
+      0,
+      expressionSourceVariables.length,
+      ...normalizedArgs.expressionSourceVariables
+    );
+    argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
+  } else if ((node as any).meta?.routerNamedObjectDispatch === true && isExecutableVariable(variable)) {
+    const routerOptionalParamNames = Array.isArray((node as any).meta?.routerOptionalParamNames)
+      ? (node as any).meta.routerOptionalParamNames.filter(
+          (paramName: unknown): paramName is string =>
+            typeof paramName === 'string' && paramName.trim().length > 0
+        )
+      : [];
+    const normalizedArgs = await normalizePlainObjectExecutableDispatchArguments({
+      env,
+      executableParamNames: Array.isArray(variable.paramNames)
+        ? variable.paramNames.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
+      optionalParamNames: routerOptionalParamNames,
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       evaluatedArgs,
       originalVariables,
@@ -4226,7 +4315,11 @@ async function evaluateExecInvocationInternal(
     Boolean(runtimeEnv.getPolicySummary()?.authorizations) &&
     isToolWriteLabelSet(toolLabels) &&
     authorizationSurfaceOperation;
-  const authorizationArgs = buildToolCallArguments(params, evaluatedArgs) ?? {};
+  const authorizationArgs = buildEffectiveToolCallArguments({
+    paramNames: params,
+    evaluatedArgs,
+    metadata: effectiveToolMetadata
+  }) ?? {};
   let effectiveArgSecurityDescriptors = mergeInvocationArgDescriptors({
     env: runtimeEnv,
     evaluatedArgs,
@@ -4271,6 +4364,7 @@ async function evaluateExecInvocationInternal(
   const validationArgs = buildToolInputValidationArguments({
     paramNames: params,
     evaluatedArgs,
+    metadata: effectiveToolMetadata,
     argSecurityDescriptors: effectiveArgSecurityDescriptors,
     argFactSourceDescriptors: effectiveArgFactSourceDescriptors
   });
@@ -4291,7 +4385,11 @@ async function evaluateExecInvocationInternal(
   const trackedToolName = trackedMcpName || (toolOperationName ?? variable.name ?? commandName ?? '');
   const toolCallArguments =
     trackedToolName.length > 0
-      ? buildToolCallArguments(params, evaluatedArgs)
+      ? buildEffectiveToolCallArguments({
+          paramNames: params,
+          evaluatedArgs,
+          metadata: effectiveToolMetadata
+        })
       : undefined;
   const toolAuditId = trackedToolName.length > 0 ? randomUUID() : undefined;
   let toolBodyExecuted = false;

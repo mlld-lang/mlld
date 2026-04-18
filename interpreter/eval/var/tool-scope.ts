@@ -316,6 +316,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       executableName: mlldName,
       executableParamNames: paramNames,
       bindKeys: boundKeys,
+      allowWholeObjectInput: (normalizedToolValue as Record<string, unknown>).direct === true,
       labels: [
         ...normalizeToolLabelValues(execVar.mx?.labels),
         ...(labels ?? [])
@@ -509,6 +510,7 @@ function resolveToolInputSchema(options: {
   executableName: string;
   executableParamNames: readonly string[];
   bindKeys: readonly string[];
+  allowWholeObjectInput?: boolean;
   labels?: readonly string[];
 }): ToolInputSchema | undefined {
   const {
@@ -518,6 +520,7 @@ function resolveToolInputSchema(options: {
     executableName,
     executableParamNames,
     bindKeys,
+    allowWholeObjectInput,
     labels
   } = options;
   if (rawInputRef === undefined) {
@@ -538,19 +541,29 @@ function resolveToolInputSchema(options: {
   const fieldSet = new Set(fieldNames);
   const paramSet = new Set(executableParamNames);
   const overlap = bindKeys.filter(key => fieldSet.has(key));
+  const wholeObjectInput =
+    allowWholeObjectInput === true
+    && bindKeys.length === 0
+    && executableParamNames.length === 1;
   if (overlap.length > 0) {
     throw new Error(
       `Tool '${toolName}' bind cannot include input-record fields: ${overlap.join(', ')}`
     );
   }
-  const invalidParams = fieldNames.filter(name => !paramSet.has(name));
+  const invalidParams = wholeObjectInput
+    ? []
+    : fieldNames.filter(name => !paramSet.has(name));
   if (invalidParams.length > 0) {
     throw new Error(
       `Tool '${toolName}' inputs for '@${executableName}' reference unknown parameters: ${invalidParams.join(', ')}`
     );
   }
-  const covered = new Set([...fieldNames, ...bindKeys]);
-  const orphanParams = executableParamNames.filter(name => !covered.has(name));
+  const covered = wholeObjectInput
+    ? new Set(bindKeys)
+    : new Set([...fieldNames, ...bindKeys]);
+  const orphanParams = wholeObjectInput
+    ? []
+    : executableParamNames.filter(name => !covered.has(name));
   if (orphanParams.length > 0) {
     throw new Error(
       `Tool '${toolName}' must cover all parameters of '@${executableName}' via inputs or bind: ${orphanParams.join(', ')}`
@@ -558,7 +571,8 @@ function resolveToolInputSchema(options: {
   }
   const inputSchema = buildToolInputSchemaFromRecordDefinition({
     recordDefinition,
-    executableParamNames
+    executableParamNames,
+    ...(wholeObjectInput ? { wholeObjectInput: true } : {})
   });
   if (inputSchema.updateFields.length > 0 && !hasUpdateWriteLabel(labels ?? [])) {
     throw new Error(

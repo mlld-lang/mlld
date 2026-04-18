@@ -25,6 +25,7 @@ export interface ToolInputSchema {
   factFields: string[];
   dataFields: string[];
   visibleParams: string[];
+  wholeObjectInput?: boolean;
   optionalParams: string[];
   exactFields: string[];
   updateFields: string[];
@@ -131,6 +132,7 @@ export function cloneToolInputSchema(schema: ToolInputSchema): ToolInputSchema {
     factFields: cloneStringList(schema.factFields),
     dataFields: cloneStringList(schema.dataFields),
     visibleParams: cloneStringList(schema.visibleParams),
+    ...(schema.wholeObjectInput === true ? { wholeObjectInput: true } : {}),
     optionalParams: cloneStringList(schema.optionalParams),
     exactFields: cloneStringList(schema.exactFields),
     updateFields: cloneStringList(schema.updateFields),
@@ -204,6 +206,7 @@ export function isToolInputSchema(value: unknown): value is ToolInputSchema {
     candidate.dataFields.every(entry => typeof entry === 'string') &&
     Array.isArray(candidate.visibleParams) &&
     candidate.visibleParams.every(entry => typeof entry === 'string') &&
+    (candidate.wholeObjectInput === undefined || typeof candidate.wholeObjectInput === 'boolean') &&
     Array.isArray(candidate.optionalParams) &&
     candidate.optionalParams.every(entry => typeof entry === 'string') &&
     Array.isArray(candidate.exactFields) &&

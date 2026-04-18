@@ -184,6 +184,9 @@ export function findIsolationRoot(env: Environment): Environment | undefined {
 }
 
 export function findVariableOwner(env: Environment, name: string): Environment | undefined {
+  if (typeof (env as any).findVisibleVariableOwner === 'function') {
+    return (env as any).findVisibleVariableOwner(name);
+  }
   let current: Environment | undefined = env;
   while (current) {
     if (current.getCurrentVariables().has(name)) return current;
@@ -251,11 +254,19 @@ export async function evaluateLetAssignment(
 
   // If value is already a Variable (e.g., from for-expression), reuse it with updated name
   if (isVariable(value)) {
+    const definedAt = astLocationToSourceLocation(entry.location, env.getCurrentFilePath());
     variable = {
       ...value,
       name: entry.identifier,
-      // Ensure mx is present with required fields
-      mx: value.mx ?? { labels: [], taint: [], sources: [] }
+      // A let binding creates a new local variable even when it aliases an
+      // existing Variable instance. Keep provenance/security fields, but do
+      // not retain import metadata from the source binding.
+      mx: {
+        ...(value.mx ?? { labels: [], taint: [], sources: [] }),
+        isImported: false,
+        importPath: 'let',
+        ...(definedAt ? { definedAt } : {})
+      }
     };
   } else {
     const importer = new VariableImporter();

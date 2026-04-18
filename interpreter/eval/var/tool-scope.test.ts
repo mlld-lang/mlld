@@ -242,6 +242,40 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('accepts direct whole-object wrappers for input-record tools', () => {
+    const env = createEnvWithExecutables(
+      {
+        createIssueTool: ['input']
+      },
+      {
+        create_issue_inputs: createInputRecord({
+          name: 'create_issue_inputs',
+          facts: [{ name: 'title', valueType: 'string' }],
+          data: [{ name: 'body', valueType: 'string', optional: true }]
+        })
+      }
+    );
+
+    const collection = normalizeToolCollection(
+      {
+        issue: {
+          mlld: '@createIssueTool',
+          labels: ['execute:w'],
+          inputs: '@create_issue_inputs',
+          direct: true
+        }
+      },
+      env
+    );
+
+    expect(collection.issue).toEqual({
+      mlld: '@createIssueTool',
+      labels: ['execute:w'],
+      inputs: '@create_issue_inputs',
+      direct: true
+    });
+  });
+
   it('preserves returns and arbitrary authored entry keys without gating them', () => {
     const env = createEnvWithExecutables({
       searchContacts: ['query']

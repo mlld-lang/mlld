@@ -78,6 +78,7 @@ import {
   PythonPackageResolver,
   PythonAliasResolver
 } from '@core/resolvers';
+import { stashCapturedModuleOwnerEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -433,6 +434,7 @@ export class Environment
   // This prevents collision errors when a module's internal variables have the same name
   // as variables in the caller. See mlld-1e23.
   private moduleIsolated: boolean = false;
+  private functionScopeBoundary: boolean = false;
 
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
@@ -551,6 +553,7 @@ export class Environment
       getCurrentFilePath: this.getCurrentFilePath.bind(this),
       getReservedNames: () => this.reservedNames,
       getParent: () => this.parent,
+      findVisibleParentVariableOwner: this.findVisibleParentVariableOwner.bind(this),
       getCapturedModuleEnv: () => this.capturedModuleEnv,
       isModuleIsolated: () => this.moduleIsolated,
       getResolverManager: this.getResolverManager.bind(this),
@@ -863,6 +866,40 @@ export class Environment
 
   setModuleIsolated(isolated: boolean): void {
     this.moduleIsolated = isolated;
+  }
+
+  setFunctionScopeBoundary(isBoundary: boolean): void {
+    this.functionScopeBoundary = isBoundary;
+  }
+
+  isFunctionScopeBoundary(): boolean {
+    return this.functionScopeBoundary;
+  }
+
+  findVisibleVariableOwner(name: string): Environment | undefined {
+    let current: Environment | undefined = this;
+    while (current) {
+      if (current.getCurrentVariables().has(name)) {
+        return current;
+      }
+      if (current.isFunctionScopeBoundary()) {
+        return undefined;
+      }
+      const parent = current.getParent();
+      if (!parent) {
+        return undefined;
+      }
+      if (current.isModuleIsolated() && !parent.isModuleIsolated()) {
+        return undefined;
+      }
+      current = parent;
+    }
+    return undefined;
+  }
+
+  findVisibleParentVariableOwner(name: string): Environment | undefined {
+    const parent = this.getParent();
+    return parent ? parent.findVisibleVariableOwner(name) : undefined;
   }
 
   setExportManifest(manifest: ExportManifest | null | undefined): void {
@@ -1648,6 +1685,7 @@ export class Environment
     slotName: string,
     options: {
       traceScope?: Partial<RuntimeTraceScope>;
+      traceEnv?: Environment;
     } = {}
   ): unknown {
     const owner = this.getShelfOwner(shelfName);
@@ -1657,12 +1695,13 @@ export class Environment
     const value = owner.shelfState?.get(shelfName)?.get(slotName);
     const slotRef = `@${shelfName}.${slotName}`;
     const readTs = new Date().toISOString();
-    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
-    this.runtimeTraceManager.emitStaleShelfRead(slotRef, value, readTs, traceScope);
-    this.emitRuntimeTraceEvent(traceShelfRead({
+    const traceEnv = options.traceEnv ?? this;
+    const traceScope = traceEnv.buildRuntimeTraceScope(options.traceScope);
+    traceEnv.runtimeTraceManager.emitStaleShelfRead(slotRef, value, readTs, traceScope);
+    traceEnv.emitRuntimeTraceEvent(traceShelfRead({
       slot: slotRef,
       found: value !== undefined,
-      value: this.summarizeTraceValue(value)
+      value: traceEnv.summarizeTraceValue(value)
     }), traceScope);
     return value;
   }
@@ -1676,6 +1715,7 @@ export class Environment
       action?: string;
       traceData?: Record<string, unknown>;
       traceScope?: Partial<RuntimeTraceScope>;
+      traceEnv?: Environment;
     } = {}
   ): void {
     const owner = this.getShelfOwner(shelfName);
@@ -1684,13 +1724,14 @@ export class Environment
     }
     owner.ensureShelfStateBucket(shelfName).set(slotName, value);
     const slotRef = `@${shelfName}.${slotName}`;
-    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
-    this.runtimeTraceManager.recordShelfWrite(slotRef, value, traceScope);
-    this.emitRuntimeTraceEvent(traceShelfWrite({
+    const traceEnv = options.traceEnv ?? this;
+    const traceScope = traceEnv.buildRuntimeTraceScope(options.traceScope);
+    traceEnv.runtimeTraceManager.recordShelfWrite(slotRef, value, traceScope);
+    traceEnv.emitRuntimeTraceEvent(traceShelfWrite({
       slot: slotRef,
       action: options.action ?? 'write',
       success: true,
-      value: this.summarizeTraceValue(value),
+      value: traceEnv.summarizeTraceValue(value),
       event: options.traceEvent,
       traceData: options.traceData
     }), traceScope);
@@ -1701,6 +1742,7 @@ export class Environment
     slotName: string,
     options: {
       traceScope?: Partial<RuntimeTraceScope>;
+      traceEnv?: Environment;
     } = {}
   ): void {
     const owner = this.getShelfOwner(shelfName);
@@ -1709,11 +1751,12 @@ export class Environment
     }
     const removed = owner.shelfState?.get(shelfName)?.delete(slotName) ?? false;
     const slotRef = `@${shelfName}.${slotName}`;
-    const traceScope = this.buildRuntimeTraceScope(options.traceScope);
+    const traceEnv = options.traceEnv ?? this;
+    const traceScope = traceEnv.buildRuntimeTraceScope(options.traceScope);
     if (removed) {
-      this.runtimeTraceManager.recordShelfWrite(slotRef, undefined, traceScope);
+      traceEnv.runtimeTraceManager.recordShelfWrite(slotRef, undefined, traceScope);
     }
-    this.emitRuntimeTraceEvent(traceShelfClear({
+    traceEnv.emitRuntimeTraceEvent(traceShelfClear({
       slot: slotRef,
       action: 'clear',
       success: removed
@@ -3062,7 +3105,9 @@ export class Environment
    * This allows imported executables to access their sibling functions
    */
   captureModuleEnvironment(): Map<string, Variable> {
-    return new Map(this.variableManager.getVariables());
+    const captured = new Map(this.variableManager.getVariables());
+    stashCapturedModuleOwnerEnv(captured, this);
+    return captured;
   }
 
   // --- Capabilities ---
@@ -3323,7 +3368,6 @@ export class Environment
 
     if (options.includeModuleIsolation) {
       child.moduleIsolated = this.moduleIsolated;
-      child.capturedModuleEnv = this.capturedModuleEnv;
     }
 
     if (options.includeTraceInheritance) {

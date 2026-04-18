@@ -1,4 +1,5 @@
 const capturedModuleEnvKeychain = new WeakMap<object, unknown>();
+const capturedModuleOwnerEnvKeychain = new WeakMap<object, unknown>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
@@ -62,4 +63,28 @@ export function getCapturedModuleEnv(target: unknown): unknown {
   }
 
   return target.capturedModuleEnv;
+}
+
+export function stashCapturedModuleOwnerEnv(
+  target: unknown,
+  ownerEnv: unknown
+): void {
+  if (!isRecord(target)) {
+    return;
+  }
+
+  if (ownerEnv === undefined) {
+    capturedModuleOwnerEnvKeychain.delete(target);
+    return;
+  }
+
+  capturedModuleOwnerEnvKeychain.set(target, ownerEnv);
+}
+
+export function getCapturedModuleOwnerEnv(target: unknown): unknown {
+  if (!isRecord(target)) {
+    return undefined;
+  }
+
+  return capturedModuleOwnerEnvKeychain.get(target);
 }
