@@ -478,7 +478,7 @@ Environment is a capability/runtime reference (same category as `ShelfSlotRefVal
 
 Opacity is not only a `JSON.stringify` concern. Recursive URL provenance extraction, recursive security-descriptor extraction, and `.text` materialization on object/array wrappers must also stop at identity-bearing runtime carriers instead of treating them as plain data.
 
-Today that means Environment and executable definitions/wrappers are summarized or skipped before any deep property walk. Tool collections remain displayable as plain objects, but their executable entries must stay opaque. Shelf refs are treated as opaque for display/URL materialization and only recurse where the caller explicitly wants the current slot descriptor. If a future recursive walker does not share the appropriate early-out behavior for these carriers, it is a bug even if `JSON.stringify` itself would have been safe.
+Environment and executable definitions/wrappers are summarized or skipped before any deep property walk. Tool collections remain displayable as plain objects, but their executable entries stay opaque. Shelf refs are opaque for display/URL materialization and only recurse where the caller explicitly wants the current slot descriptor. A recursive walker that does not share the appropriate early-out behavior for these carriers is a bug even if `JSON.stringify` itself would have been safe.
 
 ### Why both `toJSON()` and `stringifyStructured()`
 
@@ -491,7 +491,7 @@ Today that means Environment and executable definitions/wrappers are summarized 
 
 - NEVER call builtin array methods directly on wrappers—use `asData()` first
 - NEVER use raw `JSON.stringify` on values that may carry runtime references—use `stringifyStructured()` (see Serialization Rules above)
-- Reading `.text` on object/array `StructuredValue`s is a real materialization boundary. Do not use `.text` for summaries, helper setup, metrics, or logging unless you are intentionally at a display/interpolate boundary. When `.data` is an identity-bearing runtime carrier, `.text` now returns a short placeholder instead of materializing the full graph.
+- Reading `.text` on object/array `StructuredValue`s is a real materialization boundary. Do not use `.text` for summaries, helper setup, metrics, or logging unless you are intentionally at a display/interpolate boundary. When `.data` is an identity-bearing runtime carrier, `.text` returns a short placeholder instead of materializing the full graph.
 - Templates ALWAYS stringify—use `asText()` for interpolation, not `.data`
 - Equality checks unwrap via `asData()` before comparison
 - When-expression actions should convert StructuredValue results to primitives before tail modifiers
