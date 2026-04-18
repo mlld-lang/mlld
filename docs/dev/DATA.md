@@ -206,7 +206,7 @@ Use the boundary helpers by contract, not by convenience:
 - `interpolate`: template and shell string boundaries. Use when escaping rules are part of the contract.
 - `serialize`: module/import/export boundary helper. Use for module-boundary export/import serialization; do not treat it as a generic unwrap path or a catch-all for unrelated serializers.
 
-The generated function MCP bridge is not a `serialize` surface. It is an identity-preserving transport of live executables/tool collections, so bridge setup and bridge-local cloning stay in the `identity` family.
+The generated function MCP bridge is not a `serialize` surface. It is an identity-preserving transport of live executables/tool collections, so bridge setup and bridge-local cloning stay in the `identity` family. Preserving `capturedModuleEnv` as object shape is not sufficient; imported executables must be rehydrated against a live `Environment`, or nested shelf/record/executable references degrade to plain data.
 
 ### Tool Collection Identity
 
@@ -251,6 +251,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 
 **Key caveats:**
 - The `.text` column means the wrapper has a text view, not that the full underlying graph is always materialized. See [Opaque runtime carriers stay opaque in recursive walkers](#opaque-runtime-carriers-stay-opaque-in-recursive-walkers).
+- The `capturedModuleEnv` column means a live rehydrated module env, not merely a serialized object that still has the same keys.
 - **`R` for shelf**: preserved only because `object`-typed record fields pass through without deep-rebuild. Any intermediate transform that deep-clones (spread, JSON round-trip, `plainData`) breaks this before it reaches the shelf.
 - **Spread is destructive.** `{...value}` has `plainData` semantics. If you need metadata through an object construction, build fields explicitly via `field` or `identity` access.
 - **`keepStructured` does not cross mlld→mlld boundaries.** It is an embedded-language escape hatch (JS/Node/Py/Sh), not a parameter-passing mechanism. Use `preserveStructuredArgs` on the exe or explicit `boundary.identity()` at the call site for mlld-to-mlld identity.
