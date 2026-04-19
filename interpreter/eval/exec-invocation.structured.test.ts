@@ -714,6 +714,48 @@ describe('evaluateExecInvocation (structured)', () => {
     expect(strictBridgeResult.value.mx.labels).toContain('src:mcp');
   });
 
+  it('prefers toolbridge display names for output-record errors', async () => {
+    const src = `
+/exe @lookup() = js {
+  return { email: "ada@example.com" };
+} => missing_record
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const lookupVar = env.getVariable('lookup');
+    expect(lookupVar).toBeDefined();
+
+    const wrapperName = '__toolbridge_fn_lookup_1';
+    env.setVariable(wrapperName, {
+      ...lookupVar!,
+      name: wrapperName,
+      mx: {
+        ...(lookupVar!.mx ?? {}),
+        name: wrapperName
+      },
+      internal: {
+        ...(lookupVar!.internal ?? {}),
+        isToolbridgeWrapper: true,
+        toolbridgeDisplayName: 'lookup'
+      }
+    } as any);
+
+    await expect(evaluateExecInvocation(
+      {
+        type: 'ExecInvocation',
+        nodeId: 'lookup-wrapper-missing-record',
+        commandRef: {
+          type: 'CommandReference',
+          nodeId: 'lookup-wrapper-missing-record-ref',
+          identifier: wrapperName,
+          args: []
+        }
+      } as ExecInvocation,
+      env
+    )).rejects.toThrow("Executable '@lookup' references unknown record '@missing_record'");
+  });
+
   it('refines inherited untrusted record output at field level while preserving other labels', async () => {
     const src = `
 /record @transaction = {

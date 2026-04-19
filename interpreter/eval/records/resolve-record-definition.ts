@@ -13,6 +13,25 @@ type EmbeddedRecordContainer = {
   internal?: Record<string, unknown>;
 };
 
+function resolveExecutableDisplayName(
+  variable: EmbeddedRecordContainer | undefined,
+  commandName: string
+): string {
+  // Tool-bridge wrappers register under synthetic tempNames; prefer the carried
+  // display name for user-facing errors on the confirmed bridge path.
+  const toolbridgeDisplayName =
+    (variable?.internal as { toolbridgeDisplayName?: unknown } | undefined)?.toolbridgeDisplayName;
+  if (typeof toolbridgeDisplayName === 'string' && toolbridgeDisplayName.trim().length > 0) {
+    return toolbridgeDisplayName.trim();
+  }
+
+  if (typeof variable?.name === 'string' && variable.name.trim().length > 0) {
+    return variable.name.trim();
+  }
+
+  return commandName;
+}
+
 export function readEmbeddedRecordDefinition(
   variable: EmbeddedRecordContainer | undefined,
   recordName: string
@@ -37,6 +56,7 @@ export async function resolveConfiguredOutputRecordDefinition(options: {
   nodeSourceLocation: unknown;
 }): Promise<RecordDefinition> {
   const { outputRecord, variable, commandName, runtimeEnv, execEnv, nodeSourceLocation } = options;
+  const executableDisplayName = resolveExecutableDisplayName(variable, commandName);
 
   if (typeof outputRecord === 'string') {
     const recordDefinition =
@@ -45,7 +65,7 @@ export async function resolveConfiguredOutputRecordDefinition(options: {
     if (recordDefinition) {
       if (!canUseRecordForOutput(recordDefinition)) {
         throw new MlldInterpreterError(
-          `Executable '@${variable?.name ?? commandName}' cannot use input-only record '@${outputRecord}' as output`,
+          `Executable '@${executableDisplayName}' cannot use input-only record '@${outputRecord}' as output`,
           'exec',
           nodeSourceLocation as any,
           { code: 'INPUT_RECORD_COERCION_ATTEMPT' }
@@ -55,7 +75,7 @@ export async function resolveConfiguredOutputRecordDefinition(options: {
     }
 
     throw new MlldInterpreterError(
-      `Executable '@${variable?.name ?? commandName}' references unknown record '@${outputRecord}'`,
+      `Executable '@${executableDisplayName}' references unknown record '@${outputRecord}'`,
       'exec',
       nodeSourceLocation as any,
       { code: 'RECORD_NOT_FOUND' }
