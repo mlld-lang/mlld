@@ -68,15 +68,15 @@
     },
     "@mlld/opencode": {
       "version": "latest",
-      "resolved": "5e8bdfc096b1e1a07df35680fd0014cf6b730c9cfe0057e5bcddd0da4cf8cb53",
-      "source": "registry://@mlld/opencode@1.0.0",
-      "integrity": "sha256:5e8bdfc096b1e1a07df35680fd0014cf6b730c9cfe0057e5bcddd0da4cf8cb53",
-      "fetchedAt": "2026-04-13T21:54:16.971Z",
-      "registryVersion": "1.0.0"
+      "resolved": "e2efbf68382902f2e8d1266ef2e31260f1b73a1f5f28d1e1986682ee1e07547a",
+      "source": "registry://@mlld/opencode@1.3.1",
+      "integrity": "sha256:e2efbf68382902f2e8d1266ef2e31260f1b73a1f5f28d1e1986682ee1e07547a",
+      "fetchedAt": "2026-04-19T19:15:30.387Z",
+      "registryVersion": "1.3.1"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-04-17T19:57:08.874Z"
+    "updatedAt": "2026-04-19T19:15:30.387Z"
   }
 }
