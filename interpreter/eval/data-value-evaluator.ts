@@ -38,6 +38,21 @@ function isVariableReferenceNode(value: unknown): value is { type: string } {
   );
 }
 
+function arrayNodeItems(value: DataValue): unknown[] {
+  if (!value || typeof value !== 'object' || value.type !== 'array' || !('items' in value)) {
+    return [];
+  }
+
+  const items = (value as { items?: unknown }).items;
+  if (Array.isArray(items)) {
+    return items;
+  }
+  if (items === undefined || items === null) {
+    return [];
+  }
+  return [items];
+}
+
 /**
  * Singleton instance of the main data value evaluator coordinator
  */
@@ -114,7 +129,7 @@ export function isFullyEvaluated(value: DataValue): boolean {
   }
   
   if (value?.type === 'array') {
-    return value.items.every(isFullyEvaluated);
+    return arrayNodeItems(value).every(item => isFullyEvaluated(item as DataValue));
   }
   
   return true;
@@ -169,7 +184,7 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
   }
   
   if (value?.type === 'array' && 'items' in value) {
-    return value.items.some(hasUnevaluatedDirectives);
+    return arrayNodeItems(value).some(item => hasUnevaluatedDirectives(item as DataValue));
   }
   
   if (value?.type === 'object') {
