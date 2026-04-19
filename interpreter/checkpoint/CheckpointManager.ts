@@ -137,6 +137,33 @@ function safeString(value: unknown): string {
   }
 }
 
+/**
+ * Rule for normalizing a specific class of values into a stable, serializable
+ * shape for checkpoint cache keys. Register via `registerCheckpointNormalizer`
+ * when a type's identity or meaningful data lives on non-enumerable / Symbol /
+ * prototype-getter properties that `Object.keys` can't see.
+ *
+ * `recurse` is provided so the normalized shape can contain nested values that
+ * also need normalization (handles, nested slot refs, etc.).
+ */
+export interface CheckpointNormalizerRule {
+  test: (value: unknown) => boolean;
+  normalize: (value: unknown, recurse: (v: unknown) => unknown) => unknown;
+}
+
+const normalizerRules: CheckpointNormalizerRule[] = [];
+
+/**
+ * Register a typed normalizer for checkpoint cache-key serialization.
+ *
+ * Rules run in registration order, and the first matching rule wins. Register
+ * early (e.g. at module load) so the rule is visible by the time any
+ * checkpoint hook runs.
+ */
+export function registerCheckpointNormalizer(rule: CheckpointNormalizerRule): void {
+  normalizerRules.push(rule);
+}
+
 function normalizeForSerialization(value: unknown, seen: Map<object, number>): unknown {
   if (
     value === null ||
@@ -211,6 +238,27 @@ function normalizeForSerialization(value: unknown, seen: Map<object, number>): u
       return { $type: 'circular', value: seen.get(value) };
     }
     seen.set(value, seen.size + 1);
+
+    // Typed dispatch before generic object walk. Registered rules produce a
+    // stable shape for classes whose identity/data can't be recovered from
+    // Object.keys alone (non-enumerable props, Symbol keys, prototype getters).
+    for (const rule of normalizerRules) {
+      if (rule.test(value)) {
+        return rule.normalize(value, v => normalizeForSerialization(v, seen));
+      }
+    }
+
+    // Honor toJSON when a class exposes one (standard JSON.stringify behavior).
+    // This catches classes that own enumerable keys don't reflect by opting in
+    // explicitly. A toJSON that returns the same object (or another object with
+    // a toJSON that returns itself) would loop, so fall through to the generic
+    // walk if toJSON doesn't move us to a different value.
+    if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+      const jsonified = (value as { toJSON: () => unknown }).toJSON();
+      if (jsonified !== value) {
+        return normalizeForSerialization(jsonified, seen);
+      }
+    }
 
     const plain = value as Record<string, unknown>;
     const normalized: Record<string, unknown> = {};

@@ -4,8 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   CheckpointManager,
+  registerCheckpointNormalizer,
   type CheckpointManagerOptions
 } from '@interpreter/checkpoint/CheckpointManager';
+import { createShelfSlotRefValue } from '@core/types/shelf';
+import { wrapStructured } from '@interpreter/utils/structured-value';
+import '@interpreter/checkpoint/normalizers';
 
 const cleanupDirs: string[] = [];
 const FIXED_NOW = new Date('2026-02-19T00:00:00.000Z');
@@ -43,6 +47,62 @@ describe('CheckpointManager', () => {
     circular.self = circular;
     const circularKey = CheckpointManager.computeCacheKey('circular', [circular]);
     expect(circularKey.startsWith('sha256:')).toBe(true);
+  });
+
+  it('distinguishes shelf slot refs with different slot names in cache keys', () => {
+    // Regression for m-6245: ShelfSlotRefValue identity lives on non-enumerable
+    // symbol props, so without the registered normalizer rule every slot ref
+    // hashes identically.
+    const snapshot = wrapStructured('anything');
+    const aRef = createShelfSlotRefValue({ shelfName: 'session', slotName: 'a' }, snapshot);
+    const bRef = createShelfSlotRefValue({ shelfName: 'session', slotName: 'b' }, snapshot);
+
+    const aKey = CheckpointManager.computeCacheKey('slotValue', [aRef]);
+    const bKey = CheckpointManager.computeCacheKey('slotValue', [bRef]);
+
+    expect(aKey).not.toBe(bKey);
+    expect(aKey.startsWith('sha256:')).toBe(true);
+  });
+
+  it('honors toJSON() when an object exposes one', () => {
+    // Classes with identity in prototype getters but a well-behaved toJSON
+    // should serialize via toJSON, not via an empty Object.keys walk.
+    class Handle {
+      #id: string;
+      constructor(id: string) { this.#id = id; }
+      toJSON() { return { $type: 'handle', id: this.#id }; }
+    }
+
+    const a = new Handle('h_one');
+    const b = new Handle('h_two');
+
+    const aKey = CheckpointManager.computeCacheKey('dispatch', [a]);
+    const bKey = CheckpointManager.computeCacheKey('dispatch', [b]);
+
+    expect(aKey).not.toBe(bKey);
+  });
+
+  it('lets registered normalizers differentiate opaque class instances', () => {
+    class OpaqueTag {
+      #label: string;
+      constructor(label: string) { this.#label = label; }
+      get label() { return this.#label; }
+    }
+
+    // Before registering, two instances with the same prototype shape but
+    // different private state collide.
+    const unregisteredA = CheckpointManager.computeCacheKey('op', [new OpaqueTag('one')]);
+    const unregisteredB = CheckpointManager.computeCacheKey('op', [new OpaqueTag('two')]);
+    expect(unregisteredA).toBe(unregisteredB);
+
+    registerCheckpointNormalizer({
+      test: (value): value is OpaqueTag => value instanceof OpaqueTag,
+      normalize: (value) => ({ $type: 'opaque-tag', label: (value as OpaqueTag).label })
+    });
+
+    const registeredA = CheckpointManager.computeCacheKey('op', [new OpaqueTag('one')]);
+    const registeredB = CheckpointManager.computeCacheKey('op', [new OpaqueTag('two')]);
+    expect(registeredA).not.toBe(registeredB);
   });
 
   it('writes and reads cache entries with manifest + disk layout', async () => {
