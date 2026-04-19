@@ -569,6 +569,7 @@ export async function createExecOperationContextAndEnforcePolicy(
     location: node.location ?? null,
     metadata: {
       executableType: definition.type,
+      executableLanguage: (definition as { language?: unknown }).language,
       command: commandName,
       sourceRetryable: true,
       authorizationSurfaceOperation,

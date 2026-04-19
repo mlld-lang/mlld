@@ -32,13 +32,26 @@ function isRuntimeExecutableOperation(operation: OperationContext): boolean {
   return metadata?.sourceRetryable === true;
 }
 
+// See checkpoint-pre-hook.ts for the rationale — these are mlld-internal
+// control-flow pseudo-languages, not external invocations worth caching.
+function isMlldInternalLanguage(language: unknown): boolean {
+  return typeof language === 'string' && language.startsWith('mlld-');
+}
+
 function isCheckpointEligibleOperation(operation?: OperationContext): boolean {
   if (!operation) {
     return false;
   }
 
   if (operation.type === 'exe' || operation.type === 'run') {
-    return hasLlmLabel(operation.labels) && isRuntimeExecutableOperation(operation);
+    if (!hasLlmLabel(operation.labels) || !isRuntimeExecutableOperation(operation)) {
+      return false;
+    }
+    const metadata = operation.metadata as Record<string, unknown> | undefined;
+    if (isMlldInternalLanguage(metadata?.executableLanguage)) {
+      return false;
+    }
+    return true;
   }
 
   return operation.subtype === 'effect' && hasLlmLabel(operation.labels);

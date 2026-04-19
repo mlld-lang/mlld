@@ -24,13 +24,30 @@ function isRuntimeExecutableOperation(operation: OperationContext): boolean {
   return metadata?.sourceRetryable === true;
 }
 
+// mlld-internal control-flow pseudo-languages on /exe definitions. These are
+// pure mlld code (exe-block, for-expression, loop-expression, etc.), not
+// external invocations worth caching — they commonly read mutable runtime
+// state (shelves, other exes) so caching by args alone poisons subsequent
+// calls. The `llm` label on such an exe usually propagates from an enclosing
+// llm tool-call and doesn't indicate the exe itself is an LLM invocation.
+function isMlldInternalLanguage(language: unknown): boolean {
+  return typeof language === 'string' && language.startsWith('mlld-');
+}
+
 function isCheckpointEligibleOperation(operation?: OperationContext): boolean {
   if (!operation) {
     return false;
   }
 
   if (operation.type === 'exe' || operation.type === 'run') {
-    return hasLlmLabel(operation.labels) && isRuntimeExecutableOperation(operation);
+    if (!hasLlmLabel(operation.labels) || !isRuntimeExecutableOperation(operation)) {
+      return false;
+    }
+    const metadata = operation.metadata as Record<string, unknown> | undefined;
+    if (isMlldInternalLanguage(metadata?.executableLanguage)) {
+      return false;
+    }
+    return true;
   }
 
   return operation.subtype === 'effect' && hasLlmLabel(operation.labels);
