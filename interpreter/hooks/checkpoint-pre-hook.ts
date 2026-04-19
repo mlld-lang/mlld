@@ -2,6 +2,7 @@ import { CheckpointManager } from '@interpreter/checkpoint/CheckpointManager';
 import type { OperationContext } from '@interpreter/env/ContextManager';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 import { logger } from '@core/utils/logger';
 import { resolveCheckpointPolicy, shouldServeCheckpointHit } from '@interpreter/checkpoint/policy';
 import type { PreHook } from './HookManager';
@@ -37,6 +38,17 @@ function isCheckpointEligibleOperation(operation?: OperationContext): boolean {
 
 function normalizeCheckpointInput(input: unknown): unknown {
   const normalized = isVariable(input) ? input.value : input;
+  // ShelfSlotRefValue keeps its identity on non-enumerable symbol props,
+  // so the default object-key serializer collapses every slot ref to {}.
+  // Surface the slot identity explicitly so distinct slots produce distinct keys.
+  if (isShelfSlotRefValue(normalized)) {
+    return {
+      $type: 'shelf-slot-ref',
+      shelfName: normalized.shelfName,
+      slotName: normalized.slotName,
+      data: asData(normalized.current)
+    };
+  }
   if (isStructuredValue(normalized)) {
     return asData(normalized);
   }
