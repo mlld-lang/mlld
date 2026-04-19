@@ -16,6 +16,7 @@ import { interpret } from '@interpreter/index';
 import { logger } from '@core/utils/logger';
 import type { StructuredResult } from '@sdk/types';
 import { checkpointPostHook } from '@interpreter/hooks/checkpoint-post-hook';
+import { checkpointPreHook } from '@interpreter/hooks/checkpoint-pre-hook';
 
 const cleanupDirs: string[] = [];
 const cleanupGlobals: string[] = [];
@@ -407,5 +408,167 @@ describe('checkpoint runtime semantics', () => {
     expect(readTextVariable(env, 'result')).toContain('call:1');
     expect(readCalls).toBe(1);
     expect(writeCalls).toBe(1);
+  });
+
+  describe('eligibility gate', () => {
+    // Regression for m-2a3c: mlld-internal control-flow exes (mlld-exe-block,
+    // mlld-for, mlld-loop, mlld-foreach, mlld-box) inherit the `llm` label
+    // from an enclosing llm tool-call via operation context. Without this
+    // gate, every such exe called inside an llm chain becomes cache-eligible,
+    // which poisons anything reading mutable runtime state (shelves, other
+    // exes) on repeated calls.
+    //
+    // The pre-hook must return { action: 'continue' } with no cache metadata
+    // for mlld-internal exes. The post-hook must not persist their returns.
+
+    const mlldInternalLanguages = [
+      'mlld-exe-block',
+      'mlld-for',
+      'mlld-loop',
+      'mlld-foreach',
+      'mlld-box'
+    ];
+
+    for (const language of mlldInternalLanguages) {
+      it(`pre-hook skips caching for ${language} exes even with llm label`, async () => {
+        const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+        const getCalls: string[] = [];
+        env.setCheckpointManager({
+          assignInvocationMetadata(): CheckpointInvocationMetadata {
+            return { invocationOrdinal: 0, executionOrder: 0 };
+          },
+          async get(key: string): Promise<unknown | null> {
+            getCalls.push(key);
+            return null;
+          }
+        } as unknown as CheckpointManager);
+
+        const decision = await checkpointPreHook(
+          {} as any,
+          [],
+          env,
+          {
+            type: 'exe',
+            name: 'inner',
+            labels: ['llm'],
+            metadata: {
+              sourceRetryable: true,
+              executableType: 'code',
+              executableLanguage: language
+            }
+          } as any
+        );
+
+        expect(decision.action).toBe('continue');
+        expect(decision.metadata).toBeUndefined();
+        expect(getCalls).toHaveLength(0);
+      });
+    }
+
+    it('pre-hook still serves cache for non-mlld languages (js, cmd, etc.)', async () => {
+      const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+      let getCalls = 0;
+      env.setCheckpointManager({
+        assignInvocationMetadata(): CheckpointInvocationMetadata {
+          return { invocationOrdinal: 0, executionOrder: 0 };
+        },
+        async get(): Promise<unknown | null> {
+          getCalls += 1;
+          return null;
+        }
+      } as unknown as CheckpointManager);
+
+      const decision = await checkpointPreHook(
+        {} as any,
+        [],
+        env,
+        {
+          type: 'exe',
+          name: 'llm',
+          labels: ['llm'],
+          metadata: {
+            sourceRetryable: true,
+            executableType: 'code',
+            executableLanguage: 'js'
+          }
+        } as any
+      );
+
+      expect(decision.action).toBe('continue');
+      expect(getCalls).toBe(1);
+      expect(decision.metadata).toMatchObject({ checkpointKey: expect.any(String) });
+    });
+
+    it('post-hook does not persist returns from mlld-exe-block exes', async () => {
+      const env = new Environment(new MemoryFileSystem(), new PathService(), '/');
+      let putCalls = 0;
+      env.setCheckpointManager({
+        assignInvocationMetadata(): CheckpointInvocationMetadata {
+          return { invocationOrdinal: 0, executionOrder: 0 };
+        },
+        async put(): Promise<void> {
+          putCalls += 1;
+        },
+        wasWrittenThisRun(): boolean {
+          return false;
+        }
+      } as unknown as CheckpointManager);
+
+      await checkpointPostHook(
+        {} as any,
+        { value: { agent: 'x', state: 'y', query: 'z' }, env },
+        [],
+        env,
+        {
+          type: 'exe',
+          name: 'plannerToolContext',
+          labels: ['llm'],
+          metadata: {
+            sourceRetryable: true,
+            executableType: 'code',
+            executableLanguage: 'mlld-exe-block'
+          }
+        } as any
+      );
+
+      expect(putCalls).toBe(0);
+    });
+
+    it('end-to-end: repeated calls to an llm-labeled mlld-exe-block exe recompute, not cache', async () => {
+      // Direct repro of m-2a3c: an exe that reads mutable state returns
+      // different values each call. If caching sneaks back in, both calls
+      // would return the first call's value.
+      const counterKey = '__mlldCheckpointGateMlldExeBlock';
+      registerGlobalCounter(counterKey);
+
+      const root = await mkdtemp(path.join(os.tmpdir(), 'checkpoint-gate-mlld-'));
+      cleanupDirs.push(root);
+
+      const source = `
+/exe @incr() = js {
+  globalThis.${counterKey} = (globalThis.${counterKey} || 0) + 1;
+  return globalThis.${counterKey};
+}
+/exe llm @wrapper() = [
+  let @n = @incr()
+  => { count: @n }
+]
+/var @first = @wrapper()
+/var @second = @wrapper()
+`;
+      const { env } = await createEnvWithCheckpoint(root, 'gate-mlld-block');
+      await evaluateDirectives(source, env);
+
+      const first = env.getVariable('first')?.value as any;
+      const second = env.getVariable('second')?.value as any;
+
+      // If caching poisoned this, first.data.count and second.data.count
+      // would be equal (both reporting the first call's counter value).
+      const firstCount = first?.data?.count ?? first?.count;
+      const secondCount = second?.data?.count ?? second?.count;
+      expect(firstCount).toBe(1);
+      expect(secondCount).toBe(2);
+      expect(getGlobalCounter(counterKey)).toBe(2);
+    });
   });
 });
