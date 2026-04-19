@@ -3783,9 +3783,7 @@ async function evaluateExecInvocationInternal(
 
   // Create a child environment for parameter substitution
   let execEnv = runtimeEnv.createChild();
-  if (importedExecutableSourcePath) {
-    execEnv.setFunctionScopeBoundary(true);
-  }
+  execEnv.setFunctionScopeBoundary(true);
 
   // Set captured module environment for variable lookup fallback
   const capturedModuleEnv = await ensureCapturedModuleEnvMap(

@@ -20,20 +20,13 @@ describe('for-expression error propagation (m-0ccb)', () => {
   it('should throw when exe function errors in for-expression object property', async () => {
     const { fileSystem, pathService } = createTestEnv();
     const input = [
-      '/var @x = "original"',
-      '/exe @bomb() = [',
-      '  let @x = "boom"',
-      '  => "ok"',
-      ']',
+      '/exe @bomb() = js { throw new Error("boom"); }',
       '/var @results = for @n in [1, 2, 3] => {',
       '  number: @n,',
       '  status: @bomb()',
       '}',
     ].join('\n');
 
-    // Currently this does NOT throw — the error is silently wrapped as
-    // {__error: true, __message: '...'} in each iteration result.
-    // Once m-0ccb is fixed, this should throw a VariableRedefinitionError.
     await expect(interpret(input, {
       fileSystem,
       pathService,
@@ -41,17 +34,13 @@ describe('for-expression error propagation (m-0ccb)', () => {
       mlldMode: 'markdown',
       ephemeral: true,
       useMarkdownFormatter: false,
-    })).rejects.toThrow('variable-redefinition');
+    })).rejects.toThrow(/boom/);
   });
 
   it('should not produce __error objects in for-expression results', async () => {
     const { fileSystem, pathService } = createTestEnv();
     const input = [
-      '/var @x = "original"',
-      '/exe @bomb() = [',
-      '  let @x = "boom"',
-      '  => "ok"',
-      ']',
+      '/exe @bomb() = js { throw new Error("boom"); }',
       '/var @results = for @n in [1, 2, 3] => {',
       '  number: @n,',
       '  status: @bomb()',

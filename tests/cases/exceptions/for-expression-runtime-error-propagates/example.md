@@ -1,9 +1,4 @@
-/var @x = "outer"
-
-/exe @explode() = [
-  let @x = "inner"
-  => "done"
-]
+/exe @explode() = js { throw new Error("boom"); }
 
 /var @results = for @n in [1, 2, 3] => {
   number: @n,
