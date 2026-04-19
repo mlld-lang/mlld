@@ -1,11 +1,33 @@
 import * as path from 'path';
-import * as os from 'os';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { logger } from '@core/utils/logger';
 
+async function findFirstAncestorWithFile(
+  startPath: string,
+  fileNames: readonly string[],
+  fileSystem: IFileSystemService
+): Promise<{ dir: string; fileName: string } | null> {
+  let currentDir = path.resolve(startPath);
+
+  while (true) {
+    for (const fileName of fileNames) {
+      if (await fileSystem.exists(path.join(currentDir, fileName))) {
+        return { dir: currentDir, fileName };
+      }
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return null;
+    }
+
+    currentDir = parentDir;
+  }
+}
+
 /**
- * Find the project root by searching up the directory tree for mlld config files
- * or other project indicators.
+ * Find the project root by first searching for an explicit mlld config file and
+ * only then falling back to broader project markers.
  *
  * @param startPath - The directory to start searching from
  * @param fileSystem - The filesystem service to use
@@ -15,41 +37,30 @@ export async function findProjectRoot(
   startPath: string,
   fileSystem: IFileSystemService
 ): Promise<string> {
-  let currentDir = path.resolve(startPath);
-  const homeDir = os.homedir();
-
   logger.debug(`Finding project root from: ${startPath}`);
 
-  while (currentDir !== homeDir && currentDir !== path.dirname(currentDir)) {
-    // Check for mlld config files (new names first, old name for backward compatibility)
-    const configFiles = [
-      'mlld-config.json',
-      'mlld-lock.json',
-      'mlld.lock.json'  // Backward compatibility
-    ];
-
-    for (const configFile of configFiles) {
-      const configPath = path.join(currentDir, configFile);
-      if (await fileSystem.exists(configPath)) {
-        logger.debug(`Found ${configFile} at: ${currentDir}`);
-        return currentDir;
-      }
-    }
-
-    // Fallback indicators (if no mlld config files found)
-    const fallbackIndicators = ['package.json', '.git', 'pyproject.toml', 'Cargo.toml'];
-    for (const indicator of fallbackIndicators) {
-      if (await fileSystem.exists(path.join(currentDir, indicator))) {
-        // Found a project root, but warn that mlld config is missing
-        logger.warn(`Found project root at ${currentDir} but no mlld config files found`);
-        return currentDir;
-      }
-    }
-
-    currentDir = path.dirname(currentDir);
+  const configMatch = await findFirstAncestorWithFile(
+    startPath,
+    ['mlld-config.json'],
+    fileSystem
+  );
+  if (configMatch) {
+    logger.debug(`Found ${configMatch.fileName} at: ${configMatch.dir}`);
+    return configMatch.dir;
   }
 
-  // If no project root found, return original startPath
+  const fallbackMatch = await findFirstAncestorWithFile(
+    startPath,
+    ['package.json', '.git'],
+    fileSystem
+  );
+  if (fallbackMatch) {
+    logger.warn(
+      `Found project root via ${fallbackMatch.fileName} at ${fallbackMatch.dir} but no mlld-config.json found`
+    );
+    return fallbackMatch.dir;
+  }
+
   logger.debug(`No project root found, using original path: ${startPath}`);
   return startPath;
 }

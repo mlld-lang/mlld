@@ -1,6 +1,9 @@
 import chalk from 'chalk';
 import { spawn } from 'child_process';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { ModuleInstaller, ModuleWorkspace, type ModuleSpecifier, type ModuleInstallResult, type ModuleInstallerEvent } from '@core/registry';
+import { createDefaultProjectConfig } from '@core/registry/defaultConfig';
 import { renderDependencySummary } from '../utils/dependency-summary';
 import { ProgressIndicator } from '../utils/progress';
 import { OutputFormatter, formatModuleReference, formatInstallTarget } from '../utils/output';
@@ -283,8 +286,28 @@ export class InstallCommand {
   }
 }
 
+async function ensureProjectConfig(projectRoot: string): Promise<string | null> {
+  const configPath = path.join(projectRoot, 'mlld-config.json');
+
+  try {
+    await fs.access(configPath);
+    return null;
+  } catch {
+    await fs.mkdir(projectRoot, { recursive: true });
+    await fs.writeFile(
+      configPath,
+      JSON.stringify(createDefaultProjectConfig({ projectRoot }), null, 2)
+    );
+    return configPath;
+  }
+}
+
 export async function installCommand(modules: string[], options: InstallOptions = {}): Promise<void> {
   const context = await getCommandContext({ startPath: options.basePath });
+  const createdConfigPath = await ensureProjectConfig(context.projectRoot);
+  if (createdConfigPath) {
+    console.log(`Created mlld-config.json at ${createdConfigPath}`);
+  }
   const installer = new InstallCommand(context.projectRoot, options);
   await installer.install(modules, options);
 }

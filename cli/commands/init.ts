@@ -7,7 +7,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
-import { normalizeProjectName } from '@core/utils/project-name';
+import {
+  createDefaultProjectConfig,
+  DEFAULT_LOCAL_MODULES_PATH,
+  DEFAULT_SCRIPT_DIR
+} from '@core/registry/defaultConfig';
 
 export interface InitOptions {
   force?: boolean;
@@ -15,35 +19,10 @@ export interface InitOptions {
   localPath?: string;
 }
 
-const DEFAULT_CONFIG = {
-  version: 1,
-  scriptDir: 'llm/run',
-  resolvers: {
-    prefixes: [
-      {
-        prefix: '@local/',
-        resolver: 'LOCAL',
-        type: 'input',
-        priority: 20,
-        config: {
-          basePath: './llm/modules'
-        }
-      }
-    ]
-  },
-  trustedDomains: [
-    'raw.githubusercontent.com',
-    'gist.githubusercontent.com',
-    'api.github.com'
-  ]
-};
-
 export async function initCommand(options: InitOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const configPath = path.join(cwd, 'mlld-config.json');
   const lockPath = path.join(cwd, 'mlld-lock.json');
-  const baseName = path.basename(cwd);
-  const projectname = normalizeProjectName(baseName) || 'mlld-project';
 
   // Check for existing config
   if (existsSync(configPath) && !options.force) {
@@ -52,23 +31,11 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     return;
   }
 
-  // Build config with any overrides
-  const config = {
-    ...DEFAULT_CONFIG,
-    resolvers: {
-      ...DEFAULT_CONFIG.resolvers,
-      prefixes: DEFAULT_CONFIG.resolvers.prefixes.map(prefixConfig => ({
-        ...prefixConfig,
-        config: prefixConfig.config ? { ...prefixConfig.config } : undefined
-      }))
-    },
-    projectname,
-    scriptDir: options.scriptDir || DEFAULT_CONFIG.scriptDir
-  };
-
-  if (options.localPath) {
-    config.resolvers.prefixes[0].config.basePath = options.localPath;
-  }
+  const config = createDefaultProjectConfig({
+    projectRoot: cwd,
+    scriptDir: options.scriptDir,
+    localPath: options.localPath
+  });
 
   // Write config file
   await fs.writeFile(configPath, JSON.stringify(config, null, 2));
@@ -118,8 +85,8 @@ Creates mlld-config.json, mlld-lock.json, and default directories.
 
 ${chalk.bold('Options:')}
   --force              Overwrite existing configuration
-  --script-dir <path>  Script directory (default: llm/run)
-  --local-path <path>  Local modules path (default: ./llm/modules)
+  --script-dir <path>  Script directory (default: ${DEFAULT_SCRIPT_DIR})
+  --local-path <path>  Local modules path (default: ${DEFAULT_LOCAL_MODULES_PATH})
   -h, --help           Show this help message
 
 ${chalk.bold('Examples:')}

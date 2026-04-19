@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LockFile } from './LockFile';
 import { ConfigFile } from './ConfigFile';
-import { findProjectRoot } from '@core/utils/findProjectRoot';
 import type { PrefixConfig } from '@core/resolvers/types';
 import { normalizeProjectName } from '@core/utils/project-name';
 
@@ -16,8 +15,9 @@ export class ProjectConfig {
   private projectRoot: string;
 
   constructor(projectRoot?: string) {
-    // Find project root if not provided
-    this.projectRoot = projectRoot || findProjectRoot(process.cwd());
+    // Callers should pass the resolved project root. Fall back to cwd for
+    // legacy direct construction sites that omit it.
+    this.projectRoot = path.resolve(projectRoot ?? process.cwd());
 
     // Initialize both files
     this.configFile = new ConfigFile(path.join(this.projectRoot, 'mlld-config.json'));

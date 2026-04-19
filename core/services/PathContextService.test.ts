@@ -14,7 +14,7 @@ describe('PathContextService', () => {
     
     // Set up a basic project structure
     await fileSystem.mkdir('/project');
-    await fileSystem.writeFile('/project/mlld.lock.json', '{}');
+    await fileSystem.writeFile('/project/mlld-config.json', '{}');
     await fileSystem.mkdir('/project/src');
     await fileSystem.writeFile('/project/src/script.mld', '');
     await fileSystem.mkdir('/project/lib');
@@ -50,7 +50,7 @@ describe('PathContextService', () => {
         expect(context.filePath).toBe('/project/src/nested/deep.mld');
       });
       
-      it('should use file directory as project root if no mlld.lock.json', async () => {
+      it('should use file directory as project root if no project markers exist', async () => {
         await fileSystem.mkdir('/standalone');
         await fileSystem.writeFile('/standalone/script.mld', '');
         
@@ -260,7 +260,7 @@ describe('PathContextService', () => {
       it('should validate a VirtualFS-backed context as valid', async () => {
         const virtual = VirtualFS.empty();
         await virtual.mkdir('/vproj/src', { recursive: true });
-        await virtual.writeFile('/vproj/mlld.lock.json', '{}');
+        await virtual.writeFile('/vproj/mlld-config.json', '{}');
         await virtual.writeFile('/vproj/src/app.mld', '/show "vfs"');
 
         const virtualService = new PathContextService(virtual);
