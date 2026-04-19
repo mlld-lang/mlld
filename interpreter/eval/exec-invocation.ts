@@ -2235,10 +2235,14 @@ function getImportedExecutableSourcePath(variable: Variable | undefined): string
     return undefined;
   }
 
+  // These are sentinel labels stamped onto mx.importPath, not file paths.
+  // Treating them as source paths leaks strings like "in module-env" into
+  // error messages and as spurious setCurrentFilePath values.
   switch (importPath) {
     case 'let':
     case 'exe-param':
     case 'for-var':
+    case 'module-env':
       return undefined;
     default:
       return importPath;
