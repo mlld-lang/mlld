@@ -3791,7 +3791,15 @@ async function evaluateExecInvocationInternal(
 
   policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
-  // Create a child environment for parameter substitution
+  // Function-scope boundary stops findVisibleVariableOwner from walking past
+  // this frame into caller/ancestor scopes. Setting it unconditionally is
+  // what fixes the m-20d3/m-2f2c family of sibling-call leaks — any local
+  // exe in a deep chain that does `let @x = ...` otherwise lets the walker
+  // reach prior siblings' let-bindings and param envs. Narrowing the
+  // condition (to imported-only, or to imported+wrapper) regresses that fix
+  // because exes like @slotValue dispatch through captured-module-env paths
+  // where mx.isImported is false even though they're running inside an
+  // imported chain.
   let execEnv = runtimeEnv.createChild();
   execEnv.setFunctionScopeBoundary(true);
 
