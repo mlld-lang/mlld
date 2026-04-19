@@ -2587,7 +2587,12 @@ async function evaluateExecInvocationInternal(
   // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
   let isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
     && existingVar.mx.labels.includes('recursive');
-  let shouldTrackResolution = !isBuiltinCommand && !isReservedName;
+  // Tool-bridge wrapper exes are dispatch shims, not user-callable identifiers.
+  // Concurrent fan-out invokes the same tempName in parallel, which otherwise
+  // trips the recursion guard; wrappers can't self-recurse at the mlld level,
+  // the wrapped body's real name carries the real guard.
+  let isToolbridgeWrapper = existingVar?.internal?.isToolbridgeWrapper === true;
+  let shouldTrackResolution = !isBuiltinCommand && !isReservedName && !isToolbridgeWrapper;
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -2899,7 +2904,8 @@ async function evaluateExecInvocationInternal(
         commandName = variable.name ?? commandName;
         isReservedName = variable.internal?.isReserved;
         isRecursiveExe = Array.isArray(variable.mx?.labels) && variable.mx.labels.includes('recursive');
-        shouldTrackResolution = !isBuiltinMethod(commandName) && !isReservedName;
+        isToolbridgeWrapper = variable.internal?.isToolbridgeWrapper === true;
+        shouldTrackResolution = !isBuiltinMethod(commandName) && !isReservedName && !isToolbridgeWrapper;
       }
     }
     
@@ -3807,16 +3813,20 @@ async function evaluateExecInvocationInternal(
   // Functions labelled `recursive` are allowed up to MLLD_RECURSION_DEPTH calls.
   let resolutionTrackingActive = false;
   if (shouldTrackResolution && env.isResolving(commandName)) {
+    // Prefer a user-facing name over internal wrapper tempNames in error output.
+    const displayName =
+      (variable?.internal as { toolbridgeDisplayName?: unknown } | undefined)?.toolbridgeDisplayName
+        ?? commandName;
     if (!isRecursiveExe) {
       throw new CircularReferenceError(
-        `Circular reference detected: executable '@${commandName}' calls itself recursively without a terminating condition`,
+        `Circular reference detected: executable '@${displayName}' calls itself recursively without a terminating condition`,
         { identifier: commandName, location: nodeSourceLocation }
       );
     }
     const limit = Number(process.env.MLLD_RECURSION_DEPTH ?? 64);
     if (env.getCallDepth(commandName) >= limit) {
       throw new CircularReferenceError(
-        `'@${commandName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
+        `'@${displayName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
         { identifier: commandName, location: nodeSourceLocation }
       );
     }

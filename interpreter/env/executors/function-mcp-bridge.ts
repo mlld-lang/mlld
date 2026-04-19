@@ -48,7 +48,8 @@ interface JsonRpcResponse {
 function cloneExecutableForToolBridge(
   env: Environment,
   executable: ExecutableVariable,
-  tempName: string
+  tempName: string,
+  displayName: string
 ): ExecutableVariable {
   const executableDef = (executable.internal?.executableDef ?? executable.value) as any;
   const capturedModuleEnv = normalizeCapturedModuleEnvForToolBridge(env, executable);
@@ -57,7 +58,8 @@ function cloneExecutableForToolBridge(
     executableDef,
     importPath: 'let',
     isSystem: true,
-    isToolbridgeWrapper: true
+    isToolbridgeWrapper: true,
+    toolbridgeDisplayName: displayName
   };
 
   if (capturedModuleEnv !== undefined) {
@@ -168,7 +170,7 @@ class FunctionMcpBridgeServer {
     for (const [mcpName, executable] of this.functions.entries()) {
       index += 1;
       const tempName = `__toolbridge_fn_${sanitizeIdentifier(mcpName)}_${index}`;
-      const cloned = cloneExecutableForToolBridge(this.toolEnv, executable, tempName);
+      const cloned = cloneExecutableForToolBridge(this.toolEnv, executable, tempName, mcpName);
       this.toolEnv.setVariable(tempName, cloned as any);
       const clonedExecutableDef = (cloned.internal?.executableDef ?? cloned.value) as any;
       const providedDefinition = this.toolDefinitions?.get(mcpName);
