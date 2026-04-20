@@ -20,6 +20,7 @@ import {
 import { getExpressionProvenance } from './expression-provenance';
 import type { RecordProjectionMetadata, RecordSchemaMetadata } from '@core/types/record';
 import type { FactSourceHandle } from '@core/types/handle';
+import type { SessionFinalStateMap } from '@core/types/session';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import {
   getShelfSlotRefSnapshot,
@@ -52,6 +53,7 @@ export interface StructuredValueMetadata {
   source?: string;
   command?: string;
   sessionId?: string;
+  sessions?: SessionFinalStateMap | null;
   exitCode?: number;
   duration?: number;
   stderr?: string;
@@ -136,6 +138,7 @@ export interface StructuredValueContext {
   source?: string;
   command?: string;
   sessionId?: string;
+  sessions?: Readonly<SessionFinalStateMap> | null;
   exitCode?: number;
   duration?: number;
   stderr?: string;
@@ -709,6 +712,7 @@ function buildVarMxFromMetadata(
   const flattenedTitle = metadata?.title as string | undefined;
   const flattenedDescription = metadata?.description as string | undefined;
   const flattenedSessionId = metadata?.sessionId as string | undefined;
+  const flattenedSessions = (metadata?.sessions as SessionFinalStateMap | null | undefined) ?? undefined;
   const flattenedStatus = metadata?.status as number | undefined;
   const flattenedHeaders = metadata?.headers as Record<string, unknown> | undefined;
   const flattenedTokest = (metadata?.tokest as number | undefined) ?? metrics?.tokest;
@@ -751,7 +755,10 @@ function buildVarMxFromMetadata(
     md: flattenedMd,
     source: metadata?.source,
     command: metadata?.command,
-    sessionId: flattenedSessionId,
+    ...(flattenedSessionId !== undefined ? { sessionId: flattenedSessionId } : {}),
+    ...(flattenedSessions !== undefined
+      ? { sessions: flattenedSessions === null ? null : { ...flattenedSessions } }
+      : {}),
     exitCode: metadata?.exitCode,
     duration: metadata?.duration,
     stderr: metadata?.stderr,

@@ -10,6 +10,7 @@ import {
   wrapStructured
 } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -72,6 +73,7 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     }
     const clone = cloneWithOwnDescriptors(value);
     (clone as typeof value).value = resolvedValue;
+    inheritExpressionProvenance(clone, value);
     return clone;
   }
 
@@ -92,11 +94,14 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     if (value.internal) {
       resolved.internal = { ...value.internal };
     }
+    inheritExpressionProvenance(resolved, value);
     return resolved;
   }
 
   if (Array.isArray(value)) {
-    return Promise.all(value.map(item => resolveValueHandles(item, env)));
+    const resolved = await Promise.all(value.map(item => resolveValueHandles(item, env)));
+    inheritExpressionProvenance(resolved, value);
+    return resolved;
   }
 
   if (isPlainObject(value)) {
@@ -115,6 +120,7 @@ export async function resolveValueHandles(value: unknown, env: Environment): Pro
     if (toolCollectionMetadata) {
       attachToolCollectionMetadata(result, toolCollectionMetadata);
     }
+    inheritExpressionProvenance(result, value);
     return result;
   }
 

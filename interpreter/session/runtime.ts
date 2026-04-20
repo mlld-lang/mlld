@@ -11,6 +11,7 @@ import type { RecordDefinition, RecordFieldDefinition, RecordFieldValueType } fr
 import type {
   SessionBufferedWrite,
   SessionDefinition,
+  SessionFinalStateMap,
   SessionFrameInstance,
   SessionScopedAttachment,
   SessionSlotBinding,
@@ -25,6 +26,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { wrapStructured, isStructuredValue } from '@interpreter/utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
+import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import {
   buildSessionFinalTraceEnvelope,
   buildSessionSeedTraceEnvelope,
@@ -98,6 +100,7 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
     if (value.internal) {
       clone.internal = { ...value.internal };
     }
+    inheritExpressionProvenance(clone, value);
     seen.set(value as object, clone);
     return clone as T;
   }
@@ -112,6 +115,7 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
     for (const item of value) {
       clone.push(cloneSessionValue(item, seen));
     }
+    inheritExpressionProvenance(clone, value);
     return clone as T;
   }
 
@@ -125,6 +129,7 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
     for (const [key, entry] of Object.entries(value)) {
       clone[key] = cloneSessionValue(entry, seen);
     }
+    inheritExpressionProvenance(clone, value);
     return clone as T;
   }
 
@@ -256,6 +261,13 @@ export class RuntimeSessionInstance implements SessionFrameInstance {
     return this.values.get(name);
   }
 
+  getObservedSlot(name: string): unknown {
+    if (this.traceValues.has(name)) {
+      return this.traceValues.get(name);
+    }
+    return this.values.get(name);
+  }
+
   setSlot(name: string, value: unknown): void {
     this.values.set(name, value);
   }
@@ -302,6 +314,10 @@ export class RuntimeSessionInstance implements SessionFrameInstance {
       }
     }
     return snapshot;
+  }
+
+  observedSnapshot(): Record<string, unknown> {
+    return this.traceSnapshot();
   }
 }
 
@@ -400,6 +416,14 @@ function readStoredSlotValue(
       `Required session slot '${binding.name}' on @${instance.definition.canonicalName} is unset.`,
       'SESSION_REQUIRED_SLOT_UNSET'
     );
+  }
+  const observedInstance =
+    instance instanceof RuntimeSessionInstance ? instance : undefined;
+  if (observedInstance) {
+    const observedValue = observedInstance.getObservedSlot(binding.name);
+    if (observedValue !== undefined || observedInstance.hasSlot(binding.name) || observedInstance.hasTraceSlot(binding.name)) {
+      return cloneSessionValue(observedValue);
+    }
   }
   if (instance.hasSlot(binding.name)) {
     return cloneSessionValue(instance.getSlot(binding.name));
@@ -654,11 +678,35 @@ function splitBoundExecutionEnv(
   };
 }
 
-function getSessionObjectUpdates(
-  value: unknown
-): Record<string, unknown> | undefined {
+async function getSessionObjectUpdates(
+  value: unknown,
+  env: Environment
+): Promise<Record<string, unknown> | undefined> {
   const resolved = unwrapStructuredForValidation(value);
-  return isPlainObject(resolved) ? resolved : undefined;
+  if (!isPlainObject(resolved)) {
+    return undefined;
+  }
+
+  const keys = Object.keys(resolved);
+  if (keys.length === 0) {
+    return {};
+  }
+
+  const { accessFields } = await import('@interpreter/utils/field-access');
+  const updates: Record<string, unknown> = Object.create(null);
+  for (const key of keys) {
+    updates[key] = await accessFields(
+      value,
+      [{ type: 'field', value: key } as any],
+      {
+        env,
+        preserveContext: false,
+        returnUndefinedForMissing: true
+      }
+    );
+  }
+
+  return updates;
 }
 
 function readNestedPathValue(
@@ -1239,6 +1287,7 @@ function createSessionMethodExecutable(
     internal: {
       executableDef: executable,
       preserveStructuredArgs: true,
+      ...(name === 'set' ? { disableNamedObjectSpread: true } : {}),
       isReserved: true,
       isSystem: true,
       strictFieldAccess: true,
@@ -1277,7 +1326,7 @@ function createSessionAccessorValue(
       const { executionEnv, invocationArgs } = splitBoundExecutionEnv(args, env);
       const objectUpdates =
         invocationArgs.length === 1
-          ? getSessionObjectUpdates(invocationArgs[0])
+          ? await getSessionObjectUpdates(invocationArgs[0], executionEnv)
           : undefined;
       const updateEntries = objectUpdates
         ? Object.entries(objectUpdates).filter((entry): entry is [string, unknown] => entry[1] !== undefined)
@@ -1443,7 +1492,7 @@ export function createSessionSnapshot(
   env: Environment
 ): Record<string, unknown> {
   const instance = requireAttachedSessionInstance(definition, env);
-  return instance.snapshot();
+  return instance.observedSnapshot();
 }
 
 export function createSessionSnapshotVariable(
@@ -1468,6 +1517,26 @@ export function materializeSession(
   return new RuntimeSessionInstance(sessionId, definition);
 }
 
+export function snapshotSessionsForFrame(
+  sessionId: string,
+  env: Environment
+): SessionFinalStateMap | undefined {
+  const instances = env.getSessionInstancesForFrame(sessionId);
+  if (instances.length === 0) {
+    return undefined;
+  }
+
+  const snapshots: SessionFinalStateMap = Object.create(null);
+  for (const instance of instances) {
+    snapshots[instance.definition.canonicalName] =
+      instance instanceof RuntimeSessionInstance
+        ? instance.observedSnapshot()
+        : instance.snapshot();
+  }
+
+  return snapshots;
+}
+
 export async function applySeedWrites(
   instance: RuntimeSessionInstance,
   rawSeed: unknown,
@@ -1489,17 +1558,17 @@ export async function applySeedWrites(
     if (!isPlainObject(resolvedSeed)) {
       throw createSessionError('seed must evaluate to an object keyed by session slot name.', 'INVALID_SESSION_SEED');
     }
-    await setSlotValues(instance, resolvedSeed, env, 'seed');
+    const seedUpdates = await getSessionObjectUpdates(resolvedSeed, env);
+    await setSlotValues(instance, seedUpdates ?? resolvedSeed, env, 'seed');
   }
 }
 
 export function disposeSessionFrame(sessionId: string, env: Environment): void {
   for (const instance of env.getSessionInstancesForFrame(sessionId)) {
-    const finalState = instance.snapshot();
-    const traceFinalState =
+    const finalState =
       instance instanceof RuntimeSessionInstance
-        ? instance.traceSnapshot()
-        : finalState;
+        ? instance.observedSnapshot()
+        : instance.snapshot();
     env.recordCompletedSession({
       frameId: sessionId,
       declarationId: instance.definition.id,
@@ -1511,7 +1580,7 @@ export function disposeSessionFrame(sessionId: string, env: Environment): void {
       env,
       frameId: sessionId,
       definition: instance.definition,
-      finalState: traceFinalState
+      finalState
     }));
   }
   env.disposeSessionInstances(sessionId);

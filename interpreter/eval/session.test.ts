@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
+import { accessFields } from '@interpreter/utils/field-access';
 import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import {
@@ -40,6 +41,22 @@ async function interpretWithEnv(source: string, options: Record<string, unknown>
   }
 
   return { result, env: environment };
+}
+
+function field(value: string) {
+  return { type: 'field', value } as any;
+}
+
+async function readFieldChain(env: Environment, variableName: string, fields: string[]): Promise<any> {
+  const variable = env.getVariable(variableName);
+  if (!variable) {
+    throw new Error(`Variable @${variableName} not found`);
+  }
+
+  return accessFields(variable, fields.map(field), {
+    env,
+    preserveContext: false
+  });
 }
 
 describe('session runtime', () => {
@@ -117,16 +134,13 @@ describe('session runtime', () => {
 
     const output = await extractVariableValue(env.getVariable('result')!, env);
     expect(isStructuredValue(output) ? asText(output) : output).toBe('3');
-    expect(result.sessions).toEqual([
-      expect.objectContaining({
-        name: 'planner',
-        finalState: {
-          count: 3,
-          snap: 2,
-          log: ['finish']
-        }
-      })
-    ]);
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.name).toBe('planner');
+    expect(result.sessions[0]?.finalState?.count).toBe(3);
+    expect(result.sessions[0]?.finalState?.log).toEqual(['finish']);
+    const snap = result.sessions[0]?.finalState?.snap;
+    expect(isStructuredValue(snap)).toBe(true);
+    expect(isStructuredValue(snap) ? snap.data : snap).toBe(2);
   });
 
   it('applies session seed values to required slots before the first read', async () => {
@@ -147,6 +161,73 @@ describe('session runtime', () => {
     const output = await extractVariableValue(env.getVariable('result')!, env);
     expect(isStructuredValue(output) ? asText(output) : output).toBe('ok');
     expect(result.sessions[0]?.finalState).toEqual({ query: 'seeded', count: 4 });
+  });
+
+  it('exposes final session state on the returned llm value via .mx.sessions and matches ExecuteResult.sessions', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  count: number?,',
+      '  note: string?',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  @planner.set({ note: "done" })',
+      '  => "ok"',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/var @raw = @agent("hello", { tools: @toolList }) with { session: @planner }',
+      '/var @final = @raw.mx.sessions.planner'
+    ].join('\n'));
+
+    const finalState = await extractVariableValue(env.getVariable('final')!, env);
+    expect(finalState).toEqual({
+      count: 1,
+      note: 'done'
+    });
+    expect(result.sessions).toEqual([
+      expect.objectContaining({
+        name: 'planner',
+        finalState
+      })
+    ]);
+
+    const namedSessions = await readFieldChain(env, 'raw', ['mx', 'sessions']);
+    expect(namedSessions).toEqual({
+      planner: finalState
+    });
+  });
+
+  it('preserves labels when reading final session state through result .mx.sessions', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  note: string?',
+      '}',
+      '/var untrusted @payload = "external request"',
+      '/exe tool:w @track() = [',
+      '  @planner.set({ note: @payload })',
+      '  => "ok"',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/var @raw = @agent("hello", { tools: @toolList }) with { session: @planner }',
+      '/var @labels = @raw.mx.sessions.planner.note.mx.labels'
+    ].join('\n'));
+
+    const labels = await extractVariableValue(env.getVariable('labels')!, env);
+    expect(labels).toEqual(expect.arrayContaining(['untrusted']));
+  });
+
+  it('returns null for result .mx.sessions when no session is attached', async () => {
+    const { env } = await interpretWithEnv([
+      '/exe llm @agent(prompt, config) = js {',
+      '  return "ok";',
+      '}',
+      '/var @raw = @agent("hello", {})'
+    ].join('\n'));
+
+    const sessions = await readFieldChain(env, 'raw', ['mx', 'sessions']);
+    expect(sessions).toBeNull();
   });
 
   it('rejects llm executables as session update functions', async () => {

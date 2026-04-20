@@ -14,7 +14,10 @@ import { boundary } from '@interpreter/utils/boundary';
 import { FieldAccessError } from '@core/errors';
 import type { SecurityDescriptor } from '@core/types/security';
 import { InterpolationContext } from '../../core/interpolation-context';
-import { getExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import {
+  getExpressionProvenance,
+  setExpressionProvenance
+} from '@core/types/provenance/ExpressionProvenance';
 
 async function interpolateAndRecord(
   nodes: any,
@@ -270,7 +273,7 @@ export class CollectionEvaluator {
           }
         }
       }
-      this.recordCollectedDescriptors(descriptors, env);
+      this.recordCollectedDescriptors(descriptors, env, evaluatedObj);
       return evaluatedObj;
     }
 
@@ -286,7 +289,7 @@ export class CollectionEvaluator {
         }
         evaluatedObj[key] = evaluated;
       }
-      this.recordCollectedDescriptors(descriptors, env);
+      this.recordCollectedDescriptors(descriptors, env, evaluatedObj);
       return evaluatedObj;
     }
 
@@ -408,7 +411,7 @@ export class CollectionEvaluator {
       }
     }
 
-    this.recordCollectedDescriptors(descriptors, env);
+    this.recordCollectedDescriptors(descriptors, env, evaluatedElements);
     return evaluatedElements;
   }
 
@@ -436,20 +439,27 @@ export class CollectionEvaluator {
       evaluatedObject[key] = evaluated;
     }
 
-    this.recordCollectedDescriptors(descriptors, env);
+    this.recordCollectedDescriptors(descriptors, env, evaluatedObject);
     return evaluatedObject;
   }
 
   /**
    * Merges collected security descriptors and records the aggregate on the environment.
    */
-  private recordCollectedDescriptors(descriptors: SecurityDescriptor[], env: Environment): void {
+  private recordCollectedDescriptors(
+    descriptors: SecurityDescriptor[],
+    env: Environment,
+    target?: unknown
+  ): void {
     if (descriptors.length === 0) {
       return;
     }
     const merged =
       descriptors.length === 1 ? descriptors[0] : env.mergeSecurityDescriptors(...descriptors);
     env.recordSecurityDescriptor(merged);
+    if (target && typeof target === 'object') {
+      setExpressionProvenance(target, merged);
+    }
   }
 
   private isConditionalOmissionError(error: unknown): boolean {

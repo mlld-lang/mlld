@@ -164,6 +164,7 @@ import {
   disposeSessionFrame,
   getNormalizedSessionAttachment,
   materializeSession,
+  snapshotSessionsForFrame,
   resolveAttachedSessionInstance
 } from '@interpreter/session/runtime';
 import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
@@ -233,6 +234,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   visibleParamNames: readonly string[];
   optionalParamNames: readonly string[];
   preserveStructuredArgs?: boolean;
+  disableNamedObjectSpread?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
   materializedArgs?: readonly unknown[];
@@ -413,6 +415,7 @@ async function materializePlainObjectExecutableDispatchArg(
   }
 ): Promise<unknown> {
   let resolved = value;
+  let astCollectionType: 'array' | 'object' | undefined;
   const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
 
   if (isVariable(resolved)) {
@@ -446,8 +449,15 @@ async function materializePlainObjectExecutableDispatchArg(
       )
     )
   ) {
+    astCollectionType = (resolved as { type?: unknown }).type === 'array' ? 'array' : 'object';
     const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
     resolved = await evaluateDataValue(resolved as any, env);
+  }
+
+  if (options?.preserveStructuredArgs && astCollectionType && !isStructuredValue(resolved)) {
+    const wrapped = wrapStructured(resolved as any, astCollectionType);
+    inheritExpressionProvenance(wrapped, resolved);
+    return wrapped;
   }
 
   return resolved;
@@ -485,6 +495,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   executableParamNames: readonly string[];
   optionalParamNames: readonly string[];
   preserveStructuredArgs?: boolean;
+  disableNamedObjectSpread?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
@@ -496,6 +507,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     optionalParamNames,
     env,
     preserveStructuredArgs,
+    disableNamedObjectSpread,
     evaluatedArgs,
     originalVariables,
     guardVariableCandidates,
@@ -515,6 +527,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     visibleParamNames: executableParamNames,
     optionalParamNames,
     preserveStructuredArgs,
+    disableNamedObjectSpread,
     evaluatedArgs: materializedArgs,
     materializedArgs,
     originalVariables,
@@ -539,7 +552,8 @@ async function normalizeExecutableDispatchArguments(
     guardVariableCandidates,
     expressionSourceVariables,
     argSourceNames,
-    preserveStructuredArgs
+    preserveStructuredArgs,
+    disableNamedObjectSpread
   } = options;
 
   if (executableParamNames.length === 0) {
@@ -573,6 +587,7 @@ async function normalizeExecutableDispatchArguments(
       );
 
   const shouldSpreadNamedObject =
+    !disableNamedObjectSpread &&
     normalizedMaterializedArgs.length === 1
     && isPlainObject(normalizedMaterializedArgs[0])
     && Object.keys(normalizedMaterializedArgs[0]).every(key => visibleSet.has(key))
@@ -2478,20 +2493,42 @@ async function evaluateExecInvocationInternal(
     };
   };
 
-  const attachLlmSessionIdMetadata = <T>(structured: StructuredValue<T>): StructuredValue<T> => {
+  const readReturnedSessionSnapshots = (sessionEnv: Environment) => {
+    if (!hasLlmLabel) {
+      return undefined;
+    }
+    const sessionId = sessionEnv.getCurrentLlmSessionId();
+    if (!sessionId) {
+      return undefined;
+    }
+    return snapshotSessionsForFrame(sessionId, sessionEnv);
+  };
+
+  const attachLlmResultMetadata = <T>(
+    structured: StructuredValue<T>,
+    sessionEnv: Environment
+  ): StructuredValue<T> => {
+    if (!hasLlmLabel) {
+      return structured;
+    }
+
     const sessionId =
       typeof surfacedLlmSessionId === 'string' && surfacedLlmSessionId.trim().length > 0
         ? surfacedLlmSessionId.trim()
         : undefined;
-    if (!sessionId) {
-      return structured;
-    }
+    const sessions = readReturnedSessionSnapshots(sessionEnv) ?? null;
 
     structured.metadata = {
       ...(structured.metadata ?? {}),
-      sessionId
+      ...(sessionId ? { sessionId } : {}),
+      sessions
     };
-    structured.mx.sessionId = sessionId;
+
+    if (sessionId) {
+      structured.mx.sessionId = sessionId;
+    }
+    structured.mx.sessions = sessions;
+
     return structured;
   };
 
@@ -2546,7 +2583,7 @@ async function evaluateExecInvocationInternal(
       };
     }
 
-    const wrapped = attachLlmSessionIdMetadata(wrapExecResult(value, options));
+    const wrapped = attachLlmResultMetadata(wrapExecResult(value, options), targetEnv);
     if (resultSecurityDescriptor) {
       const existing = getStructuredSecurityDescriptor(wrapped);
       const merged = existing
@@ -2564,7 +2601,7 @@ async function evaluateExecInvocationInternal(
   };
 
   const toPipelineInput = (value: unknown, options?: { type?: string; text?: string }): unknown => {
-    const structured = attachLlmSessionIdMetadata(wrapExecResult(value, options));
+    const structured = attachLlmResultMetadata(wrapExecResult(value, options), execEnv);
     if (resultSecurityDescriptor) {
       setStructuredSecurityDescriptor(structured, resultSecurityDescriptor);
     }
@@ -4107,6 +4144,7 @@ async function evaluateExecInvocationInternal(
         : [],
       optionalParamNames: routerOptionalParamNames,
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
+      disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -4143,6 +4181,7 @@ async function evaluateExecInvocationInternal(
           )
         : [],
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
+      disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -5043,8 +5082,8 @@ async function evaluateExecInvocationInternal(
     result = strictToolResult;
   }
 
-  if (surfacedLlmSessionId) {
-    result = attachLlmSessionIdMetadata(wrapExecResult(result));
+  if (hasLlmLabel) {
+    result = attachLlmResultMetadata(wrapExecResult(result), execEnv);
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)

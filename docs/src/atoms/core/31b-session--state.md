@@ -72,6 +72,26 @@ Resolution is strict and local:
 - inner calls do not walk outward looking for another frame with the same name
 - if the current frame is not attached, reads and writes fail
 
+## Read final state after the call returns
+
+The returned value from an `exe llm` call carries the final committed session snapshot on `.mx.sessions`:
+
+```mlld
+var session @planner = {
+  count: number?,
+  trail: string[]?
+}
+
+let @result = @agent("Plan the work", { tools: @toolList }) with {
+  session: @planner
+}
+
+let @final = @result.mx.sessions.planner
+show @final.count
+```
+
+This snapshot is read-only and exists only on the returned value from that call. It is the same final state reported to SDK consumers through `result.sessions`.
+
 ## Slot operations
 
 Session accessors expose write helpers:

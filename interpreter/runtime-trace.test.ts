@@ -197,14 +197,10 @@ describe('runtime trace', () => {
     expect(writeEvent.data.value).toMatch(/^<labels=\[secret\] size=\d+>$/);
     expect(finalEvent).toBeDefined();
     expect(finalEvent.data.finalState.note).toMatch(/^<labels=\[secret\] size=\d+>$/);
-    expect(result.sessions).toEqual([
-      expect.objectContaining({
-        name: 'planner',
-        finalState: {
-          note: 'sk-live-123'
-        }
-      })
-    ]);
+    expect(result.sessions[0]?.name).toBe('planner');
+    const finalNote = result.sessions[0]?.finalState?.note;
+    expect(isStructuredValue(finalNote) ? asText(finalNote) : finalNote).toBe('sk-live-123');
+    expect((finalNote as any)?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
   });
 
   it('emits session.seed events for seeded slots before the first callback', async () => {
@@ -330,7 +326,9 @@ describe('runtime trace', () => {
 
     expect(writeEvent?.data?.value).toMatch(/^<labels=\[untrusted\] size=\d+>$/);
     expect(finalEvent?.data?.finalState?.note).toMatch(/^<labels=\[untrusted\] size=\d+>$/);
-    expect(result.sessions[0]?.finalState?.note).toBe('from file');
+    const finalNote = result.sessions[0]?.finalState?.note;
+    expect(isStructuredValue(finalNote) ? asText(finalNote) : finalNote).toBe('from file');
+    expect((finalNote as any)?.mx?.labels ?? []).toEqual(expect.arrayContaining(['untrusted']));
   });
 
   it('caps oversized session trace values at effects level', async () => {

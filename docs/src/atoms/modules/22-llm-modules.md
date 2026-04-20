@@ -88,7 +88,7 @@ This matters for runtime-only surfaces such as `@mx.llm.sessionId`, session acce
 
 ## Returned session metadata
 
-If an `exe llm` implementation returns provider session metadata in its runtime envelope, the final value also exposes it through value-local `.mx` metadata:
+If an `exe llm` implementation returns provider session metadata in its runtime envelope, the final value also exposes it through value-local `.mx` metadata. If the call attached `var session` state, the final committed mlld snapshot is exposed there too:
 
 ```mlld
 var @result = @claude("Review the auth module", {
@@ -97,9 +97,10 @@ var @result = @claude("Review the auth module", {
 })
 
 show @result.mx.sessionId
+show @result.mx.sessions.planner
 ```
 
-This is available on values returned by `exe llm` calls, including results that were later shaped into records. Use `@result.mx.sessionId` when you need to correlate a returned value with provider-side traces or transcripts. Use ambient `@mx.llm.sessionId` when you need the current in-flight bridge session inside the executing `exe llm` body.
+This is available on values returned by `exe llm` calls, including results that were later shaped into records. Use `@result.mx.sessionId` when you need to correlate a returned value with provider-side traces or transcripts. Use `@result.mx.sessions.<name>` when the outer `exe` needs the final mlld session state after the call returns. Use ambient `@mx.llm.sessionId` when you need the current in-flight bridge session inside the executing `exe llm` body.
 
 This provider or bridge session id is separate from `var session` state. `@mx.llm.sessionId` identifies the in-flight bridge call. `var session @planner = { ... }` is mlld-managed mutable state attached to that call.
 

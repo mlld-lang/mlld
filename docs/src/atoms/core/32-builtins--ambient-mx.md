@@ -95,11 +95,12 @@ show @mx.llm.sessionId
 show @planner.count
 ```
 
-For values returned by `exe llm`, session metadata can also appear on the returned value itself as `@someValue.mx.sessionId` when the provider returned a session id in the runtime envelope. That value-local accessor survives normal return shaping such as record coercion:
+For values returned by `exe llm`, session metadata can also appear on the returned value itself. Provider session metadata stays at `@someValue.mx.sessionId` when the runtime envelope includes it. When the call attached `var session` state, the final committed snapshot is exposed separately at `@someValue.mx.sessions.<name>`:
 
 ```mlld
 let @result = @claude("Review this file", { model: "sonnet" })
 show @result.mx.sessionId
+show @result.mx.sessions.planner
 ```
 
 `@mx.llm.display` is the active display mode for the current call, or `null`.

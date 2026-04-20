@@ -80,12 +80,15 @@ export interface SessionWriteRecord {
   index: number;
 }
 
+export type SessionFinalStateSnapshot = Record<string, unknown>;
+export type SessionFinalStateMap = Record<string, SessionFinalStateSnapshot>;
+
 export interface SessionFinalStateRecord {
   frameId: string;
   declarationId: SessionDeclarationId;
   name: string;
   originPath?: string;
-  finalState: Record<string, unknown>;
+  finalState: SessionFinalStateSnapshot;
 }
 
 export interface SessionOverlayRead {
