@@ -1229,6 +1229,61 @@ describe('tool collections', () => {
     });
   });
 
+  it('propagates attached session frames through imported tool entry mlld references', async () => {
+    const env = await interpretWithEnvAndFiles(
+      `
+        /import { @s, @myTools } from "/wrapper.mld"
+
+        /exe llm @test(prompt, config) = [
+          let @direct = @myTools.greet.mlld({})
+          => @direct
+        ]
+
+        /var @result = @test("hi", {}) with {
+          session: @s,
+          seed: { name: "seeded" }
+        }
+      `,
+      {
+        '/schema.mld': `
+          /var session @s = {
+            name: string?
+          }
+
+          /export { @s }
+        `,
+        '/wrapper.mld': `
+          /import { @s } from "/schema.mld"
+
+          /exe @myTool(input) = [
+            let @name = @s.name
+            if !@name.isDefined() [
+              => { status: "error", error: "uninitialized" }
+            ]
+            => { status: "ok", name: @name }
+          ]
+
+          /var tools @myTools = {
+            greet: {
+              mlld: @myTool,
+              labels: ["tool:w"],
+              direct: true,
+              description: "test"
+            }
+          }
+
+          /export { @s, @myTools }
+        `
+      }
+    );
+
+    const result = await extractVariableValue(env.getVariable('result') as any, env) as any;
+    expect(result.data ?? result).toEqual({
+      status: 'ok',
+      name: 'seeded'
+    });
+  });
+
   it('keeps positional direct collection dispatch behavior unchanged', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`

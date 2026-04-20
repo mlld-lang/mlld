@@ -263,11 +263,14 @@ export class ModuleExportSerializer {
     const existingCaptured =
       getCapturedModuleEnv(variable.internal)
       ?? getCapturedModuleEnv(variable);
-    if (existingCaptured instanceof Map) {
-      return context.serializeModuleEnv(existingCaptured, context.serializingEnvs);
+    const collectionCaptured =
+      existingCaptured
+      ?? getCapturedModuleEnv(variable.value);
+    if (collectionCaptured instanceof Map) {
+      return context.serializeModuleEnv(collectionCaptured, context.serializingEnvs);
     }
-    if (existingCaptured && typeof existingCaptured === 'object') {
-      return existingCaptured;
+    if (collectionCaptured && typeof collectionCaptured === 'object') {
+      return collectionCaptured;
     }
     if (!variable.value || typeof variable.value !== 'object' || Array.isArray(variable.value)) {
       return undefined;

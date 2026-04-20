@@ -7,9 +7,12 @@ import {
 import { createObjectVariable, type VariableTypeDiscriminator } from '@core/types/variable';
 import {
   getCapturedModuleEnv,
+  getCapturedModuleOwnerEnv,
+  stashCapturedModuleOwnerEnv,
   sealCapturedModuleEnv
 } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
 import { isVariable } from '@interpreter/utils/variable-resolution';
+import type { Environment } from '@interpreter/env/Environment';
 import type {
   ImportNestedVariableFactory,
   ImportValueComplexityHelpers,
@@ -34,7 +37,8 @@ export class ObjectImportStrategy {
     const toolCollectionCapturedModuleEnv = this.normalizeToolCollectionCapturedModuleEnv(
       takeSerializedToolCollectionCapturedModuleEnv(normalizedObject)
         ?? getCapturedModuleEnv(request.value),
-      request.importPath
+      request.importPath,
+      request.env
     );
     this.reconnectToolCollectionExecutables(normalizedObject, toolCollectionCapturedModuleEnv);
     const toolCollectionMetadata =
@@ -87,13 +91,15 @@ export class ObjectImportStrategy {
 
   private normalizeToolCollectionCapturedModuleEnv(
     value: unknown,
-    importPath: string
+    importPath: string,
+    env?: Environment
   ): unknown {
     if (!value || typeof value !== 'object' || value instanceof Map) {
       return value;
     }
 
     const rawCapturedEnv = value as Record<string, unknown>;
+    const capturedModuleOwnerEnv = getCapturedModuleOwnerEnv(value) as Environment | undefined;
     const metadataMap =
       rawCapturedEnv.__metadata__
       && typeof rawCapturedEnv.__metadata__ === 'object'
@@ -101,7 +107,7 @@ export class ObjectImportStrategy {
         ? rawCapturedEnv.__metadata__ as Record<string, ReturnType<typeof import('@core/types/variable').VariableMetadataUtils.serializeSecurityMetadata> | undefined>
         : {};
 
-    return new Map(
+    const deserialized = new Map(
       Object.entries(rawCapturedEnv)
         .filter(([name]) => name !== '__metadata__')
         .map(([name, entry]) => [
@@ -114,11 +120,19 @@ export class ObjectImportStrategy {
                 importPath,
                 name,
                 {
-                  serializedMetadata: metadataMap[name]
+                  serializedMetadata: metadataMap[name],
+                  ...(env ? { env } : {}),
+                  ...(capturedModuleOwnerEnv ? { capturedModuleOwnerEnv } : {})
                 }
               )
         ])
     );
+
+    if (capturedModuleOwnerEnv) {
+      stashCapturedModuleOwnerEnv(deserialized, capturedModuleOwnerEnv);
+    }
+
+    return deserialized;
   }
 
   private reconnectToolCollectionExecutables(
@@ -140,6 +154,15 @@ export class ObjectImportStrategy {
         capturedModuleEnv
       );
       if (executableVariable) {
+        if (
+          isVariable(executableVariable)
+          && getCapturedModuleEnv(executableVariable.internal) === undefined
+          && getCapturedModuleEnv(executableVariable) === undefined
+        ) {
+          const internal = { ...(executableVariable.internal ?? {}) };
+          sealCapturedModuleEnv(internal, capturedModuleEnv);
+          executableVariable.internal = internal;
+        }
         rawEntry.mlld = executableVariable;
       }
     }

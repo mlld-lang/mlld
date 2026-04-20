@@ -262,6 +262,10 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
 
   const collection: ToolCollection = {};
   const collectionCapturedModuleEnv = new Map<string, unknown>();
+  const ownerCapturedModuleEnv =
+    typeof (env as { captureModuleEnvironment?: unknown }).captureModuleEnvironment === 'function'
+      ? (env as { captureModuleEnvironment: () => Map<string, unknown> }).captureModuleEnvironment()
+      : undefined;
 
   for (const [toolName, toolValue] of Object.entries(raw)) {
     const normalizedToolValue = normalizeToolCollectionEntryValue(toolValue);
@@ -339,7 +343,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
     const definitionCapturedModuleEnv = buildToolDefinitionCapturedModuleEnv(
       mlldName,
       execVar,
-      capturedModuleEnv
+      capturedModuleEnv ?? ownerCapturedModuleEnv
     );
     if (definitionCapturedModuleEnv !== undefined) {
       sealCapturedModuleEnv(normalizedDefinition, definitionCapturedModuleEnv);
