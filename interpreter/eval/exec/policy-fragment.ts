@@ -80,7 +80,8 @@ function mergeCompileReports(
     droppedEntries: [...base.droppedEntries, ...incoming.droppedEntries],
     droppedArrayElements: [...base.droppedArrayElements, ...incoming.droppedArrayElements],
     ambiguousValues: [...base.ambiguousValues, ...incoming.ambiguousValues],
-    compiledProofs: [...base.compiledProofs, ...incoming.compiledProofs]
+    compiledProofs: [...base.compiledProofs, ...incoming.compiledProofs],
+    autoAllowedTools: [...base.autoAllowedTools, ...incoming.autoAllowedTools]
   };
 }
 

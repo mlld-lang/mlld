@@ -1,6 +1,19 @@
 import { resolveRecordFactCorrelation, type RecordDefinition } from '@core/types/record';
 import type { ToolInputSchema } from '@core/types/tools';
 
+export function computeAllowWholeObjectInput(
+  value: Pick<Record<string, unknown>, 'direct' | 'inputs'>
+): boolean {
+  const directFlag = value.direct;
+  if (directFlag === true) {
+    return true;
+  }
+  if (directFlag === false) {
+    return false;
+  }
+  return value.inputs !== undefined;
+}
+
 export function buildToolInputSchemaFromRecordDefinition(options: {
   recordDefinition: RecordDefinition;
   executableParamNames: readonly string[];

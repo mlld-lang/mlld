@@ -46,6 +46,8 @@ import { isTolerantMatch } from '@interpreter/eval/expressions';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveValueHandles } from '@interpreter/utils/handle-resolution';
 
+type AutoAllowedToolReason = 'no-facts' | 'all-optional-benign';
+
 export interface PolicyAuthorizationCompileReport {
   strippedArgs: Array<{ tool: string; arg: string }>;
   repairedArgs: Array<{ tool: string; arg: string; steps: string[] }>;
@@ -53,6 +55,7 @@ export interface PolicyAuthorizationCompileReport {
   droppedArrayElements: Array<{ tool: string; arg: string; index: number; reason: string; value: string }>;
   ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
   compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
+  autoAllowedTools: Array<{ tool: string; reason: AutoAllowedToolReason }>;
 }
 
 export interface PolicyAuthorizationCompilerIssue {
@@ -130,7 +133,8 @@ export function createEmptyPolicyAuthorizationCompileReport(): PolicyAuthorizati
     droppedEntries: [],
     droppedArrayElements: [],
     ambiguousValues: [],
-    compiledProofs: []
+    compiledProofs: [],
+    autoAllowedTools: []
   };
 }
 
@@ -143,7 +147,8 @@ export function clonePolicyAuthorizationCompileReport(
     droppedEntries: report.droppedEntries.map(entry => ({ ...entry })),
     droppedArrayElements: report.droppedArrayElements.map(entry => ({ ...entry })),
     ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
-    compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] }))
+    compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] })),
+    autoAllowedTools: report.autoAllowedTools.map(entry => ({ ...entry }))
   };
 }
 
@@ -157,6 +162,7 @@ export function hasPolicyAuthorizationCompileActivity(
     || report.droppedArrayElements.length > 0
     || report.ambiguousValues.length > 0
     || report.compiledProofs.length > 0
+    || report.autoAllowedTools.length > 0
   );
 }
 
@@ -830,7 +836,24 @@ type NormalizedAuthorizationIntentSource = {
   rawAuthorizations: unknown;
   rawSource: unknown;
   toolLevelAllowTools: Set<string>;
+  autoAllowedTools: Array<{ tool: string; reason: AutoAllowedToolReason }>;
 };
+
+function getToolAutoAllowReasonWhenOmitted(
+  tool: AuthorizationToolContext
+): AutoAllowedToolReason | null {
+  const schema = tool.inputSchema;
+  if (!schema) {
+    return null;
+  }
+  if (schema.factFields.length === 0) {
+    return 'no-facts';
+  }
+  const benign = new Set(schema.optionalBenignFields);
+  return schema.factFields.every(field => benign.has(field))
+    ? 'all-optional-benign'
+    : null;
+}
 
 async function materializeAuthorizationIntentSourceValue(
   value: unknown,
@@ -849,6 +872,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
   env: Environment;
   mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  ambientDeniedTools?: readonly string[];
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<NormalizedAuthorizationIntentSource> {
@@ -857,7 +881,8 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
     return {
       rawAuthorizations: container,
       rawSource: options.rawSource,
-      toolLevelAllowTools: new Set<string>()
+      toolLevelAllowTools: new Set<string>(),
+      autoAllowedTools: []
     };
   }
 
@@ -870,7 +895,8 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
     return {
       rawAuthorizations: undefined,
       rawSource: source,
-      toolLevelAllowTools: new Set<string>()
+      toolLevelAllowTools: new Set<string>(),
+      autoAllowedTools: []
     };
   }
 
@@ -904,13 +930,28 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
       rawSource: {
         allow: {}
       },
-      toolLevelAllowTools: new Set<string>()
+      toolLevelAllowTools: new Set<string>(),
+      autoAllowedTools: []
     };
   }
 
   const nextAllow: Record<string, unknown> = {};
   const resolvedArgKeys = new Set<string>();
   const toolLevelAllowTools = new Set<string>();
+  const autoAllowedTools: Array<{ tool: string; reason: AutoAllowedToolReason }> = [];
+  const deniedTools = new Set<string>();
+  if (Array.isArray(container.deny)) {
+    for (const toolName of container.deny) {
+      if (typeof toolName === 'string' && toolName.trim().length > 0) {
+        deniedTools.add(toolName.trim());
+      }
+    }
+  }
+  for (const toolName of options.ambientDeniedTools ?? []) {
+    if (typeof toolName === 'string' && toolName.trim().length > 0) {
+      deniedTools.add(toolName.trim());
+    }
+  }
   const normalizedTaskText =
     typeof options.taskText === 'string' && options.taskText.trim().length > 0
       ? options.taskText.trim().toLowerCase()
@@ -1092,6 +1133,24 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
     }
   }
 
+  if (options.toolContext) {
+    for (const [toolName, tool] of options.toolContext) {
+      if (hasOwnProperty(nextAllow, toolName)) {
+        continue;
+      }
+      if (deniedTools.has(toolName)) {
+        continue;
+      }
+      const reason = getToolAutoAllowReasonWhenOmitted(tool);
+      if (!reason) {
+        continue;
+      }
+      nextAllow[toolName] = true;
+      toolLevelAllowTools.add(toolName);
+      autoAllowedTools.push({ tool: toolName, reason });
+    }
+  }
+
   const next: Record<string, unknown> = {
     allow: nextAllow
   };
@@ -1102,7 +1161,8 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
   return {
     rawAuthorizations: next,
     rawSource: next,
-    toolLevelAllowTools
+    toolLevelAllowTools,
+    autoAllowedTools
   };
 }
 
@@ -1112,6 +1172,7 @@ async function normalizeAuthorizationIntentSource(options: {
   env: Environment;
   mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  ambientDeniedTools?: readonly string[];
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
 }): Promise<NormalizedAuthorizationIntentSource> {
@@ -1133,7 +1194,8 @@ async function normalizeAuthorizationIntentSource(options: {
         options.mode === 'builder'
           ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
           : options.rawSource,
-      toolLevelAllowTools: new Set<string>()
+      toolLevelAllowTools: new Set<string>(),
+      autoAllowedTools: []
     };
   }
 
@@ -1155,7 +1217,9 @@ async function normalizeAuthorizationIntentSource(options: {
         options.mode === 'builder'
           ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
           : options.rawSource,
-      toolLevelAllowTools: new Set<string>()
+      toolLevelAllowTools: new Set<string>(),
+      // Flat intent is treated as explicit programmatic construction, so omitted tools stay omitted.
+      autoAllowedTools: []
     };
   }
 
@@ -1167,7 +1231,9 @@ async function normalizeAuthorizationIntentSource(options: {
       options.mode === 'builder'
         ? await materializeAuthorizationIntentSourceValue(options.rawSource, options.env)
         : options.rawSource,
-    toolLevelAllowTools: new Set<string>()
+    // Flat intent is treated as explicit programmatic construction, so omitted tools stay omitted.
+    toolLevelAllowTools: new Set<string>(),
+    autoAllowedTools: []
   };
 }
 
@@ -2960,11 +3026,13 @@ export async function compilePolicyAuthorizations(
     env: options.env,
     mode: options.mode,
     toolContext: options.toolContext,
+    ambientDeniedTools: options.ambientDeniedTools,
     taskText: options.taskText,
     issues
   });
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
   const toolLevelAllowTools = normalizedIntent.toolLevelAllowTools;
+  report.autoAllowedTools.push(...normalizedIntent.autoAllowedTools.map(entry => ({ ...entry })));
   if (rawAuthorizations === undefined || rawAuthorizations === null) {
     return { authorizations: undefined, issues: withCompilerIssuePhase(issues, options.mode), report };
   }

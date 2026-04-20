@@ -398,6 +398,51 @@ describe('createFunctionMcpBridge', () => {
     }
   });
 
+  it('infers direct object-input bridge calls from inputs records when direct is omitted', async () => {
+    const env = await createInterpretedEnv([
+      '/record @resolve_inputs = { data: [tool: string, args: object?, purpose: string?], validate: "strict" }',
+      '/exe @plannerResolveTool(input) = [',
+      '  => @input.tool',
+      ']'
+    ].join('\n'));
+    const functionTool = env.getVariable('plannerResolveTool') as ExecutableVariable;
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([['resolve', functionTool]]),
+      toolDefinitions: new Map([[
+        'resolve',
+        {
+          mlld: 'plannerResolveTool',
+          inputs: '@resolve_inputs',
+          description: 'Resolve records'
+        }
+      ]]),
+      sessionId: 'test-session'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 1001,
+        method: 'tools/call',
+        params: {
+          name: 'resolve',
+          arguments: {
+            tool: 'get_current_datetime',
+            args: {},
+            purpose: 'Get current time'
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe('get_current_datetime');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
   it('preserves top-level array fields for direct object-input tool calls on the bridge path', async () => {
     const env = await createInterpretedEnv([
       '/record @derive_inputs = { data: [sources: array, goal: string, name: string, purpose: string?], validate: "strict" }',

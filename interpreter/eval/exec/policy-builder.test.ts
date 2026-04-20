@@ -538,7 +538,8 @@ describe('@policy builtin', () => {
       droppedEntries: [],
       droppedArrayElements: [],
       ambiguousValues: [],
-      compiledProofs: []
+      compiledProofs: [],
+      autoAllowedTools: []
     });
     expect(validated.policy.authorizations.allow.sendEmail).toEqual({
       kind: 'constrained',
@@ -795,7 +796,8 @@ describe('@policy builtin', () => {
       droppedEntries: [],
       droppedArrayElements: [],
       ambiguousValues: [],
-      compiledProofs: []
+      compiledProofs: [],
+      autoAllowedTools: []
     });
     expect(validated.policy.authorizations.allow.createDraft).toEqual({
       kind: 'unconstrained'
@@ -1146,6 +1148,193 @@ describe('@policy builtin', () => {
     expect(built.policy.authorizations.allow.createDraft).toEqual({
       kind: 'unconstrained'
     });
+  });
+
+  it('auto-allows omitted bucketed tools whose input records declare no facts', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_draft_inputs = {
+        data: [subject: string, body: string?],
+        validate: "strict"
+      }
+
+      /exe tool:w @createDraft(subject, body) = js { return subject; }
+
+      /var tools @writeTools = {
+        createDraft: {
+          mlld: @createDraft,
+          inputs: @create_draft_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: { allow: {} },
+      rawSource: { allow: {} },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow?.createDraft).toEqual({ kind: 'tool' });
+    expect(compilation.report.autoAllowedTools).toEqual([
+      { tool: 'createDraft', reason: 'no-facts' }
+    ]);
+  });
+
+  it('auto-allows omitted bucketed tools whose fact fields are all optional benign', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string?],
+        data: [subject: string],
+        optional_benign: [recipient],
+        validate: "strict"
+      }
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: { allow: {} },
+      rawSource: { allow: {} },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow?.sendEmail).toEqual({ kind: 'tool' });
+    expect(compilation.report.autoAllowedTools).toEqual([
+      { tool: 'sendEmail', reason: 'all-optional-benign' }
+    ]);
+  });
+
+  it('does not auto-allow omitted tools when any fact field is not optional benign', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string?, cc: string?],
+        data: [subject: string],
+        optional_benign: [recipient],
+        validate: "strict"
+      }
+
+      /exe exfil:send, tool:w @sendEmail(recipient, cc, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: { allow: {} },
+      rawSource: { allow: {} },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow).toEqual({});
+    expect(compilation.report.autoAllowedTools).toEqual([]);
+  });
+
+  it('does not auto-allow omitted tools that are denied by policy', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string?],
+        data: [subject: string],
+        optional_benign: [recipient],
+        validate: "strict"
+      }
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: { allow: {} },
+      rawSource: { allow: {} },
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: ['sendEmail'],
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow).toEqual({});
+    expect(compilation.report.autoAllowedTools).toEqual([]);
+  });
+
+  it('does not auto-allow omitted tools in flat intent mode', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [recipient: string?],
+        data: [subject: string],
+        optional_benign: [recipient],
+        validate: "strict"
+      }
+
+      /exe exfil:send, tool:w @sendEmail(recipient, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w"]
+        }
+      }
+    `);
+
+    const toolCollection = env.getVariable('writeTools')?.internal?.toolCollection as ToolCollection;
+    const toolContext = buildAuthorizationToolContextForCollection(env, toolCollection);
+    const compilation = await compilePolicyAuthorizations({
+      rawAuthorizations: {},
+      rawSource: {},
+      env,
+      toolContext,
+      policy: env.getPolicySummary(),
+      ambientDeniedTools: env.getPolicySummary()?.authorizations?.deny,
+      mode: 'builder'
+    });
+
+    expect(compilation.issues).toEqual([]);
+    expect(compilation.authorizations?.allow).toEqual({});
+    expect(compilation.report.autoAllowedTools).toEqual([]);
   });
 
   it('reports exact_not_in_task for input-record exact fields', async () => {

@@ -14,8 +14,8 @@ import type { CapabilityContext, SecurityDescriptor, DataLabel, ToolProvenance }
 import type { TokenMetricSource } from '@core/utils/token-metrics';
 import type { QuantifierHelper } from './ArrayHelpers';
 import type { ExecutableDefinition } from '../executable';
-import type { ToolCollection } from '../tools';
-import type { RecordDefinition, RecordSchemaMetadata } from '../record';
+import type { ToolAuthorizableValue, ToolCollection, ToolInputSchema } from '../tools';
+import type { RecordDefinition, RecordPolicySetTarget, RecordSchemaMetadata } from '../record';
 import type { FactSourceHandle } from '../handle';
 import type { SessionDefinition } from '../session';
 
@@ -143,10 +143,20 @@ export interface VariableContext {
   description?: string;
   params?: readonly ExecutableMxParam[] | null;
   controlArgs?: readonly string[] | null;
+  factArgs?: readonly string[] | null;
+  dataArgs?: readonly string[] | null;
+  optionalArgs?: readonly string[] | null;
+  optionalBenignFields?: readonly string[] | null;
   updateArgs?: readonly string[] | null;
+  exactArgs?: readonly string[] | null;
   exactPayloadArgs?: readonly string[] | null;
   sourceArgs?: readonly string[] | null;
+  allowlist?: Readonly<Record<string, RecordPolicySetTarget>> | null;
+  blocklist?: Readonly<Record<string, RecordPolicySetTarget>> | null;
+  correlate?: boolean | null;
   correlateControlArgs?: boolean | null;
+  canAuthorize?: ToolAuthorizableValue | null;
+  inputSchema?: Readonly<ToolInputSchema> | null;
   source?: string;
   retries?: number;
   fm?: unknown;

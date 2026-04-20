@@ -276,6 +276,67 @@ describe('tool scope helpers', () => {
     });
   });
 
+  it('infers whole-object wrappers from inputs records when direct is omitted', () => {
+    const env = createEnvWithExecutables(
+      {
+        createIssueTool: ['input']
+      },
+      {
+        create_issue_inputs: createInputRecord({
+          name: 'create_issue_inputs',
+          facts: [{ name: 'title', valueType: 'string' }],
+          data: [{ name: 'body', valueType: 'string', optional: true }]
+        })
+      }
+    );
+
+    const collection = normalizeToolCollection(
+      {
+        issue: {
+          mlld: '@createIssueTool',
+          labels: ['execute:w'],
+          inputs: '@create_issue_inputs'
+        }
+      },
+      env
+    );
+
+    expect(collection.issue).toEqual({
+      mlld: '@createIssueTool',
+      labels: ['execute:w'],
+      inputs: '@create_issue_inputs'
+    });
+  });
+
+  it('lets direct: false opt out of inferred whole-object wrappers', () => {
+    const env = createEnvWithExecutables(
+      {
+        createIssueTool: ['input']
+      },
+      {
+        create_issue_inputs: createInputRecord({
+          name: 'create_issue_inputs',
+          facts: [{ name: 'title', valueType: 'string' }],
+          data: [{ name: 'body', valueType: 'string', optional: true }]
+        })
+      }
+    );
+
+    expect(() =>
+      normalizeToolCollection(
+        {
+          issue: {
+            mlld: '@createIssueTool',
+            labels: ['execute:w'],
+            inputs: '@create_issue_inputs',
+            direct: false
+          }
+        },
+        env
+      )
+    ).toThrow(/unknown parameters/i);
+  });
+
   it('preserves returns and arbitrary authored entry keys without gating them', () => {
     const env = createEnvWithExecutables({
       searchContacts: ['query']

@@ -43,6 +43,13 @@ import type { DataObjectValue } from '@core/types/var';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
 import { getStaticObjectKey } from './object-compat';
+import {
+  cloneToolInputSchema,
+  getToolCollectionAuthorizationContext,
+  type ToolAuthorizationContextEntry,
+  type ToolCatalogEntry,
+  type ToolCollection
+} from '@core/types/tools';
 
 const COMMON_FILE_EXTENSION_FIELDS = new Set([
   'json',
@@ -180,6 +187,88 @@ function isPlainObjectValue(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function deepFreeze<T>(value: T): Readonly<T> {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value as Readonly<T>;
+  }
+
+  for (const key of Reflect.ownKeys(value as object)) {
+    const candidate = (value as Record<PropertyKey, unknown>)[key];
+    if (candidate && typeof candidate === 'object') {
+      deepFreeze(candidate);
+    }
+  }
+
+  return Object.freeze(value);
+}
+
+function normalizeToolMxStringList(values: readonly unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function getToolCollectionFromParentVariable(parentVariable?: Variable): ToolCollection | undefined {
+  if (
+    parentVariable?.internal?.isToolsCollection === true
+    && parentVariable.internal.toolCollection
+    && typeof parentVariable.internal.toolCollection === 'object'
+    && !Array.isArray(parentVariable.internal.toolCollection)
+  ) {
+    return parentVariable.internal.toolCollection as ToolCollection;
+  }
+
+  return undefined;
+}
+
+function resolveToolCollectionForMx(
+  rawValue: unknown,
+  parentVariable?: Variable
+): ToolCollection | undefined {
+  if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+    if (getToolCollectionAuthorizationContext(rawValue)) {
+      return rawValue as ToolCollection;
+    }
+  }
+
+  const collection = getToolCollectionFromParentVariable(parentVariable);
+  return collection && rawValue === collection ? collection : undefined;
+}
+
+function resolveToolEntryMxContext(options: {
+  rawValue: unknown;
+  parentVariable?: Variable;
+  parentPath?: string[];
+}): {
+  entry: ToolCatalogEntry;
+  entryName: string;
+  authEntry: ToolAuthorizationContextEntry | undefined;
+} | undefined {
+  const { rawValue, parentVariable, parentPath } = options;
+  const collection = getToolCollectionFromParentVariable(parentVariable);
+  if (!collection || !Array.isArray(parentPath) || parentPath.length === 0) {
+    return undefined;
+  }
+
+  const entryName = parentPath[parentPath.length - 1];
+  if (typeof entryName !== 'string' || entryName.length === 0) {
+    return undefined;
+  }
+
+  const entry = collection[entryName];
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry) || rawValue !== entry) {
+    return undefined;
+  }
+
+  return {
+    entry: entry as ToolCatalogEntry,
+    entryName,
+    authEntry: getToolCollectionAuthorizationContext(collection)?.[entryName]
+  };
+}
+
 function createObjectUtilityMxView(
   mx: unknown,
   data: unknown,
@@ -309,6 +398,149 @@ function createObjectUtilityMxView(
   });
 
   return view;
+}
+
+function createToolCollectionMxView(options: {
+  mx: unknown;
+  collection: ToolCollection;
+  parentVariable?: Variable;
+  env?: Environment;
+}): unknown {
+  const view = createObjectUtilityMxView(
+    options.mx,
+    options.collection,
+    undefined,
+    options.parentVariable,
+    options.env
+  );
+  if (!view || typeof view !== 'object') {
+    return view;
+  }
+
+  Object.defineProperty(view, 'tools', {
+    enumerable: true,
+    configurable: true,
+    get: () => deepFreeze([...Object.keys(options.collection)])
+  });
+
+  return view;
+}
+
+function createToolEntryMxView(options: {
+  mx: unknown;
+  entry: ToolCatalogEntry;
+  authEntry: ToolAuthorizationContextEntry | undefined;
+  parentVariable?: Variable;
+  env?: Environment;
+}): unknown {
+  const { mx, entry, authEntry, parentVariable, env } = options;
+  const view = createObjectUtilityMxView(mx, entry, undefined, parentVariable, env);
+  if (!view || typeof view !== 'object') {
+    return view;
+  }
+
+  const define = (name: string, getter: () => unknown) => {
+    Object.defineProperty(view, name, {
+      enumerable: true,
+      configurable: true,
+      get: getter
+    });
+  };
+
+  const inputSchema = authEntry?.inputSchema;
+  define('inputSchema', () =>
+    inputSchema ? deepFreeze(cloneToolInputSchema(inputSchema)) : undefined
+  );
+  define('params', () => deepFreeze([...(authEntry?.params ?? [])]));
+  define('factArgs', () => deepFreeze([...(inputSchema?.factFields ?? [])]));
+  define('controlArgs', () =>
+    deepFreeze([...(inputSchema?.factFields ?? authEntry?.controlArgs ?? [])])
+  );
+  define('dataArgs', () => deepFreeze([...(inputSchema?.dataFields ?? [])]));
+  define('optionalArgs', () => deepFreeze([...(inputSchema?.optionalParams ?? [])]));
+  define('optionalBenignFields', () =>
+    deepFreeze([...(inputSchema?.optionalBenignFields ?? [])])
+  );
+  define('updateArgs', () =>
+    deepFreeze([...(inputSchema?.updateFields ?? authEntry?.updateArgs ?? [])])
+  );
+  define('exactArgs', () =>
+    deepFreeze([...(inputSchema?.exactFields ?? authEntry?.exactPayloadArgs ?? [])])
+  );
+  define('allowlist', () =>
+    inputSchema ? deepFreeze(cloneToolInputSchema(inputSchema).allowlist) : deepFreeze({})
+  );
+  define('blocklist', () =>
+    inputSchema ? deepFreeze(cloneToolInputSchema(inputSchema).blocklist) : deepFreeze({})
+  );
+  define('correlate', () => inputSchema?.correlate ?? authEntry?.correlateControlArgs ?? false);
+  define('labels', () =>
+    deepFreeze([
+      ...(authEntry?.labels
+        ? authEntry.labels
+        : normalizeToolMxStringList(entry.labels))
+    ])
+  );
+
+  const description = authEntry?.description ?? readStringProperty(entry, 'description');
+  if (description !== undefined) {
+    define('description', () => description);
+  }
+
+  const instructions = authEntry?.instructions ?? readStringProperty(entry, 'instructions');
+  if (instructions !== undefined) {
+    define('instructions', () => instructions);
+  }
+
+  const canAuthorize = authEntry?.can_authorize ?? entry.can_authorize;
+  if (canAuthorize !== undefined) {
+    define('canAuthorize', () =>
+      Array.isArray(canAuthorize)
+        ? deepFreeze([...canAuthorize])
+        : canAuthorize
+    );
+  }
+
+  return view;
+}
+
+function createEnhancedMxView(options: {
+  mx: unknown;
+  rawValue: unknown;
+  structured?: StructuredValue;
+  parentVariable?: Variable;
+  parentPath?: string[];
+  env?: Environment;
+}): unknown {
+  const { mx, rawValue, structured, parentVariable, parentPath, env } = options;
+  if (!structured) {
+    const toolCollection = resolveToolCollectionForMx(rawValue, parentVariable);
+    if (toolCollection && rawValue === toolCollection) {
+      return createToolCollectionMxView({
+        mx,
+        collection: toolCollection,
+        parentVariable,
+        env
+      });
+    }
+
+    const toolEntry = resolveToolEntryMxContext({
+      rawValue,
+      parentVariable,
+      parentPath
+    });
+    if (toolEntry) {
+      return createToolEntryMxView({
+        mx,
+        entry: toolEntry.entry,
+        authEntry: toolEntry.authEntry,
+        parentVariable,
+        env
+      });
+    }
+  }
+
+  return createObjectUtilityMxView(mx, rawValue, structured, parentVariable, env);
 }
 
 function readStringProperty(value: unknown, key: string): string | undefined {
@@ -606,6 +838,8 @@ export interface FieldAccessResult {
 export interface FieldAccessOptions {
   /** Whether to preserve context and return FieldAccessResult */
   preserveContext?: boolean;
+  /** Parent Variable context for chained field access over plain objects */
+  parentVariable?: Variable;
   /** Parent path for building access path */
   parentPath?: string[];
   /** Base identifier for source-aware diagnostics */
@@ -630,7 +864,8 @@ export interface FieldAccessOptions {
  */
 export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
   // Check if the input is a Variable
-  const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
+  const directParentVariable = isVariable(value) ? value : (value as any)?.__variable;
+  const contextualParentVariable = directParentVariable ?? options?.parentVariable;
   const strictMissingFieldAccess = Boolean(
     isVariable(value) &&
       value.internal &&
@@ -667,7 +902,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       if (options?.preserveContext) {
         return {
           value: resolved.value,
-          parentVariable,
+          parentVariable: contextualParentVariable,
           accessPath: [...(options.parentPath || []), fieldName],
           isVariable: isVariable(resolved.value)
         };
@@ -732,13 +967,20 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           (isLoadContentResult(rawValue) ? (rawValue as any).mx : undefined) ??
           (value as any).mx;
 
-        return createObjectUtilityMxView(baseMx, rawValue, structuredWrapper, value, options?.env);
+        return createEnhancedMxView({
+          mx: baseMx,
+          rawValue,
+          structured: structuredWrapper,
+          parentVariable: directParentVariable,
+          parentPath: options?.parentPath,
+          env: options?.env
+        });
       })();
 
       if (options?.preserveContext) {
         return {
           value: metadataValue,
-          parentVariable: value,
+          parentVariable: contextualParentVariable,
           accessPath: [...(options.parentPath || []), fieldName],
           isVariable: false
         };
@@ -757,7 +999,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       if (options?.preserveContext) {
         return {
           value: metadataValue,
-          parentVariable: value,
+          parentVariable: contextualParentVariable,
           accessPath: [...(options.parentPath || []), fieldName],
           isVariable: false
         };
@@ -787,7 +1029,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           if (options?.preserveContext) {
             return {
               value: metadataValue,
-              parentVariable: value,
+              parentVariable: contextualParentVariable,
               accessPath: [...(options.parentPath || []), fieldName],
               isVariable: false
             };
@@ -800,7 +1042,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           if (options?.preserveContext) {
             return {
               value: metadataValue,
-              parentVariable: value,
+              parentVariable: contextualParentVariable,
               accessPath: [...(options.parentPath || []), fieldName],
               isVariable: false
             };
@@ -839,13 +1081,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           break;
         }
         if (name === 'mx') {
-          accessedValue = createObjectUtilityMxView(
-            structuredWrapper.mx,
+          accessedValue = createEnhancedMxView({
+            mx: structuredWrapper.mx,
             rawValue,
-            structuredWrapper,
-            parentVariable,
-            options?.env
-          );
+            structured: structuredWrapper,
+            parentVariable: contextualParentVariable,
+            parentPath: options?.parentPath,
+            env: options?.env
+          });
           break;
         }
       }
@@ -861,7 +1104,13 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         if (syntheticMx) {
           updateVarMxFromDescriptor(syntheticMx as any, descriptor);
         }
-        accessedValue = createObjectUtilityMxView(syntheticMx, rawValue, undefined, parentVariable, options?.env);
+        accessedValue = createEnhancedMxView({
+          mx: syntheticMx,
+          rawValue,
+          parentVariable: contextualParentVariable,
+          parentPath: options?.parentPath,
+          env: options?.env
+        });
         break;
       }
       if (typeof rawValue === 'string') {
@@ -1327,7 +1576,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   );
 
   if (!isMxHandleAccessor) {
-    const provenanceSource = parentVariable ?? structuredWrapper ?? value;
+    const provenanceSource = directParentVariable ?? structuredWrapper ?? value;
     const provenanceDescriptor = (() => {
       if (!provenanceSource) {
         return undefined;
@@ -1340,7 +1589,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     const currentDescriptor = isStructuredValue(accessedValue)
       ? extractSecurityDescriptor(accessedValue)
       : undefined;
-    const fieldMetadata = getFieldMetadata(parentVariable, structuredWrapper, fieldName);
+    const fieldMetadata = getFieldMetadata(directParentVariable, structuredWrapper, fieldName);
     const fieldDescriptor = fieldMetadata?.descriptor;
     const effectiveDescriptor =
       provenanceDescriptor && currentDescriptor && fieldDescriptor
@@ -1397,7 +1646,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
 
     return {
       value: accessedValue,
-      parentVariable,
+      parentVariable: contextualParentVariable,
       accessPath,
       isVariable: resultIsVariable
     };
@@ -1460,6 +1709,7 @@ export async function accessFields(
 
     const result = await accessField(current, field, {
       preserveContext: shouldPreserveContext,
+      parentVariable: parentVar,
       parentPath: path,
       returnUndefinedForMissing: options?.returnUndefinedForMissing,
       env: options?.env,
@@ -1470,6 +1720,9 @@ export async function accessFields(
       // Update tracking variables
       current = (result as FieldAccessResult).value;
       path = (result as FieldAccessResult).accessPath;
+      if ((result as FieldAccessResult).parentVariable) {
+        parentVar = (result as FieldAccessResult).parentVariable;
+      }
 
       // Update parent variable if we accessed through a Variable
       if ((result as FieldAccessResult).isVariable && isVariable((result as FieldAccessResult).value)) {

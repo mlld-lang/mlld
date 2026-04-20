@@ -7,7 +7,7 @@ parent: mcp
 tags: [mcp, tools, env, labels, collections]
 related: [mcp, mcp-export, tool-reshaping, mcp-guards, exe-metadata]
 related-code: [interpreter/eval/var.ts, cli/mcp/FunctionRouter.ts, cli/mcp/MCPOrchestrator.ts]
-updated: 2026-04-15
+updated: 2026-04-20
 qa_tier: 2
 ---
 
@@ -55,6 +55,7 @@ When a tool entry uses `inputs: @record`, the collection derives its visible arg
 - record fields must match executable params
 - every remaining executable param must be covered by either `inputs` or `bind`
 - bound params cannot also appear in the record
+- if the exe is a single-parameter wrapper (for example `exe @plannerTool(input) = ...`), `inputs: @record` now implies whole-object dispatch by default; `direct: true` is redundant there, while `direct: false` is an opt-out
 - on write surfaces, record `facts` become effective control args
 - on read-only surfaces, record `facts` become effective source args
 - record `correlate: true` becomes the same-source check for multi-fact write tools
@@ -84,6 +85,8 @@ mlld mcp tools.mld --tools-collection @agentTools
 The `--tools-collection` flag serves the reshaped collection instead of raw exports. Bound parameters are hidden; only surfaced parameters appear in the tool schema. See `mcp-export` for basic serving, `pattern-guarded-tool-export` for a complete example.
 
 For record-backed entries, the served schema comes from the input record fields after `bind` is applied. The same metadata also feeds injected tool notes and `@toolDocs()`.
+
+Collections and entries also expose compiled reflection through `.mx`. Use `@agentTools.mx.tools` to list surfaced names, and `@agentTools.send_email.mx.factArgs`, `@agentTools.send_email.mx.optionalArgs`, or `@agentTools.send_email.mx.inputSchema` when framework code needs the already-compiled contract instead of re-reading the authored record.
 
 **Guard on labels:**
 

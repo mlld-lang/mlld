@@ -475,7 +475,7 @@ The builder reads the active policy from the environment (deny list, rules, oper
 - `policy` — valid auth fragment, ready for `with { policy }`
 - `valid` — boolean
 - `issues` — array of `{ tool, reason, arg?, element? }` describing what was dropped
-- `report` — compiler diagnostics describing strips, repairs, dropped entries/elements, ambiguity, and compiled proofs
+- `report` — compiler diagnostics describing strips, repairs, dropped entries/elements, ambiguity, compiled proofs, and any omitted tools that were auto-promoted to tool-level allow
 
 `options.task` is optional. When present and non-empty on either `@policy.build(...)` or `@policy.validate(...)`, `known` bucket string/number literals must appear in the task text (case-insensitive substring match). Handle wrappers in `known` are rejected under task validation and must move to `resolved`.
 
@@ -486,6 +486,7 @@ What the builder checks:
 - Bucketed intent from influenced sources → rejected (`bucketed_intent_from_influenced_source`)
 - `true` for tools with effective control args in flat / raw `authorizations.allow` form → dropped (`requires_control_args`)
 - `allow: { tool: true }` in bucketed intent → explicit tool-level authorization
+- Omitted bucketed tools whose input records have no fact fields, or whose fact fields are all listed in `optional_benign`, are auto-promoted to tool-level allow and recorded in `report.autoAllowedTools`
 - Proofless control arg values → tool dropped (`proofless_control_arg`)
 - `exact` mismatch against `options.task` → tool dropped (`exact_not_in_task`)
 - `allowlist` mismatch → tool dropped (`allowlist_mismatch`)
@@ -513,7 +514,8 @@ Builder and validator results are additive:
     "droppedEntries": [ ... ],
     "droppedArrayElements": [ ... ],
     "ambiguousValues": [ ... ],
-    "compiledProofs": [ ... ]
+    "compiledProofs": [ ... ],
+    "autoAllowedTools": [ ... ]
   }
 }
 ```
@@ -549,6 +551,8 @@ Three buckets:
 - **`resolved`** — values from tool results. Every non-empty control arg value must be either a resolvable handle or a direct fact-bearing value carrying `fact:*` proof. Bare proofless literals are rejected.
 - **`known`** — values the user explicitly provided. Attested as `known`. Optional `source` field for audit logging (never compiled into policy).
 - **`allow`** — explicit tool-level authorization. Use object form: `{ "tool_name": true }`. This remains valid even when the tool has effective control args, because the planner is authorizing the whole tool rather than pinning per-arg constraints.
+
+When a surfaced tool's input record has no fact fields, or every fact field is optional and listed in `optional_benign`, bucketed intent may omit that tool entirely. `@policy.build` auto-promotes it to tool-level allow and records the decision in `report.autoAllowedTools`. This auto-allow behavior is bucketed-intent-only; flat runtime intent remains explicit.
 
 `can_authorize` is not a fourth bucket. It stays on the developer-owned base policy and never belongs in planner-produced runtime intent.
 

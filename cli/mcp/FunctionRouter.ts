@@ -121,11 +121,17 @@ export class FunctionRouter {
         const optionalParamNames = metadata?.optionalParams ?? definition.optional ?? [];
         const operationName = this.resolveOperationName(execVar, toolKey);
         const resolvedArgs = await this.resolveToolArgs(execVar, args, definition, toolName, metadata);
-        const argsAsObject = this.shouldUseObjectInvocationArgs(execVar, resolvedArgs, optionalParamNames, definition);
+        const argsAsObject = this.shouldUseObjectInvocationArgs(
+          execVar,
+          resolvedArgs,
+          optionalParamNames,
+          definition,
+          metadata
+        );
         const invocationSecurity = this.buildInvocationSecurity(
           execVar,
           resolvedArgs,
-          this.shouldUseObjectArgs(execVar, definition)
+          this.shouldUseObjectArgs(execVar, definition, metadata)
         );
         const invocation = this.buildInvocation(
           execName,
@@ -609,18 +615,24 @@ export class FunctionRouter {
 
   private shouldUseObjectArgs(
     execVar: ExecutableVariable,
-    definition?: ToolDefinition
+    definition?: ToolDefinition,
+    metadata?: Pick<EffectiveToolMetadata, 'inputSchema'>
   ): boolean {
-    return execVar.internal?.mcpTool?.argumentMode === 'object' || definition?.direct === true;
+    return (
+      execVar.internal?.mcpTool?.argumentMode === 'object'
+      || definition?.direct === true
+      || metadata?.inputSchema?.wholeObjectInput === true
+    );
   }
 
   private shouldUseObjectInvocationArgs(
     execVar: ExecutableVariable,
     args: Record<string, unknown>,
     optionalParamNames: readonly string[] = [],
-    definition?: ToolDefinition
+    definition?: ToolDefinition,
+    metadata?: Pick<EffectiveToolMetadata, 'inputSchema'>
   ): boolean {
-    if (this.shouldUseObjectArgs(execVar, definition)) {
+    if (this.shouldUseObjectArgs(execVar, definition, metadata)) {
       return true;
     }
 

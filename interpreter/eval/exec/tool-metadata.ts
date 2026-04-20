@@ -4,7 +4,10 @@ import { mergePolicyConfigs } from '@core/policy/union';
 import { expandOperationLabels } from '@core/policy/label-flow';
 import type { PolicyAuthorizableMap } from '@core/policy/authorizations';
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
-import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
+import {
+  buildToolInputSchemaFromRecordDefinition,
+  computeAllowWholeObjectInput
+} from '@core/tools/input-schema';
 import { type RecordDefinition } from '@core/types/record';
 import {
   cloneToolInputSchema,
@@ -506,10 +509,23 @@ function resolveToolInputSchema(options: {
     return undefined;
   }
 
+  const fieldNames = new Set(recordDefinition.fields.map(field => field.name));
+  const singleParamName =
+    options.executableParams.length === 1
+      ? options.executableParams[0]
+      : undefined;
+  const wholeObjectInput =
+    computeAllowWholeObjectInput(
+      (options.definition ?? {}) as Pick<Record<string, unknown>, 'direct' | 'inputs'>
+    )
+    && options.executableParams.length === 1
+    && typeof singleParamName === 'string'
+    && !fieldNames.has(singleParamName);
+
   return buildToolInputSchemaFromRecordDefinition({
     recordDefinition,
     executableParamNames: options.executableParams,
-    wholeObjectInput: options.definition?.direct === true
+    wholeObjectInput
   });
 }
 

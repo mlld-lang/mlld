@@ -10,7 +10,10 @@ import {
   canUseRecordForInput,
   type RecordDefinition
 } from '@core/types/record';
-import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
+import {
+  buildToolInputSchemaFromRecordDefinition,
+  computeAllowWholeObjectInput
+} from '@core/tools/input-schema';
 import { isExecutableVariable } from '@core/types/variable';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
@@ -316,7 +319,7 @@ export function normalizeToolCollection(raw: unknown, env: Environment): ToolCol
       executableName: mlldName,
       executableParamNames: paramNames,
       bindKeys: boundKeys,
-      allowWholeObjectInput: (normalizedToolValue as Record<string, unknown>).direct === true,
+      allowWholeObjectInput: computeAllowWholeObjectInput(normalizedToolValue),
       labels: [
         ...normalizeToolLabelValues(execVar.mx?.labels),
         ...(labels ?? [])
@@ -541,10 +544,16 @@ function resolveToolInputSchema(options: {
   const fieldSet = new Set(fieldNames);
   const paramSet = new Set(executableParamNames);
   const overlap = bindKeys.filter(key => fieldSet.has(key));
+  const singleParamName =
+    executableParamNames.length === 1
+      ? executableParamNames[0]
+      : undefined;
   const wholeObjectInput =
     allowWholeObjectInput === true
     && bindKeys.length === 0
-    && executableParamNames.length === 1;
+    && executableParamNames.length === 1
+    && typeof singleParamName === 'string'
+    && !fieldSet.has(singleParamName);
   if (overlap.length > 0) {
     throw new Error(
       `Tool '${toolName}' bind cannot include input-record fields: ${overlap.join(', ')}`
