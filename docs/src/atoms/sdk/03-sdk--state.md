@@ -8,7 +8,7 @@ parent: sdk
 tags: [sdk, state, stateWrites, update_state]
 related: [sdk-execute, sdk-payload, sdk-dynamic-modules]
 related-code: [sdk/execute.ts, sdk/state/StateManager.ts]
-updated: 2026-03-15
+updated: 2026-04-20
 ---
 
 ## @state Module
@@ -123,7 +123,7 @@ while True:
 result = handle.result()
 ```
 
-State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. Session writes stay event-stream only; the final committed session state is returned in `result.sessions`. `result()` can be called at any time — it blocks until execution completes.
+State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. Session writes stay event-stream only; the final committed session state is returned in `result.sessions`. That snapshot matches `@returnedValue.mx.sessions.<name>` for the attached `exe llm` call, including wrapper-bearing leaves when slot values still carry labels or other `.mx` metadata. `result()` can be called at any time — it blocks until execution completes.
 
 ## Handle Lifecycle
 

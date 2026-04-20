@@ -2453,6 +2453,8 @@ async function evaluateExecInvocationInternal(
     let strictToolResultDescriptor: SecurityDescriptor | undefined;
     let strictToolResultBaseDescriptor: SecurityDescriptor | undefined;
     let surfacedLlmSessionId: string | undefined;
+    let hasLlmLabel = false;
+    let execEnv: Environment = env;
     const mergeResultDescriptor = (descriptor?: SecurityDescriptor): void => {
       if (!descriptor) {
         return;
@@ -3849,7 +3851,7 @@ async function evaluateExecInvocationInternal(
   let sessionSeedApplied = false;
   let sessionSeedPending = false;
   const variableLabels = variable.mx?.labels;
-  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
   let attachedSessionFrameId: string | undefined;
   let attachedSessionCleanupRegistered = false;
   const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
@@ -3884,7 +3886,6 @@ async function evaluateExecInvocationInternal(
   const params = definition.paramNames || [];
   let evaluatedArgStrings: string[] = [];
   let evaluatedArgs: unknown[] = [];
-  let execEnv!: Environment;
   try {
     ({ evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
       args,

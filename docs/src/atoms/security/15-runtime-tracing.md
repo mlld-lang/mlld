@@ -121,6 +121,8 @@ Session traces are commit-aware:
 
 At `effects`, sensitive or large session values are redacted to size-oriented summaries. `verbose` keeps the real values.
 
+This redaction only affects the trace envelope. The final committed session snapshot returned through SDK `result.sessions` and on returned `exe llm` values at `.mx.sessions.<name>` keeps the actual runtime value, including wrapper-bearing leaves and their `.mx` metadata.
+
 ### Guard
 
 | Event | Level | Data |

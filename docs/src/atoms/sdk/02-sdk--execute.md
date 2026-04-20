@@ -8,7 +8,7 @@ parent: sdk
 tags: [configuration, sdk, execute, state]
 related: [config-sdk-dynamic-modules, config-sdk-execution-modes]
 related-code: [sdk/execute.ts, sdk/state/StateManager.ts]
-updated: 2026-03-15
+updated: 2026-04-20
 ---
 
 File-based execution with state management.
@@ -34,7 +34,7 @@ Features:
 - State hydration via `@state` module
 - Payload injection via `@payload`, including per-field labels via `payloadLabels`
 - State writes via `state://` protocol (merged from streamed events + final result)
-- Session-scoped state final snapshots via `result.sessions`
+- Session-scoped state final snapshots via `result.sessions`, matching `@returnedValue.mx.sessions.<name>` inside mlld
 - Stream handles emit `session_write` events when committed session slot writes occur
 - Stream handles support `updateState(path, value, labels?)`, `writeFile(path, content)`, and event consumption via async iteration or `next_event`
 - `mcpServers` maps logical names to MCP server commands per-execution
@@ -51,6 +51,8 @@ for await (const event of stream) {
   }
 }
 ```
+
+These snapshots preserve wrapper-bearing leaves. If a final slot value still carries labels or other `.mx` metadata, that leaf remains a structured runtime value in `result.sessions` instead of being flattened away.
 
 **MCP server injection** lets parallel `execute()` calls each get independent MCP server instances:
 

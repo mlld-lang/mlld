@@ -8,7 +8,7 @@ parent: sdk
 tags: [configuration, sdk, modes, execution]
 related: [config-sdk-dynamic-modules, config-sdk-execute]
 related-code: [sdk/execute.ts, sdk/modes/]
-updated: 2026-01-05
+updated: 2026-04-20
 ---
 
 Two public functions cover all SDK use cases:
@@ -30,6 +30,8 @@ console.log(result.effects);       // output effects
 console.log(result.denials);       // guard/policy denials
 console.log(result.metrics);       // timing (totalMs, parseMs, evaluateMs)
 ```
+
+`result.sessions` is the same final committed session snapshot that an attached `exe llm` call exposes inside mlld at `@someValue.mx.sessions.<name>`. Leaf values that still carry labels or other wrapper metadata remain wrapper-bearing values instead of being flattened to plain JSON.
 
 **Streaming** — pass `stream: true` to get real-time events
 

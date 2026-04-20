@@ -1,8 +1,11 @@
 import type { ExeReturnNode } from '@core/types';
 import type { ToolReturnMode } from '@core/types/executable';
 import { mergeDescriptors, type SecurityDescriptor } from '@core/types/security';
+import { isExecutableVariable } from '@core/types/variable';
+import { hasSecurityVarMx } from '@core/types/variable/VarMxHelpers';
 import type { Environment } from '../env/Environment';
 import { evaluate } from '../core/interpreter';
+import { isStructuredValue } from '../utils/structured-value';
 
 const NON_PRESERVING_TOP_LEVEL_FIELDS = new Set([
   'mx',
@@ -164,12 +167,25 @@ export async function resolveExeReturnValue(
     isExpression: true,
     preserveBareVariableReference
   });
+  let returnValue = result.value;
+  if (preserveBareVariableReference) {
+    const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+    if (isVariable(returnValue) && !isExecutableVariable(returnValue)) {
+      const extractedValue = await extractVariableValue(returnValue, result.env || evaluationEnv);
+      const preserveVariableWrapper =
+        Boolean(returnValue.mx && hasSecurityVarMx(returnValue.mx))
+        && !isStructuredValue(extractedValue);
+      if (!preserveVariableWrapper) {
+        returnValue = extractedValue;
+      }
+    }
+  }
   const descriptor = options.isolateSecurityDescriptor
     ? (result.env || evaluationEnv).getLocalSecurityDescriptor()
     : undefined;
   const resolvedEnv = normalizeReturnEnvironment(env, result.env || evaluationEnv);
   return {
-    value: result.value,
+    value: returnValue,
     env: resolvedEnv,
     ...(descriptor ? { descriptor } : {})
   };
