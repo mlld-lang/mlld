@@ -1,0 +1,118 @@
+/exe @encode(value) = js {
+  return JSON.stringify(value);
+}
+
+/exe @plusOne(value) = js {
+  return (value ?? 0) + 1;
+}
+
+/exe @callToolSequence(configPath, callsJson) = node {
+  const fs = require('node:fs');
+  const net = require('node:net');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const socketPath = config?.mcpServers?.mlld_tools?.env?.MLLD_FUNCTION_MCP_SOCKET;
+  const calls = JSON.parse(callsJson || '[]');
+
+  return new Promise((resolve, reject) => {
+    const sendJsonRpc = payload => new Promise((sendResolve, sendReject) => {
+      const socket = net.createConnection(socketPath);
+      let buffer = '';
+
+      socket.once('error', sendReject);
+      socket.on('data', chunk => {
+        buffer += chunk.toString('utf8');
+        const newlineIndex = buffer.indexOf('\n');
+        if (newlineIndex === -1) return;
+
+        const line = buffer.slice(0, newlineIndex).trim();
+        socket.end();
+        if (!line) {
+          sendReject(new Error('Empty JSON-RPC response'));
+          return;
+        }
+
+        try {
+          sendResolve(JSON.parse(line));
+        } catch (error) {
+          sendReject(error);
+        }
+      });
+
+      socket.once('connect', () => {
+        socket.write(`${JSON.stringify(payload)}\n`);
+      });
+    });
+
+    (async () => {
+      let lastText = '';
+      for (let index = 0; index < calls.length; index += 1) {
+        const call = calls[index] ?? {};
+        const response = await sendJsonRpc({
+          jsonrpc: '2.0',
+          id: index + 1,
+          method: 'tools/call',
+          params: {
+            name: call.name,
+            arguments: call.arguments ?? {}
+          }
+        });
+
+        if (response?.error) {
+          throw new Error(String(response.error?.message ?? 'Unknown JSON-RPC error'));
+        }
+
+        const result = response?.result ?? {};
+        if (result?.isError) {
+          const text =
+            Array.isArray(result.content) && result.content.length > 0 && typeof result.content[0]?.text === 'string'
+              ? result.content[0].text
+              : 'Unknown tool error';
+          throw new Error(text);
+        }
+
+        lastText =
+          Array.isArray(result.content) && result.content.length > 0 && typeof result.content[0]?.text === 'string'
+            ? result.content[0].text
+            : '';
+      }
+
+      resolve(lastText);
+    })().catch(reject);
+  });
+}
+
+/var session @planner = {
+  count: number?,
+  snap: number?,
+  trail: string[]?
+}
+
+/exe tool:w @planner_track() = [
+  @planner.increment("count")
+  @planner.update("count", @plusOne)
+  let @snapshot = @planner
+  @planner.increment("count")
+  @planner.set({ snap: @snapshot.count })
+  @planner.append("trail", "tracked")
+  => @encode({
+    count: @planner.count,
+    snap: @planner.snap,
+    trail: @planner.trail
+  })
+]
+
+/exe tool:r @planner_report() = [
+  let @snapshot = @planner
+  => @encode({
+    count: @planner.count,
+    snap: @snapshot.snap,
+    trail: @snapshot.trail
+  })
+]
+
+/exe llm @agent(prompt, config) = @callToolSequence(@mx.llm.config, '[{"name":"planner_track","arguments":{}},{"name":"planner_report","arguments":{}}]')
+
+/show @agent("hello", { tools: [@planner_track, @planner_report] }) with {
+  session: @planner,
+  seed: { count: 0 }
+}

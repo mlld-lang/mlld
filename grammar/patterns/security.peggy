@@ -36,6 +36,6 @@ DataLabelToken
 
 DataLabelIdentifier
   = first:BaseIdentifier suffix:(':' BaseIdentifier)? &{
-      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'from', 'as', 'tools'];
+      const reserved = ['module', 'static', 'live', 'cached', 'local', 'foreach', 'pipeline', 'with', 'from', 'as', 'tools', 'session'];
       return !reserved.includes(first.toLowerCase());
     } { return suffix ? first + ':' + suffix[1] : first; }

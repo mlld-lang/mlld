@@ -276,13 +276,14 @@ type SignContentOptions struct {
 
 // ExecuteResult contains structured output from Execute.
 type ExecuteResult struct {
-	Output      string        `json:"output"`
-	StateWrites []StateWrite  `json:"stateWrites,omitempty"`
-	Exports     any           `json:"exports,omitempty"` // Can be array or object depending on mlld output
-	Effects     []Effect      `json:"effects,omitempty"`
-	Denials     []GuardDenial `json:"denials,omitempty"`
-	TraceEvents []TraceEvent  `json:"traceEvents,omitempty"`
-	Metrics     *Metrics      `json:"metrics,omitempty"`
+	Output      string              `json:"output"`
+	StateWrites []StateWrite        `json:"stateWrites,omitempty"`
+	Sessions    []SessionFinalState `json:"sessions,omitempty"`
+	Exports     any                 `json:"exports,omitempty"` // Can be array or object depending on mlld output
+	Effects     []Effect            `json:"effects,omitempty"`
+	Denials     []GuardDenial       `json:"denials,omitempty"`
+	TraceEvents []TraceEvent        `json:"traceEvents,omitempty"`
+	Metrics     *Metrics            `json:"metrics,omitempty"`
 }
 
 // TraceEvent represents a structured runtime trace event.
@@ -314,9 +315,10 @@ type GuardDenial struct {
 
 // HandleEvent represents an event from an in-flight execution.
 type HandleEvent struct {
-	Type        string       `json:"type"`
-	StateWrite  *StateWrite  `json:"stateWrite,omitempty"`
-	GuardDenial *GuardDenial `json:"guardDenial,omitempty"`
+	Type         string        `json:"type"`
+	StateWrite   *StateWrite   `json:"stateWrite,omitempty"`
+	SessionWrite *SessionWrite `json:"sessionWrite,omitempty"`
+	GuardDenial  *GuardDenial  `json:"guardDenial,omitempty"`
 }
 
 // StateWrite represents a write to the state:// protocol.
@@ -325,6 +327,27 @@ type StateWrite struct {
 	Value     any            `json:"value"`
 	Timestamp time.Time      `json:"timestamp"`
 	Security  map[string]any `json:"security,omitempty"`
+}
+
+// SessionWrite represents an in-flight session write event.
+type SessionWrite struct {
+	FrameID       string `json:"frame_id"`
+	SessionName   string `json:"session_name"`
+	DeclarationID string `json:"declaration_id"`
+	OriginPath    string `json:"origin_path,omitempty"`
+	SlotPath      string `json:"slot_path"`
+	Operation     string `json:"operation"`
+	Prev          any    `json:"prev,omitempty"`
+	Next          any    `json:"next,omitempty"`
+}
+
+// SessionFinalState contains the final state for one attached session frame.
+type SessionFinalState struct {
+	FrameID       string         `json:"frameId"`
+	DeclarationID string         `json:"declarationId"`
+	Name          string         `json:"name"`
+	OriginPath    string         `json:"originPath,omitempty"`
+	FinalState    map[string]any `json:"finalState,omitempty"`
 }
 
 // Metrics contains execution statistics.
@@ -568,6 +591,9 @@ func (h *requestHandle) handleMessageLocked(message liveMessage) (*HandleEvent, 
 		if write, ok := parseStateWriteEvent(message.payload); ok {
 			h.stateWrites = append(h.stateWrites, write)
 			return &HandleEvent{Type: "state_write", StateWrite: &write}, true
+		}
+		if sessionWrite, ok := parseSessionWriteEvent(message.payload); ok {
+			return &HandleEvent{Type: "session_write", SessionWrite: &sessionWrite}, true
 		}
 		if denial, ok := parseGuardDenialEvent(message.payload); ok {
 			h.guardDenials = append(h.guardDenials, denial)
@@ -1806,6 +1832,47 @@ func parseStateWriteEvent(eventPayload any) (StateWrite, bool) {
 	}
 
 	return stateWrite, true
+}
+
+func parseSessionWriteEvent(eventPayload any) (SessionWrite, bool) {
+	event, ok := asMap(eventPayload)
+	if !ok {
+		return SessionWrite{}, false
+	}
+
+	eventType, _ := event["type"].(string)
+	if eventType != "session_write" {
+		return SessionWrite{}, false
+	}
+
+	payload, ok := asMap(event["session_write"])
+	if !ok {
+		return SessionWrite{}, false
+	}
+
+	frameID, _ := payload["frame_id"].(string)
+	sessionName, _ := payload["session_name"].(string)
+	declarationID, _ := payload["declaration_id"].(string)
+	slotPath, _ := payload["slot_path"].(string)
+	operation, _ := payload["operation"].(string)
+	if frameID == "" || sessionName == "" || declarationID == "" || slotPath == "" || operation == "" {
+		return SessionWrite{}, false
+	}
+
+	sessionWrite := SessionWrite{
+		FrameID:       frameID,
+		SessionName:   sessionName,
+		DeclarationID: declarationID,
+		SlotPath:      slotPath,
+		Operation:     operation,
+		Prev:          payload["prev"],
+		Next:          payload["next"],
+	}
+	if originPath, ok := payload["origin_path"].(string); ok {
+		sessionWrite.OriginPath = originPath
+	}
+
+	return sessionWrite, true
 }
 
 func guardDenialFromPayload(payload any) (GuardDenial, bool) {

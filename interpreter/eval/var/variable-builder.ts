@@ -1,5 +1,6 @@
 import type { DirectiveNode, SourceLocation } from '@core/types';
 import type { ToolCollection } from '@core/types/tools';
+import type { SessionDefinition } from '@core/types/session';
 import {
   createArrayVariable,
   createCommandResultVariable,
@@ -20,6 +21,7 @@ import {
   type VariableSource,
   VariableMetadataUtils
 } from '@core/types/variable';
+import { createSessionSchemaVariable } from '@core/types/session';
 import type { SecurityDescriptor } from '@core/types/security';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { logger } from '@core/utils/logger';
@@ -67,6 +69,7 @@ export interface VariableBuilderDependencies {
 export interface VariableBuildInput {
   resolvedValue: unknown;
   toolCollection?: ToolCollection;
+  sessionSchema?: SessionDefinition;
 }
 
 export interface VariableBuilder {
@@ -250,9 +253,13 @@ export function createVariableBuilder(dependencies: VariableBuilderDependencies)
   };
 
   const build = async (input: VariableBuildInput): Promise<Variable> => {
-    const { resolvedValue, toolCollection } = input;
+    const { resolvedValue, sessionSchema, toolCollection } = input;
 
     const { isVariable } = await import('@interpreter/utils/variable-resolution');
+
+    if (sessionSchema) {
+      return createSessionSchemaVariable(identifier, sessionSchema, source);
+    }
 
     if (toolCollection) {
       const options = applySecurityOptions(

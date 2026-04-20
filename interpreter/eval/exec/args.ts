@@ -1,5 +1,6 @@
 import type { ExecInvocation } from '@core/types';
 import type { ExecutableDefinition } from '@core/types/executable';
+import { isExecutableVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
@@ -419,6 +420,9 @@ export async function evaluateExecInvocationArgs(options: {
               !Array.isArray(variable.internal.toolCollection)
             ) {
               value = boundary.identity(variable);
+              preserveVariableAsArgument = true;
+            }
+            if (isWholeVariableReference && isExecutableVariable(variable)) {
               preserveVariableAsArgument = true;
             }
             const { isTemplate } = await import('@core/types/variable');

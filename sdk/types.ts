@@ -9,6 +9,7 @@ import type {
   RuntimeTraceLevel
 } from '@core/types/trace';
 import type { CapabilityContext, DataLabel, SecurityDescriptor } from '@core/types/security';
+import type { SessionFinalStateRecord, SessionWriteOperation } from '@core/types/session';
 import type { StateWrite } from '@core/types/state';
 import type { Variable } from '@core/types/variable';
 import type { StreamEvent } from '@interpreter/eval/pipeline/stream-bus';
@@ -123,6 +124,7 @@ export interface StructuredResult {
   effects: StructuredEffect[];
   exports: ExportMap;
   stateWrites: StateWrite[];
+  sessions: SessionFinalStateRecord[];
   denials: SDKGuardDenial[];
   traceEvents: RuntimeTraceEvent[];
   metrics?: ExecuteMetrics;
@@ -203,6 +205,21 @@ export type SDKExecutionEvent = {
 export type SDKStateWriteEvent = {
   type: 'state:write';
   write: StateWrite;
+  timestamp: number;
+};
+
+export type SDKSessionWriteEvent = {
+  type: 'session_write';
+  session_write: {
+    frame_id: string;
+    session_name: string;
+    declaration_id: string;
+    origin_path?: string;
+    slot_path: string;
+    operation: SessionWriteOperation;
+    prev?: unknown;
+    next?: unknown;
+  };
   timestamp: number;
 };
 
@@ -383,6 +400,7 @@ export type SDKEvent =
   | SDKStreamEvent
   | SDKExecutionEvent
   | SDKStateWriteEvent
+  | SDKSessionWriteEvent
   | SDKGuardDenialEvent
   | SDKDebugEvent
   | SDKStreamingEvent;

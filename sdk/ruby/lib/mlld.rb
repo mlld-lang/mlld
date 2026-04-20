@@ -17,12 +17,31 @@ module Mlld
   end
 
   StateWrite = Struct.new(:path, :value, :timestamp, :security, keyword_init: true)
+  SessionWrite = Struct.new(
+    :frame_id,
+    :session_name,
+    :declaration_id,
+    :origin_path,
+    :slot_path,
+    :operation,
+    :prev,
+    :next,
+    keyword_init: true
+  )
+  SessionFinalState = Struct.new(
+    :frame_id,
+    :declaration_id,
+    :name,
+    :origin_path,
+    :final_state,
+    keyword_init: true
+  )
   Metrics = Struct.new(:total_ms, :parse_ms, :evaluate_ms, keyword_init: true)
   Effect = Struct.new(:type, :content, :security, keyword_init: true)
   GuardDenial = Struct.new(:guard, :operation, :reason, :rule, :labels, :args, keyword_init: true)
   TraceEvent = Struct.new(:ts, :level, :category, :event, :scope, :data, keyword_init: true)
-  ExecuteResult = Struct.new(:output, :state_writes, :exports, :effects, :denials, :trace_events, :metrics, keyword_init: true)
-  HandleEvent = Struct.new(:type, :state_write, :guard_denial, keyword_init: true)
+  ExecuteResult = Struct.new(:output, :state_writes, :sessions, :exports, :effects, :denials, :trace_events, :metrics, keyword_init: true)
+  HandleEvent = Struct.new(:type, :state_write, :session_write, :guard_denial, keyword_init: true)
   FilesystemStatus = Struct.new(
     :path,
     :relative_path,
@@ -132,6 +151,11 @@ module Mlld
               return HandleEvent.new(type: 'state_write', state_write: state_write)
             end
 
+            session_write = @client.send(:session_write_from_event, payload)
+            if session_write
+              return HandleEvent.new(type: 'session_write', session_write: session_write)
+            end
+
             guard_denial = @client.send(:guard_denial_from_event, payload)
             if guard_denial
               @guard_denial_events << guard_denial
@@ -185,6 +209,8 @@ module Mlld
             when :event
               state_write = @client.send(:state_write_from_event, payload)
               @state_write_events << state_write if state_write
+              session_write = @client.send(:session_write_from_event, payload)
+              next if session_write
 
               guard_denial = @client.send(:guard_denial_from_event, payload)
               @guard_denial_events << guard_denial if guard_denial
@@ -767,6 +793,8 @@ module Mlld
         if kind == :event
           state_write = state_write_from_event(payload)
           state_write_events << state_write if state_write
+          session_write = session_write_from_event(payload)
+          next if session_write
           next
         end
 
@@ -785,6 +813,7 @@ module Mlld
         return ExecuteResult.new(
           output: result.nil? ? '' : result.to_s,
           state_writes: state_write_events,
+          sessions: [],
           exports: [],
           effects: [],
           denials: guard_denial_events,
@@ -805,6 +834,24 @@ module Mlld
       end.compact
 
       state_writes = merge_state_writes(state_writes, state_write_events)
+      sessions = Array(result['sessions']).map do |entry|
+        next unless entry.is_a?(Hash)
+
+        frame_id = entry['frameId']
+        declaration_id = entry['declarationId']
+        name = entry['name']
+        next unless frame_id.is_a?(String) && !frame_id.empty?
+        next unless declaration_id.is_a?(String) && !declaration_id.empty?
+        next unless name.is_a?(String) && !name.empty?
+
+        SessionFinalState.new(
+          frame_id: frame_id,
+          declaration_id: declaration_id,
+          name: name,
+          origin_path: entry['originPath'].is_a?(String) ? entry['originPath'] : nil,
+          final_state: entry['finalState'].is_a?(Hash) ? entry['finalState'] : {}
+        )
+      end.compact
 
       metrics_payload = result['metrics']
       metrics = nil
@@ -846,6 +893,7 @@ module Mlld
       ExecuteResult.new(
         output: result['output'].to_s,
         state_writes: state_writes,
+        sessions: sessions,
         exports: result.fetch('exports', []),
         effects: effects,
         denials: denials,
@@ -1087,6 +1135,31 @@ module Mlld
         value: decode_state_write_value(write['value']),
         timestamp: write['timestamp'],
         security: write['security'].is_a?(Hash) ? write['security'] : nil
+      )
+    end
+
+    def session_write_from_event(event)
+      return nil unless event['type'] == 'session_write'
+
+      payload = event['session_write']
+      return nil unless payload.is_a?(Hash)
+
+      frame_id = payload['frame_id']
+      session_name = payload['session_name']
+      declaration_id = payload['declaration_id']
+      slot_path = payload['slot_path']
+      operation = payload['operation']
+      return nil unless [frame_id, session_name, declaration_id, slot_path, operation].all? { |value| value.is_a?(String) && !value.empty? }
+
+      SessionWrite.new(
+        frame_id: frame_id,
+        session_name: session_name,
+        declaration_id: declaration_id,
+        origin_path: payload['origin_path'].is_a?(String) ? payload['origin_path'] : nil,
+        slot_path: slot_path,
+        operation: operation,
+        prev: payload.key?('prev') ? payload['prev'] : nil,
+        next: payload.key?('next') ? payload['next'] : nil
       )
     end
 

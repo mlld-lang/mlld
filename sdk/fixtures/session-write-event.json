@@ -1,0 +1,16 @@
+{
+  "event": {
+    "type": "session_write",
+    "session_write": {
+      "frame_id": "session-123",
+      "session_name": "planner",
+      "declaration_id": "planner-decl",
+      "origin_path": "/planner.mld",
+      "slot_path": "count",
+      "operation": "increment",
+      "prev": 1,
+      "next": 2
+    },
+    "timestamp": 1735689600000
+  }
+}

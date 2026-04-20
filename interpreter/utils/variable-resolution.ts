@@ -21,6 +21,13 @@ import {
 import { formatRecordDefinition, isRecordDefinition } from '@core/types/record';
 import { asData, asText, isStructuredValue } from './structured-value';
 import { isShelfSlotRefValue } from '@core/types/shelf';
+import {
+  createSessionAccessorVariable,
+  createSessionSnapshot,
+  createSessionSnapshotVariable,
+  getSessionDefinitionFromValue,
+  requireAttachedSessionInstance
+} from '@interpreter/session/runtime';
 // Import removed to avoid circular dependency - will use dynamic import if needed
 
 function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -201,6 +208,31 @@ export async function resolveVariable(
   env: Environment,
   context: ResolutionContext = ResolutionContext.Display
 ): Promise<Variable | VariableValue> {
+  if (variable.internal?.isSessionSchema === true) {
+    const definition =
+      variable.internal.sessionSchema
+      ?? getSessionDefinitionFromValue(variable.value);
+
+    if (definition) {
+      const sessionId = env.getCurrentLlmSessionId();
+      if (!sessionId) {
+        return shouldPreserveVariable(context) ? variable : variable.value;
+      }
+
+      requireAttachedSessionInstance(definition, env);
+
+      if (context === ResolutionContext.FieldAccess) {
+        return createSessionAccessorVariable(variable.name, definition, env);
+      }
+
+      const preserveAsSnapshotVariable = shouldPreserveVariable(context);
+      if (preserveAsSnapshotVariable) {
+        return createSessionSnapshotVariable(variable.name, definition, env);
+      }
+
+      return createSessionSnapshot(definition, env);
+    }
+  }
   
   /**
    * Special case: PipelineInput handling
@@ -320,6 +352,18 @@ export async function extractVariableValue(
   variable: Variable,
   env: Environment
 ): Promise<VariableValue> {
+  if (variable.internal?.isSessionSchema === true) {
+    const definition =
+      variable.internal.sessionSchema
+      ?? getSessionDefinitionFromValue(variable.value);
+    if (definition) {
+      const sessionId = env.getCurrentLlmSessionId();
+      if (!sessionId) {
+        return variable.value;
+      }
+      return createSessionSnapshot(definition, env);
+    }
+  }
 
   // Type-specific resolution using type guards
   if (isPrimitive(variable)) {

@@ -204,6 +204,24 @@ describe('createCallMcpConfig', () => {
     }
   });
 
+  it('preserves an explicit session id override', async () => {
+    const env = createEnv();
+    const result = await createCallMcpConfig({
+      tools: [],
+      env,
+      sessionId: 'session-fixed'
+    });
+
+    try {
+      expect(result.sessionId).toBe('session-fixed');
+    } finally {
+      const configPath = result.mcpConfigPath;
+      await result.cleanup();
+      expect(await fileExists(configPath)).toBe(false);
+      env.cleanup();
+    }
+  });
+
   it('creates a function MCP config outside a box for mixed tools', async () => {
     const env = createEnv();
     const functionTool = createFunctionTool('sayHi');

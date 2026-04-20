@@ -133,6 +133,13 @@ import {
 import { HookManager } from '../hooks/HookManager';
 import { HookRegistry } from '../hooks/HookRegistry';
 import type { RecordDefinition } from '@core/types/record';
+import type {
+  SessionDefinition,
+  SessionWriteBuffer,
+  SessionFinalStateRecord,
+  SessionFrameInstance,
+  SessionWriteRecord
+} from '@core/types/session';
 import type { ShelfDefinition, ShelfMergeMode, ShelfScopeSlotBinding } from '@core/types/shelf';
 import type { CheckpointManager } from '../checkpoint/CheckpointManager';
 import { checkpointPreHook } from '../hooks/checkpoint-pre-hook';
@@ -321,6 +328,12 @@ export class Environment
   private recordDefinitions?: Map<string, RecordDefinition>;
   private shelfDefinitions?: Map<string, ShelfDefinition>;
   private shelfState?: Map<string, Map<string, unknown>>;
+  private sessionDefinitions?: Map<string, SessionDefinition>;
+  private sessionInstances?: Map<string, Map<string, SessionFrameInstance>>;
+  private sessionWrites: SessionWriteRecord[] = [];
+  private sessionWriteIndex = 0;
+  private completedSessions: SessionFinalStateRecord[] = [];
+  private sessionWriteBuffers: SessionWriteBuffer[] = [];
   private valueHandleRegistry?: ValueHandleRegistry;
 
   // Shadow environments for language-specific function injection
@@ -1010,6 +1023,10 @@ export class Environment
     return this.parent?.getScopedEnvironmentConfig();
   }
 
+  getLocalScopedEnvironmentConfig(): EnvironmentConfig | undefined {
+    return this.scopedEnvironmentConfig;
+  }
+
   setScopedEnvironmentConfig(config?: EnvironmentConfig | null): void {
     if (config === null || config === undefined) {
       this.scopedEnvironmentConfig = undefined;
@@ -1644,6 +1661,122 @@ export class Environment
       return undefined;
     }
     return this.shelfDefinitions?.get(shelfName) ?? this.parent?.getShelfDefinition(shelfName);
+  }
+
+  registerSessionDefinition(name: string, definition: SessionDefinition): void {
+    const sessionName = typeof name === 'string' ? name.trim() : '';
+    if (!sessionName) {
+      return;
+    }
+    if (!this.sessionDefinitions) {
+      this.sessionDefinitions = new Map();
+    }
+    this.sessionDefinitions.set(sessionName, definition);
+  }
+
+  getSessionDefinition(name: string): SessionDefinition | undefined {
+    const sessionName = typeof name === 'string' ? name.trim() : '';
+    if (!sessionName) {
+      return undefined;
+    }
+    return this.sessionDefinitions?.get(sessionName) ?? this.parent?.getSessionDefinition(sessionName);
+  }
+
+  attachSessionInstance(sessionId: string, instance: SessionFrameInstance): void {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return;
+    }
+    const root = this.getRootEnvironment();
+    if (!root.sessionInstances) {
+      root.sessionInstances = new Map();
+    }
+    const bucket = root.sessionInstances.get(normalizedSessionId) ?? new Map<string, SessionFrameInstance>();
+    bucket.set(instance.definition.id, instance);
+    root.sessionInstances.set(normalizedSessionId, bucket);
+  }
+
+  getSessionInstance(sessionId: string, declarationId: string): SessionFrameInstance | undefined {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    const normalizedDeclarationId = typeof declarationId === 'string' ? declarationId.trim() : '';
+    if (!normalizedSessionId || !normalizedDeclarationId) {
+      return undefined;
+    }
+    return this.getRootEnvironment().sessionInstances?.get(normalizedSessionId)?.get(normalizedDeclarationId);
+  }
+
+  getSessionInstancesForFrame(sessionId: string): SessionFrameInstance[] {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return [];
+    }
+    return Array.from(this.getRootEnvironment().sessionInstances?.get(normalizedSessionId)?.values() ?? []);
+  }
+
+  getAttachedSessionFrameIds(): string[] {
+    return Array.from(this.getRootEnvironment().sessionInstances?.keys() ?? []);
+  }
+
+  disposeSessionInstances(sessionId: string): void {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return;
+    }
+    this.getRootEnvironment().sessionInstances?.delete(normalizedSessionId);
+  }
+
+  recordSessionWrite(write: Omit<SessionWriteRecord, 'index' | 'timestamp'> & { index?: number; timestamp?: string }): void {
+    const root = this.getRootEnvironment();
+    const entry: SessionWriteRecord = {
+      ...write,
+      index: write.index ?? root.sessionWriteIndex++,
+      timestamp: write.timestamp ?? new Date().toISOString()
+    };
+    root.sessionWrites.push(entry);
+  }
+
+  getSessionWrites(): SessionWriteRecord[] {
+    return this.getRootEnvironment().sessionWrites;
+  }
+
+  pushSessionWriteBuffer(buffer: SessionWriteBuffer): void {
+    this.getRootEnvironment().sessionWriteBuffers.push(buffer);
+  }
+
+  popSessionWriteBuffer(buffer?: SessionWriteBuffer): SessionWriteBuffer | undefined {
+    const root = this.getRootEnvironment();
+    if (root.sessionWriteBuffers.length === 0) {
+      return undefined;
+    }
+    if (!buffer) {
+      return root.sessionWriteBuffers.pop();
+    }
+    const index = root.sessionWriteBuffers.lastIndexOf(buffer);
+    if (index < 0) {
+      return undefined;
+    }
+    const [removed] = root.sessionWriteBuffers.splice(index, 1);
+    return removed;
+  }
+
+  getSessionWriteBuffer(): SessionWriteBuffer | undefined {
+    const root = this.getRootEnvironment();
+    return root.sessionWriteBuffers[root.sessionWriteBuffers.length - 1];
+  }
+
+  recordCompletedSession(entry: SessionFinalStateRecord): void {
+    const root = this.getRootEnvironment();
+    root.completedSessions.push({
+      ...entry,
+      finalState: { ...entry.finalState }
+    });
+  }
+
+  getCompletedSessions(): SessionFinalStateRecord[] {
+    return this.getRootEnvironment().completedSessions.map(entry => ({
+      ...entry,
+      finalState: { ...entry.finalState }
+    }));
   }
 
   getAllShelfDefinitions(): Map<string, ShelfDefinition> {

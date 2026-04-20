@@ -90,6 +90,21 @@ export interface McpToolSourceValue {
   source: Expression;
 }
 
+export interface SessionTypeValue {
+  type: 'sessionType';
+  base:
+    | {
+        kind: 'primitive';
+        name: 'string' | 'number' | 'boolean' | 'object' | 'array';
+      }
+    | {
+        kind: 'record';
+        name: string;
+      };
+  isArray?: boolean;
+  optional?: boolean;
+}
+
 export interface DataAliasedValue {
   type: 'aliasedValue';
   value: DataValue;
@@ -104,6 +119,7 @@ export type DataValue =
   | DataObjectValue
   | DataArrayValue
   | DataAliasedValue
+  | SessionTypeValue
   | Expression
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation
@@ -130,6 +146,7 @@ export interface VarMeta {
   inferredType?: 'text' | 'data' | 'path' | 'exec';
   securityLabels?: DataLabel[];
   isToolsCollection?: boolean;
+  isSessionLabel?: boolean;
   [key: string]: unknown;
 }
 

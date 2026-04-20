@@ -6,8 +6,12 @@ import {
   isVariable,
   extractVariableValue
 } from './variable-resolution';
+import { createSessionSchemaVariable, type SessionDefinition } from '@core/types/session';
 import { createSimpleTextVariable, createArrayVariable, createObjectVariable, createStructuredValueVariable } from '@core/types/variable/VariableFactories';
 import { Environment } from '@interpreter/env/Environment';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { RuntimeSessionInstance } from '@interpreter/session/runtime';
 import { wrapStructured } from '../utils/structured-value';
 
 // Mock the module imports
@@ -31,13 +35,49 @@ vi.mock('@interpreter/eval/data-value-evaluator', () => ({
 }));
 
 describe('Variable Resolution Strategy', () => {
-  const mockEnv = {} as Environment;
   const mockSource = {
     directive: 'var' as const,
     syntax: 'literal' as const,
     hasInterpolation: false,
     isMultiLine: false
   };
+
+  function createEnv(): Environment {
+    return new Environment(new MemoryFileSystem(), new PathService(), '/');
+  }
+
+  function createSessionDefinition(name: string): SessionDefinition {
+    return {
+      id: `${name}-decl`,
+      canonicalName: name,
+      originPath: '/sessions.mld',
+      slots: {
+        count: {
+          name: 'count',
+          type: {
+            kind: 'primitive',
+            name: 'number',
+            isArray: false,
+            optional: true
+          }
+        }
+      }
+    };
+  }
+
+  function setActiveLlmSession(env: Environment, sessionId: string): void {
+    env.setLlmToolConfig({
+      sessionId,
+      mcpConfigPath: '',
+      toolsCsv: '',
+      mcpAllowedTools: '',
+      nativeAllowedTools: '',
+      unifiedAllowedTools: '',
+      availableTools: [],
+      inBox: false,
+      cleanup: async () => {}
+    });
+  }
   
   describe('shouldPreserveVariable', () => {
     it('should preserve Variables in assignment contexts', () => {
@@ -59,6 +99,7 @@ describe('Variable Resolution Strategy', () => {
   
   describe('resolveVariable', () => {
     it('should preserve Variable in assignment context', async () => {
+      const mockEnv = {} as Environment;
       const textVar = createSimpleTextVariable('test', 'Hello World', mockSource);
       const result = await resolveVariable(textVar, mockEnv, ResolutionContext.VariableAssignment);
       
@@ -67,6 +108,7 @@ describe('Variable Resolution Strategy', () => {
     });
     
     it('preserves structured value in string interpolation context', async () => {
+      const mockEnv = {} as Environment;
       const structured = wrapStructured({ file: 1 }, 'object');
       const structuredVar = createStructuredValueVariable('item', structured, mockSource);
       const result = await resolveVariable(structuredVar, mockEnv, ResolutionContext.StringInterpolation);
@@ -74,6 +116,7 @@ describe('Variable Resolution Strategy', () => {
     });
     
     it('should extract value in display context', async () => {
+      const mockEnv = {} as Environment;
       const textVar = createSimpleTextVariable('test', 'Hello World', mockSource);
       const result = await resolveVariable(textVar, mockEnv, ResolutionContext.Display);
       
@@ -82,6 +125,7 @@ describe('Variable Resolution Strategy', () => {
     });
     
     it('should preserve array Variable in array element context', async () => {
+      const mockEnv = {} as Environment;
       const arrayVar = createArrayVariable('items', ['a', 'b', 'c'], false, mockSource);
       const result = await resolveVariable(arrayVar, mockEnv, ResolutionContext.ArrayElement);
       
@@ -90,6 +134,7 @@ describe('Variable Resolution Strategy', () => {
     });
     
     it('should handle complex Variables by evaluating but preserving wrapper', async () => {
+      const mockEnv = {} as Environment;
       const complexVar = createObjectVariable('complex', {
         type: 'object',
         properties: {
@@ -109,6 +154,7 @@ describe('Variable Resolution Strategy', () => {
     });
 
     it('keeps complex object ASTs deferred in field access context', async () => {
+      const mockEnv = {} as Environment;
       const complexVar = createObjectVariable('complex', {
         type: 'object',
         entries: [
@@ -135,6 +181,7 @@ describe('Variable Resolution Strategy', () => {
     });
 
     it('should preserve already materialized complex Variables without re-evaluating', async () => {
+      const mockEnv = {} as Environment;
       const structuredLeaf = wrapStructured({ ok: true }, 'object');
       const materializedVar = createObjectVariable(
         'complex',
@@ -146,6 +193,36 @@ describe('Variable Resolution Strategy', () => {
       const result = await resolveVariable(materializedVar, mockEnv, ResolutionContext.ObjectProperty);
 
       expect(result).toBe(materializedVar);
+    });
+
+    it('returns live accessors for session schemas inside the attached frame and snapshots in preserving contexts', async () => {
+      const env = createEnv();
+      const definition = createSessionDefinition('planner');
+      const sessionVar = createSessionSchemaVariable('planner', definition);
+      const instance = new RuntimeSessionInstance('session-1', definition);
+      instance.setSlot('count', 2);
+
+      env.setVariable('planner', sessionVar);
+      env.attachSessionInstance('session-1', instance);
+      setActiveLlmSession(env, 'session-1');
+
+      const accessor = await resolveVariable(sessionVar, env, ResolutionContext.FieldAccess);
+      expect(isVariable(accessor)).toBe(true);
+      if (!isVariable(accessor)) {
+        return;
+      }
+      expect(accessor.value.count).toBe(2);
+
+      const snapshot = await resolveVariable(sessionVar, env, ResolutionContext.ObjectProperty);
+      expect(isVariable(snapshot)).toBe(true);
+      if (!isVariable(snapshot)) {
+        return;
+      }
+      expect(snapshot.value.count).toBe(2);
+
+      instance.setSlot('count', 5);
+      expect(snapshot.value.count).toBe(2);
+      expect(accessor.value.count).toBe(5);
     });
   });
   
@@ -164,12 +241,14 @@ describe('Variable Resolution Strategy', () => {
   
   describe('extractVariableValue', () => {
     it('should extract value from Variable', async () => {
+      const mockEnv = {} as Environment;
       const variable = createSimpleTextVariable('test', 'Hello', mockSource);
       const result = await extractVariableValue(variable, mockEnv);
       expect(result).toBe('Hello');
     });
     
     it('should handle different Variable types', async () => {
+      const mockEnv = {} as Environment;
       // Test array variable
       const arrayVar = createArrayVariable('test', ['a', 'b'], false, mockSource);
       const arrayResult = await extractVariableValue(arrayVar, mockEnv);
@@ -179,6 +258,25 @@ describe('Variable Resolution Strategy', () => {
       const objVar = createObjectVariable('test', { key: 'value' }, false, mockSource);
       const objResult = await extractVariableValue(objVar, mockEnv);
       expect(objResult).toEqual({ key: 'value' });
+    });
+
+    it('throws when a session schema is referenced from a different live frame without walking outward', async () => {
+      const env = createEnv();
+      const definition = createSessionDefinition('planner');
+      const sessionVar = createSessionSchemaVariable('planner', definition);
+      const outerInstance = new RuntimeSessionInstance('outer-session', definition);
+      outerInstance.setSlot('count', 7);
+
+      env.setVariable('planner', sessionVar);
+      env.attachSessionInstance('outer-session', outerInstance);
+      setActiveLlmSession(env, 'outer-session');
+
+      const nested = env.createChild();
+      setActiveLlmSession(nested, 'inner-session');
+
+      await expect(extractVariableValue(sessionVar, nested)).rejects.toMatchObject({
+        code: 'SESSION_NOT_ATTACHED'
+      });
     });
   });
 });

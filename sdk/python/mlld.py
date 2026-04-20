@@ -32,6 +32,31 @@ class StateWrite:
 
 
 @dataclass
+class SessionWrite:
+    """Represents an in-flight session write event."""
+
+    frame_id: str
+    session_name: str
+    declaration_id: str
+    slot_path: str
+    operation: str
+    origin_path: str | None = None
+    prev: Any = None
+    next: Any = None
+
+
+@dataclass
+class SessionFinalState:
+    """Represents a final per-frame session snapshot."""
+
+    frame_id: str
+    declaration_id: str
+    name: str
+    final_state: dict[str, Any] = field(default_factory=dict)
+    origin_path: str | None = None
+
+
+@dataclass
 class Metrics:
     """Execution statistics."""
 
@@ -79,6 +104,7 @@ class ExecuteResult:
 
     output: str
     state_writes: list[StateWrite] = field(default_factory=list)
+    sessions: list[SessionFinalState] = field(default_factory=list)
     exports: Any = field(default_factory=list)  # Can be list or dict depending on mlld output
     effects: list[Effect] = field(default_factory=list)
     denials: list[GuardDenial] = field(default_factory=list)
@@ -213,8 +239,9 @@ PendingQueue = queue.Queue[tuple[str, Any]]
 class HandleEvent:
     """An event from an in-flight execution."""
 
-    type: str  # "state_write", "guard_denial", or "complete"
+    type: str  # "state_write", "session_write", "guard_denial", or "complete"
     state_write: StateWrite | None = None
+    session_write: SessionWrite | None = None
     guard_denial: GuardDenial | None = None
 
 
@@ -275,8 +302,9 @@ class _BaseHandle:
 
     def next_event(self, timeout: float | None = None) -> HandleEvent | None:
         """Block until next event. Returns HandleEvent with type="state_write"
-        for state:// writes, type="guard_denial" for structured denials,
-        and type="complete" when execution finishes.
+        for state:// writes, type="session_write" for session writes,
+        type="guard_denial" for structured denials, and type="complete"
+        when execution finishes.
         Returns None on timeout."""
 
         if self._is_complete:
@@ -303,6 +331,9 @@ class _BaseHandle:
                 if write is not None:
                     self._state_write_events.append(write)
                     return HandleEvent(type="state_write", state_write=write)
+                session_write = _session_write_from_event(payload)
+                if session_write is not None:
+                    return HandleEvent(type="session_write", session_write=session_write)
                 denial = _guard_denial_from_event(payload)
                 if denial is not None:
                     self._guard_denial_events.append(denial)
@@ -939,6 +970,9 @@ class Client:
                 write = _state_write_from_event(payload)
                 if write is not None:
                     state_write_events.append(write)
+                session_write = _session_write_from_event(payload)
+                if session_write is not None:
+                    continue
                 denial = _guard_denial_from_event(payload)
                 if denial is not None:
                     guard_denial_events.append(denial)
@@ -1248,6 +1282,34 @@ def _state_write_from_event(event: dict[str, Any]) -> StateWrite | None:
     return _state_write_from_payload(event.get("write"))
 
 
+def _session_write_from_event(event: dict[str, Any]) -> SessionWrite | None:
+    if event.get("type") != "session_write":
+        return None
+
+    payload = event.get("session_write")
+    if not isinstance(payload, dict):
+        return None
+
+    frame_id = payload.get("frame_id")
+    session_name = payload.get("session_name")
+    declaration_id = payload.get("declaration_id")
+    slot_path = payload.get("slot_path")
+    operation = payload.get("operation")
+    if not all(isinstance(value, str) and value for value in (frame_id, session_name, declaration_id, slot_path, operation)):
+        return None
+
+    return SessionWrite(
+        frame_id=frame_id,
+        session_name=session_name,
+        declaration_id=declaration_id,
+        slot_path=slot_path,
+        operation=operation,
+        origin_path=payload.get("origin_path") if isinstance(payload.get("origin_path"), str) else None,
+        prev=payload.get("prev"),
+        next=payload.get("next"),
+    )
+
+
 def _guard_denial_from_payload(payload: Any) -> GuardDenial | None:
     if not isinstance(payload, dict):
         return None
@@ -1338,6 +1400,30 @@ def _merge_guard_denials(primary: list[GuardDenial], secondary: list[GuardDenial
     return merged
 
 
+def _session_final_state_from_payload(entry: Any) -> SessionFinalState | None:
+    if not isinstance(entry, dict):
+        return None
+
+    frame_id = entry.get("frameId")
+    declaration_id = entry.get("declarationId")
+    name = entry.get("name")
+    if not isinstance(frame_id, str) or not frame_id:
+        return None
+    if not isinstance(declaration_id, str) or not declaration_id:
+        return None
+    if not isinstance(name, str) or not name:
+        return None
+
+    final_state = entry.get("finalState")
+    return SessionFinalState(
+        frame_id=frame_id,
+        declaration_id=declaration_id,
+        name=name,
+        final_state=final_state if isinstance(final_state, dict) else {},
+        origin_path=entry.get("originPath") if isinstance(entry.get("originPath"), str) else None,
+    )
+
+
 def _execute_result_from_payload(
     result: dict[str, Any],
     state_write_events: list[StateWrite],
@@ -1350,6 +1436,14 @@ def _execute_result_from_payload(
             state_writes.append(state_write)
 
     state_writes = _merge_state_writes(state_writes, state_write_events)
+    sessions = [
+        session
+        for session in (
+            _session_final_state_from_payload(raw_session)
+            for raw_session in result.get("sessions", [])
+        )
+        if session is not None
+    ]
     denials = [
         denial
         for denial in (
@@ -1394,6 +1488,7 @@ def _execute_result_from_payload(
     return ExecuteResult(
         output=result.get("output", ""),
         state_writes=state_writes,
+        sessions=sessions,
         exports=result.get("exports", []),
         effects=effects,
         denials=denials,

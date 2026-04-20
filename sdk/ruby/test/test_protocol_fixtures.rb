@@ -14,6 +14,9 @@ class ProtocolFixturesTest < Minitest::Test
     result = @client.send(:decode_execute_result, fixture.fetch('result'), [])
 
     assert_equal(1, result.state_writes.length)
+    assert_equal(1, result.sessions.length)
+    assert_equal('planner', result.sessions.first.name)
+    assert_equal({ 'count' => 2, 'status' => 'done' }, result.sessions.first.final_state)
     assert_equal(['trusted'], result.state_writes.first.security['labels'])
     assert_equal(['trusted'], result.effects.first.security['labels'])
   end
@@ -35,6 +38,18 @@ class ProtocolFixturesTest < Minitest::Test
     refute_nil(state_write)
     assert_equal('payload', state_write.path)
     assert_equal(['trusted'], state_write.security['labels'])
+  end
+
+  def test_session_write_event_fixture_preserves_fields
+    fixture = load_fixture('session-write-event.json')
+    session_write = @client.send(:session_write_from_event, fixture.fetch('event'))
+
+    refute_nil(session_write)
+    assert_equal('planner', session_write.session_name)
+    assert_equal('count', session_write.slot_path)
+    assert_equal('increment', session_write.operation)
+    assert_equal(1, session_write.prev)
+    assert_equal(2, session_write.next)
   end
 
   def test_error_fixture_decodes_transport_error

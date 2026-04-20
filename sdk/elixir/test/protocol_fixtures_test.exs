@@ -8,6 +8,9 @@ defmodule Mlld.ProtocolFixturesTest do
     result = Types.decode_execute_result(fixture["result"])
 
     assert length(result.state_writes) == 1
+    assert length(result.sessions) == 1
+    assert hd(result.sessions).name == "planner"
+    assert hd(result.sessions).final_state == %{"count" => 2, "status" => "done"}
     assert hd(result.state_writes).security["labels"] == ["trusted"]
     assert hd(result.effects).security["labels"] == ["trusted"]
   end
@@ -28,6 +31,17 @@ defmodule Mlld.ProtocolFixturesTest do
 
     assert state_write.path == "payload"
     assert state_write.security["labels"] == ["trusted"]
+  end
+
+  test "session write event fixture preserves fields" do
+    fixture = load_fixture!("session-write-event.json")
+    session_write = Protocol.session_write_from_event(fixture["event"])
+
+    assert session_write.session_name == "planner"
+    assert session_write.slot_path == "count"
+    assert session_write.operation == "increment"
+    assert session_write.prev == 1
+    assert session_write.next == 2
   end
 
   test "error fixture decodes transport error" do

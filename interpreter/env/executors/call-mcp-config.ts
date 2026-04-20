@@ -92,6 +92,7 @@ interface JsonRpcResponse {
 export interface CallMcpConfigOptions {
   tools: unknown;
   env: Environment;
+  sessionId?: string;
   workingDirectory?: string;
   conversationDescriptor?: SecurityDescriptor;
   isMcpContext?: boolean;
@@ -1131,7 +1132,7 @@ export async function createCallMcpConfig(options: CallMcpConfigOptions): Promis
   ]).join(',');
 
   const cleanupFns: Array<() => Promise<void>> = [];
-  const sessionId = randomUUID();
+  const sessionId = options.sessionId ?? randomUUID();
   const mcpServers: Record<string, unknown> = {};
   const mcpAllowedToolNames: string[] = [];
   const builtinToolMetadata = buildBuiltinToolMetadata(inBox ? vfsTools : builtinTools).map(metadata =>

@@ -17,6 +17,7 @@ import type { ExecutableDefinition } from '../executable';
 import type { ToolCollection } from '../tools';
 import type { RecordDefinition, RecordSchemaMetadata } from '../record';
 import type { FactSourceHandle } from '../handle';
+import type { SessionDefinition } from '../session';
 
 // =========================================================================
 // BASE TYPES
@@ -159,6 +160,8 @@ export interface VariableInternalMetadata extends Record<string, unknown> {
   recordDefinition?: RecordDefinition;
   toolCollection?: ToolCollection;
   isToolsCollection?: boolean;
+  isSessionSchema?: boolean;
+  sessionSchema?: SessionDefinition;
   transformerImplementation?: (...args: unknown[]) => unknown;
   transformerVariants?: Record<string, unknown>;
   isBuiltinTransformer?: boolean;

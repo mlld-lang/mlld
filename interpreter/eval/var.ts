@@ -3,6 +3,7 @@ import {
   attachToolCollectionMetadata,
   type ToolCollection
 } from '@core/types/tools';
+import type { SessionDefinition } from '@core/types/session';
 import type { Environment } from '../env/Environment';
 import type { EvalResult, EvaluationContext } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
@@ -187,6 +188,7 @@ export async function prepareVarAssignment(
   // For templates with multiple nodes (e.g., ::text {{var}}::), we need the whole array
   const valueNode = valueNodes.length === 1 ? valueNodes[0] : valueNodes;
   const isToolsCollection = directive.meta?.isToolsCollection === true;
+  const isSessionLabel = directive.meta?.isSessionLabel === true;
   const rhsDispatcher = createRhsDispatcher({
     context,
     directive,
@@ -195,11 +197,27 @@ export async function prepareVarAssignment(
     identifier,
     interpolateWithSecurity,
     isToolsCollection,
+    isSessionLabel,
     mergeResolvedDescriptor,
     referenceEvaluator,
     rhsContentEvaluator,
     sourceLocation
   });
+
+  if (
+    isSessionLabel
+    && isToolsCollection
+  ) {
+    throw new Error('Session schemas cannot be combined with `var tools`.');
+  }
+
+  if (
+    isSessionLabel
+    && Array.isArray(securityLabels)
+    && securityLabels.some(label => label === 'secret' || label === 'untrusted' || label === 'pii')
+  ) {
+    throw new Error('Session schemas cannot carry secret, untrusted, or pii labels.');
+  }
 
   if (
     isToolsCollection
@@ -262,6 +280,8 @@ export async function prepareVarAssignment(
     mergeResolvedDescriptor(rhsResult.descriptor);
   }
 
+  const sessionSchema = isSessionLabel ? resolvedValue as SessionDefinition : undefined;
+
   if (isToolsCollection) {
     toolCollection = rhsResult.handler === 'mcp-tool-source'
       ? resolvedValue as ToolCollection
@@ -277,6 +297,8 @@ export async function prepareVarAssignment(
 
   const resolvedValueDescriptor = isToolsCollection
     ? undefined
+    : isSessionLabel
+      ? undefined
     : isStructuredValue(resolvedValue)
       ? extractSecurityDescriptor(resolvedValue)
       : extractSecurityDescriptor(resolvedValue, {
@@ -301,6 +323,7 @@ export async function prepareVarAssignment(
   const { applySecurityOptions, baseCtx, baseInternal } = variableBuilder;
   let variable = await variableBuilder.build({
     resolvedValue,
+    sessionSchema,
     toolCollection
   });
 
@@ -318,6 +341,9 @@ export async function prepareVarAssignment(
   variable = await pipelineFinalizer.process(variable);
 
   const finalVar = finalizeVariable(variable);
+  if (sessionSchema) {
+    env.registerSessionDefinition(identifier, sessionSchema);
+  }
 
   return { identifier, variable: finalVar };
 }

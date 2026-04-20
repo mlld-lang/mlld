@@ -10,6 +10,35 @@ defmodule Mlld.StateWrite do
         }
 end
 
+defmodule Mlld.SessionWrite do
+  @moduledoc "Represents an in-flight session write event."
+  defstruct [:frame_id, :session_name, :declaration_id, :origin_path, :slot_path, :operation, :prev, :next]
+
+  @type t :: %__MODULE__{
+          frame_id: String.t(),
+          session_name: String.t(),
+          declaration_id: String.t(),
+          origin_path: String.t() | nil,
+          slot_path: String.t(),
+          operation: String.t(),
+          prev: term() | nil,
+          next: term() | nil
+        }
+end
+
+defmodule Mlld.SessionFinalState do
+  @moduledoc "Represents the final state of one attached session frame."
+  defstruct [:frame_id, :declaration_id, :name, :origin_path, final_state: %{}]
+
+  @type t :: %__MODULE__{
+          frame_id: String.t(),
+          declaration_id: String.t(),
+          name: String.t(),
+          origin_path: String.t() | nil,
+          final_state: map()
+        }
+end
+
 defmodule Mlld.Metrics do
   @moduledoc "Execution timing metrics from mlld."
   defstruct total_ms: 0.0, parse_ms: 0.0, evaluate_ms: 0.0
@@ -48,11 +77,12 @@ end
 
 defmodule Mlld.HandleEvent do
   @moduledoc "An event from an in-flight execution."
-  defstruct type: "", state_write: nil, guard_denial: nil
+  defstruct type: "", state_write: nil, session_write: nil, guard_denial: nil
 
   @type t :: %__MODULE__{
           type: String.t(),
           state_write: Mlld.StateWrite.t() | nil,
+          session_write: Mlld.SessionWrite.t() | nil,
           guard_denial: Mlld.GuardDenial.t() | nil
         }
 end
@@ -61,6 +91,7 @@ defmodule Mlld.ExecuteResult do
   @moduledoc "Structured output from `execute/3`."
   defstruct output: "",
             state_writes: [],
+            sessions: [],
             exports: [],
             effects: [],
             denials: [],
@@ -70,6 +101,7 @@ defmodule Mlld.ExecuteResult do
   @type t :: %__MODULE__{
           output: String.t(),
           state_writes: [Mlld.StateWrite.t()],
+          sessions: [Mlld.SessionFinalState.t()],
           exports: term(),
           effects: [Mlld.Effect.t()],
           denials: [Mlld.GuardDenial.t()],
@@ -255,6 +287,7 @@ defmodule Mlld.Types do
     Import,
     Metrics,
     Needs,
+    SessionFinalState,
     StateWrite
   }
 
@@ -267,6 +300,11 @@ defmodule Mlld.Types do
       |> Map.get("stateWrites", [])
       |> Enum.flat_map(&decode_state_write/1)
       |> merge_state_writes(streamed_state_writes)
+
+    sessions =
+      result
+      |> Map.get("sessions", [])
+      |> Enum.flat_map(&decode_session_final_state/1)
 
     metrics = decode_metrics(Map.get(result, "metrics"))
 
@@ -288,6 +326,7 @@ defmodule Mlld.Types do
     %ExecuteResult{
       output: decode_output(result),
       state_writes: state_writes,
+      sessions: sessions,
       exports: Map.get(result, "exports", []),
       effects: effects,
       denials: denials,
@@ -456,6 +495,28 @@ defmodule Mlld.Types do
   end
 
   defp decode_state_write(_), do: []
+
+  defp decode_session_final_state(entry) when is_map(entry) do
+    frame_id = entry |> Map.get("frameId", "") |> to_string()
+    declaration_id = entry |> Map.get("declarationId", "") |> to_string()
+    name = entry |> Map.get("name", "") |> to_string()
+
+    if frame_id == "" or declaration_id == "" or name == "" do
+      []
+    else
+      [
+        %SessionFinalState{
+          frame_id: frame_id,
+          declaration_id: declaration_id,
+          name: name,
+          origin_path: normalize_optional_string(Map.get(entry, "originPath")),
+          final_state: normalize_map(Map.get(entry, "finalState")) || %{}
+        }
+      ]
+    end
+  end
+
+  defp decode_session_final_state(_), do: []
 
   defp decode_metrics(%{} = entry) do
     %Metrics{

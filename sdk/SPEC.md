@@ -231,7 +231,7 @@ PENDING -> STREAMING -> COMPLETE
 2. `result()` can be called at any time — it blocks until COMPLETE, then returns the final result. Uncollected events are discarded.
 3. `next_event` and `result()` can be interleaved — consume some events, then call `result()` to get the final answer.
 4. After `result()` returns, `next_event` returns null. The event stream is drained.
-5. State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. Ignoring events does not lose data.
+5. State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. Session writes remain event-stream only; final session state is reported through `ExecuteResult.sessions`.
 6. `cancel()` is valid in any state before COMPLETE.
 
 ### Terminal Semantics
@@ -306,6 +306,7 @@ Events are delivered in order. Event types:
 | Type | Description | Payload |
 |------|-------------|---------|
 | `"state_write"` | A state:// write occurred | `StateWrite` |
+| `"session_write"` | A session slot write committed | `SessionWrite` |
 | `"guard_denial"` | A guard/policy denied an operation | `GuardDenial` |
 | `"complete"` | Execution finished | none |
 
@@ -467,9 +468,11 @@ untrusted(value) -> LabeledValue
 |-------|------|-------------|
 | output | string | Text output from execution |
 | state_writes | StateWrite[] | All state:// writes (merged: streamed + final) |
+| sessions | SessionFinalState[] | Final state for each attached session frame |
 | exports | any | Exported values (array or map) |
 | effects | Effect[] | Output effects |
 | denials | GuardDenial[] | Guard/policy denials observed during execution |
+| trace_events | TraceEvent[] | Runtime trace events emitted during execution |
 | metrics | Metrics? | Execution timing statistics |
 
 ### StateWrite
@@ -480,6 +483,29 @@ untrusted(value) -> LabeledValue
 | value | any | The value (JSON strings auto-decoded to structures) |
 | timestamp | string? | ISO timestamp |
 | security | map? | Security metadata |
+
+### SessionFinalState
+
+| Field | Type | Description |
+|-------|------|-------------|
+| frame_id | string | Stable per-frame identifier |
+| declaration_id | string | Stable session declaration identity |
+| name | string | Canonical declaration name |
+| origin_path | string? | Source path where the declaration lives |
+| final_state | map | Final slot values for the frame |
+
+### SessionWrite
+
+| Field | Type | Description |
+|-------|------|-------------|
+| frame_id | string | Stable per-frame identifier |
+| session_name | string | Canonical declaration name |
+| declaration_id | string | Stable session declaration identity |
+| origin_path | string? | Source path where the declaration lives |
+| slot_path | string | Written slot or nested slot path |
+| operation | string | `seed`, `set`, `write`, `update`, `append`, `increment`, or `clear` |
+| prev | any | Previous value after redaction, when present |
+| next | any | Next value after redaction, when present |
 
 ### GuardDenial
 
@@ -512,8 +538,9 @@ untrusted(value) -> LabeledValue
 
 | Field | Type | Description |
 |-------|------|-------------|
-| type | string | `"state_write"`, `"guard_denial"`, or `"complete"` |
+| type | string | `"state_write"`, `"session_write"`, `"guard_denial"`, or `"complete"` |
 | state_write | StateWrite? | Present when type is `"state_write"` |
+| session_write | SessionWrite? | Present when type is `"session_write"` |
 | guard_denial | GuardDenial? | Present when type is `"guard_denial"` |
 
 ### AnalyzeResult

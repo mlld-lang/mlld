@@ -1,7 +1,7 @@
 defmodule Mlld.Protocol do
   @moduledoc false
 
-  alias Mlld.{GuardDenial, JSON, StateWrite}
+  alias Mlld.{GuardDenial, JSON, SessionWrite, StateWrite}
 
   @spec encode_request(String.t(), integer(), map()) :: {:ok, iodata()} | {:error, term()}
   def encode_request(method, request_id, params)
@@ -70,6 +70,32 @@ defmodule Mlld.Protocol do
   end
 
   def state_write_from_event(_), do: nil
+
+  @spec session_write_from_event(map()) :: SessionWrite.t() | nil
+  def session_write_from_event(%{"type" => "session_write", "session_write" => %{} = payload}) do
+    frame_id = Map.get(payload, "frame_id")
+    session_name = Map.get(payload, "session_name")
+    declaration_id = Map.get(payload, "declaration_id")
+    slot_path = Map.get(payload, "slot_path")
+    operation = Map.get(payload, "operation")
+
+    if Enum.all?([frame_id, session_name, declaration_id, slot_path, operation], &(is_binary(&1) and &1 != "")) do
+      %SessionWrite{
+        frame_id: frame_id,
+        session_name: session_name,
+        declaration_id: declaration_id,
+        origin_path: normalize_optional_string(Map.get(payload, "origin_path")),
+        slot_path: slot_path,
+        operation: operation,
+        prev: Map.get(payload, "prev"),
+        next: Map.get(payload, "next")
+      }
+    else
+      nil
+    end
+  end
+
+  def session_write_from_event(_), do: nil
 
   @spec guard_denial_from_event(map()) :: GuardDenial.t() | nil
   def guard_denial_from_event(%{"type" => "guard_denial", "guard_denial" => %{} = payload}) do

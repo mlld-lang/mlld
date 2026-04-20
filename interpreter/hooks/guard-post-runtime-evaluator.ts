@@ -22,6 +22,10 @@ import {
 import { extractGuardLabelModifications } from './guard-utils';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
 import { buildGuardTraceEmitter, getGuardTraceOperationName } from './guard-trace';
+import {
+  createGuardSessionWriteBuffer,
+  emitAttachedSessionFinalSnapshot
+} from '@interpreter/session/runtime';
 
 const DEFAULT_GUARD_MAX = 3;
 
@@ -85,6 +89,10 @@ export async function evaluatePostGuardRuntime(
 ): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
+  const localScopedConfig = env.getLocalScopedEnvironmentConfig();
+  if (localScopedConfig) {
+    guardEnv.setScopedEnvironmentConfig(localScopedConfig);
+  }
   dependencies.prepareGuardEnvironment(env, guardEnv, guard);
 
   let inputVariable: Variable;
@@ -249,128 +257,161 @@ export async function evaluatePostGuardRuntime(
   });
 
   const evaluateGuardBlockFn = dependencies.evaluateGuardBlock ?? evaluatePostGuardBlock;
-  let action: GuardActionNode | undefined;
-  try {
-    action = await env.withGuardContext(guardContext, async () => {
-      return await evaluateGuardBlockFn(guard.block, guardEnv);
-    });
-  } catch (error) {
-    emitGuardTrace('guard.crash', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    throw error;
-  }
-
-  const metadataBase: Record<string, unknown> = {
-    guardName: guard.name ?? null,
-    guardFilter: `${guard.filterKind}:${guard.filterValue}`,
-    scope,
-    inputPreview,
-    guardContext: contextSnapshotForMetadata,
-    guardInput: inputVariable,
-    timing: 'after'
+  const sessionWriteBuffer = createGuardSessionWriteBuffer();
+  let sessionBufferCompleted = false;
+  const commitSessionBuffer = (): void => {
+    if (sessionBufferCompleted) {
+      return;
+    }
+    sessionBufferCompleted = true;
+    sessionWriteBuffer.commit();
+  };
+  const discardSessionBuffer = (): void => {
+    if (sessionBufferCompleted) {
+      return;
+    }
+    sessionBufferCompleted = true;
+    sessionWriteBuffer.discard();
   };
 
-  if (!action || action.decision === 'allow') {
+  env.pushSessionWriteBuffer(sessionWriteBuffer);
+  try {
+    let action: GuardActionNode | undefined;
+    try {
+      action = await env.withGuardContext(guardContext, async () => {
+        return await evaluateGuardBlockFn(guard.block, guardEnv);
+      });
+    } catch (error) {
+      discardSessionBuffer();
+      emitGuardTrace('guard.crash', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+
+    const metadataBase: Record<string, unknown> = {
+      guardName: guard.name ?? null,
+      guardFilter: `${guard.filterKind}:${guard.filterValue}`,
+      scope,
+      inputPreview,
+      guardContext: contextSnapshotForMetadata,
+      guardInput: inputVariable,
+      timing: 'after'
+    };
+
+    if (!action || action.decision === 'allow') {
+      emitGuardTrace('guard.evaluate', {
+        decision: 'allow',
+        matched: Boolean(action)
+      });
+      emitGuardTrace('guard.allow', {
+        matched: Boolean(action),
+        ...(action?.warning ? { warning: action.warning } : {})
+      });
+      const labelModifications = extractGuardLabelModifications(action);
+      const allowHint =
+        action?.warning
+          ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
+          : undefined;
+      const evaluateGuardReplacementFn =
+        dependencies.evaluateGuardReplacement ?? evaluatePostGuardReplacement;
+      const replacement = await env.withGuardContext(guardContext, async () =>
+        evaluateGuardReplacementFn(
+          action,
+          guardEnv,
+          guard,
+          inputVariable,
+          dependencies.replacementDependencies
+        )
+      );
+      commitSessionBuffer();
+      return {
+        guardName: guard.name ?? null,
+        decision: 'allow',
+        timing: 'after',
+        replacement,
+        hint: allowHint,
+        labelModifications,
+        metadata: metadataBase
+      };
+    }
+
+    if (action.decision === 'env') {
+      discardSessionBuffer();
+      emitGuardTrace('guard.evaluate', {
+        decision: 'env',
+        matched: true
+      });
+      const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
+      throw new MlldWhenExpressionError(
+        'Guard env actions apply only before execution',
+        location,
+        location?.filePath
+          ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) }
+          : undefined,
+        { env: guardEnv }
+      );
+    }
+
+    const buildDecisionMetadataFn =
+      dependencies.buildDecisionMetadata ?? buildPostDecisionMetadata;
+    const metadata = buildDecisionMetadataFn(action, guard, {
+      inputPreview,
+      inputVariable,
+      contextSnapshot: contextSnapshotForMetadata
+    });
     emitGuardTrace('guard.evaluate', {
-      decision: 'allow',
-      matched: Boolean(action)
+      decision: action.decision,
+      matched: true,
+      ...(action.message ? { message: action.message } : {})
     });
-    emitGuardTrace('guard.allow', {
-      matched: Boolean(action),
-      ...(action?.warning ? { warning: action.warning } : {})
+    emitGuardTrace(`guard.${action.decision}`, {
+      matched: true,
+      ...(action.message ? { message: action.message } : {})
     });
-    const labelModifications = extractGuardLabelModifications(action);
-    const allowHint =
-      action?.warning
-        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
-        : undefined;
-    const evaluateGuardReplacementFn =
-      dependencies.evaluateGuardReplacement ?? evaluatePostGuardReplacement;
-    const replacement = await env.withGuardContext(guardContext, async () =>
-      evaluateGuardReplacementFn(
-        action,
-        guardEnv,
-        guard,
-        inputVariable,
-        dependencies.replacementDependencies
-      )
-    );
-    return {
-      guardName: guard.name ?? null,
-      decision: 'allow',
-      timing: 'after',
-      replacement,
-      hint: allowHint,
-      labelModifications,
-      metadata: metadataBase
-    };
+
+    if (action.decision === 'deny') {
+      discardSessionBuffer();
+      emitAttachedSessionFinalSnapshot(env);
+      return {
+        guardName: guard.name ?? null,
+        decision: 'deny',
+        timing: 'after',
+        reason: metadata.reason as string | undefined,
+        metadata
+      };
+    }
+
+    if (action.decision === 'retry') {
+      discardSessionBuffer();
+      return {
+        guardName: guard.name ?? null,
+        decision: 'retry',
+        timing: 'after',
+        reason: metadata.reason as string | undefined,
+        hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
+        metadata
+      };
+    }
+
+    if (action.decision === 'resume') {
+      discardSessionBuffer();
+      return {
+        guardName: guard.name ?? null,
+        decision: 'resume',
+        timing: 'after',
+        reason: metadata.reason as string | undefined,
+        hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
+        metadata
+      };
+    }
+
+    commitSessionBuffer();
+    return { guardName: guard.name ?? null, decision: 'allow', timing: 'after', metadata };
+  } finally {
+    env.popSessionWriteBuffer(sessionWriteBuffer);
+    if (!sessionBufferCompleted) {
+      sessionWriteBuffer.discard();
+    }
   }
-
-  if (action.decision === 'env') {
-    emitGuardTrace('guard.evaluate', {
-      decision: 'env',
-      matched: true
-    });
-    const location = astLocationToSourceLocation(action.location, guardEnv.getCurrentFilePath());
-    throw new MlldWhenExpressionError(
-      'Guard env actions apply only before execution',
-      location,
-      location?.filePath
-        ? { filePath: location.filePath, sourceContent: guardEnv.getSource(location.filePath) }
-        : undefined,
-      { env: guardEnv }
-    );
-  }
-
-  const buildDecisionMetadataFn =
-    dependencies.buildDecisionMetadata ?? buildPostDecisionMetadata;
-  const metadata = buildDecisionMetadataFn(action, guard, {
-    inputPreview,
-    inputVariable,
-    contextSnapshot: contextSnapshotForMetadata
-  });
-  emitGuardTrace('guard.evaluate', {
-    decision: action.decision,
-    matched: true,
-    ...(action.message ? { message: action.message } : {})
-  });
-  emitGuardTrace(`guard.${action.decision}`, {
-    matched: true,
-    ...(action.message ? { message: action.message } : {})
-  });
-
-  if (action.decision === 'deny') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'deny',
-      timing: 'after',
-      reason: metadata.reason as string | undefined,
-      metadata
-    };
-  }
-
-  if (action.decision === 'retry') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'retry',
-      timing: 'after',
-      reason: metadata.reason as string | undefined,
-      hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
-      metadata
-    };
-  }
-
-  if (action.decision === 'resume') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'resume',
-      timing: 'after',
-      reason: metadata.reason as string | undefined,
-      hint: action.message ? { guardName: guard.name ?? null, hint: action.message } : undefined,
-      metadata
-    };
-  }
-
-  return { guardName: guard.name ?? null, decision: 'allow', timing: 'after', metadata };
 }

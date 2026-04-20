@@ -6,6 +6,7 @@ import {
   TOOL_COLLECTION_CAPTURED_MODULE_ENV_EXPORT_KEY,
   TOOL_COLLECTION_METADATA_EXPORT_KEY
 } from '@core/types/tools';
+import { serializeSessionDefinition } from '@core/types/session';
 import type { ObjectReferenceResolver } from '../ObjectReferenceResolver';
 import { getCapturedModuleEnv } from './executable/CapturedModuleEnvKeychain';
 import {
@@ -146,6 +147,13 @@ export class ModuleExportSerializer {
     variable: Variable,
     context: ModuleExportSerializationContext
   ): any {
+    if (variable.internal?.isSessionSchema === true && context.childEnv) {
+      const definition = context.childEnv.getSessionDefinition(name);
+      if (definition) {
+        return serializeSessionDefinition(context.childEnv, definition);
+      }
+    }
+
     if (variable.internal?.isShelf === true && context.childEnv) {
       const definition = context.childEnv.getShelfDefinition(name);
       if (definition) {

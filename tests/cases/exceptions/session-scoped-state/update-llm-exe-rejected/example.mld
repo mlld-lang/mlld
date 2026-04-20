@@ -1,0 +1,14 @@
+/var session @planner = {
+  count: number?
+}
+
+/exe llm @bad(value, config) = js {
+  return value;
+}
+
+/show box with {
+  session: @planner,
+  seed: { count: 1 }
+} [
+  @planner.update("count", @bad)
+]

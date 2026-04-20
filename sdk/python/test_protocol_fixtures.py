@@ -24,6 +24,8 @@ class ProtocolFixturesTest(unittest.TestCase):
         self.assertEqual(result.output, "fixture-output")
         self.assertEqual(result.state_writes[0].path, "payload")
         self.assertEqual(result.state_writes[0].value, {"enabled": True, "nested": {"count": 2}})
+        self.assertEqual(result.sessions[0].name, "planner")
+        self.assertEqual(result.sessions[0].final_state, {"count": 2, "status": "done"})
         self.assertEqual(
             result.state_writes[0].security,
             {"labels": ["trusted"], "taint": ["untrusted"]},
@@ -60,6 +62,19 @@ class ProtocolFixturesTest(unittest.TestCase):
         self.assertEqual(event.path, "payload")
         self.assertEqual(event.value, {"enabled": True})
         self.assertEqual(event.security, {"labels": ["trusted"], "taint": ["secret"]})
+
+    def test_session_write_event_fixture_round_trips_fields(self) -> None:
+        envelope = _load_fixture("session-write-event.json")
+
+        event = mlld._session_write_from_event(envelope["event"])
+
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertEqual(event.session_name, "planner")
+        self.assertEqual(event.slot_path, "count")
+        self.assertEqual(event.operation, "increment")
+        self.assertEqual(event.prev, 1)
+        self.assertEqual(event.next, 2)
 
     def test_guard_denial_event_fixture_round_trips_fields(self) -> None:
         envelope = _load_fixture("guard-denial-event.json")

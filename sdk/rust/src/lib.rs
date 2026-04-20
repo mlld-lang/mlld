@@ -278,6 +278,9 @@ impl RequestHandle {
                     self.state_write_events.push(write.clone());
                     return Ok(Some(HandleEvent::state_write(write)));
                 }
+                if let Some(session_write) = parse_session_write_event(&event) {
+                    return Ok(Some(HandleEvent::session_write(session_write)));
+                }
                 if let Some(denial) = parse_guard_denial_event(&event) {
                     self.guard_denial_events.push(denial.clone());
                     return Ok(Some(HandleEvent::guard_denial(denial)));
@@ -1380,6 +1383,27 @@ fn parse_state_write_event(event: &Value) -> Option<StateWrite> {
     })
 }
 
+fn parse_session_write_event(event: &Value) -> Option<SessionWrite> {
+    if event.get("type").and_then(Value::as_str) != Some("session_write") {
+        return None;
+    }
+
+    let payload = event.get("session_write")?;
+    Some(SessionWrite {
+        frame_id: payload.get("frame_id")?.as_str()?.to_string(),
+        session_name: payload.get("session_name")?.as_str()?.to_string(),
+        declaration_id: payload.get("declaration_id")?.as_str()?.to_string(),
+        origin_path: payload
+            .get("origin_path")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        slot_path: payload.get("slot_path")?.as_str()?.to_string(),
+        operation: payload.get("operation")?.as_str()?.to_string(),
+        prev: payload.get("prev").cloned(),
+        next: payload.get("next").cloned(),
+    })
+}
+
 fn parse_guard_denial_event(event: &Value) -> Option<GuardDenial> {
     if event.get("type").and_then(Value::as_str) != Some("guard_denial") {
         return None;
@@ -1850,6 +1874,9 @@ pub struct ExecuteResult {
     pub state_writes: Vec<StateWrite>,
 
     #[serde(default)]
+    pub sessions: Vec<SessionFinalState>,
+
+    #[serde(default)]
     pub exports: Value,
 
     #[serde(default)]
@@ -1907,6 +1934,7 @@ pub struct HandleEvent {
     #[serde(rename = "type")]
     pub event_type: String,
     pub state_write: Option<StateWrite>,
+    pub session_write: Option<SessionWrite>,
     pub guard_denial: Option<GuardDenial>,
 }
 
@@ -1915,6 +1943,16 @@ impl HandleEvent {
         Self {
             event_type: "state_write".to_string(),
             state_write: Some(state_write),
+            session_write: None,
+            guard_denial: None,
+        }
+    }
+
+    fn session_write(session_write: SessionWrite) -> Self {
+        Self {
+            event_type: "session_write".to_string(),
+            state_write: None,
+            session_write: Some(session_write),
             guard_denial: None,
         }
     }
@@ -1923,6 +1961,7 @@ impl HandleEvent {
         Self {
             event_type: "guard_denial".to_string(),
             state_write: None,
+            session_write: None,
             guard_denial: Some(guard_denial),
         }
     }
@@ -1931,6 +1970,7 @@ impl HandleEvent {
         Self {
             event_type: "complete".to_string(),
             state_write: None,
+            session_write: None,
             guard_denial: None,
         }
     }
@@ -1943,6 +1983,31 @@ pub struct StateWrite {
     pub value: Value,
     pub timestamp: Option<String>,
     pub security: Option<Value>,
+}
+
+/// A streamed session write notification.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SessionWrite {
+    pub frame_id: String,
+    pub session_name: String,
+    pub declaration_id: String,
+    pub origin_path: Option<String>,
+    pub slot_path: String,
+    pub operation: String,
+    pub prev: Option<Value>,
+    pub next: Option<Value>,
+}
+
+/// Final state for an attached session frame.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFinalState {
+    pub frame_id: String,
+    pub declaration_id: String,
+    pub name: String,
+    pub origin_path: Option<String>,
+    #[serde(default)]
+    pub final_state: Value,
 }
 
 /// Execution statistics.
@@ -2962,6 +3027,15 @@ mod tests {
             serde_json::from_value(fixture["result"].clone()).expect("decode execute fixture");
 
         assert_eq!(result.state_writes.len(), 1);
+        assert_eq!(result.sessions.len(), 1);
+        assert_eq!(result.sessions[0].name, "planner");
+        assert_eq!(
+            result.sessions[0]
+                .final_state
+                .get("status")
+                .and_then(Value::as_str),
+            Some("done")
+        );
         assert_eq!(
             result.state_writes[0]
                 .security
@@ -3013,6 +3087,19 @@ mod tests {
                 .and_then(Value::as_str),
             Some("trusted")
         );
+    }
+
+    #[test]
+    fn test_session_write_event_fixture_preserves_fields() {
+        let fixture = read_fixture("session-write-event.json");
+        let session_write =
+            parse_session_write_event(&fixture["event"]).expect("decode session-write fixture");
+
+        assert_eq!(session_write.session_name, "planner");
+        assert_eq!(session_write.slot_path, "count");
+        assert_eq!(session_write.operation, "increment");
+        assert_eq!(session_write.prev.as_ref().and_then(Value::as_i64), Some(1));
+        assert_eq!(session_write.next.as_ref().and_then(Value::as_i64), Some(2));
     }
 
     #[test]

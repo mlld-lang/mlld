@@ -187,7 +187,7 @@ export async function resolveVariableReference({
     (!firstFieldName || !NON_PRESERVING_TOP_LEVEL_FIELDS.has(firstFieldName));
   const resolutionContext =
     hasFieldAccess ? ResolutionContext.FieldAccess
-    : preserveBareVariableReference ? ResolutionContext.FieldAccess
+    : preserveBareVariableReference ? ResolutionContext.VariableCopy
     : isInExpression ? ResolutionContext.Equality
     : ResolutionContext.FieldAccess;
 

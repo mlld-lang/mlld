@@ -476,6 +476,14 @@ export function canUseRecordForInput(definition: RecordDefinition): boolean {
   return definition.direction !== 'output';
 }
 
+export function canUseRecordForSessionSlot(definition: RecordDefinition): boolean {
+  return (
+    canUseRecordForInput(definition) &&
+    definition.display.kind === 'open' &&
+    !Array.isArray(definition.when)
+  );
+}
+
 export function resolveRecordFactCorrelation(definition: Pick<RecordDefinition, 'fields' | 'correlate'>): boolean {
   if (typeof definition.correlate === 'boolean') {
     return definition.correlate;

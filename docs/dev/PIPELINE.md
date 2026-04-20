@@ -111,6 +111,13 @@ Currently implemented pipeline-related `/with` keys:
 - `stream`
 - `streamFormat`
 
+Bridge-scoped `/with` keys also exist outside pipeline runtime:
+
+- `session`
+- `seed`
+
+Those keys are handled in exec invocation / bridge setup, not in pipeline execution. Attaching `session` materializes a per-call session drawer in the same bridge-frame family as the handle registry and scoped shelf state.
+
 Related `asSection` support:
 
 - `detectPipeline`/`extractPipelineMetadata` propagate `asSection` metadata where present.

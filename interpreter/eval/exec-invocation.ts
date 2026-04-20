@@ -52,6 +52,7 @@ import {
   type ToolProvenance
 } from '@core/types/security';
 import type { FactSourceHandle } from '@core/types/handle';
+import { isShelfSlotRefValue } from '@core/types/shelf';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WhenExpressionNode } from '@core/types/when';
@@ -158,6 +159,13 @@ import {
   applyInvocationScopedRuntimeConfig,
   normalizeInvocationWithClause
 } from './exec/scoped-runtime-config';
+import {
+  applySeedWrites,
+  disposeSessionFrame,
+  getNormalizedSessionAttachment,
+  materializeSession,
+  resolveAttachedSessionInstance
+} from '@interpreter/session/runtime';
 import { resolveConfiguredOutputRecordDefinition } from './records/resolve-record-definition';
 import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
 import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
@@ -256,6 +264,59 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   }
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
+}
+
+function hasSecurityDescriptorSignals(descriptor: SecurityDescriptor | undefined): boolean {
+  return Boolean(
+    descriptor &&
+      (
+        descriptor.labels.length > 0 ||
+        descriptor.taint.length > 0 ||
+        descriptor.attestations.length > 0 ||
+        descriptor.sources.length > 0 ||
+        (descriptor.urls?.length ?? 0) > 0
+      )
+  );
+}
+
+function inferStructuredArgType(value: unknown): 'text' | 'json' | 'array' | 'object' {
+  if (typeof value === 'string') {
+    return 'text';
+  }
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (value && typeof value === 'object') {
+    return 'object';
+  }
+  return 'json';
+}
+
+function preserveStructuredArgSecurity(
+  value: unknown,
+  originalVariable: Variable | undefined,
+  preserveStructuredArgs?: boolean
+): unknown {
+  if (
+    !preserveStructuredArgs ||
+    !originalVariable ||
+    isStructuredValue(value) ||
+    isVariable(value) ||
+    isShelfSlotRefValue(value)
+  ) {
+    return value;
+  }
+
+  const descriptor = originalVariable.mx
+    ? varMxToSecurityDescriptor(originalVariable.mx as VariableContext)
+    : undefined;
+  if (!hasSecurityDescriptorSignals(descriptor)) {
+    return value;
+  }
+
+  return wrapStructured(value, inferStructuredArgType(value), undefined, {
+    security: descriptor
+  });
 }
 
 function isVariable(value: unknown): value is Variable {
@@ -500,9 +561,15 @@ async function normalizeExecutableDispatchArguments(
   const visibleSet = new Set(visibleParamNames);
   const normalizedEntries = new Map<string, CollectionDispatchArgEntry>();
   const normalizedMaterializedArgs = materializedArgs
-    ? [...materializedArgs]
+    ? materializedArgs.map((arg, index) =>
+        preserveStructuredArgSecurity(arg, originalVariables[index], preserveStructuredArgs)
+      )
     : await Promise.all(
         evaluatedArgs.map(arg => materializeCollectionDispatchArg(arg, env, { preserveStructuredArgs }))
+      ).then(args =>
+        args.map((arg, index) =>
+          preserveStructuredArgSecurity(arg, originalVariables[index], preserveStructuredArgs)
+        )
       );
 
   const shouldSpreadNamedObject =
@@ -2849,7 +2916,15 @@ async function evaluateExecInvocationInternal(
           }
         }
       } else {
-        objectValue = await extractVariableValue(objectVar, env);
+        if (objectVar.internal?.isSessionSchema === true) {
+          const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+          objectValue = await resolveVariable(objectVar, env, ResolutionContext.FieldAccess);
+          if (isVariable(objectValue)) {
+            objectValue = await extractVariableValue(objectValue, env);
+          }
+        } else {
+          objectValue = await extractVariableValue(objectVar, env);
+        }
 
         if (typeof objectValue === 'object' && objectValue !== null) {
           const toolCollection =
@@ -3734,6 +3809,12 @@ async function evaluateExecInvocationInternal(
     node,
     invocationWithClause
   });
+  let sessionSeedApplied = false;
+  let sessionSeedPending = false;
+  const variableLabels = variable.mx?.labels;
+  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  let attachedSessionFrameId: string | undefined;
+  let attachedSessionCleanupRegistered = false;
   const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
   if (importedExecutableSourcePath) {
     const sourceScopedEnv = runtimeEnv.createChild();
@@ -3744,64 +3825,103 @@ async function evaluateExecInvocationInternal(
     runtimeEnv = sourceScopedEnv;
   }
 
+  const preattachedSession = hasLlmLabel ? getNormalizedSessionAttachment(runtimeEnv) : undefined;
+  if (preattachedSession) {
+    attachedSessionFrameId = randomUUID();
+    const sessionInstance = materializeSession(
+      preattachedSession.definition,
+      runtimeEnv,
+      attachedSessionFrameId
+    );
+    runtimeEnv.attachSessionInstance(attachedSessionFrameId, sessionInstance);
+    try {
+      await applySeedWrites(sessionInstance, preattachedSession.seed, runtimeEnv);
+      sessionSeedApplied = true;
+    } catch (error) {
+      runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
+      throw error;
+    }
+  }
+
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
-  let { evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
-    args,
-    env: runtimeEnv,
-    commandName,
-    definition,
-    services: {
-      interpolate: interpolateWithResultDescriptor,
-      evaluateExecInvocation,
-      mergeResultDescriptor
+  let evaluatedArgStrings: string[] = [];
+  let evaluatedArgs: unknown[] = [];
+  let execEnv!: Environment;
+  try {
+    ({ evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
+      args,
+      env: runtimeEnv,
+      commandName,
+      definition,
+      services: {
+        interpolate: interpolateWithResultDescriptor,
+        evaluateExecInvocation,
+        mergeResultDescriptor
+      }
+    }));
+
+    if (collectionDispatchContext) {
+      const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
+      const scopedEnv = runtimeEnv.createChild();
+      scopedEnv.setScopedEnvironmentConfig({
+        ...(scopedConfig ?? {}),
+        tools: collectionDispatchContext.collection
+      });
+      runtimeEnv = scopedEnv;
     }
-  });
+    const hasInvocationPolicy =
+      invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy');
+    const replaceInvocationPolicy =
+      invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'replace')
+        ? await resolveInvocationPolicyReplaceFlag(invocationWithClause.replace, runtimeEnv)
+        : false;
+    if (replaceInvocationPolicy && !hasInvocationPolicy) {
+      throw new MlldInterpreterError('with { replace: true } requires with { policy: ... }');
+    }
+    const resolvedPolicyFragment =
+      hasInvocationPolicy
+        ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv, {
+            replace: replaceInvocationPolicy
+          })
+        : undefined;
+    if (resolvedPolicyFragment) {
+      const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment, {
+        replace: replaceInvocationPolicy
+      });
+      runtimeEnv = policyScope.env;
+    }
 
-  if (collectionDispatchContext) {
-    const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
-    const scopedEnv = runtimeEnv.createChild();
-    scopedEnv.setScopedEnvironmentConfig({
-      ...(scopedConfig ?? {}),
-      tools: collectionDispatchContext.collection
-    });
-    runtimeEnv = scopedEnv;
-  }
-  const hasInvocationPolicy =
-    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'policy');
-  const replaceInvocationPolicy =
-    invocationWithClause && Object.prototype.hasOwnProperty.call(invocationWithClause, 'replace')
-      ? await resolveInvocationPolicyReplaceFlag(invocationWithClause.replace, runtimeEnv)
-      : false;
-  if (replaceInvocationPolicy && !hasInvocationPolicy) {
-    throw new MlldInterpreterError('with { replace: true } requires with { policy: ... }');
-  }
-  const resolvedPolicyFragment =
-    hasInvocationPolicy
-      ? await resolveInvocationPolicyFragment(invocationWithClause.policy, runtimeEnv, {
-          replace: replaceInvocationPolicy
-        })
-      : undefined;
-  if (resolvedPolicyFragment) {
-    const policyScope = createInvocationPolicyScope(runtimeEnv, resolvedPolicyFragment, {
-      replace: replaceInvocationPolicy
-    });
-    runtimeEnv = policyScope.env;
-  }
+    policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
-  policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
-
-  // Function-scope boundary stops findVisibleVariableOwner from walking past
-  // this frame into caller/ancestor scopes. Setting it unconditionally is
-  // what fixes the m-20d3/m-2f2c family of sibling-call leaks — any local
-  // exe in a deep chain that does `let @x = ...` otherwise lets the walker
-  // reach prior siblings' let-bindings and param envs. Narrowing the
-  // condition (to imported-only, or to imported+wrapper) regresses that fix
-  // because exes like @slotValue dispatch through captured-module-env paths
-  // where mx.isImported is false even though they're running inside an
-  // imported chain.
-  let execEnv = runtimeEnv.createChild();
-  execEnv.setFunctionScopeBoundary(true);
+    // Function-scope boundary stops findVisibleVariableOwner from walking past
+    // this frame into caller/ancestor scopes. Setting it unconditionally is
+    // what fixes the m-20d3/m-2f2c family of sibling-call leaks — any local
+    // exe in a deep chain that does `let @x = ...` otherwise lets the walker
+    // reach prior siblings' let-bindings and param envs. Narrowing the
+    // condition (to imported-only, or to imported+wrapper) regresses that fix
+    // because exes like @slotValue dispatch through captured-module-env paths
+    // where mx.isImported is false even though they're running inside an
+    // imported chain.
+    const localScopedConfig = runtimeEnv.getLocalScopedEnvironmentConfig();
+    execEnv = runtimeEnv.createChild();
+    if (localScopedConfig) {
+      execEnv.setScopedEnvironmentConfig(localScopedConfig);
+    }
+    execEnv.setFunctionScopeBoundary(true);
+    if (attachedSessionFrameId) {
+      const sessionFrameId = attachedSessionFrameId;
+      execEnv.registerScopeCleanup(async () => {
+        disposeSessionFrame(sessionFrameId, execEnv);
+      });
+      attachedSessionCleanupRegistered = true;
+    }
+  } catch (error) {
+    if (attachedSessionFrameId && !attachedSessionCleanupRegistered) {
+      runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
+    }
+    throw error;
+  }
 
   // Set captured module environment for variable lookup fallback
   const capturedModuleEnv = await ensureCapturedModuleEnvMap(
@@ -4126,8 +4246,6 @@ async function evaluateExecInvocationInternal(
   // that accepts a config object. Tool-bridge setup remains opt-in via
   // config.tools. Shelf-scoped llm calls also receive agent-visible shelf notes
   // in config.system.
-  const variableLabels = variable.mx?.labels;
-  const hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
   const llmParamNames = Array.isArray(definition.paramNames) ? definition.paramNames : [];
   if (hasLlmLabel && llmParamNames.length >= 2) {
     const originalConfigArg = evaluatedArgs[1];
@@ -4145,6 +4263,7 @@ async function evaluateExecInvocationInternal(
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
       const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
       const hasWritableShelfScope = (getNormalizedShelfScope(execEnv)?.writeSlotBindings.length ?? 0) > 0;
+      const hasSessionAttachment = Boolean(getNormalizedSessionAttachment(execEnv));
 
       llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
@@ -4176,11 +4295,13 @@ async function evaluateExecInvocationInternal(
         }
       }
 
-      if (hasToolSelection || hasWritableShelfScope) {
+      if (hasToolSelection || hasWritableShelfScope || hasSessionAttachment) {
         // config.tools selects capabilities for the bridge; writable shelf scope can also
         // force an MCP bridge so @shelve is auto-provisioned for boxed llm calls. Neither
         // selection should seed the conversation descriptor used for policy/attestation checks.
-        resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
+        if (hasToolSelection || hasWritableShelfScope) {
+          resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
+        }
         const toolsValue = hasToolSelection ? nextConfig.tools : [];
         if (isLlmResumeContinuation) {
           assertLlmResumeBridgeToolsEmpty(toolsValue);
@@ -4192,6 +4313,7 @@ async function evaluateExecInvocationInternal(
         const callConfig = await createCallMcpConfig({
           tools: toolsValue,
           env: execEnv,
+          ...(attachedSessionFrameId ? { sessionId: attachedSessionFrameId } : {}),
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
           isMcpContext: true,
@@ -4210,6 +4332,27 @@ async function evaluateExecInvocationInternal(
         if (nextSystem !== undefined) {
           nextConfig.system = nextSystem;
           didUpdateConfigArg ||= nextSystem !== previousSystem;
+        }
+        const sessionAttachment = getNormalizedSessionAttachment(execEnv);
+        if (sessionAttachment && !attachedSessionFrameId) {
+          const existingSessionInstance = execEnv.getSessionInstance(
+            callConfig.sessionId,
+            sessionAttachment.definition.id
+          );
+          if (!existingSessionInstance) {
+            const sessionInstance = materializeSession(
+              sessionAttachment.definition,
+              execEnv,
+              callConfig.sessionId
+            );
+            execEnv.attachSessionInstance(callConfig.sessionId, sessionInstance);
+            execEnv.registerScopeCleanup(async () => {
+              disposeSessionFrame(callConfig.sessionId, execEnv);
+            });
+            sessionSeedPending = true;
+          }
+        } else if (attachedSessionFrameId) {
+          attachedSessionCleanupRegistered = true;
         }
         execEnv.registerScopeCleanup(callConfig.cleanup);
         execEnv.setLlmToolConfig(callConfig);
@@ -4623,6 +4766,23 @@ async function evaluateExecInvocationInternal(
         transformedGuardSet,
         createParameterMetadata
       });
+      if (!sessionSeedApplied && sessionSeedPending) {
+        const sessionAttachment = getNormalizedSessionAttachment(execEnv);
+        if (sessionAttachment) {
+          const sessionInstance = resolveAttachedSessionInstance(sessionAttachment.definition, execEnv);
+          if (!sessionInstance) {
+            throw new MlldInterpreterError(
+              `Session @${sessionAttachment.definition.canonicalName} failed to attach to the current frame.`,
+              'session',
+              undefined,
+              { code: 'SESSION_NOT_ATTACHED' }
+            );
+          }
+          await applySeedWrites(sessionInstance, sessionAttachment.seed, execEnv);
+          sessionSeedApplied = true;
+          sessionSeedPending = false;
+        }
+      }
 
       // Capture descriptors from executable definition and parameters
       const descriptorPieces: SecurityDescriptor[] = [];

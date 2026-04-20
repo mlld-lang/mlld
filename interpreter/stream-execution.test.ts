@@ -6,6 +6,17 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { Environment } from '@interpreter/env/Environment';
 import { StreamingManager } from '@interpreter/streaming/streaming-manager';
+import {
+  createGuardSessionWriteBuffer,
+  createSessionAccessorVariable,
+  disposeSessionFrame,
+  materializeSession
+} from '@interpreter/session/runtime';
+import { fileURLToPath } from 'url';
+
+const callToolFromConfigPath = fileURLToPath(
+  new URL('../tests/support/mcp/call-tool-from-config.cjs', import.meta.url)
+);
 
 describe('StreamExecution', () => {
   const fileSystem = new MemoryFileSystem();
@@ -216,6 +227,176 @@ describe('StreamExecution', () => {
           reason: 'blocked by policy',
           args: { value: 'hello' }
         })
+      })
+    ]);
+  });
+
+  it('emits session_write events for attached session mutations', async () => {
+    const emitter = new ExecutionEmitter();
+    const writes: any[] = [];
+    emitter.on('session_write', event => writes.push(event));
+
+    const handle = (await interpret(
+      [
+        '/var session @planner = {',
+        '  count: number?',
+        '}',
+        '/exe tool:w @track() = [',
+        '  @planner.increment("count")',
+        '  => @planner.count',
+        ']',
+        '/var @toolList = [@track]',
+        `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+        '/var @result = @agent("hello", { tools: @toolList }) with { session: @planner }'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        mode: 'stream',
+        emitter,
+        streaming: { enabled: false }
+      }
+    )) as StreamHandle;
+
+    await handle.done();
+    await handle.result();
+
+    expect(writes).toEqual([
+      expect.objectContaining({
+        type: 'session_write',
+        session_write: expect.objectContaining({
+          session_name: 'planner',
+          slot_path: 'count',
+          operation: 'increment',
+          next: 1
+        })
+      })
+    ]);
+  });
+
+  it('does not emit session_write events for writes discarded by a denying guard', async () => {
+    const emitter = new ExecutionEmitter();
+    const writes: any[] = [];
+    emitter.on('session_write', event => writes.push(event));
+
+    const handle = (await interpret(
+      [
+        '/guard @block before tool:w = when [',
+        '  * => deny "blocked"',
+        ']',
+        '/var session @planner = {',
+        '  count: number?',
+        '}',
+        '/exe tool:w @track() = [',
+        '  @planner.increment("count")',
+        '  => @planner.count',
+        ']',
+        '/var @toolList = [@track]',
+        `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+        '/var @result = @agent("hello", { tools: @toolList }) with {',
+        '  session: @planner,',
+        '  seed: { count: 1 }',
+        '}'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        mode: 'stream',
+        emitter,
+        streaming: { enabled: false }
+      }
+    )) as StreamHandle;
+
+    await expect(handle.result()).rejects.toThrow(/blocked/i);
+    await expect(handle.done()).rejects.toThrow(/blocked/i);
+
+    expect(writes).toEqual([
+      expect.objectContaining({
+        type: 'session_write',
+        session_write: expect.objectContaining({
+          session_name: 'planner',
+          slot_path: 'count',
+          operation: 'seed',
+          next: 1
+        })
+      })
+    ]);
+    expect(writes).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          session_write: expect.objectContaining({
+            operation: 'increment'
+          })
+        })
+      ])
+    );
+  });
+
+  it('drops buffered session traces and SDK events when a guard session buffer is discarded', async () => {
+    const emitter = new ExecutionEmitter();
+    const writes: any[] = [];
+    emitter.on('session_write', event => writes.push(event));
+    let capturedEnv: Environment | undefined;
+
+    await interpret(
+      [
+        '/var session @planner = {',
+        '  count: number?',
+        '}'
+      ].join('\n'),
+      {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        mode: 'structured',
+        trace: 'effects',
+        emitter,
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      }
+    );
+
+    expect(capturedEnv).toBeDefined();
+    capturedEnv!.enableSDKEvents(emitter);
+    capturedEnv!.setRuntimeTrace('effects');
+
+    const definition = capturedEnv!.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'guard-buffer-session';
+    capturedEnv!.setLlmToolConfig({ sessionId } as any);
+    const instance = materializeSession(definition!, capturedEnv!, sessionId);
+    instance.setSlot('count', 0);
+    instance.setTraceSlot('count', 0);
+    capturedEnv!.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, capturedEnv!);
+    const incrementMethod = (accessor.value as Record<string, any>).increment;
+    const incrementExecutable = incrementMethod?.internal?.executableDef;
+    expect(incrementExecutable).toBeDefined();
+
+    const sessionWriteBuffer = createGuardSessionWriteBuffer();
+    capturedEnv!.pushSessionWriteBuffer(sessionWriteBuffer);
+    await incrementExecutable!.fn('count', capturedEnv!);
+    sessionWriteBuffer.discard();
+    capturedEnv!.popSessionWriteBuffer(sessionWriteBuffer);
+
+    disposeSessionFrame(sessionId, capturedEnv!);
+
+    expect(writes).toEqual([]);
+    expect(capturedEnv?.getSessionWrites()).toEqual([]);
+    expect(capturedEnv?.getRuntimeTraceEvents().filter(event => event.category === 'session')).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({ event: 'session.write' })
+      ])
+    );
+    expect(capturedEnv?.getCompletedSessions()).toEqual([
+      expect.objectContaining({
+        name: 'planner',
+        finalState: { count: 0 }
       })
     ]);
   });

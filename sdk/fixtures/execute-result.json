@@ -22,6 +22,18 @@
         }
       }
     ],
+    "sessions": [
+      {
+        "frameId": "session-123",
+        "declarationId": "planner-decl",
+        "name": "planner",
+        "originPath": "/planner.mld",
+        "finalState": {
+          "count": 2,
+          "status": "done"
+        }
+      }
+    ],
     "exports": {
       "@answer": {
         "name": "@answer",

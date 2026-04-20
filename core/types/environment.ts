@@ -1,4 +1,5 @@
 import type { DataLabel } from './security';
+import type { SessionDefinition, SessionScopedAttachment } from './session';
 import type { NormalizedShelfScope, ShelfDefinition } from './shelf';
 import type { ToolCollection } from './tools';
 import type { PolicyConfig } from '../policy/union';
@@ -20,6 +21,8 @@ export type EnvironmentConfig = {
   profiles?: Record<string, unknown>;
   mcpConfig?: unknown;
   shelf?: NormalizedShelfScope | ShelfDefinition;
+  session?: SessionScopedAttachment | SessionDefinition;
+  seed?: unknown;
   tools?: ToolCollection | string[];
   _policyDerivedConstraints?: PolicyDerivedConstraints;
   [key: string]: unknown;

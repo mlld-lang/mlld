@@ -1,0 +1,70 @@
+/exe @callTool(configPath, toolName, argsJson) = node {
+  const fs = require('node:fs');
+  const net = require('node:net');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const socketPath = config?.mcpServers?.mlld_tools?.env?.MLLD_FUNCTION_MCP_SOCKET;
+  const args = JSON.parse(argsJson || '{}');
+
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection(socketPath);
+    let buffer = '';
+
+    socket.once('error', reject);
+    socket.on('data', chunk => {
+      buffer += chunk.toString('utf8');
+      const newlineIndex = buffer.indexOf('\n');
+      if (newlineIndex === -1) return;
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      socket.end();
+      if (!line) {
+        reject(new Error('Empty JSON-RPC response'));
+        return;
+      }
+
+      try {
+        const response = JSON.parse(line);
+        if (response?.error) {
+          reject(new Error(String(response.error?.message ?? 'Unknown JSON-RPC error')));
+          return;
+        }
+
+        const result = response?.result ?? {};
+        resolve(
+          Array.isArray(result.content) && result.content.length > 0 && typeof result.content[0]?.text === 'string'
+            ? result.content[0].text
+            : ''
+        );
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    socket.once('connect', () => {
+      socket.write(`${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: args
+        }
+      })}\n`);
+    });
+  });
+}
+
+/var session @planner = {
+  count: number?
+}
+
+/exe tool:r @planner_report() = @planner.count
+
+/exe llm @agent(prompt, config) = @callTool(@mx.llm.config, "planner_report", '{}') with {
+  session: @planner,
+  seed: { count: 1 }
+}
+
+/show @agent("hello", { tools: [@planner_report] }) with {
+  seed: { count: 2 }
+}

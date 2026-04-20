@@ -73,10 +73,18 @@
       "integrity": "sha256:e2efbf68382902f2e8d1266ef2e31260f1b73a1f5f28d1e1986682ee1e07547a",
       "fetchedAt": "2026-04-19T19:15:30.387Z",
       "registryVersion": "1.3.1"
+    },
+    "@mlld/codex": {
+      "version": "latest",
+      "resolved": "e1dc7e557b97ef4efe41c18725dea1a9026f28d4b7c082b3813f27c96980711d",
+      "source": "registry://@mlld/codex@1.0.0",
+      "integrity": "sha256:e1dc7e557b97ef4efe41c18725dea1a9026f28d4b7c082b3813f27c96980711d",
+      "fetchedAt": "2026-04-20T02:29:13.382Z",
+      "registryVersion": "1.0.0"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-04-19T19:15:30.387Z"
+    "updatedAt": "2026-04-20T02:29:13.382Z"
   }
 }

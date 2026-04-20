@@ -1,0 +1,17 @@
+/var session @wrapper = {
+  count: number?
+}
+
+/var session @caller = {
+  count: number?
+}
+
+/exe llm @agent(prompt, config) = js {
+  return "ok";
+} with {
+  session: @wrapper
+}
+
+/show @agent("hello", {}) with {
+  session: @caller
+}

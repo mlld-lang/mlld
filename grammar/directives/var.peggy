@@ -6,14 +6,26 @@ VarKeyword
   = "/"? "var"
 
 SlashVar "var directive"
-  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier optionalMarker:("?" { return true; })? _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+  = DirectiveContext VarKeyword toolsSegment:(HWS "tools")? sessionSegment:(HWS "session")? labelsSegment:(HWS DataLabelList HWS &"@")? _ "@" id:BaseIdentifier optionalMarker:("?" { return true; })? _ "=" _ value:(
+      &{ return !!sessionSegment; } sessionValue:SessionSchemaLiteral { return sessionValue; }
+      / &{ return !sessionSegment; } regularValue:VarRHSContent { return regularValue; }
+    ) ending:SecuredDirectiveEnding {
       helpers.debug('AtVar matched', { id, optionalMarker: !!optionalMarker, value, ending });
       
       // Extract ending components
       let tail = ending.tail;
       const labelInfo = labelsSegment ? labelsSegment[1] : null;
       const isToolsCollection = !!toolsSegment;
+      const isSessionLabel = !!sessionSegment;
       const comment = ending.comment;
+
+      if (isToolsCollection && isSessionLabel) {
+        helpers.mlldError(
+          'var session cannot be combined with var tools',
+          '@name = { ... }',
+          location()
+        );
+      }
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
@@ -253,6 +265,10 @@ SlashVar "var directive"
         metaInfo.isToolsCollection = true;
       }
 
+      if (isSessionLabel) {
+        metaInfo.isSessionLabel = true;
+      }
+
       if (optionalMarker) {
         metaInfo.optionalAssignment = true;
       }
@@ -279,6 +295,59 @@ SlashVar "var directive"
         metaInfo,
         location()
       );
+    }
+
+SessionSchemaLiteral "session schema literal"
+  = "{" _ entries:SessionSchemaEntries? _ "}" {
+      return {
+        type: 'object',
+        entries: entries || [],
+        location: location()
+      };
+    }
+
+SessionSchemaEntries
+  = first:SessionSchemaEntry rest:(_ "," _ entry:SessionSchemaEntry { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+SessionSchemaEntry
+  = key:SessionSchemaKey _ ":" _ value:SessionTypeExpression {
+      return {
+        type: 'pair',
+        key,
+        value
+      };
+    }
+
+SessionSchemaKey
+  = PropertyIdentifier
+  / DataString
+
+SessionTypeExpression
+  = base:(SessionRecordType / SessionPrimitiveType) arrayMarker:(_ "[" _ "]" { return true; })? optional:"?"? {
+      return {
+        type: 'sessionType',
+        base,
+        isArray: !!arrayMarker,
+        optional: !!optional
+      };
+    }
+
+SessionRecordType
+  = "@" name:BaseIdentifier {
+      return {
+        kind: 'record',
+        name
+      };
+    }
+
+SessionPrimitiveType
+  = name:("string" / "number" / "boolean" / "object" / "array") {
+      return {
+        kind: 'primitive',
+        name
+      };
     }
 
   // Error: Augmented assignment inside /var

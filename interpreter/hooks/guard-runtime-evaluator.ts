@@ -35,6 +35,10 @@ import { formatGuardFilterForMetadata } from './guard-filter-display';
 import type { GuardArgsSnapshot } from '../utils/guard-args';
 import { asData, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
 import { buildGuardTraceEmitter, getGuardTraceOperationName } from './guard-trace';
+import {
+  createGuardSessionWriteBuffer,
+  emitAttachedSessionFinalSnapshot
+} from '@interpreter/session/runtime';
 
 interface BuildDecisionMetadataExtras {
   hint?: string | null;
@@ -182,6 +186,10 @@ export async function evaluateGuardRuntime(
 ): Promise<GuardResult> {
   const { env, guard, operation, scope } = options;
   const guardEnv = env.createChild();
+  const localScopedConfig = env.getLocalScopedEnvironmentConfig();
+  if (localScopedConfig) {
+    guardEnv.setScopedEnvironmentConfig(localScopedConfig);
+  }
   deps.prepareGuardEnvironment(env, guardEnv, guard);
 
   let inputVariable: Variable;
@@ -329,6 +337,7 @@ export async function evaluateGuardRuntime(
       urlRegistry: env.getKnownUrls()
     });
     if (policyResult.decision === 'deny') {
+      emitAttachedSessionFinalSnapshot(env);
       emitGuardTrace('guard.evaluate', {
         decision: 'deny',
         policyGuard: true,
@@ -415,210 +424,244 @@ export async function evaluateGuardRuntime(
     };
   }
 
-  let action: GuardActionNode | undefined;
-  try {
-    action = await env.withGuardContext(guardContext, async () => {
-      return await deps.evaluateGuardBlock(guard.block, guardEnv);
-    });
-  } catch (error) {
-    emitGuardTrace('guard.crash', {
-      error: error instanceof Error ? error.message : String(error)
-    });
-    throw error;
-  }
-
-  const metadataBase: Record<string, unknown> = {
-    guardName: guard.name ?? null,
-    guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
-    scope,
-    inputPreview,
-    guardContext: contextSnapshotForMetadata,
-    guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable,
-    guardPrivileged: guard.privileged === true,
-    policyGuard: false,
-    guardScopeKey: scopeKey
+  const sessionWriteBuffer = createGuardSessionWriteBuffer();
+  let sessionBufferCompleted = false;
+  const commitSessionBuffer = (): void => {
+    if (sessionBufferCompleted) {
+      return;
+    }
+    sessionBufferCompleted = true;
+    sessionWriteBuffer.commit();
+  };
+  const discardSessionBuffer = (): void => {
+    if (sessionBufferCompleted) {
+      return;
+    }
+    sessionBufferCompleted = true;
+    sessionWriteBuffer.discard();
   };
 
-  if (!action || action.decision === 'allow') {
-    emitGuardTrace('guard.evaluate', {
-      decision: 'allow',
-      matched: Boolean(action),
-      guardActionMatched: Boolean(action)
-    });
-    emitGuardTrace('guard.allow', {
-      matched: Boolean(action),
-      guardActionMatched: Boolean(action),
-      ...(action?.warning ? { warning: action.warning } : {})
-    });
-    const allowHint =
-      action?.warning
-        ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
-        : undefined;
-    const replacement = await env.withGuardContext(guardContext, async () =>
-      deps.evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
-    );
-    return {
-      guardName: guard.name ?? null,
-      decision: 'allow',
-      timing: 'before',
-      replacement,
-      hint: allowHint,
-      metadata: {
-        ...metadataBase,
-        guardActionMatched: Boolean(action)
-      }
-    };
-  }
+  env.pushSessionWriteBuffer(sessionWriteBuffer);
+  try {
+    let action: GuardActionNode | undefined;
+    try {
+      action = await env.withGuardContext(guardContext, async () => {
+        return await deps.evaluateGuardBlock(guard.block, guardEnv);
+      });
+    } catch (error) {
+      discardSessionBuffer();
+      emitGuardTrace('guard.crash', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
 
-  if (action.decision === 'env') {
-    emitGuardTrace('guard.evaluate', {
-      decision: 'env',
-      matched: true
-    });
-    const envDecision = await deps.resolveGuardEnvConfig(action, guardEnv);
-    const envConfig = envDecision.envConfig;
-    const metadata = {
-      ...metadataBase,
-      decision: 'env',
-      guardActionMatched: true,
-      ...(envConfig !== undefined ? { envConfig } : {}),
-      ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {})
+    const metadataBase: Record<string, unknown> = {
+      guardName: guard.name ?? null,
+      guardFilter: formatGuardFilterForMetadata(guard.filterKind, guard.filterValue),
+      scope,
+      inputPreview,
+      guardContext: contextSnapshotForMetadata,
+      guardInput: hasSecretLabel(inputVariable) ? redactVariableForErrorOutput(inputVariable) : inputVariable,
+      guardPrivileged: guard.privileged === true,
+      policyGuard: false,
+      guardScopeKey: scopeKey
     };
+
+    if (!action || action.decision === 'allow') {
+      emitGuardTrace('guard.evaluate', {
+        decision: 'allow',
+        matched: Boolean(action),
+        guardActionMatched: Boolean(action)
+      });
+      emitGuardTrace('guard.allow', {
+        matched: Boolean(action),
+        guardActionMatched: Boolean(action),
+        ...(action?.warning ? { warning: action.warning } : {})
+      });
+      const allowHint =
+        action?.warning
+          ? { guardName: guard.name ?? null, hint: action.warning, severity: 'warn' }
+          : undefined;
+      const replacement = await env.withGuardContext(guardContext, async () =>
+        deps.evaluateGuardReplacement(action, guardEnv, guard, inputVariable)
+      );
+      commitSessionBuffer();
+      return {
+        guardName: guard.name ?? null,
+        decision: 'allow',
+        timing: 'before',
+        replacement,
+        hint: allowHint,
+        metadata: {
+          ...metadataBase,
+          guardActionMatched: Boolean(action)
+        }
+      };
+    }
+
+    if (action.decision === 'env') {
+      discardSessionBuffer();
+      emitGuardTrace('guard.evaluate', {
+        decision: 'env',
+        matched: true
+      });
+      const envDecision = await deps.resolveGuardEnvConfig(action, guardEnv);
+      const envConfig = envDecision.envConfig;
+      const metadata = {
+        ...metadataBase,
+        decision: 'env',
+        guardActionMatched: true,
+        ...(envConfig !== undefined ? { envConfig } : {}),
+        ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {})
+      };
+      deps.logGuardDecisionEvent({
+        guard,
+        node: options.node,
+        operation,
+        scope,
+        attempt: options.attemptNumber,
+        decision: 'env',
+        reason: null,
+        hint: null,
+        inputPreview
+      });
+      return {
+        guardName: guard.name ?? null,
+        decision: 'env',
+        timing: 'before',
+        ...(envConfig !== undefined ? { envConfig } : {}),
+        ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {}),
+        metadata
+      };
+    }
+
+    const metadata = deps.buildDecisionMetadata(action, guard, {
+      inputPreview,
+      attempt: options.attemptNumber,
+      tries: options.attemptHistory,
+      inputVariable,
+      contextSnapshot: contextSnapshotForMetadata,
+      scopeKey,
+      guardActionMatched: true
+    });
+
     deps.logGuardDecisionEvent({
       guard,
       node: options.node,
       operation,
       scope,
       attempt: options.attemptNumber,
-      decision: 'env',
-      reason: null,
-      hint: null,
+      decision: action.decision,
+      reason: action.decision === 'deny' ? action.message ?? null : null,
+      hint:
+        action.decision === 'retry' || action.decision === 'resume'
+          ? action.message ?? null
+          : null,
       inputPreview
     });
+
+    emitGuardTrace('guard.evaluate', {
+      decision: action.decision,
+      matched: true,
+      guardActionMatched: true,
+      ...(action.message ? { message: action.message } : {})
+    });
+    emitGuardTrace(`guard.${action.decision}`, {
+      matched: true,
+      guardActionMatched: true,
+      ...(action.message ? { message: action.message } : {})
+    });
+
+    if (action.decision === 'deny') {
+      discardSessionBuffer();
+      emitAttachedSessionFinalSnapshot(env);
+      return {
+        guardName: guard.name ?? null,
+        decision: 'deny',
+        timing: 'before',
+        reason: metadata.reason as string | undefined,
+        metadata
+      };
+    }
+    if (action.decision === 'retry') {
+      discardSessionBuffer();
+      const entry: GuardAttemptEntry = {
+        attempt: options.attemptNumber,
+        decision: 'retry',
+        hint: action.message ?? null
+      };
+      const updatedHistory = [...options.attemptHistory, entry];
+      options.attemptStore.set(options.attemptKey, {
+        nextAttempt: options.attemptNumber + 1,
+        history: updatedHistory
+      });
+      const retryMetadata = deps.buildDecisionMetadata(action, guard, {
+        hint: action.message ?? null,
+        inputPreview,
+        attempt: options.attemptNumber,
+        tries: updatedHistory,
+        inputVariable,
+        contextSnapshot: contextSnapshotForMetadata,
+        scopeKey,
+        guardActionMatched: true
+      });
+      return {
+        guardName: guard.name ?? null,
+        decision: 'retry',
+        timing: 'before',
+        reason: retryMetadata.reason as string | undefined,
+        hint: action.message
+          ? { guardName: guard.name ?? null, hint: action.message }
+          : undefined,
+        metadata: retryMetadata
+      };
+    }
+    if (action.decision === 'resume') {
+      discardSessionBuffer();
+      const entry: GuardAttemptEntry = {
+        attempt: options.attemptNumber,
+        decision: 'resume',
+        hint: action.message ?? null
+      };
+      const updatedHistory = [...options.attemptHistory, entry];
+      options.attemptStore.set(options.attemptKey, {
+        nextAttempt: options.attemptNumber + 1,
+        history: updatedHistory
+      });
+      const resumeMetadata = deps.buildDecisionMetadata(action, guard, {
+        hint: action.message ?? null,
+        inputPreview,
+        attempt: options.attemptNumber,
+        tries: updatedHistory,
+        inputVariable,
+        contextSnapshot: contextSnapshotForMetadata,
+        scopeKey,
+        guardActionMatched: true
+      });
+      return {
+        guardName: guard.name ?? null,
+        decision: 'resume',
+        timing: 'before',
+        reason: resumeMetadata.reason as string | undefined,
+        hint: action.message
+          ? { guardName: guard.name ?? null, hint: action.message }
+          : undefined,
+        metadata: resumeMetadata
+      };
+    }
+
+    commitSessionBuffer();
     return {
       guardName: guard.name ?? null,
-      decision: 'env',
+      decision: 'allow',
       timing: 'before',
-      ...(envConfig !== undefined ? { envConfig } : {}),
-      ...(envDecision.policyFragment ? { policyFragment: envDecision.policyFragment } : {}),
       metadata
     };
+  } finally {
+    env.popSessionWriteBuffer(sessionWriteBuffer);
+    if (!sessionBufferCompleted) {
+      sessionWriteBuffer.discard();
+    }
   }
-
-  const metadata = deps.buildDecisionMetadata(action, guard, {
-    inputPreview,
-    attempt: options.attemptNumber,
-    tries: options.attemptHistory,
-    inputVariable,
-    contextSnapshot: contextSnapshotForMetadata,
-    scopeKey,
-    guardActionMatched: true
-  });
-
-  deps.logGuardDecisionEvent({
-    guard,
-    node: options.node,
-    operation,
-    scope,
-    attempt: options.attemptNumber,
-    decision: action.decision,
-    reason: action.decision === 'deny' ? action.message ?? null : null,
-    hint:
-      action.decision === 'retry' || action.decision === 'resume'
-        ? action.message ?? null
-        : null,
-    inputPreview
-  });
-
-  emitGuardTrace('guard.evaluate', {
-    decision: action.decision,
-    matched: true,
-    guardActionMatched: true,
-    ...(action.message ? { message: action.message } : {})
-  });
-  emitGuardTrace(`guard.${action.decision}`, {
-    matched: true,
-    guardActionMatched: true,
-    ...(action.message ? { message: action.message } : {})
-  });
-
-  if (action.decision === 'deny') {
-    return {
-      guardName: guard.name ?? null,
-      decision: 'deny',
-      timing: 'before',
-      reason: metadata.reason as string | undefined,
-      metadata
-    };
-  }
-  if (action.decision === 'retry') {
-    const entry: GuardAttemptEntry = {
-      attempt: options.attemptNumber,
-      decision: 'retry',
-      hint: action.message ?? null
-    };
-    const updatedHistory = [...options.attemptHistory, entry];
-    options.attemptStore.set(options.attemptKey, {
-      nextAttempt: options.attemptNumber + 1,
-      history: updatedHistory
-    });
-    const retryMetadata = deps.buildDecisionMetadata(action, guard, {
-      hint: action.message ?? null,
-      inputPreview,
-      attempt: options.attemptNumber,
-      tries: updatedHistory,
-      inputVariable,
-      contextSnapshot: contextSnapshotForMetadata,
-      scopeKey,
-      guardActionMatched: true
-    });
-    return {
-      guardName: guard.name ?? null,
-      decision: 'retry',
-      timing: 'before',
-      reason: retryMetadata.reason as string | undefined,
-      hint: action.message
-        ? { guardName: guard.name ?? null, hint: action.message }
-        : undefined,
-      metadata: retryMetadata
-    };
-  }
-  if (action.decision === 'resume') {
-    const entry: GuardAttemptEntry = {
-      attempt: options.attemptNumber,
-      decision: 'resume',
-      hint: action.message ?? null
-    };
-    const updatedHistory = [...options.attemptHistory, entry];
-    options.attemptStore.set(options.attemptKey, {
-      nextAttempt: options.attemptNumber + 1,
-      history: updatedHistory
-    });
-    const resumeMetadata = deps.buildDecisionMetadata(action, guard, {
-      hint: action.message ?? null,
-      inputPreview,
-      attempt: options.attemptNumber,
-      tries: updatedHistory,
-      inputVariable,
-      contextSnapshot: contextSnapshotForMetadata,
-      scopeKey,
-      guardActionMatched: true
-    });
-    return {
-      guardName: guard.name ?? null,
-      decision: 'resume',
-      timing: 'before',
-      reason: resumeMetadata.reason as string | undefined,
-      hint: action.message
-        ? { guardName: guard.name ?? null, hint: action.message }
-        : undefined,
-      metadata: resumeMetadata
-    };
-  }
-  return {
-    guardName: guard.name ?? null,
-    decision: 'allow',
-    timing: 'before',
-    metadata
-  };
 }

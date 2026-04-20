@@ -3,6 +3,7 @@ import type { SecurityDescriptor } from '@core/types/security';
 import { logger } from '@core/utils/logger';
 import type { ToolCollection } from '@core/types/tools';
 import type { Variable } from '@core/types/variable';
+import type { SessionDefinition } from '@core/types/session';
 import type { EvaluationContext } from '@interpreter/core/interpreter';
 import type { Environment } from '@interpreter/env/Environment';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
@@ -24,6 +25,7 @@ import {
   extractDescriptorsFromTemplateAst,
   type DescriptorCollector
 } from './security-descriptor';
+import { evaluateSessionSchemaObject } from './session-schema';
 
 export type RhsHandlerKey =
   | 'file-reference'
@@ -74,6 +76,7 @@ export interface RhsDispatcherDependencies {
   identifier: string;
   interpolateWithSecurity: (nodes: unknown) => Promise<string>;
   isToolsCollection: boolean;
+  isSessionLabel?: boolean;
   mergeResolvedDescriptor: DescriptorCollector;
   referenceEvaluator: ReferenceEvaluator;
   rhsContentEvaluator: RhsContentEvaluator;
@@ -287,6 +290,7 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
     identifier,
     interpolateWithSecurity,
     isToolsCollection,
+    isSessionLabel,
     mergeResolvedDescriptor,
     referenceEvaluator,
     rhsContentEvaluator,
@@ -340,6 +344,20 @@ export function createRhsDispatcher(dependencies: RhsDispatcherDependencies): Rh
 
       case 'object': {
         const objectNode = valueNode as any;
+        if (isSessionLabel) {
+          const value = evaluateSessionSchemaObject({
+            env,
+            identifier,
+            sourceLocation,
+            valueNode: objectNode
+          });
+          return {
+            type: 'resolved',
+            handler: handlerKey,
+            value: value as SessionDefinition
+          };
+        }
+
         if (isToolsCollection) {
           // Tool collections are metadata/configuration; tool labels belong to tool calls,
           // not to the collection object itself.

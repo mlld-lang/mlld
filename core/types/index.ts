@@ -43,6 +43,7 @@ export * from './policy'; // Policy directives
 export * from './box'; // Box directives
 export * from './record'; // Record directives and runtime types
 export * from './shelf';
+export * from './session';
 export * from './handle';
 export * from './load-content'; // Load content types and utilities including URL metadata
 export * from './while'; // While directives and stages

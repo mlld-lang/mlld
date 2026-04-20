@@ -35,6 +35,12 @@ func TestExecuteResultFixturePreservesSecurity(t *testing.T) {
 	if len(result.StateWrites) != 1 {
 		t.Fatalf("expected one state write, got %d", len(result.StateWrites))
 	}
+	if len(result.Sessions) != 1 {
+		t.Fatalf("expected one session snapshot, got %d", len(result.Sessions))
+	}
+	if result.Sessions[0].Name != "planner" {
+		t.Fatalf("expected session name planner, got %q", result.Sessions[0].Name)
+	}
 	if labels := result.StateWrites[0].Security["labels"]; labels == nil {
 		t.Fatalf("expected state write security labels to be preserved")
 	}
@@ -90,6 +96,27 @@ func TestStateWriteEventFixturePreservesSecurity(t *testing.T) {
 	}
 	if stateWrite.Security == nil || stateWrite.Security["labels"] == nil {
 		t.Fatalf("expected security metadata to be preserved: %#v", stateWrite.Security)
+	}
+}
+
+func TestSessionWriteEventFixturePreservesFields(t *testing.T) {
+	envelope := loadFixtureEnvelope(t, "session-write-event.json")
+
+	event, ok := asMap(envelope["event"])
+	if !ok {
+		t.Fatalf("expected session-write event payload to be an object")
+	}
+
+	sessionWrite, ok := parseSessionWriteEvent(event)
+	if !ok {
+		t.Fatalf("expected session-write fixture to decode")
+	}
+
+	if sessionWrite.SessionName != "planner" || sessionWrite.SlotPath != "count" {
+		t.Fatalf("unexpected session write decode: %#v", sessionWrite)
+	}
+	if sessionWrite.Operation != "increment" || sessionWrite.Prev != float64(1) || sessionWrite.Next != float64(2) {
+		t.Fatalf("expected prev/next increment payload, got %#v", sessionWrite)
 	}
 }
 

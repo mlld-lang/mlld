@@ -28,6 +28,7 @@ export type RuntimeTraceNormalizedLevel = Exclude<RuntimeTraceLevel, 'handles'>;
 export type RuntimeTraceEmissionLevel = 'effects' | 'verbose';
 
 export type RuntimeTraceCategory =
+  | 'session'
   | 'shelf'
   | 'guard'
   | 'handle'
@@ -41,6 +42,9 @@ export type RuntimeTraceCategory =
 type TraceRecord<T extends object> = T & Record<string, unknown>;
 
 export type RuntimeTraceEventName =
+  | 'session.seed'
+  | 'session.write'
+  | 'session.final'
   | 'import.resolve'
   | 'import.cache_hit'
   | 'import.read'
@@ -105,6 +109,44 @@ type RuntimeImportTraceRecord = TraceRecord<{
 }>;
 
 export interface RuntimeTraceEventSpecMap {
+  'session.seed': {
+    category: 'session';
+    level: 'effects';
+    data: TraceRecord<{
+      frameId: string;
+      sessionName: string;
+      declarationId: string;
+      originPath?: string;
+      path: string;
+      operation: string;
+      value?: unknown;
+    }>;
+  };
+  'session.write': {
+    category: 'session';
+    level: 'effects';
+    data: TraceRecord<{
+      frameId: string;
+      sessionName: string;
+      declarationId: string;
+      originPath?: string;
+      path: string;
+      operation: string;
+      previous?: unknown;
+      value?: unknown;
+    }>;
+  };
+  'session.final': {
+    category: 'session';
+    level: 'effects';
+    data: TraceRecord<{
+      frameId: string;
+      sessionName: string;
+      declarationId: string;
+      originPath?: string;
+      finalState: Record<string, unknown>;
+    }>;
+  };
   'import.resolve': {
     category: 'import';
     level: 'verbose';

@@ -46,6 +46,24 @@ export function traceHandleIssued(data: RuntimeTraceEventSpecMap['handle.issued'
   return createRuntimeTraceEnvelope('verbose', 'handle', 'handle.issued', data);
 }
 
+export function traceSessionSeed(
+  data: RuntimeTraceEventSpecMap['session.seed']['data']
+): RuntimeTraceEnvelope<'session.seed'> {
+  return createRuntimeTraceEnvelope('effects', 'session', 'session.seed', data);
+}
+
+export function traceSessionWrite(
+  data: RuntimeTraceEventSpecMap['session.write']['data']
+): RuntimeTraceEnvelope<'session.write'> {
+  return createRuntimeTraceEnvelope('effects', 'session', 'session.write', data);
+}
+
+export function traceSessionFinal(
+  data: RuntimeTraceEventSpecMap['session.final']['data']
+): RuntimeTraceEnvelope<'session.final'> {
+  return createRuntimeTraceEnvelope('effects', 'session', 'session.final', data);
+}
+
 export function traceImportEvent<K extends 'import.resolve' | 'import.cache_hit' | 'import.read' | 'import.parse' | 'import.evaluate' | 'import.exports'>(
   event: K,
   data: RuntimeTraceEventSpecMap[K]['data']

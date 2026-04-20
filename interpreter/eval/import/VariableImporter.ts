@@ -29,6 +29,7 @@ import {
 } from '@core/types/record';
 import { createShelfVariable, isSerializedShelfDefinition } from '@interpreter/shelf/runtime';
 import { createRecordVariable } from '@core/types/variable';
+import { createSessionSchemaVariable, isSerializedSessionDefinition } from '@core/types/session';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -340,6 +341,29 @@ export class VariableImporter {
         }
       }
       return createShelfVariable(shelfOwnerEnv, definition);
+    }
+
+    if (options?.env && isSerializedSessionDefinition(value)) {
+      const sessionOwnerEnv = options.capturedModuleOwnerEnv ?? options.env;
+      const registrationEnvs = Array.from(new Set(
+        [options.env, sessionOwnerEnv].filter((entry): entry is Environment => Boolean(entry))
+      ));
+
+      for (const [recordName, definition] of Object.entries(value.records ?? {})) {
+        for (const registrationEnv of registrationEnvs) {
+          if (!registrationEnv.getRecordDefinition(recordName)) {
+            registrationEnv.registerRecordDefinition(recordName, definition);
+          }
+        }
+      }
+
+      const definition = value.definition;
+      for (const registrationEnv of registrationEnvs) {
+        if (!registrationEnv.getSessionDefinition(name)) {
+          registrationEnv.registerSessionDefinition(name, definition);
+        }
+      }
+      return createSessionSchemaVariable(name, definition);
     }
 
     if (isSerializedRecordDefinition(value)) {

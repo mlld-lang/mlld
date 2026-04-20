@@ -343,6 +343,29 @@ Filesystem trust is a separate layer built from:
 
 That layer determines how file content becomes trusted, untrusted, or unlabeled data on read. It feeds labels into the same policy and guard machinery as other security sources.
 
+### Session Containers Under Guards
+
+Per-call session state now lives in bridge-owned session containers declared with `var session` and attached with `with { session: @schema, seed: ... }`.
+
+Security-relevant runtime rules:
+
+- session state is frame-scoped, not a mutable user var
+- bare-name access inside an attached frame resolves to the live accessor; preserving contexts take a snapshot
+- `before` and `after` guards can read/write the attached session through the same accessors as tool callbacks
+- guard-local session writes commit on allow and discard on deny or retry
+- denied guard writes do not leak through trace output, SDK `session_write` events, or `result.sessions`
+- trace redaction treats `secret`, `pii`, `sensitive`, `untrusted`, and `influenced` session values as hidden at `--trace effects`
+- `policy.defaults.unlabeled: "untrusted"` is honored for session trace redaction, so filesystem-loaded unlabeled data is hidden unless verbose tracing is explicitly requested
+
+Common middleware patterns that now compose directly with guards:
+
+- budget counters (`@planner.increment("runtime.tool_calls")`)
+- terminal latches (`@planner.write("runtime.terminal", "send_email")`)
+- execution logs (`@planner.append("runtime.log", entry)`)
+- seeded required context (`with { session: @planner, seed: { agent: @agent, query: @query } }`)
+
+Source of truth for the full contract lives in `spec-session-scoped-state.md`, with implementation notes in `plan-var-session-implementation.md` and the `plan-var-session-dossier-*.md` files.
+
 ## Gotchas
 
 - Fact proof is field-level. A fact-bearing object does not make every descendant authorized.

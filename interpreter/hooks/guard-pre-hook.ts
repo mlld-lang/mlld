@@ -1,6 +1,7 @@
 import type { HookDecision, PreHook } from './HookManager';
 import type { GuardResult } from '@core/types/guard';
 import type { Variable } from '@core/types/variable';
+import { isExecutableVariable } from '@core/types/variable';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import {
   evaluatePolicyAuthorizationDecision,
@@ -69,6 +70,8 @@ import {
   getGuardArgNamesFromMetadata
 } from '../utils/guard-args';
 import { emitAggregateGuardTrace, getGuardTraceOperationName } from './guard-trace';
+import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { resolveDirectToolCollection } from '@interpreter/eval/var/tool-scope';
 
 function applyCurrentInputToCandidate(
   candidate: PerInputCandidate,
@@ -104,6 +107,78 @@ function getActivePolicyName(env: Parameters<PreHook>[2]): string {
     ? policyContext.activePolicies.filter((entry): entry is string => typeof entry === 'string')
     : [];
   return activePolicies.length > 0 ? activePolicies.join(', ') : 'policy';
+}
+
+function unwrapPassiveToolCollectionValue(value: unknown): unknown {
+  let resolved = value;
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+  if (isVariable(resolved)) {
+    resolved = resolved.value;
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+  }
+  return resolved;
+}
+
+function isPassiveToolCollectionAst(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const node = value as {
+    type?: string;
+    identifier?: unknown;
+    fields?: unknown[];
+    items?: unknown[];
+    elements?: unknown[];
+  };
+
+  if (node.type === 'VariableReference') {
+    return typeof node.identifier === 'string'
+      && (!Array.isArray(node.fields) || node.fields.length === 0);
+  }
+
+  if (node.type === 'array') {
+    const items = Array.isArray(node.items)
+      ? node.items
+      : Array.isArray(node.elements)
+        ? node.elements
+        : [];
+    return items.every(entry => isPassiveToolCollectionAst(entry));
+  }
+
+  return false;
+}
+
+function isPassiveToolCollectionEntry(value: unknown): boolean {
+  const resolved = unwrapPassiveToolCollectionValue(value);
+  if (resolved && isExecutableVariable(resolved as any)) {
+    return true;
+  }
+  if (typeof resolved === 'string') {
+    return resolved.trim().length > 0;
+  }
+  if (isPassiveToolCollectionAst(resolved)) {
+    return true;
+  }
+  if (resolveDirectToolCollection(resolved)) {
+    return true;
+  }
+  return Array.isArray(resolved) && resolved.every(entry => isPassiveToolCollectionEntry(entry));
+}
+
+function isPassiveToolCollectionInput(value: unknown): boolean {
+  const resolved = unwrapPassiveToolCollectionValue(value);
+  if (resolveDirectToolCollection(resolved)) {
+    return true;
+  }
+  if (isPassiveToolCollectionAst(resolved)) {
+    return true;
+  }
+  return Array.isArray(resolved) && resolved.every(entry => isPassiveToolCollectionEntry(entry));
 }
 
 function buildLabelPolicyGuardResult(options: {
@@ -596,7 +671,13 @@ export const guardPreHook: PreHook = async (
     if (node.kind === 'guard') {
       return { action: 'continue' };
     }
-    if (node.kind === 'var' && node.meta?.isToolsCollection === true) {
+    if (
+      node.kind === 'var'
+      && (
+        node.meta?.isToolsCollection === true
+        || (inputs.length > 0 && isPassiveToolCollectionInput(inputs[0]))
+      )
+    ) {
       return { action: 'continue' };
     }
   }
