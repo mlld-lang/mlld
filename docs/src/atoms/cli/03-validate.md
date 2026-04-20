@@ -121,6 +121,13 @@ Suppressible codes include `exe-parameter-shadowing`, `deprecated-json-transform
     { "name": "send_email_inputs" },
     { "name": "email_result", "key": "message_id", "display": "legacy" }
   ],
+  "sessions": [{
+    "name": "planner",
+    "declarationId": "/workspace/agent.mld#planner",
+    "slots": [
+      { "name": "count", "kind": "primitive", "type": "number?", "optional": true, "isArray": false }
+    ]
+  }],
   "shelves": [{ "name": "pipeline", "slots": [{ "name": "selected", "record": "email_result", "cardinality": "singular" }] }],
   "policies": [{ "name": "task", "rules": ["no-send-to-unknown"], "operations": { "destructive": ["tool:w"] }, "locked": false }],
   "policyCalls": [{
@@ -180,14 +187,19 @@ Skipped entries stay out of default text output so `mlld validate` only reports 
 - `bind` keys that overlap the input record
 - surfaced tools with `update:` input sections that are missing `update:w` in `labels`
 
-**Record and shelf validation:**
+**Record, session, and shelf validation:**
 
-`mlld validate` now catches statically knowable record and shelf definition errors before execution:
+`mlld validate` now catches statically knowable record, session, and shelf definition errors before execution:
 
 - record key fields that are missing or optional
 - impure computed record fields
 - invalid record display and `when` declarations
 - executable `=> record` references to unknown records
+- session schemas with invalid labels or dynamic keys
+- session slot references to unknown or session-unsafe records
+- seed usage without an attached session
+- wrapper/call session conflicts that are missing `override: "session"`
+- statically obvious non-pure `@session.update(..., @exe)` updaters
 - shelf references to unknown records or slots
 - invalid shelf merge/cardinality combinations
 - statically obvious `box.shelf` alias conflicts and unknown slot targets

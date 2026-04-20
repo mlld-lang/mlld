@@ -79,6 +79,8 @@ export class DirectiveVisitor extends BaseVisitor {
         });
       }
     }
+
+    this.tokenizeVarCollectionModifiers(node);
     
     if (node.kind === 'when') {
       this.visitWhenDirective(node, context);
@@ -348,6 +350,46 @@ export class DirectiveVisitor extends BaseVisitor {
 
     // Handle end-of-line comments
     this.handleDirectiveComment(node);
+  }
+
+  private tokenizeVarCollectionModifiers(node: LspAstNode): void {
+    if (node.kind !== 'var' || !node.location) {
+      return;
+    }
+
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const identifierName = Array.isArray(node.values?.identifier)
+      ? node.values.identifier?.[0]?.identifier
+      : undefined;
+    const identifierIndex =
+      typeof identifierName === 'string' && identifierName.length > 0
+        ? directiveText.indexOf(`@${identifierName}`)
+        : -1;
+    if (identifierIndex <= 0) {
+      return;
+    }
+
+    const prefixText = directiveText.slice(0, identifierIndex);
+    const keywords = ['tools', 'session'];
+
+    for (const keyword of keywords) {
+      const pattern = new RegExp(`\\b${keyword}\\b`, 'g');
+      for (const match of prefixText.matchAll(pattern)) {
+        if (typeof match.index !== 'number') {
+          continue;
+        }
+
+        const position = this.document.positionAt(node.location.start.offset + match.index);
+        this.tokenBuilder.addToken({
+          line: position.line,
+          char: position.character,
+          length: keyword.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+      }
+    }
   }
 
   private visitRecordDirective(directive: LspAstNode, context: VisitorContext): void {
@@ -4145,9 +4187,9 @@ export class DirectiveVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
 
-    // Find the raw labels string in the directive text
-    // Labels appear at the end, so search from the end
-    const labelsIndex = directiveText.lastIndexOf(rawLabels);
+    // Find the raw labels string in the directive text near the directive header.
+    // Using the last occurrence is wrong for cases like `exe llm @agent() = @call(@mx.llm.config)`.
+    const labelsIndex = directiveText.indexOf(rawLabels);
     if (labelsIndex === -1) return;
 
     // Tokenize each label

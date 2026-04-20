@@ -25,6 +25,7 @@ const output = await processMlld(script);
 const result = await execute(filePath, payload);
 console.log(result.output);        // text output
 console.log(result.stateWrites);   // state:// writes
+console.log(result.sessions);      // final session-scoped state snapshots
 console.log(result.effects);       // output effects
 console.log(result.denials);       // guard/policy denials
 console.log(result.metrics);       // timing (totalMs, parseMs, evaluateMs)

@@ -115,13 +115,15 @@ while True:
         break
     if event.type == "state_write":
         print(f"State: {event.state_write.path} = {event.state_write.value}")
+    elif event.type == "session_write":
+        print(f"Session: {event.session_write.slot_path} = {event.session_write.next}")
     elif event.type == "guard_denial":
         print(f"Denied: {event.guard_denial.operation}")
 
 result = handle.result()
 ```
 
-State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. `result()` can be called at any time — it blocks until execution completes.
+State writes and guard denials from events are merged into the final `ExecuteResult` regardless of whether `next_event` was called. Session writes stay event-stream only; the final committed session state is returned in `result.sessions`. `result()` can be called at any time — it blocks until execution completes.
 
 ## Handle Lifecycle
 

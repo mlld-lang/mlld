@@ -587,6 +587,25 @@ var tools @agentTools = {
         modifiers: ['declaration']
       });
     });
+
+    it('highlights session var declarations', async () => {
+      const code = '/var session @planner = { count: number? }';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: '/var',
+        tokenType: 'directiveDefinition'
+      });
+      expectToken(tokens, {
+        text: 'session',
+        tokenType: 'keyword'
+      });
+      expectToken(tokens, {
+        text: '@planner',
+        tokenType: 'variable',
+        modifiers: ['declaration']
+      });
+    });
   });
   
   describe('Template Contexts', () => {
@@ -923,6 +942,20 @@ exe @emitContacts() = js {
       });
       expectToken(tokens, {
         text: 'allowed',
+        tokenType: 'property'
+      });
+    });
+
+    it('keeps @mx.llm field access tokenized as properties in direct llm exe invocations', async () => {
+      const code = 'exe llm @agent(prompt, config) = @callToolSequence(@mx.llm.config, "[]")';
+      const tokens = await getSemanticTokens(code);
+
+      expectToken(tokens, {
+        text: 'llm',
+        tokenType: 'property'
+      });
+      expectToken(tokens, {
+        text: 'config',
         tokenType: 'property'
       });
     });

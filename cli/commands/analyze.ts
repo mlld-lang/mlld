@@ -62,7 +62,12 @@ import type {
   ShelfScopeSlotBinding,
   ShelfScopeSlotRef
 } from '@core/types/shelf';
+import type {
+  SessionDefinition,
+  SessionSlotType
+} from '@core/types/session';
 import { buildRecordDefinitionFromDirective } from '@core/validation/record-definition';
+import { buildSessionDefinitionFromDirective } from '@core/validation/session-definition';
 import { buildShelfDefinitionFromDirective } from '@core/validation/shelf-definition';
 import {
   analyzeStaticPolicyAuthorizationIntent,
@@ -166,6 +171,20 @@ export interface ShelfSlotInfo {
 export interface ShelfInfo {
   name: string;
   slots: ShelfSlotInfo[];
+}
+
+export interface SessionSlotInfo {
+  name: string;
+  kind: 'primitive' | 'record';
+  type: string;
+  optional: boolean;
+  isArray: boolean;
+}
+
+export interface SessionInfo {
+  name: string;
+  declarationId: string;
+  slots: SessionSlotInfo[];
 }
 
 export interface PolicyInfo {
@@ -291,6 +310,7 @@ export interface AnalyzeResult {
   policyCalls?: PolicyCallInfo[];
   records?: RecordInfo[];
   shelves?: ShelfInfo[];
+  sessions?: SessionInfo[];
   needs?: NeedsInfo;
   template?: TemplateInfo;
   ast?: MlldNode[];
@@ -2590,6 +2610,25 @@ function shelfInfoFromDefinition(definition: ShelfDefinition): ShelfInfo {
   };
 }
 
+function sessionTypeToSummary(type: SessionSlotType): string {
+  const base = type.kind === 'record' ? `@${type.name}` : type.name;
+  return `${base}${type.isArray ? '[]' : ''}${type.optional ? '?' : ''}`;
+}
+
+function sessionInfoFromDefinition(definition: SessionDefinition): SessionInfo {
+  return {
+    name: definition.canonicalName,
+    declarationId: definition.id,
+    slots: Object.values(definition.slots).map(slot => ({
+      name: slot.name,
+      kind: slot.type.kind,
+      type: sessionTypeToSummary(slot.type),
+      optional: slot.type.optional,
+      isArray: slot.type.isArray
+    }))
+  };
+}
+
 function extractRecordsAndDiagnostics(
   ast: MlldNode[],
   filePath: string
@@ -2664,6 +2703,40 @@ function extractShelvesAndDiagnostics(
   });
 
   return { shelves, errors, definitions };
+}
+
+function extractSessionsAndDiagnostics(
+  ast: MlldNode[],
+  filePath: string,
+  knownRecords: ReadonlyMap<string, RecordDefinition>
+): {
+  sessions: SessionInfo[];
+  errors: AnalysisError[];
+  definitions: Map<string, SessionDefinition>;
+} {
+  const sessions: SessionInfo[] = [];
+  const errors: AnalysisError[] = [];
+  const definitions = new Map<string, SessionDefinition>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'var' || (node as any).meta?.isSessionLabel !== true) {
+      return;
+    }
+
+    const directive = node as any;
+    const buildResult = buildSessionDefinitionFromDirective(directive, {
+      filePath,
+      resolveRecord: name => knownRecords.get(name)
+    });
+    if (buildResult.definition) {
+      sessions.push(sessionInfoFromDefinition(buildResult.definition));
+      definitions.set(buildResult.definition.canonicalName, buildResult.definition);
+    } else {
+      errors.push(...buildResult.issues.map(toAnalysisError));
+    }
+  });
+
+  return { sessions, errors, definitions };
 }
 
 function collectExecutableOutputRecordDiagnostics(
@@ -3135,6 +3208,318 @@ function collectBoxShelfScopeDiagnostics(
         readResult.readAliases
       ).map(toAnalysisError)
     );
+  });
+
+  return errors;
+}
+
+function extractStaticSessionReferenceName(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    const isSingleAstWrapper =
+      value.length === 1 &&
+      value[0] !== null &&
+      typeof value[0] === 'object' &&
+      !Array.isArray(value[0]) &&
+      'type' in (value[0] as Record<string, unknown>);
+
+    if (isSingleAstWrapper) {
+      return extractStaticSessionReferenceName(value[0]);
+    }
+    return undefined;
+  }
+
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const typedValue = value as Record<string, unknown>;
+  if (
+    typedValue.type === 'VariableReference' &&
+    typeof typedValue.identifier === 'string' &&
+    (!Array.isArray(typedValue.fields) || typedValue.fields.length === 0)
+  ) {
+    const trimmed = typedValue.identifier.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  const extracted = extractStaticValue(value);
+  if (typeof extracted === 'string' && extracted.startsWith('@')) {
+    const trimmed = extracted.slice(1).trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  return undefined;
+}
+
+function extractExecutableDirectiveMap(ast: MlldNode[]): Map<string, ExecutableDirectiveNode> {
+  const definitions = new Map<string, ExecutableDirectiveNode>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'exe') {
+      return;
+    }
+
+    const executableNode = node as ExecutableDirectiveNode & {
+      values?: { identifier?: Array<{ identifier?: string }> };
+      raw?: { identifier?: string };
+    };
+    const identifierNode = executableNode.values?.identifier?.[0];
+    const name =
+      typeof identifierNode?.identifier === 'string' && identifierNode.identifier.trim().length > 0
+        ? identifierNode.identifier.trim()
+        : executableNode.raw?.identifier?.trim();
+    if (!name) {
+      return;
+    }
+    definitions.set(name, executableNode);
+  });
+
+  return definitions;
+}
+
+function isStaticallyRejectedSessionUpdater(directive: ExecutableDirectiveNode): boolean {
+  const typedDirective = directive as ExecutableDirectiveNode & {
+    subtype?: string;
+    values?: {
+      lang?: Array<{ content?: string }>;
+      securityLabels?: string[];
+    };
+    meta?: {
+      language?: string;
+      securityLabels?: string[];
+    };
+  };
+
+  const labels =
+    typedDirective.values?.securityLabels ??
+    typedDirective.meta?.securityLabels ??
+    [];
+  if (Array.isArray(labels) && labels.includes('llm')) {
+    return true;
+  }
+
+  if (typedDirective.subtype === 'exeCode') {
+    const language =
+      typedDirective.values?.lang?.[0]?.content ??
+      typedDirective.meta?.language;
+    const normalizedLanguage =
+      typeof language === 'string'
+        ? language.trim().toLowerCase()
+        : '';
+    if (
+      normalizedLanguage === 'js' ||
+      normalizedLanguage === 'javascript' ||
+      normalizedLanguage === 'node' ||
+      normalizedLanguage === 'nodejs'
+    ) {
+      return false;
+    }
+  }
+
+  if (typedDirective.subtype === 'exeData') {
+    return false;
+  }
+
+  return typedDirective.subtype === 'exeCommand'
+    || typedDirective.subtype === 'exeTemplate'
+    || typedDirective.subtype === 'exeTemplateFile'
+    || typedDirective.subtype === 'exeResolver'
+    || typedDirective.subtype === 'exeProse'
+    || typedDirective.subtype === 'exeProseFile'
+    || typedDirective.subtype === 'exeProseTemplate';
+}
+
+function collectSessionScopedRuntimeDiagnostics(
+  ast: MlldNode[],
+  filePath: string,
+  sessionDefinitions: ReadonlyMap<string, SessionDefinition>
+): AnalysisError[] {
+  const errors: AnalysisError[] = [];
+  const seen = new Set<string>();
+  const executableDirectives = extractExecutableDirectiveMap(ast);
+
+  const push = (message: string, location?: { line?: number; column?: number }): void => {
+    const key = `${location?.line ?? 0}:${location?.column ?? 0}:${message}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    errors.push({
+      message,
+      line: location?.line,
+      column: location?.column
+    });
+  };
+
+  const resolveStaticSessionDefinition = (
+    raw: unknown,
+    location?: { line?: number; column?: number }
+  ): SessionDefinition | undefined => {
+    if (raw === undefined) {
+      return undefined;
+    }
+    const sessionName = extractStaticSessionReferenceName(raw);
+    if (!sessionName) {
+      return undefined;
+    }
+    const definition = sessionDefinitions.get(sessionName);
+    if (!definition) {
+      push(`session must reference a declared session schema; unknown session '@${sessionName}'`, location);
+      return undefined;
+    }
+    return definition;
+  };
+
+  const validateStaticSeedKeys = (
+    rawSeed: unknown,
+    sessionDefinition: SessionDefinition | undefined
+  ): void => {
+    if (!sessionDefinition || rawSeed === undefined) {
+      return;
+    }
+
+    const seedInputs = Array.isArray(rawSeed) ? rawSeed : [rawSeed];
+    for (const seedInput of seedInputs) {
+      const node =
+        Array.isArray(seedInput) &&
+        seedInput.length === 1 &&
+        seedInput[0] &&
+        typeof seedInput[0] === 'object'
+          ? seedInput[0]
+          : seedInput;
+
+      if (!isPlainObject(node) || node.type !== 'object' || !Array.isArray(node.entries)) {
+        continue;
+      }
+
+      for (const entry of node.entries as Array<Record<string, unknown>>) {
+        if (entry.type !== 'pair' && entry.type !== 'conditionalPair') {
+          continue;
+        }
+        const key = getStaticObjectKey(entry.key);
+        if (!key || sessionDefinition.slots[key]) {
+          continue;
+        }
+        const location = astLocationToSourceLocation((entry as any).location, filePath);
+        push(
+          `Seed input references unknown session slot '${key}' on @${sessionDefinition.canonicalName}.`,
+          location
+        );
+      }
+    }
+  };
+
+  const validateOverride = (rawOverride: unknown): boolean => {
+    if (rawOverride === undefined) {
+      return false;
+    }
+
+    const staticValue = extractStaticValue(rawOverride);
+    if (staticValue === undefined) {
+      return false;
+    }
+
+    if (staticValue === null || staticValue === false) {
+      return false;
+    }
+
+    if (typeof staticValue === 'string' && staticValue.trim() === 'session') {
+      return true;
+    }
+
+    const location = astLocationToSourceLocation((rawOverride as any)?.location, filePath);
+    push(
+      'override must be the string "session" when overriding a wrapper-attached session.',
+      location
+    );
+    return false;
+  };
+
+  walkAST(ast, node => {
+    if (node.type === 'Directive' && node.kind === 'exe') {
+      const executableNode = node as ExecutableDirectiveNode;
+      const sessionNode = getWithClauseField(executableNode.values?.withClause, 'session');
+      const seedNode = getWithClauseField(executableNode.values?.withClause, 'seed');
+      const sessionDefinition = resolveStaticSessionDefinition(
+        sessionNode,
+        astLocationToSourceLocation(executableNode.location, filePath)
+      );
+      if (seedNode !== undefined && !sessionDefinition) {
+        push(
+          'seed requires an attached session',
+          astLocationToSourceLocation(executableNode.location, filePath)
+        );
+      }
+      validateStaticSeedKeys(seedNode, sessionDefinition);
+      return;
+    }
+
+    if (node.type !== 'ExecInvocation') {
+      return;
+    }
+
+    const invocation = node as any;
+    const invocationLocation = astLocationToSourceLocation(invocation.location, filePath);
+    const invocationSessionNode = getWithClauseField(invocation.withClause, 'session');
+    const invocationSeedNode = getWithClauseField(invocation.withClause, 'seed');
+    const overrideSession = validateOverride(
+      getWithClauseField(invocation.withClause, 'override')
+    );
+    const invocationSession = resolveStaticSessionDefinition(invocationSessionNode, invocationLocation);
+
+    const executableName =
+      typeof invocation.commandRef?.name === 'string' && invocation.commandRef.name.trim().length > 0
+        ? invocation.commandRef.name.trim()
+        : undefined;
+    const executableDirective =
+      executableName !== undefined
+        ? executableDirectives.get(executableName)
+        : undefined;
+    const wrapperSession = executableDirective
+      ? resolveStaticSessionDefinition(
+          getWithClauseField(executableDirective.values?.withClause, 'session'),
+          astLocationToSourceLocation(executableDirective.location, filePath)
+        )
+      : undefined;
+
+    if (
+      wrapperSession &&
+      invocationSession &&
+      wrapperSession.id !== invocationSession.id &&
+      !overrideSession
+    ) {
+      push(
+        `session key conflicts; use override: 'session' to replace`,
+        invocationLocation
+      );
+    }
+
+    const effectiveSession =
+      invocationSession && (!wrapperSession || overrideSession || wrapperSession.id === invocationSession.id)
+        ? invocationSession
+        : wrapperSession;
+
+    if (invocationSeedNode !== undefined && !effectiveSession) {
+      push('seed requires an attached session', invocationLocation);
+    }
+    validateStaticSeedKeys(invocationSeedNode, effectiveSession);
+
+    if (invocation.commandRef?.name === 'update' && Array.isArray(invocation.commandRef?.args)) {
+      const objectIdentifier = invocation.commandRef?.objectReference?.identifier;
+      if (typeof objectIdentifier === 'string' && sessionDefinitions.has(objectIdentifier)) {
+        const updater = invocation.commandRef.args[1];
+        const updaterName = extractStaticSessionReferenceName(updater);
+        if (updaterName) {
+          const updaterDirective = executableDirectives.get(updaterName);
+          if (updaterDirective && isStaticallyRejectedSessionUpdater(updaterDirective)) {
+            push(
+              '@session.update requires a pure local executable (js, node, or mlld data/when executable).',
+              astLocationToSourceLocation((updater as any)?.location, filePath) ?? invocationLocation
+            );
+          }
+        }
+      }
+    }
   });
 
   return errors;
@@ -3772,6 +4157,30 @@ function buildRecordDefinitionsMapFromAst(ast: MlldNode[]): Map<string, RecordDe
   return definitions;
 }
 
+function buildSessionDefinitionsMapFromAst(
+  ast: MlldNode[],
+  filePath: string,
+  recordDefinitions: ReadonlyMap<string, RecordDefinition>
+): Map<string, SessionDefinition> {
+  const definitions = new Map<string, SessionDefinition>();
+
+  walkAST(ast, node => {
+    if (node.type !== 'Directive' || node.kind !== 'var' || (node as any).meta?.isSessionLabel !== true) {
+      return;
+    }
+
+    const buildResult = buildSessionDefinitionFromDirective(node as any, {
+      filePath,
+      resolveRecord: name => recordDefinitions.get(name)
+    });
+    if (buildResult.definition) {
+      definitions.set(buildResult.definition.canonicalName, buildResult.definition);
+    }
+  });
+
+  return definitions;
+}
+
 async function buildAvailableRecordDefinitionsForValidation(
   filepath: string,
   ast: MlldNode[],
@@ -3796,6 +4205,70 @@ async function buildAvailableRecordDefinitionsForValidation(
     for (const [recordName, recordDefinition] of buildRecordDefinitionsMapFromAst(moduleAst)) {
       if (!definitions.has(recordName)) {
         definitions.set(recordName, recordDefinition);
+      }
+    }
+
+    for (const importInfo of extractImports(moduleAst)) {
+      if (typeof importInfo.from !== 'string' || importInfo.from.trim().length === 0) {
+        continue;
+      }
+      const resolvedImport = await resolveModuleImportForDeepValidation(
+        importInfo.from,
+        normalizedPath,
+        projectRoot
+      );
+      if (resolvedImport) {
+        await visitModule(resolvedImport);
+      }
+    }
+  };
+
+  for (const importInfo of extractImports(ast)) {
+    if (typeof importInfo.from !== 'string' || importInfo.from.trim().length === 0) {
+      continue;
+    }
+    const resolvedImport = await resolveModuleImportForDeepValidation(
+      importInfo.from,
+      filepath,
+      projectRoot
+    );
+    if (resolvedImport) {
+      await visitModule(resolvedImport);
+    }
+  }
+
+  return definitions;
+}
+
+async function buildAvailableSessionDefinitionsForValidation(
+  filepath: string,
+  ast: MlldNode[],
+  localDefinitions: ReadonlyMap<string, SessionDefinition>,
+  recordDefinitions: ReadonlyMap<string, RecordDefinition>
+): Promise<Map<string, SessionDefinition>> {
+  const definitions = new Map(localDefinitions);
+  const projectRoot = await resolveProjectRootForDeepValidation([filepath]);
+  const visited = new Set<string>();
+
+  const visitModule = async (modulePath: string): Promise<void> => {
+    const normalizedPath = path.resolve(modulePath);
+    if (visited.has(normalizedPath)) {
+      return;
+    }
+    visited.add(normalizedPath);
+
+    const moduleAst = await parseModuleAstForDeepTraversal(normalizedPath);
+    if (!moduleAst) {
+      return;
+    }
+
+    for (const [sessionName, sessionDefinition] of buildSessionDefinitionsMapFromAst(
+      moduleAst,
+      normalizedPath,
+      recordDefinitions
+    )) {
+      if (!definitions.has(sessionName)) {
+        definitions.set(sessionName, sessionDefinition);
       }
     }
 
@@ -6978,6 +7451,17 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ast,
         recordExtraction.definitions
       );
+      const sessionExtraction = extractSessionsAndDiagnostics(
+        ast,
+        filepath,
+        availableRecordDefinitions
+      );
+      const availableSessionDefinitions = await buildAvailableSessionDefinitionsForValidation(
+        filepath,
+        ast,
+        sessionExtraction.definitions,
+        availableRecordDefinitions
+      );
       const recordsForShelfValidation = new Map<string, Pick<RecordDefinition, 'key'>>();
       for (const [recordName, recordDefinition] of availableRecordDefinitions) {
         recordsForShelfValidation.set(recordName, { key: recordDefinition.key });
@@ -7000,6 +7484,11 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         ast,
         availableRecordDefinitions,
         recordExtraction.declaredNames
+      );
+      const sessionScopedRuntimeErrors = collectSessionScopedRuntimeDiagnostics(
+        ast,
+        filepath,
+        availableSessionDefinitions
       );
       const boxShelfScopeErrors = collectBoxShelfScopeDiagnostics(
         ast,
@@ -7028,6 +7517,7 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
       if (policyCallDiagnostics.policyCalls.length > 0) result.policyCalls = policyCallDiagnostics.policyCalls;
       if (recordExtraction.records.length > 0) result.records = recordExtraction.records;
       if (shelfExtraction.shelves.length > 0) result.shelves = shelfExtraction.shelves;
+      if (sessionExtraction.sessions.length > 0) result.sessions = sessionExtraction.sessions;
       if (needs) result.needs = needs;
       if (checkpointErrors.length > 0) {
         result.valid = false;
@@ -7046,6 +7536,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.errors = [
           ...(result.errors ?? []),
           ...shelfExtraction.errors
+        ];
+      }
+      if (sessionExtraction.errors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...sessionExtraction.errors
         ];
       }
       if (executableDefinitionErrors.length > 0) {
@@ -7074,6 +7571,13 @@ export async function analyze(filepath: string, options: AnalyzeOptions = {}): P
         result.errors = [
           ...(result.errors ?? []),
           ...castErrors
+        ];
+      }
+      if (sessionScopedRuntimeErrors.length > 0) {
+        result.valid = false;
+        result.errors = [
+          ...(result.errors ?? []),
+          ...sessionScopedRuntimeErrors
         ];
       }
       if (boxShelfScopeErrors.length > 0) {
@@ -7329,6 +7833,16 @@ function displayResult(result: AnalyzeResult, format: 'json' | 'text'): void {
         })
         .join(', ');
       console.log(`  ${shelf.name}${slotSummary ? ` ${chalk.dim(`{ ${slotSummary} }`)}` : ''}`);
+    }
+  }
+
+  if (result.sessions && result.sessions.length > 0) {
+    console.log(`${label('sessions')}`);
+    for (const session of result.sessions) {
+      const slotSummary = session.slots
+        .map(slot => `${slot.name}:${slot.type}`)
+        .join(', ');
+      console.log(`  ${session.name}${slotSummary ? ` ${chalk.dim(`{ ${slotSummary} }`)}` : ''}`);
     }
   }
 

@@ -88,7 +88,7 @@ export const HIGHLIGHTING_RULES: HighlightingRules = {
   keywords: {
     commands: ['run', 'sh', 'cmd'],
     languages: ['js', 'node', 'nodejs', 'python', 'py', 'bash', 'sh', 'zsh'],
-    special: ['when', 'if', 'else', 'until', 'endless', 'done', 'continue', 'first', 'all', 'any', 'foreach', 'from', 'as', 'record', 'to', 'with', 'new', 'node', 'tools', 'mcp', 'git', 'using', 'env', 'known', 'trusted', 'untrusted', 'resolved', 'privileged', 'resume']
+    special: ['when', 'if', 'else', 'until', 'endless', 'done', 'continue', 'first', 'all', 'any', 'foreach', 'from', 'as', 'record', 'to', 'with', 'new', 'node', 'tools', 'session', 'mcp', 'git', 'using', 'env', 'known', 'trusted', 'untrusted', 'resolved', 'privileged', 'resume']
   }
 } as const;
 

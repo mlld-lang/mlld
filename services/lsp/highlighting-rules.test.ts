@@ -186,6 +186,7 @@ describe('Highlighting Rules', () => {
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('privileged');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('resume');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('tools');
+      expect(HIGHLIGHTING_RULES.keywords.special).toContain('session');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('mcp');
       expect(HIGHLIGHTING_RULES.keywords.special).toContain('git');
     });

@@ -84,6 +84,17 @@ Outside an active bridge call, the same accessor returns the same shape with `ha
 
 `@mx.llm.sessionId` is the current bridge call session id, or `null` when no LLM call is active.
 
+This is bridge or provider metadata, not `var session` state. Session-scoped state is read through its declared accessor name:
+
+```mlld
+var session @planner = {
+  count: number?
+}
+
+show @mx.llm.sessionId
+show @planner.count
+```
+
 For values returned by `exe llm`, session metadata can also appear on the returned value itself as `@someValue.mx.sessionId` when the provider returned a session id in the runtime envelope. That value-local accessor survives normal return shaping such as record coercion:
 
 ```mlld

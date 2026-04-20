@@ -42,7 +42,7 @@ Poll variants (`@claudePoll`, `@claudePollJsonl`, `@claudePollEvent`) extend the
 
 **Convention, not schema:** The runtime recognizes `tools` and `dir` from the config object (see next section). Everything else — `model`, `system`, `stream` — is handled by the module implementation, not the runtime. Module authors can add their own fields.
 
-## Runtime support for `config.tools`
+## Runtime support for bridge calls
 
 When an `exe llm` function is invoked with a config object containing a `tools` property, the runtime automatically:
 
@@ -67,6 +67,25 @@ exe llm @agent(prompt, config) = [
 
 This is why `exe llm` functions don't need to manually construct `--mcp-config` flags or manage bridge lifecycles — the runtime handles it.
 
+The bridge activation gate is wider than `config.tools`. A call also gets an active bridge frame when it carries session state or box-managed shelf scope, even when no tools are declared:
+
+```mlld
+var session @planner = {
+  count: number?
+}
+
+exe llm @agent(prompt, config) = js {
+  return "ok"
+}
+
+show @agent("hello", {}) with {
+  session: @planner,
+  seed: { count: 0 }
+}
+```
+
+This matters for runtime-only surfaces such as `@mx.llm.sessionId`, session accessors, shelf notes, and scoped handle visibility.
+
 ## Returned session metadata
 
 If an `exe llm` implementation returns provider session metadata in its runtime envelope, the final value also exposes it through value-local `.mx` metadata:
@@ -81,6 +100,8 @@ show @result.mx.sessionId
 ```
 
 This is available on values returned by `exe llm` calls, including results that were later shaped into records. Use `@result.mx.sessionId` when you need to correlate a returned value with provider-side traces or transcripts. Use ambient `@mx.llm.sessionId` when you need the current in-flight bridge session inside the executing `exe llm` body.
+
+This provider or bridge session id is separate from `var session` state. `@mx.llm.sessionId` identifies the in-flight bridge call. `var session @planner = { ... }` is mlld-managed mutable state attached to that call.
 
 ### Tool types in the array
 
@@ -106,6 +127,38 @@ Passing an empty array signals "no tools" — the runtime sets `@mx.llm.hasTools
 ```mlld
 var @r = @claude("Pure text generation", { tools: [] })
 ```
+
+### Wrapper-owned session defaults
+
+LLM wrappers can attach a default session with their `with` clause:
+
+```mlld
+var session @planner = {
+  count: number?
+}
+
+exe llm @agent(prompt, config) = js {
+  return "ok"
+} with {
+  session: @planner,
+  seed: { count: 0 }
+}
+```
+
+That default belongs to the wrapper. A caller can replace it only with:
+
+```mlld
+var session @callerPlanner = {
+  count: number?
+}
+
+show @agent("hello", {}) with {
+  session: @callerPlanner,
+  override: "session"
+}
+```
+
+Without `override: "session"`, a conflicting caller session is rejected.
 
 ## Box interaction
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0]
 
 ### Changed
+- `exe llm` bridge activation now also turns on for attached `session` state and shelf scope, not just `config.tools`. Wrapper-owned session defaults stay attached unless the caller explicitly replaces them with `override: "session"`.
 - Gitignored state directories moved from `.mlld/` to `.llm/` at both project and user scope. Project audit log, caches, checkpoints, run registry, box, and env dirs now live at `<projectRoot>/.llm/...`. User-level auth token and shared module/python caches now live at `~/.llm/...`. `mlld-config.json` and `mlld-lock.json` remain at the project root (committed). No read fallback — run `mlld migrate-state` once to rename existing `.mlld/` state. When mlld detects a legacy `.mlld/` directory it prints a one-time warning.
 - `/show`, `/output`, and `/append` now keep field-level labels and proofs through field access, then render only at the final text/JSON boundary.
 - `with { policy }`, `@policy.build(...)`, and `@policy.validate(...)` now accept policy fragments composed through variables, field access, imports, and object spread while preserving proof-bearing leaves used for authorization matching.
@@ -16,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.keep` / `.keepStructured` are now strictly embedded-language escape hatches. `bind` values and `state://` writes materialize plain data instead of storing live wrappers.
 
 ### Added
+- `var session` declarations for typed session-scoped runtime state on LLM bridge frames. Attach with `with { session: @schema, seed: {...} }`, read through named accessors inside attached calls and tool callbacks, and mutate with `.set`, `.append`, `.increment`, `.clear`, and pure-local `.update`.
+- Session state now surfaces through runtime tracing (`session.seed`, `session.write`, `session.final`), streamed SDK `session_write` events, and final SDK `result.sessions` snapshots.
+- `mlld validate` and `mlld analyze` now validate session schemas and statically obvious session attachment and update errors.
 - Executable thin-arrow return channels: `->` writes a tool-only return, `=->` writes both canonical and tool returns, surfaced tool dispatch switches to strict tool-return mode when either form appears in source, and empty strict-mode tool results resolve to `null` or `[]` when all tool reaches are inside `for` bodies.
 - `record` declarations for structured tool output with field-level trust classification. `facts` fields carry `fact:@record.field` proof labels and clear inherited exe `untrusted`; `data` fields are informational content that preserves taint. `exe @fn(...) = ... => record` coerces tool output through the record schema. Supports field remapping (`@input.dealname as name`), computed fields, conditional trust tiers via `when` clauses, typed validation modes (`demote`, `strict`, `drop`), array fact fields with per-element proof, and automatic LLM output parsing.
 - Inline dynamic record coercion via `@value as record @schema` and `@cast(@value, @schema)`. Uses the same runtime/schema metadata path as `=> record @schema` and works in expression positions, object/array literals, pipeline terminals, and grouped field access.

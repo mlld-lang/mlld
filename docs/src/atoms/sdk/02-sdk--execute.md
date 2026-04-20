@@ -23,6 +23,10 @@ const result = await execute('./agent.mld', payload, {
 for (const write of result.stateWrites) {
   await updateState(write.path, write.value);
 }
+
+for (const session of result.sessions) {
+  console.log(session.name, session.finalState);
+}
 ```
 
 Features:
@@ -30,9 +34,23 @@ Features:
 - State hydration via `@state` module
 - Payload injection via `@payload`, including per-field labels via `payloadLabels`
 - State writes via `state://` protocol (merged from streamed events + final result)
+- Session-scoped state final snapshots via `result.sessions`
+- Stream handles emit `session_write` events when committed session slot writes occur
 - Stream handles support `updateState(path, value, labels?)`, `writeFile(path, content)`, and event consumption via async iteration or `next_event`
 - `mcpServers` maps logical names to MCP server commands per-execution
-- Results include `stateWrites`, `effects` (with security metadata), `denials` (guard/policy), and `metrics` (timing)
+- Results include `stateWrites`, `sessions`, `effects` (with security metadata), `denials` (guard/policy), and `metrics` (timing)
+
+`result.sessions` is the final committed state per attached session frame. Per-write session activity stays in the event stream:
+
+```typescript
+const stream = await execute('./agent.mld', payload, { stream: true });
+
+for await (const event of stream) {
+  if (event.type === 'session_write') {
+    console.log(event.session_write.slot_path, event.session_write.next);
+  }
+}
+```
 
 **MCP server injection** lets parallel `execute()` calls each get independent MCP server instances:
 

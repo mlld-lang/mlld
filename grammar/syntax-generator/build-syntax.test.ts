@@ -26,6 +26,7 @@ describe('MlldSyntaxGenerator', () => {
     expect(generator.patterns.arrowOperator).toContain('=>');
     expect(generator.patterns.arrowOperator).toContain('->');
     expect(generator.patterns.operators).toContain('tools');
+    expect(generator.patterns.operators).toContain('session');
     expect(generator.patterns.operators).toContain('mcp');
     expect(generator.patterns.operators).toContain('using');
     expect(generator.patterns.operators).toContain('record');

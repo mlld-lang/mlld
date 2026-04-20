@@ -529,11 +529,11 @@
         },
         {
           "name": "support.type.property-name.mlld",
-          "match": "(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:(?!:))"
+          "match": "(?<=^|[{,\\s])[A-Za-z_][A-Za-z0-9_-]*(?::[A-Za-z_][A-Za-z0-9_-]*)?(?=\\s*:(?!:))"
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|mcp|git|using)\\b"
+          "match": "\\b(from|as|record|foreach|with|to|format|parallel|before|after|always|allow|deny|retry|resume|stream|module|static|live|cached|local|cmd|in|for|first|none|known|trusted|untrusted|resolved|privileged|demote|strict|drop|node|new|tools|session|mcp|git|using)\\b"
         },
         {
           "name": "support.type.guard-filter.mlld",

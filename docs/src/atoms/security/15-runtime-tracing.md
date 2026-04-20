@@ -1,13 +1,13 @@
 ---
 id: runtime-tracing
 title: Runtime Effect Tracing
-brief: Real-time structured traces for shelf writes, guard decisions, handle issue/resolve/release, policy builds, and authorization checks
+brief: Real-time structured traces for session writes, shelf writes, guard decisions, handles, policy builds, and authorization checks
 category: security
 parent: audit-log
-tags: [tracing, debugging, observability, guards, shelf, handles, policy]
-related: [audit-log, tool-call-tracking, security-guards-basics, labels-overview, facts-and-handles, shelf-slots, policy-auth]
+tags: [tracing, debugging, observability, guards, session, shelf, handles, policy]
+related: [audit-log, tool-call-tracking, security-guards-basics, labels-overview, facts-and-handles, shelf-slots, session-state, policy-auth]
 related-code: [core/types/trace.ts, interpreter/tracing/RuntimeTraceManager.ts, interpreter/tracing/events.ts, interpreter/env/Environment.ts]
-updated: 2026-04-07
+updated: 2026-04-20
 qa_tier: 2
 ---
 
@@ -46,9 +46,9 @@ var @result = @claude(@task, { tools: @writeTools }) with { trace: "effects" }
 | Level | What's traced |
 |---|---|
 | `off` | Nothing (default) |
-| `effects` | Shelf writes/clears, guard decisions, policy builds, auth checks, record schema failures, stale-read detection |
+| `effects` | Session seed/write/final events, shelf writes/clears, guard decisions, policy builds, auth checks, record schema failures, stale-read detection |
 | `handle` / `handles` | Only handle lifecycle events (`handle.issued`, `handle.resolved`, `handle.resolve_failed`, `handle.released`) |
-| `verbose` | Everything in `effects` plus shelf reads, handle lifecycle events, display projections, LLM calls, tool calls, record coercions |
+| `verbose` | Everything in `effects` plus shelf reads, handle lifecycle events, display projections, LLM calls, tool calls, record coercions, and unredacted session values |
 
 Start with `effects` for debugging. Use `handle` when you're isolating proof-bearing handle flow. Use `verbose` when you need the full runtime picture.
 
@@ -103,6 +103,23 @@ Import traces make the import pipeline debuggable from inside mlld: resolution, 
 | `shelf.stale_read` | effects | slot, writeTs, readTs, expected, actual, message |
 
 `shelf.stale_read` fires when a read returns different data than a write in the same execution context. This catches the "write succeeded but state was empty" class of bugs immediately.
+
+### Session
+
+| Event | Level | Data |
+|---|---|---|
+| `session.seed` | effects | frameId, sessionName, declarationId, path, operation, value |
+| `session.write` | effects | frameId, sessionName, declarationId, path, operation, previous, value |
+| `session.final` | effects | frameId, sessionName, declarationId, finalState |
+
+Session traces are commit-aware:
+
+- writes inside guard buffering do not emit immediately
+- same-guard reads still see the buffered overlay
+- if the guard denies or discards the write, both the trace envelope and the SDK `session_write` event are dropped
+- on commit, the write and its trace emit together
+
+At `effects`, sensitive or large session values are redacted to size-oriented summaries. `verbose` keeps the real values.
 
 ### Guard
 
@@ -231,6 +248,7 @@ Tracing is one side of the debugging surface. Ambient `@mx.*` accessors expose t
 - `@mx.llm.sessionId`
 - `@mx.llm.display`
 - `@mx.llm.resume`
+- `@planner.count`
 - `@mx.shelf.writable`
 - `@mx.shelf.readable`
 - `@mx.policy.active`

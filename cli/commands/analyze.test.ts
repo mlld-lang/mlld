@@ -1492,6 +1492,144 @@ show @built
     ]);
   });
 
+  it('catches statically knowable session definition errors', async () => {
+    const modulePath = await writeModule('analyze-invalid-session.mld', `
+/record @displayRecord = {
+  facts: [id: string],
+  display: [id]
+}
+
+/var session @planner = {
+  missing: @missing_record,
+  bad: @displayRecord
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("Session slot 'missing' references unknown record '@missing_record'.");
+    expect(messages).toContain("Record '@displayRecord' cannot be used as a session slot type.");
+  });
+
+  it('surfaces valid session definitions in analyze output', async () => {
+    const modulePath = await writeModule('analyze-session-info.mld', `
+/record @item = {
+  facts: [id: string]
+}
+
+/var session @planner = {
+  count: number?,
+  status: string?,
+  items: @item[]
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.sessions).toEqual([
+      expect.objectContaining({
+        name: 'planner',
+        declarationId: expect.stringContaining('#planner'),
+        slots: expect.arrayContaining([
+          expect.objectContaining({ name: 'count', kind: 'primitive', type: 'number?', optional: true, isArray: false }),
+          expect.objectContaining({ name: 'status', kind: 'primitive', type: 'string?', optional: true, isArray: false }),
+          expect.objectContaining({ name: 'items', kind: 'record', type: '@item[]', optional: false, isArray: true })
+        ])
+      })
+    ]);
+  });
+
+  it('resolves imported session definitions for static invocation validation', async () => {
+    await writeModule('sessions.mld', `
+/var session @planner = {
+  count: number?
+}
+`);
+
+    const modulePath = await writeModule('analyze-imported-session.mld', `
+/import { @planner } from "./sessions.mld"
+
+/exe llm @agent(prompt, config) = js {
+  return "ok";
+}
+
+/show @agent("hello", {}) with {
+  session: @planner,
+  seed: { count: 1 }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).not.toContain(
+      "unknown session '@planner'"
+    );
+  });
+
+  it('catches statically knowable session invocation errors', async () => {
+    const modulePath = await writeModule('analyze-session-invocation-errors.mld', `
+/var session @planner = {
+  count: number?
+}
+
+/var session @caller = {
+  count: number?
+}
+
+/exe llm @agent(prompt, config) = js {
+  return "ok";
+} with {
+  session: @planner
+}
+
+/exe llm @plain(prompt, config) = js {
+  return "ok";
+}
+
+/show @agent("hello", {}) with {
+  session: @caller,
+  seed: { missing: 1 }
+}
+
+/show @plain("hello", {}) with {
+  seed: { count: 1 }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).toContain("session key conflicts; use override: 'session' to replace");
+    expect(messages).toContain("Seed input references unknown session slot 'missing' on @planner.");
+    expect(messages).toContain('seed requires an attached session');
+  });
+
+  it('rejects statically knowable non-pure session update executables', async () => {
+    const modulePath = await writeModule('analyze-session-update-llm.mld', `
+/var session @planner = {
+  count: number?
+}
+
+/exe llm @bad(value, config) = js {
+  return value;
+}
+
+/show @planner.update("count", @bad)
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(false);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).toContain(
+      '@session.update requires a pure local executable'
+    );
+  });
+
   it('catches static box shelf alias conflicts and unknown targets', async () => {
     const modulePath = await writeModule('analyze-box-shelf-scope.mld', `
 /record @contact = {
