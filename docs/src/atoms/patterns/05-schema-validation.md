@@ -283,7 +283,7 @@ When possible, define the extraction record once per write tool shape (one recor
 
 ### Dynamic coercion for framework-driven contracts
 
-When a framework takes contracts as configuration (e.g., `@rig.build({ contracts: { email: @emailPayload } })`), the extract worker needs to coerce output against a record that was passed in, not one referenced statically by name. Use `=> record @schema`:
+When a framework takes contracts as configuration (e.g., `@agent.build({ contracts: { email: @emailPayload } })`), the extract worker needs to coerce output against a record that was passed in, not one referenced statically by name. Use `=> record @schema`:
 
 ```mlld
 >> The extract worker takes the contract as a parameter

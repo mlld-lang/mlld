@@ -455,7 +455,7 @@ The planner naturally accumulates progress via its own conversation history. Whe
 
 **Which variant to use:**
 
-- **Stateless variant** — when you want deterministic per-phase authorization gates, explicit phase boundaries, or framework-level orchestration control (the rig framework at `~/mlld/rig` is the canonical example). Each phase is a separate `@claude` call with explicit state threading.
+- **Stateless variant** — when you want deterministic per-phase authorization gates, explicit phase boundaries, or framework-level orchestration control. Each phase is a separate `@claude` call with explicit state threading.
 - **Persistent-session variant** — when you want the simplest possible orchestration, natural progress accumulation via conversation history, and the shortest path from "define your tool exes" to "call `@claude(prompt, {tools})`". Works well for open-ended agent tasks where the planner decides the flow.
 
 Both variants are equally secure because the security model (`->` strict mode, consumer-side untrusted tagging, `@policy.build` validation) is identical. They differ only in orchestration shape.
