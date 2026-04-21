@@ -1,0 +1,78 @@
+/record @contact = {
+  facts: [email: string],
+  data: [name: string]
+}
+
+/record @file_entry = {
+  facts: [id_: string],
+  data: [filename: string]
+}
+
+/record @share_file_inputs = {
+  facts: [email: string, file_id: string],
+  data: [permission: string],
+  blocklist: { permission: ["owner"] },
+  correlate: false,
+  validate: "strict"
+}
+
+/exe @get_contact() = {
+  email: "ada@example.com",
+  name: "Ada"
+} => contact
+
+/exe @get_file() = {
+  id_: "file-7",
+  filename: "notes.txt"
+} => file_entry
+
+/exe tool:w @share_file(email, file_id, permission) = `shared:@email:@file_id:@permission`
+
+/var tools @writeTools = {
+  share_file: {
+    mlld: @share_file,
+    inputs: @share_file_inputs,
+    labels: ["tool:w", "exfil:send"]
+  }
+}
+
+/var @contact = @get_contact()
+/var @file = @get_file()
+/var @goodArgs = {
+  email: @contact.email,
+  file_id: @file.id_,
+  permission: "read"
+}
+/var @blockedArgs = {
+  email: @contact.email,
+  file_id: @file.id_,
+  permission: "owner"
+}
+/var @taskPolicy = {
+  defaults: { rules: [] },
+  operations: {
+    "exfil:send": ["share_file"]
+  },
+  authorizations: {
+    allow: {
+      share_file: {
+        args: {
+          email: @contact.email,
+          file_id: @file.id_
+        }
+      }
+    }
+  }
+}
+
+/var @good = @writeTools["share_file"](@goodArgs) with { policy: @taskPolicy }
+/var @blocked = when [
+  denied => {
+    code: @mx.guard.code ?? @mx.guard.reason,
+    field: @mx.guard.field ?? null
+  }
+  * => @writeTools["share_file"](@blockedArgs) with { policy: @taskPolicy }
+]
+
+/show @good
+/show @blocked
