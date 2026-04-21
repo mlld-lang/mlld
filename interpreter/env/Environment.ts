@@ -1733,6 +1733,9 @@ export class Environment
       timestamp: write.timestamp ?? new Date().toISOString()
     };
     root.sessionWrites.push(entry);
+    if (root.sessionWrites.length > 200) {
+      root.sessionWrites = root.sessionWrites.slice(-100);
+    }
   }
 
   getSessionWrites(): SessionWriteRecord[] {
