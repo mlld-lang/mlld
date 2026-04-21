@@ -64,9 +64,9 @@ export class RuntimeTraceManager {
     return [...this.root.events];
   }
 
-  emitTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): void {
+  emitTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): RuntimeTraceEvent | undefined {
     if (!shouldEmitRuntimeTrace(this.getLevel(), trace.requiredLevel, trace.category)) {
-      return;
+      return undefined;
     }
 
     const payload: RuntimeTraceEvent = {
@@ -95,6 +95,8 @@ export class RuntimeTraceManager {
     if (this.root.stderr) {
       process.stderr.write(`${formatRuntimeTraceLine(payload)}\n`);
     }
+
+    return payload;
   }
 
   summarizeValue(value: unknown): unknown {

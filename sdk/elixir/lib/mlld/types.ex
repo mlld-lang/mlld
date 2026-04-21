@@ -12,7 +12,16 @@ end
 
 defmodule Mlld.SessionWrite do
   @moduledoc "Represents an in-flight session write event."
-  defstruct [:frame_id, :session_name, :declaration_id, :origin_path, :slot_path, :operation, :prev, :next]
+  defstruct [
+    :frame_id,
+    :session_name,
+    :declaration_id,
+    :origin_path,
+    :slot_path,
+    :operation,
+    :prev,
+    :next
+  ]
 
   @type t :: %__MODULE__{
           frame_id: String.t(),
@@ -75,15 +84,30 @@ defmodule Mlld.GuardDenial do
         }
 end
 
+defmodule Mlld.TraceEvent do
+  @moduledoc "Structured runtime trace event."
+  defstruct ts: "", level: "", category: "", event: "", scope: %{}, data: %{}
+
+  @type t :: %__MODULE__{
+          ts: String.t(),
+          level: String.t(),
+          category: String.t(),
+          event: String.t(),
+          scope: map(),
+          data: map()
+        }
+end
+
 defmodule Mlld.HandleEvent do
   @moduledoc "An event from an in-flight execution."
-  defstruct type: "", state_write: nil, session_write: nil, guard_denial: nil
+  defstruct type: "", state_write: nil, session_write: nil, guard_denial: nil, trace_event: nil
 
   @type t :: %__MODULE__{
           type: String.t(),
           state_write: Mlld.StateWrite.t() | nil,
           session_write: Mlld.SessionWrite.t() | nil,
-          guard_denial: Mlld.GuardDenial.t() | nil
+          guard_denial: Mlld.GuardDenial.t() | nil,
+          trace_event: Mlld.TraceEvent.t() | nil
         }
 end
 
@@ -105,7 +129,7 @@ defmodule Mlld.ExecuteResult do
           exports: term(),
           effects: [Mlld.Effect.t()],
           denials: [Mlld.GuardDenial.t()],
-          trace_events: [map()],
+          trace_events: [Mlld.TraceEvent.t()],
           metrics: Mlld.Metrics.t() | nil
         }
 end
@@ -288,7 +312,8 @@ defmodule Mlld.Types do
     Metrics,
     Needs,
     SessionFinalState,
-    StateWrite
+    StateWrite,
+    TraceEvent
   }
 
   alias Mlld.JSON
@@ -321,7 +346,7 @@ defmodule Mlld.Types do
     trace_events =
       result
       |> Map.get("traceEvents", [])
-      |> Enum.filter(&is_map/1)
+      |> Enum.flat_map(&decode_trace_event/1)
 
     %ExecuteResult{
       output: decode_output(result),
@@ -561,6 +586,21 @@ defmodule Mlld.Types do
   end
 
   defp decode_guard_denial(_), do: []
+
+  defp decode_trace_event(entry) when is_map(entry) do
+    [
+      %TraceEvent{
+        ts: entry |> Map.get("ts", "") |> to_string(),
+        level: entry |> Map.get("level", "") |> to_string(),
+        category: entry |> Map.get("category", "") |> to_string(),
+        event: entry |> Map.get("event", "") |> to_string(),
+        scope: normalize_map(Map.get(entry, "scope")) || %{},
+        data: normalize_map(Map.get(entry, "data")) || %{}
+      }
+    ]
+  end
+
+  defp decode_trace_event(_), do: []
 
   defp decode_analysis_errors(entries) do
     entries

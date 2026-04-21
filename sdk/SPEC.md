@@ -78,7 +78,9 @@ Events are emitted during in-flight executions:
 
 Event types on the wire:
 - `state:write` - a state:// write occurred
+- `session_write` - a session slot write committed
 - `guard_denial` - a guard/policy denied an operation
+- `trace_event` - a runtime trace event was emitted
 - `result` - execution completed (carries final payload)
 
 ### Envelope Rule
@@ -308,6 +310,7 @@ Events are delivered in order. Event types:
 | `"state_write"` | A state:// write occurred | `StateWrite` |
 | `"session_write"` | A session slot write committed | `SessionWrite` |
 | `"guard_denial"` | A guard/policy denied an operation | `GuardDenial` |
+| `"trace_event"` | A runtime trace event was emitted | `TraceEvent` |
 | `"complete"` | Execution finished | none |
 
 #### wait / result
@@ -538,10 +541,11 @@ untrusted(value) -> LabeledValue
 
 | Field | Type | Description |
 |-------|------|-------------|
-| type | string | `"state_write"`, `"session_write"`, `"guard_denial"`, or `"complete"` |
+| type | string | `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"` |
 | state_write | StateWrite? | Present when type is `"state_write"` |
 | session_write | SessionWrite? | Present when type is `"session_write"` |
 | guard_denial | GuardDenial? | Present when type is `"guard_denial"` |
+| trace_event | TraceEvent? | Present when type is `"trace_event"` |
 
 ### AnalyzeResult
 
@@ -672,6 +676,7 @@ sdk/fixtures/
 |- analyze-result.json        # AnalyzeResult with executables, guards, imports
 |- state-write-event.json     # state:write event with security metadata
 |- guard-denial-event.json    # guard_denial event with all fields
+|- trace-event.json           # trace_event with scope and data
 |- fs-status-result.json      # fs_status response array
 |- sign-result.json           # sign/verify FileVerifyResult
 |- sign-content-result.json   # sign_content ContentSignature

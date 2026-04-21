@@ -77,6 +77,27 @@ class StateWriteParsingTest(unittest.TestCase):
         self.assertEqual(denial.operation, "send_email")
         self.assertEqual(denial.args, {"recipients": ["attacker@evil.com"]})
 
+    def test_trace_event_parser_decodes_stream_event(self) -> None:
+        trace = mlld._trace_event_from_event(
+            {
+                "type": "trace_event",
+                "traceEvent": {
+                    "ts": "2026-01-01T00:00:00.000Z",
+                    "level": "effects",
+                    "category": "guard",
+                    "event": "guard.deny",
+                    "scope": {"frameId": "frame-child", "parentFrameId": "frame-parent"},
+                    "data": {"guard": "blocker", "operation": "send"},
+                },
+            }
+        )
+
+        self.assertIsNotNone(trace)
+        assert trace is not None
+        self.assertEqual(trace.event, "guard.deny")
+        self.assertEqual(trace.category, "guard")
+        self.assertEqual(trace.scope["parentFrameId"], "frame-parent")
+
     def test_execute_result_merges_guard_denials_without_duplicates(self) -> None:
         streamed = mlld.GuardDenial(
             guard="blocker",

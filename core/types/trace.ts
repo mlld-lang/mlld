@@ -90,6 +90,8 @@ export interface RuntimeTraceScope {
   guard_try?: number;
   pipeline_stage?: number;
   file?: string;
+  frameId?: string;
+  parentFrameId?: string;
   [key: string]: unknown;
 }
 

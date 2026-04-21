@@ -44,6 +44,16 @@ defmodule Mlld.ProtocolFixturesTest do
     assert session_write.next == 2
   end
 
+  test "trace event fixture preserves fields" do
+    fixture = load_fixture!("trace-event.json")
+    trace_event = Protocol.trace_event_from_event(fixture["event"])
+
+    assert trace_event.event == "guard.deny"
+    assert trace_event.category == "guard"
+    assert trace_event.scope["parentFrameId"] == "frame-parent"
+    assert trace_event.data["operation"] == "send"
+  end
+
   test "error fixture decodes transport error" do
     fixture = load_fixture!("error-result.json")
     error = fixture |> Protocol.error() |> Error.from_payload()

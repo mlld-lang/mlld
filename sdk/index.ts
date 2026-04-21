@@ -81,6 +81,7 @@ export type {
   SDKStateWriteEvent,
   SDKSessionWriteEvent,
   SDKGuardDenialEvent,
+  SDKTraceEvent,
   SDKDebugEvent,
   SDKGuardDenial,
   SDKStreamingEvent,

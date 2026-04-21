@@ -1,7 +1,7 @@
 defmodule Mlld.Protocol do
   @moduledoc false
 
-  alias Mlld.{GuardDenial, JSON, SessionWrite, StateWrite}
+  alias Mlld.{GuardDenial, JSON, SessionWrite, StateWrite, TraceEvent}
 
   @spec encode_request(String.t(), integer(), map()) :: {:ok, iodata()} | {:error, term()}
   def encode_request(method, request_id, params)
@@ -79,7 +79,10 @@ defmodule Mlld.Protocol do
     slot_path = Map.get(payload, "slot_path")
     operation = Map.get(payload, "operation")
 
-    if Enum.all?([frame_id, session_name, declaration_id, slot_path, operation], &(is_binary(&1) and &1 != "")) do
+    if Enum.all?(
+         [frame_id, session_name, declaration_id, slot_path, operation],
+         &(is_binary(&1) and &1 != "")
+       ) do
       %SessionWrite{
         frame_id: frame_id,
         session_name: session_name,
@@ -117,6 +120,20 @@ defmodule Mlld.Protocol do
   end
 
   def guard_denial_from_event(_), do: nil
+
+  @spec trace_event_from_event(map()) :: TraceEvent.t() | nil
+  def trace_event_from_event(%{"type" => "trace_event", "traceEvent" => %{} = payload}) do
+    %TraceEvent{
+      ts: payload |> Map.get("ts", "") |> to_string(),
+      level: payload |> Map.get("level", "") |> to_string(),
+      category: payload |> Map.get("category", "") |> to_string(),
+      event: payload |> Map.get("event", "") |> to_string(),
+      scope: normalize_map(Map.get(payload, "scope")) || %{},
+      data: normalize_map(Map.get(payload, "data")) || %{}
+    }
+  end
+
+  def trace_event_from_event(_), do: nil
 
   defp normalize_timestamp(value) when is_binary(value), do: value
   defp normalize_timestamp(_), do: nil

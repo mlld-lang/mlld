@@ -120,6 +120,27 @@ func TestSessionWriteEventFixturePreservesFields(t *testing.T) {
 	}
 }
 
+func TestTraceEventFixturePreservesFields(t *testing.T) {
+	envelope := loadFixtureEnvelope(t, "trace-event.json")
+
+	event, ok := asMap(envelope["event"])
+	if !ok {
+		t.Fatalf("expected trace event payload to be an object")
+	}
+
+	traceEvent, ok := parseTraceEventEvent(event)
+	if !ok {
+		t.Fatalf("expected trace-event fixture to decode")
+	}
+
+	if traceEvent.Event != "guard.deny" || traceEvent.Category != "guard" {
+		t.Fatalf("unexpected trace event decode: %#v", traceEvent)
+	}
+	if traceEvent.Scope["parentFrameId"] != "frame-parent" || traceEvent.Data["operation"] != "send" {
+		t.Fatalf("expected trace scope/data to be preserved: %#v", traceEvent)
+	}
+}
+
 func TestErrorFixtureDecodesTransportError(t *testing.T) {
 	envelope := loadFixtureEnvelope(t, "error-result.json")
 

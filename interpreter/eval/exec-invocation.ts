@@ -3873,6 +3873,7 @@ async function evaluateExecInvocationInternal(
   hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
   let attachedSessionFrameId: string | undefined;
   let attachedSessionCleanupRegistered = false;
+  const llmTraceFrameId = hasLlmLabel ? randomUUID() : undefined;
   const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
   if (importedExecutableSourcePath) {
     const sourceScopedEnv = runtimeEnv.createChild();
@@ -3882,10 +3883,19 @@ async function evaluateExecInvocationInternal(
     }
     runtimeEnv = sourceScopedEnv;
   }
+  if (llmTraceFrameId) {
+    const frameScopedEnv = runtimeEnv.createChild();
+    const localScopedConfig = runtimeEnv.getLocalScopedEnvironmentConfig();
+    if (localScopedConfig) {
+      frameScopedEnv.setScopedEnvironmentConfig(localScopedConfig);
+    }
+    frameScopedEnv.setRuntimeTraceFrame(runtimeEnv.createRuntimeTraceChildFrame(llmTraceFrameId));
+    runtimeEnv = frameScopedEnv;
+  }
 
   const preattachedSession = hasLlmLabel ? getNormalizedSessionAttachment(runtimeEnv) : undefined;
   if (preattachedSession) {
-    attachedSessionFrameId = randomUUID();
+    attachedSessionFrameId = llmTraceFrameId ?? randomUUID();
     const sessionInstance = materializeSession(
       preattachedSession.definition,
       runtimeEnv,
@@ -4413,7 +4423,7 @@ async function evaluateExecInvocationInternal(
         const callConfig = await createCallMcpConfig({
           tools: toolsValue,
           env: execEnv,
-          ...(attachedSessionFrameId ? { sessionId: attachedSessionFrameId } : {}),
+          ...(llmTraceFrameId ? { sessionId: llmTraceFrameId } : {}),
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
           isMcpContext: true,
@@ -4671,9 +4681,9 @@ async function evaluateExecInvocationInternal(
     trackedToolName.length > 0 &&
     Array.from(env.getEnclosingExeLabels()).includes('llm');
   if (shouldTraceLlmToolCall) {
-    env.emitRuntimeTraceEvent(traceLlmToolCall({
+    runtimeEnv.emitRuntimeTraceEvent(traceLlmToolCall({
       tool: trackedToolName,
-      args: env.summarizeTraceValue(toolCallArguments)
+      args: runtimeEnv.summarizeTraceValue(toolCallArguments)
     }));
   }
   const recordToolCall = (ok: boolean, error?: unknown): void => {
@@ -5354,10 +5364,10 @@ async function evaluateExecInvocationInternal(
     }
     await recordToolAudit(true, invocationResult.value);
     if (shouldTraceLlmToolCall) {
-      env.emitRuntimeTraceEvent(traceLlmToolResult({
+      runtimeEnv.emitRuntimeTraceEvent(traceLlmToolResult({
         tool: trackedToolName,
         ok: true,
-        result: env.summarizeTraceValue(invocationResult.value),
+        result: runtimeEnv.summarizeTraceValue(invocationResult.value),
         durationMs:
           toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
             ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
@@ -5365,7 +5375,7 @@ async function evaluateExecInvocationInternal(
       }));
     }
     if (hasLlmLabel) {
-      env.emitRuntimeTraceEvent(traceLlmInvocation(
+      runtimeEnv.emitRuntimeTraceEvent(traceLlmInvocation(
         isLlmResumeContinuation ? 'llm.resume' : 'llm.call',
         {
         sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
@@ -5383,7 +5393,7 @@ async function evaluateExecInvocationInternal(
   } catch (error) {
     await recordToolAudit(false, undefined, error);
     if (shouldTraceLlmToolCall) {
-      env.emitRuntimeTraceEvent(traceLlmToolResult({
+      runtimeEnv.emitRuntimeTraceEvent(traceLlmToolResult({
         tool: trackedToolName,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
@@ -5394,7 +5404,7 @@ async function evaluateExecInvocationInternal(
       }));
     }
     if (hasLlmLabel) {
-      env.emitRuntimeTraceEvent(traceLlmInvocation(
+      runtimeEnv.emitRuntimeTraceEvent(traceLlmInvocation(
         isLlmResumeContinuation ? 'llm.resume' : 'llm.call',
         {
         sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,

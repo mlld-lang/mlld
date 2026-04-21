@@ -269,6 +269,10 @@ interface NormalizedCodeExecutionInput {
 
 type ShadowFunctions = Map<string, any>;
 
+interface RuntimeTraceFrameContext {
+  frameId: string;
+  parentFrameId?: string;
+}
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -411,6 +415,7 @@ export class Environment
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
   private runtimeTraceManager: RuntimeTraceManager;
+  private runtimeTraceFrame?: RuntimeTraceFrameContext;
 
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
@@ -4170,11 +4175,38 @@ export class Environment
     return this.runtimeTraceManager.getEvents();
   }
 
+  createRuntimeTraceChildFrame(frameId: string): RuntimeTraceFrameContext {
+    const trimmedFrameId = frameId.trim();
+    const parentFrame = this.getRuntimeTraceFrame();
+    return {
+      frameId: trimmedFrameId,
+      ...(parentFrame?.frameId ? { parentFrameId: parentFrame.frameId } : {})
+    };
+  }
+
+  setRuntimeTraceFrame(frame: RuntimeTraceFrameContext | undefined): void {
+    this.runtimeTraceFrame = frame ? { ...frame } : undefined;
+  }
+
+  getRuntimeTraceFrame(): RuntimeTraceFrameContext | undefined {
+    if (this.runtimeTraceFrame) {
+      return this.runtimeTraceFrame;
+    }
+    return this.parent?.getRuntimeTraceFrame();
+  }
+
   emitRuntimeTraceEvent(
     trace: RuntimeTraceEnvelope,
     scopeOverrides?: Partial<RuntimeTraceScope>
   ): void {
-    this.runtimeTraceManager.emitTrace(trace, this.buildRuntimeTraceScope(scopeOverrides));
+    const payload = this.runtimeTraceManager.emitTrace(trace, this.buildRuntimeTraceScope(scopeOverrides));
+    if (payload && this.getRootEnvironment().hasSDKEmitter()) {
+      this.emitSDKEvent({
+        type: 'trace_event',
+        traceEvent: payload,
+        timestamp: Date.now()
+      } as SDKEvent);
+    }
   }
 
   emitRuntimeTrace(
@@ -4199,6 +4231,7 @@ export class Environment
     const pipeline = this.getPipelineContext();
     const scopedConfig = this.getScopedEnvironmentConfig();
     const bridge = this.getActiveBridge();
+    const runtimeTraceFrame = this.getRuntimeTraceFrame();
     const snapshot: RuntimeTraceScopeSnapshot = {
       operationType: operation?.type,
       operationName: operation?.name,
@@ -4208,7 +4241,9 @@ export class Environment
       pipelineStage: typeof pipeline?.stage === 'number' ? pipeline.stage : undefined,
       boxName: typeof scopedConfig?.name === 'string' ? scopedConfig.name : undefined,
       bridgeBox: bridge?.mcpConfigPath,
-      currentFile: this.getCurrentFilePath()
+      currentFile: this.getCurrentFilePath(),
+      frameId: runtimeTraceFrame?.frameId,
+      parentFrameId: runtimeTraceFrame?.parentFrameId
     };
     return buildRuntimeTraceScope(snapshot, overrides);
   }

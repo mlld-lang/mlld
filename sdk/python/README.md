@@ -111,9 +111,9 @@ print(handle.result())
 ### Client
 
 - `Client(command='mlld', command_args=None, timeout=30.0, working_dir=None)`
-- `process(script, *, file_path=None, payload=None, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, timeout=None, mcp_servers=None)`
+- `process(script, *, file_path=None, payload=None, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, trace=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
 - `process_async(...) -> ProcessHandle`
-- `execute(filepath, payload=None, *, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, timeout=None, mcp_servers=None)`
+- `execute(filepath, payload=None, *, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, trace=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
 - `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
@@ -172,5 +172,5 @@ result = execute("script.mld", {
 - `ExecuteResult.denials` collects structured guard/policy label-flow denials seen during execution.
 - `ExecuteResult.effects` contains output effects with security metadata.
 - `ExecuteResult.metrics` contains timing statistics (`total_ms`, `parse_ms`, `evaluate_ms`).
-- `handle.next_event()` yields `HandleEvent` with type `"state_write"`, `"guard_denial"`, or `"complete"`.
+- `handle.next_event()` yields `HandleEvent` with type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
 - Sync methods are wrappers around async handle methods.

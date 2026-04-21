@@ -189,6 +189,15 @@ type ProcessOptions struct {
 	// AllowAbsolutePaths enables absolute path access when true.
 	AllowAbsolutePaths *bool
 
+	// Trace enables runtime effect tracing: off|effects|verbose.
+	Trace string
+
+	// TraceFile writes runtime trace events as JSONL.
+	TraceFile string
+
+	// TraceStderr mirrors runtime trace events to stderr.
+	TraceStderr bool
+
 	// Timeout overrides the client default.
 	Timeout time.Duration
 }
@@ -221,6 +230,9 @@ type ExecuteOptions struct {
 
 	// TraceFile writes runtime trace events as JSONL.
 	TraceFile string
+
+	// TraceStderr mirrors runtime trace events to stderr.
+	TraceStderr bool
 
 	// Timeout overrides the client default.
 	Timeout time.Duration
@@ -319,6 +331,7 @@ type HandleEvent struct {
 	StateWrite   *StateWrite   `json:"stateWrite,omitempty"`
 	SessionWrite *SessionWrite `json:"sessionWrite,omitempty"`
 	GuardDenial  *GuardDenial  `json:"guardDenial,omitempty"`
+	TraceEvent   *TraceEvent   `json:"traceEvent,omitempty"`
 }
 
 // StateWrite represents a write to the state:// protocol.
@@ -599,6 +612,9 @@ func (h *requestHandle) handleMessageLocked(message liveMessage) (*HandleEvent, 
 			h.guardDenials = append(h.guardDenials, denial)
 			return &HandleEvent{Type: "guard_denial", GuardDenial: &denial}, true
 		}
+		if traceEvent, ok := parseTraceEventEvent(message.payload); ok {
+			return &HandleEvent{Type: "trace_event", TraceEvent: &traceEvent}, true
+		}
 		return nil, false
 	case liveMessageResult:
 		envelope, ok := asMap(message.payload)
@@ -828,6 +844,15 @@ func (c *Client) buildProcessRequest(script string, opts *ProcessOptions) (map[s
 	if opts.AllowAbsolutePaths != nil {
 		params["allowAbsolutePaths"] = *opts.AllowAbsolutePaths
 	}
+	if opts.Trace != "" {
+		params["trace"] = opts.Trace
+	}
+	if opts.TraceFile != "" {
+		params["traceFile"] = opts.TraceFile
+	}
+	if opts.TraceStderr {
+		params["traceStderr"] = opts.TraceStderr
+	}
 
 	return params, c.resolveTimeout(opts.Timeout), nil
 }
@@ -875,6 +900,9 @@ func (c *Client) buildExecuteRequest(filepath string, payload any, opts *Execute
 	}
 	if opts.TraceFile != "" {
 		params["traceFile"] = opts.TraceFile
+	}
+	if opts.TraceStderr {
+		params["traceStderr"] = opts.TraceStderr
 	}
 
 	return params, c.resolveTimeout(opts.Timeout), nil
@@ -1922,6 +1950,48 @@ func parseGuardDenialEvent(eventPayload any) (GuardDenial, bool) {
 		return GuardDenial{}, false
 	}
 	return guardDenialFromPayload(event["guard_denial"])
+}
+
+func parseTraceEventEvent(eventPayload any) (TraceEvent, bool) {
+	event, ok := asMap(eventPayload)
+	if !ok {
+		return TraceEvent{}, false
+	}
+	eventType, _ := event["type"].(string)
+	if eventType != "trace_event" {
+		return TraceEvent{}, false
+	}
+
+	payload, ok := asMap(event["traceEvent"])
+	if !ok {
+		return TraceEvent{}, false
+	}
+
+	traceEvent := TraceEvent{}
+	if ts, ok := payload["ts"].(string); ok {
+		traceEvent.TS = ts
+	}
+	if level, ok := payload["level"].(string); ok {
+		traceEvent.Level = level
+	}
+	if category, ok := payload["category"].(string); ok {
+		traceEvent.Category = category
+	}
+	if name, ok := payload["event"].(string); ok {
+		traceEvent.Event = name
+	}
+	if scope, ok := asMap(payload["scope"]); ok {
+		traceEvent.Scope = scope
+	} else {
+		traceEvent.Scope = map[string]any{}
+	}
+	if data, ok := asMap(payload["data"]); ok {
+		traceEvent.Data = data
+	} else {
+		traceEvent.Data = map[string]any{}
+	}
+
+	return traceEvent, true
 }
 
 func mergeStateWrites(resultWrites []StateWrite, eventWrites []StateWrite) []StateWrite {

@@ -34,6 +34,11 @@ defmodule Mlld.Client do
     "dynamicModuleSource" => :dynamic_module_source,
     "dynamic_module_source" => :dynamic_module_source,
     "mode" => :mode,
+    "trace" => :trace,
+    "traceFile" => :trace_file,
+    "trace_file" => :trace_file,
+    "traceStderr" => :trace_stderr,
+    "trace_stderr" => :trace_stderr,
     "allowAbsolutePaths" => :allow_absolute_paths,
     "allow_absolute_paths" => :allow_absolute_paths,
     "timeout" => :timeout
@@ -60,6 +65,9 @@ defmodule Mlld.Client do
           | {:dynamic_module_source, String.t()}
           | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
+          | {:trace, String.t()}
+          | {:trace_file, String.t()}
+          | {:trace_stderr, boolean()}
           | {:allow_absolute_paths, boolean()}
           | {:timeout, non_neg_integer() | nil}
 
@@ -70,6 +78,9 @@ defmodule Mlld.Client do
           | {:dynamic_module_source, String.t()}
           | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
+          | {:trace, String.t()}
+          | {:trace_file, String.t()}
+          | {:trace_stderr, boolean()}
           | {:allow_absolute_paths, boolean()}
           | {:timeout, non_neg_integer() | nil}
 
@@ -221,6 +232,9 @@ defmodule Mlld.Client do
         |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
         |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
+        |> put_if_present("trace", Keyword.get(opts, :trace))
+        |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
+        |> put_if_present("traceStderr", Keyword.get(opts, :trace_stderr))
         |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
 
       {"process", params, timeout_ms}
@@ -249,6 +263,7 @@ defmodule Mlld.Client do
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
         |> put_if_present("trace", Keyword.get(opts, :trace))
         |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
+        |> put_if_present("traceStderr", Keyword.get(opts, :trace_stderr))
 
       {"execute", params, timeout_ms}
     end

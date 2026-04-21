@@ -229,6 +229,12 @@ export type SDKGuardDenialEvent = {
   timestamp: number;
 };
 
+export type SDKTraceEvent = {
+  type: 'trace_event';
+  traceEvent: RuntimeTraceEvent;
+  timestamp: number;
+};
+
 export type SDKDebugEvent =
   | {
       type: 'debug:directive:start';
@@ -402,6 +408,7 @@ export type SDKEvent =
   | SDKStateWriteEvent
   | SDKSessionWriteEvent
   | SDKGuardDenialEvent
+  | SDKTraceEvent
   | SDKDebugEvent
   | SDKStreamingEvent;
 

@@ -41,7 +41,7 @@ module Mlld
   GuardDenial = Struct.new(:guard, :operation, :reason, :rule, :labels, :args, keyword_init: true)
   TraceEvent = Struct.new(:ts, :level, :category, :event, :scope, :data, keyword_init: true)
   ExecuteResult = Struct.new(:output, :state_writes, :sessions, :exports, :effects, :denials, :trace_events, :metrics, keyword_init: true)
-  HandleEvent = Struct.new(:type, :state_write, :session_write, :guard_denial, keyword_init: true)
+  HandleEvent = Struct.new(:type, :state_write, :session_write, :guard_denial, :trace_event, keyword_init: true)
   FilesystemStatus = Struct.new(
     :path,
     :relative_path,
@@ -160,6 +160,11 @@ module Mlld
             if guard_denial
               @guard_denial_events << guard_denial
               return HandleEvent.new(type: 'guard_denial', guard_denial: guard_denial)
+            end
+
+            trace_event = @client.send(:trace_event_from_event, payload)
+            if trace_event
+              return HandleEvent.new(type: 'trace_event', trace_event: trace_event)
             end
           when :transport_error
             @error = payload
@@ -385,6 +390,9 @@ module Mlld
       dynamic_module_source: nil,
       mode: nil,
       allow_absolute_paths: nil,
+      trace: nil,
+      trace_file: nil,
+      trace_stderr: nil,
       timeout: nil
     )
       process_async(
@@ -398,6 +406,9 @@ module Mlld
         dynamic_module_source: dynamic_module_source,
         mode: mode,
         allow_absolute_paths: allow_absolute_paths,
+        trace: trace,
+        trace_file: trace_file,
+        trace_stderr: trace_stderr,
         timeout: timeout
       ).result
     end
@@ -413,6 +424,9 @@ module Mlld
       dynamic_module_source: nil,
       mode: nil,
       allow_absolute_paths: nil,
+      trace: nil,
+      trace_file: nil,
+      trace_stderr: nil,
       timeout: nil
     )
       params = build_process_request(
@@ -425,7 +439,10 @@ module Mlld
         dynamic_modules: dynamic_modules,
         dynamic_module_source: dynamic_module_source,
         mode: mode,
-        allow_absolute_paths: allow_absolute_paths
+        allow_absolute_paths: allow_absolute_paths,
+        trace: trace,
+        trace_file: trace_file,
+        trace_stderr: trace_stderr
       )
       request_id, response_queue = send_request('process', params)
       ProcessHandle.new(
@@ -448,6 +465,7 @@ module Mlld
       mode: nil,
       trace: nil,
       trace_file: nil,
+      trace_stderr: nil,
       timeout: nil
     )
       execute_async(
@@ -462,6 +480,7 @@ module Mlld
         mode: mode,
         trace: trace,
         trace_file: trace_file,
+        trace_stderr: trace_stderr,
         timeout: timeout
       ).result
     end
@@ -478,6 +497,7 @@ module Mlld
       mode: nil,
       trace: nil,
       trace_file: nil,
+      trace_stderr: nil,
       timeout: nil
     )
       params = build_execute_request(
@@ -491,7 +511,8 @@ module Mlld
         allow_absolute_paths: allow_absolute_paths,
         mode: mode,
         trace: trace,
-        trace_file: trace_file
+        trace_file: trace_file,
+        trace_stderr: trace_stderr
       )
       request_id, response_queue = send_request('execute', params)
       ExecuteHandle.new(
@@ -517,7 +538,10 @@ module Mlld
       dynamic_modules: nil,
       dynamic_module_source: nil,
       mode: nil,
-      allow_absolute_paths: nil
+      allow_absolute_paths: nil,
+      trace: nil,
+      trace_file: nil,
+      trace_stderr: nil
     )
       normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
       normalized_mcp_servers = normalize_string_map(mcp_servers)
@@ -532,6 +556,9 @@ module Mlld
       params['mcpServers'] = normalized_mcp_servers if normalized_mcp_servers
       params['mode'] = mode if mode
       params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
+      params['trace'] = trace if trace
+      params['traceFile'] = trace_file if trace_file
+      params['traceStderr'] = trace_stderr unless trace_stderr.nil?
       params
     end
 
@@ -546,7 +573,8 @@ module Mlld
       allow_absolute_paths: nil,
       mode: nil,
       trace: nil,
-      trace_file: nil
+      trace_file: nil,
+      trace_stderr: nil
     )
       normalized_payload, normalized_payload_labels = normalize_payload_and_labels(payload, payload_labels)
       normalized_mcp_servers = normalize_string_map(mcp_servers)
@@ -562,6 +590,7 @@ module Mlld
       params['mode'] = mode if mode
       params['trace'] = trace if trace
       params['traceFile'] = trace_file if trace_file
+      params['traceStderr'] = trace_stderr unless trace_stderr.nil?
       params
     end
 
@@ -1167,6 +1196,22 @@ module Mlld
       return nil unless event['type'] == 'guard_denial'
 
       guard_denial_from_payload(event['guard_denial'])
+    end
+
+    def trace_event_from_event(event)
+      return nil unless event['type'] == 'trace_event'
+
+      payload = event['traceEvent']
+      return nil unless payload.is_a?(Hash)
+
+      TraceEvent.new(
+        ts: payload['ts'].to_s,
+        level: payload['level'].to_s,
+        category: payload['category'].to_s,
+        event: payload['event'].to_s,
+        scope: payload['scope'].is_a?(Hash) ? payload['scope'] : {},
+        data: payload['data'].is_a?(Hash) ? payload['data'] : {}
+      )
     end
 
     def guard_denial_from_payload(entry)

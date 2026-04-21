@@ -118,6 +118,7 @@ export class StreamExecution implements StreamExecutionInterface {
       'state:write',
       'session_write',
       'guard_denial',
+      'trace_event',
       'debug:directive:start',
       'debug:directive:complete',
       'debug:variable:create',

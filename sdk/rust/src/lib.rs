@@ -285,6 +285,9 @@ impl RequestHandle {
                     self.guard_denial_events.push(denial.clone());
                     return Ok(Some(HandleEvent::guard_denial(denial)));
                 }
+                if let Some(trace_event) = parse_trace_event_event(&event) {
+                    return Ok(Some(HandleEvent::trace_event(trace_event)));
+                }
                 Ok(None)
             }
             TransportMessage::Result(result) => {
@@ -1412,6 +1415,47 @@ fn parse_guard_denial_event(event: &Value) -> Option<GuardDenial> {
     guard_denial_from_payload(event.get("guard_denial")?)
 }
 
+fn parse_trace_event_event(event: &Value) -> Option<TraceEvent> {
+    if event.get("type").and_then(Value::as_str) != Some("trace_event") {
+        return None;
+    }
+
+    let payload = event.get("traceEvent")?;
+    if !payload.is_object() {
+        return None;
+    }
+    Some(TraceEvent {
+        ts: payload
+            .get("ts")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        level: payload
+            .get("level")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        category: payload
+            .get("category")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        event: payload
+            .get("event")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        scope: payload
+            .get("scope")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Default::default())),
+        data: payload
+            .get("data")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Default::default())),
+    })
+}
+
 fn guard_denial_from_payload(payload: &Value) -> Option<GuardDenial> {
     let operation = payload.get("operation")?.as_str()?.to_string();
     let reason = payload.get("reason")?.as_str()?.to_string();
@@ -1677,6 +1721,15 @@ fn build_process_request(
             Value::Bool(allow_absolute_paths),
         );
     }
+    if let Some(trace) = opts.trace {
+        params.insert("trace".to_string(), Value::String(trace));
+    }
+    if let Some(trace_file) = opts.trace_file {
+        params.insert("traceFile".to_string(), Value::String(trace_file));
+    }
+    if let Some(trace_stderr) = opts.trace_stderr {
+        params.insert("traceStderr".to_string(), Value::Bool(trace_stderr));
+    }
 
     Ok((
         "process",
@@ -1736,6 +1789,9 @@ fn build_execute_request(
     if let Some(trace_file) = opts.trace_file {
         params.insert("traceFile".to_string(), Value::String(trace_file));
     }
+    if let Some(trace_stderr) = opts.trace_stderr {
+        params.insert("traceStderr".to_string(), Value::Bool(trace_stderr));
+    }
 
     Ok((
         "execute",
@@ -1774,6 +1830,15 @@ pub struct ProcessOptions {
     /// Allow absolute path access.
     pub allow_absolute_paths: Option<bool>,
 
+    /// Runtime effect tracing: off|effects|verbose.
+    pub trace: Option<String>,
+
+    /// Write runtime trace events as JSONL.
+    pub trace_file: Option<String>,
+
+    /// Mirror runtime trace events to stderr.
+    pub trace_stderr: Option<bool>,
+
     /// Override the client default timeout.
     pub timeout: Option<Duration>,
 }
@@ -1807,6 +1872,9 @@ pub struct ExecuteOptions {
 
     /// Write runtime trace events as JSONL.
     pub trace_file: Option<String>,
+
+    /// Mirror runtime trace events to stderr.
+    pub trace_stderr: Option<bool>,
 
     /// Override the client default timeout.
     pub timeout: Option<Duration>,
@@ -1936,6 +2004,7 @@ pub struct HandleEvent {
     pub state_write: Option<StateWrite>,
     pub session_write: Option<SessionWrite>,
     pub guard_denial: Option<GuardDenial>,
+    pub trace_event: Option<TraceEvent>,
 }
 
 impl HandleEvent {
@@ -1945,6 +2014,7 @@ impl HandleEvent {
             state_write: Some(state_write),
             session_write: None,
             guard_denial: None,
+            trace_event: None,
         }
     }
 
@@ -1954,6 +2024,7 @@ impl HandleEvent {
             state_write: None,
             session_write: Some(session_write),
             guard_denial: None,
+            trace_event: None,
         }
     }
 
@@ -1963,6 +2034,17 @@ impl HandleEvent {
             state_write: None,
             session_write: None,
             guard_denial: Some(guard_denial),
+            trace_event: None,
+        }
+    }
+
+    fn trace_event(trace_event: TraceEvent) -> Self {
+        Self {
+            event_type: "trace_event".to_string(),
+            state_write: None,
+            session_write: None,
+            guard_denial: None,
+            trace_event: Some(trace_event),
         }
     }
 
@@ -1972,6 +2054,7 @@ impl HandleEvent {
             state_write: None,
             session_write: None,
             guard_denial: None,
+            trace_event: None,
         }
     }
 }
@@ -3100,6 +3183,27 @@ mod tests {
         assert_eq!(session_write.operation, "increment");
         assert_eq!(session_write.prev.as_ref().and_then(Value::as_i64), Some(1));
         assert_eq!(session_write.next.as_ref().and_then(Value::as_i64), Some(2));
+    }
+
+    #[test]
+    fn test_trace_event_fixture_preserves_fields() {
+        let fixture = read_fixture("trace-event.json");
+        let trace_event =
+            parse_trace_event_event(&fixture["event"]).expect("decode trace-event fixture");
+
+        assert_eq!(trace_event.event, "guard.deny");
+        assert_eq!(trace_event.category, "guard");
+        assert_eq!(
+            trace_event
+                .scope
+                .get("parentFrameId")
+                .and_then(Value::as_str),
+            Some("frame-parent")
+        );
+        assert_eq!(
+            trace_event.data.get("operation").and_then(Value::as_str),
+            Some("send")
+        );
     }
 
     #[test]

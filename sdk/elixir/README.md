@@ -445,7 +445,7 @@ This SDK implements the full [SDK Interface Specification](../SPEC.md):
 - Result envelope: always `{ id, result }` — no method-specific unwrapping
 - Handle lifecycle: PENDING → STREAMING → COMPLETE with event buffering
 - `state:write` and `guard_denial` events merged into final `ExecuteResult`
-- `next_event` on handles for event-driven consumption
+- `next_event` on handles for event-driven consumption (`state_write`, `session_write`, `guard_denial`, `trace_event`, `complete`)
 - `write_file` on execute handles for in-flight file operations
 - MCP server injection via `:mcp_servers` option
 - Filesystem integrity: `fs_status`, `sign`, `verify`, `sign_content`

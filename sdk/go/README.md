@@ -190,5 +190,5 @@ fileSig, err := handle.WriteFile("out.txt", "hello from sdk")
 - `ExecuteResult.Denials` collects structured guard/policy label-flow denials.
 - `ExecuteResult.Effects` contains output effects with security metadata.
 - `ExecuteResult.Metrics` contains timing statistics.
-- `NextEvent` yields `HandleEvent` with Type `"state_write"`, `"guard_denial"`, or `"complete"`.
+- `NextEvent` yields `HandleEvent` with Type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
 - Sync methods are wrappers around async handle methods.

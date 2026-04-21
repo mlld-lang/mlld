@@ -154,4 +154,4 @@ file_sig = handle.write_file('out.txt', 'hello from sdk')
 - `ExecuteResult.denials` collects structured guard/policy label-flow denials.
 - `ExecuteResult.effects` contains output effects with security metadata.
 - `ExecuteResult.metrics` contains timing statistics.
-- `next_event` yields `HandleEvent` with type `"state_write"`, `"guard_denial"`, or `"complete"`.
+- `next_event` yields `HandleEvent` with type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.

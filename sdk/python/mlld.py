@@ -239,10 +239,11 @@ PendingQueue = queue.Queue[tuple[str, Any]]
 class HandleEvent:
     """An event from an in-flight execution."""
 
-    type: str  # "state_write", "session_write", "guard_denial", or "complete"
+    type: str  # "state_write", "session_write", "guard_denial", "trace_event", or "complete"
     state_write: StateWrite | None = None
     session_write: SessionWrite | None = None
     guard_denial: GuardDenial | None = None
+    trace_event: TraceEvent | None = None
 
 
 class _BaseHandle:
@@ -303,7 +304,8 @@ class _BaseHandle:
     def next_event(self, timeout: float | None = None) -> HandleEvent | None:
         """Block until next event. Returns HandleEvent with type="state_write"
         for state:// writes, type="session_write" for session writes,
-        type="guard_denial" for structured denials, and type="complete"
+        type="guard_denial" for structured denials, type="trace_event" for
+        runtime trace events, and type="complete"
         when execution finishes.
         Returns None on timeout."""
 
@@ -338,6 +340,9 @@ class _BaseHandle:
                 if denial is not None:
                     self._guard_denial_events.append(denial)
                     return HandleEvent(type="guard_denial", guard_denial=denial)
+                trace_event = _trace_event_from_event(payload)
+                if trace_event is not None:
+                    return HandleEvent(type="trace_event", trace_event=trace_event)
                 continue
 
             if kind == "transport_error":
@@ -529,6 +534,9 @@ class Client:
         dynamic_module_source: str | None = None,
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
+        trace: str | None = None,
+        trace_file: str | None = None,
+        trace_stderr: bool | None = None,
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
     ) -> str:
@@ -565,6 +573,9 @@ class Client:
             dynamic_module_source=dynamic_module_source,
             mode=mode,
             allow_absolute_paths=allow_absolute_paths,
+            trace=trace,
+            trace_file=trace_file,
+            trace_stderr=trace_stderr,
             timeout=timeout,
             mcp_servers=mcp_servers,
         ).result()
@@ -581,6 +592,9 @@ class Client:
         dynamic_module_source: str | None = None,
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
+        trace: str | None = None,
+        trace_file: str | None = None,
+        trace_stderr: bool | None = None,
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
     ) -> ProcessHandle:
@@ -608,6 +622,12 @@ class Client:
             params["allowAbsolutePaths"] = allow_absolute_paths
         if mcp_servers is not None:
             params["mcpServers"] = mcp_servers
+        if trace is not None:
+            params["trace"] = trace
+        if trace_file is not None:
+            params["traceFile"] = trace_file
+        if trace_stderr is not None:
+            params["traceStderr"] = trace_stderr
 
         request_id, response_queue = self._send_request("process", params)
         return ProcessHandle(
@@ -632,6 +652,7 @@ class Client:
         mcp_servers: dict[str, str] | None = None,
         trace: str | None = None,
         trace_file: str | None = None,
+        trace_stderr: bool | None = None,
     ) -> ExecuteResult:
         """
         Run an mlld file with a payload and optional state.
@@ -669,6 +690,7 @@ class Client:
             mcp_servers=mcp_servers,
             trace=trace,
             trace_file=trace_file,
+            trace_stderr=trace_stderr,
         ).result()
 
     def execute_async(
@@ -686,6 +708,7 @@ class Client:
         mcp_servers: dict[str, str] | None = None,
         trace: str | None = None,
         trace_file: str | None = None,
+        trace_stderr: bool | None = None,
     ) -> ExecuteHandle:
         """
         Start an mlld file execution and return an in-flight request handle.
@@ -713,6 +736,8 @@ class Client:
             params["trace"] = trace
         if trace_file is not None:
             params["traceFile"] = trace_file
+        if trace_stderr is not None:
+            params["traceStderr"] = trace_stderr
 
         request_id, response_queue = self._send_request("execute", params)
         return ExecuteHandle(
@@ -1339,6 +1364,24 @@ def _guard_denial_from_event(event: dict[str, Any]) -> GuardDenial | None:
         return None
 
     return _guard_denial_from_payload(event.get("guard_denial"))
+
+
+def _trace_event_from_event(event: dict[str, Any]) -> TraceEvent | None:
+    if event.get("type") != "trace_event":
+        return None
+
+    payload = event.get("traceEvent")
+    if not isinstance(payload, dict):
+        return None
+
+    return TraceEvent(
+        ts=str(payload.get("ts", "")),
+        level=str(payload.get("level", "")),
+        category=str(payload.get("category", "")),
+        event=str(payload.get("event", "")),
+        scope=payload.get("scope", {}) if isinstance(payload.get("scope"), dict) else {},
+        data=payload.get("data", {}) if isinstance(payload.get("data"), dict) else {},
+    )
 
 
 def _state_write_key(state_write: StateWrite) -> str:

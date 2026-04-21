@@ -52,6 +52,17 @@ class ProtocolFixturesTest < Minitest::Test
     assert_equal(2, session_write.next)
   end
 
+  def test_trace_event_fixture_preserves_fields
+    fixture = load_fixture('trace-event.json')
+    trace_event = @client.send(:trace_event_from_event, fixture.fetch('event'))
+
+    refute_nil(trace_event)
+    assert_equal('guard.deny', trace_event.event)
+    assert_equal('guard', trace_event.category)
+    assert_equal('frame-parent', trace_event.scope['parentFrameId'])
+    assert_equal('send', trace_event.data['operation'])
+  end
+
   def test_error_fixture_decodes_transport_error
     fixture = load_fixture('error-result.json')
     error = @client.send(:error_from_payload, fixture.fetch('error'))

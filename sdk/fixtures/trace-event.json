@@ -1,0 +1,21 @@
+{
+  "event": {
+    "requestId": 1,
+    "type": "trace_event",
+    "traceEvent": {
+      "ts": "2026-04-04T00:00:00.000Z",
+      "level": "effects",
+      "category": "guard",
+      "event": "guard.deny",
+      "scope": {
+        "frameId": "frame-child",
+        "parentFrameId": "frame-parent"
+      },
+      "data": {
+        "guard": "@blocker",
+        "operation": "send"
+      }
+    },
+    "timestamp": 1735689600000
+  }
+}

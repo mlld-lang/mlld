@@ -66,7 +66,7 @@ Each SDK exposes handle APIs for long-running process/execute calls:
 
 - Start request: `process_async(...)` / `execute_async(...)`
 - Handle operations: `wait`/`result`, `cancel`, `update_state(path, value, labels?)`
-- Event consumption: `next_event(timeout?)` — returns `state_write`, `guard_denial`, or `complete` events in order
+- Event consumption: `next_event(timeout?)` — returns `state_write`, `session_write`, `guard_denial`, `trace_event`, or `complete` events in order
 - File operations: `write_file(path, content)` on `ExecuteHandle` — writes a file within the execution context and auto-signs it
 
 JS/TS exposes equivalent semantics through `StreamExecution` async event iteration.

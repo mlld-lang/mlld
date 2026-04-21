@@ -74,6 +74,7 @@ interface ProcessRequestParams {
   mcpServers?: Record<string, string>;
   trace?: RuntimeTraceLevel;
   traceFile?: string;
+  traceStderr?: boolean;
   eventMode?: LiveEventMode;
   recordEffects?: boolean;
 }
@@ -91,6 +92,7 @@ interface ExecuteRequestParams {
   mcpServers?: Record<string, string>;
   trace?: RuntimeTraceLevel;
   traceFile?: string;
+  traceStderr?: boolean;
   eventMode?: LiveEventMode;
   recordEffects?: boolean;
 }
@@ -147,6 +149,7 @@ const SDK_EVENT_TYPES: SDKEvent['type'][] = [
   'stream:progress',
   'execution:complete',
   'state:write',
+  'trace_event',
   'guard_denial',
   'debug:directive:start',
   'debug:directive:complete',
@@ -591,11 +594,14 @@ export class LiveStdioServer {
       mcpServers: parsed.mcpServers,
       trace: parsed.trace,
       traceFile: parsed.traceFile,
-      traceStderr: false,
+      traceStderr: parsed.traceStderr,
       recordEffects: parsed.recordEffects
     } as any)) as StreamExecution;
 
-    await this.streamExecution(requestId, streamHandle, { eventMode: parsed.eventMode });
+    await this.streamExecution(requestId, streamHandle, {
+      eventMode: parsed.eventMode,
+      traceEnabled: parsed.trace !== undefined && parsed.trace !== 'off'
+    });
   }
 
   private async runExecute(requestId: RequestId, params: unknown): Promise<void> {
@@ -619,7 +625,7 @@ export class LiveStdioServer {
       mcpServers: parsed.mcpServers,
       trace: parsed.trace,
       traceFile: parsed.traceFile,
-      traceStderr: false,
+      traceStderr: parsed.traceStderr,
       recordEffects: parsed.recordEffects,
       fileSystem,
       pathService,
@@ -629,7 +635,8 @@ export class LiveStdioServer {
     const streamHandle = (await this.deps.executeFile(parsed.filepath, parsed.payload, options)) as StreamExecution;
     await this.streamExecution(requestId, streamHandle, {
       writeFile,
-      eventMode: parsed.eventMode
+      eventMode: parsed.eventMode,
+      traceEnabled: parsed.trace !== undefined && parsed.trace !== 'off'
     });
   }
 
@@ -686,11 +693,15 @@ export class LiveStdioServer {
   private async streamExecution(
     requestId: RequestId,
     execution: StreamExecution,
-    activeExtensions: Partial<ActiveExecution> & { eventMode?: LiveEventMode } = {}
+    activeExtensions: Partial<ActiveExecution> & { eventMode?: LiveEventMode; traceEnabled?: boolean } = {}
   ): Promise<void> {
     const listeners: Array<[SDKEvent['type'], (event: SDKEvent) => void]> = [];
-    const { eventMode = 'minimal', ...activeExecution } = activeExtensions;
-    const eventTypes = eventMode === 'all' ? SDK_EVENT_TYPES : MINIMAL_LIVE_EVENT_TYPES;
+    const { eventMode = 'minimal', traceEnabled = false, ...activeExecution } = activeExtensions;
+    const eventTypes = eventMode === 'all'
+      ? SDK_EVENT_TYPES
+      : traceEnabled
+        ? [...MINIMAL_LIVE_EVENT_TYPES, 'trace_event' as SDKEvent['type']]
+        : MINIMAL_LIVE_EVENT_TYPES;
 
     const attach = (type: SDKEvent['type']) => {
       const handler = (event: SDKEvent) => {
@@ -763,6 +774,7 @@ export class LiveStdioServer {
       mcpServers: this.parseMcpServers(params.mcpServers),
       trace: this.parseTraceLevel(params.trace),
       traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
+      traceStderr: typeof params.traceStderr === 'boolean' ? params.traceStderr : false,
       eventMode: this.parseEventMode(params.eventMode),
       recordEffects: this.parseRecordEffects(params.recordEffects)
     };
@@ -792,6 +804,7 @@ export class LiveStdioServer {
       mcpServers: this.parseMcpServers(params.mcpServers),
       trace: this.parseTraceLevel(params.trace),
       traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
+      traceStderr: typeof params.traceStderr === 'boolean' ? params.traceStderr : false,
       eventMode: this.parseEventMode(params.eventMode),
       recordEffects: this.parseRecordEffects(params.recordEffects)
     };

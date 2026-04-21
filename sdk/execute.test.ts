@@ -199,6 +199,47 @@ describe('execute', () => {
     expect(types).toContain('execution:complete');
   });
 
+  it('yields runtime trace events during stream execution when tracing is enabled', async () => {
+    await fileSystem.writeFile(
+      routePath,
+      `
+/record @contact = {
+  key: id,
+  facts: [id: string]
+}
+/shelf @pipeline = {
+  selected: contact?
+}
+/exe @emitContact() = { id: "c_1" } => contact
+/show @shelf.write(@pipeline.selected, @emitContact())
+      `.trim()
+    );
+
+    const handle = (await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      stream: true,
+      trace: 'effects'
+    })) as any;
+
+    const events: any[] = [];
+    for await (const event of handle as AsyncIterable<any>) {
+      events.push(event);
+    }
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'trace_event',
+          traceEvent: expect.objectContaining({
+            event: 'shelf.write',
+            category: 'shelf'
+          })
+        })
+      ])
+    );
+  });
+
   it('wraps missing files as ExecuteError', async () => {
     await expect(execute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toBeInstanceOf(ExecuteError);
     await expect(execute('/nope.mlld', undefined, { fileSystem, pathService })).rejects.toMatchObject({

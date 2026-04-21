@@ -10,6 +10,8 @@ export interface RuntimeTraceScopeSnapshot {
   boxName?: string;
   bridgeBox?: string;
   currentFile?: string;
+  frameId?: string;
+  parentFrameId?: string;
 }
 
 export function buildRuntimeTraceScope(
@@ -52,6 +54,14 @@ export function buildRuntimeTraceScope(
 
   if (typeof snapshot.currentFile === 'string' && snapshot.currentFile.trim().length > 0) {
     scope.file = snapshot.currentFile;
+  }
+
+  if (typeof snapshot.frameId === 'string' && snapshot.frameId.trim().length > 0) {
+    scope.frameId = snapshot.frameId.trim();
+  }
+
+  if (typeof snapshot.parentFrameId === 'string' && snapshot.parentFrameId.trim().length > 0) {
+    scope.parentFrameId = snapshot.parentFrameId.trim();
   }
 
   return {

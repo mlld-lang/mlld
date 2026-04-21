@@ -231,6 +231,46 @@ describe('StreamExecution', () => {
     ]);
   });
 
+  it('streams runtime trace events before rejecting guarded execution', async () => {
+    const emitter = new ExecutionEmitter();
+    const traceEvents: any[] = [];
+    emitter.on('trace_event' as any, event => traceEvents.push(event));
+
+    const handle = (await interpret(
+      `
+/guard @blocker before op:exe = when [
+  @mx.op.name == "danger" => deny "blocked by policy"
+  * => allow
+]
+/exe @danger(value) = \`danger: @value\`
+/show @danger("hello")
+      `.trim(),
+      {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        mode: 'stream',
+        trace: 'effects',
+        emitter,
+        streaming: { enabled: true }
+      }
+    )) as StreamHandle;
+
+    await expect(handle.result()).rejects.toThrow(/blocked by policy/i);
+    await expect(handle.done()).rejects.toThrow(/blocked by policy/i);
+    expect(traceEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'trace_event',
+          traceEvent: expect.objectContaining({
+            event: 'guard.deny',
+            category: 'guard'
+          })
+        })
+      ])
+    );
+  });
+
   it('emits session_write events for attached session mutations', async () => {
     const emitter = new ExecutionEmitter();
     const writes: any[] = [];

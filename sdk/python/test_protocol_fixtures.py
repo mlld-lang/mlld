@@ -87,6 +87,18 @@ class ProtocolFixturesTest(unittest.TestCase):
         self.assertEqual(event.operation, "send")
         self.assertEqual(event.args, {"value": "hello"})
 
+    def test_trace_event_fixture_round_trips_fields(self) -> None:
+        envelope = _load_fixture("trace-event.json")
+
+        event = mlld._trace_event_from_event(envelope["event"])
+
+        self.assertIsNotNone(event)
+        assert event is not None
+        self.assertEqual(event.event, "guard.deny")
+        self.assertEqual(event.category, "guard")
+        self.assertEqual(event.scope["parentFrameId"], "frame-parent")
+        self.assertEqual(event.data["operation"], "send")
+
     def test_fs_status_fixture_round_trips_array_payload(self) -> None:
         envelope = _load_fixture("fs-status-result.json")
         client = mlld.Client(timeout=1.0)

@@ -95,20 +95,24 @@ defmodule Mlld.HandleBuffer do
   def handle_info({:mlld_event, request_id, event}, %{request_id: request_id} = state) do
     next_state =
       case {
-             Protocol.state_write_from_event(event),
-             Protocol.session_write_from_event(event),
-             Protocol.guard_denial_from_event(event)
-           } do
-        {%Mlld.StateWrite{} = state_write, _, _} ->
+        Protocol.state_write_from_event(event),
+        Protocol.session_write_from_event(event),
+        Protocol.guard_denial_from_event(event),
+        Protocol.trace_event_from_event(event)
+      } do
+        {%Mlld.StateWrite{} = state_write, _, _, _} ->
           enqueue_event(state, %HandleEvent{type: "state_write", state_write: state_write})
 
-        {nil, %Mlld.SessionWrite{} = session_write, _} ->
+        {nil, %Mlld.SessionWrite{} = session_write, _, _} ->
           enqueue_event(state, %HandleEvent{type: "session_write", session_write: session_write})
 
-        {nil, nil, %Mlld.GuardDenial{} = guard_denial} ->
+        {nil, nil, %Mlld.GuardDenial{} = guard_denial, _} ->
           state
           |> Map.update!(:guard_denials, &(&1 ++ [guard_denial]))
           |> enqueue_event(%HandleEvent{type: "guard_denial", guard_denial: guard_denial})
+
+        {nil, nil, nil, %Mlld.TraceEvent{} = trace_event} ->
+          enqueue_event(state, %HandleEvent{type: "trace_event", trace_event: trace_event})
 
         _ ->
           state

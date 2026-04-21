@@ -337,6 +337,51 @@ describe('LiveStdioServer', () => {
 
     await harness.close();
   });
+
+  it('forwards trace_event events by default when trace is enabled', async () => {
+    const handle = new FakeStreamExecution();
+    const harness = createServerHarness({
+      executeFile: async () => handle
+    });
+
+    harness.input.write(
+      `${JSON.stringify({
+        method: 'execute',
+        id: 18,
+        params: {
+          filepath: '/tmp/traced-stream.mld',
+          trace: 'effects'
+        }
+      })}\n`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    handle.emit({
+      type: 'trace_event',
+      traceEvent: {
+        ts: '2026-01-01T00:00:00.000Z',
+        level: 'effects',
+        category: 'guard',
+        event: 'guard.deny',
+        scope: {},
+        data: { guard: 'blocker', operation: 'send' }
+      },
+      timestamp: Date.now()
+    } as any);
+    handle.resolve({ output: 'blocked', effects: [], exports: {}, stateWrites: [], traceEvents: [] } as any);
+
+    await harness.waitForLineCount(2);
+    const lines = harness.jsonLines();
+
+    expect(lines[0].event.type).toBe('trace_event');
+    expect(lines[0].event.id).toBe(18);
+    expect(lines[0].event.traceEvent.event).toBe('guard.deny');
+    expect(lines[1].id).toBe(18);
+
+    await harness.close();
+  });
+
   it('forwards guard_denial events and preserves result denials', async () => {
     const handle = new FakeStreamExecution();
 
