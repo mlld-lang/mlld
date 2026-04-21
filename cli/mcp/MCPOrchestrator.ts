@@ -61,6 +61,7 @@ class McpServerConnection {
   private readonly idleTimeoutMs?: number;
   private idleTimer?: NodeJS.Timeout;
   private inflightCount = 0;
+  private idleHoldCount = 0;
 
   constructor(name: string, child: ChildProcessWithoutNullStreams, idleTimeoutMs?: number) {
     this.name = name;
@@ -76,6 +77,27 @@ class McpServerConnection {
 
   getClosedReason(): 'idle' | 'exit' | 'manual' | undefined {
     return this.closedReason;
+  }
+
+  retainIdle(): void {
+    this.idleHoldCount += 1;
+    this.clearIdleTimer();
+  }
+
+  releaseIdle(): void {
+    this.idleHoldCount = Math.max(0, this.idleHoldCount - 1);
+    if (this.inflightCount === 0) {
+      this.touch();
+    }
+  }
+
+  setIdleHoldCount(count: number): void {
+    this.idleHoldCount = Math.max(0, Math.floor(count));
+    if (this.idleHoldCount > 0) {
+      this.clearIdleTimer();
+    } else if (this.inflightCount === 0) {
+      this.touch();
+    }
   }
 
   async initialize(): Promise<void> {
@@ -144,6 +166,7 @@ class McpServerConnection {
 
     return new Promise<JSONRPCResponse>((resolve, reject) => {
       this.inflightCount += 1;
+      this.clearIdleTimer();
       const onDone = () => {
         this.inflightCount = Math.max(0, this.inflightCount - 1);
         if (this.inflightCount === 0) {
@@ -223,9 +246,17 @@ class McpServerConnection {
     if (!this.idleTimeoutMs || this.idleTimeoutMs <= 0) {
       return;
     }
+    if (this.idleHoldCount > 0 || this.inflightCount > 0) {
+      this.clearIdleTimer();
+      return;
+    }
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
       if (this.closed) {
+        return;
+      }
+      if (this.idleHoldCount > 0 || this.inflightCount > 0) {
+        this.touch();
         return;
       }
       this.closed = true;
@@ -249,17 +280,25 @@ class McpProxyServer {
   private readonly tools: MCPToolSchema[];
   private readonly toolIndex: Map<string, McpServerConnection>;
   private readonly router?: FunctionRouter;
+  private readonly onClientOpen?: () => void;
+  private readonly onClientClose?: () => void;
 
   constructor(
     socketPath: string,
     tools: MCPToolSchema[],
     toolIndex: Map<string, McpServerConnection>,
-    router?: FunctionRouter
+    router?: FunctionRouter,
+    clientLifecycle?: {
+      onOpen?: () => void;
+      onClose?: () => void;
+    }
   ) {
     this.socketPath = socketPath;
     this.tools = tools;
     this.toolIndex = toolIndex;
     this.router = router;
+    this.onClientOpen = clientLifecycle?.onOpen;
+    this.onClientClose = clientLifecycle?.onClose;
   }
 
   async start(): Promise<void> {
@@ -281,6 +320,15 @@ class McpProxyServer {
   }
 
   private handleConnection(socket: net.Socket): void {
+    this.onClientOpen?.();
+    socket.once('close', () => {
+      this.onClientClose?.();
+    });
+    socket.on('error', () => {
+      // Client transports can churn while an agent is running; request handlers
+      // surface call-level failures, so socket errors only affect lifecycle holds.
+    });
+
     const rl = readline.createInterface({ input: socket, terminal: false });
     rl.on('line', async line => {
       const trimmed = line.trim();
@@ -412,6 +460,7 @@ export class MCPOrchestrator {
   private pidFiles = new Map<string, string>();
   private serverConfigs = new Map<string, NormalizedServerConfig>();
   private serverHandles = new Map<string, { connection: McpServerConnection; restartAttempts: number }>();
+  private activeProxyClients = 0;
 
   constructor(options?: { environment?: Environment }) {
     this.environment = options?.environment;
@@ -481,7 +530,10 @@ export class MCPOrchestrator {
         toolNamesAreMcp: true
       });
     }
-    this.proxy = new McpProxyServer(this.socketPath, tools, toolIndex, this.toolRouter);
+    this.proxy = new McpProxyServer(this.socketPath, tools, toolIndex, this.toolRouter, {
+      onOpen: () => this.retainServersForProxyClient(),
+      onClose: () => this.releaseServersForProxyClient()
+    });
     await this.proxy.start();
 
     const env = {
@@ -525,6 +577,24 @@ export class MCPOrchestrator {
     this.serverConfigs.clear();
     this.serverHandles.clear();
     this.lifecycle = undefined;
+    this.activeProxyClients = 0;
+  }
+
+  private retainServersForProxyClient(): void {
+    this.activeProxyClients += 1;
+    for (const server of this.servers.values()) {
+      server.retainIdle();
+    }
+  }
+
+  private releaseServersForProxyClient(): void {
+    if (this.activeProxyClients === 0) {
+      return;
+    }
+    this.activeProxyClients -= 1;
+    for (const server of this.servers.values()) {
+      server.releaseIdle();
+    }
   }
 
   private registerToolProxy(tool: MCPToolSchema, serverName: string): void {
@@ -619,6 +689,9 @@ export class MCPOrchestrator {
     });
 
     const connection = new McpServerConnection(server.name, child, lifecycle.idleTimeoutMs);
+    if (this.activeProxyClients > 0) {
+      connection.setIdleHoldCount(this.activeProxyClients);
+    }
     this.servers.set(server.name, connection);
 
     if (child.pid) {

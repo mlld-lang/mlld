@@ -206,7 +206,7 @@ describe('MCPOrchestrator', () => {
     await orchestrator.cleanup();
   });
 
-  it('shuts down idle servers', async () => {
+  it('keeps servers alive while a proxy client is connected', async () => {
     const { MCPOrchestrator } = await import('./MCPOrchestrator');
     const environment = await createEnvironment('');
     const orchestrator = new MCPOrchestrator({ environment });
@@ -237,12 +237,59 @@ describe('MCPOrchestrator', () => {
 
     const callResponse = await client.request('tools/call', {
       name: 'echo',
+      arguments: { text: 'still-alive' }
+    });
+    expect(callResponse.result.isError).toBeUndefined();
+    expect(callResponse.result.content[0].text).toBe('still-alive');
+
+    client.close();
+    await orchestrator.cleanup();
+  });
+
+  it('shuts down idle servers', async () => {
+    const { MCPOrchestrator } = await import('./MCPOrchestrator');
+    const environment = await createEnvironment('');
+    const orchestrator = new MCPOrchestrator({ environment });
+
+    const connection = await orchestrator.start({
+      lifecycle: { idleTimeoutMs: 50 },
+      servers: [
+        {
+          command: process.execPath,
+          args: [fakeServerPath],
+          tools: ['echo']
+        }
+      ]
+    });
+
+    if (!connection) {
+      throw new Error('MCP orchestrator did not return connection info');
+    }
+
+    const client = await McpTestClient.connect(connection.socketPath);
+    await client.request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' }
+    });
+    client.close();
+
+    await new Promise(resolve => setTimeout(resolve, 75));
+
+    const lateClient = await McpTestClient.connect(connection.socketPath);
+    await lateClient.request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'test', version: '1.0' }
+    });
+    const callResponse = await lateClient.request('tools/call', {
+      name: 'echo',
       arguments: { text: 'late' }
     });
     expect(callResponse.result.isError).toBe(true);
     expect(callResponse.result.content[0].text).toContain('tools/call failed');
 
-    client.close();
+    lateClient.close();
     await orchestrator.cleanup();
   });
 
