@@ -306,6 +306,7 @@ describe('LiveStdioServer', () => {
       executeFile: async (_filepath: string, _payload: unknown, options: any) => {
         seen.push({
           trace: options?.trace,
+          traceMemory: options?.traceMemory,
           traceFile: options?.traceFile,
           traceStderr: options?.traceStderr
         });
@@ -320,6 +321,7 @@ describe('LiveStdioServer', () => {
         params: {
           filepath: '/tmp/traced.mld',
           trace: 'effects',
+          traceMemory: true,
           traceFile: '/tmp/runtime.jsonl'
         }
       })}\n`
@@ -330,6 +332,7 @@ describe('LiveStdioServer', () => {
     expect(seen).toEqual([
       {
         trace: 'effects',
+        traceMemory: true,
         traceFile: '/tmp/runtime.jsonl',
         traceStderr: false
       }

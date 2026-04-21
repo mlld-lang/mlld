@@ -59,6 +59,7 @@ export interface InterpretOptions {
   normalizeBlankLines?: boolean;
   enableTrace?: boolean;
   trace?: RuntimeTraceLevel;
+  traceMemory?: boolean;
   traceFile?: string;
   traceStderr?: boolean;
   useMarkdownFormatter?: boolean;

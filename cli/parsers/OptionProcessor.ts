@@ -52,6 +52,7 @@ export class OptionProcessor {
       resume: cliOptions.resume,
       fork: cliOptions.fork,
       trace: cliOptions.trace,
+      traceMemory: cliOptions.traceMemory,
       traceFile: cliOptions.traceFile,
       // Streaming options
       streaming: this.buildStreamingOptions(cliOptions)

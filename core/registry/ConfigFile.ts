@@ -37,6 +37,11 @@ export interface ConfigFileData {
   scriptDir?: string;
   mode?: 'development' | 'production';
   nodePackageManager?: string;
+  runtime?: {
+    heap?: string | number;
+    parallelLimit?: number;
+    memoryBudget?: string | number;
+  };
 
   // Development settings
   dev?: {

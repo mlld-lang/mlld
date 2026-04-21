@@ -222,6 +222,14 @@ export function traceLlmInvocation(
   });
 }
 
+export function traceMemoryEvent<K extends 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure'>(
+  level: RuntimeTraceEventSpecMap[K]['level'],
+  event: K,
+  data: RuntimeTraceEventSpecMap[K]['data']
+): RuntimeTraceEnvelope<K> {
+  return createRuntimeTraceEnvelope(level, 'memory', event, data);
+}
+
 export function traceRecordSchemaFail(data: RuntimeTraceEventSpecMap['record.schema_fail']['data']): RuntimeTraceEnvelope<'record.schema_fail'> {
   return createRuntimeTraceEnvelope('effects', 'record', 'record.schema_fail', data);
 }

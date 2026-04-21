@@ -2,13 +2,13 @@
 id: sdk-language-sdks
 qa_tier: 3
 title: Language SDKs
-brief: Thin wrappers for Go, Python, Rust, Ruby, and Elixir, including boundary-label APIs
+brief: Thin wrappers for Go, Python, Rust, Ruby, and Elixir, including tracing and boundary-label APIs
 category: sdk
 parent: sdk
 tags: [sdk, go, python, rust, ruby, elixir]
 related: [sdk-basics, sdk-execute, sdk-state, cli-live-stdio]
 related-code: [sdk/go, sdk/python, sdk/rust, sdk/ruby, sdk/elixir]
-updated: 2026-04-04
+updated: 2026-04-21
 ---
 
 Thin wrappers around the mlld CLI for Go, Python, Rust, Ruby, and Elixir. Each keeps a persistent `mlld live --stdio` subprocess for repeated calls via NDJSON RPC.
@@ -35,7 +35,7 @@ Every `execute` call returns a structured result:
 | `exports` | Exported values |
 | `effects` | Output effects with security metadata |
 | `denials` | Guard/policy label-flow denials observed during execution |
-| `trace_events` | Runtime trace events (when `trace` option is set) |
+| `trace_events` | Runtime trace events (when `trace` or memory tracing is enabled) |
 | `metrics` | Timing statistics (total_ms, parse_ms, evaluate_ms) |
 
 ### Options
@@ -52,8 +52,37 @@ Common options for `process` and `execute`:
 | `mode` | Parsing mode: `"strict"` or `"markdown"` |
 | `allow_absolute_paths` | Allow absolute path access |
 | `timeout` | Override client default |
-| `trace` | Runtime trace level: `"off"`, `"effects"`, or `"verbose"` |
+| `trace` | Runtime trace level: `"off"`, `"effects"`, `"handle"` / `"handles"`, or `"verbose"` |
+| `trace_memory` | Include `memory.*` events; implies effects tracing when `trace` is omitted |
 | `trace_file` | Write trace events as JSONL to a file path |
+| `trace_stderr` | Mirror trace events to stderr |
+
+Naming follows each language's conventions. JS/TS uses `traceMemory`, `traceFile`, and `traceStderr`; Python uses `trace_memory`, `trace_file`, and `trace_stderr`. Memory trace options are available in JS/TS and Python first; Go, Rust, Ruby, and Elixir are being brought up to the same surface.
+
+## Runtime Tracing and Heap
+
+Memory tracing is request-scoped. It emits `memory.sample` and `memory.delta` trace events with RSS, heap, external, and ArrayBuffer measurements:
+
+```python
+result = client.execute(
+    "./agent.mld",
+    payload,
+    trace_memory=True,
+    trace_file="tmp/trace.jsonl",
+)
+
+for event in result.trace_events:
+    if event.category == "memory":
+        print(event.event, event.data)
+```
+
+Process heap configuration is client-scoped for subprocess SDKs because it must be applied before `mlld live --stdio` starts. Python supports this now:
+
+```python
+client = Client(heap="8g", heap_snapshot_near_limit=2)
+```
+
+When `command="mlld"`, the SDK starts `mlld --mlld-heap=8g --heap-snapshot-near-limit 2 live --stdio`. When `command="node"` with a CLI entrypoint in `command_args`, it passes V8 flags before the entrypoint. JS/TS runs in the host Node process, so launch the host with Node heap flags or `NODE_OPTIONS` instead of setting heap per request.
 
 ## Handle API
 

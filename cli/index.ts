@@ -117,6 +117,7 @@ export interface CLIOptions {
   metrics?: boolean;
   // Runtime effect tracing
   trace?: RuntimeTraceLevel;
+  traceMemory?: boolean;
   traceFile?: string;
   // Dynamic module injection
   inject?: string[];  // ['@module=value', '@data=@file.json']

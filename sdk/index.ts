@@ -14,6 +14,7 @@ import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 import { resolveMlldMode } from '@core/utils/mode';
 import type { MlldMode } from '@core/types/mode';
+import type { RuntimeTraceLevel } from '@core/types/trace';
 import {
   liveSignFile,
   liveSignContent,
@@ -35,6 +36,7 @@ export { PathContextBuilder } from '@core/services/PathContextService';
 export { ExecutionEmitter } from './execution-emitter';
 export { StreamExecution } from './stream-execution';
 export { execute, TimeoutError, MemoryAstCache } from './execute';
+export type { ExecuteOptions } from './execute';
 export { ExecuteError, type ExecuteErrorCode } from './types';
 export { NodeFileSystem } from '@services/fs/NodeFileSystem';
 export type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -141,6 +143,14 @@ export interface ProcessOptions {
   normalizeBlankLines?: boolean;
   /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
+  /** Runtime effect tracing level. */
+  trace?: RuntimeTraceLevel;
+  /** Include memory samples in runtime trace output. Implies effects tracing when trace is omitted. */
+  traceMemory?: boolean;
+  /** Write runtime trace events as JSONL. */
+  traceFile?: string;
+  /** Mirror runtime trace events to stderr. */
+  traceStderr?: boolean;
 
   /**
    * Dynamic (non-filesystem) modules for runtime injection.
@@ -260,7 +270,11 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     dynamicModules: options?.dynamicModules,
     dynamicModuleSource: options?.dynamicModuleSource,
     dynamicModuleMode: options?.dynamicModuleMode,
-    mlldMode: languageMode
+    mlldMode: languageMode,
+    trace: options?.trace,
+    traceMemory: options?.traceMemory,
+    traceFile: options?.traceFile,
+    traceStderr: options?.traceStderr
   });
 
   // Interpret returns string output in document mode; other modes carry output on the object

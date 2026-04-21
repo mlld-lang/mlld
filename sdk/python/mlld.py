@@ -14,11 +14,68 @@ from __future__ import annotations
 import atexit
 import json
 import queue
+import re
 import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+
+def _parse_heap_to_mb(value: str | int) -> int:
+    raw = str(value).strip().lower()
+
+    match = re.match(r"^(\d+(?:\.\d+)?)\s*(m|mb|g|gb)?$", raw)
+    if not match:
+        raise ValueError("heap must be a positive memory size like 8192, 8192m, or 8g")
+
+    amount = float(match.group(1))
+    if amount <= 0:
+        raise ValueError("heap must be a positive memory size")
+
+    unit = match.group(2) or "mb"
+    mb = amount * 1024 if unit in ("g", "gb") else amount
+    if mb < 1:
+        raise ValueError("heap must resolve to at least 1 MB")
+    return round(mb)
+
+
+def _is_node_command(command: str) -> bool:
+    name = Path(command).name.lower()
+    return name in ("node", "node.exe", "nodejs", "nodejs.exe")
+
+
+def _runtime_startup_args(
+    command: list[str],
+    *,
+    heap: str | int | None = None,
+    heap_snapshot_near_limit: int | None = None,
+) -> list[str]:
+    if not command:
+        return command
+
+    if heap is None and heap_snapshot_near_limit is None:
+        return command
+
+    is_node = _is_node_command(command[0])
+    runtime_args: list[str] = []
+
+    if heap is not None:
+        if is_node:
+            runtime_args.append(f"--max-old-space-size={_parse_heap_to_mb(heap)}")
+        else:
+            runtime_args.append(f"--mlld-heap={heap}")
+
+    if heap_snapshot_near_limit is not None:
+        if not isinstance(heap_snapshot_near_limit, int) or heap_snapshot_near_limit <= 0:
+            raise ValueError("heap_snapshot_near_limit must be a positive integer")
+        if is_node:
+            runtime_args.append(f"--heapsnapshot-near-heap-limit={heap_snapshot_near_limit}")
+        else:
+            runtime_args.extend(["--heap-snapshot-near-limit", str(heap_snapshot_near_limit)])
+
+    return [command[0], *runtime_args, *command[1:]]
 
 
 @dataclass
@@ -451,6 +508,8 @@ class Client:
         command: The mlld command to invoke. Defaults to "mlld".
         command_args: Extra command args before `live --stdio`.
             Example: command="node", command_args=["./dist/cli.cjs"]
+        heap: Optional Node heap limit for the mlld process, e.g. "8g" or 8192.
+        heap_snapshot_near_limit: Optional V8 heap snapshot count near the heap limit.
         timeout: Default timeout in seconds. None means no timeout.
         working_dir: Working directory for script execution.
     """
@@ -459,11 +518,15 @@ class Client:
         self,
         command: str = "mlld",
         command_args: list[str] | None = None,
+        heap: str | int | None = None,
+        heap_snapshot_near_limit: int | None = None,
         timeout: float | None = 30.0,
         working_dir: str | None = None,
     ):
         self.command = command
         self.command_args = list(command_args or [])
+        self.heap = heap
+        self.heap_snapshot_near_limit = heap_snapshot_near_limit
         self.timeout = timeout
         self.working_dir = working_dir
 
@@ -535,6 +598,7 @@ class Client:
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
         trace: str | None = None,
+        trace_memory: bool | None = None,
         trace_file: str | None = None,
         trace_stderr: bool | None = None,
         timeout: float | None = None,
@@ -553,6 +617,10 @@ class Client:
             dynamic_module_source: Source label for dynamic modules.
             mode: Parsing mode (strict|markdown).
             allow_absolute_paths: Allow absolute path access when True.
+            trace: Runtime trace level (handle|effects|verbose).
+            trace_memory: Include memory samples in runtime trace events.
+            trace_file: Write runtime trace events as JSONL.
+            trace_stderr: Mirror runtime trace events to stderr.
             timeout: Override the client default timeout.
             mcp_servers: Map of logical name to MCP server command.
 
@@ -574,6 +642,7 @@ class Client:
             mode=mode,
             allow_absolute_paths=allow_absolute_paths,
             trace=trace,
+            trace_memory=trace_memory,
             trace_file=trace_file,
             trace_stderr=trace_stderr,
             timeout=timeout,
@@ -593,6 +662,7 @@ class Client:
         mode: str | None = None,
         allow_absolute_paths: bool | None = None,
         trace: str | None = None,
+        trace_memory: bool | None = None,
         trace_file: str | None = None,
         trace_stderr: bool | None = None,
         timeout: float | None = None,
@@ -624,6 +694,8 @@ class Client:
             params["mcpServers"] = mcp_servers
         if trace is not None:
             params["trace"] = trace
+        if trace_memory is not None:
+            params["traceMemory"] = trace_memory
         if trace_file is not None:
             params["traceFile"] = trace_file
         if trace_stderr is not None:
@@ -651,6 +723,7 @@ class Client:
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
         trace: str | None = None,
+        trace_memory: bool | None = None,
         trace_file: str | None = None,
         trace_stderr: bool | None = None,
     ) -> ExecuteResult:
@@ -669,6 +742,10 @@ class Client:
             timeout: Override the client default timeout.
             mcp_servers: Map of logical name to MCP server command. Allows
                 ``import tools from mcp "name"`` to resolve to the mapped command.
+            trace: Runtime trace level (handle|effects|verbose).
+            trace_memory: Include memory samples in runtime trace events.
+            trace_file: Write runtime trace events as JSONL.
+            trace_stderr: Mirror runtime trace events to stderr.
 
         Returns:
             ExecuteResult with output, state writes, and metrics.
@@ -689,6 +766,7 @@ class Client:
             timeout=timeout,
             mcp_servers=mcp_servers,
             trace=trace,
+            trace_memory=trace_memory,
             trace_file=trace_file,
             trace_stderr=trace_stderr,
         ).result()
@@ -707,6 +785,7 @@ class Client:
         timeout: float | None = None,
         mcp_servers: dict[str, str] | None = None,
         trace: str | None = None,
+        trace_memory: bool | None = None,
         trace_file: str | None = None,
         trace_stderr: bool | None = None,
     ) -> ExecuteHandle:
@@ -734,6 +813,8 @@ class Client:
             params["mcpServers"] = mcp_servers
         if trace is not None:
             params["trace"] = trace
+        if trace_memory is not None:
+            params["traceMemory"] = trace_memory
         if trace_file is not None:
             params["traceFile"] = trace_file
         if trace_stderr is not None:
@@ -1138,7 +1219,7 @@ class Client:
 
         self.close()
 
-        command = [self.command, *self.command_args, "live", "--stdio"]
+        command = self._transport_command()
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -1161,6 +1242,15 @@ class Client:
 
         self._stderr_thread = threading.Thread(target=self._stderr_loop, name="mlld-live-stderr", daemon=True)
         self._stderr_thread.start()
+
+    def _transport_command(self) -> list[str]:
+        command = [self.command, *self.command_args]
+        runtime_args = _runtime_startup_args(
+            command,
+            heap=self.heap,
+            heap_snapshot_near_limit=self.heap_snapshot_near_limit,
+        )
+        return [*runtime_args, "live", "--stdio"]
 
     def _reader_loop(self) -> None:
         process = self._process

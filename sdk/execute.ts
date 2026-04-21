@@ -50,6 +50,7 @@ export interface ExecuteOptions {
   checkpointCacheRootDir?: string;
   mcpServers?: Record<string, string>;
   trace?: RuntimeTraceLevel;
+  traceMemory?: boolean;
   traceFile?: string;
   traceStderr?: boolean;
 }
@@ -107,6 +108,7 @@ export async function execute(
     checkpointCacheRootDir: options.checkpointCacheRootDir,
     mcpServers: options.mcpServers,
     trace: options.trace,
+    traceMemory: options.traceMemory,
     traceFile: options.traceFile,
     traceStderr: options.traceStderr
   } as InterpretOptions;

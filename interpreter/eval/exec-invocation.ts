@@ -4492,6 +4492,15 @@ async function evaluateExecInvocationInternal(
   }
   if (hasLlmLabel) {
     llmTraceStartedAt = Date.now();
+    runtimeEnv.emitRuntimeMemoryTrace('llm.call', 'start', {
+      requiredLevel: 'verbose',
+      data: {
+        provider: llmTraceProvider,
+        model: llmTraceModel,
+        toolCount: llmTraceToolCount,
+        resume: isLlmResumeContinuation
+      }
+    });
   }
   
   const guardHelperImpl =
@@ -4681,6 +4690,12 @@ async function evaluateExecInvocationInternal(
     trackedToolName.length > 0 &&
     Array.from(env.getEnclosingExeLabels()).includes('llm');
   if (shouldTraceLlmToolCall) {
+    runtimeEnv.emitRuntimeMemoryTrace('llm.tool_call', 'start', {
+      requiredLevel: 'verbose',
+      data: {
+        tool: trackedToolName
+      }
+    });
     runtimeEnv.emitRuntimeTraceEvent(traceLlmToolCall({
       tool: trackedToolName,
       args: runtimeEnv.summarizeTraceValue(toolCallArguments)
@@ -5373,6 +5388,12 @@ async function evaluateExecInvocationInternal(
             ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
             : undefined
       }));
+      runtimeEnv.emitRuntimeMemoryTrace('llm.tool_result', 'finish', {
+        data: {
+          tool: trackedToolName,
+          ok: true
+        }
+      });
     }
     if (hasLlmLabel) {
       runtimeEnv.emitRuntimeTraceEvent(traceLlmInvocation(
@@ -5387,6 +5408,16 @@ async function evaluateExecInvocationInternal(
         durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
         }
       ));
+      runtimeEnv.emitRuntimeMemoryTrace('llm.call', 'finish', {
+        data: {
+          sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+          provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+          model: llmTraceModel,
+          toolCount: llmTraceToolCount,
+          resume: isLlmResumeContinuation,
+          ok: true
+        }
+      });
     }
     recordToolCall(true);
     return invocationResult;
@@ -5402,6 +5433,13 @@ async function evaluateExecInvocationInternal(
             ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
             : undefined
       }));
+      runtimeEnv.emitRuntimeMemoryTrace('llm.tool_result', 'finish', {
+        data: {
+          tool: trackedToolName,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      });
     }
     if (hasLlmLabel) {
       runtimeEnv.emitRuntimeTraceEvent(traceLlmInvocation(
@@ -5417,6 +5455,17 @@ async function evaluateExecInvocationInternal(
         durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
         }
       ));
+      runtimeEnv.emitRuntimeMemoryTrace('llm.call', 'finish', {
+        data: {
+          sessionId: currentLlmResumeState?.sessionId ?? llmTraceSessionId,
+          provider: currentLlmResumeState?.provider ?? llmTraceProvider,
+          model: llmTraceModel,
+          toolCount: llmTraceToolCount,
+          resume: isLlmResumeContinuation,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      });
     }
     recordToolCall(false, error);
     throw error;

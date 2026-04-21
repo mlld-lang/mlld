@@ -113,10 +113,14 @@ Create a client wrapping a persistent `mlld live --stdio` subprocess.
 |------|------|---------|-------------|
 | command | string | `"mlld"` | CLI command to invoke |
 | command_args | string[] | `[]` | Extra args before `live --stdio` |
+| heap | string \| int? | null | Process-scoped Node heap limit for the mlld subprocess, e.g. `"8g"` or `8192` |
+| heap_snapshot_near_limit | int? | null | Process-scoped V8 heap snapshot count near the heap limit |
 | timeout | duration | 30s | Default timeout for all operations |
 | working_dir | string? | null | Working directory for script execution |
 
 The subprocess is spawned lazily on first use, not at construction.
+
+Transport-wrapping SDKs apply heap options when spawning the subprocess, before `live --stdio`. When `command` is the `mlld` wrapper, pass wrapper flags such as `--mlld-heap=<value>` and `--heap-snapshot-near-limit <n>`. When `command` is `node`, pass V8 flags before the CLI entrypoint. JS/TS runs in the host Node process, so heap cannot be changed per request or after startup; launch the host process with Node heap flags or `NODE_OPTIONS`.
 
 ### close
 
@@ -147,6 +151,10 @@ process(script, options?) -> string
 | dynamic_module_source | string? | no | Source label for dynamic modules |
 | mode | "strict" \| "markdown"? | no | Parsing mode |
 | allow_absolute_paths | bool? | no | Allow absolute path access |
+| trace | string? | no | Runtime trace level (`"handle"`, `"effects"`, or `"verbose"`) |
+| trace_memory | bool? | no | Include `memory.*` runtime trace events; implies effects tracing when `trace` is omitted |
+| trace_file | string? | no | Write runtime trace events as JSONL |
+| trace_stderr | bool? | no | Mirror runtime trace events to stderr |
 | timeout | duration? | no | Override client default |
 | mcp_servers | map[string, string]? | no | Logical name to MCP server command |
 
@@ -172,6 +180,10 @@ execute(filepath, payload?, options?) -> ExecuteResult
 | dynamic_module_source | string? | no | Source label for dynamic modules |
 | mode | "strict" \| "markdown"? | no | Parsing mode |
 | allow_absolute_paths | bool? | no | Allow absolute path access |
+| trace | string? | no | Runtime trace level (`"handle"`, `"effects"`, or `"verbose"`) |
+| trace_memory | bool? | no | Include `memory.*` runtime trace events; implies effects tracing when `trace` is omitted |
+| trace_file | string? | no | Write runtime trace events as JSONL |
+| trace_stderr | bool? | no | Mirror runtime trace events to stderr |
 | timeout | duration? | no | Override client default |
 | mcp_servers | map[string, string]? | no | Logical name to MCP server command |
 

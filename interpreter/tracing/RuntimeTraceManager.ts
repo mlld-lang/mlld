@@ -5,6 +5,7 @@ import {
   normalizeRuntimeTraceLevel,
   shouldEmitRuntimeTrace,
   type RuntimeTraceEvent,
+  type RuntimeTraceEmissionLevel,
   type RuntimeTraceLevel,
   type RuntimeTraceOptions,
   type RuntimeTraceScope
@@ -19,6 +20,12 @@ type RuntimeTraceRootState = {
   events: RuntimeTraceEvent[];
   filePath?: string;
   stderr: boolean;
+  memory: boolean;
+  retainLimit?: number;
+  lastMemorySample?: {
+    label: string;
+    usage: NodeJS.MemoryUsage;
+  };
   shelfTracker: RuntimeTraceShelfTracker;
 };
 
@@ -31,6 +38,7 @@ export class RuntimeTraceManager {
       level: 'off',
       events: [],
       stderr: false,
+      memory: false,
       shelfTracker: new RuntimeTraceShelfTracker()
     };
   }
@@ -43,6 +51,14 @@ export class RuntimeTraceManager {
     this.root.level = normalizeRuntimeTraceLevel(level);
     this.root.filePath = options.filePath ? path.resolve(options.filePath) : undefined;
     this.root.stderr = options.stderr === true;
+    this.root.memory = options.memory === true;
+    this.root.retainLimit =
+      typeof options.retainLimit === 'number' && Number.isFinite(options.retainLimit) && options.retainLimit >= 0
+        ? Math.floor(options.retainLimit)
+        : this.root.memory && this.root.filePath
+          ? 10000
+          : undefined;
+    this.root.lastMemorySample = undefined;
     if (level === 'off') {
       this.root.events = [];
       this.root.shelfTracker.clear();
@@ -81,7 +97,12 @@ export class RuntimeTraceManager {
       data: sanitizeSerializableValue(trace.data) as Record<string, unknown>
     };
 
-    this.root.events.push(payload);
+    if (this.root.retainLimit !== 0) {
+      this.root.events.push(payload);
+      if (this.root.retainLimit !== undefined && this.root.events.length > this.root.retainLimit) {
+        this.root.events.splice(0, this.root.events.length - this.root.retainLimit);
+      }
+    }
 
     if (this.root.filePath) {
       try {
@@ -94,6 +115,68 @@ export class RuntimeTraceManager {
 
     if (this.root.stderr) {
       process.stderr.write(`${formatRuntimeTraceLine(payload)}\n`);
+    }
+
+    return payload;
+  }
+
+  isMemoryEnabled(): boolean {
+    return this.root.memory;
+  }
+
+  emitMemoryTrace(
+    args: {
+      label: string;
+      phase?: string;
+      requiredLevel?: RuntimeTraceEmissionLevel;
+      event?: 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure';
+      data?: Record<string, unknown>;
+    },
+    scope: RuntimeTraceScope
+  ): RuntimeTraceEvent | undefined {
+    if (!this.root.memory) {
+      return undefined;
+    }
+
+    const usage = process.memoryUsage();
+    const previous = this.root.lastMemorySample;
+    const event = args.event ?? (previous ? 'memory.delta' : 'memory.sample');
+    const data = {
+      label: args.label,
+      ...(args.phase ? { phase: args.phase } : {}),
+      rss: usage.rss,
+      heapUsed: usage.heapUsed,
+      heapTotal: usage.heapTotal,
+      external: usage.external,
+      arrayBuffers: usage.arrayBuffers,
+      ...(previous
+        ? {
+            deltaRss: usage.rss - previous.usage.rss,
+            deltaHeapUsed: usage.heapUsed - previous.usage.heapUsed,
+            deltaHeapTotal: usage.heapTotal - previous.usage.heapTotal,
+            deltaExternal: usage.external - previous.usage.external,
+            deltaArrayBuffers: usage.arrayBuffers - previous.usage.arrayBuffers,
+            previousLabel: previous.label
+          }
+        : {}),
+      ...args.data
+    };
+
+    const payload = this.emitTrace(
+      {
+        requiredLevel: args.requiredLevel ?? (event === 'memory.gc' ? 'verbose' : 'effects'),
+        category: 'memory',
+        event,
+        data
+      },
+      scope
+    );
+
+    if (payload) {
+      this.root.lastMemorySample = {
+        label: args.label,
+        usage
+      };
     }
 
     return payload;

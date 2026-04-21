@@ -36,6 +36,7 @@ export type RuntimeTraceCategory =
   | 'auth'
   | 'display'
   | 'llm'
+  | 'memory'
   | 'record'
   | 'import';
 
@@ -80,6 +81,10 @@ export type RuntimeTraceEventName =
   | 'llm.resume'
   | 'llm.tool_call'
   | 'llm.tool_result'
+  | 'memory.sample'
+  | 'memory.delta'
+  | 'memory.gc'
+  | 'memory.pressure'
   | 'record.coerce'
   | 'record.schema_fail';
 
@@ -108,6 +113,25 @@ type RuntimeImportTraceRecord = TraceRecord<{
   exportCount?: number;
   phase?: string;
   error?: string;
+}>;
+
+type RuntimeMemoryTraceRecord = TraceRecord<{
+  label: string;
+  phase?: string;
+  rss: number;
+  heapUsed: number;
+  heapTotal: number;
+  external: number;
+  arrayBuffers: number;
+  deltaRss?: number;
+  deltaHeapUsed?: number;
+  deltaHeapTotal?: number;
+  deltaExternal?: number;
+  deltaArrayBuffers?: number;
+  previousLabel?: string;
+  gcAvailable?: boolean;
+  detail?: string;
+  pressure?: string;
 }>;
 
 export interface RuntimeTraceEventSpecMap {
@@ -334,6 +358,26 @@ export interface RuntimeTraceEventSpecMap {
       durationMs?: number;
     }>;
   };
+  'memory.sample': {
+    category: 'memory';
+    level: 'effects';
+    data: RuntimeMemoryTraceRecord;
+  };
+  'memory.delta': {
+    category: 'memory';
+    level: 'effects';
+    data: RuntimeMemoryTraceRecord;
+  };
+  'memory.gc': {
+    category: 'memory';
+    level: 'verbose';
+    data: RuntimeMemoryTraceRecord;
+  };
+  'memory.pressure': {
+    category: 'memory';
+    level: 'effects';
+    data: RuntimeMemoryTraceRecord;
+  };
   'record.coerce': {
     category: 'record';
     level: 'verbose';
@@ -360,6 +404,8 @@ export type RuntimeTraceEvent = {
 export interface RuntimeTraceOptions {
   filePath?: string;
   stderr?: boolean;
+  memory?: boolean;
+  retainLimit?: number;
 }
 
 export function isRuntimeTraceLevel(value: unknown): value is RuntimeTraceLevel {
@@ -381,6 +427,9 @@ export function shouldEmitRuntimeTrace(
   }
   if (normalized === 'verbose') {
     return true;
+  }
+  if (category === 'memory') {
+    return required === 'effects';
   }
   if (normalized === 'handle') {
     return category === 'handle';

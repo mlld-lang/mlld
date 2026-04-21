@@ -18,6 +18,49 @@ function createEnvironment(basePath = '/tmp/mlld-runtime-trace'): Environment {
 }
 
 describe('runtime trace', () => {
+  it('emits memory trace events when traceMemory is enabled without an explicit trace level', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+
+    const result = await interpret('/show "ok"', {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      traceMemory: true
+    }) as any;
+
+    expect(result.traceEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'memory',
+          event: expect.stringMatching(/^memory\.(sample|delta)$/),
+          level: 'effects',
+          data: expect.objectContaining({
+            label: expect.any(String),
+            rss: expect.any(Number),
+            heapUsed: expect.any(Number),
+            heapTotal: expect.any(Number),
+            external: expect.any(Number),
+            arrayBuffers: expect.any(Number)
+          })
+        })
+      ])
+    );
+  });
+
+  it('bounds retained runtime trace events when a retain limit is configured', () => {
+    const env = createEnvironment();
+    env.setRuntimeTrace('effects', { memory: true, retainLimit: 2 });
+
+    env.emitRuntimeMemoryTrace('one', 'sample');
+    env.emitRuntimeMemoryTrace('two', 'sample');
+    env.emitRuntimeMemoryTrace('three', 'sample');
+
+    expect(env.getRuntimeTraceEvents()).toHaveLength(2);
+    expect(env.getRuntimeTraceEvents().map((event: any) => event.data.label)).toEqual(['two', 'three']);
+  });
+
   it('collects runtime trace events end-to-end when tracing is enabled', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();

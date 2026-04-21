@@ -8,7 +8,7 @@ parent: sdk
 tags: [configuration, sdk, execute, state]
 related: [config-sdk-dynamic-modules, config-sdk-execution-modes]
 related-code: [sdk/execute.ts, sdk/state/StateManager.ts]
-updated: 2026-04-20
+updated: 2026-04-21
 ---
 
 File-based execution with state management.
@@ -38,7 +38,8 @@ Features:
 - Stream handles emit `session_write` events when committed session slot writes occur
 - Stream handles support `updateState(path, value, labels?)`, `writeFile(path, content)`, and event consumption via async iteration or `next_event`
 - `mcpServers` maps logical names to MCP server commands per-execution
-- Results include `stateWrites`, `sessions`, `effects` (with security metadata), `denials` (guard/policy), and `metrics` (timing)
+- Runtime tracing via `trace`, `traceMemory`, `traceFile`, and `traceStderr`
+- Results include `stateWrites`, `sessions`, `effects` (with security metadata), `denials` (guard/policy), `traceEvents`, and `metrics` (timing)
 
 `result.sessions` is the final committed state per attached session frame. Per-write session activity stays in the event stream:
 
@@ -63,3 +64,20 @@ const result = await execute('./agent.mld', payload, {
 ```
 
 The script uses `import tools from mcp "tools" as @t` — `"tools"` resolves to the SDK-provided command instead of being treated as a shell command.
+
+**Memory tracing** is request-scoped:
+
+```typescript
+const result = await execute('./agent.mld', payload, {
+  traceMemory: true,
+  traceFile: 'tmp/trace.jsonl'
+});
+
+for (const event of result.traceEvents) {
+  if (event.category === 'memory') {
+    console.log(event.event, event.data);
+  }
+}
+```
+
+Use `traceMemory` to correlate heap/RSS changes with parse, evaluation, LLM calls, tool calls, and parallel batches. Use Node heap flags or `NODE_OPTIONS` to change the host process heap for JS/TS callers; heap size is not a per-request SDK option.

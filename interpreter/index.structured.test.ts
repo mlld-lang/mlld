@@ -114,6 +114,49 @@ describe('interpret structured mode', () => {
     }
   });
 
+  it('mirrors memory trace events to JSONL when traceMemory is enabled', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const traceDir = await mkdtemp(path.join(os.tmpdir(), 'mlld-memory-trace-'));
+    const traceFile = path.join(traceDir, 'runtime.jsonl');
+
+    try {
+      const result = await interpret('/show "ok"', {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        format: 'markdown',
+        mode: 'structured',
+        traceMemory: true,
+        traceFile
+      }) as any;
+
+      const traceLines = (await readFile(traceFile, 'utf8'))
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line));
+
+      expect(result.traceEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ category: 'memory' })
+        ])
+      );
+      expect(traceLines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            category: 'memory',
+            data: expect.objectContaining({
+              heapUsed: expect.any(Number),
+              rss: expect.any(Number)
+            })
+          })
+        ])
+      );
+    } finally {
+      await rm(traceDir, { recursive: true, force: true });
+    }
+  });
+
   it('filters verbose-only runtime events out of effects-level traces', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();

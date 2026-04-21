@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import queue
 import unittest
 from pathlib import Path
+from typing import Any
 
 import mlld
 
@@ -157,6 +159,114 @@ class ProtocolFixturesTest(unittest.TestCase):
 
         self.assertEqual(error.code, "TIMEOUT")
         self.assertEqual(error.message, "request timeout after 5s")
+
+    def test_client_transport_command_adds_wrapper_heap_args(self) -> None:
+        client = mlld.Client(
+            command="mlld",
+            heap="8g",
+            heap_snapshot_near_limit=2,
+        )
+
+        self.assertEqual(
+            client._transport_command(),
+            [
+                "mlld",
+                "--mlld-heap=8g",
+                "--heap-snapshot-near-limit",
+                "2",
+                "live",
+                "--stdio",
+            ],
+        )
+
+    def test_client_transport_command_adds_node_heap_args(self) -> None:
+        client = mlld.Client(
+            command="node",
+            command_args=["./dist/cli.cjs"],
+            heap="8g",
+            heap_snapshot_near_limit=2,
+        )
+
+        self.assertEqual(
+            client._transport_command(),
+            [
+                "node",
+                "--max-old-space-size=8192",
+                "--heapsnapshot-near-heap-limit=2",
+                "./dist/cli.cjs",
+                "live",
+                "--stdio",
+            ],
+        )
+
+    def test_client_transport_command_validates_runtime_options(self) -> None:
+        with self.assertRaises(ValueError):
+            mlld.Client(command="node", heap="nope")._transport_command()
+
+        with self.assertRaises(ValueError):
+            mlld.Client(command="mlld", heap_snapshot_near_limit=0)._transport_command()
+
+    def test_process_async_serializes_trace_memory_options(self) -> None:
+        client = mlld.Client(timeout=1.0)
+        captured: dict[str, Any] = {}
+
+        def fake_send_request(method: str, params: dict[str, Any]):
+            captured["method"] = method
+            captured["params"] = params
+            return 7, queue.Queue()
+
+        client._send_request = fake_send_request  # type: ignore[method-assign]
+
+        handle = client.process_async(
+            '/show "hi"',
+            trace="effects",
+            trace_memory=True,
+            trace_file="trace.jsonl",
+            trace_stderr=False,
+        )
+
+        self.assertEqual(handle.request_id, 7)
+        self.assertEqual(captured["method"], "process")
+        self.assertEqual(
+            captured["params"],
+            {
+                "script": '/show "hi"',
+                "recordEffects": True,
+                "trace": "effects",
+                "traceMemory": True,
+                "traceFile": "trace.jsonl",
+                "traceStderr": False,
+            },
+        )
+
+    def test_execute_async_serializes_trace_memory_options(self) -> None:
+        client = mlld.Client(timeout=1.0)
+        captured: dict[str, Any] = {}
+
+        def fake_send_request(method: str, params: dict[str, Any]):
+            captured["method"] = method
+            captured["params"] = params
+            return 8, queue.Queue()
+
+        client._send_request = fake_send_request  # type: ignore[method-assign]
+
+        handle = client.execute_async(
+            "/repo/main.mld",
+            {"name": "Ada"},
+            trace_memory=True,
+        )
+
+        self.assertEqual(handle.request_id, 8)
+        self.assertEqual(captured["method"], "execute")
+        self.assertEqual(
+            captured["params"],
+            {
+                "filepath": "/repo/main.mld",
+                "recordEffects": True,
+                "payload": {"name": "Ada"},
+                "traceMemory": True,
+            },
+        )
 
 
 if __name__ == "__main__":

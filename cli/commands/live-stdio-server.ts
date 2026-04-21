@@ -73,6 +73,7 @@ interface ProcessRequestParams {
   allowAbsolutePaths?: boolean;
   mcpServers?: Record<string, string>;
   trace?: RuntimeTraceLevel;
+  traceMemory?: boolean;
   traceFile?: string;
   traceStderr?: boolean;
   eventMode?: LiveEventMode;
@@ -91,6 +92,7 @@ interface ExecuteRequestParams {
   mode?: MlldMode;
   mcpServers?: Record<string, string>;
   trace?: RuntimeTraceLevel;
+  traceMemory?: boolean;
   traceFile?: string;
   traceStderr?: boolean;
   eventMode?: LiveEventMode;
@@ -593,6 +595,7 @@ export class LiveStdioServer {
       allowAbsolutePaths: parsed.allowAbsolutePaths,
       mcpServers: parsed.mcpServers,
       trace: parsed.trace,
+      traceMemory: parsed.traceMemory,
       traceFile: parsed.traceFile,
       traceStderr: parsed.traceStderr,
       recordEffects: parsed.recordEffects
@@ -600,7 +603,9 @@ export class LiveStdioServer {
 
     await this.streamExecution(requestId, streamHandle, {
       eventMode: parsed.eventMode,
-      traceEnabled: parsed.trace !== undefined && parsed.trace !== 'off'
+      traceEnabled:
+        (parsed.trace !== undefined && parsed.trace !== 'off') ||
+        (parsed.trace === undefined && parsed.traceMemory === true)
     });
   }
 
@@ -624,6 +629,7 @@ export class LiveStdioServer {
       mode: parsed.mode,
       mcpServers: parsed.mcpServers,
       trace: parsed.trace,
+      traceMemory: parsed.traceMemory,
       traceFile: parsed.traceFile,
       traceStderr: parsed.traceStderr,
       recordEffects: parsed.recordEffects,
@@ -773,6 +779,7 @@ export class LiveStdioServer {
         typeof params.allowAbsolutePaths === 'boolean' ? params.allowAbsolutePaths : undefined,
       mcpServers: this.parseMcpServers(params.mcpServers),
       trace: this.parseTraceLevel(params.trace),
+      traceMemory: this.parseTraceMemory(params.traceMemory),
       traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
       traceStderr: typeof params.traceStderr === 'boolean' ? params.traceStderr : false,
       eventMode: this.parseEventMode(params.eventMode),
@@ -803,6 +810,7 @@ export class LiveStdioServer {
       mode: this.parseMode(params.mode),
       mcpServers: this.parseMcpServers(params.mcpServers),
       trace: this.parseTraceLevel(params.trace),
+      traceMemory: this.parseTraceMemory(params.traceMemory),
       traceFile: typeof params.traceFile === 'string' ? params.traceFile : undefined,
       traceStderr: typeof params.traceStderr === 'boolean' ? params.traceStderr : false,
       eventMode: this.parseEventMode(params.eventMode),
@@ -812,6 +820,10 @@ export class LiveStdioServer {
 
   private parseEventMode(value: unknown): LiveEventMode {
     return value === 'all' ? 'all' : 'minimal';
+  }
+
+  private parseTraceMemory(value: unknown): boolean | undefined {
+    return typeof value === 'boolean' ? value : undefined;
   }
 
   private parseTraceLevel(value: unknown): RuntimeTraceLevel | undefined {

@@ -52,6 +52,28 @@ describe('execute', () => {
     expect(metrics.effectCount).toBeGreaterThan(0);
   });
 
+  it('supports memory tracing as an execute option', async () => {
+    await fileSystem.writeFile(routePath, '/show "memory"');
+
+    const result = await execute(routePath, undefined, {
+      fileSystem,
+      pathService,
+      traceMemory: true
+    });
+
+    expect((result as any).traceEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'memory',
+          data: expect.objectContaining({
+            heapUsed: expect.any(Number),
+            rss: expect.any(Number)
+          })
+        })
+      ])
+    );
+  });
+
   it('preserves object and boolean values for state:// writes', async () => {
     await fileSystem.writeFile(
       routePath,

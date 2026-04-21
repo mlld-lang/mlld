@@ -895,6 +895,14 @@ function recordCommittedSessionWrite(args: {
         nextValue: args.nextValue
       });
   args.env.emitRuntimeTraceEvent(traceEnvelope);
+  args.env.emitRuntimeMemoryTrace('session.write', 'finish', {
+    requiredLevel: 'verbose',
+    data: {
+      sessionName: args.instance.definition.canonicalName,
+      operation: args.operation,
+      path: args.path
+    }
+  });
   args.env.emitSDKEvent({
     type: 'session_write',
     session_write: buildSessionWriteSdkPayload({
@@ -1583,6 +1591,11 @@ export function disposeSessionFrame(sessionId: string, env: Environment): void {
       definition: instance.definition,
       finalState
     }));
+    env.emitRuntimeMemoryTrace('session.final', 'finish', {
+      data: {
+        sessionName: instance.definition.canonicalName
+      }
+    });
   }
   env.disposeSessionInstances(sessionId);
 }

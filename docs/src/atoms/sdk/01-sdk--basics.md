@@ -8,7 +8,7 @@ parent: sdk
 tags: [configuration, sdk, modes, execution]
 related: [config-sdk-dynamic-modules, config-sdk-execute]
 related-code: [sdk/execute.ts, sdk/modes/]
-updated: 2026-04-20
+updated: 2026-04-21
 ---
 
 Two public functions cover all SDK use cases:
@@ -28,6 +28,7 @@ console.log(result.stateWrites);   // state:// writes
 console.log(result.sessions);      // final session-scoped state snapshots
 console.log(result.effects);       // output effects
 console.log(result.denials);       // guard/policy denials
+console.log(result.traceEvents);   // runtime trace events
 console.log(result.metrics);       // timing (totalMs, parseMs, evaluateMs)
 ```
 
@@ -48,4 +49,25 @@ The `StreamExecution` object supports `on`/`off`/`once` event subscriptions and 
 for await (const event of stream) {
   console.log(event.type, event);
 }
+```
+
+**Runtime tracing** — pass trace options to capture execution events
+
+```typescript
+const result = await execute(filePath, payload, {
+  trace: 'effects',
+  traceMemory: true
+});
+
+const memoryEvents = result.traceEvents.filter(event => event.category === 'memory');
+```
+
+`traceMemory: true` adds `memory.*` events with RSS, heap, external, and ArrayBuffer samples. If no `trace` level is set, memory tracing implies effects-level tracing. `processMlld()` accepts the same trace options, but since it returns only text output, use `traceFile` to persist trace events:
+
+```typescript
+await processMlld(script, {
+  traceMemory: true,
+  traceFile: 'tmp/trace.jsonl',
+  traceStderr: false
+});
 ```

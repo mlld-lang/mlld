@@ -483,8 +483,11 @@ export class FileProcessor {
       resume: cliOptions.resume,
       fork: cliOptions.fork,
       trace: cliOptions.trace,
+      traceMemory: cliOptions.traceMemory,
       traceFile: cliOptions.traceFile,
-      traceStderr: cliOptions.trace !== undefined && cliOptions.trace !== 'off',
+      traceStderr:
+        (cliOptions.trace !== undefined && cliOptions.trace !== 'off') ||
+        (cliOptions.trace === undefined && cliOptions.traceMemory === true),
       captureEnvironment: env => {
         resultEnvironment = env;
       },

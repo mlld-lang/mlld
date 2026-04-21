@@ -31,8 +31,8 @@ from mlld import Client
 
 client = Client()
 
-# Optional command override (local repo build example)
-# client = Client(command='node', command_args=['./dist/cli.cjs'])
+# Optional command override and process heap configuration
+# client = Client(command='node', command_args=['./dist/cli.cjs'], heap='8g')
 
 output = client.process('show "Hello World"')
 print(output)
@@ -110,10 +110,10 @@ print(handle.result())
 
 ### Client
 
-- `Client(command='mlld', command_args=None, timeout=30.0, working_dir=None)`
-- `process(script, *, file_path=None, payload=None, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, trace=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
+- `Client(command='mlld', command_args=None, heap=None, heap_snapshot_near_limit=None, timeout=30.0, working_dir=None)`
+- `process(script, *, file_path=None, payload=None, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, mode=None, allow_absolute_paths=None, trace=None, trace_memory=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
 - `process_async(...) -> ProcessHandle`
-- `execute(filepath, payload=None, *, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, trace=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
+- `execute(filepath, payload=None, *, payload_labels=None, state=None, dynamic_modules=None, dynamic_module_source=None, allow_absolute_paths=None, mode=None, trace=None, trace_memory=None, trace_file=None, trace_stderr=None, timeout=None, mcp_servers=None)`
 - `execute_async(...) -> ExecuteHandle`
 - `analyze(filepath)`
 - `sign(path, *, identity=None, metadata=None, base_path=None, timeout=None) -> FileVerifyResult`
@@ -173,4 +173,6 @@ result = execute("script.mld", {
 - `ExecuteResult.effects` contains output effects with security metadata.
 - `ExecuteResult.metrics` contains timing statistics (`total_ms`, `parse_ms`, `evaluate_ms`).
 - `handle.next_event()` yields `HandleEvent` with type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
+- `trace_memory=True` enables `memory.*` runtime trace events for that request; use `trace_file` to persist them as JSONL.
+- `heap` and `heap_snapshot_near_limit` are process-scoped `Client` options and apply when the live subprocess starts.
 - Sync methods are wrappers around async handle methods.

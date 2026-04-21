@@ -226,6 +226,31 @@ describe('Mlld API', () => {
       expect(result.trim()).toBe('plain text');
     });
 
+    it('writes memory trace events when traceMemory is enabled', async () => {
+      const root = await mkdtemp(path.join(tmpdir(), 'mlld-sdk-trace-'));
+      const traceFile = path.join(root, 'trace.jsonl');
+
+      try {
+        const result = await processMlld('/show "trace"', {
+          traceMemory: true,
+          traceFile,
+          traceStderr: false
+        });
+
+        expect(result.trim()).toBe('trace');
+        const events = (await readFile(traceFile, 'utf8'))
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map(line => JSON.parse(line) as { category?: string; event?: string });
+
+        expect(events.some(event => event.category === 'memory')).toBe(true);
+        expect(events.some(event => event.event === 'memory.sample')).toBe(true);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+
     it('infers strict mode for .mld files and runs bare directives', async () => {
       const content = `
 var @name = "World"

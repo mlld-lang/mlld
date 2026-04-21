@@ -223,6 +223,9 @@ export class ArgumentParser {
           options.trace = traceLevel;
           break;
         }
+        case '--trace-memory':
+          options.traceMemory = true;
+          break;
         case '--trace-file': {
           const traceFile = args[++i];
           if (!traceFile) {

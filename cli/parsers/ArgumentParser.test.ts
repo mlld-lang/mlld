@@ -180,6 +180,18 @@ describe('ArgumentParser eval mode', () => {
   });
 });
 
+describe('ArgumentParser trace memory flag', () => {
+  it('parses --trace-memory as a built-in option instead of payload', () => {
+    const parser = new ArgumentParser();
+    const options = parser.parseArgs(['script.mld', '--trace-memory', '--topic', 'vars']);
+
+    expect(options.traceMemory).toBe(true);
+    expect(options.inject).toEqual([
+      '@payload={"topic":"vars"}'
+    ]);
+  });
+});
+
 describe('ArgumentParser streaming flag', () => {
   it('parses --no-stream', () => {
     const parser = new ArgumentParser();

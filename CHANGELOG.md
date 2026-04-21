@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.keep` / `.keepStructured` are now strictly embedded-language escape hatches. `bind` values and `state://` writes materialize plain data instead of storing live wrappers.
 
 ### Added
+- CLI wrappers now support configurable Node heap limits with `--mlld-heap`, `MLLD_HEAP`, and `runtime.heap` in config. `--heap-snapshot-near-limit` passes through to V8 heap snapshot diagnostics.
+- Runtime tracing now supports `--trace-memory`, adding `memory.*` trace events with RSS/heap/external/ArrayBuffer samples and deltas. `--trace-memory` implies `--trace effects` when no trace level is set, and JS/TS `execute()`, `processMlld()`, Python SDK calls, and live stdio requests accept memory trace options.
 - `var session` declarations for typed session-scoped runtime state on LLM bridge frames. Attach with `with { session: @schema, seed: {...} }`, read through named accessors inside attached calls and tool callbacks, and mutate with `.set`, `.append`, `.increment`, `.clear`, and pure-local `.update`.
 - Session state now surfaces through runtime tracing (`session.seed`, `session.write`, `session.final`), streamed SDK `session_write` events, final SDK `result.sessions` snapshots, and returned LLM values at `.mx.sessions.<name>`. Session snapshots preserve wrapper metadata on stored leaves.
 - `mlld validate` and `mlld analyze` now validate session schemas and statically obvious session attachment and update errors.

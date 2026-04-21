@@ -23,6 +23,7 @@ import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS'
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type {
   DirectiveTrace,
+  RuntimeTraceEmissionLevel,
   RuntimeTraceLevel,
   RuntimeTraceOptions,
   RuntimeTraceScope
@@ -4175,6 +4176,10 @@ export class Environment
     return this.runtimeTraceManager.getEvents();
   }
 
+  isRuntimeMemoryTraceEnabled(): boolean {
+    return this.runtimeTraceManager.isMemoryEnabled();
+  }
+
   createRuntimeTraceChildFrame(frameId: string): RuntimeTraceFrameContext {
     const trimmedFrameId = frameId.trim();
     const parentFrame = this.getRuntimeTraceFrame();
@@ -4217,6 +4222,35 @@ export class Environment
     scope?: Partial<RuntimeTraceScope>
   ): void {
     this.emitRuntimeTraceEvent({ requiredLevel, category, event, data, scope });
+  }
+
+  emitRuntimeMemoryTrace(
+    label: string,
+    phase?: string,
+    options: {
+      requiredLevel?: RuntimeTraceEmissionLevel;
+      event?: 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure';
+      data?: Record<string, unknown>;
+      scope?: Partial<RuntimeTraceScope>;
+    } = {}
+  ): void {
+    const payload = this.runtimeTraceManager.emitMemoryTrace(
+      {
+        label,
+        ...(phase ? { phase } : {}),
+        ...(options.requiredLevel ? { requiredLevel: options.requiredLevel } : {}),
+        ...(options.event ? { event: options.event } : {}),
+        ...(options.data ? { data: options.data } : {})
+      },
+      this.buildRuntimeTraceScope(options.scope)
+    );
+    if (payload && this.getRootEnvironment().hasSDKEmitter()) {
+      this.emitSDKEvent({
+        type: 'trace_event',
+        traceEvent: payload,
+        timestamp: Date.now()
+      } as SDKEvent);
+    }
   }
 
   summarizeTraceValue(value: unknown): unknown {

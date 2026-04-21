@@ -602,8 +602,12 @@ Options:
   --json                  With --debug, emit DebugResult JSON to stdout (no streaming)
   --structured            Output JSON with effects, exports, and security metadata
   --timeout <duration>    Overall execution timeout (e.g., 5m, 1h, 30s)
+  --mlld-heap <size>      Set child Node heap limit for mlld (e.g., 8192m, 8g)
+  --heap-snapshot-near-limit <n>
+                          Write V8 heap snapshots near heap limit
   --metrics               Show execution timing on stderr
   --trace <level>         Runtime effect tracing: off, effects, handle/handles, or verbose
+  --trace-memory          Include memory samples in runtime trace output (implies --trace effects)
   --trace-file <path>     Write runtime trace events as JSONL
                           Ambient debug accessors: @mx.handles, @mx.llm.sessionId/display/resume,
                           @mx.shelf.readable/writable, @mx.policy.active

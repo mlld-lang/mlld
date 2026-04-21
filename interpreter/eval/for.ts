@@ -570,17 +570,23 @@ export async function evaluateForDirective(
 	              if (isExeReturnControl(canaryResult)) {
 	                return windowResults;
 	              }
-	            }
+            }
 
-	            if (windowTasks.length > 0) {
-	              const parallelWindowResults = await runWithConcurrency(
-	                windowTasks,
-	                windowTasks.length,
-	                task => runOne(task.entry, task.index, undefined, operationBatch),
-	                { ordered: false, paceMs: effective.rateMs }
-	              );
+            if (windowTasks.length > 0) {
+              env.emitRuntimeMemoryTrace('for.parallel.batch', 'start', {
+                data: { size: windowTasks.length, cap: windowTasks.length }
+              });
+              const parallelWindowResults = await runWithConcurrency(
+                windowTasks,
+                windowTasks.length,
+                task => runOne(task.entry, task.index, undefined, operationBatch),
+                { ordered: false, paceMs: effective.rateMs }
+              );
+              env.emitRuntimeMemoryTrace('for.parallel.batch', 'finish', {
+                data: { size: windowTasks.length, cap: windowTasks.length }
+              });
 	              windowResults.push(...parallelWindowResults);
-	            }
+            }
 	            return windowResults;
 	          };
 
@@ -626,6 +632,9 @@ export async function evaluateForDirective(
 	          ? tasks.filter(task => task.index !== canaryTask.index)
 	          : (whenFilterCondition ? [] : tasks);
 	        const cap = Math.min(configuredCap, remainingTasks.length);
+          env.emitRuntimeMemoryTrace('for.parallel.batch', 'start', {
+            data: { size: remainingTasks.length, cap }
+          });
 	        const results = await runWithConcurrency(
 	          remainingTasks,
 	          cap,
@@ -639,6 +648,9 @@ export async function evaluateForDirective(
 	          ),
 	          { ordered: false, paceMs: effective.rateMs }
 	        );
+          env.emitRuntimeMemoryTrace('for.parallel.batch', 'finish', {
+            data: { size: remainingTasks.length, cap }
+          });
 	        const returnControl = results.find(result => isExeReturnControl(result));
 	        if (returnControl) {
 	          return { value: returnControl, env };
@@ -876,6 +888,9 @@ export async function evaluateForExpression(
 	          }
 
 	          if (windowTasks.length > 0) {
+	            env.emitRuntimeMemoryTrace('for.parallel.batch', 'start', {
+	              data: { size: windowTasks.length, cap: windowTasks.length }
+	            });
 	            const parallelWindowResults = await runWithConcurrency(
 	              windowTasks,
 	              windowTasks.length,
@@ -885,6 +900,9 @@ export async function evaluateForExpression(
 	              }),
 	              { ordered: false, paceMs: effective.rateMs }
 	            );
+	            env.emitRuntimeMemoryTrace('for.parallel.batch', 'finish', {
+	              data: { size: windowTasks.length, cap: windowTasks.length }
+	            });
 	            windowResults.push(...parallelWindowResults);
 	          }
 
@@ -927,6 +945,9 @@ export async function evaluateForExpression(
 	        ? tasks.filter(task => task.index !== canaryTask.index)
 	        : (expressionWhenFilter ? [] : tasks);
 	      const cap = Math.min(configuredCap, remainingTasks.length);
+	      env.emitRuntimeMemoryTrace('for.parallel.batch', 'start', {
+	        data: { size: remainingTasks.length, cap }
+	      });
 	      const concurrentResults = await runWithConcurrency(
 	        remainingTasks,
 	        cap,
@@ -943,6 +964,9 @@ export async function evaluateForExpression(
 	        }),
 	        { ordered: false, paceMs: effective.rateMs }
 	      );
+	      env.emitRuntimeMemoryTrace('for.parallel.batch', 'finish', {
+	        data: { size: remainingTasks.length, cap }
+	      });
 	      parallelResults.push(...concurrentResults);
 	    }
 	    for (const item of parallelResults) {

@@ -792,15 +792,33 @@ export async function interpret(
     env.setTraceEnabled(options.enableTrace);
   }
 
-  if (options.trace !== undefined || options.traceFile !== undefined || options.traceStderr !== undefined) {
+  if (
+    options.trace !== undefined ||
+    options.traceMemory === true ||
+    options.traceFile !== undefined ||
+    options.traceStderr !== undefined
+  ) {
     env.setRuntimeTrace(
-      options.trace ?? 'off',
+      options.trace ?? (options.traceMemory === true ? 'effects' : 'off'),
       {
         filePath: options.traceFile,
-        stderr: options.traceStderr
+        stderr: options.traceStderr,
+        memory: options.traceMemory
       }
     );
   }
+  env.emitRuntimeMemoryTrace('run', 'start', {
+    data: {
+      mode,
+      filePath: options.filePath
+    }
+  });
+  env.emitRuntimeMemoryTrace('parse', 'finish', {
+    data: {
+      nodeCount: Array.isArray(ast) ? ast.length : undefined,
+      fromCache: options.ast !== undefined
+    }
+  });
   
   // Set fuzzy matching for local files (default: true)
   if (options.localFileFuzzyMatch !== undefined) {
@@ -823,69 +841,84 @@ export async function interpret(
   
   // Evaluate the AST
   const runExecution = async (): Promise<string> => {
-    const evaluationResult = await env.withExecutionContext(
-      'exe',
-      { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
-      async () => evaluate(ast, env)
-    );
+    env.emitRuntimeMemoryTrace('evaluation', 'start');
 
-    await finalizePendingCheckpointScope(env);
+    try {
+      const evaluationResult = await env.withExecutionContext(
+        'exe',
+        { allowReturn: true, scope: 'script', hasFunctionBoundary: false },
+        async () => evaluate(ast, env)
+      );
 
-    // Script-level return is explicit final output. Non-return final values are ignored.
-    if (isExeReturnControl(evaluationResult.value)) {
-      const materialized = boundary.display(evaluationResult.value.value);
-      if (materialized.text.length > 0) {
-        env.emitEffect('both', materialized.text);
+      env.emitRuntimeMemoryTrace('evaluation', 'finish');
+
+      await finalizePendingCheckpointScope(env);
+
+      // Script-level return is explicit final output. Non-return final values are ignored.
+      if (isExeReturnControl(evaluationResult.value)) {
+        const materialized = boundary.display(evaluationResult.value.value);
+        if (materialized.text.length > 0) {
+          env.emitEffect('both', materialized.text);
+        }
       }
-    }
 
-    // Flush any pending breaks before getting final output
-    env.renderOutput();
+      // Flush any pending breaks before getting final output
+      env.renderOutput();
 
-    // Display collected errors with rich formatting if enabled
-    if (options.outputOptions?.collectErrors) {
-      await env.displayCollectedErrors();
-    }
+      // Display collected errors with rich formatting if enabled
+      if (options.outputOptions?.collectErrors) {
+        await env.displayCollectedErrors();
+      }
 
-    // Get the document from the effect handler
-    const activeEffectHandler = env.getEffectHandler();
-    let output: string;
+      // Get the document from the effect handler
+      const activeEffectHandler = env.getEffectHandler();
+      let output: string;
+
+      const format = options.format || 'markdown';
+
+      if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
+        // Get the accumulated document from the effect handler
+        output = activeEffectHandler.getDocument();
+
+        // Apply output normalization if requested (default format is markdown)
+        if (options.useMarkdownFormatter !== false && format === 'markdown') {
+          const { normalizeOutput } = await import('./output/normalizer');
+          output = normalizeOutput(output);
+        }
+      } else {
+        // Fallback to old node-based system if effect handler doesn't have getDocument
+        const nodes = env.getNodes();
+
+        // Format the output
+        output = await formatOutput(nodes, {
+          format: 'markdown',
+          variables: env.getAllVariables(),
+          useMarkdownFormatter: options.useMarkdownFormatter,
+          normalizeBlankLines: options.normalizeBlankLines
+        });
+      }
+
+      if (format === 'xml') {
+        const { applyOutputFormatToText } = await import('./output/formatter');
+        output = await applyOutputFormatToText(output, format);
+      }
     
-    const format = options.format || 'markdown';
-
-    if (activeEffectHandler && typeof activeEffectHandler.getDocument === 'function') {
-      // Get the accumulated document from the effect handler
-      output = activeEffectHandler.getDocument();
-
-      // Apply output normalization if requested (default format is markdown)
-      if (options.useMarkdownFormatter !== false && format === 'markdown') {
-        const { normalizeOutput } = await import('./output/normalizer');
-        output = normalizeOutput(output);
+      // Call captureEnvironment callback if provided
+      if (options.captureEnvironment) {
+        options.captureEnvironment(env);
       }
-    } else {
-      // Fallback to old node-based system if effect handler doesn't have getDocument
-      const nodes = env.getNodes();
 
-      // Format the output
-      output = await formatOutput(nodes, {
-        format: 'markdown',
-        variables: env.getAllVariables(),
-        useMarkdownFormatter: options.useMarkdownFormatter,
-        normalizeBlankLines: options.normalizeBlankLines
+      env.emitRuntimeMemoryTrace('run', 'finish');
+      return output;
+    } catch (error) {
+      env.emitRuntimeMemoryTrace('run', 'finish', {
+        data: {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
       });
+      throw error;
     }
-
-    if (format === 'xml') {
-      const { applyOutputFormatToText } = await import('./output/formatter');
-      output = await applyOutputFormatToText(output, format);
-    }
-    
-    // Call captureEnvironment callback if provided
-    if (options.captureEnvironment) {
-      options.captureEnvironment(env);
-    }
-
-    return output;
   };
 
   if (mode === 'stream') {

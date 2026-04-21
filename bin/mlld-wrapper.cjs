@@ -5,9 +5,27 @@ const { spawn } = require('child_process');
 const { existsSync } = require('fs');
 const path = require('path');
 const { resolveTsxImportSpecifier } = require('./dev-runtime.cjs');
+const { buildNodeRuntimeArgs, extractWrapperRuntimeArgs } = require('./runtime-options.cjs');
 
 // Get the arguments passed to this script
-const args = process.argv.slice(2);
+let wrapperOptions;
+try {
+  wrapperOptions = extractWrapperRuntimeArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+const args = wrapperOptions.args;
+let nodeRuntimeArgs;
+try {
+  nodeRuntimeArgs = buildNodeRuntimeArgs({
+    heap: wrapperOptions.heap,
+    heapSnapshotNearLimit: wrapperOptions.heapSnapshotNearLimit
+  });
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 // Path to the CLI bundle
 const cliPath = path.resolve(__dirname, '../dist/cli.cjs');
@@ -23,7 +41,7 @@ function spawnCliProcess() {
         process.exit(1);
       }
 
-      return spawn(process.execPath, ['--import', tsxImportSpecifier, devCliPath, ...args], {
+      return spawn(process.execPath, [...nodeRuntimeArgs, '--import', tsxImportSpecifier, devCliPath, ...args], {
         stdio: 'inherit',
         env: process.env
       });
@@ -42,7 +60,7 @@ function spawnCliProcess() {
     require(cliPath);
   `;
 
-  return spawn(process.execPath, ['-e', runner], {
+  return spawn(process.execPath, [...nodeRuntimeArgs, '-e', runner], {
     stdio: 'inherit',
     env: process.env
   });
