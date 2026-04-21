@@ -836,8 +836,209 @@ describe('@policy builtin', () => {
     });
     expect(built.policy.authorizations.deny).toEqual(['deleteDraft']);
     expect(built.policy.authorizations.allow.createDraft).toEqual({
+      kind: 'tool'
+    });
+  });
+
+  it('returns a direct-exe dispatch-ready policy for allow-list tools with no input-record control args', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_note_inputs = {
+        facts: [],
+        data: [content: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @create_note(content) = \`@content\`
+
+      /var tools @writeTools = {
+        create_note: {
+          mlld: @create_note,
+          inputs: @create_note_inputs,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @built = @policy.build({ allow: ["create_note"] }, @writeTools)
+      /var @result = @create_note("hello") with { policy: @built.policy }
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+    const result = await extractBuiltinResult(env, 'result');
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.create_note).toEqual({
+      kind: 'tool'
+    });
+    expect(result).toBe('hello');
+  });
+
+  it('accepts allow-list tools when input-record control args are optional and omitted', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_note_inputs = {
+        facts: [content: string?],
+        data: [title: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @createNote(content, title) = js { return title; }
+
+      /var tools @writeTools = {
+        create_note: {
+          mlld: @createNote,
+          inputs: @create_note_inputs,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @built = @policy.build({ allow: ["create_note"] }, @writeTools)
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.create_note).toEqual({
+      kind: 'constrained',
+      args: {}
+    });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations: built.policy.authorizations,
+        operationName: 'create_note',
+        args: { title: 'note' },
+        controlArgs: ['content']
+      })
+    ).toEqual({
+      decision: 'allow',
+      matched: true
+    });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations: built.policy.authorizations,
+        operationName: 'create_note',
+        args: { content: 'private', title: 'note' },
+        controlArgs: ['content']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      code: 'args_mismatch'
+    });
+  });
+
+  it('accepts object-form true allow when input-record control args are optional and omitted', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_note_inputs = {
+        facts: [content: string?],
+        data: [title: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @createNote(content, title) = js { return title; }
+
+      /var tools @writeTools = {
+        create_note: {
+          mlld: @createNote,
+          inputs: @create_note_inputs,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @built = @policy.build({ allow: { create_note: true } }, @writeTools)
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.create_note).toEqual({
+      kind: 'constrained',
+      args: {}
+    });
+  });
+
+  it('accepts mixed object-form true allow when input-record control args are optional and omitted', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_note_inputs = {
+        facts: [content: string?],
+        data: [title: string],
+        validate: "strict"
+      }
+      /record @create_draft_inputs = {
+        data: [title: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @createNote(content, title) = js { return title; }
+      /exe tool:w @createDraft(title) = js { return title; }
+
+      /var tools @writeTools = {
+        create_note: {
+          mlld: @createNote,
+          inputs: @create_note_inputs,
+          labels: ["tool:w"]
+        },
+        create_draft: {
+          mlld: @createDraft,
+          inputs: @create_draft_inputs,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @built = @policy.build({
+        allow: {
+          create_note: true,
+          create_draft: { args: { title: "draft" } }
+        }
+      }, @writeTools)
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.create_note).toEqual({
+      kind: 'constrained',
+      args: {}
+    });
+    expect(built.policy.authorizations.allow.create_draft).toEqual({
       kind: 'unconstrained'
     });
+  });
+
+  it('rejects allow-list tools when input-record control args are required', async () => {
+    const env = await interpretWithEnv(`
+      /record @create_note_inputs = {
+        facts: [content: string],
+        data: [title: string],
+        validate: "strict"
+      }
+
+      /exe tool:w @createNote(content, title) = js { return title; }
+
+      /var tools @writeTools = {
+        createNote: {
+          mlld: @createNote,
+          inputs: @create_note_inputs,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @built = @policy.build({ allow: ["createNote"] }, @writeTools)
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(false);
+    expect(built.issues).toEqual([
+      expect.objectContaining({
+        reason: 'requires_control_args',
+        tool: 'createNote'
+      })
+    ]);
+    expect(built.policy.authorizations.allow).toEqual({});
   });
 
   it('accepts plain arrays of executable refs for build and validate', async () => {
@@ -861,7 +1062,7 @@ describe('@policy builtin', () => {
       expect(result.valid).toBe(true);
       expect(result.issues).toEqual([]);
       expect(result.policy.authorizations.allow.createDraft).toEqual({
-        kind: 'unconstrained'
+        kind: 'tool'
       });
       expect(result.policy.authorizations.allow).not.toHaveProperty('sendEmail');
     }
@@ -938,7 +1139,7 @@ describe('@policy builtin', () => {
       ])
     );
     expect(compilation.authorizations?.allow?.createDraft).toEqual({
-      kind: 'unconstrained'
+      kind: 'tool'
     });
 
     const sendEmailEntry = compilation.authorizations?.allow?.sendEmail;

@@ -203,6 +203,9 @@ function stripEntryToDeclaredControlArgs(
   tool?: AuthorizationToolContext
 ): AuthorizationEntry {
   const cloned = cloneAuthorizationEntry(entry);
+  if (cloned.kind === 'unconstrained') {
+    return normalizeOmittedControlArgsEntry(tool);
+  }
   if (!tool?.hasControlArgsMetadata || cloned.kind !== 'constrained') {
     return cloned;
   }
@@ -222,6 +225,30 @@ function stripEntryToDeclaredControlArgs(
   }
 
   return { kind: 'constrained', args };
+}
+
+function hasOnlyOptionalInputRecordControlArgs(
+  tool: AuthorizationToolContext | undefined
+): boolean {
+  if (!tool?.inputSchema || !tool.hasControlArgsMetadata || tool.controlArgs.size === 0) {
+    return false;
+  }
+
+  const optionalFactFields = new Set(
+    tool.inputSchema.fields
+      .filter(field => field.classification === 'fact' && field.optional === true)
+      .map(field => field.name)
+  );
+
+  return [...tool.controlArgs].every(argName => optionalFactFields.has(argName));
+}
+
+function normalizeOmittedControlArgsEntry(
+  tool: AuthorizationToolContext | undefined
+): AuthorizationEntry {
+  return hasOnlyOptionalInputRecordControlArgs(tool)
+    ? { kind: 'constrained', args: {} }
+    : { kind: 'unconstrained' };
 }
 
 function cloneAuthorizations(authorizations?: PolicyAuthorizations): PolicyAuthorizations | undefined {
@@ -555,7 +582,7 @@ function normalizeEntry(
   }
 
   if (raw === true) {
-    return { kind: 'unconstrained' };
+    return normalizeOmittedControlArgsEntry(tool);
   }
 
   if (!isPlainObject(raw)) {
@@ -578,7 +605,7 @@ function normalizeEntry(
       path: `authorizations.allow.${toolName}`,
       message: `Authorization entry '{}' for '${toolName}' normalizes to true`
     });
-    return { kind: 'unconstrained' };
+    return normalizeOmittedControlArgsEntry(tool);
   }
 
   const unsupportedKeys = entryKeys.filter(key => key !== 'args');
@@ -602,7 +629,7 @@ function normalizeEntry(
       path: `authorizations.allow.${toolName}`,
       message: `Authorization entry for '${toolName}' without args normalizes to true`
     });
-    return { kind: 'unconstrained' };
+    return normalizeOmittedControlArgsEntry(tool);
   }
 
   if (!isPlainObject(rawArgs)) {

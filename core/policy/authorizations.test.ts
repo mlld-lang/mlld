@@ -164,6 +164,79 @@ describe('policy authorizations', () => {
     );
   });
 
+  it('normalizes true to omitted-control constraints when input-record control args are optional', () => {
+    const toolContext = new Map([
+      [
+        'create_note',
+        {
+          name: 'create_note',
+          params: new Set(['content', 'title']),
+          inputSchema: {
+            recordName: 'create_note_inputs',
+            fields: [
+              {
+                name: 'content',
+                classification: 'fact' as const,
+                valueType: 'string' as const,
+                optional: true
+              },
+              {
+                name: 'title',
+                classification: 'data' as const,
+                valueType: 'string' as const,
+                optional: false
+              }
+            ],
+            factFields: ['content'],
+            dataFields: ['title'],
+            visibleParams: ['content', 'title'],
+            optionalParams: ['content'],
+            exactFields: [],
+            updateFields: [],
+            allowlist: {},
+            blocklist: {},
+            optionalBenignFields: [],
+            correlate: false
+          },
+          controlArgs: new Set(['content']),
+          hasControlArgsMetadata: true,
+          updateArgs: new Set<string>(),
+          hasUpdateArgsMetadata: false
+        }
+      ]
+    ]);
+
+    const validation = validatePolicyAuthorizations(
+      {
+        allow: {
+          create_note: true
+        }
+      },
+      toolContext,
+      {
+        requireKnownTools: true,
+        requireControlArgsMetadata: true
+      }
+    );
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.normalized?.allow?.create_note).toEqual({
+      kind: 'constrained',
+      args: {}
+    });
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations: validation.normalized!,
+        operationName: 'create_note',
+        args: { title: 'note' },
+        controlArgs: ['content']
+      })
+    ).toEqual({
+      decision: 'allow',
+      matched: true
+    });
+  });
+
   it('fails validation when an allowed tool is denied by policy', () => {
     const toolContext = new Map([
       [

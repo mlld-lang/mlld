@@ -855,6 +855,47 @@ function getToolAutoAllowReasonWhenOmitted(
     : null;
 }
 
+function canAllowOmittedOptionalControlArgs(
+  tool: AuthorizationToolContext | undefined
+): boolean {
+  if (!tool?.inputSchema || !tool.hasControlArgsMetadata || tool.controlArgs.size === 0) {
+    return false;
+  }
+
+  const optionalFields = new Set(
+    tool.inputSchema.fields
+      .filter(field => field.classification === 'fact' && field.optional === true)
+      .map(field => field.name)
+  );
+
+  return [...tool.controlArgs].every(argName => optionalFields.has(argName));
+}
+
+function buildAllowListToolEntry(
+  tool: AuthorizationToolContext | undefined
+): true | { args: Record<string, never> } {
+  return canAllowOmittedOptionalControlArgs(tool)
+    ? { args: {} }
+    : true;
+}
+
+function shouldPromoteAllowTrueEntryToTool(options: {
+  tool: AuthorizationToolContext | undefined;
+  form: 'array' | 'object';
+}): boolean {
+  const { tool, form } = options;
+  if (form === 'array') {
+    return tool?.hasControlArgsMetadata === true && tool.controlArgs.size === 0;
+  }
+  if (!tool) {
+    return true;
+  }
+  if (!tool.hasControlArgsMetadata) {
+    return true;
+  }
+  return tool.controlArgs.size === 0;
+}
+
 async function materializeAuthorizationIntentSourceValue(
   value: unknown,
   env: Environment
@@ -960,8 +1001,12 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
   if (isPlainObject(container.allow)) {
     for (const [toolName, entry] of Object.entries(container.allow)) {
       if (entry === true) {
-        nextAllow[toolName] = true;
-        toolLevelAllowTools.add(toolName);
+        const tool = options.toolContext?.get(toolName);
+        const nextEntry = buildAllowListToolEntry(tool);
+        nextAllow[toolName] = nextEntry;
+        if (nextEntry === true && shouldPromoteAllowTrueEntryToTool({ tool, form: 'object' })) {
+          toolLevelAllowTools.add(toolName);
+        }
         continue;
       }
 
@@ -1015,7 +1060,12 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
       }
       const toolName = entry.trim();
       if (!hasOwnProperty(nextAllow, toolName)) {
-        nextAllow[toolName] = true;
+        const tool = options.toolContext?.get(toolName);
+        const nextEntry = buildAllowListToolEntry(tool);
+        nextAllow[toolName] = nextEntry;
+        if (nextEntry === true && shouldPromoteAllowTrueEntryToTool({ tool, form: 'array' })) {
+          toolLevelAllowTools.add(toolName);
+        }
       }
     }
   } else if (container.allow !== undefined && !isPlainObject(container.allow)) {
@@ -1206,7 +1256,7 @@ async function normalizeAuthorizationIntentSource(options: {
   ) {
     const next: Record<string, unknown> = {};
     if (Object.prototype.hasOwnProperty.call(container, 'allow')) {
-      next.allow = cloneRawAllowEntries(container.allow);
+      next.allow = cloneRawAllowEntries(container.allow, options.toolContext);
     }
     if (Object.prototype.hasOwnProperty.call(container, 'deny')) {
       next.deny = Array.isArray(container.deny) ? container.deny.slice() : container.deny;
@@ -1225,7 +1275,7 @@ async function normalizeAuthorizationIntentSource(options: {
 
   return {
     rawAuthorizations: {
-      allow: cloneRawAllowEntries(container)
+      allow: cloneRawAllowEntries(container, options.toolContext)
     },
     rawSource:
       options.mode === 'builder'
@@ -1237,14 +1287,22 @@ async function normalizeAuthorizationIntentSource(options: {
   };
 }
 
-function cloneRawAllowEntries(value: unknown): unknown {
+function cloneRawAllowEntries(
+  value: unknown,
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>
+): unknown {
   if (!isPlainObject(value)) {
     return value;
   }
 
   const next: Record<string, unknown> = {};
   for (const [toolName, rawEntry] of Object.entries(value)) {
-    if (rawEntry === true || !isPlainObject(rawEntry)) {
+    if (rawEntry === true) {
+      next[toolName] = buildAllowListToolEntry(toolContext?.get(toolName));
+      continue;
+    }
+
+    if (!isPlainObject(rawEntry)) {
       next[toolName] = rawEntry;
       continue;
     }
@@ -3074,7 +3132,11 @@ export async function compilePolicyAuthorizations(
   }
 
   for (const toolName of toolLevelAllowTools) {
-    if (normalized.allow?.[toolName]?.kind === 'unconstrained') {
+    const entry = normalized.allow?.[toolName];
+    if (
+      entry?.kind === 'unconstrained'
+      || (entry?.kind === 'constrained' && Object.keys(entry.args).length === 0)
+    ) {
       normalized.allow[toolName] = { kind: 'tool' };
     }
   }
