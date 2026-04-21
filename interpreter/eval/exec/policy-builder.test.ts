@@ -1662,6 +1662,88 @@ describe('@policy builtin', () => {
     expect(compilation.authorizations?.allow).toEqual({});
   });
 
+  it('expands allow true to input-record allowlist constraints for required control args', async () => {
+    const env = await interpretWithEnv(`
+      /var @approvedRecipients = ["ada@example.com"]
+
+      /record @send_email_inputs = {
+        facts: [recipient: string],
+        data: [subject: string],
+        allowlist: { recipient: @approvedRecipients },
+        validate: "strict"
+      }
+
+      /exe tool:w, exfil:send @sendEmail(recipient, subject) = js { return subject; }
+
+      /var tools @writeTools = {
+        sendEmail: {
+          mlld: @sendEmail,
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "tool:w", "exfil:send"],
+          can_authorize: "role:planner"
+        }
+      }
+
+      /exe role:planner @buildPolicy() = [
+        => @policy.build(
+          { allow: { sendEmail: true } },
+          @writeTools,
+          {
+            task: "Send hello to ada@example.com.",
+            basePolicy: {
+              defaults: { rules: [] },
+              operations: { "exfil:send": ["sendEmail"] },
+              authorizations: {
+                deny: [],
+                can_authorize: { "role:planner": ["sendEmail"] }
+              }
+            }
+          }
+        )
+      ]
+
+      /var @built = @buildPolicy()
+    `);
+
+    const built = await extractBuiltinResult(env, 'built');
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.authorizations.allow.sendEmail).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [{ oneOf: ['ada@example.com'], oneOfAttestations: [['known']] }]
+      }
+    });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations: built.policy.authorizations,
+        operationName: 'sendEmail',
+        args: { recipient: 'ada@example.com', subject: 'hello' },
+        controlArgs: ['recipient']
+      })
+    ).toMatchObject({
+      decision: 'allow',
+      matched: true,
+      matchedAttestations: {
+        recipient: ['known']
+      }
+    });
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations: built.policy.authorizations,
+        operationName: 'sendEmail',
+        args: { recipient: 'mallory@example.com', subject: 'hello' },
+        controlArgs: ['recipient']
+      })
+    ).toMatchObject({
+      decision: 'deny',
+      code: 'args_mismatch'
+    });
+  });
+
   it('drops blocklisted array elements for input-record policy checks', async () => {
     const env = await interpretWithEnv(`
       /var @blockedSubjects = ["blocked subject"]

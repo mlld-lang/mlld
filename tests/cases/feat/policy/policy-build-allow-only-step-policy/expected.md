@@ -1,5 +1,5 @@
 true
 no-untrusted-destructive
 delete_draft
-unconstrained
+tool
 draft:hello

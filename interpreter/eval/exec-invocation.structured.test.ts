@@ -1578,6 +1578,43 @@ print(json.dumps(value))
     });
   });
 
+  it('spreads matching object args when dispatching through an executable parameter', async () => {
+    const src = `
+/exe @schedule_meeting(title, start_time, end_time, participants: array) = {
+  title: @title,
+  start_time: @start_time,
+  end_time: @end_time,
+  participants: @participants
+}
+/exe @dispatch(exe, args) = [
+  let @callee = @exe
+  => @callee(@args)
+]
+/var @args = {
+  title: "Lunch",
+  start_time: "2024-05-19 12:00",
+  end_time: "2024-05-19 13:00",
+  participants: ["alice@example.com"]
+}
+/var @result = @dispatch(@schedule_meeting, @args)
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const resultVar = env.getVariable('result');
+    expect(resultVar).toBeDefined();
+    const result = isStructuredValue((resultVar as any).value)
+      ? (resultVar as any).value.data
+      : (resultVar as any).value;
+
+    expect(result).toEqual({
+      title: 'Lunch',
+      start_time: '2024-05-19 12:00',
+      end_time: '2024-05-19 13:00',
+      participants: ['alice@example.com']
+    });
+  });
+
   it('keeps positional object args for plain object executable dispatch when keys do not match params', async () => {
     const src = `
 /exe @wrap(config) = { config: @config }

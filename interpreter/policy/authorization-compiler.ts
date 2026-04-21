@@ -855,11 +855,12 @@ function getToolAutoAllowReasonWhenOmitted(
     : null;
 }
 
-function canAllowOmittedOptionalControlArgs(
-  tool: AuthorizationToolContext | undefined
-): boolean {
+function buildAllowListToolEntry(
+  tool: AuthorizationToolContext | undefined,
+  env?: Environment
+): true | { args: Record<string, unknown> } {
   if (!tool?.inputSchema || !tool.hasControlArgsMetadata || tool.controlArgs.size === 0) {
-    return false;
+    return true;
   }
 
   const optionalFields = new Set(
@@ -867,16 +868,30 @@ function canAllowOmittedOptionalControlArgs(
       .filter(field => field.classification === 'fact' && field.optional === true)
       .map(field => field.name)
   );
+  const args: Record<string, unknown> = {};
 
-  return [...tool.controlArgs].every(argName => optionalFields.has(argName));
-}
+  for (const argName of tool.controlArgs) {
+    if (optionalFields.has(argName)) {
+      continue;
+    }
 
-function buildAllowListToolEntry(
-  tool: AuthorizationToolContext | undefined
-): true | { args: Record<string, never> } {
-  return canAllowOmittedOptionalControlArgs(tool)
-    ? { args: {} }
-    : true;
+    const target = tool.inputSchema.allowlist?.[argName];
+    if (!target || !env) {
+      return true;
+    }
+
+    const members = resolvePolicySetTargetMembers(env, target);
+    if (members.length === 0) {
+      return true;
+    }
+
+    args[argName] = {
+      oneOf: members,
+      oneOfAttestations: members.map(() => ['known'])
+    };
+  }
+
+  return { args };
 }
 
 function shouldPromoteAllowTrueEntryToTool(options: {
@@ -1002,7 +1017,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
     for (const [toolName, entry] of Object.entries(container.allow)) {
       if (entry === true) {
         const tool = options.toolContext?.get(toolName);
-        const nextEntry = buildAllowListToolEntry(tool);
+        const nextEntry = buildAllowListToolEntry(tool, options.env);
         nextAllow[toolName] = nextEntry;
         if (nextEntry === true && shouldPromoteAllowTrueEntryToTool({ tool, form: 'object' })) {
           toolLevelAllowTools.add(toolName);
@@ -1061,7 +1076,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
       const toolName = entry.trim();
       if (!hasOwnProperty(nextAllow, toolName)) {
         const tool = options.toolContext?.get(toolName);
-        const nextEntry = buildAllowListToolEntry(tool);
+        const nextEntry = buildAllowListToolEntry(tool, options.env);
         nextAllow[toolName] = nextEntry;
         if (nextEntry === true && shouldPromoteAllowTrueEntryToTool({ tool, form: 'array' })) {
           toolLevelAllowTools.add(toolName);
@@ -1256,7 +1271,7 @@ async function normalizeAuthorizationIntentSource(options: {
   ) {
     const next: Record<string, unknown> = {};
     if (Object.prototype.hasOwnProperty.call(container, 'allow')) {
-      next.allow = cloneRawAllowEntries(container.allow, options.toolContext);
+      next.allow = cloneRawAllowEntries(container.allow, options.toolContext, options.env);
     }
     if (Object.prototype.hasOwnProperty.call(container, 'deny')) {
       next.deny = Array.isArray(container.deny) ? container.deny.slice() : container.deny;
@@ -1275,7 +1290,7 @@ async function normalizeAuthorizationIntentSource(options: {
 
   return {
     rawAuthorizations: {
-      allow: cloneRawAllowEntries(container, options.toolContext)
+      allow: cloneRawAllowEntries(container, options.toolContext, options.env)
     },
     rawSource:
       options.mode === 'builder'
@@ -1289,7 +1304,8 @@ async function normalizeAuthorizationIntentSource(options: {
 
 function cloneRawAllowEntries(
   value: unknown,
-  toolContext?: ReadonlyMap<string, AuthorizationToolContext>
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>,
+  env?: Environment
 ): unknown {
   if (!isPlainObject(value)) {
     return value;
@@ -1298,7 +1314,7 @@ function cloneRawAllowEntries(
   const next: Record<string, unknown> = {};
   for (const [toolName, rawEntry] of Object.entries(value)) {
     if (rawEntry === true) {
-      next[toolName] = buildAllowListToolEntry(toolContext?.get(toolName));
+      next[toolName] = buildAllowListToolEntry(toolContext?.get(toolName), env);
       continue;
     }
 

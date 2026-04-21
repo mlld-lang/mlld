@@ -235,6 +235,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   optionalParamNames: readonly string[];
   preserveStructuredArgs?: boolean;
   disableNamedObjectSpread?: boolean;
+  allowPartialNamedObjectSpread?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
   materializedArgs?: readonly unknown[];
@@ -496,6 +497,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   optionalParamNames: readonly string[];
   preserveStructuredArgs?: boolean;
   disableNamedObjectSpread?: boolean;
+  allowPartialNamedObjectSpread?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
@@ -508,6 +510,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     env,
     preserveStructuredArgs,
     disableNamedObjectSpread,
+    allowPartialNamedObjectSpread,
     evaluatedArgs,
     originalVariables,
     guardVariableCandidates,
@@ -528,6 +531,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     optionalParamNames,
     preserveStructuredArgs,
     disableNamedObjectSpread,
+    allowPartialNamedObjectSpread,
     evaluatedArgs: materializedArgs,
     materializedArgs,
     originalVariables,
@@ -535,6 +539,17 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     expressionSourceVariables,
     argSourceNames
   });
+}
+
+function shouldNormalizeIndirectExecutableObjectDispatch(variable: Variable): boolean {
+  const importPath = typeof variable.mx?.importPath === 'string'
+    ? variable.mx.importPath
+    : undefined;
+  return (
+    variable.internal?.isParameter === true ||
+    importPath === 'let' ||
+    importPath === 'exe-param'
+  );
 }
 
 async function normalizeExecutableDispatchArguments(
@@ -553,7 +568,8 @@ async function normalizeExecutableDispatchArguments(
     expressionSourceVariables,
     argSourceNames,
     preserveStructuredArgs,
-    disableNamedObjectSpread
+    disableNamedObjectSpread,
+    allowPartialNamedObjectSpread
   } = options;
 
   if (executableParamNames.length === 0) {
@@ -591,9 +607,12 @@ async function normalizeExecutableDispatchArguments(
     normalizedMaterializedArgs.length === 1
     && isPlainObject(normalizedMaterializedArgs[0])
     && Object.keys(normalizedMaterializedArgs[0]).every(key => visibleSet.has(key))
-    && visibleParamNames
-      .filter(param => !optionalSet.has(param))
-      .every(param => Object.prototype.hasOwnProperty.call(normalizedMaterializedArgs[0], param));
+    && (
+      allowPartialNamedObjectSpread === true
+      || visibleParamNames
+        .filter(param => !optionalSet.has(param))
+        .every(param => Object.prototype.hasOwnProperty.call(normalizedMaterializedArgs[0], param))
+    );
 
   if (shouldSpreadNamedObject) {
     const objectArg = normalizedMaterializedArgs[0] as Record<string, unknown>;
@@ -4183,6 +4202,47 @@ async function evaluateExecInvocationInternal(
         : [],
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
+      evaluatedArgs,
+      originalVariables,
+      guardVariableCandidates,
+      expressionSourceVariables,
+      argSourceNames
+    });
+    evaluatedArgs = normalizedArgs.evaluatedArgs;
+    evaluatedArgStrings = normalizedArgs.evaluatedArgStrings;
+    originalVariables.splice(0, originalVariables.length, ...normalizedArgs.originalVariables);
+    guardVariableCandidates.splice(
+      0,
+      guardVariableCandidates.length,
+      ...normalizedArgs.guardVariableCandidates
+    );
+    expressionSourceVariables.splice(
+      0,
+      expressionSourceVariables.length,
+      ...normalizedArgs.expressionSourceVariables
+    );
+    argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
+  } else if (
+    isExecutableVariable(variable) &&
+    shouldNormalizeIndirectExecutableObjectDispatch(variable)
+  ) {
+    const normalizedArgs = await normalizePlainObjectExecutableDispatchArguments({
+      env,
+      executableParamNames: Array.isArray(variable.paramNames)
+        ? variable.paramNames.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
+      optionalParamNames: Array.isArray(definition.optionalParams)
+        ? definition.optionalParams.filter(
+            (paramName): paramName is string =>
+              typeof paramName === 'string' && paramName.trim().length > 0
+          )
+        : [],
+      preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
+      disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
+      allowPartialNamedObjectSpread: true,
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
