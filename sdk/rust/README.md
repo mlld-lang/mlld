@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 fn main() -> mlld::Result<()> {
-    let client = Client::new();
+    let client = Client::new().with_heap("8g"); // optional process-scoped Node heap limit
 
     let output = client.process(r#"show "Hello World""#, None)?;
     println!("{}", output);
@@ -38,6 +38,8 @@ fn main() -> mlld::Result<()> {
         Some(ExecuteOptions {
             state: Some(json!({ "count": 0 })),
             dynamic_modules: Some(modules),
+            trace_memory: Some(true),
+            trace_file: Some("trace.jsonl".into()),
             timeout: Some(Duration::from_secs(10)),
             ..Default::default()
         }),
@@ -116,7 +118,7 @@ let file_sig = handle.write_file("out.txt", "hello from sdk", None)?;
 ### Client
 
 - `Client::new()`
-- `with_command(command)` / `with_command_args(args)` / `with_timeout(timeout)` / `with_working_dir(dir)`
+- `with_command(command)` / `with_command_args(args)` / `with_heap(heap)` / `with_heap_snapshot_near_limit(count)` / `with_timeout(timeout)` / `with_working_dir(dir)`
 - `process(script, opts)` / `process_async(script, opts) -> ProcessHandle`
 - `execute(filepath, payload, opts)` / `execute_async(filepath, payload, opts) -> ExecuteHandle`
 - `analyze(filepath)`
@@ -147,7 +149,7 @@ let file_sig = handle.write_file("out.txt", "hello from sdk", None)?;
 - `payload_labels: Option<HashMap<String, Vec<String>>>`
 - `state` / `dynamic_modules` / `dynamic_module_source`
 - `mcp_servers: Option<HashMap<String, String>>`
-- `mode` / `allow_absolute_paths` / `timeout`
+- `mode` / `allow_absolute_paths` / `trace` / `trace_memory` / `trace_file` / `trace_stderr` / `timeout`
 
 ### Label Helpers
 
@@ -168,3 +170,5 @@ let file_sig = handle.write_file("out.txt", "hello from sdk", None)?;
 - `ExecuteResult.effects` contains output effects with security metadata.
 - `ExecuteResult.metrics` contains timing statistics.
 - `next_event` yields `HandleEvent` with type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
+- `trace_memory: Some(true)` enables `memory.*` runtime trace events for that request; use `trace_file` to persist them as JSONL.
+- `with_heap(...)` and `with_heap_snapshot_near_limit(...)` are process-scoped and apply when the live subprocess starts.

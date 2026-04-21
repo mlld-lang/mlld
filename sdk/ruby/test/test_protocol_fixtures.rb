@@ -99,6 +99,46 @@ class ProtocolFixturesTest < Minitest::Test
     assert_equal({ 'channel' => 'sdk' }, result.metadata)
   end
 
+  def test_process_and_execute_requests_serialize_trace_memory
+    process_params = @client.build_process_request(
+      'show "hi"',
+      trace: 'effects',
+      trace_memory: true,
+      trace_file: 'trace.jsonl',
+      trace_stderr: false
+    )
+
+    assert_equal 'effects', process_params['trace']
+    assert_equal true, process_params['traceMemory']
+    assert_equal 'trace.jsonl', process_params['traceFile']
+    assert_equal false, process_params['traceStderr']
+
+    execute_params = @client.build_execute_request(
+      '/repo/main.mld',
+      { 'name' => 'Ada' },
+      trace_memory: true
+    )
+
+    assert_equal true, execute_params['traceMemory']
+  end
+
+  def test_transport_command_adds_runtime_heap_args
+    wrapper = Mlld::Client.new(heap: '8g', heap_snapshot_near_limit: 2)
+    assert_equal(
+      ['mlld', '--mlld-heap=8g', '--heap-snapshot-near-limit', '2', 'live', '--stdio'],
+      wrapper.send(:transport_command)
+    )
+
+    node = Mlld::Client.new(command: 'node', command_args: ['./dist/cli.cjs'], heap: '8g', heap_snapshot_near_limit: 2)
+    assert_equal(
+      ['node', '--max-old-space-size=8192', '--heapsnapshot-near-heap-limit=2', './dist/cli.cjs', 'live', '--stdio'],
+      node.send(:transport_command)
+    )
+
+    assert_raises(Mlld::Error) { Mlld::Client.new(command: 'node', heap: 'nope').send(:transport_command) }
+    assert_raises(Mlld::Error) { Mlld::Client.new(heap_snapshot_near_limit: 0).send(:transport_command) }
+  end
+
   private
 
   def load_fixture(name)

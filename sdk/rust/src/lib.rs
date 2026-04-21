@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -95,6 +96,12 @@ pub struct Client {
 
     /// Working directory for script execution.
     pub working_dir: Option<String>,
+
+    /// Node heap limit for the mlld subprocess, e.g. "8g" or "8192".
+    pub heap: Option<String>,
+
+    /// V8 heap snapshot count near the heap limit.
+    pub heap_snapshot_near_limit: Option<u32>,
 
     transport: Arc<Mutex<Option<LiveTransport>>>,
     next_request_id: Arc<AtomicU64>,
@@ -500,6 +507,8 @@ impl Client {
             command_args: Vec::new(),
             timeout: Some(Duration::from_secs(30)),
             working_dir: None,
+            heap: None,
+            heap_snapshot_near_limit: None,
             transport: Arc::new(Mutex::new(None)),
             next_request_id: Arc::new(AtomicU64::new(1)),
         }
@@ -530,6 +539,18 @@ impl Client {
     /// Set the working directory.
     pub fn with_working_dir(mut self, dir: impl Into<String>) -> Self {
         self.working_dir = Some(dir.into());
+        self
+    }
+
+    /// Set the Node heap limit for the mlld subprocess.
+    pub fn with_heap(mut self, heap: impl Into<String>) -> Self {
+        self.heap = Some(heap.into());
+        self
+    }
+
+    /// Enable V8 heap snapshots near the heap limit.
+    pub fn with_heap_snapshot_near_limit(mut self, count: u32) -> Self {
+        self.heap_snapshot_near_limit = Some(count);
         self
     }
 
@@ -894,6 +915,8 @@ impl Client {
             *slot = Some(LiveTransport::spawn(
                 &self.command,
                 &self.command_args,
+                self.heap.as_deref(),
+                self.heap_snapshot_near_limit,
                 self.working_dir.as_deref(),
             )?);
         }
@@ -920,8 +943,14 @@ struct LiveTransport {
 }
 
 impl LiveTransport {
-    fn spawn(command: &str, command_args: &[String], working_dir: Option<&str>) -> Result<Self> {
-        let mut args = command_args.to_vec();
+    fn spawn(
+        command: &str,
+        command_args: &[String],
+        heap: Option<&str>,
+        heap_snapshot_near_limit: Option<u32>,
+        working_dir: Option<&str>,
+    ) -> Result<Self> {
+        let mut args = runtime_startup_args(command, command_args, heap, heap_snapshot_near_limit)?;
         args.push("live".to_string());
         args.push("--stdio".to_string());
 
@@ -1151,6 +1180,90 @@ fn value_to_request_id(value: &Value) -> Option<u64> {
         Value::String(text) => text.parse::<u64>().ok(),
         _ => None,
     }
+}
+
+fn runtime_startup_args(
+    command: &str,
+    command_args: &[String],
+    heap: Option<&str>,
+    heap_snapshot_near_limit: Option<u32>,
+) -> Result<Vec<String>> {
+    let mut args = command_args.to_vec();
+    if heap.is_none() && heap_snapshot_near_limit.is_none() {
+        return Ok(args);
+    }
+
+    let mut runtime_args = Vec::new();
+    if let Some(heap) = heap {
+        if is_node_command(command) {
+            runtime_args.push(format!("--max-old-space-size={}", parse_heap_to_mb(heap)?));
+        } else {
+            runtime_args.push(format!("--mlld-heap={heap}"));
+        }
+    }
+
+    if let Some(count) = heap_snapshot_near_limit {
+        if count == 0 {
+            return Err(Error::Transport(
+                "heap snapshot near limit must be a positive integer".to_string(),
+            ));
+        }
+        if is_node_command(command) {
+            runtime_args.push(format!("--heapsnapshot-near-heap-limit={count}"));
+        } else {
+            runtime_args.push("--heap-snapshot-near-limit".to_string());
+            runtime_args.push(count.to_string());
+        }
+    }
+
+    runtime_args.append(&mut args);
+    Ok(runtime_args)
+}
+
+fn is_node_command(command: &str) -> bool {
+    let name = Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(command)
+        .to_ascii_lowercase();
+    matches!(name.as_str(), "node" | "node.exe" | "nodejs" | "nodejs.exe")
+}
+
+fn parse_heap_to_mb(heap: &str) -> Result<u64> {
+    let raw = heap.trim().to_ascii_lowercase();
+    let (number, unit) = if let Some(number) = raw.strip_suffix("gb") {
+        (number.trim(), "gb")
+    } else if let Some(number) = raw.strip_suffix('g') {
+        (number.trim(), "g")
+    } else if let Some(number) = raw.strip_suffix("mb") {
+        (number.trim(), "mb")
+    } else if let Some(number) = raw.strip_suffix('m') {
+        (number.trim(), "m")
+    } else {
+        (raw.as_str(), "mb")
+    };
+
+    let amount: f64 = number.parse().map_err(|_| {
+        Error::Transport("heap must be a positive memory size like 8192, 8192m, or 8g".to_string())
+    })?;
+    if amount <= 0.0 {
+        return Err(Error::Transport(
+            "heap must be a positive memory size".to_string(),
+        ));
+    }
+
+    let mb = if unit == "g" || unit == "gb" {
+        amount * 1024.0
+    } else {
+        amount
+    };
+    if mb < 1.0 {
+        return Err(Error::Transport(
+            "heap must resolve to at least 1 MB".to_string(),
+        ));
+    }
+
+    Ok(mb.round() as u64)
 }
 
 fn normalize_labels<I, S>(labels: I) -> Vec<String>
@@ -1724,6 +1837,9 @@ fn build_process_request(
     if let Some(trace) = opts.trace {
         params.insert("trace".to_string(), Value::String(trace));
     }
+    if let Some(trace_memory) = opts.trace_memory {
+        params.insert("traceMemory".to_string(), Value::Bool(trace_memory));
+    }
     if let Some(trace_file) = opts.trace_file {
         params.insert("traceFile".to_string(), Value::String(trace_file));
     }
@@ -1786,6 +1902,9 @@ fn build_execute_request(
     if let Some(trace) = opts.trace {
         params.insert("trace".to_string(), Value::String(trace));
     }
+    if let Some(trace_memory) = opts.trace_memory {
+        params.insert("traceMemory".to_string(), Value::Bool(trace_memory));
+    }
     if let Some(trace_file) = opts.trace_file {
         params.insert("traceFile".to_string(), Value::String(trace_file));
     }
@@ -1833,6 +1952,9 @@ pub struct ProcessOptions {
     /// Runtime effect tracing: off|effects|verbose.
     pub trace: Option<String>,
 
+    /// Include memory samples in runtime trace events.
+    pub trace_memory: Option<bool>,
+
     /// Write runtime trace events as JSONL.
     pub trace_file: Option<String>,
 
@@ -1869,6 +1991,9 @@ pub struct ExecuteOptions {
 
     /// Runtime effect tracing: off|effects|verbose.
     pub trace: Option<String>,
+
+    /// Include memory samples in runtime trace events.
+    pub trace_memory: Option<bool>,
 
     /// Write runtime trace events as JSONL.
     pub trace_file: Option<String>,
@@ -2302,12 +2427,41 @@ mod tests {
             .with_command("node")
             .with_command_args(["./dist/cli.cjs"])
             .with_timeout(Duration::from_secs(60))
-            .with_working_dir("/tmp");
+            .with_working_dir("/tmp")
+            .with_heap("8g")
+            .with_heap_snapshot_near_limit(2);
 
         assert_eq!(client.command, "node");
         assert_eq!(client.command_args, vec!["./dist/cli.cjs".to_string()]);
         assert_eq!(client.timeout, Some(Duration::from_secs(60)));
         assert_eq!(client.working_dir, Some("/tmp".to_string()));
+        assert_eq!(client.heap, Some("8g".to_string()));
+        assert_eq!(client.heap_snapshot_near_limit, Some(2));
+    }
+
+    #[test]
+    fn test_runtime_startup_args() {
+        assert_eq!(
+            runtime_startup_args("mlld", &[], Some("8g"), Some(2)).unwrap(),
+            vec![
+                "--mlld-heap=8g".to_string(),
+                "--heap-snapshot-near-limit".to_string(),
+                "2".to_string()
+            ]
+        );
+
+        assert_eq!(
+            runtime_startup_args("node", &["./dist/cli.cjs".to_string()], Some("8g"), Some(2))
+                .unwrap(),
+            vec![
+                "--max-old-space-size=8192".to_string(),
+                "--heapsnapshot-near-heap-limit=2".to_string(),
+                "./dist/cli.cjs".to_string()
+            ]
+        );
+
+        assert!(runtime_startup_args("node", &[], Some("nope"), None).is_err());
+        assert!(runtime_startup_args("mlld", &[], None, Some(0)).is_err());
     }
 
     #[test]
@@ -2962,6 +3116,10 @@ mod tests {
                 dynamic_module_source: Some("sdk".to_string()),
                 mcp_servers: Some(mcp_servers.clone()),
                 allow_absolute_paths: Some(true),
+                trace: Some("effects".to_string()),
+                trace_memory: Some(true),
+                trace_file: Some("trace.jsonl".to_string()),
+                trace_stderr: Some(false),
                 timeout: Some(Duration::from_secs(5)),
                 ..Default::default()
             }),
@@ -2987,7 +3145,11 @@ mod tests {
                 },
                 "dynamicModuleSource": "sdk",
                 "mcpServers": { "tools": "uv run python3 mcp_server.py" },
-                "allowAbsolutePaths": true
+                "allowAbsolutePaths": true,
+                "trace": "effects",
+                "traceMemory": true,
+                "traceFile": "trace.jsonl",
+                "traceStderr": false
             })
         );
 
@@ -3002,6 +3164,7 @@ mod tests {
                     vec!["trusted".to_string()],
                 )])),
                 mcp_servers: Some(mcp_servers),
+                trace_memory: Some(true),
                 timeout: Some(Duration::from_secs(6)),
                 ..Default::default()
             }),
@@ -3017,7 +3180,8 @@ mod tests {
                 "recordEffects": true,
                 "payload": { "history": "tool transcript" },
                 "payloadLabels": { "history": ["untrusted", "trusted"] },
-                "mcpServers": { "tools": "uv run python3 mcp_server.py" }
+                "mcpServers": { "tools": "uv run python3 mcp_server.py" },
+                "traceMemory": true
             })
         );
     }

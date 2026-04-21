@@ -82,6 +82,18 @@ Handles follow a three-state lifecycle (PENDING → STREAMING → COMPLETE). Sta
 
 Structured execute results also expose `denials` (guard/policy label-flow denials), `effects` (output effects), and `metrics` (execution timing).
 
+## Runtime Tracing and Heap
+
+All SDKs expose request-scoped runtime trace options for `process` and `execute`:
+
+- `trace` / `traceMemory` or language-idiomatic `trace_memory`
+- `traceFile` / `trace_file`
+- `traceStderr` / `trace_stderr`
+
+Memory tracing emits `memory.*` events with RSS, heap, external, and ArrayBuffer samples. Use a trace file to persist JSONL traces for post-run analysis.
+
+Wrapper SDKs also expose client-scoped heap startup options for the persistent `mlld live --stdio` subprocess. Heap must be configured before the subprocess starts; JS/TS callers run in the host Node process and should use Node heap flags or `NODE_OPTIONS`.
+
 ## MCP Server Injection
 
 `execute` and `process` accept an `mcp_servers` map (logical name → shell command). When a script uses `import tools from mcp "name"`, the runtime checks this map before treating the spec as a command. Each execution gets its own server lifecycle, enabling parallel calls with independent MCP server state.

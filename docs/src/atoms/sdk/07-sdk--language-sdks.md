@@ -57,7 +57,7 @@ Common options for `process` and `execute`:
 | `trace_file` | Write trace events as JSONL to a file path |
 | `trace_stderr` | Mirror trace events to stderr |
 
-Naming follows each language's conventions. JS/TS uses `traceMemory`, `traceFile`, and `traceStderr`; Python uses `trace_memory`, `trace_file`, and `trace_stderr`. Memory trace options are available in JS/TS and Python first; Go, Rust, Ruby, and Elixir are being brought up to the same surface.
+Naming follows each language's conventions. JS/TS and Go use `traceMemory` / `TraceMemory`; Python, Rust, Ruby, and Elixir use `trace_memory`. File and stderr options follow the same convention (`traceFile` / `trace_file`, `traceStderr` / `trace_stderr`).
 
 ## Runtime Tracing and Heap
 
@@ -76,13 +76,13 @@ for event in result.trace_events:
         print(event.event, event.data)
 ```
 
-Process heap configuration is client-scoped for subprocess SDKs because it must be applied before `mlld live --stdio` starts. Python supports this now:
+Process heap configuration is client-scoped for subprocess SDKs because it must be applied before `mlld live --stdio` starts:
 
 ```python
 client = Client(heap="8g", heap_snapshot_near_limit=2)
 ```
 
-When `command="mlld"`, the SDK starts `mlld --mlld-heap=8g --heap-snapshot-near-limit 2 live --stdio`. When `command="node"` with a CLI entrypoint in `command_args`, it passes V8 flags before the entrypoint. JS/TS runs in the host Node process, so launch the host with Node heap flags or `NODE_OPTIONS` instead of setting heap per request.
+When `command="mlld"`, wrapper SDKs start `mlld --mlld-heap=8g --heap-snapshot-near-limit 2 live --stdio`. When `command="node"` with a CLI entrypoint in `command_args`, they pass V8 flags before the entrypoint. JS/TS runs in the host Node process, so launch the host with Node heap flags or `NODE_OPTIONS` instead of setting heap per request.
 
 ## Handle API
 

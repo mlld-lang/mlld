@@ -294,11 +294,13 @@ module Mlld
   end
 
   class Client
-    attr_accessor :command, :command_args, :timeout, :working_dir
+    attr_accessor :command, :command_args, :heap, :heap_snapshot_near_limit, :timeout, :working_dir
 
-    def initialize(command: 'mlld', command_args: nil, timeout: 30.0, working_dir: nil)
+    def initialize(command: 'mlld', command_args: nil, heap: nil, heap_snapshot_near_limit: nil, timeout: 30.0, working_dir: nil)
       @command = command
       @command_args = Array(command_args)
+      @heap = heap
+      @heap_snapshot_near_limit = heap_snapshot_near_limit
       @timeout = timeout
       @working_dir = working_dir
 
@@ -391,6 +393,7 @@ module Mlld
       mode: nil,
       allow_absolute_paths: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil,
       timeout: nil
@@ -407,6 +410,7 @@ module Mlld
         mode: mode,
         allow_absolute_paths: allow_absolute_paths,
         trace: trace,
+        trace_memory: trace_memory,
         trace_file: trace_file,
         trace_stderr: trace_stderr,
         timeout: timeout
@@ -425,6 +429,7 @@ module Mlld
       mode: nil,
       allow_absolute_paths: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil,
       timeout: nil
@@ -441,6 +446,7 @@ module Mlld
         mode: mode,
         allow_absolute_paths: allow_absolute_paths,
         trace: trace,
+        trace_memory: trace_memory,
         trace_file: trace_file,
         trace_stderr: trace_stderr
       )
@@ -464,6 +470,7 @@ module Mlld
       allow_absolute_paths: nil,
       mode: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil,
       timeout: nil
@@ -479,6 +486,7 @@ module Mlld
         allow_absolute_paths: allow_absolute_paths,
         mode: mode,
         trace: trace,
+        trace_memory: trace_memory,
         trace_file: trace_file,
         trace_stderr: trace_stderr,
         timeout: timeout
@@ -496,6 +504,7 @@ module Mlld
       allow_absolute_paths: nil,
       mode: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil,
       timeout: nil
@@ -511,6 +520,7 @@ module Mlld
         allow_absolute_paths: allow_absolute_paths,
         mode: mode,
         trace: trace,
+        trace_memory: trace_memory,
         trace_file: trace_file,
         trace_stderr: trace_stderr
       )
@@ -540,6 +550,7 @@ module Mlld
       mode: nil,
       allow_absolute_paths: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil
     )
@@ -557,6 +568,7 @@ module Mlld
       params['mode'] = mode if mode
       params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
       params['trace'] = trace if trace
+      params['traceMemory'] = trace_memory unless trace_memory.nil?
       params['traceFile'] = trace_file if trace_file
       params['traceStderr'] = trace_stderr unless trace_stderr.nil?
       params
@@ -573,6 +585,7 @@ module Mlld
       allow_absolute_paths: nil,
       mode: nil,
       trace: nil,
+      trace_memory: nil,
       trace_file: nil,
       trace_stderr: nil
     )
@@ -589,6 +602,7 @@ module Mlld
       params['allowAbsolutePaths'] = allow_absolute_paths unless allow_absolute_paths.nil?
       params['mode'] = mode if mode
       params['trace'] = trace if trace
+      params['traceMemory'] = trace_memory unless trace_memory.nil?
       params['traceFile'] = trace_file if trace_file
       params['traceStderr'] = trace_stderr unless trace_stderr.nil?
       params
@@ -1054,7 +1068,7 @@ module Mlld
 
       @stderr_lines = []
 
-      command = [@command, *@command_args, 'live', '--stdio']
+      command = [@command, *transport_runtime_args, 'live', '--stdio']
       options = {}
       options[:chdir] = @working_dir if @working_dir
 
@@ -1063,6 +1077,63 @@ module Mlld
       @stderr_thread = Thread.new { stderr_loop }
     rescue StandardError => e
       raise Error.new("failed to create live transport stdio pipes: #{e}", code: 'TRANSPORT_ERROR')
+    end
+
+    def transport_command
+      [@command, *transport_runtime_args, 'live', '--stdio']
+    end
+
+    def transport_runtime_args
+      runtime_startup_args(@command, @command_args, heap: @heap, heap_snapshot_near_limit: @heap_snapshot_near_limit)
+    end
+
+    def runtime_startup_args(command, command_args, heap: nil, heap_snapshot_near_limit: nil)
+      args = Array(command_args)
+      return args if heap.nil? && heap_snapshot_near_limit.nil?
+
+      runtime_args = []
+      if heap
+        if node_command?(command)
+          runtime_args << "--max-old-space-size=#{parse_heap_to_mb(heap)}"
+        else
+          runtime_args << "--mlld-heap=#{heap}"
+        end
+      end
+
+      unless heap_snapshot_near_limit.nil?
+        count = Integer(heap_snapshot_near_limit)
+        raise Error.new('heap_snapshot_near_limit must be a positive integer', code: 'INVALID_REQUEST') unless count.positive?
+
+        if node_command?(command)
+          runtime_args << "--heapsnapshot-near-heap-limit=#{count}"
+        else
+          runtime_args << '--heap-snapshot-near-limit'
+          runtime_args << count.to_s
+        end
+      end
+
+      runtime_args + args
+    rescue ArgumentError
+      raise Error.new('heap_snapshot_near_limit must be a positive integer', code: 'INVALID_REQUEST')
+    end
+
+    def node_command?(command)
+      %w[node node.exe nodejs nodejs.exe].include?(File.basename(command.to_s).downcase)
+    end
+
+    def parse_heap_to_mb(heap)
+      raw = heap.to_s.strip.downcase
+      match = raw.match(/\A(\d+(?:\.\d+)?)\s*(m|mb|g|gb)?\z/)
+      raise Error.new('heap must be a positive memory size like 8192, 8192m, or 8g', code: 'INVALID_REQUEST') unless match
+
+      amount = Float(match[1])
+      raise Error.new('heap must be a positive memory size', code: 'INVALID_REQUEST') unless amount.positive?
+
+      unit = match[2] || 'mb'
+      mb = %w[g gb].include?(unit) ? amount * 1024 : amount
+      raise Error.new('heap must resolve to at least 1 MB', code: 'INVALID_REQUEST') if mb < 1
+
+      mb.round
     end
 
     def reader_loop

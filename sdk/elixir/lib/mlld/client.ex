@@ -35,6 +35,8 @@ defmodule Mlld.Client do
     "dynamic_module_source" => :dynamic_module_source,
     "mode" => :mode,
     "trace" => :trace,
+    "traceMemory" => :trace_memory,
+    "trace_memory" => :trace_memory,
     "traceFile" => :trace_file,
     "trace_file" => :trace_file,
     "traceStderr" => :trace_stderr,
@@ -52,6 +54,8 @@ defmodule Mlld.Client do
           {:name, GenServer.name()}
           | {:command, String.t()}
           | {:command_args, [String.t()]}
+          | {:heap, String.t() | integer()}
+          | {:heap_snapshot_near_limit, pos_integer()}
           | {:timeout, non_neg_integer() | nil}
           | {:working_dir, String.t()}
           | {:completed_limit, pos_integer()}
@@ -66,6 +70,7 @@ defmodule Mlld.Client do
           | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
           | {:trace, String.t()}
+          | {:trace_memory, boolean()}
           | {:trace_file, String.t()}
           | {:trace_stderr, boolean()}
           | {:allow_absolute_paths, boolean()}
@@ -79,6 +84,7 @@ defmodule Mlld.Client do
           | {:mcp_servers, %{optional(String.t()) => String.t()}}
           | {:mode, :strict | :markdown | String.t()}
           | {:trace, String.t()}
+          | {:trace_memory, boolean()}
           | {:trace_file, String.t()}
           | {:trace_stderr, boolean()}
           | {:allow_absolute_paths, boolean()}
@@ -230,9 +236,13 @@ defmodule Mlld.Client do
         |> put_if_present("state", Keyword.get(opts, :state))
         |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
         |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
-        |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
+        |> put_if_present(
+          "mcpServers",
+          normalize_string_map_option(Keyword.get(opts, :mcp_servers))
+        )
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
         |> put_if_present("trace", Keyword.get(opts, :trace))
+        |> put_if_present("traceMemory", Keyword.get(opts, :trace_memory))
         |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
         |> put_if_present("traceStderr", Keyword.get(opts, :trace_stderr))
         |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
@@ -258,10 +268,14 @@ defmodule Mlld.Client do
         |> put_if_present("state", Keyword.get(opts, :state))
         |> put_if_present("dynamicModules", Keyword.get(opts, :dynamic_modules))
         |> put_if_present("dynamicModuleSource", Keyword.get(opts, :dynamic_module_source))
-        |> put_if_present("mcpServers", normalize_string_map_option(Keyword.get(opts, :mcp_servers)))
+        |> put_if_present(
+          "mcpServers",
+          normalize_string_map_option(Keyword.get(opts, :mcp_servers))
+        )
         |> put_if_present("allowAbsolutePaths", Keyword.get(opts, :allow_absolute_paths))
         |> put_if_present("mode", normalize_mode(Keyword.get(opts, :mode)))
         |> put_if_present("trace", Keyword.get(opts, :trace))
+        |> put_if_present("traceMemory", Keyword.get(opts, :trace_memory))
         |> put_if_present("traceFile", Keyword.get(opts, :trace_file))
         |> put_if_present("traceStderr", Keyword.get(opts, :trace_stderr))
 
@@ -277,7 +291,7 @@ defmodule Mlld.Client do
              call_request(client, "analyze", %{"filepath" => filepath}, nil) do
         {:ok, Types.decode_analyze_result(result, filepath)}
       end
-      end)
+    end)
   end
 
   @spec fs_status(GenServer.server(), String.t() | nil, [fs_status_option()]) ::
@@ -505,6 +519,8 @@ defmodule Mlld.Client do
      %{
        command: Keyword.get(opts, :command, "mlld"),
        command_args: Keyword.get(opts, :command_args, []),
+       heap: Keyword.get(opts, :heap),
+       heap_snapshot_near_limit: Keyword.get(opts, :heap_snapshot_near_limit),
        timeout: normalize_timeout(Keyword.get(opts, :timeout, @default_timeout)),
        working_dir: Keyword.get(opts, :working_dir),
        completed_limit: Keyword.get(opts, :completed_limit, @default_completed_limit),
@@ -741,6 +757,7 @@ defmodule Mlld.Client do
           case value do
             %Mlld.LabeledValue{value: raw_value, labels: labels} ->
               normalized = normalize_labels(labels)
+
               next_labels =
                 if normalized == nil do
                   labels_acc
@@ -763,7 +780,8 @@ defmodule Mlld.Client do
     else
       case normalize_payload_labels(payload_labels) do
         nil ->
-          {:ok, normalized_payload, if(map_size(merged_labels) == 0, do: nil, else: merged_labels)}
+          {:ok, normalized_payload,
+           if(map_size(merged_labels) == 0, do: nil, else: merged_labels)}
 
         explicit_labels when is_map(normalized_payload) ->
           with :ok <- validate_payload_label_keys(normalized_payload, explicit_labels) do
@@ -878,6 +896,8 @@ defmodule Mlld.Client do
     case Port.open(
            command: state.command,
            command_args: state.command_args,
+           heap: state.heap,
+           heap_snapshot_near_limit: state.heap_snapshot_near_limit,
            working_dir: state.working_dir
          ) do
       {:ok, transport} ->

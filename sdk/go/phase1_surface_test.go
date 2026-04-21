@@ -23,6 +23,10 @@ func TestBuildProcessRequestMergesLabeledPayloadAndMcpServers(t *testing.T) {
 		DynamicModuleSource: "sdk",
 		McpServers:          map[string]string{"tools": "uv run python3 mcp_server.py"},
 		AllowAbsolutePaths:  &allowAbsolutePaths,
+		Trace:               "effects",
+		TraceMemory:         true,
+		TraceFile:           "trace.jsonl",
+		TraceStderr:         true,
 		Timeout:             5 * time.Second,
 	})
 	if err != nil {
@@ -56,6 +60,51 @@ func TestBuildProcessRequestMergesLabeledPayloadAndMcpServers(t *testing.T) {
 	}
 	if params["recordEffects"] != true {
 		t.Fatalf("expected recordEffects=true, got %#v", params["recordEffects"])
+	}
+	if params["trace"] != "effects" || params["traceMemory"] != true || params["traceFile"] != "trace.jsonl" || params["traceStderr"] != true {
+		t.Fatalf("unexpected trace params: %#v", params)
+	}
+}
+
+func TestRuntimeStartupArgs(t *testing.T) {
+	wrapperArgs, err := runtimeStartupArgs("mlld", nil, "8g", 2)
+	if err != nil {
+		t.Fatalf("runtimeStartupArgs wrapper failed: %v", err)
+	}
+	if !reflect.DeepEqual(wrapperArgs, []string{"--mlld-heap=8g", "--heap-snapshot-near-limit", "2"}) {
+		t.Fatalf("unexpected wrapper args: %#v", wrapperArgs)
+	}
+
+	nodeArgs, err := runtimeStartupArgs("node", []string{"./dist/cli.cjs"}, "8g", 2)
+	if err != nil {
+		t.Fatalf("runtimeStartupArgs node failed: %v", err)
+	}
+	expectedNode := []string{"--max-old-space-size=8192", "--heapsnapshot-near-heap-limit=2", "./dist/cli.cjs"}
+	if !reflect.DeepEqual(nodeArgs, expectedNode) {
+		t.Fatalf("unexpected node args: %#v", nodeArgs)
+	}
+
+	if _, err := runtimeStartupArgs("node", nil, "nope", 0); err == nil {
+		t.Fatalf("expected invalid heap to fail")
+	}
+	if _, err := runtimeStartupArgs("mlld", nil, "", -1); err == nil {
+		t.Fatalf("expected invalid heap snapshot limit to fail")
+	}
+}
+
+func TestBuildExecuteRequestSerializesTraceMemory(t *testing.T) {
+	client := &Client{Timeout: 30 * time.Second}
+
+	params, _, err := client.buildExecuteRequest("/repo/agent.mld", map[string]any{"name": "Ada"}, &ExecuteOptions{
+		TraceMemory: true,
+		TraceFile:   "trace.jsonl",
+	})
+	if err != nil {
+		t.Fatalf("buildExecuteRequest failed: %v", err)
+	}
+
+	if params["traceMemory"] != true || params["traceFile"] != "trace.jsonl" {
+		t.Fatalf("unexpected trace params: %#v", params)
 	}
 }
 

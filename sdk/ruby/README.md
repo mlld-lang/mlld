@@ -22,7 +22,7 @@ gem install ./mlld-*.gem
 ```ruby
 require 'mlld'
 
-client = Mlld::Client.new
+client = Mlld::Client.new(heap: '8g') # optional process-scoped Node heap limit
 
 output = client.process('/show "Hello World"')
 puts output
@@ -34,6 +34,8 @@ result = client.execute(
   dynamic_modules: {
     '@config' => { 'mode' => 'demo' }
   },
+  trace_memory: true,
+  trace_file: 'trace.jsonl',
   timeout: 10
 )
 puts result.output
@@ -107,10 +109,10 @@ file_sig = handle.write_file('out.txt', 'hello from sdk')
 
 ### Client
 
-- `Mlld::Client.new(command: 'mlld', command_args: nil, timeout: 30.0, working_dir: nil)`
-- `process(script, file_path:, payload:, payload_labels:, state:, dynamic_modules:, dynamic_module_source:, mode:, allow_absolute_paths:, timeout:, mcp_servers:)`
+- `Mlld::Client.new(command: 'mlld', command_args: nil, heap: nil, heap_snapshot_near_limit: nil, timeout: 30.0, working_dir: nil)`
+- `process(script, file_path:, payload:, payload_labels:, state:, dynamic_modules:, dynamic_module_source:, mode:, allow_absolute_paths:, trace:, trace_memory:, trace_file:, trace_stderr:, timeout:, mcp_servers:)`
 - `process_async(...) -> Mlld::ProcessHandle`
-- `execute(filepath, payload = nil, payload_labels:, state:, dynamic_modules:, dynamic_module_source:, allow_absolute_paths:, mode:, timeout:, mcp_servers:)`
+- `execute(filepath, payload = nil, payload_labels:, state:, dynamic_modules:, dynamic_module_source:, allow_absolute_paths:, mode:, trace:, trace_memory:, trace_file:, trace_stderr:, timeout:, mcp_servers:)`
 - `execute_async(...) -> Mlld::ExecuteHandle`
 - `analyze(filepath)`
 - `fs_status(glob = nil, base_path:, timeout:) -> [Mlld::FilesystemStatus]`
@@ -155,3 +157,5 @@ file_sig = handle.write_file('out.txt', 'hello from sdk')
 - `ExecuteResult.effects` contains output effects with security metadata.
 - `ExecuteResult.metrics` contains timing statistics.
 - `next_event` yields `HandleEvent` with type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
+- `trace_memory: true` enables `memory.*` runtime trace events for that request; use `trace_file` to persist them as JSONL.
+- `heap` and `heap_snapshot_near_limit` are process-scoped client options and apply when the live subprocess starts.

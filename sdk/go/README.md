@@ -28,6 +28,7 @@ import (
 
 func main() {
   client := mlld.New()
+  client.Heap = "8g" // optional process-scoped Node heap limit
 
   output, err := client.Process(`show "Hello World"`, nil)
   if err != nil {
@@ -43,6 +44,8 @@ func main() {
       DynamicModules: map[string]any{
         "@config": map[string]any{"mode": "demo"},
       },
+      TraceMemory: true,
+      TraceFile:   "trace.jsonl",
       Timeout: 10 * time.Second,
     },
   )
@@ -175,6 +178,10 @@ fileSig, err := handle.WriteFile("out.txt", "hello from sdk")
 - `McpServers map[string]string`
 - `Mode`
 - `AllowAbsolutePaths`
+- `Trace`
+- `TraceMemory`
+- `TraceFile`
+- `TraceStderr`
 - `Timeout`
 
 ### Label Helpers
@@ -191,4 +198,6 @@ fileSig, err := handle.WriteFile("out.txt", "hello from sdk")
 - `ExecuteResult.Effects` contains output effects with security metadata.
 - `ExecuteResult.Metrics` contains timing statistics.
 - `NextEvent` yields `HandleEvent` with Type `"state_write"`, `"session_write"`, `"guard_denial"`, `"trace_event"`, or `"complete"`.
+- `TraceMemory` enables `memory.*` runtime trace events for that request; use `TraceFile` to persist them as JSONL.
+- `Client.Heap` and `Client.HeapSnapshotNearLimit` are process-scoped and apply when the live subprocess starts.
 - Sync methods are wrappers around async handle methods.

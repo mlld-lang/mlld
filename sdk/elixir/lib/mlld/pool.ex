@@ -17,6 +17,8 @@ defmodule Mlld.Pool do
           | {:checkout_timeout, non_neg_integer()}
           | {:command, String.t()}
           | {:command_args, [String.t()]}
+          | {:heap, String.t() | integer()}
+          | {:heap_snapshot_near_limit, pos_integer()}
           | {:timeout, non_neg_integer() | nil}
           | {:working_dir, String.t()}
 
@@ -75,7 +77,14 @@ defmodule Mlld.Pool do
 
     client_opts =
       opts
-      |> Keyword.take([:command, :command_args, :timeout, :working_dir])
+      |> Keyword.take([
+        :command,
+        :command_args,
+        :heap,
+        :heap_snapshot_near_limit,
+        :timeout,
+        :working_dir
+      ])
 
     clients =
       Enum.map(1..size, fn _ ->

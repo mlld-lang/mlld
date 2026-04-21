@@ -1,7 +1,7 @@
 defmodule Mlld.Phase1SurfaceTest do
   use ExUnit.Case, async: true
 
-  alias Mlld.Client
+  alias Mlld.{Client, Port}
 
   test "labeled helpers wrap values with normalized labels" do
     assert %Mlld.LabeledValue{value: "hello", labels: ["trusted", "extra"]} =
@@ -28,6 +28,10 @@ defmodule Mlld.Phase1SurfaceTest do
               "dynamicModuleSource" => "sdk",
               "mcpServers" => %{"tools" => "uv run python3 mcp_server.py"},
               "allowAbsolutePaths" => true,
+              "trace" => "effects",
+              "traceMemory" => true,
+              "traceFile" => "trace.jsonl",
+              "traceStderr" => false,
               "recordEffects" => true
             }, 5_000} =
              Client.build_process_request("show @payload.history",
@@ -41,6 +45,10 @@ defmodule Mlld.Phase1SurfaceTest do
                mcp_servers: %{"tools" => "uv run python3 mcp_server.py"},
                dynamic_module_source: "sdk",
                allow_absolute_paths: true,
+               trace: "effects",
+               trace_memory: true,
+               trace_file: "trace.jsonl",
+               trace_stderr: false,
                timeout: 5_000
              )
 
@@ -50,13 +58,39 @@ defmodule Mlld.Phase1SurfaceTest do
               "recordEffects" => true,
               "payload" => %{"history" => "tool transcript"},
               "payloadLabels" => %{"history" => ["untrusted", "trusted"]},
-              "mcpServers" => %{"tools" => "uv run python3 mcp_server.py"}
+              "mcpServers" => %{"tools" => "uv run python3 mcp_server.py"},
+              "traceMemory" => true
             }, 6_000} =
-             Client.build_execute_request("/repo/agent.mld", %{"history" => Mlld.untrusted("tool transcript")},
+             Client.build_execute_request(
+               "/repo/agent.mld",
+               %{"history" => Mlld.untrusted("tool transcript")},
                payload_labels: %{"history" => ["trusted"]},
                mcp_servers: %{"tools" => "uv run python3 mcp_server.py"},
+               trace_memory: true,
                timeout: 6_000
              )
+  end
+
+  test "runtime startup args add wrapper and node heap flags" do
+    assert {:ok, ["--mlld-heap=8g", "--heap-snapshot-near-limit", "2"]} =
+             Port.runtime_startup_args("mlld", [], heap: "8g", heap_snapshot_near_limit: 2)
+
+    assert {:ok,
+            [
+              "--max-old-space-size=8192",
+              "--heapsnapshot-near-heap-limit=2",
+              "./dist/cli.cjs"
+            ]} =
+             Port.runtime_startup_args("node", ["./dist/cli.cjs"],
+               heap: "8g",
+               heap_snapshot_near_limit: 2
+             )
+
+    assert {:error, %Mlld.Error{code: "INVALID_REQUEST"}} =
+             Port.runtime_startup_args("node", [], heap: "nope")
+
+    assert {:error, %Mlld.Error{code: "INVALID_REQUEST"}} =
+             Port.runtime_startup_args("mlld", [], heap_snapshot_near_limit: 0)
   end
 
   test "request builders reject invalid payload_labels" do

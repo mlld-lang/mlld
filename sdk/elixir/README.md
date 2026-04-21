@@ -59,6 +59,7 @@ alias Mlld.Client
 {:ok, client} =
   Client.start_link(
     command: "mlld",
+    heap: "8g",
     timeout: 30_000
   )
 
@@ -82,6 +83,8 @@ IO.puts(output)
     dynamic_modules: %{
       "@config" => %{"mode" => "demo"}
     },
+    trace_memory: true,
+    trace_file: "trace.jsonl",
     timeout: 10_000
   )
 
@@ -147,6 +150,7 @@ Returned structs are aligned with other SDK wrappers:
   - `exports`
   - `effects` (`[Mlld.Effect]`)
   - `denials` (`[Mlld.GuardDenial]`)
+  - `trace_events` (`[Mlld.TraceEvent]`)
   - `metrics` (`Mlld.Metrics | nil`)
 - `Mlld.AnalyzeResult`
   - `filepath`
@@ -175,6 +179,8 @@ Returned structs are aligned with other SDK wrappers:
 - `:name` - process registration (`:atom`, `{:global, term}`, `{:via, module, term}`)
 - `:command` - command executable (`"mlld"` default)
 - `:command_args` - prepended args before `live --stdio`
+- `:heap` - process-scoped Node heap limit, e.g. `"8g"` or `8192`
+- `:heap_snapshot_near_limit` - V8 heap snapshot count near the heap limit
 - `:timeout` - default request timeout in milliseconds (default `30_000`)
 - `:working_dir` - working directory for script execution
 - `:completed_limit` - in-memory completed request cache size (default `1024`)
@@ -201,6 +207,10 @@ Local repo CLI example:
 - `:mcp_servers` — `%{"name" => "command"}`
 - `:mode` (`:strict`, `:markdown`, or string)
 - `:allow_absolute_paths`
+- `:trace`
+- `:trace_memory`
+- `:trace_file`
+- `:trace_stderr`
 - `:timeout` (request-specific ms override)
 
 ### Execute options (`execute/4`, `execute_async/4`)
@@ -212,6 +222,10 @@ Local repo CLI example:
 - `:mcp_servers`
 - `:mode`
 - `:allow_absolute_paths`
+- `:trace`
+- `:trace_memory`
+- `:trace_file`
+- `:trace_stderr`
 - `:timeout`
 
 ### Update-state options (`update_state/5`, `Handle.update_state/4`)

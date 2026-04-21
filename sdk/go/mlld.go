@@ -17,7 +17,9 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +41,12 @@ type Client struct {
 
 	// Working directory for script execution.
 	WorkingDir string
+
+	// Heap sets the Node heap limit for the mlld subprocess, e.g. "8g" or "8192".
+	Heap string
+
+	// HeapSnapshotNearLimit enables V8 heap snapshots near the heap limit.
+	HeapSnapshotNearLimit int
 
 	mu          sync.Mutex
 	writeMu     sync.Mutex
@@ -192,6 +200,9 @@ type ProcessOptions struct {
 	// Trace enables runtime effect tracing: off|effects|verbose.
 	Trace string
 
+	// TraceMemory includes memory samples in runtime trace events.
+	TraceMemory bool
+
 	// TraceFile writes runtime trace events as JSONL.
 	TraceFile string
 
@@ -227,6 +238,9 @@ type ExecuteOptions struct {
 
 	// Trace enables runtime effect tracing: off|effects|verbose.
 	Trace string
+
+	// TraceMemory includes memory samples in runtime trace events.
+	TraceMemory bool
 
 	// TraceFile writes runtime trace events as JSONL.
 	TraceFile string
@@ -847,6 +861,9 @@ func (c *Client) buildProcessRequest(script string, opts *ProcessOptions) (map[s
 	if opts.Trace != "" {
 		params["trace"] = opts.Trace
 	}
+	if opts.TraceMemory {
+		params["traceMemory"] = opts.TraceMemory
+	}
 	if opts.TraceFile != "" {
 		params["traceFile"] = opts.TraceFile
 	}
@@ -897,6 +914,9 @@ func (c *Client) buildExecuteRequest(filepath string, payload any, opts *Execute
 	}
 	if opts.Trace != "" {
 		params["trace"] = opts.Trace
+	}
+	if opts.TraceMemory {
+		params["traceMemory"] = opts.TraceMemory
 	}
 	if opts.TraceFile != "" {
 		params["traceFile"] = opts.TraceFile
@@ -1431,7 +1451,10 @@ func (c *Client) ensureLiveLocked() error {
 		return nil
 	}
 
-	args := append([]string{}, c.CommandArgs...)
+	args, err := runtimeStartupArgs(c.Command, c.CommandArgs, c.Heap, c.HeapSnapshotNearLimit)
+	if err != nil {
+		return err
+	}
 	args = append(args, "live", "--stdio")
 
 	cmd := exec.Command(c.Command, args...)
@@ -1465,6 +1488,68 @@ func (c *Client) ensureLiveLocked() error {
 	c.livePending = make(map[uint64]chan liveMessage)
 	go c.readLoop(stdout)
 	return nil
+}
+
+func runtimeStartupArgs(command string, commandArgs []string, heap string, heapSnapshotNearLimit int) ([]string, error) {
+	args := append([]string{}, commandArgs...)
+	if heap == "" && heapSnapshotNearLimit == 0 {
+		return args, nil
+	}
+
+	runtimeArgs := make([]string, 0, 4)
+	if heap != "" {
+		if isNodeCommand(command) {
+			heapMB, err := parseHeapToMB(heap)
+			if err != nil {
+				return nil, err
+			}
+			runtimeArgs = append(runtimeArgs, fmt.Sprintf("--max-old-space-size=%d", heapMB))
+		} else {
+			runtimeArgs = append(runtimeArgs, fmt.Sprintf("--mlld-heap=%s", heap))
+		}
+	}
+
+	if heapSnapshotNearLimit != 0 {
+		if heapSnapshotNearLimit < 0 {
+			return nil, &Error{Code: "INVALID_REQUEST", Message: "heap snapshot near limit must be a positive integer"}
+		}
+		if isNodeCommand(command) {
+			runtimeArgs = append(runtimeArgs, fmt.Sprintf("--heapsnapshot-near-heap-limit=%d", heapSnapshotNearLimit))
+		} else {
+			runtimeArgs = append(runtimeArgs, "--heap-snapshot-near-limit", strconv.Itoa(heapSnapshotNearLimit))
+		}
+	}
+
+	return append(runtimeArgs, args...), nil
+}
+
+func isNodeCommand(command string) bool {
+	name := strings.ToLower(filepath.Base(command))
+	return name == "node" || name == "node.exe" || name == "nodejs" || name == "nodejs.exe"
+}
+
+func parseHeapToMB(heap string) (int, error) {
+	value := strings.TrimSpace(strings.ToLower(heap))
+	match := regexp.MustCompile(`^(\d+(?:\.\d+)?)\s*(m|mb|g|gb)?$`).FindStringSubmatch(value)
+	if match == nil {
+		return 0, &Error{Code: "INVALID_REQUEST", Message: "heap must be a positive memory size like 8192, 8192m, or 8g"}
+	}
+
+	amount, err := strconv.ParseFloat(match[1], 64)
+	if err != nil || amount <= 0 {
+		return 0, &Error{Code: "INVALID_REQUEST", Message: "heap must be a positive memory size"}
+	}
+
+	unit := match[2]
+	mb := amount
+	if unit == "g" || unit == "gb" {
+		mb = amount * 1024
+	}
+	if mb < 1 {
+		return 0, &Error{Code: "INVALID_REQUEST", Message: "heap must resolve to at least 1 MB"}
+	}
+
+	return int(mb + 0.5), nil
 }
 
 func (c *Client) readLoop(stdout io.Reader) {
