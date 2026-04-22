@@ -1,0 +1,103 @@
+/record @calendar_evt = {
+  facts: [id_: string],
+  data: [title: string],
+  key: id_
+}
+
+/record @file_entry = {
+  facts: [id_: string],
+  data: [filename: string],
+  key: id_
+}
+
+/record @add_calendar_event_participants_inputs = {
+  facts: [participants: array, event_id: handle],
+  data: [],
+  correlate: false,
+  validate: "strict"
+}
+
+/record @share_file_inputs = {
+  facts: [email: string, file_id: handle],
+  data: {
+    trusted: [permission: string]
+  },
+  correlate: false,
+  validate: "strict"
+}
+
+/exe @search_calendar_event() = {
+  id_: "24",
+  title: "Introductory meeting"
+} => calendar_evt
+
+/exe @create_file() = {
+  id_: "file-7",
+  filename: "notes.txt"
+} => file_entry
+
+/exe tool:w @add_calendar_event_participants(participants: array, event_id) = `added:@event_id:@participants.length`
+/exe tool:w @share_file(email, file_id, permission) = `shared:@email:@file_id:@permission`
+
+/var tools @writeTools = {
+  add_calendar_event_participants: {
+    mlld: @add_calendar_event_participants,
+    inputs: @add_calendar_event_participants_inputs,
+    labels: ["tool:w", "calendar:w", "exfil:send"]
+  },
+  share_file: {
+    mlld: @share_file,
+    inputs: @share_file_inputs,
+    labels: ["tool:w", "exfil:send", "comm:w"]
+  }
+}
+
+/var @event = @search_calendar_event()
+/var @file = @create_file()
+
+/var @calendarIntent = {
+  known: {
+    add_calendar_event_participants: {
+      participants: ["bob@test.com"]
+    }
+  },
+  resolved: {
+    add_calendar_event_participants: {
+      event_id: @event.id_
+    }
+  }
+}
+
+/var @shareIntent = {
+  known: {
+    share_file: {
+      email: "ada@example.com"
+    }
+  },
+  resolved: {
+    share_file: {
+      file_id: @file.id_
+    }
+  }
+}
+
+/var @calendarBuilt = @policy.build(@calendarIntent, @writeTools, {
+  task: "Add bob@test.com to the Introductory meeting."
+})
+
+/var @shareBuilt = @policy.build(@shareIntent, @writeTools, {
+  task: "Share notes.txt with ada@example.com as read."
+})
+
+/show @calendarBuilt.valid
+/show @writeTools["add_calendar_event_participants"]({
+  participants: ["bob@test.com"],
+  event_id: @event.id_
+}) with { policy: @calendarBuilt.policy }
+
+/show @shareBuilt.valid
+/show @writeTools["share_file"]({
+  email: "ada@example.com",
+  file_id: @file.id_,
+  permission: "read"
+}) with { policy: @shareBuilt.policy }

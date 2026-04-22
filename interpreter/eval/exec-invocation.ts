@@ -1454,10 +1454,16 @@ function matchesInputType(value: unknown, expected: string | undefined): boolean
     case 'object':
       return isPlainObject(resolved);
     case 'handle':
-      return isHandleWrapper(resolved);
+      return isHandleWrapper(resolved) || collectInputFactSources(value).length > 0;
     default:
       return true;
   }
+}
+
+function inputSchemaRequiresStructuredCollectionArgs(
+  metadata: EffectiveToolMetadata | undefined
+): boolean {
+  return metadata?.inputSchema?.fields.some(field => field.valueType === 'handle') === true;
 }
 
 function unwrapPolicySetComparableValue(value: unknown): unknown {
@@ -4202,7 +4208,9 @@ async function evaluateExecInvocationInternal(
         : [],
       definition: collectionDispatchContext.definition,
       metadata: collectionMetadata,
-      preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
+      preserveStructuredArgs:
+        variable.internal?.preserveStructuredArgs === true ||
+        inputSchemaRequiresStructuredCollectionArgs(collectionMetadata),
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,

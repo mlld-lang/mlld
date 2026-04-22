@@ -1380,6 +1380,73 @@ print(json.dumps(value))
     }
   });
 
+  it('accepts fact-backed values for handle-typed collection input records under policy', async () => {
+    const src = `
+/record @event = {
+  facts: [id_: string],
+  data: [subject: string]
+}
+/record @add_parts_inputs = {
+  facts: [participants: array, event_id: handle],
+  data: [],
+  correlate: false,
+  validate: "strict"
+}
+/exe @get_event() = {
+  id_: "24",
+  subject: "launch"
+} => event
+/exe tool:w @add_parts(participants, event_id) = {
+  ok: true,
+  event_id: @event_id,
+  participants: @participants
+}
+/var tools @writeTools = {
+  add_parts: {
+    mlld: @add_parts,
+    inputs: @add_parts_inputs,
+    labels: ["tool:w", "calendar:w"]
+  }
+}
+/var @event = @get_event()
+/var @args = {
+  participants: ["bob@test.com"],
+  event_id: @event.id_
+}
+/var @query = "Add bob@test.com to launch"
+/var @intent = {
+  known: {
+    add_parts: {
+      participants: ["bob@test.com"]
+    }
+  },
+  resolved: {
+    add_parts: {
+      event_id: @event.id_
+    }
+  }
+}
+/var @built = @policy.build(@intent, @writeTools, { task: @query })
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    const invocation = await parseSingleInvocation(
+      '/show @writeTools["add_parts"](@args) with { policy: @built.policy }'
+    );
+    const result = await evaluateExecInvocation(invocation, env);
+
+    expect(isStructuredValue(result.value)).toBe(true);
+    expect((result.value as any).data.ok).toBe(true);
+    expect(asText((result.value as any).data.event_id)).toBe('24');
+    expect((result.value as any).data.participants).toEqual(['bob@test.com']);
+
+    const literalInvocation = await parseSingleInvocation(
+      '/show @writeTools["add_parts"]({ participants: ["bob@test.com"], event_id: "24" }) with { policy: @built.policy }'
+    );
+    await expect(evaluateExecInvocation(literalInvocation, env)).rejects.toThrow(/must be handle/);
+  });
+
   it('uses registry-backed @fyi.known inside exec invocations', async () => {
     const src = `
 /record @contact = { facts: [email: string] }
