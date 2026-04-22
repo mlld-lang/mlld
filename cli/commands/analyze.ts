@@ -35,7 +35,10 @@ import {
 import { isRoleDisplayModeName } from '@core/records/display-mode';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
-import { buildToolInputSchemaFromRecordDefinition } from '@core/tools/input-schema';
+import {
+  buildToolInputSchemaFromRecordDefinition,
+  computeAllowWholeObjectInput
+} from '@core/tools/input-schema';
 import { cloneToolInputSchema } from '@core/types/tools';
 import * as yaml from 'js-yaml';
 import type {
@@ -52,7 +55,8 @@ import { astLocationToSourceLocation } from '@core/types';
 import {
   canUseRecordForOutput,
   canUseRecordForInput,
-  type RecordDefinition
+  type RecordDefinition,
+  type RecordPolicySetTarget
 } from '@core/types/record';
 import type {
   BoxDirectiveNode
@@ -4140,6 +4144,30 @@ function hasUpdateWriteLabel(labels: ReadonlySet<string> | readonly string[]): b
   return false;
 }
 
+function shouldUseWholeObjectInputForStaticTool(options: {
+  toolValue: unknown;
+  recordDefinition: RecordDefinition;
+  executableParamNames: readonly string[];
+  bindKeys: readonly string[];
+}): boolean {
+  const { bindKeys, executableParamNames, recordDefinition, toolValue } = options;
+  const allowWholeObjectInput = computeAllowWholeObjectInput({
+    direct: extractStaticValue(getObjectEntryValue(toolValue, 'direct')),
+    inputs: extractStaticValue(getObjectEntryValue(toolValue, 'inputs'))
+  });
+  if (!allowWholeObjectInput || bindKeys.length !== 0 || executableParamNames.length !== 1) {
+    return false;
+  }
+
+  const singleParamName = executableParamNames[0];
+  if (typeof singleParamName !== 'string' || singleParamName.length === 0) {
+    return false;
+  }
+
+  const fieldSet = new Set(recordDefinition.fields.map(field => field.name));
+  return !fieldSet.has(singleParamName);
+}
+
 function buildRecordDefinitionsMapFromAst(ast: MlldNode[]): Map<string, RecordDefinition> {
   const definitions = new Map<string, RecordDefinition>();
 
@@ -4456,8 +4484,9 @@ function mergeValidationContextAst(
       }
 
       const bindNode = getObjectEntryValue(toolValue, 'bind');
+      const resolvedBindKeys = extractStaticObjectKeys(bindNode) ?? [];
       const boundKeys =
-        (extractStaticObjectKeys(bindNode) ?? [])
+        resolvedBindKeys
           .filter(key => executableTarget.params.has(key));
 
       const inputsValue = extractStaticValue(getObjectEntryValue(toolValue, 'inputs'));
@@ -4465,11 +4494,16 @@ function mergeValidationContextAst(
         const recordName = inputsValue.trim().replace(/^@/, '');
         const recordDefinition = recordDefinitions.get(recordName);
         if (recordDefinition && canUseRecordForInput(recordDefinition)) {
-          const directValue = extractStaticValue(getObjectEntryValue(toolValue, 'direct'));
-          const wholeObjectInput = directValue === true && resolvedBindKeys.length === 0 && executableTarget.params.size === 1;
+          const executableParamNames = [...executableTarget.params];
+          const wholeObjectInput = shouldUseWholeObjectInputForStaticTool({
+            toolValue,
+            recordDefinition,
+            executableParamNames,
+            bindKeys: resolvedBindKeys
+          });
           const inputSchema = buildToolInputSchemaFromRecordDefinition({
             recordDefinition,
-            executableParamNames: [...executableTarget.params],
+            executableParamNames,
             ...(wholeObjectInput ? { wholeObjectInput: true } : {})
           });
 
@@ -4769,11 +4803,16 @@ function collectToolCatalogDiagnostics(
         continue;
       }
 
-      const directValue = extractStaticValue(getObjectEntryValue(toolValue, 'direct'));
-      const wholeObjectInput = directValue === true && resolvedBindKeys.length === 0 && (executable.params ?? []).length === 1;
+      const executableParamNames = executable.params ?? [];
+      const wholeObjectInput = shouldUseWholeObjectInputForStaticTool({
+        toolValue,
+        recordDefinition,
+        executableParamNames,
+        bindKeys: resolvedBindKeys
+      });
       const schema = buildToolInputSchemaFromRecordDefinition({
         recordDefinition,
-        executableParamNames: executable.params ?? [],
+        executableParamNames,
         ...(wholeObjectInput ? { wholeObjectInput: true } : {})
       });
       const fieldNames = schema.fields.map(field => field.name);
@@ -5778,6 +5817,31 @@ function resolveStaticExpression(
   return { ok: false, failure: 'dynamic' };
 }
 
+function resolveStaticPolicySetTargetMembers(
+  target: RecordPolicySetTarget,
+  bindings: ReadonlyMap<string, TopLevelStaticBinding>
+): readonly unknown[] | undefined {
+  if (target.kind === 'array') {
+    return [...target.values];
+  }
+
+  const binding = bindings.get(target.name);
+  if (!binding) {
+    return undefined;
+  }
+
+  const resolved = resolveStaticExpression(binding.node, bindings);
+  if (!resolved.ok) {
+    return undefined;
+  }
+
+  if (Array.isArray(resolved.value)) {
+    return resolved.value;
+  }
+
+  return resolved.value === undefined ? [] : [resolved.value];
+}
+
 function classifyPolicyCallSource(node: unknown): PolicyCallSourceKind {
   if (!node || typeof node !== 'object') {
     return 'unknown';
@@ -6071,7 +6135,9 @@ function collectPolicyCallDiagnostics(
     const staticAnalysis = analyzeStaticPolicyAuthorizationIntent({
       rawIntent: resolvedIntent.value,
       toolContext,
-      taskText
+      taskText,
+      resolvePolicySetTargetMembers: target =>
+        resolveStaticPolicySetTargetMembers(target, bindings)
     });
     const authorizationValidation = validatePolicyAuthorizations(
       staticAnalysis.rawAuthorizations,

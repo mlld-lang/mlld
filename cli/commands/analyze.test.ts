@@ -596,6 +596,49 @@ show @taskPolicy
     expect(result.valid).toBe(true);
   });
 
+  it('accepts allow true when a required input-record control arg has a static allowlist', async () => {
+    const modulePath = await writeModule('analyze-policy-build-allow-true-allowlist.mld', `var @approvedRecipients = ["ada-recipient"]
+
+record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string],
+  allowlist: { recipient: @approvedRecipients },
+  validate: "strict"
+}
+
+exe tool:w @sendEmail(recipient, subject) = cmd { echo "ok" }
+
+var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+
+var @built = @policy.build({
+  allow: {
+    sendEmail: true
+  }
+}, @writeTools)
+show @built
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    expect((result.errors ?? []).map(entry => entry.message).join('\n')).not.toContain(
+      "Tool 'sendEmail' cannot use true in policy.authorizations"
+    );
+    expect(result.policyCalls).toEqual([
+      expect.objectContaining({
+        callee: '@policy.build',
+        status: 'analyzed'
+      })
+    ]);
+    expect(result.policyCalls?.[0]).not.toHaveProperty('diagnostics');
+  });
+
   it('does not validate generic authorizations objects as policy declarations', async () => {
     const modulePath = await writeModule('analyze-generic-authorizations-intent.mld', `var @decision = {
   authorizations: {
@@ -1322,6 +1365,33 @@ show @built
     expect((result.errors ?? []).map(entry => entry.message)).not.toContain(
       "Tool 'send_email' inputs reference unknown record '@send_email_inputs'"
     );
+  });
+
+  it('accepts default whole-object input-record catalog entries for single wrapper params', async () => {
+    const modulePath = await writeModule('analyze-input-record-whole-object-default.mld', `
+/record @send_email_inputs = {
+  facts: [recipient: string],
+  data: [subject: string, body: string],
+  validate: "strict"
+}
+
+/exe tool:w @send_email(payload) = js { return "ok"; }
+
+/var tools @agentTools = {
+  send_email: {
+    mlld: @send_email,
+    inputs: @send_email_inputs,
+    labels: ["execute:w"]
+  }
+}
+`);
+
+    const result = await analyze(modulePath, { checkVariables: false });
+
+    expect(result.valid).toBe(true);
+    const messages = (result.errors ?? []).map(entry => entry.message).join('\n');
+    expect(messages).not.toContain("reference unknown parameters");
+    expect(messages).not.toContain("must cover all parameters");
   });
 
   it('catches statically knowable record definition errors', async () => {

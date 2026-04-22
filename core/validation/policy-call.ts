@@ -1,4 +1,5 @@
 import type { AuthorizationToolContext } from '@core/policy/authorizations';
+import type { RecordPolicySetTarget } from '@core/types/record';
 
 export type StaticPolicyCallIssueReason =
   | 'invalid_authorization'
@@ -21,6 +22,10 @@ export interface StaticPolicyCallAnalysisResult {
   rawAuthorizations?: unknown;
   issues: StaticPolicyCallIssue[];
 }
+
+export type StaticPolicySetTargetMemberResolver = (
+  target: RecordPolicySetTarget
+) => readonly unknown[] | undefined;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -67,14 +72,64 @@ function cloneRawAuthorizationEntry(entry: unknown): unknown {
   };
 }
 
-function cloneRawAllowEntries(value: unknown): unknown {
+function buildAllowListToolEntry(
+  tool: AuthorizationToolContext | undefined,
+  resolvePolicySetTargetMembers?: StaticPolicySetTargetMemberResolver
+): true | { args: Record<string, unknown> } {
+  if (!tool?.inputSchema || !tool.hasControlArgsMetadata || tool.controlArgs.size === 0) {
+    return true;
+  }
+
+  const optionalFields = new Set(
+    tool.inputSchema.fields
+      .filter(field => field.classification === 'fact' && field.optional === true)
+      .map(field => field.name)
+  );
+  const args: Record<string, unknown> = {};
+
+  for (const argName of tool.controlArgs) {
+    if (optionalFields.has(argName)) {
+      continue;
+    }
+
+    const target = tool.inputSchema.allowlist?.[argName];
+    if (!target || !resolvePolicySetTargetMembers) {
+      return true;
+    }
+
+    const members = resolvePolicySetTargetMembers(target);
+    if (!members || members.length === 0) {
+      return true;
+    }
+
+    args[argName] = {
+      oneOf: [...members],
+      oneOfAttestations: members.map(() => ['known'])
+    };
+  }
+
+  return { args };
+}
+
+function cloneRawAllowEntries(
+  value: unknown,
+  toolContext?: ReadonlyMap<string, AuthorizationToolContext>,
+  resolvePolicySetTargetMembers?: StaticPolicySetTargetMemberResolver
+): unknown {
   if (!isPlainObject(value)) {
     return value;
   }
 
   const next: Record<string, unknown> = {};
   for (const [toolName, rawEntry] of Object.entries(value)) {
-    if (rawEntry === true || !isPlainObject(rawEntry)) {
+    if (rawEntry === true) {
+      next[toolName] = buildAllowListToolEntry(
+        toolContext?.get(toolName),
+        resolvePolicySetTargetMembers
+      );
+      continue;
+    }
+    if (!isPlainObject(rawEntry)) {
       next[toolName] = rawEntry;
       continue;
     }
@@ -422,6 +477,7 @@ function normalizeBucketedAuthorizationIntent(options: {
   rawIntent: unknown;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
+  resolvePolicySetTargetMembers?: StaticPolicySetTargetMemberResolver;
   issues: StaticPolicyCallIssue[];
 }): unknown {
   if (!isPlainObject(options.rawIntent)) {
@@ -436,7 +492,11 @@ function normalizeBucketedAuthorizationIntent(options: {
       : undefined;
 
   if (isPlainObject(container.allow)) {
-    const explicitAllow = cloneRawAllowEntries(container.allow);
+    const explicitAllow = cloneRawAllowEntries(
+      container.allow,
+      options.toolContext,
+      options.resolvePolicySetTargetMembers
+    );
     if (isPlainObject(explicitAllow)) {
       for (const [toolName, entry] of Object.entries(explicitAllow)) {
         nextAllow[toolName] = cloneRawAuthorizationEntry(entry);
@@ -520,7 +580,10 @@ function normalizeBucketedAuthorizationIntent(options: {
       }
       const toolName = entry.trim();
       if (!hasOwnProperty(nextAllow, toolName)) {
-        nextAllow[toolName] = true;
+        nextAllow[toolName] = buildAllowListToolEntry(
+          options.toolContext?.get(toolName),
+          options.resolvePolicySetTargetMembers
+        );
       }
     }
   } else if (container.allow !== undefined && !isPlainObject(container.allow)) {
@@ -599,6 +662,7 @@ function normalizeStaticAuthorizationIntent(options: {
   rawIntent: unknown;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
+  resolvePolicySetTargetMembers?: StaticPolicySetTargetMemberResolver;
   issues: StaticPolicyCallIssue[];
 }): unknown {
   if (hasBucketedAuthorizationIntent(options.rawIntent)) {
@@ -613,7 +677,11 @@ function normalizeStaticAuthorizationIntent(options: {
   if (hasOwnProperty(raw, 'allow') || hasOwnProperty(raw, 'deny')) {
     const next: Record<string, unknown> = {};
     if (hasOwnProperty(raw, 'allow')) {
-      next.allow = cloneRawAllowEntries(raw.allow);
+      next.allow = cloneRawAllowEntries(
+        raw.allow,
+        options.toolContext,
+        options.resolvePolicySetTargetMembers
+      );
     }
     if (hasOwnProperty(raw, 'deny')) {
       next.deny = Array.isArray(raw.deny) ? raw.deny.slice() : raw.deny;
@@ -622,7 +690,11 @@ function normalizeStaticAuthorizationIntent(options: {
   }
 
   return {
-    allow: cloneRawAllowEntries(raw)
+    allow: cloneRawAllowEntries(
+      raw,
+      options.toolContext,
+      options.resolvePolicySetTargetMembers
+    )
   };
 }
 
@@ -701,12 +773,14 @@ export function analyzeStaticPolicyAuthorizationIntent(options: {
   rawIntent: unknown;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   taskText?: string;
+  resolvePolicySetTargetMembers?: StaticPolicySetTargetMemberResolver;
 }): StaticPolicyCallAnalysisResult {
   const issues: StaticPolicyCallIssue[] = [];
   const rawAuthorizations = normalizeStaticAuthorizationIntent({
     rawIntent: options.rawIntent,
     toolContext: options.toolContext,
     taskText: options.taskText,
+    resolvePolicySetTargetMembers: options.resolvePolicySetTargetMembers,
     issues
   });
 
