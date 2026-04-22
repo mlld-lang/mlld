@@ -1711,6 +1711,24 @@ export class Environment
     return this.getRootEnvironment().sessionInstances?.get(normalizedSessionId)?.get(normalizedDeclarationId);
   }
 
+  findSessionInstanceByDefinition(declarationId: string): SessionFrameInstance | undefined {
+    const normalizedId = typeof declarationId === 'string' ? declarationId.trim() : '';
+    if (!normalizedId) {
+      return undefined;
+    }
+    const allFrames = this.getRootEnvironment().sessionInstances;
+    if (!allFrames) {
+      return undefined;
+    }
+    for (const bucket of allFrames.values()) {
+      const instance = bucket.get(normalizedId);
+      if (instance) {
+        return instance;
+      }
+    }
+    return undefined;
+  }
+
   getSessionInstancesForFrame(sessionId: string): SessionFrameInstance[] {
     const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
     if (!normalizedSessionId) {
@@ -3594,6 +3612,10 @@ export class Environment
   getLlmToolConfig(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined {
     if (this.llmToolConfig !== undefined) return this.llmToolConfig;
     return this.parent?.getLlmToolConfig();
+  }
+
+  getLocalLlmToolConfig(): import('./executors/call-mcp-config').CallMcpConfig | null | undefined {
+    return this.llmToolConfig;
   }
 
   getCurrentLlmSessionId(): string | undefined {

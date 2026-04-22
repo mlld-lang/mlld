@@ -4253,6 +4253,10 @@ async function evaluateExecInvocationInternal(
   if (importedExecutableSourcePath) {
     const sourceScopedEnv = runtimeEnv.createChild();
     sourceScopedEnv.setModuleIsolated(true);
+    const inheritedScopedConfig = runtimeEnv.getLocalScopedEnvironmentConfig();
+    if (inheritedScopedConfig) {
+      sourceScopedEnv.setScopedEnvironmentConfig(inheritedScopedConfig);
+    }
     if (runtimeEnv.getCurrentFilePath() !== importedExecutableSourcePath) {
       sourceScopedEnv.setCurrentFilePath(importedExecutableSourcePath);
     }

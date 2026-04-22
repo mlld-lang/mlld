@@ -216,6 +216,17 @@ export async function resolveVariable(
     if (definition) {
       const sessionId = env.getCurrentLlmSessionId();
       if (!sessionId) {
+        const fallbackInstance = env.findSessionInstanceByDefinition(definition.id);
+        if (fallbackInstance) {
+          if (context === ResolutionContext.FieldAccess) {
+            return createSessionAccessorVariable(variable.name, definition, env);
+          }
+          const preserveAsSnapshotVariable = shouldPreserveVariable(context);
+          if (preserveAsSnapshotVariable) {
+            return createSessionSnapshotVariable(variable.name, definition, env);
+          }
+          return createSessionSnapshot(definition, env);
+        }
         return shouldPreserveVariable(context) ? variable : variable.value;
       }
 

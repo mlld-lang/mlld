@@ -1445,31 +1445,29 @@ export function resolveAttachedSessionInstance(
   env: Environment
 ): RuntimeSessionInstance | undefined {
   const sessionId = env.getCurrentLlmSessionId();
-  if (!sessionId) {
-    return undefined;
+  if (sessionId) {
+    const direct = env.getSessionInstance(sessionId, definition.id) as RuntimeSessionInstance | undefined;
+    if (direct) {
+      return direct;
+    }
   }
-  return env.getSessionInstance(sessionId, definition.id) as RuntimeSessionInstance | undefined;
+  return env.findSessionInstanceByDefinition(definition.id) as RuntimeSessionInstance | undefined;
 }
 
 export function requireAttachedSessionInstance(
   definition: SessionDefinition,
   env: Environment
 ): RuntimeSessionInstance {
-  const sessionId = env.getCurrentLlmSessionId();
-  if (!sessionId) {
-    throw createSessionError(
-      `Session @${definition.canonicalName} is only live inside an attached LLM frame.`,
-      'SESSION_NOT_ATTACHED'
-    );
-  }
-
   const instance = resolveAttachedSessionInstance(definition, env);
   if (instance) {
     return instance;
   }
 
+  const sessionId = env.getCurrentLlmSessionId();
   throw createSessionError(
-    `Session @${definition.canonicalName} is not attached to the current frame.`,
+    sessionId
+      ? `Session @${definition.canonicalName} is not attached to the current frame.`
+      : `Session @${definition.canonicalName} is only live inside an attached LLM frame.`,
     'SESSION_NOT_ATTACHED'
   );
 }
@@ -1597,7 +1595,10 @@ export function disposeSessionFrame(sessionId: string, env: Environment): void {
       }
     });
   }
-  env.disposeSessionInstances(sessionId);
+  // Session instances are kept alive after frame exit so outer scopes and
+  // post-call reads can still access session state. Each call has its own
+  // sessionId key, so instances from different calls don't conflict.
+  // Instances are cleaned up when the root environment is disposed.
 }
 
 export function emitAttachedSessionFinalSnapshot(env: Environment): void {

@@ -260,7 +260,7 @@ describe('Variable Resolution Strategy', () => {
       expect(objResult).toEqual({ key: 'value' });
     });
 
-    it('throws when a session schema is referenced from a different live frame without walking outward', async () => {
+    it('resolves session from ancestor frame when current frame has a different sessionId', async () => {
       const env = createEnv();
       const definition = createSessionDefinition('planner');
       const sessionVar = createSessionSchemaVariable('planner', definition);
@@ -274,9 +274,8 @@ describe('Variable Resolution Strategy', () => {
       const nested = env.createChild();
       setActiveLlmSession(nested, 'inner-session');
 
-      await expect(extractVariableValue(sessionVar, nested)).rejects.toMatchObject({
-        code: 'SESSION_NOT_ATTACHED'
-      });
+      const result = await extractVariableValue(sessionVar, nested);
+      expect(result).toEqual({ count: 7 });
     });
   });
 });
