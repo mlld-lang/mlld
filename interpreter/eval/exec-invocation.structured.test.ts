@@ -1396,6 +1396,10 @@ print(json.dumps(value))
   id_: "24",
   subject: "launch"
 } => event
+/exe @make_args(event) = {
+  participants: ["bob@test.com"],
+  event_id: @event.id_
+}
 /exe tool:w @add_parts(participants, event_id) = {
   ok: true,
   event_id: @event_id,
@@ -1409,10 +1413,7 @@ print(json.dumps(value))
   }
 }
 /var @event = @get_event()
-/var @args = {
-  participants: ["bob@test.com"],
-  event_id: @event.id_
-}
+/var @args = @make_args(@event)
 /var @query = "Add bob@test.com to launch"
 /var @intent = {
   known: {

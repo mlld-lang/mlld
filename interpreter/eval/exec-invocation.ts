@@ -314,6 +314,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function getNamedObjectSpreadCandidate(value: unknown): Record<string, unknown> | undefined {
+  const candidate = isStructuredValue(value) ? asData(value) : value;
+  return isPlainObject(candidate) ? candidate : undefined;
+}
+
 function hasSecurityDescriptorSignals(descriptor: SecurityDescriptor | undefined): boolean {
   return Boolean(
     descriptor &&
@@ -646,21 +651,23 @@ async function normalizeExecutableDispatchArguments(
           preserveStructuredArgSecurity(arg, originalVariables[index], preserveStructuredArgs)
         )
       );
+  const namedObjectArg = normalizedMaterializedArgs.length === 1
+    ? getNamedObjectSpreadCandidate(normalizedMaterializedArgs[0])
+    : undefined;
 
   const shouldSpreadNamedObject =
     !disableNamedObjectSpread &&
-    normalizedMaterializedArgs.length === 1
-    && isPlainObject(normalizedMaterializedArgs[0])
-    && Object.keys(normalizedMaterializedArgs[0]).every(key => visibleSet.has(key))
+    namedObjectArg !== undefined
+    && Object.keys(namedObjectArg).every(key => visibleSet.has(key))
     && (
       allowPartialNamedObjectSpread === true
       || visibleParamNames
         .filter(param => !optionalSet.has(param))
-        .every(param => Object.prototype.hasOwnProperty.call(normalizedMaterializedArgs[0], param))
+        .every(param => Object.prototype.hasOwnProperty.call(namedObjectArg, param))
     );
 
   if (shouldSpreadNamedObject) {
-    const objectArg = normalizedMaterializedArgs[0] as Record<string, unknown>;
+    const objectArg = namedObjectArg as Record<string, unknown>;
     for (const paramName of visibleParamNames) {
       if (!Object.prototype.hasOwnProperty.call(objectArg, paramName)) {
         continue;
