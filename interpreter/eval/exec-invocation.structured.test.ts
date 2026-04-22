@@ -1428,6 +1428,18 @@ print(json.dumps(value))
   }
 }
 /var @built = @policy.build(@intent, @writeTools, { task: @query })
+/var @claimedPolicy = {
+  authorizations: {
+    allow: {
+      add_parts: {
+        args: {
+          participants: { eq: ["bob@test.com"], attestations: ["known"] },
+          event_id: { eq: "24", attestations: ["fact:@event.id_"] }
+        }
+      }
+    }
+  }
+}
 `;
     const { ast } = await parse(src);
     await evaluate(ast, env);
@@ -1442,10 +1454,151 @@ print(json.dumps(value))
     expect(asText((result.value as any).data.event_id)).toBe('24');
     expect((result.value as any).data.participants).toEqual(['bob@test.com']);
 
-    const literalInvocation = await parseSingleInvocation(
+    const literalWithBuiltPolicyInvocation = await parseSingleInvocation(
       '/show @writeTools["add_parts"]({ participants: ["bob@test.com"], event_id: "24" }) with { policy: @built.policy }'
     );
-    await expect(evaluateExecInvocation(literalInvocation, env)).rejects.toThrow(/must be handle/);
+    const literalWithBuiltPolicyResult = await evaluateExecInvocation(literalWithBuiltPolicyInvocation, env);
+    expect((literalWithBuiltPolicyResult.value as any).data.ok).toBe(true);
+    expect(asText((literalWithBuiltPolicyResult.value as any).data.event_id)).toBe('24');
+
+    const literalWithClaimedPolicyInvocation = await parseSingleInvocation(
+      '/show @writeTools["add_parts"]({ participants: ["bob@test.com"], event_id: "24" }) with { policy: @claimedPolicy }'
+    );
+    await expect(evaluateExecInvocation(literalWithClaimedPolicyInvocation, env)).rejects.toThrow(
+      /lacks required proof|must be handle/
+    );
+  });
+
+  it('preserves fact-backed handle fields through rig-style arg rebuild before policy collection dispatch', async () => {
+    const src = `
+/record @event = {
+  facts: [id_: string],
+  data: [subject: string]
+}
+/record @add_parts_inputs = {
+  facts: [participants: array, event_id: handle],
+  data: [],
+  correlate: false,
+  validate: "strict"
+}
+/exe @get_event() = {
+  id_: "24",
+  subject: "launch"
+} => event
+/exe @pairsToObject(pairs) = [
+  if !@pairs.isDefined() [ => {} ]
+  let @acc = loop(1000) [
+    let @cursor = when [
+      @input["_test_cursor"] == "pairsToObject" => @input
+      * => { _test_cursor: "pairsToObject", index: 0, obj: {} }
+    ]
+    if @cursor.index >= @pairs.length [ done @cursor ]
+    let @pair = @pairs.at(@cursor.index)
+    let @nextObj = @cursor.obj
+    if @pair.key.isDefined() [
+      @nextObj += { [@pair.key]: @pair.value }
+    ]
+    continue {
+      _test_cursor: "pairsToObject",
+      index: @cursor.index + 1,
+      obj: @nextObj
+    }
+  ]
+  => @acc.obj
+]
+/exe @controlArgValues(compiledEntries, controlArgs) = [
+  let @controlArgNames = for @argName in (@controlArgs ?? []) => \`@argName\`
+  let @pairs = for @entry in (@compiledEntries ?? []) when @controlArgNames.includes(\`@entry.arg\`) => {
+    key: @entry.arg,
+    value: @entry.value
+  }
+  => @pairsToObject(@pairs)
+]
+/exe @mergeArgSources(values) = [
+  let @pairs = loop(1000) [
+    let @ctx = when [
+      @input["_test_cursor"] == "mergeArgSources" => @input
+      * => { _test_cursor: "mergeArgSources", index: 0, values: [] }
+    ]
+    if @ctx.index >= @values.length [ done @ctx.values ]
+    let @source = @values[@ctx.index] ?? {}
+    let @sourcePairs = for @argKey, @argValue in @source => {
+      key: @argKey,
+      value: @argValue
+    }
+    continue {
+      _test_cursor: "mergeArgSources",
+      index: @ctx.index + 1,
+      values: @ctx.values.concat(@sourcePairs)
+    }
+  ]
+  => @pairsToObject(@pairs)
+]
+/exe tool:w @add_parts(participants, event_id) = {
+  ok: true,
+  event_id: @event_id,
+  participants: @participants
+}
+/var tools @writeTools = {
+  add_parts: {
+    mlld: @add_parts,
+    inputs: @add_parts_inputs,
+    labels: ["tool:w", "calendar:w"]
+  }
+}
+/var @event = @get_event()
+/var @compiledEntries = [
+  { arg: "participants", value: ["bob@test.com"] },
+  { arg: "event_id", value: @event.id_ }
+]
+/var @rebuiltArgs = @controlArgValues(@compiledEntries, ["participants", "event_id"])
+/var @finalArgs = @mergeArgSources([{}, @rebuiltArgs])
+/var @query = "Add bob@test.com to launch"
+/var @intent = {
+  known: {
+    add_parts: {
+      participants: ["bob@test.com"]
+    }
+  },
+  resolved: {
+    add_parts: {
+      event_id: @event.id_
+    }
+  }
+}
+/var @built = @policy.build(@intent, @writeTools, { task: @query })
+`;
+    const { ast } = await parse(src);
+    await evaluate(ast, env);
+
+    for (const variableName of ['rebuiltArgs', 'finalArgs']) {
+      const argsVariable = env.getVariable(variableName);
+      expect(argsVariable).toBeDefined();
+
+      const eventId = await accessField(
+        argsVariable,
+        { type: 'field', value: 'event_id' } as any,
+        { env }
+      );
+      expect(isStructuredValue(eventId)).toBe(true);
+      expect((eventId as any).mx.factsources).toEqual([
+        expect.objectContaining({
+          ref: '@event.id_',
+          sourceRef: '@event',
+          field: 'id_'
+        })
+      ]);
+
+      const invocation = await parseSingleInvocation(
+        `/show @writeTools["add_parts"](@${variableName}) with { policy: @built.policy }`
+      );
+      const result = await evaluateExecInvocation(invocation, env);
+
+      expect(isStructuredValue(result.value)).toBe(true);
+      expect((result.value as any).data.ok).toBe(true);
+      expect(asText((result.value as any).data.event_id)).toBe('24');
+      expect((result.value as any).data.participants).toEqual(['bob@test.com']);
+    }
   });
 
   it('uses registry-backed @fyi.known inside exec invocations', async () => {

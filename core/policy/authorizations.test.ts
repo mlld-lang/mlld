@@ -3,8 +3,10 @@ import {
   evaluatePolicyAuthorizationDecision,
   mergePolicyAuthorizations,
   normalizePolicyAuthorizations,
+  setAuthorizationConstraintClauseEqFactsources,
   validatePolicyAuthorizations
 } from './authorizations';
+import { createFactSourceHandle } from '@core/types/handle';
 
 describe('policy authorizations', () => {
   it('normalizes deny-only authorizations', () => {
@@ -622,6 +624,65 @@ describe('policy authorizations', () => {
       matched: true,
       matchedAttestations: {
         recipients: ['known:internal']
+      }
+    });
+  });
+
+  it('returns matched factsources for matching constrained args', () => {
+    const authorizations = normalizePolicyAuthorizations({
+      allow: {
+        add_parts: {
+          args: {
+            event_id: {
+              eq: '24',
+              attestations: ['fact:@event.id_']
+            }
+          }
+        }
+      }
+    });
+    if (!authorizations) {
+      throw new Error('Expected normalized authorizations');
+    }
+
+    const eventIdClause = authorizations.allow?.add_parts.kind === 'constrained'
+      ? authorizations.allow.add_parts.args.event_id?.[0]
+      : undefined;
+    if (!eventIdClause || !('eq' in eventIdClause)) {
+      throw new Error('Expected event_id eq constraint');
+    }
+
+    const factsource = createFactSourceHandle({
+      sourceRef: '@event',
+      field: 'id_',
+      coercionId: 'event-24',
+      position: 0
+    });
+    setAuthorizationConstraintClauseEqFactsources(eventIdClause, [factsource]);
+
+    expect(
+      evaluatePolicyAuthorizationDecision({
+        authorizations,
+        operationName: 'add_parts',
+        args: {
+          event_id: '24'
+        },
+        controlArgs: ['event_id']
+      })
+    ).toEqual({
+      decision: 'allow',
+      matched: true,
+      matchedAttestations: {
+        event_id: ['fact:@event.id_']
+      },
+      matchedFactsources: {
+        event_id: [expect.objectContaining({
+          ref: '@event.id_',
+          sourceRef: '@event',
+          field: 'id_',
+          coercionId: 'event-24',
+          position: 0
+        })]
       }
     });
   });

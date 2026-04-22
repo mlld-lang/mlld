@@ -1785,6 +1785,64 @@ function mergeAuthorizationAttestationsIntoArgDescriptors(options: {
   return changed ? descriptors : argSecurityDescriptors;
 }
 
+function mergeAuthorizationFactsourcesIntoArgDescriptors(options: {
+  paramNames: readonly string[];
+  argFactSourceDescriptors?: readonly (readonly FactSourceHandle[] | undefined)[];
+  matchedFactsources?: Readonly<Record<string, readonly FactSourceHandle[]>>;
+}): readonly (readonly FactSourceHandle[] | undefined)[] | undefined {
+  const { paramNames, argFactSourceDescriptors, matchedFactsources } = options;
+  if (!matchedFactsources || Object.keys(matchedFactsources).length === 0) {
+    return argFactSourceDescriptors;
+  }
+
+  const descriptorCount = Math.max(paramNames.length, argFactSourceDescriptors?.length ?? 0);
+  if (descriptorCount === 0) {
+    return argFactSourceDescriptors;
+  }
+
+  const descriptors = Array.from(
+    { length: descriptorCount },
+    (_unused, index) => cloneFactSources(argFactSourceDescriptors?.[index])
+  );
+  let changed = false;
+
+  const pushFactsource = (
+    merged: Map<string, FactSourceHandle>,
+    factsources: readonly FactSourceHandle[] | undefined
+  ): void => {
+    for (const handle of factsources ?? []) {
+      const key = `${handle.instanceKey ?? ''}::${handle.coercionId ?? ''}::${handle.position ?? ''}::${handle.ref}`;
+      if (!merged.has(key)) {
+        merged.set(key, handle);
+      }
+    }
+  };
+
+  for (const [argName, factsources] of Object.entries(matchedFactsources)) {
+    const paramIndex = paramNames.indexOf(argName);
+    if (paramIndex === -1 || !Array.isArray(factsources) || factsources.length === 0) {
+      continue;
+    }
+
+    const merged = new Map<string, FactSourceHandle>();
+    pushFactsource(merged, descriptors[paramIndex]);
+    pushFactsource(merged, factsources);
+
+    const nextFactsources = Array.from(merged.values());
+    const current = descriptors[paramIndex];
+    if (
+      !Array.isArray(current) ||
+      current.length !== nextFactsources.length ||
+      current.some((entry, entryIndex) => entry !== nextFactsources[entryIndex])
+    ) {
+      descriptors[paramIndex] = nextFactsources;
+      changed = true;
+    }
+  }
+
+  return changed ? descriptors : argFactSourceDescriptors;
+}
+
 function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -4914,7 +4972,7 @@ async function evaluateExecInvocationInternal(
     evaluatedArgs,
     argSecurityDescriptors: effectiveArgSecurityDescriptors
   });
-  const effectiveArgFactSourceDescriptors = mergeInvocationArgFactSources({
+  let effectiveArgFactSourceDescriptors = mergeInvocationArgFactSources({
     evaluatedArgs,
     originalVariables,
     guardVariableCandidates,
@@ -5045,6 +5103,13 @@ async function evaluateExecInvocationInternal(
           paramNames: params,
           argSecurityDescriptors: effectiveArgSecurityDescriptors,
           matchedAttestations: authorizationDecision.matchedAttestations
+        });
+      }
+      if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedFactsources) {
+        effectiveArgFactSourceDescriptors = mergeAuthorizationFactsourcesIntoArgDescriptors({
+          paramNames: params,
+          argFactSourceDescriptors: effectiveArgFactSourceDescriptors,
+          matchedFactsources: authorizationDecision.matchedFactsources
         });
       }
     }
