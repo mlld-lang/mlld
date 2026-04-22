@@ -136,4 +136,142 @@ describe('evaluateExecInvocation runtime trace', () => {
       new Set([parentCall.scope.frameId])
     );
   });
+
+  it('returns collection input-record policy failures as failed llm tool results', async () => {
+    const source = [
+      '/record @event = { facts: [id: string] }',
+      '/record @add_parts_inputs = {',
+      '  facts: [event_id: handle],',
+      '  data: [participants: array],',
+      '  validate: "strict"',
+      '}',
+      '/exe @get_event() = { id: "24" } => event',
+      '/exe tool:w @add_parts(participants, event_id) = {',
+      '  ok: true,',
+      '  event_id: @event_id,',
+      '  participants: @participants',
+      '} with { controlArgs: [] }',
+      '/var @event = @get_event()',
+      '/var tools @writeTools = {',
+      '  add_parts: {',
+      '    mlld: @add_parts,',
+      '    inputs: @add_parts_inputs,',
+      '    labels: ["tool:w"],',
+      '    controlArgs: []',
+      '  }',
+      '}',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      add_parts: {',
+      '        args: {',
+      '          event_id: [@event.id]',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm @agent() = when [',
+      '  * => @writeTools["add_parts"]({ participants: ["bob@test.com"], event_id: "24" }) with { policy: @taskPolicy }',
+      ']',
+      '/show @agent()'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem: new MemoryFileSystem(),
+      pathService: new PathService(),
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    expect(result.output).toContain('tool_input_validation_failed');
+    expect(result.output).toContain('event_id');
+
+    const policyError = result.traceEvents.find((event: any) => event.event === 'policy.error');
+    expect(policyError).toBeDefined();
+    expect(policyError.data).toMatchObject({
+      tool: 'add_parts',
+      code: 'input_type_mismatch',
+      field: 'event_id',
+      phase: 'dispatch',
+      direction: 'input'
+    });
+    expect(policyError.data.message).toMatch(/must be handle/);
+    expect(policyError.data.error).toMatchObject({
+      name: 'MlldPolicyError',
+      code: 'input_type_mismatch'
+    });
+
+    const toolResult = result.traceEvents.find(
+      (event: any) => event.event === 'llm.tool_result' && event.data.tool === 'add_parts'
+    );
+    expect(toolResult).toBeDefined();
+    expect(toolResult.data.ok).toBe(false);
+    expect(toolResult.data.error).toMatch(/must be handle/);
+    expect(toolResult.data.errorDetails).toMatchObject({
+      name: 'MlldPolicyError',
+      code: 'input_type_mismatch'
+    });
+  });
+
+  it('returns authorization denials inside llm tool frames as failed tool results', async () => {
+    const source = [
+      '/record @account = { facts: [id: string] }',
+      '/exe @get_account() = { id: "acct-1" } => account',
+      '/exe tool:w @send_money(recipient, amount) = `sent:@recipient:@amount` with { controlArgs: ["recipient"] }',
+      '/var @account = @get_account()',
+      '/var tools @writeTools = {',
+      '  send_money: {',
+      '    mlld: @send_money,',
+      '    labels: ["tool:w"],',
+      '    expose: ["recipient", "amount"],',
+      '    controlArgs: ["recipient"]',
+      '  }',
+      '}',
+      '/var @taskPolicy = {',
+      '  authorizations: {',
+      '    allow: {',
+      '      send_money: {',
+      '        args: {',
+      '          recipient: [@account.id]',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+      '/exe llm @agent() = [',
+      '  => @writeTools["send_money"]({ recipient: "acct-2", amount: 5 }) with { policy: @taskPolicy }',
+      ']',
+      '/show @agent()'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem: new MemoryFileSystem(),
+      pathService: new PathService(),
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    expect(result.output).toContain('policy_denied');
+    expect(result.output).toContain('operation arguments did not match');
+
+    const authDeny = result.traceEvents.find(
+      (event: any) => event.event === 'auth.deny' && event.data.tool === 'send_money'
+    );
+    expect(authDeny).toBeDefined();
+
+    const policyError = result.traceEvents.find((event: any) => event.event === 'policy.error');
+    expect(policyError).toBeDefined();
+    expect(policyError.data.tool).toBe('send_money');
+    expect(policyError.data.code).toMatch(/^POLICY_/);
+
+    const toolResult = result.traceEvents.find(
+      (event: any) => event.event === 'llm.tool_result' && event.data.tool === 'send_money'
+    );
+    expect(toolResult).toBeDefined();
+    expect(toolResult.data.ok).toBe(false);
+    expect(toolResult.data.error).toMatch(/operation arguments did not match/);
+  });
 });

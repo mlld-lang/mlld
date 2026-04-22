@@ -3,6 +3,9 @@ import type { Environment } from '@interpreter/env/Environment';
 import { MlldSecurityError } from './MlldSecurityError';
 
 export type PolicyEnforcementCode =
+  | 'missing_required_input'
+  | 'input_type_mismatch'
+  | 'untrusted_input'
   | 'allowlist_mismatch'
   | 'blocklist_match'
   | 'no_update_fields'

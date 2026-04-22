@@ -25,7 +25,15 @@ import {
   type ToolDefinition
 } from '@core/types/tools';
 import { applyWithClause } from './with-clause';
-import { MlldInterpreterError, MlldPolicyError, MlldSecurityError, CircularReferenceError } from '@core/errors';
+import {
+  CircularReferenceError,
+  GuardError,
+  MlldDenialError,
+  MlldInterpreterError,
+  MlldPolicyError,
+  MlldSecurityError
+} from '@core/errors';
+import { createErrorSnapshot } from '@core/errors/errorSerialization';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 import { deriveExecutableSourceTaintLabel } from '@core/security/taint';
@@ -153,7 +161,8 @@ import {
 import {
   traceLlmInvocation,
   traceLlmToolCall,
-  traceLlmToolResult
+  traceLlmToolResult,
+  tracePolicyError
 } from '@interpreter/tracing/events';
 import {
   applyInvocationScopedRuntimeConfig,
@@ -1513,7 +1522,15 @@ function validateToolInputSchema(options: {
   const providedArgs = args ?? {};
   const fieldMap = new Map(inputSchema.fields.map(field => [field.name, field]));
   const throwDispatchPolicyError = (params: {
-    code: 'allowlist_mismatch' | 'blocklist_match' | 'proofless_control_arg' | 'proofless_source_arg' | 'correlate_mismatch';
+    code:
+      | 'missing_required_input'
+      | 'input_type_mismatch'
+      | 'untrusted_input'
+      | 'allowlist_mismatch'
+      | 'blocklist_match'
+      | 'proofless_control_arg'
+      | 'proofless_source_arg'
+      | 'correlate_mismatch';
     message: string;
     field?: string;
     hint: string;
@@ -1538,14 +1555,24 @@ function validateToolInputSchema(options: {
       && providedArgs[field.name] !== undefined;
     if (!hasValue) {
       if (!field.optional) {
-        throw new Error(`Tool '${metadata.name}' is missing required input '${field.name}'`);
+        throwDispatchPolicyError({
+          code: 'missing_required_input',
+          message: `Tool '${metadata.name}' is missing required input '${field.name}'`,
+          field: field.name,
+          hint: `Provide required input '${field.name}' before calling '${metadata.name}'.`
+        });
       }
       continue;
     }
 
     const value = providedArgs[field.name];
     if (!matchesInputType(value, field.valueType)) {
-      throw new Error(`Tool '${metadata.name}' input '${field.name}' must be ${field.valueType}`);
+      throwDispatchPolicyError({
+        code: 'input_type_mismatch',
+        message: `Tool '${metadata.name}' input '${field.name}' must be ${field.valueType}`,
+        field: field.name,
+        hint: `Pass '${field.name}' as ${field.valueType} before calling '${metadata.name}'.`
+      });
     }
     if (field.classification === 'fact') {
       if (!hasAcceptedProofForInput(value)) {
@@ -1562,7 +1589,12 @@ function validateToolInputSchema(options: {
       continue;
     }
     if (field.dataTrust === 'trusted' && hasUntrustedDescriptor(value)) {
-      throw new Error(`Tool '${metadata.name}' trusted input '${field.name}' cannot carry untrusted taint`);
+      throwDispatchPolicyError({
+        code: 'untrusted_input',
+        message: `Tool '${metadata.name}' trusted input '${field.name}' cannot carry untrusted taint`,
+        field: field.name,
+        hint: `Remove untrusted taint from '${field.name}' before calling '${metadata.name}'.`
+      });
     }
   }
 
@@ -1755,6 +1787,192 @@ function mergeAuthorizationAttestationsIntoArgDescriptors(options: {
 
 function normalizeToolCallError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function getStringField(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function getSnapshotDetails(snapshot: unknown): Record<string, unknown> | undefined {
+  const record = asRecord(snapshot);
+  return asRecord(record?.details);
+}
+
+function getPolicySurfaceCode(error: unknown, snapshot?: unknown): string | undefined {
+  if (error instanceof MlldPolicyError) {
+    return error.details.code;
+  }
+  if (error instanceof MlldDenialError) {
+    return error.context.code;
+  }
+  if (error instanceof MlldSecurityError) {
+    return error.code;
+  }
+
+  const errorRecord = asRecord(error);
+  const snapshotRecord = asRecord(snapshot);
+  return getStringField(errorRecord, 'code')
+    ?? getStringField(snapshotRecord, 'code')
+    ?? getStringField(getSnapshotDetails(snapshot), 'code');
+}
+
+function getPolicySurfaceMetadata(
+  error: unknown,
+  snapshot: unknown,
+  trackedToolName: string
+): {
+  tool?: string;
+  code?: string;
+  phase?: string;
+  direction?: string;
+  field?: string;
+  hint?: string;
+} {
+  const snapshotRecord = asRecord(snapshot);
+  const snapshotDetails = getSnapshotDetails(snapshot);
+  const code = getPolicySurfaceCode(error, snapshot);
+
+  if (error instanceof MlldPolicyError) {
+    return {
+      tool: error.tool || trackedToolName || undefined,
+      code,
+      phase: error.phase,
+      direction: error.direction,
+      field: error.field,
+      hint: error.hint
+    };
+  }
+
+  return {
+    tool: trackedToolName || getStringField(snapshotRecord, 'tool') || getStringField(snapshotDetails, 'tool'),
+    code,
+    phase: getStringField(snapshotRecord, 'phase') ?? getStringField(snapshotDetails, 'phase'),
+    direction: getStringField(snapshotRecord, 'direction') ?? getStringField(snapshotDetails, 'direction'),
+    field: getStringField(snapshotRecord, 'field') ?? getStringField(snapshotDetails, 'field'),
+    hint: getStringField(snapshotRecord, 'hint') ?? getStringField(snapshotDetails, 'hint')
+  };
+}
+
+function isPolicySurfaceFailure(error: unknown): boolean {
+  if (error instanceof MlldPolicyError) {
+    return true;
+  }
+  if (error instanceof GuardError) {
+    return error.decision === 'deny';
+  }
+  if (error instanceof MlldDenialError) {
+    return error.context.code.startsWith('POLICY_')
+      || error.context.code === 'GUARD_DENIED'
+      || error.context.code === 'PRIVILEGED_GUARD_DENIED';
+  }
+  if (error instanceof MlldSecurityError) {
+    return error.code.startsWith('POLICY_')
+      || error.code === 'GUARD_DENIED'
+      || error.code === 'PRIVILEGED_GUARD_DENIED';
+  }
+  return false;
+}
+
+function classifySurfacedPolicyFailure(
+  error: unknown,
+  metadata: { code?: string; direction?: string }
+): string {
+  if (error instanceof MlldPolicyError && metadata.direction === 'input') {
+    return 'tool_input_validation_failed';
+  }
+  if (metadata.code === 'POLICY_AUTHORIZATIONS_INVALID' || metadata.code === 'POLICY_FRAGMENT_INVALID') {
+    return 'policy_error';
+  }
+  if (metadata.code?.startsWith('POLICY_')) {
+    return 'policy_denied';
+  }
+  if (
+    error instanceof GuardError
+    || metadata.code === 'GUARD_DENIED'
+    || metadata.code === 'PRIVILEGED_GUARD_DENIED'
+  ) {
+    return 'guard_denied';
+  }
+  return 'policy_error';
+}
+
+function buildPolicyErrorTraceData(
+  error: unknown,
+  trackedToolName: string,
+  snapshot: unknown
+) {
+  const metadata = getPolicySurfaceMetadata(error, snapshot, trackedToolName);
+  return {
+    ...metadata,
+    message: normalizeToolCallError(error),
+    error: snapshot
+  };
+}
+
+function buildPublicToolErrorDetails(snapshot: unknown): Record<string, unknown> {
+  const snapshotRecord = asRecord(snapshot) ?? {};
+  const snapshotDetails = asRecord(snapshotRecord.details);
+  const publicDetails: Record<string, unknown> = {};
+
+  for (const key of [
+    'class',
+    'name',
+    'message',
+    'code',
+    'severity',
+    'phase',
+    'direction',
+    'hint',
+    'tool',
+    'field',
+    'arg',
+    'reason',
+    'sourceLocation'
+  ]) {
+    if (snapshotRecord[key] !== undefined) {
+      publicDetails[key] = snapshotRecord[key];
+    }
+  }
+
+  const denial = asRecord(snapshotDetails?.denial);
+  if (denial) {
+    publicDetails.denial = {
+      ...(denial.code !== undefined ? { code: denial.code } : {}),
+      ...(denial.operation !== undefined ? { operation: denial.operation } : {}),
+      ...(denial.blocker !== undefined ? { blocker: denial.blocker } : {}),
+      ...(denial.reason !== undefined ? { reason: denial.reason } : {}),
+      ...(denial.suggestions !== undefined ? { suggestions: denial.suggestions } : {})
+    };
+  }
+
+  return publicDetails;
+}
+
+function buildSurfacedToolFailureResult(
+  error: unknown,
+  trackedToolName: string,
+  snapshot: unknown
+): Record<string, unknown> {
+  const metadata = getPolicySurfaceMetadata(error, snapshot, trackedToolName);
+  return {
+    ok: false,
+    error: classifySurfacedPolicyFailure(error, metadata),
+    message: normalizeToolCallError(error),
+    ...(metadata.tool ? { tool: metadata.tool } : {}),
+    ...(metadata.code ? { code: metadata.code } : {}),
+    ...(metadata.phase ? { phase: metadata.phase } : {}),
+    ...(metadata.direction ? { direction: metadata.direction } : {}),
+    ...(metadata.field ? { field: metadata.field } : {}),
+    ...(metadata.hint ? { hint: metadata.hint } : {}),
+    details: buildPublicToolErrorDetails(snapshot)
+  };
 }
 
 function collectConversationInputDescriptor(value: unknown): SecurityDescriptor | undefined {
@@ -4703,44 +4921,6 @@ async function evaluateExecInvocationInternal(
     expressionSourceVariables,
     argFactSourceDescriptors
   });
-  if (shouldValidatePolicyAuthorizations) {
-    const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
-    if (validation && validation.errors.length > 0) {
-      throw createPolicyAuthorizationValidationError(validation);
-    }
-
-    const authorizationDecision = evaluatePolicyAuthorizationDecision({
-      authorizations: runtimeEnv.getPolicySummary()!.authorizations!,
-      operationName: toolOperationName ?? variable.name ?? commandName,
-      args: authorizationArgs,
-      controlArgs: authorizationDecisionControlArgs
-    });
-    if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
-      effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
-        env: runtimeEnv,
-        paramNames: params,
-        argSecurityDescriptors: effectiveArgSecurityDescriptors,
-        matchedAttestations: authorizationDecision.matchedAttestations
-      });
-    }
-  }
-  const validationArgs = buildToolInputValidationArguments({
-    paramNames: params,
-    evaluatedArgs,
-    metadata: effectiveToolMetadata,
-    argSecurityDescriptors: effectiveArgSecurityDescriptors,
-    argFactSourceDescriptors: effectiveArgFactSourceDescriptors
-  });
-  validateToolInputSchema({
-    env,
-    metadata: effectiveToolMetadata,
-    args: validationArgs
-  });
-  enforceUpdateToolArguments({
-    metadata: effectiveToolMetadata,
-    args: authorizationArgs,
-    env
-  });
   const trackedMcpName =
     typeof (mcpTool as any)?.name === 'string' && (mcpTool as any).name.trim().length > 0
       ? (mcpTool as any).name.trim()
@@ -4847,6 +5027,45 @@ async function evaluateExecInvocationInternal(
   };
 
   try {
+    if (shouldValidatePolicyAuthorizations) {
+      const validation = validateRuntimePolicyAuthorizations(runtimeEnv.getPolicySummary(), runtimeEnv);
+      if (validation && validation.errors.length > 0) {
+        throw createPolicyAuthorizationValidationError(validation);
+      }
+
+      const authorizationDecision = evaluatePolicyAuthorizationDecision({
+        authorizations: runtimeEnv.getPolicySummary()!.authorizations!,
+        operationName: toolOperationName ?? variable.name ?? commandName,
+        args: authorizationArgs,
+        controlArgs: authorizationDecisionControlArgs
+      });
+      if (authorizationDecision.decision === 'allow' && authorizationDecision.matchedAttestations) {
+        effectiveArgSecurityDescriptors = mergeAuthorizationAttestationsIntoArgDescriptors({
+          env: runtimeEnv,
+          paramNames: params,
+          argSecurityDescriptors: effectiveArgSecurityDescriptors,
+          matchedAttestations: authorizationDecision.matchedAttestations
+        });
+      }
+    }
+    const validationArgs = buildToolInputValidationArguments({
+      paramNames: params,
+      evaluatedArgs,
+      metadata: effectiveToolMetadata,
+      argSecurityDescriptors: effectiveArgSecurityDescriptors,
+      argFactSourceDescriptors: effectiveArgFactSourceDescriptors
+    });
+    validateToolInputSchema({
+      env,
+      metadata: effectiveToolMetadata,
+      args: validationArgs
+    });
+    enforceUpdateToolArguments({
+      metadata: effectiveToolMetadata,
+      args: authorizationArgs,
+      env
+    });
+
     const activePolicyEnforcer = policyEnforcer ?? new PolicyEnforcer(runtimeEnv.getPolicySummary());
     const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
       env: runtimeEnv,
@@ -5503,12 +5722,29 @@ async function evaluateExecInvocationInternal(
     recordToolCall(true);
     return invocationResult;
   } catch (error) {
+    const policySurfaceFailure = isPolicySurfaceFailure(error);
+    const errorMessage = normalizeToolCallError(error);
+    const errorSnapshot = policySurfaceFailure
+      ? createErrorSnapshot(error, {
+          maxCauseDepth: 8,
+          maxDepth: 3,
+          maxObjectKeys: 24,
+          maxArrayLength: 12
+        })
+      : undefined;
+
     await recordToolAudit(false, undefined, error);
+    if (policySurfaceFailure && errorSnapshot !== undefined) {
+      runtimeEnv.emitRuntimeTraceEvent(tracePolicyError(
+        buildPolicyErrorTraceData(error, trackedToolName, errorSnapshot)
+      ));
+    }
     if (shouldTraceLlmToolCall) {
       runtimeEnv.emitRuntimeTraceEvent(traceLlmToolResult({
         tool: trackedToolName,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
+        ...(errorSnapshot !== undefined ? { errorDetails: errorSnapshot } : {}),
         durationMs:
           toolBodyStartedAt !== undefined && toolBodyEndedAt !== undefined
             ? Math.max(0, toolBodyEndedAt - toolBodyStartedAt)
@@ -5518,9 +5754,16 @@ async function evaluateExecInvocationInternal(
         data: {
           tool: trackedToolName,
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: errorMessage
         }
       });
+    }
+    if (shouldTraceLlmToolCall && policySurfaceFailure && errorSnapshot !== undefined) {
+      recordToolCall(false, error);
+      return createEvalResult(
+        buildSurfacedToolFailureResult(error, trackedToolName, errorSnapshot),
+        execEnv
+      );
     }
     if (hasLlmLabel) {
       runtimeEnv.emitRuntimeTraceEvent(traceLlmInvocation(
@@ -5532,7 +5775,7 @@ async function evaluateExecInvocationInternal(
         toolCount: llmTraceToolCount,
         resume: isLlmResumeContinuation,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
         durationMs: llmTraceStartedAt !== undefined ? Math.max(0, Date.now() - llmTraceStartedAt) : undefined
         }
       ));
@@ -5544,7 +5787,7 @@ async function evaluateExecInvocationInternal(
           toolCount: llmTraceToolCount,
           resume: isLlmResumeContinuation,
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: errorMessage
         }
       });
     }

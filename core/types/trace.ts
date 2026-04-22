@@ -73,6 +73,7 @@ export type RuntimeTraceEventName =
   | 'policy.validate'
   | 'policy.compile_drop'
   | 'policy.compile_repair'
+  | 'policy.error'
   | 'auth.check'
   | 'auth.allow'
   | 'auth.deny'
@@ -301,6 +302,19 @@ export interface RuntimeTraceEventSpecMap {
     category: 'policy';
     level: 'verbose';
     data: TraceRecord<{ mode: string; repairedArgs: unknown[] }>;
+  };
+  'policy.error': {
+    category: 'policy';
+    level: 'effects';
+    data: TraceRecord<{
+      tool?: string;
+      code?: string;
+      message: string;
+      phase?: string;
+      direction?: string;
+      field?: string;
+      error: unknown;
+    }>;
   };
   'auth.check': {
     category: 'auth';
