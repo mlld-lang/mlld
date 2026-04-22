@@ -353,6 +353,46 @@ describe('box MCP config integration', () => {
     }
   });
 
+  it('preserves imported tool collections nested in forwarded llm config parameters', async () => {
+    const fileSystem = new MemoryFileSystem();
+    await fileSystem.writeFile('/tools.mld', [
+      '/exe tool:w @send_email(recipient, subject) = `sent:@recipient:@subject`',
+      '/var tools @writeTools = {',
+      '  send_email: {',
+      '    mlld: @send_email,',
+      '    labels: ["tool:w"],',
+      '    description: "Send email"',
+      '  }',
+      '}',
+      '/export { @writeTools }'
+    ].join('\n'));
+
+    const source = [
+      '/import { @writeTools } from "/tools.mld"',
+      '/exe llm @agent(prompt, config) = `@mx.llm.allowed`',
+      '/exe @wrapper(prompt, config) = @agent(@prompt, @config)',
+      '/var @cfg = { tools: @writeTools }',
+      '/show @wrapper("Email the summary", @cfg)'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('mcp__mlld_tools__send_email');
+    } finally {
+      environment?.cleanup();
+    }
+  });
+
   it('preserves an explicit empty tool policy as a strict llm config', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [

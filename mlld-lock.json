@@ -66,14 +66,6 @@
       "registryVersion": "1.0.0",
       "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/3439100511477bf013577ce2bb518b63bba715cf/md-fetch/index.mld"
     },
-    "@mlld/opencode": {
-      "version": "latest",
-      "resolved": "e2efbf68382902f2e8d1266ef2e31260f1b73a1f5f28d1e1986682ee1e07547a",
-      "source": "registry://@mlld/opencode@1.3.1",
-      "integrity": "sha256:e2efbf68382902f2e8d1266ef2e31260f1b73a1f5f28d1e1986682ee1e07547a",
-      "fetchedAt": "2026-04-19T19:15:30.387Z",
-      "registryVersion": "1.3.1"
-    },
     "@mlld/codex": {
       "version": "latest",
       "resolved": "e1dc7e557b97ef4efe41c18725dea1a9026f28d4b7c082b3813f27c96980711d",
@@ -81,10 +73,19 @@
       "integrity": "sha256:e1dc7e557b97ef4efe41c18725dea1a9026f28d4b7c082b3813f27c96980711d",
       "fetchedAt": "2026-04-20T02:29:13.382Z",
       "registryVersion": "1.0.0"
+    },
+    "@mlld/opencode": {
+      "version": "1.4.1",
+      "resolved": "33137d8f0af091bfbfed7389ca4b5cf2e7d9630d25ee76e44b25efc7c542c174",
+      "source": "registry://@mlld/opencode@1.4.1",
+      "integrity": "sha256:33137d8f0af091bfbfed7389ca4b5cf2e7d9630d25ee76e44b25efc7c542c174",
+      "fetchedAt": "2026-04-22T20:35:36.823Z",
+      "registryVersion": "1.4.1",
+      "sourceUrl": "https://raw.githubusercontent.com/mlld-lang/modules/35befa0a12dea8c4ea185bd20847c08fbea617ee/opencode/index.mld"
     }
   },
   "metadata": {
     "createdAt": "2026-01-27T05:40:45.987Z",
-    "updatedAt": "2026-04-20T02:29:13.382Z"
+    "updatedAt": "2026-04-22T20:35:36.823Z"
   }
 }

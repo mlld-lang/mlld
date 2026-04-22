@@ -401,6 +401,63 @@ function getToolCollectionFromValue(value: unknown): ToolCollection | undefined 
   return metadata?.auth ? (value as ToolCollection) : undefined;
 }
 
+function isAstCollectionValue(value: unknown): boolean {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+
+  if (
+    value.type === 'object' &&
+    (
+      Array.isArray((value as { entries?: unknown[] }).entries) ||
+      isPlainObject((value as { properties?: unknown }).properties)
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    value.type === 'array' &&
+    (
+      Array.isArray((value as { items?: unknown[] }).items) ||
+      Array.isArray((value as { elements?: unknown[] }).elements)
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+async function materializeLlmConfigArgument(
+  value: unknown,
+  env: Environment
+): Promise<unknown> {
+  if (value === undefined) {
+    return {};
+  }
+
+  let resolved = value;
+  if (isVariable(resolved)) {
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    resolved = await extractVariableValue(resolved, env);
+  }
+
+  if (isStructuredValue(resolved)) {
+    resolved = asData(resolved);
+  }
+
+  if (isAstCollectionValue(resolved)) {
+    const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
+    resolved = await evaluateDataValue(resolved as never, env);
+    if (isStructuredValue(resolved)) {
+      resolved = asData(resolved);
+    }
+  }
+
+  return resolved;
+}
+
 function getToolDefinitionBind(definition: ToolDefinition): Record<string, unknown> | undefined {
   return isPlainObject(definition.bind) ? definition.bind : undefined;
 }
@@ -4746,7 +4803,7 @@ async function evaluateExecInvocationInternal(
   }
   if (hasLlmLabel && llmParamNames.length >= 2) {
     const originalConfigArg = evaluatedArgs[1];
-    const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
+    const rawConfig = await materializeLlmConfigArgument(originalConfigArg, execEnv);
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
       const captureLlmTraceConfig = (config: Record<string, unknown>): void => {
         const runtimeConfig = readLlmRuntimeResumeConfig(config);
@@ -4756,7 +4813,7 @@ async function evaluateExecInvocationInternal(
         llmTraceToolCount = Array.isArray(config.tools) ? config.tools.length : undefined;
       };
       let nextConfig = { ...(rawConfig as Record<string, unknown>) };
-      let didUpdateConfigArg = false;
+      let didUpdateConfigArg = rawConfig !== originalConfigArg;
       const existingRuntimeResumeConfig = readLlmRuntimeResumeConfig(rawConfig);
       const hasToolSelection = Object.prototype.hasOwnProperty.call(nextConfig, 'tools');
       const hasWritableShelfScope = (getNormalizedShelfScope(execEnv)?.writeSlotBindings.length ?? 0) > 0;
