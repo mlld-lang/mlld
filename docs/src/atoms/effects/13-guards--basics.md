@@ -173,7 +173,7 @@ guard @validateJson after op:exe = when [
 ]
 ```
 
-`resume` is for LLM exes that called write tools and then produced malformed output. Unlike `retry`, `resume` continues the existing conversation — the LLM sees its prior tool calls and results, plus the correction message. No tools re-fire, no new tools are exposed, and auto-provisioned `@shelve` is disabled for the resumed call. That makes resume final-output repair only, not a chance to redo tool work. See the [resume invariants](#resume-invariants) section below.
+`resume` is for LLM exes that called write tools and then produced malformed output. Unlike `retry`, `resume` continues the existing conversation — the LLM sees its prior tool calls and results, plus the correction message. By default no tools re-fire and no new tools are exposed. A with-clause can override the tool set for the resumed call (e.g., terminal-only tools that don't re-fire writes). See `guard-resume` for the full resume reference.
 
 ```mlld
 guard after @fixShape for op:named:myWorker = when [
@@ -182,18 +182,25 @@ guard after @fixShape for op:named:myWorker = when [
   @output.mx.schema.valid == false => deny "Still invalid"
   * => allow
 ]
+
+>> Resume with explicit tools for the repair pass
+guard after op:named:planner = when [
+  @output.mx.schema.valid == false && @mx.guard.try < 2
+    => resume "Fix the output" with { tools: @composeTools }
+  * => allow
+]
 ```
 
 ### Resume invariants
 
-A resumed call runs with two structural restrictions:
+By default, a resumed call runs with two structural restrictions:
 
 - **`tools = []`** — the user-supplied tool list is forced empty for the resumed turn.
 - **`disableAutoProvisionedShelve: true`** — the auto-provisioned shelve tool from writable shelf scope is also dropped from the resumed call.
 
-Both are load-bearing for handle safety, not just convenience. Handles are minted per call: each LLM invocation has its own mint table that dies when the call ends. The conversation history that resume replays still contains handle strings from the prior turn, but those handles are dead by the time the resume runs — their mint table belongs to the original call.
+Both are load-bearing for handle safety. Handles are minted per call: each LLM invocation has its own mint table that dies when the call ends. The conversation history that resume replays still contains handle strings from the prior turn, but those handles are dead — their mint table belongs to the original call.
 
-If the resumed call could fire tools or shelve writes, the LLM might paste a handle from the prior turn into a fresh tool call. That handle would not resolve, and the dispatch would either deny outright or — worse, if any path were lenient — match a different value than the LLM intended. Forcing `tools = []` and disabling auto-provisioned shelve eliminates the failure mode at the structural level.
+A resume with-clause can override the tool list: `resume "hint" with { tools: @toolSet }`. The bridge mints fresh handles for the provided tools; old handles from the prior turn remain dead. Auto-provisioned `@shelve` stays disabled. Use this when the repair pass needs specific terminal tools (e.g., `compose`, `blocked`) but should not re-fire the original write tools.
 
 What this means semantically: **resume fixes the LLM's text or JSON output, not its tool calls.** Use it when the model called the right tools but produced malformed final text. If you want the LLM to take more actions, that is a new step in the orchestration loop — not a resume. Use `retry` (which starts a fresh call with a fresh mint table) if you want to re-attempt the entire operation, but be careful: `retry` re-fires write tools, so it is dangerous for exes that send email, create issues, or otherwise have side effects.
 

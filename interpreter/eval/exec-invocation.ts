@@ -2153,12 +2153,8 @@ function injectLlmRuntimeResumeConfig(
 function clearLlmResumeBridgeTools(
   config: Record<string, unknown>
 ): { config: Record<string, unknown>; didUpdate: boolean } {
-  // Resume is output repair only, not "retry but cheaper". Handle aliases are
-  // minted per bridge call, so a continue:true call cannot safely expose new
-  // tools against handles mentioned in the previous transcript. Keep the
-  // explicit tool list empty here and pair it with disableAutoProvisionedShelve
-  // at bridge construction time. Loosening this is a spec change.
-  // See spec-guard-resume.md#resume-invariants.
+  // Default resume clears tools. A guard resume with-clause can override this
+  // with an explicit tool set; the bridge mints fresh handles for those tools.
   if (!Object.prototype.hasOwnProperty.call(config, 'tools')) {
     return { config, didUpdate: false };
   }
@@ -2360,6 +2356,30 @@ function readLlmResumePromptFromGuardAction(
     return guardContext.reason.trim();
   }
 
+  return null;
+}
+
+function readLlmResumeToolsFromGuardAction(
+  action: ReturnType<typeof getGuardNextAction>
+): unknown[] | null {
+  if (action?.decision !== 'resume' || !action.details) {
+    return null;
+  }
+  const details = action.details as Record<string, unknown>;
+  const guardResults = Array.isArray(details.guardResults) ? details.guardResults : [];
+  for (const entry of guardResults) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const metadata = (entry as Record<string, unknown>).metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      continue;
+    }
+    const resumeTools = (metadata as Record<string, unknown>).resumeTools;
+    if (resumeTools !== undefined && resumeTools !== null) {
+      return Array.isArray(resumeTools) ? resumeTools : [resumeTools];
+    }
+  }
   return null;
 }
 
@@ -4689,6 +4709,7 @@ async function evaluateExecInvocationInternal(
 
   const pendingGuardAction = getGuardNextAction(runtimeEnv);
   const resumePrompt = readLlmResumePromptFromGuardAction(pendingGuardAction);
+  const resumeToolsOverride = readLlmResumeToolsFromGuardAction(pendingGuardAction);
   let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
   let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
@@ -4709,11 +4730,16 @@ async function evaluateExecInvocationInternal(
     });
   }
 
-  // Provider-neutral resume state is injected into llm config for any exe llm
-  // that accepts a config object. Tool-bridge setup remains opt-in via
-  // config.tools. Shelf-scoped llm calls also receive agent-visible shelf notes
-  // in config.system.
+  // Any llm-labeled exe is resume-eligible so after-guards can issue resume
+  // actions. Config injection (tools, resume state) still requires 2+ params.
   const llmParamNames = Array.isArray(definition.paramNames) ? definition.paramNames : [];
+  if (hasLlmLabel) {
+    llmResumeEligible = true;
+    if (!llmTraceSessionId) {
+      llmTraceSessionId = randomUUID();
+      llmTraceProvider = 'unknown';
+    }
+  }
   if (hasLlmLabel && llmParamNames.length >= 2) {
     const originalConfigArg = evaluatedArgs[1];
     const rawConfig = originalConfigArg === undefined ? {} : originalConfigArg;
@@ -4732,7 +4758,6 @@ async function evaluateExecInvocationInternal(
       const hasWritableShelfScope = (getNormalizedShelfScope(execEnv)?.writeSlotBindings.length ?? 0) > 0;
       const hasSessionAttachment = Boolean(getNormalizedSessionAttachment(execEnv));
 
-      llmResumeEligible = true;
       if (existingRuntimeResumeConfig?.continue === true) {
         isLlmResumeContinuation = true;
         const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
@@ -4740,17 +4765,22 @@ async function evaluateExecInvocationInternal(
         didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
       } else if (!existingRuntimeResumeConfig && !isLlmResumeContinuation && !hasToolSelection) {
         nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
-          sessionId: randomUUID(),
-          provider: 'unknown',
+          sessionId: llmTraceSessionId!,
+          provider: llmTraceProvider ?? 'unknown',
           continue: false
         });
         didUpdateConfigArg = true;
       }
 
       if (pendingGuardAction?.decision === 'resume') {
-        const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
-        nextConfig = normalizedResumeConfig.config;
-        didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
+        if (resumeToolsOverride) {
+          nextConfig = { ...nextConfig, tools: resumeToolsOverride };
+          didUpdateConfigArg = true;
+        } else {
+          const normalizedResumeConfig = clearLlmResumeBridgeTools(nextConfig);
+          nextConfig = normalizedResumeConfig.config;
+          didUpdateConfigArg ||= normalizedResumeConfig.didUpdate;
+        }
         if (currentLlmResumeState) {
           currentLlmResumeState = activateLlmResumeState(currentLlmResumeState);
           nextConfig = injectLlmRuntimeResumeConfig(nextConfig, {
@@ -4762,15 +4792,13 @@ async function evaluateExecInvocationInternal(
         }
       }
 
-      if (hasToolSelection || hasWritableShelfScope || hasSessionAttachment) {
-        // config.tools selects capabilities for the bridge; writable shelf scope can also
-        // force an MCP bridge so @shelve is auto-provisioned for boxed llm calls. Neither
-        // selection should seed the conversation descriptor used for policy/attestation checks.
-        if (hasToolSelection || hasWritableShelfScope) {
+      const effectiveHasToolSelection = hasToolSelection || Boolean(resumeToolsOverride);
+      if (effectiveHasToolSelection || hasWritableShelfScope || hasSessionAttachment) {
+        if (effectiveHasToolSelection || hasWritableShelfScope) {
           resultSecurityDescriptor = buildLlmConversationDescriptor(execEnv, evaluatedArgs);
         }
-        const toolsValue = hasToolSelection ? nextConfig.tools : [];
-        if (isLlmResumeContinuation) {
+        const toolsValue = effectiveHasToolSelection ? nextConfig.tools : [];
+        if (isLlmResumeContinuation && !resumeToolsOverride) {
           assertLlmResumeBridgeToolsEmpty(toolsValue);
         }
         const dirValue = nextConfig.dir;
@@ -5196,6 +5224,11 @@ async function evaluateExecInvocationInternal(
       }
       if (currentLlmResumeState) {
         nextMetadata.llmResumeState = { ...currentLlmResumeState };
+      } else if (llmResumeEligible && llmTraceSessionId) {
+        nextMetadata.llmResumeState = {
+          sessionId: llmTraceSessionId,
+          provider: llmTraceProvider ?? 'unknown'
+        };
       }
       operationContext.metadata = nextMetadata;
     }
@@ -5211,8 +5244,22 @@ async function evaluateExecInvocationInternal(
       operationContext.metadata = nextMetadata;
     }
 
-    const finalizeResult = async (result: EvalResult): Promise<EvalResult> =>
-      runExecPostGuards({
+    const finalizeResult = async (result: EvalResult): Promise<EvalResult> => {
+      if (!llmResumeEligible) {
+        const envelope = tryExtractLlmResumeEnvelope(result?.value ?? result);
+        if (envelope?.resumeState) {
+          llmResumeEligible = true;
+          currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, envelope.resumeState);
+          const nextMetadata: Record<string, unknown> = {
+            ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+            llmResumeEligible: true,
+            llmResumeState: { ...currentLlmResumeState }
+          };
+          operationContext.metadata = nextMetadata;
+          runtimeEnv.updateOpContext({ metadata: nextMetadata });
+        }
+      }
+      return runExecPostGuards({
         env: runtimeEnv,
         execEnv,
         node,
@@ -5221,6 +5268,7 @@ async function evaluateExecInvocationInternal(
         result,
         whenExprNode
       });
+    };
 
     const invocationResult = await runtimeEnv.withOpContext(operationContext, async () => {
       return AutoUnwrapManager.executeWithPreservation(async () => {
@@ -5486,11 +5534,27 @@ async function evaluateExecInvocationInternal(
   if (resumeEnvelope) {
     result = resumeEnvelope.value;
     if (resumeEnvelope.resumeState) {
+      llmResumeEligible = true;
       currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, resumeEnvelope.resumeState);
       surfacedLlmSessionId = currentLlmResumeState.sessionId;
       const nextMetadata: Record<string, unknown> = {
         ...((operationContext.metadata ?? {}) as Record<string, unknown>),
-        ...(llmResumeEligible ? { llmResumeEligible: true } : {}),
+        llmResumeEligible: true,
+        llmResumeState: { ...currentLlmResumeState }
+      };
+      operationContext.metadata = nextMetadata;
+      runtimeEnv.updateOpContext({ metadata: nextMetadata });
+    }
+  }
+  if (!llmResumeEligible && isStructuredValue(result)) {
+    const embeddedResume = (result as any).metadata?._mlldResumeState;
+    if (embeddedResume && typeof embeddedResume === 'object' && typeof embeddedResume.sessionId === 'string') {
+      llmResumeEligible = true;
+      currentLlmResumeState = mergeReturnedLlmResumeState(currentLlmResumeState, embeddedResume as LlmResumeState);
+      surfacedLlmSessionId = currentLlmResumeState.sessionId;
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+        llmResumeEligible: true,
         llmResumeState: { ...currentLlmResumeState }
       };
       operationContext.metadata = nextMetadata;
@@ -5535,6 +5599,15 @@ async function evaluateExecInvocationInternal(
 
   if (hasLlmLabel) {
     result = attachLlmResultMetadata(wrapExecResult(result), execEnv);
+  }
+
+  if (currentLlmResumeState && surfacedLlmSessionId) {
+    const structured = isStructuredValue(result) ? result : wrapExecResult(result);
+    structured.metadata = {
+      ...(structured.metadata ?? {}),
+      _mlldResumeState: { ...currentLlmResumeState }
+    };
+    result = structured;
   }
 
   // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)

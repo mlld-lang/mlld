@@ -1,14 +1,14 @@
 ---
-id: checkpoint
+id: checkpoint-resume
 qa_tier: 2
 title: Checkpoint & Resume
 brief: Cache LLM call results, control replay policy, and resume targeted work
 category: cli
-aliases: [checkpoint, checkpoints, resume, cache, fresh, fork]
+aliases: [checkpoint, checkpoints, checkpoint-resume, resume, cache, fresh, fork]
 tags: [checkpoint, resume, cache, llm, cli]
-related: [config-cli-run, hooks, exe-simple]
+related: [config-cli-run, hooks, exe-simple, guard-resume]
 related-code: [interpreter/checkpoint/CheckpointManager.ts, interpreter/hooks/checkpoint-pre-hook.ts, cli/commands/checkpoint.ts, cli/commands/run.ts]
-updated: 2026-03-06
+updated: 2026-04-22
 ---
 
 Checkpointing automatically persists results from `llm`-labeled executables so you can resume interrupted runs without re-calling LLMs. Cache writes are automatic; cache reads follow the script's resume policy.

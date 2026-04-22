@@ -372,6 +372,15 @@ GuardAction
         location: location()
       });
     }
+  / "resume" message:GuardActionMessage options:GuardResumeWithClause? {
+      return helpers.createNode('GuardAction', {
+        decision: 'resume',
+        message: message.value,
+        rawMessage: message.raw,
+        resumeTools: options?.tools,
+        location: location()
+      });
+    }
   / "resume" message:GuardActionMessage? {
       if (!message) {
         helpers.mlldError('Guard resume actions require a hint: resume "hint"', '"hint"', location());
@@ -468,6 +477,12 @@ GuardAllowEntry
     }
   / "warning" _ ":" _ message:StringLiteral {
       return ["warning", message];
+    }
+
+GuardResumeWithClause
+  = HWS "with" _ "{" _ "tools" _ ":" _ value:(UnifiedQuoteOrTemplate / UnifiedExpression) _ "}" {
+      const nodes = Array.isArray(value) ? value : [value];
+      return { tools: nodes };
     }
 
 GuardLabelList

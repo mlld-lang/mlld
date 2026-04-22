@@ -5,7 +5,7 @@ title: Ralph Loop Pattern
 brief: Autonomous agent loop with fresh context and test backpressure
 category: patterns
 tags: [patterns, agents, loops, orchestration, autonomous]
-related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute, checkpoint, hooks]
+related: [loop, pattern-gate, pattern-llm-integration, config-sdk-execute, checkpoint-resume, hooks]
 related-code: [interpreter/eval/loop.ts]
 updated: 2026-02-24
 ---

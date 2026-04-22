@@ -9,6 +9,7 @@ import type {
   GuardResult
 } from '@core/types/guard';
 import type { GuardEnvActionResolution } from './guard-action-evaluator';
+import { evaluateResumeTools } from './guard-action-evaluator';
 import type { Variable, VariableSource } from '@core/types/variable';
 import { createArrayVariable, createSimpleTextVariable } from '@core/types/variable';
 import { attachArrayHelpers } from '@core/types/variable/ArrayHelpers';
@@ -619,6 +620,7 @@ export async function evaluateGuardRuntime(
     }
     if (action.decision === 'resume') {
       discardSessionBuffer();
+      const resolvedResumeTools = await evaluateResumeTools(action, guardEnv);
       const entry: GuardAttemptEntry = {
         attempt: options.attemptNumber,
         decision: 'resume',
@@ -639,6 +641,9 @@ export async function evaluateGuardRuntime(
         scopeKey,
         guardActionMatched: true
       });
+      if (resolvedResumeTools !== undefined) {
+        resumeMetadata.resumeTools = resolvedResumeTools;
+      }
       return {
         guardName: guard.name ?? null,
         decision: 'resume',

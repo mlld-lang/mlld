@@ -91,6 +91,25 @@ export async function evaluateGuardReplacement(
   return cloneVariableForReplacement(inputVariable, guardDescriptor);
 }
 
+export async function evaluateResumeTools(
+  action: GuardActionNode,
+  guardEnv: Environment
+): Promise<unknown> {
+  if (!action.resumeTools || action.resumeTools.length === 0) {
+    return undefined;
+  }
+  const { evaluate } = await import('../core/interpreter');
+  const result = await evaluate(action.resumeTools, guardEnv, { isExpression: true });
+  let value = result?.value ?? result;
+  if (isVariable(value as Variable)) {
+    value = (value as Variable).value;
+  }
+  if (isStructuredValue(value)) {
+    value = value.data;
+  }
+  return value;
+}
+
 export async function resolveGuardEnvConfig(
   action: GuardActionNode,
   guardEnv: Environment

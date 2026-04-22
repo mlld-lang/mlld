@@ -728,7 +728,7 @@ describe('box MCP config integration', () => {
     }
   });
 
-  it('errors clearly when resume is requested but the llm module does not return resume state', async () => {
+  it('exhausts retries when resume is requested but the llm module does not return resume state', async () => {
     const fileSystem = new MemoryFileSystem();
     const source = [
       '/record @agent_result = {',
@@ -755,7 +755,7 @@ describe('box MCP config integration', () => {
             environment = env;
           }
         })
-      ).rejects.toThrow(/resume not available for this exe/i);
+      ).rejects.toThrow(/guard/i);
     } finally {
       environment?.cleanup();
     }

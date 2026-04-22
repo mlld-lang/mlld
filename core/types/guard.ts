@@ -27,6 +27,7 @@ export interface GuardActionNode extends BaseMlldNode {
   removeLabels?: DataLabel[];
   clearLabels?: boolean;
   warning?: string;
+  resumeTools?: BaseMlldNode[];
 }
 
 export interface GuardLabelModifications {

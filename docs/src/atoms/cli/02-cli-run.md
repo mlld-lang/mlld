@@ -5,7 +5,7 @@ title: mlld run Command
 brief: Execute scripts with payload injection
 category: cli
 tags: [cli, run, scripts, payload, checkpoint, resume]
-related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint, runtime-tracing]
+related: [syntax-payload, config-sdk-dynamic-modules, config-cli-file, checkpoint-resume, runtime-tracing]
 related-code: [cli/commands/run.ts]
 updated: 2026-03-06
 ---
