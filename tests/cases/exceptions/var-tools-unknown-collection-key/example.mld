@@ -1,0 +1,10 @@
+/exe @sendEmail(subject) = `sent:@subject`
+
+/var tools @tools = {
+  send_email: {
+    mlld: @sendEmail,
+    labels: ["tool:w"]
+  }
+}
+
+/show @tools.missing("hello")

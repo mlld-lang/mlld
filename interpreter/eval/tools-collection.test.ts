@@ -1284,6 +1284,39 @@ describe('tool collections', () => {
     });
   });
 
+  it('invokes parameter-bound tool entry executable fields before preserved collection dispatch', async () => {
+    const env = await interpretWithEnv(`
+      /exe @hello() = "entry-mlld-field"
+      /exe @collectionMlld() = "collection-tool-mlld"
+
+      /exe @callDot(entry) = @entry.mlld()
+      /exe @callBracket(entry) = @entry["mlld"]()
+
+      /var tools @tools = {
+        greet: {
+          mlld: @hello,
+          labels: ["tool:w"]
+        },
+        mlld: {
+          mlld: @collectionMlld,
+          labels: ["tool:w"]
+        }
+      }
+
+      /var @dot = @callDot(@tools.greet)
+      /var @bracket = @callBracket(@tools.greet)
+      /var @collection = @tools.mlld()
+    `);
+
+    const dot = await extractVariableValue(env.getVariable('dot') as any, env);
+    const bracket = await extractVariableValue(env.getVariable('bracket') as any, env);
+    const collection = await extractVariableValue(env.getVariable('collection') as any, env);
+
+    expect((dot as any).data ?? dot).toBe('entry-mlld-field');
+    expect((bracket as any).data ?? bracket).toBe('entry-mlld-field');
+    expect((collection as any).data ?? collection).toBe('collection-tool-mlld');
+  });
+
   it('keeps positional direct collection dispatch behavior unchanged', async () => {
     const output = await interpret(`
       /exe @send_email(recipients, subject, body) = \`sent:@subject:@body\`

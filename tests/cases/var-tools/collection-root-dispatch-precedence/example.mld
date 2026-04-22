@@ -1,0 +1,23 @@
+/exe @shorthand(name) = `shorthand:@name`
+/exe @objectTool(name) = `object:@name`
+/exe @collectionMlld() = "collection-root-mlld"
+
+/var tools @tools = {
+  shorthand: @shorthand,
+  objectTool: {
+    mlld: @objectTool,
+    labels: ["tool:w"],
+    description: "metadata path"
+  },
+  mlld: {
+    mlld: @collectionMlld,
+    labels: ["tool:w"]
+  }
+}
+
+/show @tools.shorthand("Ada")
+/show @tools["shorthand"]("Byron")
+/show @tools.objectTool("Ada")
+/show @tools.mlld()
+/show @tools.shorthand.mlld("Cora")
+/show @tools.objectTool.mlld("Drew")

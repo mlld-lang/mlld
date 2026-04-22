@@ -1,0 +1,15 @@
+/exe @entryMlld() = "imported-entry-mlld-field"
+/exe @collectionMlld() = "imported-collection-tool-mlld"
+
+/var tools @tools = {
+  greet: {
+    mlld: @entryMlld,
+    labels: ["tool:w"]
+  },
+  mlld: {
+    mlld: @collectionMlld,
+    labels: ["tool:w"]
+  }
+}
+
+/export { @tools }

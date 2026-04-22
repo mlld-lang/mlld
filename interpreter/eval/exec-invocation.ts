@@ -204,6 +204,27 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   return record[name];
 }
 
+function isSerializedExecutableValue(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '__executable' in value &&
+    Boolean((value as { __executable?: unknown }).__executable)
+  );
+}
+
+function resolveCallableObjectMethod(obj: unknown, name: string): unknown {
+  const value = resolveObjectMethod(obj, name);
+  if (
+    value &&
+    typeof value === 'object' &&
+    (isExecutableVariable(value as any) || isSerializedExecutableValue(value))
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 function getExecutableResolutionIdentifier(
   variable: Variable | undefined,
   fallbackName: string
@@ -3010,50 +3031,61 @@ async function evaluateExecInvocationInternal(
         }
 
         if (typeof objectValue === 'object' && objectValue !== null) {
-          const toolCollection =
-            (objectVar.internal?.isToolsCollection === true
-              ? boundary.identity<ToolCollection | undefined>(objectVar)
-              : undefined)
-            ?? getToolCollectionFromValue(objectValue);
-          if (toolCollection) {
-            const definition = toolCollection[commandName];
-            if (!definition) {
-              throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
-            }
-
-            const execName = normalizeCollectionExecutableReferenceName(definition.mlld);
-            if (!execName) {
-              throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
-            }
-
-            const resolvedExecutable = await resolveCollectionExecutableForDispatch({
-              env,
-              execName,
-              executableRef: definition.mlld,
-              collection: toolCollection,
-              definition,
-              sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined
-            });
-            const isSerializedExecutable =
-              typeof resolvedExecutable === 'object'
-              && resolvedExecutable !== null
-              && '__executable' in resolvedExecutable
-              && Boolean((resolvedExecutable as { __executable?: unknown }).__executable);
-            if (!resolvedExecutable || (!isExecutableVariable(resolvedExecutable) && !isSerializedExecutable)) {
-              throw new MlldInterpreterError(
-                `Tool '${commandName}' in collection '@${objectRef.identifier}' references non-executable '@${execName}'`
-              );
-            }
-
-            variable = resolvedExecutable;
-            collectionDispatchContext = {
-              collection: toolCollection,
-              definition,
-              toolKey: commandName
-            };
-          } else {
-            variable = resolveObjectMethod(objectValue, commandName);
+          const preservedToolCollection = objectVar.internal?.isToolsCollection === true
+            ? boundary.identity<ToolCollection | undefined>(objectVar)
+            : undefined;
+          const valueToolCollection = getToolCollectionFromValue(objectValue);
+          const isCollectionRootValue =
+            Boolean(valueToolCollection) ||
+            (preservedToolCollection !== undefined && objectValue === preservedToolCollection);
+          const callableObjectMethod = isCollectionRootValue
+            ? undefined
+            : resolveCallableObjectMethod(objectValue, commandName);
+          if (callableObjectMethod) {
+            variable = callableObjectMethod;
             objectMethodExecutableDispatch = true;
+          } else {
+            const toolCollection = preservedToolCollection ?? valueToolCollection;
+            if (toolCollection) {
+              const definition = toolCollection[commandName];
+              if (!definition) {
+                throw new MlldInterpreterError(`Unknown tool '${commandName}' in collection '@${objectRef.identifier}'`);
+              }
+
+              const execName = normalizeCollectionExecutableReferenceName(definition.mlld);
+              if (!execName) {
+                throw new MlldInterpreterError(`Tool '${commandName}' in collection '@${objectRef.identifier}' is missing an executable reference`);
+              }
+
+              const resolvedExecutable = await resolveCollectionExecutableForDispatch({
+                env,
+                execName,
+                executableRef: definition.mlld,
+                collection: toolCollection,
+                definition,
+                sourceVariable: objectVar as { internal?: Record<string, unknown> } | undefined
+              });
+              const isSerializedExecutable =
+                typeof resolvedExecutable === 'object'
+                && resolvedExecutable !== null
+                && '__executable' in resolvedExecutable
+                && Boolean((resolvedExecutable as { __executable?: unknown }).__executable);
+              if (!resolvedExecutable || (!isExecutableVariable(resolvedExecutable) && !isSerializedExecutable)) {
+                throw new MlldInterpreterError(
+                  `Tool '${commandName}' in collection '@${objectRef.identifier}' references non-executable '@${execName}'`
+                );
+              }
+
+              variable = resolvedExecutable;
+              collectionDispatchContext = {
+                collection: toolCollection,
+                definition,
+                toolKey: commandName
+              };
+            } else {
+              variable = resolveObjectMethod(objectValue, commandName);
+              objectMethodExecutableDispatch = true;
+            }
           }
         }
       }

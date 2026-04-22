@@ -1,0 +1,24 @@
+/exe @entryMlld() = "entry-mlld-field"
+/exe @collectionMlld() = "collection-tool-mlld"
+
+/exe @callDot(entry) = @entry.mlld()
+/exe @callBracket(entry) = @entry["mlld"]()
+
+/var tools @tools = {
+  greet: {
+    mlld: @entryMlld,
+    labels: ["tool:w"]
+  },
+  mlld: {
+    mlld: @collectionMlld,
+    labels: ["tool:w"]
+  }
+}
+
+/var @entryAlias = @tools.greet
+
+/show @callDot(@tools.greet)
+/show @callBracket(@tools.greet)
+/show @entryAlias.mlld()
+/show @entryAlias["mlld"]()
+/show @tools.mlld()
