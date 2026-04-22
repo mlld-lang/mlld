@@ -158,6 +158,9 @@ export class ContextManager {
   private toolAvailable: AvailableToolContextEntry[] = [];
   private toolResults: Record<string, unknown> = {};
   private sigStatuses: Record<string, unknown> = {};
+  private toolsSnapshotVersion = 0;
+  private toolsSnapshotCachedAt = -1;
+  private cachedToolsSnapshot?: ToolsContextSnapshot;
   private sigFilesResolver?: SigFilesResolver;
   private readonly knownUrls = new Set<string>();
 
@@ -314,33 +317,41 @@ export class ContextManager {
   setToolAvailability(allowed?: readonly string[] | null, denied?: readonly string[] | null): void {
     this.toolAllowed = this.normalizeToolList(allowed);
     this.toolDenied = this.normalizeToolList(denied);
+    this.toolsSnapshotVersion++;
   }
 
   setAvailableTools(available?: readonly AvailableToolContextEntry[] | null): void {
     this.toolAvailable = this.normalizeAvailableTools(available);
+    this.toolsSnapshotVersion++;
   }
 
   recordToolCall(call: ToolCallRecord): void {
     this.toolCalls.push(Object.freeze({ ...call }));
+    this.toolsSnapshotVersion++;
     if (call.ok) {
       if (call.result !== undefined) {
-        this.toolResults[call.name] = this.cloneToolResult(call.result);
+        this.toolResults[call.name] = this.deepFreezeValue(call.result);
       }
       return;
     }
-    this.toolResults[call.name] = {
+    this.toolResults[call.name] = Object.freeze({
       ok: false,
       error: call.error ?? null
-    };
+    });
   }
 
   resetToolCalls(): void {
     this.toolCalls = [];
     this.toolResults = {};
+    this.toolsSnapshotVersion++;
+    this.cachedToolsSnapshot = undefined;
   }
 
   getToolsSnapshot(): ToolsContextSnapshot {
-    return {
+    if (this.cachedToolsSnapshot && this.toolsSnapshotCachedAt === this.toolsSnapshotVersion) {
+      return this.cachedToolsSnapshot;
+    }
+    this.cachedToolsSnapshot = {
       calls: this.toolCalls.map(call => call.name),
       allowed: [...this.toolAllowed],
       denied: [...this.toolDenied],
@@ -348,6 +359,8 @@ export class ContextManager {
       results: { ...this.toolResults },
       history: []
     };
+    this.toolsSnapshotCachedAt = this.toolsSnapshotVersion;
+    return this.cachedToolsSnapshot;
   }
 
   recordSigStatus(keys: readonly string[], status: unknown): void {
@@ -355,7 +368,7 @@ export class ContextManager {
       return;
     }
 
-    const snapshot = this.cloneToolResult(status);
+    const frozen = this.deepFreezeValue(status);
     for (const key of keys) {
       if (typeof key !== 'string') {
         continue;
@@ -364,7 +377,7 @@ export class ContextManager {
       if (!normalized) {
         continue;
       }
-      this.sigStatuses[normalized] = snapshot;
+      this.sigStatuses[normalized] = frozen;
     }
   }
 
@@ -567,36 +580,38 @@ export class ContextManager {
     return normalized;
   }
 
-  private cloneToolResult(value: unknown): unknown {
-    try {
-      return structuredClone(value);
-    } catch {
-      return this.sanitizeToolResult(value, new WeakSet<object>());
-    }
-  }
-
-  private sanitizeToolResult(value: unknown, seen: WeakSet<object>): unknown {
+  private deepFreezeValue(value: unknown, seen?: WeakMap<object, unknown>): unknown {
     if (value === null || value === undefined) {
       return value;
     }
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value !== 'object' || typeof value === 'function') {
       return value;
     }
-    if (Array.isArray(value)) {
-      return value.map(entry => this.sanitizeToolResult(entry, seen));
+    const obj = value as object;
+    if (Object.isFrozen(obj)) {
+      return obj;
     }
-    if (typeof value === 'object') {
-      if (seen.has(value as object)) {
-        return '[Circular]';
-      }
-      seen.add(value as object);
-      const output: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-        output[key] = this.sanitizeToolResult(entry, seen);
-      }
-      return output;
+    if (!seen) {
+      seen = new WeakMap();
     }
-    return String(value);
+    const cached = seen.get(obj);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (Array.isArray(obj)) {
+      const copy: unknown[] = [];
+      seen.set(obj, copy);
+      for (const item of obj) {
+        copy.push(this.deepFreezeValue(item, seen));
+      }
+      return Object.freeze(copy);
+    }
+    const copy: Record<string, unknown> = {};
+    seen.set(obj, copy);
+    for (const [key, entry] of Object.entries(obj as Record<string, unknown>)) {
+      copy[key] = this.deepFreezeValue(entry, seen);
+    }
+    return Object.freeze(copy);
   }
 
   private buildSigContext(): Record<string, unknown> {

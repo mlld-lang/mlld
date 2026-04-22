@@ -942,8 +942,10 @@ function applySlotMutation(args: {
     args.instance.clearSlot(args.binding.name);
     args.instance.clearTraceSlot(args.binding.name);
   } else {
-    args.instance.setSlot(args.binding.name, cloneSessionValue(normalizeStoredSessionValue(args.nextValue)));
-    args.instance.setTraceSlot(args.binding.name, cloneSessionValue(args.nextValue));
+    args.instance.setSlot(args.binding.name, normalizeStoredSessionValue(args.nextValue));
+    if (args.env.getRuntimeTraceLevel() !== 'off') {
+      args.instance.setTraceSlot(args.binding.name, cloneSessionValue(args.nextValue));
+    }
   }
 
   stageMutation(args.env, {

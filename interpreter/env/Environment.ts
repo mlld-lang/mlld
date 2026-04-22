@@ -1779,6 +1779,9 @@ export class Environment
       ...entry,
       finalState: { ...entry.finalState }
     });
+    if (root.completedSessions.length > 200) {
+      root.completedSessions = root.completedSessions.slice(-100);
+    }
   }
 
   getCompletedSessions(): SessionFinalStateRecord[] {
@@ -2031,6 +2034,9 @@ export class Environment
       timestamp: write.timestamp ?? new Date().toISOString()
     };
     root.stateWrites.push(entry);
+    if (root.stateWrites.length > 200) {
+      root.stateWrites = root.stateWrites.slice(-100);
+    }
     root.applyStateWriteToSnapshot(entry);
 
     if (root.hasSDKEmitter()) {
@@ -2054,6 +2060,9 @@ export class Environment
       args: denial.args ? { ...denial.args } : null
     };
     root.guardDenials.push(entry);
+    if (root.guardDenials.length > 200) {
+      root.guardDenials = root.guardDenials.slice(-100);
+    }
 
     if (root.hasSDKEmitter()) {
       root.emitSDKEvent({
