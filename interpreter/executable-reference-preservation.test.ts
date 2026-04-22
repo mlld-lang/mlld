@@ -98,4 +98,32 @@ describe('Executable Reference Preservation', () => {
     const output = await run(source);
     expect(output.split('\n').filter(Boolean)).toEqual(['2']);
   });
+
+  it('tracks resolved executables instead of local alias names for nested dispatch', async () => {
+    const source = [
+      '/exe @leaf(x) = `leaf:@x`',
+      '/var tools @tools = {',
+      '  leaf: { mlld: @leaf, labels: ["tool:r"] }',
+      '}',
+      '/exe @agent(args) = [',
+      '  let @entry = @tools.leaf',
+      '  let @tool = @entry.mlld',
+      '  => @tool(@args)',
+      ']',
+      '/var tools @agents = {',
+      '  agent: { mlld: @agent, labels: ["agent:r"] }',
+      '}',
+      '/exe recursive @dispatch(entry, args) = [',
+      '  let @tool = @entry.mlld',
+      '  if @typeof(@tool) == "executable" [',
+      '    => @tool(@args)',
+      '  ]',
+      '  => null',
+      ']',
+      '/show @dispatch(@agents.agent, "x")'
+    ].join('\n');
+
+    const output = await run(source);
+    expect(output.split('\n').filter(Boolean)).toEqual(['leaf:x']);
+  });
 });

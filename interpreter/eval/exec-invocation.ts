@@ -204,6 +204,30 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   return record[name];
 }
 
+function getExecutableResolutionIdentifier(
+  variable: Variable | undefined,
+  fallbackName: string
+): string {
+  // Let/param executable aliases keep the callee's mx.name. Track that stable
+  // identity instead of the local alias so nested dispatchers can reuse names
+  // like @tool without looking recursive.
+  const mxName = typeof variable?.mx?.name === 'string'
+    ? variable.mx.name.trim()
+    : '';
+  if (mxName.length > 0) {
+    return mxName;
+  }
+
+  const variableName = typeof variable?.name === 'string'
+    ? variable.name.trim()
+    : '';
+  if (variableName.length > 0) {
+    return variableName;
+  }
+
+  return fallbackName;
+}
+
 type CollectionDispatchContext = {
   collection: ToolCollection;
   definition: ToolDefinition;
@@ -2722,6 +2746,7 @@ async function evaluateExecInvocationInternal(
   // the wrapped body's real name carries the real guard.
   let isToolbridgeWrapper = existingVar?.internal?.isToolbridgeWrapper === true;
   let shouldTrackResolution = !isBuiltinCommand && !isReservedName && !isToolbridgeWrapper;
+  let resolutionIdentifier = commandName;
 
   // Check if this is a field access exec invocation (e.g., @obj.method())
   // or a method call on an exec result (e.g., @func(args).method())
@@ -3043,6 +3068,7 @@ async function evaluateExecInvocationInternal(
         isRecursiveExe = Array.isArray(variable.mx?.labels) && variable.mx.labels.includes('recursive');
         isToolbridgeWrapper = variable.internal?.isToolbridgeWrapper === true;
         shouldTrackResolution = !isBuiltinMethod(commandName) && !isReservedName && !isToolbridgeWrapper;
+        resolutionIdentifier = getExecutableResolutionIdentifier(variable, commandName);
       }
     }
     
@@ -3231,6 +3257,14 @@ async function evaluateExecInvocationInternal(
   // Ensure it's an executable variable
   if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
+  }
+
+  if (shouldTrackResolution) {
+    resolutionIdentifier = getExecutableResolutionIdentifier(variable, commandName);
+    isReservedName = variable.internal?.isReserved;
+    isRecursiveExe = Array.isArray(variable.mx?.labels) && variable.mx.labels.includes('recursive');
+    isToolbridgeWrapper = variable.internal?.isToolbridgeWrapper === true;
+    shouldTrackResolution = !isBuiltinMethod(resolutionIdentifier) && !isReservedName && !isToolbridgeWrapper;
   }
   
   // Special handling for built-in transformers
@@ -4011,32 +4045,32 @@ async function evaluateExecInvocationInternal(
   // and it is about to execute again. Non-recursive functions throw immediately.
   // Functions labelled `recursive` are allowed up to MLLD_RECURSION_DEPTH calls.
   let resolutionTrackingActive = false;
-  if (shouldTrackResolution && env.isResolving(commandName)) {
+  if (shouldTrackResolution && env.isResolving(resolutionIdentifier)) {
     // Prefer a user-facing name over internal wrapper tempNames in error output.
     const displayName =
       (variable?.internal as { toolbridgeDisplayName?: unknown } | undefined)?.toolbridgeDisplayName
-        ?? commandName;
+        ?? resolutionIdentifier;
     if (!isRecursiveExe) {
       throw new CircularReferenceError(
         `Circular reference detected: executable '@${displayName}' calls itself recursively without a terminating condition`,
-        { identifier: commandName, location: nodeSourceLocation }
+        { identifier: resolutionIdentifier, location: nodeSourceLocation }
       );
     }
     const limit = Number(process.env.MLLD_RECURSION_DEPTH ?? 64);
-    if (env.getCallDepth(commandName) >= limit) {
+    if (env.getCallDepth(resolutionIdentifier) >= limit) {
       throw new CircularReferenceError(
         `'@${displayName}' exceeded maximum recursion depth (${limit}). Add a base case or increase the limit with MLLD_RECURSION_DEPTH.`,
-        { identifier: commandName, location: nodeSourceLocation }
+        { identifier: resolutionIdentifier, location: nodeSourceLocation }
       );
     }
   }
   if (shouldTrackResolution) {
-    env.beginResolving(commandName);
+    env.beginResolving(resolutionIdentifier);
     resolutionTrackingActive = true;
   }
   endResolutionTrackingIfNeeded = (): void => {
-    if (!resolutionTrackingActive || !commandName) return;
-    env.endResolving(commandName);
+    if (!resolutionTrackingActive || !resolutionIdentifier) return;
+    env.endResolving(resolutionIdentifier);
     resolutionTrackingActive = false;
   };
 
