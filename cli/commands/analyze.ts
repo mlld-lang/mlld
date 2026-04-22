@@ -424,6 +424,8 @@ const EXECUTABLE_WITH_CLAUSE_KEYS = new Set([
   'pipeline',
   'policy',
   'profile',
+  'seed',
+  'session',
   'sourceArgs',
   'stdin',
   'stream',
