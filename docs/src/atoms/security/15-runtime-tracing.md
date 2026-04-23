@@ -155,7 +155,7 @@ Trace handle lifecycle to debug authorization failures. If `auth.deny` fires bec
 | `policy.validate` | effects | same as policy.build |
 | `policy.compile_drop` | effects | dropped entries and array elements |
 | `policy.compile_repair` | verbose | repaired args with repair steps |
-| `proof.lifted` | verbose | tool, arg, lifted proof labels — a proofless value was rescued by matching a fact-backed value in the environment |
+| `proof.lifted` | verbose | tool, arg, element index (for arrays), lifted proof labels — a proofless value was rescued by matching a fact-backed value in the environment |
 | `auth.check` | effects | tool, args summary, effective auth args |
 | `auth.allow` | effects | tool, matched attestation count |
 | `auth.deny` | effects | tool, reason, code |
