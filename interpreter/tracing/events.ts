@@ -170,6 +170,12 @@ export function tracePolicyEvent<K extends 'policy.build' | 'policy.validate' | 
   return createRuntimeTraceEnvelope(level, 'policy', event, data);
 }
 
+export function traceProofEvent(
+  data: RuntimeTraceEventSpecMap['proof.lifted']['data']
+): RuntimeTraceEnvelope<'proof.lifted'> {
+  return createRuntimeTraceEnvelope('verbose', 'proof', 'proof.lifted', data);
+}
+
 export function tracePolicyError(data: RuntimeTraceEventSpecMap['policy.error']['data']): RuntimeTraceEnvelope<'policy.error'> {
   return createRuntimeTraceEnvelope('effects', 'policy', 'policy.error', data);
 }

@@ -56,6 +56,7 @@ export interface PolicyAuthorizationCompileReport {
   ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
   compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
   autoAllowedTools: Array<{ tool: string; reason: AutoAllowedToolReason }>;
+  liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[] }>;
 }
 
 export interface PolicyAuthorizationCompilerIssue {
@@ -134,7 +135,8 @@ export function createEmptyPolicyAuthorizationCompileReport(): PolicyAuthorizati
     droppedArrayElements: [],
     ambiguousValues: [],
     compiledProofs: [],
-    autoAllowedTools: []
+    autoAllowedTools: [],
+    liftedArgs: []
   };
 }
 
@@ -148,7 +150,8 @@ export function clonePolicyAuthorizationCompileReport(
     droppedArrayElements: report.droppedArrayElements.map(entry => ({ ...entry })),
     ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
     compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] })),
-    autoAllowedTools: report.autoAllowedTools.map(entry => ({ ...entry }))
+    autoAllowedTools: report.autoAllowedTools.map(entry => ({ ...entry })),
+    liftedArgs: report.liftedArgs.map(entry => ({ ...entry, liftedLabels: [...entry.liftedLabels] }))
   };
 }
 
@@ -163,6 +166,7 @@ export function hasPolicyAuthorizationCompileActivity(
     || report.ambiguousValues.length > 0
     || report.compiledProofs.length > 0
     || report.autoAllowedTools.length > 0
+    || report.liftedArgs.length > 0
   );
 }
 
@@ -2818,6 +2822,7 @@ async function enforceEqClauseProof(options: {
   env: Environment;
   mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
+  report: PolicyAuthorizationCompileReport;
 }): Promise<AuthorizationConstraintClause | undefined> {
   if (hasAcceptedProofLabels(options.clause.attestations)) {
     return options.clause;
@@ -2885,6 +2890,12 @@ async function enforceEqClauseProof(options: {
         liftedMatch !== undefined
         && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch))
       ) {
+        const liftedLabels = collectValueProofLabels(liftedMatch);
+        options.report.liftedArgs.push({
+          tool: options.toolName,
+          arg: options.argName,
+          liftedLabels
+        });
         retained.push(liftedMatch);
         continue;
       }
@@ -2921,6 +2932,11 @@ async function enforceEqClauseProof(options: {
   if (liftedMatch !== undefined) {
     const liftedLabels = collectValueProofLabels(liftedMatch);
     if (hasAcceptedProofLabels(liftedLabels)) {
+      options.report.liftedArgs.push({
+        tool: options.toolName,
+        arg: options.argName,
+        liftedLabels
+      });
       return {
         ...options.clause,
         eq: liftedMatch,
@@ -2945,6 +2961,7 @@ async function enforceOneOfClauseProof(options: {
   env: Environment;
   mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
+  report: PolicyAuthorizationCompileReport;
 }): Promise<AuthorizationConstraintClause | undefined> {
   const retainedValues: unknown[] = [];
   const retainedAttestations: string[][] = [];
@@ -3006,6 +3023,7 @@ async function enforceControlArgProof(options: {
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
+  report: PolicyAuthorizationCompileReport;
 }): Promise<void> {
   const allow = options.authorizations?.allow;
   if (!allow) {
@@ -3038,7 +3056,8 @@ async function enforceControlArgProof(options: {
                 clause,
                 env: options.env,
                 mode: options.mode,
-                issues: options.issues
+                issues: options.issues,
+                report: options.report
               })
             : await enforceOneOfClauseProof({
                 toolName,
@@ -3046,7 +3065,8 @@ async function enforceControlArgProof(options: {
                 clause,
                 env: options.env,
                 mode: options.mode,
-                issues: options.issues
+                issues: options.issues,
+                report: options.report
               });
 
         if (nextClause) {
@@ -3180,7 +3200,8 @@ export async function compilePolicyAuthorizations(
     env: options.env,
     toolContext: options.toolContext,
     mode: options.mode,
-    issues
+    issues,
+    report
   });
 
   if (options.mode === 'runtime' && issues.some(isFatalRuntimeCompilerIssue)) {

@@ -518,4 +518,44 @@ describe('runtime trace', () => {
       expect.arrayContaining(['proofless_resolved_value'])
     );
   });
+
+  it('policy.build report includes liftedArgs field', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = \`sent\` with { controlArgs: ["recipient"] }
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+/var @intent = {
+  sendEmail: {
+    recipient: {
+      eq: "someone@example.com",
+      attestations: ["known"]
+    }
+  }
+}
+/var @built = @policy.build(@intent, @writeTools, {
+  basePolicy: {
+    defaults: { rules: ["no-send-to-unknown"] },
+    operations: { "exfil:send": ["tool:w"] }
+  }
+})
+/show @built.report.liftedArgs
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    expect(result.output.trim()).toBe('[]');
+  });
 });

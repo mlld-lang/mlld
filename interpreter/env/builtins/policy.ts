@@ -31,7 +31,7 @@ import { normalizeToolCollection } from '@interpreter/eval/var/tool-scope';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { boundary } from '@interpreter/utils/boundary';
-import { tracePolicyEvent } from '@interpreter/tracing/events';
+import { tracePolicyEvent, traceProofEvent } from '@interpreter/tracing/events';
 
 const POLICY_SOURCE: VariableSource = {
   directive: 'var',
@@ -809,6 +809,16 @@ async function buildPolicyAuthorizations(
       mode,
       droppedEntries: compilation.report.droppedEntries,
       droppedArrayElements: compilation.report.droppedArrayElements
+    }));
+  }
+  if (compilation.report.liftedArgs.length > 0) {
+    executionEnv.emitRuntimeTraceEvent(traceProofEvent({
+      mode,
+      liftedArgs: compilation.report.liftedArgs.map(entry => ({
+        tool: entry.tool,
+        arg: entry.arg,
+        liftedLabels: entry.liftedLabels
+      }))
     }));
   }
 

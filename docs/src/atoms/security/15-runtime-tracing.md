@@ -155,6 +155,7 @@ Trace handle lifecycle to debug authorization failures. If `auth.deny` fires bec
 | `policy.validate` | effects | same as policy.build |
 | `policy.compile_drop` | effects | dropped entries and array elements |
 | `policy.compile_repair` | verbose | repaired args with repair steps |
+| `proof.lifted` | verbose | tool, arg, lifted proof labels — a proofless value was rescued by matching a fact-backed value in the environment |
 | `auth.check` | effects | tool, args summary, effective auth args |
 | `auth.allow` | effects | tool, matched attestation count |
 | `auth.deny` | effects | tool, reason, code |
@@ -243,6 +244,8 @@ The `policy.build` event includes per-tool arg classification summaries:
 ```
 
 `rawArgKeys` shows what the planner actually sent. `controlArgKeys` shows what the tool declares as security-relevant. A mismatch between the two — for example `rawArgKeys: ["query"]` vs `controlArgKeys: ["query", "date"]` — points directly at missing intent fields without tracing through the compiler manually.
+
+If `proof.lifted` appears in verbose trace, a control arg value arrived without proof but was rescued by matching a fact-backed value in the environment. This means proof was lost upstream — typically through an object spread, `@mergeArgSources`, or `@pairsToObject` that rebuilt the value without preserving its StructuredValue wrapper.
 
 ### "Why is shelf state empty after a write?"
 

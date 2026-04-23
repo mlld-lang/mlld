@@ -540,7 +540,8 @@ describe('@policy builtin', () => {
       droppedArrayElements: [],
       ambiguousValues: [],
       compiledProofs: [],
-      autoAllowedTools: []
+      autoAllowedTools: [],
+      liftedArgs: []
     });
     expect(validated.policy.authorizations.allow.sendEmail).toEqual({
       kind: 'constrained',
@@ -798,7 +799,8 @@ describe('@policy builtin', () => {
       droppedArrayElements: [],
       ambiguousValues: [],
       compiledProofs: [],
-      autoAllowedTools: []
+      autoAllowedTools: [],
+      liftedArgs: []
     });
     expect(validated.policy.authorizations.allow.createDraft).toEqual({
       kind: 'unconstrained'

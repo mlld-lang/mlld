@@ -38,7 +38,8 @@ export type RuntimeTraceCategory =
   | 'llm'
   | 'memory'
   | 'record'
-  | 'import';
+  | 'import'
+  | 'proof';
 
 type TraceRecord<T extends object> = T & Record<string, unknown>;
 
@@ -87,7 +88,8 @@ export type RuntimeTraceEventName =
   | 'memory.gc'
   | 'memory.pressure'
   | 'record.coerce'
-  | 'record.schema_fail';
+  | 'record.schema_fail'
+  | 'proof.lifted';
 
 export interface RuntimeTraceScope {
   exe?: string;
@@ -312,6 +314,11 @@ export interface RuntimeTraceEventSpecMap {
     category: 'policy';
     level: 'verbose';
     data: TraceRecord<{ mode: string; repairedArgs: unknown[] }>;
+  };
+  'proof.lifted': {
+    category: 'proof';
+    level: 'verbose';
+    data: TraceRecord<{ mode: string; liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[] }> }>;
   };
   'policy.error': {
     category: 'policy';
