@@ -138,6 +138,9 @@ export class RuntimeTraceManager {
       return undefined;
     }
 
+    if (typeof globalThis.gc === 'function' && process.env.MLLD_TRACE_GC === '1') {
+      globalThis.gc();
+    }
     const usage = process.memoryUsage();
     const previous = this.root.lastMemorySample;
     const event = args.event ?? (previous ? 'memory.delta' : 'memory.sample');
