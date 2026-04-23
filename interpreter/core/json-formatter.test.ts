@@ -65,6 +65,29 @@ describe('formatForDisplay', () => {
     expect(rendered).toBe(JSON.stringify({ stance }));
   });
 
+  it('does not collapse proxy objects with missing text fields in arrays', () => {
+    const issue = new Proxy(
+      {
+        reason: 'no_update_fields',
+        message: 'Tool update authorization must specify at least one update field'
+      },
+      {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && !(prop in target)) {
+            return '';
+          }
+          return Reflect.get(target, prop, receiver);
+        }
+      }
+    );
+
+    const rendered = formatForDisplay([issue], { pretty: false });
+    expect(rendered).toBe(JSON.stringify([{
+      reason: 'no_update_fields',
+      message: 'Tool update authorization must specify at least one update field'
+    }]));
+  });
+
   it('serializes interpolated wrapped strings instead of returning empty text', () => {
     const value = {
       message: {

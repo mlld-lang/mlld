@@ -102,7 +102,12 @@ function normalizeArrayEntry(item: unknown): unknown {
   if (Array.isArray(item)) {
     return item.map(el => normalizeArrayEntry(el));
   }
-  if (item && typeof item === 'object' && typeof (item as any).text === 'string') {
+  if (
+    item &&
+    typeof item === 'object' &&
+    Object.prototype.hasOwnProperty.call(item, 'text') &&
+    typeof (item as any).text === 'string'
+  ) {
     return (item as any).text;
   }
   return item;

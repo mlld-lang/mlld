@@ -15,6 +15,7 @@ import type { ToolCollection } from '@core/types/tools';
 import { createSimpleTextVariable, createStructuredValueVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { wrapStructured } from '@interpreter/utils/structured-value';
+import { TestEffectHandler } from '@interpreter/env/EffectHandler';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
@@ -1268,6 +1269,50 @@ describe('@policy builtin', () => {
       ])
     );
     expect(compilation.authorizations?.allow).toEqual({});
+  });
+
+  it('preserves structured issues through show, pretty, and field access', async () => {
+    const effects = new TestEffectHandler();
+    const output = await interpret(`
+      /exe finance:w, tool:w @updateScheduledTransaction(id, recipient, amount, date, subject) = js { return amount; } with {
+        controlArgs: ["id", "recipient"],
+        updateArgs: ["amount", "date", "subject"]
+      }
+
+      /var tools @writeTools = {
+        updateScheduledTransaction: {
+          mlld: @updateScheduledTransaction,
+          expose: ["id", "recipient", "amount", "date", "subject"]
+        }
+      }
+
+      /var @intent = {
+        allow: {
+          updateScheduledTransaction: {
+            id: "txn-1",
+            recipient: "acct-1"
+          }
+        }
+      }
+
+      /var @built = @policy.build(@intent, @writeTools)
+      /show @built.issues
+      /var @prettyIssues = @built.issues | @pretty
+      /show @prettyIssues
+      /show @built.issues[0].reason
+    `, {
+      fileSystem: new MemoryFileSystem(),
+      pathService,
+      pathContext,
+      filePath: pathContext.filePath,
+      format: 'markdown',
+      normalizeBlankLines: true,
+      effectHandler: effects
+    });
+
+    expect(output).not.toContain('[""]');
+    expect(output.match(/"reason": "no_update_fields"/g) ?? []).toHaveLength(2);
+    expect(output.trim().endsWith('no_update_fields')).toBe(true);
   });
 
   it('validates exactPayloadArgs against task text for known bucket values', async () => {
