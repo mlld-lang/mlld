@@ -1,7 +1,8 @@
 import { mlldNameToMCPName } from '@core/mcp/names';
 import {
   getPolicyAuthorizableToolsForRole,
-  stripPolicyAuthorizableField
+  stripPolicyAuthorizableField,
+  type AuthorizationToolContext
 } from '@core/policy/authorizations';
 import type { Environment } from '@interpreter/env/Environment';
 import type { NodeFunctionExecutable } from '@core/types/executable';
@@ -462,6 +463,139 @@ function collectRequestedAuthorizationToolNames(raw: unknown): string[] {
   return requested;
 }
 
+function detectIntentMode(raw: unknown): 'bucketed' | 'flat' | 'empty' {
+  if (!isPlainObject(raw)) {
+    return 'empty';
+  }
+  const container = isPlainObject(raw.authorizations) ? raw.authorizations : raw;
+  if (!isPlainObject(container)) {
+    return 'empty';
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(container, 'resolved')
+    || Object.prototype.hasOwnProperty.call(container, 'known')
+    || Array.isArray(container.allow)
+  ) {
+    return 'bucketed';
+  }
+  if (Object.keys(container).length === 0) {
+    return 'empty';
+  }
+  return 'flat';
+}
+
+function collectRawArgKeysPerTool(
+  raw: unknown
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  if (!isPlainObject(raw)) {
+    return result;
+  }
+  const container = isPlainObject(raw.authorizations) ? raw.authorizations : raw;
+  if (!isPlainObject(container)) {
+    return result;
+  }
+
+  const mergeToolArgs = (toolName: string, entry: unknown): void => {
+    if (entry === true || !isPlainObject(entry)) {
+      if (!result.has(toolName)) {
+        result.set(toolName, []);
+      }
+      return;
+    }
+    const args = isPlainObject(entry.args)
+      ? (entry.args as Record<string, unknown>)
+      : (!Object.prototype.hasOwnProperty.call(entry, 'args') && !Object.prototype.hasOwnProperty.call(entry, 'kind'))
+        ? entry
+        : undefined;
+    const keys = args ? Object.keys(args) : [];
+    const existing = result.get(toolName);
+    if (existing) {
+      for (const k of keys) {
+        if (!existing.includes(k)) {
+          existing.push(k);
+        }
+      }
+    } else {
+      result.set(toolName, keys);
+    }
+  };
+
+  for (const bucket of ['resolved', 'known', 'allow'] as const) {
+    const bucketValue = container[bucket];
+    if (isPlainObject(bucketValue)) {
+      for (const [toolName, entry] of Object.entries(bucketValue)) {
+        mergeToolArgs(toolName, entry);
+      }
+    } else if (Array.isArray(bucketValue)) {
+      for (const entry of bucketValue) {
+        if (typeof entry === 'string' && entry.trim().length > 0) {
+          mergeToolArgs(entry.trim(), true);
+        }
+      }
+    }
+  }
+
+  if (result.size === 0) {
+    for (const [key, entry] of Object.entries(container)) {
+      if (key === 'allow' || key === 'deny' || key === 'known' || key === 'resolved') {
+        continue;
+      }
+      mergeToolArgs(key, entry);
+    }
+  }
+
+  return result;
+}
+
+function buildPolicyBuildTraceSummary(
+  strippedAuthorizations: unknown,
+  toolContext: ReadonlyMap<string, AuthorizationToolContext>,
+  callerRole: string | undefined,
+  issues: readonly { reason: string }[]
+) {
+  const intentMode = detectIntentMode(strippedAuthorizations);
+  const rawArgKeysPerTool = collectRawArgKeysPerTool(strippedAuthorizations);
+
+  const tools: Array<{
+    tool: string;
+    rawArgKeys: string[];
+    controlArgKeys: string[];
+    payloadArgKeys: string[];
+    updateArgKeys: string[];
+  }> = [];
+
+  const toolNames = new Set([...rawArgKeysPerTool.keys(), ...toolContext.keys()]);
+  for (const toolName of toolNames) {
+    if (!rawArgKeysPerTool.has(toolName)) {
+      continue;
+    }
+    const rawArgKeys = rawArgKeysPerTool.get(toolName) ?? [];
+    const ctx = toolContext.get(toolName);
+    const controlArgKeys = ctx ? [...ctx.controlArgs] : [];
+    const controlArgSet = new Set(controlArgKeys);
+    const payloadArgKeys = rawArgKeys.filter(k => !controlArgSet.has(k));
+    const updateArgKeys = ctx ? [...ctx.updateArgs] : [];
+    tools.push({ tool: toolName, rawArgKeys, controlArgKeys, payloadArgKeys, updateArgKeys });
+  }
+
+  const seenCodes = new Set<string>();
+  const issueCodes: string[] = [];
+  for (const issue of issues) {
+    if (!seenCodes.has(issue.reason)) {
+      seenCodes.add(issue.reason);
+      issueCodes.push(issue.reason);
+    }
+  }
+
+  return {
+    intentMode,
+    callerRole: callerRole ?? null,
+    issueCodes: issueCodes.length > 0 ? issueCodes : undefined,
+    tools: tools.length > 0 ? tools : undefined
+  };
+}
+
 function resolveAuthorizationSurfaceNamesForTool(
   requestedToolName: string,
   toolContext: ReadonlyMap<string, { name: string }>
@@ -616,6 +750,19 @@ async function buildPolicyAuthorizations(
     }
 
     if (issues.length > 0) {
+      const summary = buildPolicyBuildTraceSummary(
+        strippedAuthorizations, toolContext, authorizationRole, issues
+      );
+      executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('effects', `policy.${mode}`, {
+        mode,
+        toolCount: Object.keys(toolCollection).length,
+        valid: false,
+        issueCount: issues.length,
+        repairedArgCount: 0,
+        droppedEntryCount: 0,
+        droppedArrayElementCount: 0,
+        ...summary
+      }));
       return createPolicyBuilderIssueResult(basePolicy, issues);
     }
   }
@@ -631,6 +778,9 @@ async function buildPolicyAuthorizations(
     mode: 'builder'
   });
 
+  const traceSummary = buildPolicyBuildTraceSummary(
+    strippedAuthorizations, toolContext, authorizationRole, compilation.issues
+  );
   executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('effects', `policy.${mode}`, {
     mode,
     toolCount: Object.keys(toolCollection).length,
@@ -638,7 +788,8 @@ async function buildPolicyAuthorizations(
     issueCount: compilation.issues.length,
     repairedArgCount: compilation.report.repairedArgs.length,
     droppedEntryCount: compilation.report.droppedEntries.length,
-    droppedArrayElementCount: compilation.report.droppedArrayElements.length
+    droppedArrayElementCount: compilation.report.droppedArrayElements.length,
+    ...traceSummary
   }));
   if (compilation.report.repairedArgs.length > 0) {
     executionEnv.emitRuntimeTraceEvent(tracePolicyEvent('verbose', 'policy.compile_repair', {

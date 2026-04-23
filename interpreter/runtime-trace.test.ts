@@ -458,4 +458,64 @@ describe('runtime trace', () => {
       ])
     );
   });
+
+  it('policy.build trace includes arg classification summaries', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = \`sent\` with { controlArgs: ["recipient"] }
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+/var @intent = {
+  resolved: {
+    sendEmail: {
+      recipient: "someone@example.com"
+    }
+  }
+}
+/var @built = @policy.build(@intent, @writeTools, {
+  basePolicy: {
+    defaults: { rules: ["no-send-to-unknown"] },
+    operations: { "exfil:send": ["tool:w"] }
+  }
+})
+/show @built.valid
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'effects'
+    }) as any;
+
+    const buildEvent = result.traceEvents.find(
+      (event: any) => event.event === 'policy.build'
+    );
+    expect(buildEvent).toBeDefined();
+    expect(buildEvent.data).toEqual(
+      expect.objectContaining({
+        mode: 'build',
+        intentMode: 'bucketed',
+        callerRole: null,
+        tools: expect.arrayContaining([
+          expect.objectContaining({
+            tool: 'sendEmail',
+            rawArgKeys: ['recipient'],
+            controlArgKeys: ['recipient'],
+            payloadArgKeys: []
+          })
+        ])
+      })
+    );
+    expect(buildEvent.data.issueCodes).toEqual(
+      expect.arrayContaining(['proofless_resolved_value'])
+    );
+  });
 });

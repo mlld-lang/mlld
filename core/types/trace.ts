@@ -290,6 +290,16 @@ export interface RuntimeTraceEventSpecMap {
       repairedArgCount: number;
       droppedEntryCount: number;
       droppedArrayElementCount: number;
+      intentMode?: 'bucketed' | 'flat' | 'empty';
+      callerRole?: string | null;
+      issueCodes?: string[];
+      tools?: Array<{
+        tool: string;
+        rawArgKeys: string[];
+        controlArgKeys: string[];
+        payloadArgKeys: string[];
+        updateArgKeys: string[];
+      }>;
     }>;
   };
   'policy.validate': RuntimeTraceEventSpecMap['policy.build'];
