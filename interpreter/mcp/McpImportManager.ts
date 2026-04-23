@@ -52,7 +52,7 @@ type McpImportLifecycle = {
 
 const DEFAULT_LIFECYCLE: McpImportLifecycle = {
   startupTimeoutMs: 10_000,
-  idleTimeoutMs: 60_000,
+  idleTimeoutMs: 300_000,
   maxConcurrent: 5
 };
 
@@ -74,6 +74,31 @@ export class McpImportManager {
   async callTool(spec: string, name: string, args: Record<string, unknown>): Promise<string> {
     const server = await this.getServer(spec);
     return server.callTool(name, args);
+  }
+
+  retainAll(): void {
+    for (const server of this.servers.values()) {
+      if (!server.isClosed()) {
+        server.retainIdle();
+      }
+    }
+  }
+
+  releaseAll(): void {
+    for (const server of this.servers.values()) {
+      if (!server.isClosed()) {
+        server.releaseIdle();
+      }
+    }
+  }
+
+  hasActiveServers(): boolean {
+    for (const server of this.servers.values()) {
+      if (!server.isClosed()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   closeAll(): void {
@@ -137,6 +162,7 @@ class McpImportServer {
   private readonly idleTimeoutMs?: number;
   private idleTimer?: NodeJS.Timeout;
   private inflightCount = 0;
+  private idleHoldCount = 0;
 
   constructor(private readonly spec: McpSpawnSpec, idleTimeoutMs?: number) {
     this.idleTimeoutMs = idleTimeoutMs;
@@ -216,6 +242,18 @@ class McpImportServer {
     return text;
   }
 
+  retainIdle(): void {
+    this.idleHoldCount += 1;
+    this.clearIdleTimer();
+  }
+
+  releaseIdle(): void {
+    this.idleHoldCount = Math.max(0, this.idleHoldCount - 1);
+    if (this.inflightCount === 0) {
+      this.touch();
+    }
+  }
+
   close(): void {
     this.closeWithReason('manual');
   }
@@ -290,9 +328,13 @@ class McpImportServer {
     if (!this.idleTimeoutMs || this.idleTimeoutMs <= 0) {
       return;
     }
+    if (this.idleHoldCount > 0 || this.inflightCount > 0) {
+      this.clearIdleTimer();
+      return;
+    }
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
-      if (this.closed || this.inflightCount > 0) {
+      if (this.closed || this.idleHoldCount > 0 || this.inflightCount > 0) {
         return;
       }
       this.closeWithReason('idle');

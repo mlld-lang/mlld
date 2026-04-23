@@ -2166,6 +2166,13 @@ export class Environment
     }
     return this.mcpImportManager;
   }
+
+  getMcpImportManagerIfActive(): McpImportManager | undefined {
+    if (this.parent) {
+      return this.parent.getMcpImportManagerIfActive();
+    }
+    return this.mcpImportManager?.hasActiveServers() ? this.mcpImportManager : undefined;
+  }
   
   getResolverManager(): ResolverManager | undefined {
     // Get from this environment or parent

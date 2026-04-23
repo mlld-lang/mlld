@@ -2786,6 +2786,7 @@ async function evaluateExecInvocationInternal(
 ): Promise<EvalResult> {
   let commandName: string | undefined; // Declare at function scope for finally block
   let endResolutionTrackingIfNeeded: () => void = () => {};
+  let mcpIdleRetained = false;
   const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
   const invocationWithClause = normalizeInvocationWithClause(node);
 
@@ -4947,8 +4948,13 @@ async function evaluateExecInvocationInternal(
         resume: isLlmResumeContinuation
       }
     });
+    const mcpManager = env.getMcpImportManagerIfActive();
+    if (mcpManager) {
+      mcpManager.retainAll();
+      mcpIdleRetained = true;
+    }
   }
-  
+
   const guardHelperImpl =
     (variable.internal as any)?.guardHelperImplementation;
   if (
@@ -5994,7 +6000,9 @@ async function evaluateExecInvocationInternal(
     throw error;
   }
   } finally {
-    // Ensure resolution tracking is always cleaned up, even on error paths.
+    if (mcpIdleRetained) {
+      env.getMcpImportManagerIfActive()?.releaseAll();
+    }
     endResolutionTrackingIfNeeded();
 
     finalizeExecInvocationStreaming(env, streamingManager);

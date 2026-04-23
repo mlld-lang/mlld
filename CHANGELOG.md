@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld validate` / `mlld analyze` now statically validate record declarations, shelf declarations, executable metadata (`controlArgs`, `updateArgs`, `exactPayloadArgs`, `correlateControlArgs`, output records), `resume` guard arms, and statically obvious `box.shelf` binding conflicts before runtime.
 
 ### Fixed
+- MCP import connections now survive long LLM thinking gaps. Active LLM calls retain all open MCP server idle timers for the call duration, and the default idle timeout is raised from 60s to 300s.
 - `.llm/sec/audit.jsonl` tool-call records are now summarized before write: captured module envs, executableDef / codeTemplate plumbing, AST nodes, and Environment-like instances are replaced with sentinels; long strings are previewed with their length; each record is capped at 64 KB as a final backstop. Security-critical fields (`taint`, `labels`, `sources`, `writer`, `path`, `tool`, `ok`, timestamps) are kept intact. Prior logs could grow to hundreds of GB when exes received large tool catalogs.
 - Lock-file discovery no longer falls back to `.mlld/mlld.lock.json`. Only `mlld-lock.json` (canonical) and the legacy `mlld.lock.json` (sibling) are consulted.
 - Project-root discovery now ignores nested `mlld-lock.json` files, prefers the nearest `mlld-config.json`, and `mlld install` creates `mlld-config.json` at the resolved root when missing.
