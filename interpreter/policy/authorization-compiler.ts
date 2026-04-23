@@ -56,7 +56,7 @@ export interface PolicyAuthorizationCompileReport {
   ambiguousValues: Array<{ tool: string; arg: string; value: string }>;
   compiledProofs: Array<{ tool: string; arg: string; labels: string[] }>;
   autoAllowedTools: Array<{ tool: string; reason: AutoAllowedToolReason }>;
-  liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[] }>;
+  liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[]; element?: number }>;
 }
 
 export interface PolicyAuthorizationCompilerIssue {
@@ -151,7 +151,11 @@ export function clonePolicyAuthorizationCompileReport(
     ambiguousValues: report.ambiguousValues.map(entry => ({ ...entry })),
     compiledProofs: report.compiledProofs.map(entry => ({ ...entry, labels: [...entry.labels] })),
     autoAllowedTools: report.autoAllowedTools.map(entry => ({ ...entry })),
-    liftedArgs: report.liftedArgs.map(entry => ({ ...entry, liftedLabels: [...entry.liftedLabels] }))
+    liftedArgs: report.liftedArgs.map(entry => ({
+      ...entry,
+      liftedLabels: [...entry.liftedLabels],
+      ...(entry.element !== undefined ? { element: entry.element } : {})
+    }))
   };
 }
 
@@ -687,6 +691,7 @@ async function normalizeResolvedControlArgValue(options: {
   env: Environment;
   mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
+  report?: PolicyAuthorizationCompileReport;
 }): Promise<unknown | undefined> {
   const materialized = await materializePolicySourceValue(options.value, options.env);
 
@@ -720,6 +725,14 @@ async function normalizeResolvedControlArgValue(options: {
           ? await findUniqueFactBackedValueMatch(options.env, materialized[index])
           : undefined;
       if (liftedMatch !== undefined) {
+        if (options.report) {
+          options.report.liftedArgs.push({
+            tool: options.toolName,
+            arg: options.argName,
+            liftedLabels: collectValueProofLabels(liftedMatch),
+            element: index
+          });
+        }
         retained.push(liftedMatch);
         continue;
       }
@@ -752,6 +765,13 @@ async function normalizeResolvedControlArgValue(options: {
       ? await findUniqueFactBackedValueMatch(options.env, materialized)
       : undefined;
   if (liftedMatch !== undefined) {
+    if (options.report) {
+      options.report.liftedArgs.push({
+        tool: options.toolName,
+        arg: options.argName,
+        liftedLabels: collectValueProofLabels(liftedMatch)
+      });
+    }
     return liftedMatch;
   }
 
@@ -771,6 +791,7 @@ async function normalizeResolvedBucketToolEntry(options: {
   mode: 'builder' | 'runtime';
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
   issues: PolicyAuthorizationCompilerIssue[];
+  report?: PolicyAuthorizationCompileReport;
 }): Promise<{ entry: unknown; resolvedArgNames: string[] } | undefined> {
   const normalizedEntry = cloneRawAuthorizationEntry(options.entry);
   if (!isPlainObject(normalizedEntry)) {
@@ -808,7 +829,8 @@ async function normalizeResolvedBucketToolEntry(options: {
       value: rawArgValue,
       env: options.env,
       mode: options.mode,
-      issues: options.issues
+      issues: options.issues,
+      report: options.report
     });
     if (normalizedValue === undefined) {
       continue;
@@ -935,6 +957,7 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
   ambientDeniedTools?: readonly string[];
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
+  report?: PolicyAuthorizationCompileReport;
 }): Promise<NormalizedAuthorizationIntentSource> {
   const container = unwrapAuthorizationIntentContainer(options.raw);
   if (!isPlainObject(container)) {
@@ -1049,7 +1072,8 @@ async function normalizeBucketedAuthorizationIntentSource(options: {
             env: options.env,
             mode: options.mode,
             toolContext: options.toolContext,
-            issues: options.issues
+            issues: options.issues,
+            report: options.report
           });
           if (!normalizedEntry) {
             continue;
@@ -1244,6 +1268,7 @@ async function normalizeAuthorizationIntentSource(options: {
   ambientDeniedTools?: readonly string[];
   taskText?: string;
   issues: PolicyAuthorizationCompilerIssue[];
+  report?: PolicyAuthorizationCompileReport;
 }): Promise<NormalizedAuthorizationIntentSource> {
   const bucketDetectionOptions = {
     allowToolObjectBucket: options.mode === 'builder'
@@ -2894,7 +2919,8 @@ async function enforceEqClauseProof(options: {
         options.report.liftedArgs.push({
           tool: options.toolName,
           arg: options.argName,
-          liftedLabels
+          liftedLabels,
+          element: index
         });
         retained.push(liftedMatch);
         continue;
@@ -2989,6 +3015,26 @@ async function enforceOneOfClauseProof(options: {
     ) {
       retainedValues.push(repairedCandidate);
       retainedAttestations.push(candidateAttestations);
+      continue;
+    }
+
+    const liftedMatch =
+      options.mode === 'builder'
+        ? await findUniqueFactBackedValueMatch(options.env, repairedCandidate)
+        : undefined;
+    if (
+      liftedMatch !== undefined
+      && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch))
+    ) {
+      const liftedLabels = collectValueProofLabels(liftedMatch);
+      options.report.liftedArgs.push({
+        tool: options.toolName,
+        arg: options.argName,
+        liftedLabels,
+        element: index
+      });
+      retainedValues.push(liftedMatch);
+      retainedAttestations.push(liftedLabels);
       continue;
     }
 
@@ -3122,7 +3168,8 @@ export async function compilePolicyAuthorizations(
     toolContext: options.toolContext,
     ambientDeniedTools: options.ambientDeniedTools,
     taskText: options.taskText,
-    issues
+    issues,
+    report
   });
   const rawAuthorizations = normalizedIntent.rawAuthorizations;
   const toolLevelAllowTools = normalizedIntent.toolLevelAllowTools;

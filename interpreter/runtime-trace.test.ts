@@ -558,4 +558,68 @@ describe('runtime trace', () => {
 
     expect(result.output.trim()).toBe('[]');
   });
+
+  it('emits proof.lifted when resolved bucket value is rescued by fact-backed match', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = `
+/record @contact = {
+  facts: [email: string]
+}
+/exe @lookupContact(query) = { email: "ada@example.com" } => contact
+/exe exfil:send, tool:w @sendEmail(recipient, subject, body) = \`sent\` with { controlArgs: ["recipient"] }
+/var tools @writeTools = {
+  sendEmail: {
+    mlld: @sendEmail,
+    expose: ["recipient", "subject", "body"],
+    controlArgs: ["recipient"]
+  }
+}
+/var @found = @lookupContact("ada")
+/var @email = @found.email
+/var @intent = {
+  resolved: {
+    sendEmail: {
+      recipient: "ada@example.com"
+    }
+  }
+}
+/var @built = @policy.build(@intent, @writeTools, {
+  basePolicy: {
+    defaults: { rules: ["no-send-to-unknown"] },
+    operations: { "exfil:send": ["tool:w"] }
+  }
+})
+/show @built.valid
+/show @built.report.liftedArgs
+    `.trim();
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    const lines = result.output.trim().split('\n');
+    expect(lines[0]).toBe('true');
+    const liftedArgsOutput = lines.slice(1).join('\n');
+    const liftedArgs = JSON.parse(liftedArgsOutput);
+    expect(liftedArgs.length).toBeGreaterThan(0);
+
+    const liftedEvent = result.traceEvents.find(
+      (event: any) => event.event === 'proof.lifted'
+    );
+    expect(liftedEvent).toBeDefined();
+    expect(liftedEvent.data.liftedArgs[0]).toEqual(
+      expect.objectContaining({
+        tool: 'sendEmail',
+        arg: 'recipient',
+        liftedLabels: expect.arrayContaining([
+          expect.stringContaining('fact:')
+        ])
+      })
+    );
+  });
 });

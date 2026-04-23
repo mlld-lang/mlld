@@ -318,7 +318,7 @@ export interface RuntimeTraceEventSpecMap {
   'proof.lifted': {
     category: 'proof';
     level: 'verbose';
-    data: TraceRecord<{ mode: string; liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[] }> }>;
+    data: TraceRecord<{ mode: string; liftedArgs: Array<{ tool: string; arg: string; liftedLabels: string[]; element?: number }> }>;
   };
   'policy.error': {
     category: 'policy';
