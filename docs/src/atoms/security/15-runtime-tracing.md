@@ -151,7 +151,7 @@ Trace handle lifecycle to debug authorization failures. If `auth.deny` fires bec
 
 | Event | Level | Data |
 |---|---|---|
-| `policy.build` | effects | mode, tool count, valid, issue/repair/drop counts |
+| `policy.build` | effects | mode, tool count, valid, issue/repair/drop counts, intent mode, caller role, per-tool arg classification, issue codes |
 | `policy.validate` | effects | same as policy.build |
 | `policy.compile_drop` | effects | dropped entries and array elements |
 | `policy.compile_repair` | verbose | repaired args with repair steps |
@@ -217,6 +217,32 @@ grep -E 'auth\.|policy\.' tmp/trace.log
 ```
 
 Look for `auth.deny` → check `policy.build` for compilation issues → check `policy.compile_drop` for missing proof.
+
+The `policy.build` event includes per-tool arg classification summaries:
+
+```json
+{
+  "event": "policy.build",
+  "data": {
+    "mode": "build",
+    "valid": false,
+    "intentMode": "bucketed",
+    "callerRole": "role:planner",
+    "issueCodes": ["proofless_resolved_value"],
+    "tools": [
+      {
+        "tool": "send_email",
+        "rawArgKeys": ["recipient"],
+        "controlArgKeys": ["recipient"],
+        "payloadArgKeys": [],
+        "updateArgKeys": []
+      }
+    ]
+  }
+}
+```
+
+`rawArgKeys` shows what the planner actually sent. `controlArgKeys` shows what the tool declares as security-relevant. A mismatch between the two — for example `rawArgKeys: ["query"]` vs `controlArgKeys: ["query", "date"]` — points directly at missing intent fields without tracing through the compiler manually.
 
 ### "Why is shelf state empty after a write?"
 
