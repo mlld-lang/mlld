@@ -338,6 +338,7 @@ function createMcpToolVariable(
 ) {
   const manager = env.getMcpImportManager();
   const paramInfo = deriveMcpParamInfo(tool);
+  const optionalParams = paramInfo.paramNames.filter(name => !paramInfo.requiredParams.includes(name));
   const execFn = async (...args: unknown[]) => {
     const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
     return await manager.callTool(importPath, mcpName, payload);
@@ -349,6 +350,7 @@ function createMcpToolVariable(
     fn: execFn,
     paramNames: paramInfo.paramNames,
     paramTypes: paramInfo.paramTypes,
+    ...(optionalParams.length > 0 ? { optionalParams } : {}),
     description: tool.description,
     sourceDirective: 'exec'
   };

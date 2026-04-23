@@ -21,6 +21,7 @@ export class McpImportService {
   createMcpToolVariable(options: McpToolVariableOptions): Variable {
     const { alias, tool, mcpName, importPath, definedAt } = options;
     const paramInfo = deriveMcpParamInfo(tool);
+    const optionalParams = paramInfo.paramNames.filter(name => !paramInfo.requiredParams.includes(name));
     const manager = this.env.getMcpImportManager();
     const execFn = async (...args: unknown[]) => {
       const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
@@ -32,6 +33,7 @@ export class McpImportService {
       fn: execFn,
       paramNames: paramInfo.paramNames,
       paramTypes: paramInfo.paramTypes,
+      ...(optionalParams.length > 0 ? { optionalParams } : {}),
       description: tool.description,
       sourceDirective: 'exec'
     };

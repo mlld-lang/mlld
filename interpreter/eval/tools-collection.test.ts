@@ -1602,6 +1602,27 @@ describe('tool collections', () => {
     await expect(router.executeFunction('ping', {})).resolves.toBe('pong');
   });
 
+  it('spreads required-only named args when dispatching MCP-backed collection tools', async () => {
+    const env = await interpretWithEnv(`
+      /import tools { @createEvent } from mcp "${process.execPath} ${fakeServerPath}"
+
+      /var tools @calendarTools = {
+        create_event: @createEvent
+      }
+
+      /var @result = @calendarTools["create_event"]({
+        title: "Lunch",
+        participants: ["alice@example.com"]
+      })
+    `);
+
+    const resolved = await extractVariableValue(env.getVariable('result') as any, env);
+    const text = (resolved as any)?.text ?? String(resolved);
+    expect(text).toContain('title="Lunch"');
+    expect(text).toContain('participants=["alice@example.com"]');
+    expect(text).not.toContain('title={"title"');
+  });
+
   it('rejects dynamic MCP tool sources when the runtime spec is not a string', async () => {
     await expect(
       interpretWithEnv(`
