@@ -377,14 +377,23 @@ export function attachToolCollectionMetadata<T extends Record<string, unknown>>(
   collection: T,
   metadata: ToolCollectionMetadata
 ): T {
+  const cloned = cloneToolCollectionMetadata(metadata);
   Object.defineProperty(collection, TOOL_COLLECTION_METADATA, {
-    value: cloneToolCollectionMetadata(metadata),
+    value: cloned,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  Object.defineProperty(collection, TOOL_COLLECTION_METADATA_HIDDEN_KEY, {
+    value: cloned,
     enumerable: false,
     configurable: true,
     writable: true
   });
   return collection;
 }
+
+const TOOL_COLLECTION_METADATA_HIDDEN_KEY = '__mlld_tc__';
 
 export function getToolCollectionMetadata(
   collection: unknown
@@ -393,7 +402,9 @@ export function getToolCollectionMetadata(
     return undefined;
   }
 
-  const candidate = (collection as Record<PropertyKey, unknown>)[TOOL_COLLECTION_METADATA];
+  const candidate =
+    (collection as Record<PropertyKey, unknown>)[TOOL_COLLECTION_METADATA]
+    ?? (collection as Record<string, unknown>)[TOOL_COLLECTION_METADATA_HIDDEN_KEY];
   if (!isToolCollectionMetadata(candidate)) {
     return undefined;
   }

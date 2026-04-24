@@ -1,0 +1,29 @@
+/record @calendar_evt = {
+  facts: [id_: string],
+  data: [title: string],
+  key: id_
+}
+
+/record @add_participants_inputs = {
+  facts: [participants: array, event_id: handle],
+  data: [],
+  correlate: false,
+  validate: "strict"
+}
+
+/exe @search_calendar_event() = {
+  id_: "24",
+  title: "Introductory meeting"
+} => calendar_evt
+
+/exe tool:w @add_participants(participants: array, event_id) = `added:@event_id:@participants.length`
+
+/var tools @tools = {
+  add_participants: {
+    mlld: @add_participants,
+    inputs: @add_participants_inputs,
+    labels: ["tool:w", "calendar:w", "exfil:send"]
+  }
+}
+
+/export { @tools, @search_calendar_event, @calendar_evt }

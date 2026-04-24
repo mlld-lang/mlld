@@ -1,0 +1,23 @@
+>> Simulates the rig's execute worker → callToolWithOptionalPolicy chain.
+>> dispatchExecute receives the agent and extracts toolsCollection from it.
+
+exe recursive @callToolViaCollection(toolEntry, toolsCollection, toolName, args, policyValue) = [
+  let @toolKey = `@toolName`
+  let @hasInputRecord = @toolEntry.inputs.isDefined()
+  let @exeParamCount = @typeof(@toolEntry.mlld) == "executable" ? @toolEntry.mlld.mx.params.length : 0
+  let @callableEntry = @toolsCollection[@toolKey].isDefined()
+
+  if @hasInputRecord && @exeParamCount > 1 && @callableEntry [
+    => @toolsCollection[@toolKey](@args) with { policy: @policyValue }
+  ]
+
+  let @directExe = @toolEntry.mlld
+  => @directExe(@args) with { policy: @policyValue }
+]
+
+exe role:planner @dispatchExecute(agent, toolName, args, policy) = [
+  let @tool = @agent.tools[@toolName]
+  => @callToolViaCollection(@tool, @agent.toolsCollection, @toolName, @args, @policy)
+]
+
+export { @callToolViaCollection, @dispatchExecute }

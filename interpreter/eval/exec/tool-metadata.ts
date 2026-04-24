@@ -1211,6 +1211,9 @@ function buildAuthorizationToolContextFromCollection(
     if (contexts.has(toolName)) {
       continue;
     }
+    if (!definition || typeof definition !== 'object' || !('mlld' in (definition as Record<string, unknown>))) {
+      continue;
+    }
 
     const executable = resolveToolCollectionExecutable(env, collection, definition, definition?.mlld);
     if (!executable) {

@@ -398,7 +398,29 @@ function getToolCollectionFromValue(value: unknown): ToolCollection | undefined 
   }
 
   const metadata = getToolCollectionMetadata(value);
-  return metadata?.auth ? (value as ToolCollection) : undefined;
+  if (metadata?.auth) {
+    return value as ToolCollection;
+  }
+
+  return recoverToolCollectionFromStructure(value);
+}
+
+function recoverToolCollectionFromStructure(value: Record<string, unknown>): ToolCollection | undefined {
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  let toolEntryCount = 0;
+  for (const [key, entry] of entries) {
+    if (key.startsWith('_')) continue;
+    if (!entry || typeof entry !== 'object') return undefined;
+    if (!('mlld' in (entry as Record<string, unknown>))) return undefined;
+    toolEntryCount++;
+  }
+  if (toolEntryCount === 0) {
+    return undefined;
+  }
+  return value as ToolCollection;
 }
 
 function isAstCollectionValue(value: unknown): boolean {
@@ -868,18 +890,29 @@ async function resolveCollectionExecutableForDispatch(options: {
     }
   }
 
-  return (
+  const resolved =
     env.getVariable(execName)
     ?? (await ensureCapturedModuleEnvMap(sourceVariable))?.get(execName)
     ?? (await ensureCapturedModuleEnvMap(collection as Record<string, unknown> | undefined))?.get(execName)
-    ?? (await ensureCapturedModuleEnvMap(definition as Record<string, unknown> | undefined))?.get(execName)
-  );
+    ?? (await ensureCapturedModuleEnvMap(definition as Record<string, unknown> | undefined))?.get(execName);
+
+  return resolved;
 }
 
 function normalizeCollectionExecutableReferenceName(value: unknown): string {
   if (typeof value === 'string') {
     const trimmed = value.trim();
     return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  }
+
+  // m-5178: after session roundtrip, Variables degrade to plain objects
+  // but retain their name/type/value structure
+  if (value && typeof value === 'object' && !isExecutableVariable(value as any)) {
+    const v = value as Record<string, unknown>;
+    if (typeof v.name === 'string' && v.name.trim().length > 0 && v.type === 'executable') {
+      const name = v.name.trim();
+      return name.startsWith('@') ? name.slice(1) : name;
+    }
   }
 
   if (value && typeof value === 'object' && isExecutableVariable(value as any)) {
@@ -3402,13 +3435,6 @@ async function evaluateExecInvocationInternal(
             ? boundary.identity<ToolCollection | undefined>(objectVar)
             : undefined;
           const valueToolCollection = getToolCollectionFromValue(objectValue);
-          // m-5178 diagnostic
-          if (commandName && !preservedToolCollection && !valueToolCollection) {
-            const sym = Symbol.for('mlld.toolCollectionMetadata');
-            const hasSym = sym in (objectValue as any);
-            const symVal = (objectValue as any)[sym];
-            console.error(`[m5178:dispatch] cmd=${commandName} isToolsCol=${objectVar.internal?.isToolsCollection} hasSym=${hasSym} symVal=${JSON.stringify(symVal)} objKeys=${Object.keys(objectValue as any).slice(0,5)}`);
-          }
           const isCollectionRootValue =
             Boolean(valueToolCollection) ||
             (preservedToolCollection !== undefined && objectValue === preservedToolCollection);

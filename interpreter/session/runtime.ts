@@ -449,9 +449,10 @@ function normalizeStoredSessionValue(value: unknown): unknown {
     return value.map(entry => normalizeStoredSessionValue(entry));
   }
   if (isPlainObject(value)) {
-    return Object.fromEntries(
+    const normalized = Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [key, normalizeStoredSessionValue(entry)])
     );
+    return normalized;
   }
   return value;
 }

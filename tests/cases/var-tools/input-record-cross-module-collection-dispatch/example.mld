@@ -1,0 +1,49 @@
+>> m-5178: collection dispatch for all-facts multi-param tools through
+>> imported exe parameter chains. Verifies the core handles cross-module
+>> collection dispatch correctly. The rig-specific failure (where the
+>> tool entry's input record metadata degrades across deeper import
+>> chains) is covered by the rig test suite.
+
+/import { @tools, @search_calendar_event } from "./support/input-record-cross-module-collection-dispatch-tools.mld"
+/import { @dispatchExecute } from "./support/input-record-cross-module-collection-dispatch-dispatch.mld"
+
+/var @event = @search_calendar_event()
+
+/var @intent = {
+  known: {
+    add_participants: {
+      participants: ["bob@test.com"]
+    }
+  },
+  resolved: {
+    add_participants: {
+      event_id: @event.id_
+    }
+  }
+}
+
+/var @built = @policy.build(@intent, @tools, {
+  task: "Add bob@test.com to the Introductory meeting."
+})
+
+/exe @buildAgent(config) = [
+  => {
+    tools: @config.tools,
+    toolsCollection: @config.tools
+  }
+]
+/var @agent = @buildAgent({ tools: @tools })
+
+/show @built.valid
+
+>> Direct dispatch (same module)
+/show @tools["add_participants"]({
+  participants: ["bob@test.com"],
+  event_id: @event.id_
+}) with { policy: @built.policy }
+
+>> Cross-module dispatch: agent.toolsCollection → imported exe chain
+/show @dispatchExecute(@agent, "add_participants", {
+  participants: ["bob@test.com"],
+  event_id: @event.id_
+}, @built.policy)

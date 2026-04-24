@@ -230,6 +230,9 @@ Tool collections are an identity-preservation hot spot architecturally — they 
 - Object spread (`{ ...tools }`), `boundary.plainData()`, raw `JSON.stringify`
 - Any intermediate deep-clone between a shelf write and its later read
 - JS interop paths that bypass `toJsValue` reattachment, or any host-side JS that reconstructs the object without forwarding Symbol-keyed properties (the default for `JSON.parse(JSON.stringify(x))` and similar)
+- Session seed → session read roundtrip (`normalizeStoredSessionValue`, `cloneSessionValue`, and the dozens of `Object.fromEntries(Object.entries(...))` copies on the path). The session stores the Variable wrapper for tool collection properties, but objects nested inside the agent config are copied at multiple points — each copy creates a fresh `{}` that drops Symbol-keyed and non-enumerable properties. The collection object arrives structurally intact (correct keys, correct entry shapes) but without the Symbol or the WeakMap-keyed `capturedModuleEnv`.
+
+**Structural recovery fallback:** `recoverToolCollectionFromStructure` in `exec-invocation.ts` identifies collections by checking that all non-underscore entries have a `mlld` property. This recovers dispatch after Symbol loss. The degraded Variable objects inside entries (which retain `{type: 'executable', name: '...'}` shape) are recovered by `normalizeCollectionExecutableReferenceName`. The exe itself is resolved by name via `env.getVariable(execName)`, which succeeds when the exe is visible in the current environment chain. See m-5178.
 
 The architectural framing here is descriptive: this is where identity *can* be lost. Whether it has been lost in any given runtime path is empirical — verify with a host-backed repro before treating identity loss as the diagnosed root cause of a downstream symptom.
 
@@ -248,6 +251,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 | Module export→import | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | `=> record` coercion | ✓ | ✓ | ✓ | ✓ (minted) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | JS/Node interop | ✓ | ◐ | ◐ | ◐ | ✗ | ◐ | ✗ | ✗ | ◐ | ✗ |
+| Session seed→read | ✓ | ✓ | ◐ | ◐ | ✗ | ✗† | ✗ | ✗ | ✗ | ✗ |
 
 **Key caveats:**
 - The `.text` column means the wrapper has a text view, not that the full underlying graph is always materialized. See [Opaque runtime carriers stay opaque in recursive walkers](#opaque-runtime-carriers-stay-opaque-in-recursive-walkers).
@@ -256,6 +260,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 - **Spread is destructive.** `{...value}` has `plainData` semantics. If you need metadata through an object construction, build fields explicitly via `field` or `identity` access.
 - **`keepStructured` does not cross mlld→mlld boundaries.** It is an embedded-language escape hatch (JS/Node/Py/Sh), not a parameter-passing mechanism. Use `preserveStructuredArgs` on the exe or explicit `boundary.identity()` at the call site for mlld-to-mlld identity.
 - **ExpressionProvenance is in-memory only.** Does not serialize. Lost at module boundaries. Consumers that need descriptor information after a serialization round-trip must materialize into Variable `.mx` first.
+- **`†` Session roundtrip tool collection**: the Symbol is lost but `recoverToolCollectionFromStructure` recovers dispatch by structural shape detection. The recovery is transparent to callers — dispatch works, but `getToolCollectionMetadata` returns `undefined` on the recovered object. Code that checks the Symbol directly (rather than going through `getToolCollectionFromValue`) will not see the recovered identity.
 
 ### Debugging Heuristics
 
@@ -276,6 +281,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 - Grep for accidental display/materialization paths, not just `JSON.stringify`: `.text`, `asText(`, `String(`, template interpolation, pretty/log helpers, token/length metrics, and audit summarizers.
 - Tool collections, routed tool entries, and imported agent objects are identity-bearing and large. Prefer keyed access on the existing wrapper/object surface. Rebuilding them into fresh plain objects is a real materialization step with both perf and metadata risk.
 - Shelf round-trip identity preservation is **by reference only** (see matrix note `R`). If a deep-clone happens anywhere upstream of a shelf write, identity is lost before it reaches storage and cannot be recovered on read.
+- Session-seeded objects containing tool collections or executables will lose Symbol/WeakMap identity through the session write→read path. The object's string-keyed structure survives but all non-enumerable metadata is gone. If the session also injects `_mlld.resume` metadata, that key appears alongside the tool entries and must be filtered by consumers that iterate `Object.entries` on the collection. The structural recovery in `getToolCollectionFromValue` handles this for dispatch; other consumers (e.g. `buildAuthorizationToolContextFromCollection`) must guard against entries without `mlld`.
 
 ### Where Values Flow
 
