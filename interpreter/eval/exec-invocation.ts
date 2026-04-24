@@ -3402,6 +3402,13 @@ async function evaluateExecInvocationInternal(
             ? boundary.identity<ToolCollection | undefined>(objectVar)
             : undefined;
           const valueToolCollection = getToolCollectionFromValue(objectValue);
+          // m-5178 diagnostic
+          if (commandName && !preservedToolCollection && !valueToolCollection) {
+            const sym = Symbol.for('mlld.toolCollectionMetadata');
+            const hasSym = sym in (objectValue as any);
+            const symVal = (objectValue as any)[sym];
+            console.error(`[m5178:dispatch] cmd=${commandName} isToolsCol=${objectVar.internal?.isToolsCollection} hasSym=${hasSym} symVal=${JSON.stringify(symVal)} objKeys=${Object.keys(objectValue as any).slice(0,5)}`);
+          }
           const isCollectionRootValue =
             Boolean(valueToolCollection) ||
             (preservedToolCollection !== undefined && objectValue === preservedToolCollection);
@@ -5876,6 +5883,10 @@ async function evaluateExecInvocationInternal(
     execEnv.releaseChildScope();
     if (workspacePushed) {
       execEnv.popActiveWorkspace();
+    }
+    if (hasLlmLabel && process.env.MLLD_HEAP_TRACE === '1') {
+      const mem = process.memoryUsage();
+      process.stderr.write(`[heap] llm_done exe=${commandName} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB\n`);
     }
   }
       });

@@ -153,6 +153,10 @@ export class FunctionRouter {
           ok: true,
           result: this.toTrackedToolResult(result.value)
         });
+        if (process.env.MLLD_HEAP_TRACE === '1') {
+          const mem = process.memoryUsage();
+          process.stderr.write(`[heap] tool=${toolName} rss=${(mem.rss / 1048576).toFixed(0)}MB heap=${(mem.heapUsed / 1048576).toFixed(0)}MB\n`);
+        }
         return await this.serializeResult(result.value);
       }
 
