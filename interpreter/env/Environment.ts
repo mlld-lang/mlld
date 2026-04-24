@@ -3691,6 +3691,16 @@ export class Environment
       }
     }
   }
+
+  releaseChildScope(): void {
+    for (const child of this.childEnvironments) {
+      child.releaseChildScope();
+    }
+    this.childEnvironments.clear();
+    if (this.parent) {
+      this.parent.childEnvironments.delete(this);
+    }
+  }
   
   /**
    * Create a child environment with isolated variable scope

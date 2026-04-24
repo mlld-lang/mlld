@@ -5873,6 +5873,7 @@ async function evaluateExecInvocationInternal(
   return finalEvalResult;
   } finally {
     await execEnv.runScopeCleanups();
+    execEnv.releaseChildScope();
     if (workspacePushed) {
       execEnv.popActiveWorkspace();
     }
