@@ -199,6 +199,51 @@ describe('session runtime', () => {
     });
   });
 
+  it('releases live session frames after finalizing while preserving post-call snapshot reads', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  count: number?,',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  => "ok"',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/var @raw = @agent("hello", { tools: @toolList }) with { session: @planner }',
+      '/var @final = @raw.mx.sessions.planner',
+      '/var @postCallCount = @planner.count'
+    ].join('\n'));
+
+    expect(await extractVariableValue(env.getVariable('final')!, env)).toEqual({ count: 1 });
+    expect(await extractVariableValue(env.getVariable('postCallCount')!, env)).toBe(1);
+    expect(result.sessions[0]?.finalState).toEqual({ count: 1 });
+    expect(env.getAttachedSessionFrameIds()).toEqual([]);
+  });
+
+  it('does not retain SDK session history for document-mode runs', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  count: number?,',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  => "ok"',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/var @raw = @agent("hello", { tools: @toolList }) with { session: @planner }',
+      '/var @final = @raw.mx.sessions.planner',
+      '/var @postCallCount = @planner.count'
+    ].join('\n'), {
+      mode: 'document'
+    });
+
+    expect(await extractVariableValue(env.getVariable('final')!, env)).toEqual({ count: 1 });
+    expect(await extractVariableValue(env.getVariable('postCallCount')!, env)).toBe(1);
+    expect(env.getCompletedSessions()).toEqual([]);
+  });
+
   it('preserves labels when reading final session state through result .mx.sessions', async () => {
     const { env } = await interpretWithEnv([
       '/var session @planner = {',
@@ -301,6 +346,37 @@ describe('session runtime', () => {
     });
     expect(writes[0]).not.toHaveProperty('value');
     expect(writes[0]).not.toHaveProperty('previous');
+    expect(instance.getSlot('state')).toMatchObject(largeState);
+  });
+
+  it('stores session writes in one observed slot copy', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'single-observed-session-copy';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, env);
+    const setMethod = (accessor.value as Record<string, any>).set;
+    const setExecutable = setMethod?.internal?.executableDef;
+    expect(setExecutable).toBeDefined();
+
+    const largeState = {
+      payload: 'x'.repeat(1_000_000),
+      nested: { ok: true }
+    };
+    await setExecutable!.fn({ state: largeState }, env);
+
+    expect((instance as any).values.has('state')).toBe(false);
+    expect(instance.hasSlot('state')).toBe(true);
     expect(instance.getSlot('state')).toMatchObject(largeState);
   });
 

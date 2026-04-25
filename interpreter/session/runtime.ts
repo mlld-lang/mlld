@@ -28,7 +28,6 @@ import {
   isStructuredValue,
   type StructuredValueMetadata
 } from '@interpreter/utils/structured-value';
-import { boundary } from '@interpreter/utils/boundary';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import {
@@ -268,11 +267,13 @@ export class RuntimeSessionInstance implements SessionFrameInstance {
   ) {}
 
   hasSlot(name: string): boolean {
-    return this.values.has(name);
+    return this.values.has(name) || this.traceValues.has(name);
   }
 
   getSlot(name: string): unknown {
-    return this.values.get(name);
+    return this.values.has(name)
+      ? this.values.get(name)
+      : this.traceValues.get(name);
   }
 
   getObservedSlot(name: string): unknown {
@@ -311,6 +312,10 @@ export class RuntimeSessionInstance implements SessionFrameInstance {
     for (const slotName of Object.keys(this.definition.slots)) {
       if (this.values.has(slotName)) {
         snapshot[slotName] = cloneSessionValue(this.values.get(slotName));
+        continue;
+      }
+      if (this.traceValues.has(slotName)) {
+        snapshot[slotName] = cloneSessionValue(this.traceValues.get(slotName));
       }
     }
     return snapshot;
@@ -453,22 +458,6 @@ function readStoredSlotValue(
 
 function unwrapStructuredForValidation(value: unknown): unknown {
   return isStructuredValue(value) ? value.data : value;
-}
-
-function normalizeStoredSessionValue(value: unknown): unknown {
-  if (isStructuredValue(value)) {
-    return boundary.plainData(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map(entry => normalizeStoredSessionValue(entry));
-  }
-  if (isPlainObject(value)) {
-    const normalized = Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, normalizeStoredSessionValue(entry)])
-    );
-    return normalized;
-  }
-  return value;
 }
 
 function validatePrimitiveValue(typeName: string, value: unknown): boolean {
@@ -943,18 +932,21 @@ function applySlotMutation(args: {
     validateSlotValue(args.binding, args.nextValue);
   }
 
+  const buffer = args.env.getSessionWriteBuffer();
   const hadPrevious = args.instance.hasSlot(args.binding.name);
-  const previousValue = hadPrevious ? cloneSessionValue(args.instance.getSlot(args.binding.name)) : undefined;
+  const previousValue = hadPrevious
+    ? (buffer ? cloneSessionValue(args.instance.getSlot(args.binding.name)) : args.instance.getSlot(args.binding.name))
+    : undefined;
   const hadPreviousTrace = args.instance.hasTraceSlot(args.binding.name);
   const previousTraceValue = hadPreviousTrace
-    ? cloneSessionValue(args.instance.getTraceSlot(args.binding.name))
+    ? (buffer ? cloneSessionValue(args.instance.getTraceSlot(args.binding.name)) : args.instance.getTraceSlot(args.binding.name))
     : undefined;
 
   if (args.clear) {
     args.instance.clearSlot(args.binding.name);
     args.instance.clearTraceSlot(args.binding.name);
   } else {
-    args.instance.setSlot(args.binding.name, normalizeStoredSessionValue(args.nextValue));
+    args.instance.clearSlot(args.binding.name);
     args.instance.setTraceSlot(args.binding.name, cloneSessionValue(args.nextValue));
   }
 
@@ -1519,7 +1511,19 @@ export function createSessionSnapshotVariable(
   definition: SessionDefinition,
   env: Environment
 ): Variable {
-  return createObjectVariable(name, createSessionSnapshot(definition, env), false, SESSION_VARIABLE_SOURCE, {
+  return createSessionSnapshotVariableFromState(
+    name,
+    definition,
+    createSessionSnapshot(definition, env)
+  );
+}
+
+export function createSessionSnapshotVariableFromState(
+  name: string,
+  definition: SessionDefinition,
+  finalState: Record<string, unknown>
+): Variable {
+  return createObjectVariable(name, cloneSessionValue(finalState), false, SESSION_VARIABLE_SOURCE, {
     internal: {
       strictFieldAccess: true,
       sessionDefinition: definition,
@@ -1607,10 +1611,7 @@ export function disposeSessionFrame(sessionId: string, env: Environment): void {
       }
     });
   }
-  // Session instances are kept alive after frame exit so outer scopes and
-  // post-call reads can still access session state. Each call has its own
-  // sessionId key, so instances from different calls don't conflict.
-  // Instances are cleaned up when the root environment is disposed.
+  env.disposeSessionInstances(sessionId);
 }
 
 export function emitAttachedSessionFinalSnapshot(env: Environment): void {

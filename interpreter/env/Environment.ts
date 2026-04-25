@@ -338,6 +338,8 @@ export class Environment
   private sessionWrites: SessionWriteRecord[] = [];
   private sessionWriteIndex = 0;
   private completedSessions: SessionFinalStateRecord[] = [];
+  private latestCompletedSessionsByDefinition: Map<string, SessionFinalStateRecord> = new Map();
+  private retainCompletedSessionHistory = true;
   private sessionWriteBuffers: SessionWriteBuffer[] = [];
   private valueHandleRegistry?: ValueHandleRegistry;
 
@@ -1793,12 +1795,25 @@ export class Environment
 
   recordCompletedSession(entry: SessionFinalStateRecord): void {
     const root = this.getRootEnvironment();
-    root.completedSessions.push({
+    const storedEntry = {
       ...entry,
       finalState: { ...entry.finalState }
-    });
+    };
+    root.latestCompletedSessionsByDefinition.set(entry.declarationId, storedEntry);
+    if (!root.retainCompletedSessionHistory) {
+      return;
+    }
+    root.completedSessions.push(storedEntry);
     if (root.completedSessions.length > 200) {
       root.completedSessions = root.completedSessions.slice(-100);
+    }
+  }
+
+  setRetainCompletedSessionHistory(retain: boolean): void {
+    const root = this.getRootEnvironment();
+    root.retainCompletedSessionHistory = retain;
+    if (!retain) {
+      root.completedSessions = [];
     }
   }
 
@@ -1807,6 +1822,33 @@ export class Environment
       ...entry,
       finalState: { ...entry.finalState }
     }));
+  }
+
+  findCompletedSessionByDefinition(declarationId: string): SessionFinalStateRecord | undefined {
+    const normalizedDeclarationId = typeof declarationId === 'string' ? declarationId.trim() : '';
+    if (!normalizedDeclarationId) {
+      return undefined;
+    }
+    const root = this.getRootEnvironment();
+    const latest = root.latestCompletedSessionsByDefinition.get(normalizedDeclarationId);
+    if (latest) {
+      return {
+        ...latest,
+        finalState: { ...latest.finalState }
+      };
+    }
+    const completedSessions = root.completedSessions;
+    for (let index = completedSessions.length - 1; index >= 0; index -= 1) {
+      const entry = completedSessions[index];
+      if (entry?.declarationId !== normalizedDeclarationId) {
+        continue;
+      }
+      return {
+        ...entry,
+        finalState: { ...entry.finalState }
+      };
+    }
+    return undefined;
   }
 
   getAllShelfDefinitions(): Map<string, ShelfDefinition> {

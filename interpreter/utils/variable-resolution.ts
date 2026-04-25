@@ -25,6 +25,7 @@ import {
   createSessionAccessorVariable,
   createSessionSnapshot,
   createSessionSnapshotVariable,
+  createSessionSnapshotVariableFromState,
   getSessionDefinitionFromValue,
   requireAttachedSessionInstance
 } from '@interpreter/session/runtime';
@@ -227,6 +228,20 @@ export async function resolveVariable(
           }
           return createSessionSnapshot(definition, env);
         }
+        const completedSession = env.findCompletedSessionByDefinition(definition.id);
+        if (completedSession) {
+          if (
+            context === ResolutionContext.FieldAccess ||
+            shouldPreserveVariable(context)
+          ) {
+            return createSessionSnapshotVariableFromState(
+              variable.name,
+              definition,
+              completedSession.finalState
+            );
+          }
+          return completedSession.finalState;
+        }
         return shouldPreserveVariable(context) ? variable : variable.value;
       }
 
@@ -370,6 +385,10 @@ export async function extractVariableValue(
     if (definition) {
       const sessionId = env.getCurrentLlmSessionId();
       if (!sessionId) {
+        const completedSession = env.findCompletedSessionByDefinition(definition.id);
+        if (completedSession) {
+          return completedSession.finalState;
+        }
         return variable.value;
       }
       return createSessionSnapshot(definition, env);

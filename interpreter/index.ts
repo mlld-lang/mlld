@@ -591,6 +591,7 @@ export async function interpret(
     effectHandler
   );
   env.setSigService(new SigService(pathContext.projectRoot, resolveSigFileSystem(options.fileSystem)));
+  env.setRetainCompletedSessionHistory(mode !== 'document');
   const signingIdentity = (options as { signingIdentity?: unknown }).signingIdentity;
   const signingContext = (options as { signingContext?: Record<string, unknown> | undefined }).signingContext;
   env.setSignerIdentity(
