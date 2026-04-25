@@ -6,7 +6,9 @@ import { Environment } from '@interpreter/env/Environment';
 import { createCallMcpConfig } from '@interpreter/env/executors/call-mcp-config';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
+import { buildSessionWriteTraceEnvelope } from '@interpreter/session/trace-envelope';
+import { makeSecurityDescriptor } from '@core/types/security';
 import { fileURLToPath } from 'url';
 
 const callToolFromConfigPath = fileURLToPath(
@@ -244,6 +246,42 @@ describe('runtime trace', () => {
     const finalNote = result.sessions[0]?.finalState?.note;
     expect(isStructuredValue(finalNote) ? asText(finalNote) : finalNote).toBe('sk-live-123');
     expect((finalNote as any)?.mx?.labels ?? []).toEqual(expect.arrayContaining(['secret']));
+  });
+
+  it('does not stringify redacted session trace payloads just to compute size', () => {
+    const env = createEnvironment();
+    env.setRuntimeTrace('effects');
+
+    let stringified = false;
+    const payload = {
+      value: 'x'.repeat(1_000_000),
+      toJSON() {
+        stringified = true;
+        return { value: this.value };
+      }
+    };
+    const wrappedPayload = wrapStructured(payload, 'object', undefined, {
+      security: makeSecurityDescriptor({ labels: ['untrusted'] })
+    });
+    stringified = false;
+
+    const envelope = buildSessionWriteTraceEnvelope({
+      env,
+      frameId: 'session-1',
+      definition: {
+        id: 'test#planner',
+        canonicalName: 'planner',
+        slots: {},
+        originPath: '/test.mld'
+      },
+      path: 'state',
+      operation: 'set',
+      previousValue: undefined,
+      nextValue: wrappedPayload
+    });
+
+    expect(envelope.data.value).toMatch(/^<labels=\[untrusted\] size=\d+>$/);
+    expect(stringified).toBe(false);
   });
 
   it('emits session.seed events for seeded slots before the first callback', async () => {
