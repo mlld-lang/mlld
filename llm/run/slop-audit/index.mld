@@ -1,207 +1,305 @@
->> Slop Audit — AI Code Anti-Pattern Detection
->> Usage:
->>   mlld run slop-audit                              # audit uncommitted changes, or changes since last run
->>   mlld run slop-audit --all true                   # full codebase audit
->>   mlld run slop-audit --since abc1234              # changes since commit
->>   mlld run slop-audit --files "cli/index.ts,core/policy/guards.ts"  # specific files
->>   mlld run slop-audit --parallel 10                # cap concurrency
->>   mlld run slop-audit --new                        # fresh run (ignore cache)
+>> Slop Audit — ticket-aware anti-slop orchestrator
 >>
->> Resilience: exe llm labels + checkpoint directives. Crash recovery is automatic.
->>   mlld run slop-audit                       # auto-resumes via cache
->>   mlld run slop-audit --resume "verify"     # skip to verification phase
->>   mlld run slop-audit --new                 # fresh run
+>> Usage:
+>>   mlld run slop-audit
+>>   mlld run slop-audit --files "cli/commands/analyze.ts,cli/mcp/BuiltinTools.ts"
+>>   mlld run slop-audit --since HEAD~10
+>>   mlld run slop-audit --branch main..2.1.0
+>>   mlld run slop-audit --full true
+>>   mlld run slop-audit --maxIterations 8
+>>   mlld run slop-audit --parallel 4
+>>   mlld run slop-audit --plannerModel opus
+>>   mlld run slop-audit --workerModel togetherai/zai-org/GLM-5.1
+>>   mlld run slop-audit --name slop-audit-2026-04-25
+>>
+>> Design:
+>>   Strict llm-first. The script gathers raw context, asks an Opus planner
+>>   what to do, and mechanically dispatches scope or audit-batch actions.
+>>   Ticket interpretation, code exploration, duplicate detection, and ticket
+>>   creation rules live in prompts and agent tool use, not mlld conditionals.
 
 needs { sh }
-import { @claudePoll } from @mlld/claude-poll
+import { @claude } from @mlld/claude
+import { @opencode } from @mlld/opencode
 
 >> Config
-var @parallelism = @payload.parallel ? @payload.parallel * 1 : 20
+var @maxIterations = @payload.maxIterations ? @payload.maxIterations * 1 : 5
+var @parallelism = @payload.parallel ? @payload.parallel * 1 : 4
+var @plannerModel = @payload.plannerModel ?? "opus"
+var @workerModel = @payload.workerModel ?? "togetherai/zai-org/GLM-5.1"
 var @today = cmd { date -u +%Y-%m-%d }
-var @runId = `slop-audit-@today`
-var @runDir = `@root/llm/output/@runId`
+var @runName = @payload.name ?? @payload.run ?? `slop-audit-@today`
+var @runDir = `@root/llm/output/@runName`
+var @lastRunCommitFile = <@root/llm/output/.slop-audit-last-commit>?
+var @lastRunCommit = when [
+  @payload.lastRunCommit => @payload.lastRunCommit
+  @lastRunCommitFile => @lastRunCommitFile.trim()
+  * => ""
+]
+var @fullFlag = @payload.full ?? @payload.all ?? ""
+var @scopeFlags = {
+  files: @payload.files ?? "",
+  since: @payload.since ?? "",
+  branch: @payload.branch ?? "",
+  full: @fullFlag,
+  lastRunCommit: @lastRunCommit
+}
 
->> Create run directory
-run sh { mkdir -p "$runDir/scope" "$runDir/reviews" "$runDir/verifications" }
+run sh { mkdir -p "$runDir/prompts" "$runDir/responses" "$runDir/batches" }
 
->> Tool permissions — escalation between phases
-var @scopeTools = "Read,Write,Bash(git:*)"
-var @reviewTools = "Read,Write"
-var @verifyTools = "Read,Write,Glob,Grep"
+>> The planner can inspect the repo and manage tickets directly.
+var @plannerTools = [
+  "Read",
+  "Write",
+  "Glob",
+  "Grep",
+  "Bash(tk:*)",
+  "Bash(git:*)",
+  "Bash(rg:*)",
+  "Bash(nl:*)",
+  "Bash(sed:*)",
+  "Bash(mlld:*)"
+]
 
->> Load the anti-slop guide — this is the reviewer's reference material
+>> Reference material
 var @antiSlopGuide = <@root/docs/dev/ANTI-SLOP.md>
 
 >> Prompt templates
-exe @scopePrompt(flags, lastRunCommit) = template "./prompts/scope.att"
-exe @reviewPrompt(file, fileContent, guide) = template "./prompts/review.att"
-exe @verifyPrompt(finding, fileContent, guide) = template "./prompts/verify.att"
+exe @decisionPrompt(context, guide) = template "./prompts/decision.att"
+exe @scopePrompt(flags, context, guide) = template "./prompts/scope.att"
+exe @reviewPrompt(unit, context, guide) = template "./prompts/review.att"
+exe @verifyPrompt(unit, reviewResult, context, guide) = template "./prompts/verify.att"
+exe @draftPrompt(unit, reviewResult, verifyResult, context, guide) = template "./prompts/draft.att"
 
->> LLM wrappers — llm label enables automatic caching, bail on failure
-exe llm @callScope(prompt, tools, outPath) = [
-  let @fullPrompt = `@prompt
+>> Raw context snapshots. These are intentionally simple: agents decide how to
+>> interpret them and can use tools to dig deeper.
+exe @ticketSnapshot() = sh {
+  tk list --dir anti-slop || true
+}
 
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
-  let @result = @claudePoll(@fullPrompt, "sonnet", "@root", @tools, @outPath)
-  when !@result => bail `Scope agent failed to produce output`
-  => @result
+exe @gitSnapshot() = sh {
+  printf 'branch: '
+  git branch --show-current
+  printf '\nstatus:\n'
+  git status --short
+}
+
+exe @recentEvents(runDir) = sh {
+  if [ -f "$runDir/events.jsonl" ]; then
+    tail -40 "$runDir/events.jsonl"
+  fi
+}
+
+exe @buildContext(iteration, lastWorkerResult, lastError) = [
+  let @tickets = @ticketSnapshot()
+  let @git = @gitSnapshot()
+  let @events = @recentEvents(@runDir)
+  => `<goal>
+Audit the mlld codebase for violations of docs/dev/ANTI-SLOP.md and keep work tracked in tk under --dir anti-slop.
+</goal>
+
+<run>
+name: @runName
+dir: @runDir
+iteration: @iteration
+max_iterations: @maxIterations
+parallelism: @parallelism
+</run>
+
+<scope_flags>
+@scopeFlags
+</scope_flags>
+
+<ticket_snapshot command="tk list --dir anti-slop">
+@tickets
+</ticket_snapshot>
+
+<git_snapshot>
+@git
+</git_snapshot>
+
+<recent_events>
+@events
+</recent_events>
+
+<last_worker_result>
+@lastWorkerResult
+</last_worker_result>
+
+<last_error>
+@lastError
+</last_error>`
 ]
 
-exe llm @callReview(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
-exe llm @callVerify(prompt, tools, outPath) = @claudePoll(@prompt, "sonnet", "@root", @tools, @outPath)
+exe llm @callPlanner(prompt, model, tools) = @claude(@prompt, {
+  model: @model,
+  dir: @root,
+  tools: @tools
+})
 
->> Helpers
-exe @flatMap(arrays) = js { return arrays.filter(Boolean).flatMap(a => { const d = a.data || a; return d.findings || [] }) }
-exe @filterByVerdict(results, verdict) = js { return results.filter(r => { const d = r.data || r; return d && d.verdict === verdict }) }
+exe llm @callWorker(prompt, model) = @opencode(@prompt, {
+  model: @model,
+  dir: @root,
+  pure: true,
+  bypass: true
+})
 
->> ═══════════════════════════════════════════════════════
->> Phase 0: Scope Resolution
->> ═══════════════════════════════════════════════════════
+exe @runAuditUnit(unit, unitIndex, context, guide, model, runDir, iteration) = [
+  let @unitDir = `@runDir/batches/iteration-@iteration/unit-@unitIndex`
+  run sh { mkdir -p "$unitDir" }
+
+  let @reviewPromptText = @reviewPrompt(@unit, @context, @guide)
+  output @reviewPromptText to `@unitDir/review.prompt.md`
+  let @reviewRaw = @callWorker(@reviewPromptText, @model)
+  output @reviewRaw to `@unitDir/review.txt`
+
+  let @verifyPromptText = @verifyPrompt(@unit, @reviewRaw, @context, @guide)
+  output @verifyPromptText to `@unitDir/verify.prompt.md`
+  let @verifyRaw = @callWorker(@verifyPromptText, @model)
+  output @verifyRaw to `@unitDir/verify.txt`
+
+  let @draftPromptText = @draftPrompt(@unit, @reviewRaw, @verifyRaw, @context, @guide)
+  output @draftPromptText to `@unitDir/draft.prompt.md`
+  let @draftRaw = @callWorker(@draftPromptText, @model)
+  output @draftRaw to `@unitDir/draft.txt`
+
+  => {
+    unit: @unit,
+    artifacts: { dir: @unitDir },
+    review: @reviewRaw,
+    verify: @verifyRaw,
+    draft: @draftRaw
+  }
+]
 
 show `Slop Audit`
+show `Name: @runName`
 show `Run: @runDir`
+show `Planner: @plannerModel`
+show `Worker: @workerModel`
+show `Parallelism: @parallelism`
 
->> Check for last run's commit hash
-var @lastRunCommit = <@root/llm/output/.slop-audit-last-commit>?
-
->> Build flags context for the scope agent
-var @flags = {
-  all: @payload.all ?? false,
-  since: @payload.since ?? null,
-  files: @payload.files ?? null,
-  lastRunCommit: @lastRunCommit ? @lastRunCommit.trim() : null
-}
-
-var @scopeOutPath = `@runDir/scope/files.json`
-
-show `  Resolving scope...`
-@callScope(@scopePrompt(@flags, @lastRunCommit), @scopeTools, @scopeOutPath)
-show `  Scope resolved.`
-var @scopeResult = <@scopeOutPath>? | @parse
-
->> bail is an error — scope failure means we can't proceed
-when !@scopeResult => bail `Scope resolution failed — no output at @scopeOutPath`
-
-var @filesToAudit = @scopeResult.files
-var @scopeDescription = @scopeResult.description
-
-show `Scope: @scopeDescription`
-show `Files: @filesToAudit.length`
-
->> ═══════════════════════════════════════════════════════
->> Phase 1: Review (limited tools — reviewer sees only the file)
->> Empty file list → for-parallel returns [] → no findings → skip to report
->> ═══════════════════════════════════════════════════════
-
-show `\nPhase 1: Review (@filesToAudit.length files, parallel @parallelism)`
-
-checkpoint "review"
-
-var @reviewResults = for parallel(@parallelism) @filePath in @filesToAudit [
-  let @file = <@root/@filePath>?
-  when !@file => [
-    show `  @filePath: file not found, skipping`
-    => null
+var @runResult = loop(@maxIterations) [
+  let @state = when [
+    @input["_slop_audit_state"] == "state" => @input
+    * => {
+      _slop_audit_state: "state",
+      iteration: 1,
+      lastWorkerResult: "",
+      lastError: ""
+    }
   ]
 
-  let @flatName = @filePath.replaceAll("/", "--")
-  let @outPath = `@runDir/reviews/@flatName\.json`
+  let @context = @buildContext(@state.iteration, @state.lastWorkerResult, @state.lastError)
+  let @plannerPromptText = @decisionPrompt(@context, @antiSlopGuide)
+  let @plannerPromptPath = `@runDir/prompts/planner-@state.iteration\.md`
+  output @plannerPromptText to @plannerPromptPath
 
-  show `  @filePath: reviewing...`
-  let @reviewFullPrompt = `@reviewPrompt(@filePath, @file, @antiSlopGuide)
+  show `\nIteration @state.iteration: planning...`
+  let @decisionRaw = @callPlanner(@plannerPromptText, @plannerModel, @plannerTools)
+  output @decisionRaw to "@runDir/responses/planner-@state.iteration\.txt"
+  let @decision = @decisionRaw | @parse.llm
 
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON matching the schema.`
-  @callReview(@reviewFullPrompt, @reviewTools, @outPath)
-  let @result = <@outPath>? | @parse
+  append {
+    type: "planner_decision",
+    iteration: @state.iteration,
+    action: @decision.action,
+    reasoning: @decision.reasoning ?? null
+  } to "@runDir/events.jsonl"
 
-  when !@result => [
-    show `  @filePath: FAILED (no output)`
-    => null
+  when @decision.action [
+    "scope" => [
+      let @scopePromptText = @scopePrompt(@scopeFlags, @context, @antiSlopGuide)
+      let @scopePromptPath = `@runDir/prompts/scope-@state.iteration\.md`
+      output @scopePromptText to @scopePromptPath
+
+      show `Iteration @state.iteration: resolving audit scope...`
+      let @scopeRaw = @callWorker(@scopePromptText, @workerModel)
+      output @scopeRaw to "@runDir/responses/scope-@state.iteration\.txt"
+
+      append {
+        type: "scope_result",
+        iteration: @state.iteration,
+        prompt: @scopePromptPath,
+        summary: @scopeRaw
+      } to "@runDir/events.jsonl"
+
+      continue {
+        _slop_audit_state: "state",
+        iteration: @state.iteration + 1,
+        lastWorkerResult: @scopeRaw,
+        lastError: ""
+      }
+    ]
+
+    "audit_batch" => [
+      let @units = @decision.units ?? []
+      output @decision to "@runDir/responses/audit-batch-@state.iteration\.json"
+
+      show `Iteration @state.iteration: auditing @units.length units...`
+      let @batchResults = for parallel(@parallelism) @unit in @units [
+        let @unitIndex = @mx.for.index
+        let @result = @runAuditUnit(@unit, @unitIndex, @context, @antiSlopGuide, @workerModel, @runDir, @state.iteration)
+        => @result
+      ]
+      output @batchResults to "@runDir/responses/audit-batch-@state.iteration-results.json"
+
+      append {
+        type: "audit_batch_result",
+        iteration: @state.iteration,
+        units: @units,
+        results: @batchResults
+      } to "@runDir/events.jsonl"
+
+      continue {
+        _slop_audit_state: "state",
+        iteration: @state.iteration + 1,
+        lastWorkerResult: @batchResults,
+        lastError: ""
+      }
+    ]
+
+    "blocked" => [
+      let @questions = @decision.questions ?? []
+      output @decision to "@runDir/blocked.json"
+      append {
+        type: "blocked",
+        iteration: @state.iteration,
+        questions: @questions
+      } to "@runDir/events.jsonl"
+      done {
+        status: "blocked",
+        questions: @questions,
+        message: `Blocked. See @runDir/blocked.json`
+      }
+    ]
+
+    "complete" => [
+      let @summary = @decision.summary ?? "complete"
+      let @currentCommit = cmd { git rev-parse HEAD }
+      output @currentCommit to "@root/llm/output/.slop-audit-last-commit"
+      output @decision to "@runDir/complete.json"
+      append {
+        type: "complete",
+        iteration: @state.iteration,
+        summary: @summary
+      } to "@runDir/events.jsonl"
+      done {
+        status: "complete",
+        summary: @summary,
+        message: `Complete. See @runDir/complete.json`
+      }
+    ]
+
+    * => [
+      continue {
+        _slop_audit_state: "state",
+        iteration: @state.iteration + 1,
+        lastWorkerResult: @state.lastWorkerResult,
+        lastError: `Planner returned unknown action. Raw response saved in @runDir/responses/planner-@state.iteration\.txt`
+      }
+    ]
   ]
-
-  let @count = @result.findings.length
-  show `  @filePath: done, @count findings`
-  => @result
 ]
 
-var @allFindings = @flatMap(@reviewResults)
-show `\nTotal findings: @allFindings.length`
-
->> ═══════════════════════════════════════════════════════
->> Phase 2: Verification (expanded tools — verifier explores codebase)
->> Empty findings → for-parallel returns [] → report shows 0s
->> ═══════════════════════════════════════════════════════
-
-show `\nPhase 2: Verification (@allFindings.length findings, parallel @parallelism)`
-
-checkpoint "verify"
-
-var @verificationResults = for parallel(@parallelism) @finding in @allFindings [
-  let @findingId = `@finding.file-@finding.line`
-  let @flatId = @findingId.replaceAll("/", "--")
-  let @outPath = `@runDir/verifications/@flatId\.json`
-
-  show `  @findingId: verifying...`
-  let @sourceFile = <@root/@finding.file>?
-  let @verifyFullPrompt = `@verifyPrompt(@finding, @sourceFile, @antiSlopGuide)
-
-IMPORTANT: Write your JSON response to @outPath using the Write tool. Write ONLY valid JSON.`
-  @callVerify(@verifyFullPrompt, @verifyTools, @outPath)
-  let @result = <@outPath>? | @parse
-
-  when !@result => [
-    show `  @findingId: FAILED — keeping as confirmed`
-    => { finding: @finding, verdict: "confirmed", reasoning: "verification agent produced no output" }
-  ]
-
-  let @status = when @result.verdict [
-    "confirmed" => "CONFIRMED"
-    "false-positive" => "FALSE POS"
-    "insufficient-context" => "NEEDS CTX"
-    "needs-human" => "NEEDS HUMAN"
-    * => "CONFIRMED"
-  ]
-  show `  @findingId: @status`
-  => @result
-]
-
->> ═══════════════════════════════════════════════════════
->> Phase 3: Report
->> ═══════════════════════════════════════════════════════
-
-var @confirmed = @filterByVerdict(@verificationResults, "confirmed")
-var @falsePositives = @filterByVerdict(@verificationResults, "false-positive")
-var @needsContext = @filterByVerdict(@verificationResults, "insufficient-context")
-var @needsHuman = @filterByVerdict(@verificationResults, "needs-human")
-
-show `\n═══ Results ═══`
-show `Total findings:        @allFindings.length`
-show `  Confirmed:           @confirmed.length`
-show `  False positives:     @falsePositives.length`
-show `  Insufficient context: @needsContext.length`
-show `  Needs human review:  @needsHuman.length`
-
-var @report = {
-  run: @runId,
-  scope: @scopeDescription,
-  files_audited: @filesToAudit.length,
-  summary: {
-    total: @allFindings.length,
-    confirmed: @confirmed.length,
-    false_positives: @falsePositives.length,
-    insufficient_context: @needsContext.length,
-    needs_human: @needsHuman.length
-  },
-  confirmed: @confirmed,
-  needs_human: @needsHuman,
-  insufficient_context: @needsContext,
-  false_positives: @falsePositives
-}
-
-output @report to "@runDir/report.json"
-
->> Record commit hash for next run
-var @currentCommit = cmd { git rev-parse HEAD }
-output @currentCommit to "@root/llm/output/.slop-audit-last-commit"
-
-show `\nReport: @runDir/report.json`
+show `\n@runResult.message`
