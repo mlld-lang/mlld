@@ -266,6 +266,44 @@ describe('session runtime', () => {
     expect(clonedRaw.mx.factsources).toEqual(raw.mx.factsources);
   });
 
+  it('does not retain full payloads in private committed session write history', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'large-session-write';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, env);
+    const setMethod = (accessor.value as Record<string, any>).set;
+    const setExecutable = setMethod?.internal?.executableDef;
+    expect(setExecutable).toBeDefined();
+
+    const largeState = {
+      payload: 'x'.repeat(1_000_000),
+      nested: { ok: true }
+    };
+    await setExecutable!.fn({ state: largeState }, env);
+
+    const writes = env.getSessionWrites();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({
+      sessionName: 'planner',
+      path: 'state',
+      operation: 'set'
+    });
+    expect(writes[0]).not.toHaveProperty('value');
+    expect(writes[0]).not.toHaveProperty('previous');
+    expect(instance.getSlot('state')).toMatchObject(largeState);
+  });
+
   it('returns null for result .mx.sessions when no session is attached', async () => {
     const { env } = await interpretWithEnv([
       '/exe llm @agent(prompt, config) = js {',

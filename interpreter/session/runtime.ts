@@ -881,16 +881,13 @@ function recordCommittedSessionWrite(args: {
   previousValue: unknown;
   nextValue: unknown;
 }): void {
-  const shouldRecordPrevious = args.previousValue !== undefined && args.env.getRuntimeTraceLevel() !== 'off';
   args.env.recordSessionWrite({
     sessionId: args.instance.sessionId,
     declarationId: args.instance.definition.id,
     sessionName: args.instance.definition.canonicalName,
     originPath: args.instance.definition.originPath,
     path: args.path,
-    operation: args.operation,
-    ...(shouldRecordPrevious ? { previous: cloneSessionValue(args.previousValue) } : {}),
-    ...(args.nextValue !== undefined ? { value: cloneSessionValue(args.nextValue) } : {})
+    operation: args.operation
   });
   const traceEnvelope = args.operation === 'seed'
     ? buildSessionSeedTraceEnvelope({
