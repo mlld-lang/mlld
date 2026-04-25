@@ -23,7 +23,11 @@ import type { Variable, VariableSource } from '@core/types/variable';
 import { createObjectVariable, isExecutableVariable } from '@core/types/variable';
 import { isHandleWrapper } from '@core/types/handle';
 import type { Environment } from '@interpreter/env/Environment';
-import { wrapStructured, isStructuredValue } from '@interpreter/utils/structured-value';
+import {
+  wrapStructured,
+  isStructuredValue,
+  type StructuredValueMetadata
+} from '@interpreter/utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
 import { extractVariableValue, isVariable } from '@interpreter/utils/variable-resolution';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
@@ -72,6 +76,16 @@ function isAstLikeNode(value: unknown): boolean {
   );
 }
 
+function cloneSessionStructuredMetadata(
+  metadata: StructuredValueMetadata | undefined
+): StructuredValueMetadata | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+  const { sessions: _sessions, ...rest } = metadata;
+  return rest;
+}
+
 function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new WeakMap()): T {
   if (value === null || value === undefined) {
     return value;
@@ -95,7 +109,7 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
       clonedData,
       value.type,
       undefined,
-      value.metadata ? { ...value.metadata } : undefined
+      cloneSessionStructuredMetadata(value.metadata)
     ) as typeof value;
     if (value.internal) {
       clone.internal = { ...value.internal };

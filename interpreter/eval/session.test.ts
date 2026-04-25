@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import {
   createGuardSessionWriteBuffer,
   createSessionAccessorVariable,
-  materializeSession
+  materializeSession,
+  snapshotSessionsForFrame
 } from '@interpreter/session/runtime';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
@@ -216,6 +217,53 @@ describe('session runtime', () => {
 
     const labels = await extractVariableValue(env.getVariable('labels')!, env);
     expect(labels).toEqual(expect.arrayContaining(['untrusted']));
+  });
+
+  it('strips nested session snapshots from structured values copied into session snapshots', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  raw: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'snapshot-strip-session';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const nestedSessions = {
+      planner: {
+        state: {
+          large: 'retained only by the original llm result'
+        }
+      }
+    };
+    const raw = wrapStructured(
+      { answer: 'ok' },
+      'object',
+      undefined,
+      {
+        sessionId: 'inner-session',
+        sessions: nestedSessions,
+        factsources: [{ kind: 'record-field', ref: 'f_1', field: 'answer' } as any]
+      }
+    );
+    expect(raw.mx.sessions).toEqual(nestedSessions);
+    instance.setSlot('raw', raw);
+
+    const snapshots = snapshotSessionsForFrame(sessionId, env);
+    const clonedRaw = snapshots?.planner?.raw;
+    expect(isStructuredValue(clonedRaw)).toBe(true);
+    if (!isStructuredValue(clonedRaw)) {
+      throw new Error('expected structured raw snapshot');
+    }
+    expect(clonedRaw.metadata?.sessions).toBeUndefined();
+    expect(clonedRaw.mx.sessions).toBeUndefined();
+    expect(clonedRaw.mx.sessionId).toBe('inner-session');
+    expect(clonedRaw.mx.factsources).toEqual(raw.mx.factsources);
   });
 
   it('returns null for result .mx.sessions when no session is attached', async () => {
