@@ -149,6 +149,85 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
   return value;
 }
 
+function cloneSessionValueWithReuse<T>(
+  value: T,
+  previous: unknown,
+  seen: WeakMap<object, unknown> = new WeakMap()
+): T {
+  if (value === previous) {
+    return previous as T;
+  }
+
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'function') {
+    return value;
+  }
+
+  if (isVariable(value)) {
+    return value;
+  }
+
+  if (isStructuredValue(value)) {
+    const existing = seen.get(value as object);
+    if (existing) {
+      return existing as T;
+    }
+    const previousStructured = isStructuredValue(previous) ? previous : undefined;
+    const clonedData = cloneSessionValueWithReuse(
+      value.data as T,
+      previousStructured?.data,
+      seen
+    );
+    const clone = wrapStructured(
+      clonedData,
+      value.type,
+      undefined,
+      cloneSessionStructuredMetadata(value.metadata)
+    ) as typeof value;
+    if (value.internal) {
+      clone.internal = { ...value.internal };
+    }
+    inheritExpressionProvenance(clone, value);
+    seen.set(value as object, clone);
+    return clone as T;
+  }
+
+  if (Array.isArray(value)) {
+    const existing = seen.get(value as object);
+    if (existing) {
+      return existing as T;
+    }
+    const previousArray = Array.isArray(previous) ? previous : undefined;
+    const clone: unknown[] = [];
+    seen.set(value as object, clone);
+    for (let index = 0; index < value.length; index += 1) {
+      clone.push(cloneSessionValueWithReuse(value[index], previousArray?.[index], seen));
+    }
+    inheritExpressionProvenance(clone, value);
+    return clone as T;
+  }
+
+  if (isPlainObject(value)) {
+    const existing = seen.get(value as object);
+    if (existing) {
+      return existing as T;
+    }
+    const previousObject = isPlainObject(previous) ? previous as Record<string, unknown> : undefined;
+    const clone: Record<string, unknown> = Object.create(Object.getPrototypeOf(value));
+    seen.set(value as object, clone);
+    for (const [key, entry] of Object.entries(value)) {
+      clone[key] = cloneSessionValueWithReuse(entry, previousObject?.[key], seen);
+    }
+    inheritExpressionProvenance(clone, value);
+    return clone as T;
+  }
+
+  return value;
+}
+
 function describeValueType(value: unknown): string {
   const unwrapped = isStructuredValue(value) ? value.data : value;
   if (unwrapped === null) {
@@ -878,24 +957,26 @@ function recordCommittedSessionWrite(args: {
     path: args.path,
     operation: args.operation
   });
-  const traceEnvelope = args.operation === 'seed'
-    ? buildSessionSeedTraceEnvelope({
-        env: args.env,
-        frameId: args.instance.sessionId,
-        definition: args.instance.definition,
-        path: args.path,
-        nextValue: args.nextValue
-      })
-    : buildSessionWriteTraceEnvelope({
-        env: args.env,
-        frameId: args.instance.sessionId,
-        definition: args.instance.definition,
-        path: args.path,
-        operation: args.operation,
-        previousValue: args.previousValue,
-        nextValue: args.nextValue
-      });
-  args.env.emitRuntimeTraceEvent(traceEnvelope);
+  if (args.env.shouldEmitRuntimeTrace('effects', 'session')) {
+    const traceEnvelope = args.operation === 'seed'
+      ? buildSessionSeedTraceEnvelope({
+          env: args.env,
+          frameId: args.instance.sessionId,
+          definition: args.instance.definition,
+          path: args.path,
+          nextValue: args.nextValue
+        })
+      : buildSessionWriteTraceEnvelope({
+          env: args.env,
+          frameId: args.instance.sessionId,
+          definition: args.instance.definition,
+          path: args.path,
+          operation: args.operation,
+          previousValue: args.previousValue,
+          nextValue: args.nextValue
+        });
+    args.env.emitRuntimeTraceEvent(traceEnvelope);
+  }
   args.env.emitRuntimeMemoryTrace('session.write', 'finish', {
     requiredLevel: 'verbose',
     data: {
@@ -904,19 +985,21 @@ function recordCommittedSessionWrite(args: {
       path: args.path
     }
   });
-  args.env.emitSDKEvent({
-    type: 'session_write',
-    session_write: buildSessionWriteSdkPayload({
-      env: args.env,
-      definition: args.instance.definition,
-      frameId: args.instance.sessionId,
-      path: args.path,
-      operation: args.operation,
-      previousValue: args.previousValue,
-      nextValue: args.nextValue
-    }),
-    timestamp: Date.now()
-  });
+  if (args.env.hasSDKEmitter()) {
+    args.env.emitSDKEvent({
+      type: 'session_write',
+      session_write: buildSessionWriteSdkPayload({
+        env: args.env,
+        definition: args.instance.definition,
+        frameId: args.instance.sessionId,
+        path: args.path,
+        operation: args.operation,
+        previousValue: args.previousValue,
+        nextValue: args.nextValue
+      }),
+      timestamp: Date.now()
+    });
+  }
 }
 
 function applySlotMutation(args: {
@@ -932,6 +1015,7 @@ function applySlotMutation(args: {
     validateSlotValue(args.binding, args.nextValue);
   }
 
+  args.env.clearSessionFrameSnapshotCache(args.instance.sessionId);
   const buffer = args.env.getSessionWriteBuffer();
   const hadPrevious = args.instance.hasSlot(args.binding.name);
   const previousValue = hadPrevious
@@ -947,7 +1031,13 @@ function applySlotMutation(args: {
     args.instance.clearTraceSlot(args.binding.name);
   } else {
     args.instance.clearSlot(args.binding.name);
-    args.instance.setTraceSlot(args.binding.name, cloneSessionValue(args.nextValue));
+    const previousObservedValue = hadPreviousTrace
+      ? previousTraceValue
+      : (hadPrevious ? previousValue : undefined);
+    args.instance.setTraceSlot(
+      args.binding.name,
+      cloneSessionValueWithReuse(args.nextValue, previousObservedValue)
+    );
   }
 
   stageMutation(args.env, {
@@ -1544,6 +1634,11 @@ export function snapshotSessionsForFrame(
   sessionId: string,
   env: Environment
 ): SessionFinalStateMap | undefined {
+  const cached = env.getCachedSessionFrameSnapshot(sessionId) as SessionFinalStateMap | undefined;
+  if (cached) {
+    return cached;
+  }
+
   const instances = env.getSessionInstancesForFrame(sessionId);
   if (instances.length === 0) {
     return undefined;
@@ -1557,6 +1652,7 @@ export function snapshotSessionsForFrame(
         : instance.snapshot();
   }
 
+  env.cacheSessionFrameSnapshot(sessionId, snapshots);
   return snapshots;
 }
 
@@ -1587,11 +1683,13 @@ export async function applySeedWrites(
 }
 
 export function disposeSessionFrame(sessionId: string, env: Environment): void {
+  const cachedSnapshots = env.getCachedSessionFrameSnapshot(sessionId) as SessionFinalStateMap | undefined;
   for (const instance of env.getSessionInstancesForFrame(sessionId)) {
     const finalState =
-      instance instanceof RuntimeSessionInstance
-        ? instance.observedSnapshot()
-        : instance.snapshot();
+      cachedSnapshots?.[instance.definition.canonicalName]
+        ?? (instance instanceof RuntimeSessionInstance
+          ? instance.observedSnapshot()
+          : instance.snapshot());
     env.recordCompletedSession({
       frameId: sessionId,
       declarationId: instance.definition.id,
@@ -1599,18 +1697,21 @@ export function disposeSessionFrame(sessionId: string, env: Environment): void {
       originPath: instance.definition.originPath,
       finalState
     });
-    env.emitRuntimeTraceEvent(buildSessionFinalTraceEnvelope({
-      env,
-      frameId: sessionId,
-      definition: instance.definition,
-      finalState
-    }));
+    if (env.shouldEmitRuntimeTrace('effects', 'session')) {
+      env.emitRuntimeTraceEvent(buildSessionFinalTraceEnvelope({
+        env,
+        frameId: sessionId,
+        definition: instance.definition,
+        finalState
+      }));
+    }
     env.emitRuntimeMemoryTrace('session.final', 'finish', {
       data: {
         sessionName: instance.definition.canonicalName
       }
     });
   }
+  env.clearSessionFrameSnapshotCache(sessionId);
   env.disposeSessionInstances(sessionId);
 }
 
@@ -1625,6 +1726,9 @@ export function emitAttachedSessionFinalSnapshot(env: Environment): void {
 
   for (const sessionId of sessionIds) {
     for (const instance of env.getSessionInstancesForFrame(sessionId)) {
+      if (!env.shouldEmitRuntimeTrace('effects', 'session')) {
+        continue;
+      }
       const traceFinalState =
         instance instanceof RuntimeSessionInstance
           ? instance.traceSnapshot()

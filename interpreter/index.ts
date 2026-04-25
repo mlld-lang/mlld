@@ -800,11 +800,12 @@ export async function interpret(
     options.traceStderr !== undefined
   ) {
     env.setRuntimeTrace(
-      options.trace ?? (options.traceMemory === true ? 'effects' : 'off'),
+      options.trace ?? 'off',
       {
         filePath: options.traceFile,
         stderr: options.traceStderr,
-        memory: options.traceMemory
+        memory: options.traceMemory,
+        retainLimit: mode === 'document' ? 0 : undefined
       }
     );
   }

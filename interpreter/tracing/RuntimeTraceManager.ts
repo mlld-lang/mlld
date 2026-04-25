@@ -80,11 +80,14 @@ export class RuntimeTraceManager {
     return [...this.root.events];
   }
 
-  emitTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): RuntimeTraceEvent | undefined {
-    if (!shouldEmitRuntimeTrace(this.getLevel(), trace.requiredLevel, trace.category)) {
-      return undefined;
-    }
+  shouldEmitTrace(
+    requiredLevel: RuntimeTraceEmissionLevel,
+    category: RuntimeTraceEnvelope['category']
+  ): boolean {
+    return shouldEmitRuntimeTrace(this.getLevel(), requiredLevel, category);
+  }
 
+  private recordTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): RuntimeTraceEvent {
     const payload: RuntimeTraceEvent = {
       ts: new Date().toISOString(),
       level: trace.requiredLevel,
@@ -120,6 +123,14 @@ export class RuntimeTraceManager {
     return payload;
   }
 
+  emitTrace(trace: RuntimeTraceEnvelope, scope: RuntimeTraceScope): RuntimeTraceEvent | undefined {
+    if (!this.shouldEmitTrace(trace.requiredLevel, trace.category)) {
+      return undefined;
+    }
+
+    return this.recordTrace(trace, scope);
+  }
+
   isMemoryEnabled(): boolean {
     return this.root.memory;
   }
@@ -144,6 +155,13 @@ export class RuntimeTraceManager {
     const usage = process.memoryUsage();
     const previous = this.root.lastMemorySample;
     const event = args.event ?? (previous ? 'memory.delta' : 'memory.sample');
+    const requiredLevel = args.requiredLevel ?? (event === 'memory.gc' ? 'verbose' : 'effects');
+    const shouldEmit =
+      this.shouldEmitTrace(requiredLevel, 'memory') ||
+      requiredLevel === 'effects';
+    if (!shouldEmit) {
+      return undefined;
+    }
     const data = {
       label: args.label,
       ...(args.phase ? { phase: args.phase } : {}),
@@ -165,9 +183,9 @@ export class RuntimeTraceManager {
       ...args.data
     };
 
-    const payload = this.emitTrace(
+    const payload = this.recordTrace(
       {
-        requiredLevel: args.requiredLevel ?? (event === 'memory.gc' ? 'verbose' : 'effects'),
+        requiredLevel,
         category: 'memory',
         event,
         data

@@ -51,6 +51,34 @@ describe('runtime trace', () => {
     );
   });
 
+  it('does not enable non-memory effects when only traceMemory is requested', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const source = [
+      '/var session @planner = {',
+      '  count: number?',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  => "ok"',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @agent(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/var @result = @agent("hello", { tools: @toolList }) with { session: @planner }'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem,
+      pathService,
+      basePath: '/',
+      mode: 'structured',
+      traceMemory: true
+    }) as any;
+
+    expect(result.traceEvents.some((event: any) => event.category === 'memory')).toBe(true);
+    expect(result.traceEvents.some((event: any) => event.event === 'session.write')).toBe(false);
+  });
+
   it('bounds retained runtime trace events when a retain limit is configured', () => {
     const env = createEnvironment();
     env.setRuntimeTrace('effects', { memory: true, retainLimit: 2 });

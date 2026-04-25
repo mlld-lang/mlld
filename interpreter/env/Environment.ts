@@ -23,6 +23,7 @@ import { VirtualFS, type VirtualFSSigningContext } from '@services/fs/VirtualFS'
 import type { ResolvedURLConfig } from '@core/types/url-config';
 import type {
   DirectiveTrace,
+  RuntimeTraceCategory,
   RuntimeTraceEmissionLevel,
   RuntimeTraceLevel,
   RuntimeTraceOptions,
@@ -275,6 +276,8 @@ interface RuntimeTraceFrameContext {
   parentFrameId?: string;
 }
 
+type SessionFrameSnapshotCache = Record<string, Record<string, unknown>>;
+
 /**
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
@@ -340,6 +343,7 @@ export class Environment
   private completedSessions: SessionFinalStateRecord[] = [];
   private latestCompletedSessionsByDefinition: Map<string, SessionFinalStateRecord> = new Map();
   private retainCompletedSessionHistory = true;
+  private sessionFrameSnapshotCache: Map<string, SessionFrameSnapshotCache> = new Map();
   private sessionWriteBuffers: SessionWriteBuffer[] = [];
   private valueHandleRegistry?: ValueHandleRegistry;
 
@@ -1822,6 +1826,30 @@ export class Environment
       ...entry,
       finalState: { ...entry.finalState }
     }));
+  }
+
+  getCachedSessionFrameSnapshot(sessionId: string): SessionFrameSnapshotCache | undefined {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return undefined;
+    }
+    return this.getRootEnvironment().sessionFrameSnapshotCache.get(normalizedSessionId);
+  }
+
+  cacheSessionFrameSnapshot(sessionId: string, snapshot: SessionFrameSnapshotCache): void {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return;
+    }
+    this.getRootEnvironment().sessionFrameSnapshotCache.set(normalizedSessionId, snapshot);
+  }
+
+  clearSessionFrameSnapshotCache(sessionId: string): void {
+    const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    if (!normalizedSessionId) {
+      return;
+    }
+    this.getRootEnvironment().sessionFrameSnapshotCache.delete(normalizedSessionId);
   }
 
   findCompletedSessionByDefinition(declarationId: string): SessionFinalStateRecord | undefined {
@@ -4262,6 +4290,13 @@ export class Environment
     return this.runtimeTraceManager.getLevel();
   }
 
+  shouldEmitRuntimeTrace(
+    requiredLevel: RuntimeTraceEmissionLevel,
+    category: RuntimeTraceCategory
+  ): boolean {
+    return this.runtimeTraceManager.shouldEmitTrace(requiredLevel, category);
+  }
+
   getRuntimeTraceEvents() {
     return this.runtimeTraceManager.getEvents();
   }
@@ -4819,7 +4854,7 @@ export class Environment
     };
   }
 
-  private hasSDKEmitter(): boolean {
+  hasSDKEmitter(): boolean {
     return this.getRootEnvironment().sdkEmitter !== undefined;
   }
 

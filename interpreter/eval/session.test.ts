@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
@@ -7,6 +7,7 @@ import { Environment } from '@interpreter/env/Environment';
 import {
   createGuardSessionWriteBuffer,
   createSessionAccessorVariable,
+  disposeSessionFrame,
   materializeSession,
   snapshotSessionsForFrame
 } from '@interpreter/session/runtime';
@@ -349,6 +350,97 @@ describe('session runtime', () => {
     expect(instance.getSlot('state')).toMatchObject(largeState);
   });
 
+  it('does not build disabled trace or SDK session-write payloads', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const runtimeTraceSpy = vi.spyOn(env, 'emitRuntimeTraceEvent');
+    const sdkEventSpy = vi.spyOn(env, 'emitSDKEvent');
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'disabled-observer-session-write';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, env);
+    const setMethod = (accessor.value as Record<string, any>).set;
+    const setExecutable = setMethod?.internal?.executableDef;
+    expect(setExecutable).toBeDefined();
+
+    await setExecutable!.fn({
+      state: {
+        payload: 'x'.repeat(1_000_000),
+        nested: { ok: true }
+      }
+    }, env);
+
+    expect(runtimeTraceSpy).not.toHaveBeenCalled();
+    expect(sdkEventSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not build disabled final session trace payloads', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'disabled-final-session-trace';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.attachSessionInstance(sessionId, instance);
+    instance.setTraceSlot('state', {
+      payload: 'x'.repeat(1_000_000),
+      nested: { ok: true }
+    });
+
+    const runtimeTraceSpy = vi.spyOn(env, 'emitRuntimeTraceEvent');
+    disposeSessionFrame(sessionId, env);
+
+    expect(runtimeTraceSpy).not.toHaveBeenCalled();
+  });
+
+  it('reuses returned session snapshots when disposing a finalized frame', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'reuse-final-session-snapshot';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.attachSessionInstance(sessionId, instance);
+
+    let payloadReads = 0;
+    const state = Object.create(null);
+    Object.defineProperty(state, 'payload', {
+      enumerable: true,
+      get() {
+        payloadReads += 1;
+        return 'x'.repeat(1000);
+      }
+    });
+    instance.setTraceSlot('state', state);
+
+    const snapshots = snapshotSessionsForFrame(sessionId, env);
+    expect(snapshots?.planner?.state).toMatchObject({ payload: expect.any(String) });
+    expect(payloadReads).toBe(1);
+
+    disposeSessionFrame(sessionId, env);
+
+    expect(payloadReads).toBe(1);
+  });
+
   it('stores session writes in one observed slot copy', async () => {
     const { env } = await interpretWithEnv([
       '/var session @planner = {',
@@ -378,6 +470,46 @@ describe('session runtime', () => {
     expect((instance as any).values.has('state')).toBe(false);
     expect(instance.hasSlot('state')).toBe(true);
     expect(instance.getSlot('state')).toMatchObject(largeState);
+  });
+
+  it('reuses unchanged session subtrees across observed slot writes', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'reuse-observed-session-subtrees';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, env);
+    const setMethod = (accessor.value as Record<string, any>).set;
+    const setExecutable = setMethod?.internal?.executableDef;
+    expect(setExecutable).toBeDefined();
+
+    await setExecutable!.fn({
+      state: {
+        stable: { payload: 'x'.repeat(1_000_000) },
+        changed: 1
+      }
+    }, env);
+
+    const firstStoredState = instance.getSlot('state') as any;
+    await setExecutable!.fn({
+      state: {
+        stable: firstStoredState.stable,
+        changed: 2
+      }
+    }, env);
+
+    const secondStoredState = instance.getSlot('state') as any;
+    expect(secondStoredState.changed).toBe(2);
+    expect(secondStoredState.stable).toBe(firstStoredState.stable);
   });
 
   it('returns null for result .mx.sessions when no session is attached', async () => {

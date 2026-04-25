@@ -157,6 +157,44 @@ describe('interpret structured mode', () => {
     }
   });
 
+  it('streams document-mode memory traces without retaining them in the environment', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const pathService = new PathService();
+    const traceDir = await mkdtemp(path.join(os.tmpdir(), 'mlld-document-memory-trace-'));
+    const traceFile = path.join(traceDir, 'runtime.jsonl');
+    let capturedEnv: Environment | undefined;
+
+    try {
+      const output = await interpret('/show "ok"', {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        format: 'markdown',
+        mode: 'document',
+        traceMemory: true,
+        traceFile,
+        captureEnvironment: env => {
+          capturedEnv = env;
+        }
+      });
+
+      expect(output).toContain('ok');
+      const traceLines = (await readFile(traceFile, 'utf8'))
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line));
+
+      expect(traceLines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ category: 'memory' })
+        ])
+      );
+      expect(capturedEnv?.getRuntimeTraceEvents()).toEqual([]);
+    } finally {
+      await rm(traceDir, { recursive: true, force: true });
+    }
+  });
+
   it('filters verbose-only runtime events out of effects-level traces', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
