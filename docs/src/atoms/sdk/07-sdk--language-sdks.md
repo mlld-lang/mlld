@@ -53,7 +53,7 @@ Common options for `process` and `execute`:
 | `allow_absolute_paths` | Allow absolute path access |
 | `timeout` | Override client default |
 | `trace` | Runtime trace level: `"off"`, `"effects"`, `"handle"` / `"handles"`, or `"verbose"` |
-| `trace_memory` | Include `memory.*` events; implies effects tracing when `trace` is omitted |
+| `trace_memory` | Include `memory.*` events; set `trace` to include non-memory events |
 | `trace_file` | Write trace events as JSONL to a file path |
 | `trace_stderr` | Mirror trace events to stderr |
 

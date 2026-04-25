@@ -145,7 +145,7 @@ export interface ProcessOptions {
   useMarkdownFormatter?: boolean;
   /** Runtime effect tracing level. */
   trace?: RuntimeTraceLevel;
-  /** Include memory samples in runtime trace output. Implies effects tracing when trace is omitted. */
+  /** Include memory samples in runtime trace output. Set trace to include non-memory events. */
   traceMemory?: boolean;
   /** Write runtime trace events as JSONL. */
   traceFile?: string;

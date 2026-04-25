@@ -607,7 +607,7 @@ Options:
                           Write V8 heap snapshots near heap limit
   --metrics               Show execution timing on stderr
   --trace <level>         Runtime effect tracing: off, effects, handle/handles, or verbose
-  --trace-memory          Include memory samples in runtime trace output (implies --trace effects)
+  --trace-memory          Include memory samples in runtime trace output
   --trace-file <path>     Write runtime trace events as JSONL
                           Ambient debug accessors: @mx.handles, @mx.llm.sessionId/display/resume,
                           @mx.shelf.readable/writable, @mx.policy.active

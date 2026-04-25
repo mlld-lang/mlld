@@ -548,7 +548,7 @@ Options:
   --timeout <duration>    Script timeout (e.g., 5m, 1h, 30s, or ms) - default: unlimited
   --debug                 Show execution metrics (timing, cache hits, effects)
   --trace <level>         Runtime effect tracing: off, effects, handle/handles, or verbose
-  --trace-memory          Include memory samples in runtime trace output (implies --trace effects)
+  --trace-memory          Include memory samples in runtime trace output
   --trace-file <path>     Write runtime trace events as JSONL
                           Ambient debug accessors: @mx.handles, @mx.llm.sessionId/display/resume,
                           @mx.shelf.readable/writable, @mx.policy.active
@@ -585,7 +585,7 @@ Examples:
   mlld run my-app                    # Run llm/run/my-app/index.mld
   mlld run hello --debug             # Show execution metrics
   mlld run hello --trace effects     # Trace runtime effects to stderr
-  mlld run hello --trace-memory      # Include memory samples in effects tracing
+  mlld run hello --trace-memory      # Include memory samples in runtime trace output
   mlld run hello --trace handle      # Trace handle issue/resolve/release events
   mlld run qa --topic variables      # Pass --topic as payload
 

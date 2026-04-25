@@ -152,7 +152,7 @@ process(script, options?) -> string
 | mode | "strict" \| "markdown"? | no | Parsing mode |
 | allow_absolute_paths | bool? | no | Allow absolute path access |
 | trace | string? | no | Runtime trace level (`"handle"`, `"effects"`, or `"verbose"`) |
-| trace_memory | bool? | no | Include `memory.*` runtime trace events; implies effects tracing when `trace` is omitted |
+| trace_memory | bool? | no | Include `memory.*` runtime trace events; set `trace` to include non-memory events |
 | trace_file | string? | no | Write runtime trace events as JSONL |
 | trace_stderr | bool? | no | Mirror runtime trace events to stderr |
 | timeout | duration? | no | Override client default |
@@ -181,7 +181,7 @@ execute(filepath, payload?, options?) -> ExecuteResult
 | mode | "strict" \| "markdown"? | no | Parsing mode |
 | allow_absolute_paths | bool? | no | Allow absolute path access |
 | trace | string? | no | Runtime trace level (`"handle"`, `"effects"`, or `"verbose"`) |
-| trace_memory | bool? | no | Include `memory.*` runtime trace events; implies effects tracing when `trace` is omitted |
+| trace_memory | bool? | no | Include `memory.*` runtime trace events; set `trace` to include non-memory events |
 | trace_file | string? | no | Write runtime trace events as JSONL |
 | trace_stderr | bool? | no | Mirror runtime trace events to stderr |
 | timeout | duration? | no | Override client default |
