@@ -3,10 +3,16 @@ import type { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { fileURLToPath } from 'url';
 
 const fakeServerPath = fileURLToPath(
   new URL('../../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
+const crashServerPath = fileURLToPath(
+  new URL('../../../tests/support/mcp/crash-server.cjs', import.meta.url)
 );
 
 const pathService = new PathService();
@@ -191,6 +197,43 @@ describe('MCP tool imports', () => {
       }
     } finally {
       environment?.cleanup();
+    }
+  });
+
+  it('restarts an imported MCP server that exits during the first tool call', async () => {
+    const previousMarker = process.env.MLLD_MCP_CRASH_MARKER;
+    const markerDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-import-e2e-crash-'));
+    const markerPath = path.join(markerDir, 'marker');
+    process.env.MLLD_MCP_CRASH_MARKER = markerPath;
+
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${crashServerPath}`;
+    const source = [
+      `/import tools { @echo } from mcp "${serverSpec}"`,
+      '/show @echo("retry")'
+    ].join('\n');
+
+    let environment: Environment | undefined;
+    try {
+      const output = await interpret(source, {
+        fileSystem,
+        pathService,
+        pathContext,
+        format: 'markdown',
+        captureEnvironment: env => {
+          environment = env;
+        }
+      });
+
+      expect(output.trim()).toBe('retry');
+    } finally {
+      environment?.cleanup();
+      if (previousMarker === undefined) {
+        delete process.env.MLLD_MCP_CRASH_MARKER;
+      } else {
+        process.env.MLLD_MCP_CRASH_MARKER = previousMarker;
+      }
+      await fs.rm(markerDir, { recursive: true, force: true });
     }
   });
 

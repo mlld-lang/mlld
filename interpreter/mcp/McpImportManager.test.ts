@@ -3,10 +3,16 @@ import { McpImportManager } from '@interpreter/mcp/McpImportManager';
 import { Environment } from '@interpreter/env/Environment';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { fileURLToPath } from 'url';
 
 const fakeServerPath = fileURLToPath(
   new URL('../../tests/support/mcp/fake-server.cjs', import.meta.url)
+);
+const crashServerPath = fileURLToPath(
+  new URL('../../tests/support/mcp/crash-server.cjs', import.meta.url)
 );
 
 function createEnvironment(): Environment {
@@ -62,6 +68,29 @@ describe('McpImportManager', () => {
       } else {
         process.env.MLLD_MCP_IMPORT_MAX_CONCURRENT = previousMax;
       }
+    }
+  });
+
+  it('restarts and retries once when a server exits during a tool call', async () => {
+    const previousMarker = process.env.MLLD_MCP_CRASH_MARKER;
+    const markerDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-mcp-import-crash-'));
+    const markerPath = path.join(markerDir, 'marker');
+    process.env.MLLD_MCP_CRASH_MARKER = markerPath;
+
+    const env = createEnvironment();
+    const manager = new McpImportManager(env);
+    const spec = `${process.execPath} ${crashServerPath}`;
+
+    try {
+      await expect(manager.callTool(spec, 'echo', { text: 'retry' })).resolves.toBe('retry');
+    } finally {
+      manager.closeAll();
+      if (previousMarker === undefined) {
+        delete process.env.MLLD_MCP_CRASH_MARKER;
+      } else {
+        process.env.MLLD_MCP_CRASH_MARKER = previousMarker;
+      }
+      await fs.rm(markerDir, { recursive: true, force: true });
     }
   });
 });

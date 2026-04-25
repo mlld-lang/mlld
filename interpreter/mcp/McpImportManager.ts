@@ -68,12 +68,28 @@ export class McpImportManager {
 
   async listTools(spec: string): Promise<MCPToolSchema[]> {
     const server = await this.getServer(spec);
-    return server.listTools();
+    try {
+      return await server.listTools();
+    } catch (error) {
+      if (!this.shouldRestartAfterFailure(server)) {
+        throw error;
+      }
+      const restarted = await this.restartServer(spec, server);
+      return await restarted.listTools();
+    }
   }
 
   async callTool(spec: string, name: string, args: Record<string, unknown>): Promise<string> {
     const server = await this.getServer(spec);
-    return server.callTool(name, args);
+    try {
+      return await server.callTool(name, args);
+    } catch (error) {
+      if (!this.shouldRestartAfterFailure(server)) {
+        throw error;
+      }
+      const restarted = await this.restartServer(spec, server);
+      return await restarted.callTool(name, args);
+    }
   }
 
   retainAll(): void {
@@ -145,6 +161,20 @@ export class McpImportManager {
       }
     }
   }
+
+  private shouldRestartAfterFailure(server: McpImportServer): boolean {
+    return server.isClosed() && server.getClosedReason() === 'exit';
+  }
+
+  private async restartServer(spec: string, failedServer: McpImportServer): Promise<McpImportServer> {
+    const trimmed = spec.trim();
+    const mapped = this.env.getMcpServerMap()?.[trimmed];
+    const resolvedKey = mapped ?? trimmed;
+    if (this.servers.get(resolvedKey) === failedServer) {
+      this.servers.delete(resolvedKey);
+    }
+    return await this.getServer(spec);
+  }
 }
 
 class McpImportServer {
@@ -198,6 +228,10 @@ class McpImportServer {
 
   isClosed(): boolean {
     return this.closed;
+  }
+
+  getClosedReason(): 'idle' | 'exit' | 'manual' | undefined {
+    return this.closedReason;
   }
 
   async initialize(): Promise<void> {
@@ -287,10 +321,24 @@ class McpImportServer {
       };
       this.pending.set(id, { resolve, reject, onDone });
       try {
-        this.child.stdin.write(`${JSON.stringify(payload)}\n`);
+        this.child.stdin.write(`${JSON.stringify(payload)}\n`, error => {
+          if (!error) {
+            return;
+          }
+          if (this.pending.delete(id)) {
+            onDone();
+          }
+          this.closed = true;
+          this.closedReason = this.closedReason ?? 'exit';
+          this.clearIdleTimer();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
       } catch (error) {
         this.pending.delete(id);
         onDone();
+        this.closed = true;
+        this.closedReason = this.closedReason ?? 'exit';
+        this.clearIdleTimer();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
