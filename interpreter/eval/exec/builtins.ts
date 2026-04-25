@@ -307,11 +307,20 @@ function handleTypeCheckingBuiltin(method: TypeCheckingMethod, target: unknown):
 
 function handleSearchBuiltin(method: SearchBuiltinMethod, target: unknown, arg: unknown): boolean | number {
   if (Array.isArray(target)) {
+    const unwrap = (v: unknown): unknown =>
+      isStructuredValue(v) || isShelfSlotRefValue(v) ? asData(v) : v;
+    const needle = unwrap(arg);
     if (method === 'includes') {
-      return target.includes(arg);
+      for (const element of target) {
+        if (unwrap(element) === needle) return true;
+      }
+      return false;
     }
     if (method === 'indexOf') {
-      return target.indexOf(arg);
+      for (let i = 0; i < target.length; i++) {
+        if (unwrap(target[i]) === needle) return i;
+      }
+      return -1;
     }
     throw new MlldInterpreterError(`Cannot call .${method}() on array targets`);
   }
