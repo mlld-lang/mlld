@@ -2,6 +2,11 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import * as readline from 'readline';
 import { version } from '@core/version';
 import type { Environment } from '@interpreter/env/Environment';
+import {
+  createMcpRequestCancelledError,
+  getMcpCancellationContext,
+  throwIfMcpRequestCancelled
+} from './cancellation';
 
 type JSONRPCId = string | number | null;
 
@@ -80,15 +85,20 @@ export class McpImportManager {
   }
 
   async callTool(spec: string, name: string, args: Record<string, unknown>): Promise<string> {
+    throwIfMcpRequestCancelled(this.env);
+    const signal = getMcpCancellationContext(this.env)?.signal;
     const server = await this.getServer(spec);
     try {
-      return await server.callTool(name, args);
+      return await server.callTool(name, args, signal);
     } catch (error) {
+      if (signal?.aborted) {
+        throw createMcpRequestCancelledError(signal.reason);
+      }
       if (!this.shouldRestartAfterFailure(server)) {
         throw error;
       }
       const restarted = await this.restartServer(spec, server);
-      return await restarted.callTool(name, args);
+      return await restarted.callTool(name, args, signal);
     }
   }
 
@@ -188,7 +198,7 @@ class McpImportServer {
   private toolsCache?: MCPToolSchema[];
   private nextId = 1;
   private closed = false;
-  private closedReason?: 'idle' | 'exit' | 'manual';
+  private closedReason?: 'idle' | 'exit' | 'manual' | 'abort';
   private readonly idleTimeoutMs?: number;
   private idleTimer?: NodeJS.Timeout;
   private inflightCount = 0;
@@ -230,7 +240,7 @@ class McpImportServer {
     return this.closed;
   }
 
-  getClosedReason(): 'idle' | 'exit' | 'manual' | undefined {
+  getClosedReason(): 'idle' | 'exit' | 'manual' | 'abort' | undefined {
     return this.closedReason;
   }
 
@@ -259,8 +269,8 @@ class McpImportServer {
     return tools;
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<string> {
-    const response = await this.request('tools/call', { name, arguments: args });
+  async callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+    const response = await this.request('tools/call', { name, arguments: args }, signal);
     if (response.error) {
       throw new Error(this.decorateError(`MCP server '${this.spec.displayName}' tools/call failed: ${response.error.message}`));
     }
@@ -292,7 +302,7 @@ class McpImportServer {
     this.closeWithReason('manual');
   }
 
-  private closeWithReason(reason: 'idle' | 'manual'): void {
+  private closeWithReason(reason: 'idle' | 'manual' | 'abort'): void {
     if (this.closed) {
       return;
     }
@@ -304,29 +314,59 @@ class McpImportServer {
     this.child.kill('SIGTERM');
   }
 
-  private async request(method: string, params?: Record<string, unknown>): Promise<JSONRPCResponse> {
+  private async request(
+    method: string,
+    params?: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<JSONRPCResponse> {
     if (this.closed) {
       throw new Error(`MCP server '${this.spec.displayName}' is closed`);
+    }
+    if (signal?.aborted) {
+      this.closeWithReason('abort');
+      throw createMcpRequestCancelledError(signal.reason);
     }
     const id = this.nextId++;
     const payload: JSONRPCRequest = { jsonrpc: '2.0', id, method, params };
     return await new Promise((resolve, reject) => {
       this.clearIdleTimer();
       this.inflightCount += 1;
+      let cleanupAbortListener: (() => void) | undefined;
       const onDone = () => {
+        cleanupAbortListener?.();
         this.inflightCount = Math.max(0, this.inflightCount - 1);
         if (this.inflightCount === 0) {
           this.touch();
         }
       };
+      const abortRequest = () => {
+        const entry = this.pending.get(id);
+        if (!entry) {
+          return;
+        }
+        this.pending.delete(id);
+        entry.onDone?.();
+        this.closeWithReason('abort');
+        reject(createMcpRequestCancelledError(signal?.reason));
+      };
+      cleanupAbortListener = signal
+        ? () => signal.removeEventListener('abort', abortRequest)
+        : undefined;
+      signal?.addEventListener('abort', abortRequest, { once: true });
       this.pending.set(id, { resolve, reject, onDone });
+      if (signal?.aborted) {
+        abortRequest();
+        return;
+      }
       try {
         this.child.stdin.write(`${JSON.stringify(payload)}\n`, error => {
           if (!error) {
             return;
           }
-          if (this.pending.delete(id)) {
-            onDone();
+          const entry = this.pending.get(id);
+          if (entry) {
+            this.pending.delete(id);
+            entry.onDone?.();
           }
           this.closed = true;
           this.closedReason = this.closedReason ?? 'exit';
@@ -334,8 +374,11 @@ class McpImportServer {
           reject(error instanceof Error ? error : new Error(String(error)));
         });
       } catch (error) {
-        this.pending.delete(id);
-        onDone();
+        const entry = this.pending.get(id);
+        if (entry) {
+          this.pending.delete(id);
+          entry.onDone?.();
+        }
         this.closed = true;
         this.closedReason = this.closedReason ?? 'exit';
         this.clearIdleTimer();

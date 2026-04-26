@@ -55,6 +55,10 @@ Built by `ContextManager.buildLlmContext()` from the `CallMcpConfig` set via `se
 3. Server clones each executable into a `toolEnv` (child of `execEnv`), sets its own `llmToolConfig` with the bridge `sessionId`, handles `tools/call` JSON-RPC requests by routing through cloned executables.
 4. Returns `CallMcpConfig` with config path, socket path, tool metadata, cleanup function.
 
+Function-backed `tools/call` requests are serialized per bridge instance before routing into mlld. Harnesses may send multiple MCP tool calls in one model step, but mlld tool sessions and attached `var session` state are mutable; queueing keeps one tool call from racing another against the same session. Protocol-only requests such as `initialize` and `tools/list` stay outside that queue.
+
+When the harness closes the client socket, the bridge aborts active and queued `tools/call` requests for that socket. The active tool call runs under an internal cancellation context; nested exec invocations check that context before dispatch, and MCP-imported tool calls terminate their stdio server process if the abort arrives while a request is pending. The cancellation context is not stored in operation metadata, so it does not appear in `@mx`.
+
 The config file contains `{ mcpServers: { mlld_tools: { command, args, env } } }`. Harness modules read this path from `@mx.llm.config` and translate into harness-specific config.
 
 ## How harness modules wire in
@@ -203,6 +207,7 @@ This creates multiple scope boundaries. Key behaviors:
 - `MLLD_TRACE=session` — session attachment/disposal events.
 - `MLLD_TRACE=guard` — guard evaluation decisions.
 - `MLLD_TRACE=all` — everything including tool bridge setup.
+- `MLLD_TRACE=verbose` with `MLLD_TRACE_FILE=...` — includes `mcp.request`, long-running `mcp.progress`, and `mcp.response` events for the `exe llm` function bridge. Use these to time opencode→mlld MCP calls; `mcp.response` includes `durationMs`, `responseBytes`, `ok`, `isError`, `error`, and `clientClosed`.
 - `DEBUG_MCP=1` — MCP server diagnostics on stderr.
 - `MLLD_DEBUG=true` — interpreter logging for argument binding and execution flow.
 - Verify bridge wiring from inside `exe llm` block: `show @mx.llm.hasTools` / `show @mx.llm.config`.

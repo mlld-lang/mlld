@@ -5,8 +5,8 @@ brief: The (prompt, config) convention for LLM executables and how the runtime s
 category: modules
 tags: [modules, llm, exe, config, tools, bridge, streaming, box]
 related: [module-patterns, exe-simple, exe-blocks, box-blocks, stream]
-related-code: [interpreter/eval/exec-invocation.ts, interpreter/env/executors/call-mcp-config.ts]
-updated: 2026-04-12
+related-code: [interpreter/eval/exec-invocation.ts, interpreter/env/executors/call-mcp-config.ts, interpreter/env/executors/function-mcp-bridge.ts]
+updated: 2026-04-26
 qa_tier: 2
 ---
 
@@ -66,6 +66,8 @@ exe llm @agent(prompt, config) = [
 ```
 
 This is why `exe llm` functions don't need to manually construct `--mcp-config` flags or manage bridge lifecycles — the runtime handles it.
+
+If the LLM client closes the bridge socket, such as after a harness timeout, the function bridge cancels active and queued exe-ref `tools/call` work instead of letting it run after the client is gone. Nested imported MCP calls receive the same cancellation signal.
 
 The bridge activation gate is wider than `config.tools`. A call also gets an active bridge frame when it carries session state or box-managed shelf scope, even when no tools are declared:
 

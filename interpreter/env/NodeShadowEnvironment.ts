@@ -16,6 +16,7 @@ export class NodeShadowEnvironment {
   private isCleaningUp: boolean = false;
   private activeTimers: Set<any> = new Set();
   private activeIntervals: Set<any> = new Set();
+  private cleanupRejectors: Set<(error: Error) => void> = new Set();
   
   constructor(basePath: string, currentFile?: string) {
     this.basePath = basePath;
@@ -168,7 +169,7 @@ export class NodeShadowEnvironment {
         columnOffset: 0
       });
       
-      const result = await script.runInContext(this.context);
+      const result = await this.awaitResultOrCleanup(script.runInContext(this.context));
       
       // Restore original console.log
       this.context.console.log = originalLog;
@@ -211,6 +212,32 @@ export class NodeShadowEnvironment {
       throw error;
     }
   }
+
+  private async awaitResultOrCleanup<T>(value: T | Promise<T>): Promise<T> {
+    if (!value || typeof (value as any).then !== 'function') {
+      return value as T;
+    }
+    if (this.isCleaningUp) {
+      throw new Error('Node shadow environment error: execution cancelled during cleanup');
+    }
+
+    return await new Promise<T>((resolve, reject) => {
+      const rejectOnCleanup = (error: Error) => {
+        reject(error);
+      };
+      this.cleanupRejectors.add(rejectOnCleanup);
+      Promise.resolve(value).then(
+        result => {
+          this.cleanupRejectors.delete(rejectOnCleanup);
+          resolve(result);
+        },
+        error => {
+          this.cleanupRejectors.delete(rejectOnCleanup);
+          reject(error);
+        }
+      );
+    });
+  }
   
   /**
    * Get a copy of the context (for inspection/debugging)
@@ -238,6 +265,12 @@ export class NodeShadowEnvironment {
    */
   cleanup(): void {
     this.isCleaningUp = true;
+
+    const cleanupError = new Error('Node shadow environment error: execution cancelled during cleanup');
+    for (const reject of this.cleanupRejectors) {
+      reject(cleanupError);
+    }
+    this.cleanupRejectors.clear();
     
     // Clear shadow functions first
     this.shadowFunctions.clear();

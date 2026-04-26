@@ -23,10 +23,16 @@ import {
 import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { ObjectReferenceResolver } from '@interpreter/eval/import/ObjectReferenceResolver';
 import { renderToolDescriptionNotes } from '@interpreter/fyi/tool-docs';
+import { traceMcpProgress, traceMcpRequest, traceMcpResponse } from '@interpreter/tracing/events';
+import {
+  createMcpRequestCancelledError,
+  MCP_CANCELLATION_CONTEXT
+} from '@interpreter/mcp/cancellation';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FUNCTION_SOCKET_ENV = 'MLLD_FUNCTION_MCP_SOCKET';
 const DEFAULT_CLEANUP_GRACE_MS = 30_000;
+const MCP_TRACE_PROGRESS_INTERVAL_MS = 30_000;
 
 interface JsonRpcRequest {
   jsonrpc?: string;
@@ -43,6 +49,21 @@ interface JsonRpcResponse {
     code: number;
     message: string;
   };
+}
+
+interface BridgeTraceContext {
+  requestId: number;
+  startedAt: number;
+  method: string;
+  jsonrpcId?: string | number | null;
+  tool?: string;
+  progressTimer?: NodeJS.Timeout;
+}
+
+interface BridgeRequestControl {
+  socket: net.Socket;
+  abortController: AbortController;
+  abortActiveExecution?: () => void;
 }
 
 function cloneExecutableForToolBridge(
@@ -133,13 +154,16 @@ class FunctionMcpBridgeServer {
   private readonly toolSchemas: Array<Record<string, unknown>>;
   private readonly toolParamInfo: Map<string, McpParamInfo>;
   private readonly router: FunctionRouter;
+  private readonly socketRequestControls = new Map<net.Socket, Set<BridgeRequestControl>>();
+  private requestSequence = 0;
+  private toolCallQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly env: Environment,
     private readonly functions: Map<string, ExecutableVariable>,
     private readonly toolDefinitions: ReadonlyMap<string, ToolDefinition> | undefined,
     private readonly socketPath: string,
-    sessionId: string,
+    private readonly sessionId: string,
     availableTools: readonly AvailableToolDescriptor[] | undefined,
     toolMetadata: CallMcpConfig['toolMetadata'],
     authorizationRole: string | undefined,
@@ -277,6 +301,7 @@ class FunctionMcpBridgeServer {
     this.activeSockets.add(socket);
     socket.once('close', () => {
       this.activeSockets.delete(socket);
+      this.abortSocketRequests(socket);
     });
     socket.on('error', () => {
       // Claude may drop and respawn the stdio proxy; do not treat socket churn as a bridge failure.
@@ -293,16 +318,20 @@ class FunctionMcpBridgeServer {
         if (line.length > 0) {
           const parsed = parseJsonRpcRequest(line);
           if ('error' in parsed) {
-            socket.write(`${JSON.stringify(parsed.error)}\n`);
+            this.writeResponse(socket, parsed.error);
           } else {
-            this.handleRequest(parsed.request)
+            const requestControl = this.beginRequestControl(socket);
+            const traceContext = this.beginRequestTrace(parsed.request, socket);
+            this.handleRequest(parsed.request, requestControl)
               .then(response => {
+                this.finishRequestTrace(traceContext, response, socket);
                 if (response) {
-                  socket.write(`${JSON.stringify(response)}\n`);
+                  this.writeResponse(socket, response);
                 }
               })
               .catch(error => {
                 if (parsed.request.id === undefined) {
+                  this.finishRequestTrace(traceContext, null, socket, error);
                   return;
                 }
                 const message = error instanceof Error ? error.message : String(error);
@@ -314,7 +343,11 @@ class FunctionMcpBridgeServer {
                     message
                   }
                 };
-                socket.write(`${JSON.stringify(fallback)}\n`);
+                this.finishRequestTrace(traceContext, fallback, socket, error);
+                this.writeResponse(socket, fallback);
+              })
+              .finally(() => {
+                this.finishRequestControl(requestControl);
               });
           }
         }
@@ -323,7 +356,87 @@ class FunctionMcpBridgeServer {
     });
   }
 
-  private async handleRequest(request: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+  private beginRequestControl(socket: net.Socket): BridgeRequestControl {
+    const control: BridgeRequestControl = {
+      socket,
+      abortController: new AbortController()
+    };
+    let controls = this.socketRequestControls.get(socket);
+    if (!controls) {
+      controls = new Set();
+      this.socketRequestControls.set(socket, controls);
+    }
+    controls.add(control);
+    if (isSocketClosed(socket)) {
+      this.abortRequestControl(control);
+    }
+    return control;
+  }
+
+  private finishRequestControl(control: BridgeRequestControl): void {
+    const controls = this.socketRequestControls.get(control.socket);
+    if (controls) {
+      controls.delete(control);
+      if (controls.size === 0) {
+        this.socketRequestControls.delete(control.socket);
+      }
+    }
+    control.abortActiveExecution = undefined;
+  }
+
+  private abortSocketRequests(socket: net.Socket): void {
+    const controls = this.socketRequestControls.get(socket);
+    if (!controls) {
+      return;
+    }
+    for (const control of Array.from(controls)) {
+      this.abortRequestControl(control);
+    }
+  }
+
+  private abortRequestControl(control: BridgeRequestControl): void {
+    if (control.abortController.signal.aborted) {
+      return;
+    }
+    control.abortController.abort(createMcpRequestCancelledError());
+    control.abortActiveExecution?.();
+  }
+
+  private throwIfRequestCancelled(control: BridgeRequestControl): void {
+    if (control.abortController.signal.aborted || isSocketClosed(control.socket)) {
+      if (!control.abortController.signal.aborted) {
+        this.abortRequestControl(control);
+      }
+      throw createMcpRequestCancelledError(control.abortController.signal.reason);
+    }
+  }
+
+  private async handleRequest(
+    request: JsonRpcRequest,
+    control: BridgeRequestControl
+  ): Promise<JsonRpcResponse | null> {
+    if (request.method === 'tools/call') {
+      return this.enqueueToolCall(request, control);
+    }
+    return this.dispatchRequest(request, control);
+  }
+
+  private enqueueToolCall(
+    request: JsonRpcRequest,
+    control: BridgeRequestControl
+  ): Promise<JsonRpcResponse | null> {
+    const run = this.toolCallQueue.then(() => {
+      this.throwIfRequestCancelled(control);
+      return this.dispatchRequest(request, control);
+    });
+    this.toolCallQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async dispatchRequest(
+    request: JsonRpcRequest,
+    control: BridgeRequestControl
+  ): Promise<JsonRpcResponse | null> {
     const hasRequestId = request.id !== undefined;
     const id = hasRequestId ? request.id : null;
 
@@ -382,9 +495,10 @@ class FunctionMcpBridgeServer {
         }
 
         try {
+          this.throwIfRequestCancelled(control);
           const paramInfo = this.toolParamInfo.get(toolName);
           const coercedArgs = paramInfo ? coerceMcpArgs(args, paramInfo) : args;
-          const text = await this.router.executeFunction(toolName, coercedArgs);
+          const text = await this.executeToolCall(toolName, coercedArgs, control);
           return {
             jsonrpc: '2.0',
             id,
@@ -423,6 +537,156 @@ class FunctionMcpBridgeServer {
     }
   }
 
+  private async executeToolCall(
+    toolName: string,
+    args: Record<string, unknown>,
+    control: BridgeRequestControl
+  ): Promise<string> {
+    this.throwIfRequestCancelled(control);
+    const abortActiveExecution = () => this.toolEnv.cleanup();
+    control.abortActiveExecution = abortActiveExecution;
+    try {
+      return await this.raceWithRequestCancellation(
+        control,
+        () => this.toolEnv.withExecutionContext(
+          MCP_CANCELLATION_CONTEXT,
+          { signal: control.abortController.signal },
+          () => this.router.executeFunction(toolName, args)
+        )
+      );
+    } finally {
+      if (control.abortActiveExecution === abortActiveExecution) {
+        control.abortActiveExecution = undefined;
+      }
+    }
+  }
+
+  private async raceWithRequestCancellation<T>(
+    control: BridgeRequestControl,
+    run: () => Promise<T>
+  ): Promise<T> {
+    this.throwIfRequestCancelled(control);
+    return await new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const finish = (callback: () => void): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        control.abortController.signal.removeEventListener('abort', onAbort);
+        callback();
+      };
+      const onAbort = () => {
+        finish(() => reject(createMcpRequestCancelledError(control.abortController.signal.reason)));
+      };
+      control.abortController.signal.addEventListener('abort', onAbort, { once: true });
+      if (control.abortController.signal.aborted || isSocketClosed(control.socket)) {
+        this.abortRequestControl(control);
+        onAbort();
+        return;
+      }
+      run().then(
+        value => finish(() => resolve(value)),
+        error => finish(() => reject(error))
+      );
+    });
+  }
+
+  private beginRequestTrace(request: JsonRpcRequest, socket: net.Socket): BridgeTraceContext {
+    const requestId = ++this.requestSequence;
+    const method = typeof request.method === 'string' && request.method.length > 0
+      ? request.method
+      : '<missing>';
+    const tool = method === 'tools/call'
+      ? String(request.params?.name ?? '')
+      : undefined;
+    const args = method === 'tools/call'
+      && request.params
+      && typeof request.params.arguments === 'object'
+      && request.params.arguments
+        ? request.params.arguments as Record<string, unknown>
+        : undefined;
+    const argBytes = args !== undefined ? safeJsonByteLength(args) : undefined;
+
+    const context: BridgeTraceContext = {
+      requestId,
+      startedAt: Date.now(),
+      method,
+      ...(request.id !== undefined ? { jsonrpcId: request.id } : {}),
+      ...(tool ? { tool } : {})
+    };
+
+    this.toolEnv.emitRuntimeTraceEvent(traceMcpRequest({
+      bridge: 'function',
+      sessionId: this.sessionId,
+      requestId,
+      ...(request.id !== undefined ? { jsonrpcId: request.id } : {}),
+      method,
+      ...(tool ? { tool } : {}),
+      ...(args !== undefined ? { args: this.toolEnv.summarizeTraceValue(args) } : {}),
+      ...(argBytes !== undefined ? { argBytes } : {})
+    }));
+
+    if (this.toolEnv.shouldEmitRuntimeTrace('verbose', 'mcp')) {
+      const progressTimer = setInterval(() => {
+        this.emitProgressTrace(context, socket);
+      }, MCP_TRACE_PROGRESS_INTERVAL_MS);
+      progressTimer.unref?.();
+      context.progressTimer = progressTimer;
+    }
+
+    return context;
+  }
+
+  private emitProgressTrace(context: BridgeTraceContext, socket: net.Socket): void {
+    this.toolEnv.emitRuntimeTraceEvent(traceMcpProgress({
+      bridge: 'function',
+      sessionId: this.sessionId,
+      requestId: context.requestId,
+      ...(context.jsonrpcId !== undefined ? { jsonrpcId: context.jsonrpcId } : {}),
+      method: context.method,
+      ...(context.tool ? { tool: context.tool } : {}),
+      durationMs: Math.max(0, Date.now() - context.startedAt),
+      clientClosed: isSocketClosed(socket)
+    }));
+  }
+
+  private finishRequestTrace(
+    context: BridgeTraceContext,
+    response: JsonRpcResponse | null,
+    socket: net.Socket,
+    thrownError?: unknown
+  ): void {
+    if (context.progressTimer) {
+      clearInterval(context.progressTimer);
+      context.progressTimer = undefined;
+    }
+    const responseText = response ? `${JSON.stringify(response)}\n` : undefined;
+    const outcome = describeMcpResponse(response, thrownError);
+    this.toolEnv.emitRuntimeTraceEvent(traceMcpResponse({
+      bridge: 'function',
+      sessionId: this.sessionId,
+      requestId: context.requestId,
+      ...(context.jsonrpcId !== undefined ? { jsonrpcId: context.jsonrpcId } : {}),
+      method: context.method,
+      ...(context.tool ? { tool: context.tool } : {}),
+      ok: outcome.ok,
+      ...(outcome.isError !== undefined ? { isError: outcome.isError } : {}),
+      ...(outcome.error ? { error: outcome.error } : {}),
+      ...(outcome.errorCode !== undefined ? { errorCode: outcome.errorCode } : {}),
+      durationMs: Math.max(0, Date.now() - context.startedAt),
+      ...(responseText !== undefined ? { responseBytes: Buffer.byteLength(responseText, 'utf8') } : {}),
+      clientClosed: isSocketClosed(socket)
+    }));
+  }
+
+  private writeResponse(socket: net.Socket, response: JsonRpcResponse): void {
+    if (isSocketClosed(socket)) {
+      return;
+    }
+    socket.write(`${JSON.stringify(response)}\n`);
+  }
+
   private async stopInternal(): Promise<void> {
     if (this.server) {
       const server = this.server;
@@ -456,6 +720,64 @@ function parseJsonRpcRequest(line: string): { request: JsonRpcRequest } | { erro
       }
     };
   }
+}
+
+function describeMcpResponse(
+  response: JsonRpcResponse | null,
+  thrownError?: unknown
+): { ok: boolean; isError?: boolean; error?: string; errorCode?: number } {
+  if (thrownError !== undefined) {
+    return {
+      ok: false,
+      error: thrownError instanceof Error ? thrownError.message : String(thrownError)
+    };
+  }
+  if (!response) {
+    return { ok: true };
+  }
+  if (response.error) {
+    return {
+      ok: false,
+      errorCode: response.error.code,
+      error: response.error.message
+    };
+  }
+
+  const result = response.result as Record<string, unknown> | undefined;
+  if (result?.isError === true) {
+    return {
+      ok: false,
+      isError: true,
+      error: firstTextContent(result) ?? 'MCP tool returned isError'
+    };
+  }
+
+  return { ok: true };
+}
+
+function firstTextContent(result: Record<string, unknown>): string | undefined {
+  const content = result.content;
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+  const first = content[0];
+  if (!first || typeof first !== 'object') {
+    return undefined;
+  }
+  const text = (first as Record<string, unknown>).text;
+  return typeof text === 'string' ? text : undefined;
+}
+
+function safeJsonByteLength(value: unknown): number | undefined {
+  try {
+    return Buffer.byteLength(JSON.stringify(value), 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+function isSocketClosed(socket: net.Socket): boolean {
+  return socket.destroyed || socket.writableEnded || !socket.writable;
 }
 
 function sanitizeIdentifier(input: string): string {

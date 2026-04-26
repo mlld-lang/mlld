@@ -232,6 +232,33 @@ export function traceLlmInvocation(
   });
 }
 
+export function traceMcpRequest(
+  data: Omit<RuntimeTraceEventSpecMap['mcp.request']['data'], 'phase'>
+): RuntimeTraceEnvelope<'mcp.request'> {
+  return createRuntimeTraceEnvelope('verbose', 'mcp', 'mcp.request', {
+    phase: 'start',
+    ...data
+  });
+}
+
+export function traceMcpResponse(
+  data: Omit<RuntimeTraceEventSpecMap['mcp.response']['data'], 'phase'>
+): RuntimeTraceEnvelope<'mcp.response'> {
+  return createRuntimeTraceEnvelope('verbose', 'mcp', 'mcp.response', {
+    phase: 'finish',
+    ...data
+  });
+}
+
+export function traceMcpProgress(
+  data: Omit<RuntimeTraceEventSpecMap['mcp.progress']['data'], 'phase'>
+): RuntimeTraceEnvelope<'mcp.progress'> {
+  return createRuntimeTraceEnvelope('verbose', 'mcp', 'mcp.progress', {
+    phase: 'progress',
+    ...data
+  });
+}
+
 export function traceMemoryEvent<K extends 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure'>(
   level: RuntimeTraceEventSpecMap[K]['level'],
   event: K,

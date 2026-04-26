@@ -181,6 +181,7 @@ import { materializeGuardInputs } from '@interpreter/utils/guard-inputs';
 import { emitResolvedAuthorizationTrace } from './exec/authorization-trace';
 import { getStaticObjectKey } from '@interpreter/utils/object-compat';
 import { isTolerantMatch } from '@interpreter/eval/expressions';
+import { throwIfMcpRequestCancelled } from '@interpreter/mcp/cancellation';
 
 /**
  * Resolve a method/field on an object, handling AST-shaped objects
@@ -2802,6 +2803,7 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  throwIfMcpRequestCancelled(env);
   const operationPreview = buildExecOperationPreview(node);
   return env.withExecutionContext('exec-invocation', { allowToolbridge: true }, async () => {
     return runWithGuardRetry({

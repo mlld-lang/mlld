@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as child_process from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { fileURLToPath } from 'url';
 import { Environment } from '@interpreter/env/Environment';
 import { interpret } from '@interpreter/index';
@@ -127,6 +129,100 @@ async function sendJsonRpcMaybeResponse(
 
     socket.once('connect', () => {
       socket.write(`${JSON.stringify(payload)}\n`);
+    });
+  });
+}
+
+async function sendJsonRpcBatch(
+  socketPath: string,
+  payloads: Array<Record<string, unknown>>,
+  timeoutMs = 1000
+): Promise<Array<Record<string, unknown>>> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection(socketPath);
+    const responses: Array<Record<string, unknown>> = [];
+    let buffer = '';
+    const timeout = setTimeout(() => {
+      socket.end();
+      reject(new Error('Timed out waiting for JSON-RPC batch responses'));
+    }, timeoutMs);
+
+    const finish = (error?: unknown) => {
+      clearTimeout(timeout);
+      socket.end();
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(responses);
+    };
+
+    socket.once('error', error => {
+      finish(error);
+    });
+    socket.on('data', chunk => {
+      buffer += chunk.toString('utf8');
+      let newlineIndex = buffer.indexOf('\n');
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (line) {
+          try {
+            responses.push(JSON.parse(line) as Record<string, unknown>);
+          } catch (error) {
+            finish(error);
+            return;
+          }
+        }
+        if (responses.length === payloads.length) {
+          finish();
+          return;
+        }
+        newlineIndex = buffer.indexOf('\n');
+      }
+    });
+
+    socket.once('connect', () => {
+      for (const payload of payloads) {
+        socket.write(`${JSON.stringify(payload)}\n`);
+      }
+    });
+  });
+}
+
+async function sendJsonRpcAndClose(
+  socketPath: string,
+  payload: Record<string, unknown>,
+  closeAfterMs = 20
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const socket = net.createConnection(socketPath);
+    let closeTimer: NodeJS.Timeout | undefined;
+
+    const finish = (error?: unknown) => {
+      if (closeTimer) {
+        clearTimeout(closeTimer);
+        closeTimer = undefined;
+      }
+      socket.destroy();
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    };
+
+    socket.once('error', error => {
+      finish(error);
+    });
+    socket.once('connect', () => {
+      socket.write(`${JSON.stringify(payload)}\n`, error => {
+        if (error) {
+          finish(error);
+          return;
+        }
+        closeTimer = setTimeout(() => finish(), closeAfterMs);
+      });
     });
   });
 }
@@ -275,6 +371,304 @@ describe('createFunctionMcpBridge', () => {
       const configPath = bridge.mcpConfigPath;
       await bridge.cleanup();
       expect(await fileExists(configPath)).toBe(false);
+      env.cleanup();
+    }
+  });
+
+  it('emits verbose runtime traces for bridge request timing', async () => {
+    const env = createEnv();
+    env.setRuntimeTrace('verbose');
+    const functionTool = createFunctionTool('sayHi');
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]]),
+      sessionId: 'trace-session'
+    });
+
+    try {
+      await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {}
+      });
+      await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: mcpName,
+          arguments: {}
+        }
+      });
+
+      const events = env.getRuntimeTraceEvents();
+      const callStart = events.find((event: any) =>
+        event.event === 'mcp.request' && event.data.method === 'tools/call'
+      );
+      expect(callStart).toBeDefined();
+      if (!callStart) {
+        throw new Error('Missing mcp.request trace event');
+      }
+      expect(callStart.data).toMatchObject({
+        phase: 'start',
+        bridge: 'function',
+        sessionId: 'trace-session',
+        jsonrpcId: 2,
+        method: 'tools/call',
+        tool: mcpName,
+        argBytes: 2
+      });
+      expect(callStart.data.args).toEqual(expect.objectContaining({
+        kind: 'object',
+        size: 0,
+        bytes: 2
+      }));
+
+      const callFinish = events.find((event: any) =>
+        event.event === 'mcp.response' && event.data.requestId === callStart.data.requestId
+      );
+      expect(callFinish).toBeDefined();
+      if (!callFinish) {
+        throw new Error('Missing mcp.response trace event');
+      }
+      expect(callFinish.data).toMatchObject({
+        phase: 'finish',
+        bridge: 'function',
+        sessionId: 'trace-session',
+        jsonrpcId: 2,
+        method: 'tools/call',
+        tool: mcpName,
+        ok: true,
+        clientClosed: false
+      });
+      expect(callFinish.data.durationMs).toEqual(expect.any(Number));
+      expect(callFinish.data.responseBytes).toEqual(expect.any(Number));
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('serializes function tool calls for one bridge session', async () => {
+    const env = await createInterpretedEnv([
+      '/exe @slowTool() = js {',
+      '  await new Promise(resolve => setTimeout(resolve, 120));',
+      '  return "slow";',
+      '}',
+      '/exe @fastTool() = js { return "fast"; }'
+    ].join('\n'));
+    const slowTool = env.getVariable('slowTool') as ExecutableVariable;
+    const fastTool = env.getVariable('fastTool') as ExecutableVariable;
+    const slowName = mlldNameToMCPName(slowTool.name);
+    const fastName = mlldNameToMCPName(fastTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([
+        [slowName, slowTool],
+        [fastName, fastTool]
+      ])
+    });
+
+    try {
+      const responses = await sendJsonRpcBatch(bridge.socketPath, [
+        {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name: slowName,
+            arguments: {}
+          }
+        },
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: fastName,
+            arguments: {}
+          }
+        }
+      ]);
+
+      expect(responses.map(response => response.id)).toEqual([1, 2]);
+      expect((responses[0].result as any)?.content?.[0]?.text).toBe('slow');
+      expect((responses[1].result as any)?.content?.[0]?.text).toBe('fast');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('cancels an in-flight function tool call when the client socket closes', async () => {
+    const markerDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-bridge-cancel-'));
+    const markerPath = path.join(markerDir, 'finished.txt');
+    const env = await createInterpretedEnv([
+      '/exe @slowTool() = node {',
+      "  const fs = require('fs');",
+      '  await new Promise(resolve => setTimeout(resolve, 200));',
+      `  fs.writeFileSync(${JSON.stringify(markerPath)}, 'done');`,
+      '  return "done";',
+      '}'
+    ].join('\n'));
+    env.setRuntimeTrace('verbose');
+    const slowTool = env.getVariable('slowTool') as ExecutableVariable;
+    const slowName = mlldNameToMCPName(slowTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[slowName, slowTool]]),
+      sessionId: 'cancel-session'
+    });
+
+    try {
+      await sendJsonRpcAndClose(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: slowName,
+          arguments: {}
+        }
+      });
+
+      await waitFor(async () => env.getRuntimeTraceEvents().some((event: any) =>
+        event.event === 'mcp.response' &&
+        event.data.sessionId === 'cancel-session' &&
+        event.data.method === 'tools/call' &&
+        event.data.clientClosed === true
+      ), 1000);
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      expect(await fileExists(markerPath)).toBe(false);
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+      await fs.rm(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not dispatch queued function tool calls after the client socket closes', async () => {
+    const markerDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mlld-bridge-queue-cancel-'));
+    const markerPath = path.join(markerDir, 'queued.txt');
+    const env = await createInterpretedEnv([
+      '/exe @slowTool() = node {',
+      '  await new Promise(resolve => setTimeout(resolve, 200));',
+      '  return "slow";',
+      '}',
+      '/exe @fastTool() = node {',
+      "  const fs = require('fs');",
+      `  fs.writeFileSync(${JSON.stringify(markerPath)}, 'fast');`,
+      '  return "fast";',
+      '}'
+    ].join('\n'));
+    env.setRuntimeTrace('verbose');
+    const slowTool = env.getVariable('slowTool') as ExecutableVariable;
+    const fastTool = env.getVariable('fastTool') as ExecutableVariable;
+    const slowName = mlldNameToMCPName(slowTool.name);
+    const fastName = mlldNameToMCPName(fastTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([
+        [slowName, slowTool],
+        [fastName, fastTool]
+      ]),
+      sessionId: 'queue-cancel-session'
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const socket = net.createConnection(bridge.socketPath);
+        const finish = (error?: unknown) => {
+          socket.destroy();
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        };
+        socket.once('error', finish);
+        socket.once('connect', () => {
+          socket.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: slowName, arguments: {} }
+          })}\n`);
+          socket.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: { name: fastName, arguments: {} }
+          })}\n`, error => {
+            if (error) {
+              finish(error);
+              return;
+            }
+            setTimeout(() => finish(), 20);
+          });
+        });
+      });
+
+      await waitFor(async () => env.getRuntimeTraceEvents().filter((event: any) =>
+        event.event === 'mcp.response' &&
+        event.data.sessionId === 'queue-cancel-session' &&
+        event.data.method === 'tools/call' &&
+        event.data.clientClosed === true
+      ).length >= 2, 1000);
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      expect(await fileExists(markerPath)).toBe(false);
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+      await fs.rm(markerDir, { recursive: true, force: true });
+    }
+  });
+
+  it('marks bridge tool errors in runtime trace responses', async () => {
+    const env = createEnv();
+    env.setRuntimeTrace('verbose');
+    const functionTool = createFunctionTool('sayHi');
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]]),
+      sessionId: 'trace-errors'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'missing_tool',
+          arguments: {}
+        }
+      });
+
+      expect((called.result as any)?.isError).toBe(true);
+      const finish = env.getRuntimeTraceEvents().find((event: any) =>
+        event.event === 'mcp.response' && event.data.tool === 'missing_tool'
+      );
+      expect(finish).toBeDefined();
+      if (!finish) {
+        throw new Error('Missing mcp.response error trace event');
+      }
+      expect(finish.data).toMatchObject({
+        phase: 'finish',
+        bridge: 'function',
+        sessionId: 'trace-errors',
+        method: 'tools/call',
+        tool: 'missing_tool',
+        ok: false,
+        isError: true
+      });
+      expect(finish.data.error).toContain("Tool 'missing_tool' not available");
+    } finally {
+      await bridge.cleanup();
       env.cleanup();
     }
   });

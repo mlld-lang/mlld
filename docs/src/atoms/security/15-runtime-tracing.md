@@ -1,13 +1,13 @@
 ---
 id: runtime-tracing
 title: Runtime Effect Tracing
-brief: Real-time structured traces for session writes, shelf writes, guard decisions, handles, policy builds, and authorization checks
+brief: Real-time structured traces for session writes, shelf writes, guard decisions, handles, policy builds, authorization checks, and MCP bridge calls
 category: security
 parent: audit-log
-tags: [tracing, debugging, observability, guards, session, shelf, handles, policy]
+tags: [tracing, debugging, observability, guards, session, shelf, handles, policy, mcp]
 related: [audit-log, tool-call-tracking, security-guards-basics, labels-overview, facts-and-handles, shelf-slots, session-state, policy-auth]
 related-code: [core/types/trace.ts, interpreter/tracing/RuntimeTraceManager.ts, interpreter/tracing/events.ts, interpreter/env/Environment.ts]
-updated: 2026-04-20
+updated: 2026-04-26
 qa_tier: 2
 ---
 
@@ -183,6 +183,16 @@ Trace display projections to verify that LLMs see the right fields in the right 
 | `llm.resume` | verbose | same as llm.call (resume=true) |
 | `llm.tool_call` | verbose | tool name, args |
 | `llm.tool_result` | verbose | tool name, ok, result summary, duration |
+
+### MCP
+
+| Event | Level | Data |
+|---|---|---|
+| `mcp.request` | verbose | bridge, sessionId, requestId, jsonrpcId, method, tool, args, argBytes |
+| `mcp.progress` | verbose | bridge, sessionId, requestId, jsonrpcId, method, tool, durationMs, clientClosed |
+| `mcp.response` | verbose | bridge, sessionId, requestId, jsonrpcId, method, tool, ok, error, durationMs, responseBytes, clientClosed |
+
+MCP traces cover function-tool bridge requests. `mcp.progress` emits periodically for long-running requests. `clientClosed: true` means the MCP client disconnected before the response could be delivered; active and queued bridge tool calls are cancelled instead of continuing after timeout.
 
 ### Record
 

@@ -36,6 +36,7 @@ export type RuntimeTraceCategory =
   | 'auth'
   | 'display'
   | 'llm'
+  | 'mcp'
   | 'memory'
   | 'record'
   | 'import'
@@ -83,6 +84,9 @@ export type RuntimeTraceEventName =
   | 'llm.resume'
   | 'llm.tool_call'
   | 'llm.tool_result'
+  | 'mcp.request'
+  | 'mcp.progress'
+  | 'mcp.response'
   | 'memory.sample'
   | 'memory.delta'
   | 'memory.gc'
@@ -387,6 +391,56 @@ export interface RuntimeTraceEventSpecMap {
       result?: unknown;
       error?: string;
       durationMs?: number;
+    }>;
+  };
+  'mcp.request': {
+    category: 'mcp';
+    level: 'verbose';
+    data: TraceRecord<{
+      phase: 'start';
+      bridge: string;
+      sessionId?: string;
+      requestId: number;
+      jsonrpcId?: string | number | null;
+      method: string;
+      tool?: string;
+      args?: unknown;
+      argBytes?: number;
+    }>;
+  };
+  'mcp.response': {
+    category: 'mcp';
+    level: 'verbose';
+    data: TraceRecord<{
+      phase: 'finish';
+      bridge: string;
+      sessionId?: string;
+      requestId: number;
+      jsonrpcId?: string | number | null;
+      method: string;
+      tool?: string;
+      ok: boolean;
+      isError?: boolean;
+      error?: string;
+      errorCode?: number;
+      durationMs: number;
+      responseBytes?: number;
+      clientClosed: boolean;
+    }>;
+  };
+  'mcp.progress': {
+    category: 'mcp';
+    level: 'verbose';
+    data: TraceRecord<{
+      phase: 'progress';
+      bridge: string;
+      sessionId?: string;
+      requestId: number;
+      jsonrpcId?: string | number | null;
+      method: string;
+      tool?: string;
+      durationMs: number;
+      clientClosed: boolean;
     }>;
   };
   'memory.sample': {
