@@ -768,6 +768,7 @@ async function coerceRecordEntry(
 
   const shaped: Record<string, unknown> = {};
   const rawFieldValues: Record<string, unknown> = {};
+  const invalidFieldNames = new Set<string>();
   const namespaceMetadata: Record<string, NamespaceFieldMetadata> = {};
   const errors: RecordValidationError[] = [];
 
@@ -800,6 +801,7 @@ async function coerceRecordEntry(
       if (definition.validate === 'drop') {
         continue;
       }
+      invalidFieldNames.add(field.name);
       shaped[field.name] = rawValue;
       continue;
     }
@@ -855,21 +857,23 @@ async function coerceRecordEntry(
       wrapperSecurity && fieldSecurity
         ? mergeDescriptors(wrapperSecurity, fieldSecurity)
         : fieldSecurity ?? wrapperSecurity;
-    if (field.valueType === 'array') {
-      shaped[field.name] = finalizeArrayFieldValue({
-        value: shaped[field.name],
-        descriptor: effectiveArraySecurity,
-        factsources: fieldFactsources,
-        projection: fieldProjection,
-        materializeElementMetadata: !allData && field.classification === 'fact'
-      });
-    } else if (field.valueType === 'object') {
-      shaped[field.name] = finalizeObjectFieldValue({
-        value: shaped[field.name],
-        descriptor: effectiveArraySecurity,
-        factsources: fieldFactsources,
-        projection: fieldProjection
-      });
+    if (!invalidFieldNames.has(field.name)) {
+      if (field.valueType === 'array') {
+        shaped[field.name] = finalizeArrayFieldValue({
+          value: shaped[field.name],
+          descriptor: effectiveArraySecurity,
+          factsources: fieldFactsources,
+          projection: fieldProjection,
+          materializeElementMetadata: !allData && field.classification === 'fact'
+        });
+      } else if (field.valueType === 'object') {
+        shaped[field.name] = finalizeObjectFieldValue({
+          value: shaped[field.name],
+          descriptor: effectiveArraySecurity,
+          factsources: fieldFactsources,
+          projection: fieldProjection
+        });
+      }
     }
     namespaceMetadata[field.name] = {
       ...(namespaceSecurity

@@ -841,6 +841,49 @@ describe('record output coercion', () => {
     expect(participants.data).toEqual(['ada@example.com', 'grace@example.com']);
   });
 
+  it('preserves invalid typed array values instead of finalizing them to empty defaults', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @example = {
+  key: name,
+  facts: [name: string],
+  data: {
+    trusted: [
+      stringField: string?,
+      arrayField: array?
+    ]
+  }
+}
+`);
+
+    const output = await coerceRecordOutput({
+      definition,
+      value: {
+        name: 'test',
+        stringField: 'ok',
+        arrayField: 'this is a string not an array'
+      },
+      env
+    });
+
+    expect(output.mx.schema?.valid).toBe(false);
+    expect(output.mx.schema?.errors).toEqual([
+      expect.objectContaining({
+        path: 'arrayField',
+        code: 'type',
+        expected: 'array',
+        actual: 'string'
+      })
+    ]);
+    expect((output.data as Record<string, unknown>).arrayField).toBe('this is a string not an array');
+
+    const arrayField = await accessNamedField(output, 'arrayField');
+    expect(isStructuredValue(arrayField)).toBe(true);
+    expect(arrayField.type).toBe('text');
+    expect(arrayField.text).toBe('this is a string not an array');
+    expect(arrayField.mx.factsources?.map(handle => handle.ref)).toEqual(['@example.arrayfield']);
+  });
+
   it('keeps inherited untrusted on every field when validation demotes the record', async () => {
     const env = createEnvironment();
     const definition = await registerRecord(env, `

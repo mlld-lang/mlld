@@ -88,6 +88,44 @@ describe('inline record coercion', () => {
     expect(readData(env, 'code')).toBe('type');
   });
 
+  it('preserves invalid typed field values for inline and exe output coercion', async () => {
+    const env = await evaluateSource([
+      '/record @example = {',
+      '  key: name,',
+      '  facts: [name: string],',
+      '  data: {',
+      '    trusted: [',
+      '      stringField: string?,',
+      '      arrayField: array?',
+      '    ]',
+      '  }',
+      '}',
+      '/var @schema = @example',
+      '/exe @badTool() = { name: "test", stringField: "ok", arrayField: "this is a string not an array" } => record @schema',
+      '/var @fromExe = @badTool()',
+      '/var @fromInline = { name: "inline", stringField: "ok", arrayField: "still not an array" } as record @schema',
+      '/var @exeArray = @fromExe.arrayField',
+      '/var @inlineArray = @fromInline.arrayField',
+      '/var @exeValid = @fromExe.mx.schema.valid',
+      '/var @inlineActual = @fromInline.mx.schema.errors[0].actual'
+    ].join('\n'));
+
+    expect(readData(env, 'fromExe')).toMatchObject({
+      name: 'test',
+      stringField: 'ok',
+      arrayField: 'this is a string not an array'
+    });
+    expect(readData(env, 'fromInline')).toMatchObject({
+      name: 'inline',
+      stringField: 'ok',
+      arrayField: 'still not an array'
+    });
+    expect(readData(env, 'exeArray')).toBe('this is a string not an array');
+    expect(readData(env, 'inlineArray')).toBe('still not an array');
+    expect(readData(env, 'exeValid')).toBe(false);
+    expect(readData(env, 'inlineActual')).toBe('string');
+  });
+
   it('works inside when conditions through grouped mx access', async () => {
     const env = await evaluateSource([
       '/record @contact = { facts: [email: string], validate: "demote" }',
