@@ -21,18 +21,9 @@ import {
 } from '../security';
 import { buildTokenMetrics, type TokenEstimationOptions, type TokenMetrics } from '@core/utils/token-metrics';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
-
-function getMaterializedStructuredText(value: unknown): string | undefined {
-  if (!value || typeof value !== 'object') {
-    return undefined;
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
-  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : undefined;
-}
 
 // =========================================================================
 // METADATA UTILITY FUNCTIONS

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   makeSecurityDescriptor,
   mergeDescriptors,
+  normalizeSecurityDescriptor,
+  removeLabelsFromDescriptor,
   hasLabel,
   serializeSecurityDescriptor,
   deserializeSecurityDescriptor,
@@ -24,6 +26,49 @@ describe('SecurityDescriptor helpers', () => {
     const descriptor = makeSecurityDescriptor();
     expect(descriptor.labels).toEqual([]);
     expect(descriptor.taint).toEqual([]);
+    expect(makeSecurityDescriptor()).toBe(descriptor);
+  });
+
+  it('interns repeated equal descriptors and canonical empty arrays', () => {
+    const first = makeSecurityDescriptor({ labels: ['known'], sources: ['src:mcp'] });
+    const second = makeSecurityDescriptor({ labels: ['known'], sources: ['src:mcp'] });
+
+    expect(second).toBe(first);
+    expect(first.labels).toBe(second.labels);
+    expect(first.sources).toBe(second.sources);
+    expect(Object.isFrozen(first.labels)).toBe(true);
+  });
+
+  it('does not intern descriptors with nested policy contexts', () => {
+    const first = makeSecurityDescriptor({
+      labels: ['secret'],
+      policyContext: { nested: { rule: 'a' } as any }
+    });
+    const second = makeSecurityDescriptor({
+      labels: ['secret'],
+      policyContext: { nested: { rule: 'a' } as any }
+    });
+
+    expect(second).not.toBe(first);
+    expect(second.policyContext).toEqual(first.policyContext);
+  });
+
+  it('normalizes shape-compatible descriptors defensively', () => {
+    const labels = ['secret'];
+    const input = {
+      labels,
+      taint: ['secret'],
+      attestations: [],
+      sources: [],
+      urls: ['https://example.com/a']
+    };
+
+    const normalized = normalizeSecurityDescriptor(input);
+    expect(normalized).toBeDefined();
+    expect(normalized).not.toBe(input);
+
+    labels.push('mutated');
+    expect(normalized?.labels).toEqual(['secret']);
   });
 
   it('merges descriptors preserving highest taint and labels', () => {
@@ -100,5 +145,24 @@ describe('SecurityDescriptor helpers', () => {
       'https://example.com/a',
       'https://docs.example.com/b'
     ]);
+  });
+
+  it('preserves url provenance when removing labels', () => {
+    const descriptor = makeSecurityDescriptor({
+      labels: ['known', 'untrusted'],
+      sources: ['src:file'],
+      urls: ['https://example.com/a'],
+      tools: [{ name: 'fetch', auditRef: 'audit-1' }],
+      capability: 'command',
+      policyContext: { rule: 'test' }
+    });
+
+    const stripped = removeLabelsFromDescriptor(descriptor, ['untrusted']);
+    expect(stripped?.labels).toEqual(['known']);
+    expect(stripped?.urls).toEqual(['https://example.com/a']);
+    expect(stripped?.sources).toEqual(['src:file']);
+    expect(stripped?.tools).toEqual([{ name: 'fetch', auditRef: 'audit-1' }]);
+    expect(stripped?.capability).toBe('command');
+    expect(stripped?.policyContext).toEqual({ rule: 'test' });
   });
 });

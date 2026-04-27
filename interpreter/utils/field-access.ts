@@ -50,6 +50,7 @@ import {
   type ToolCatalogEntry,
   type ToolCollection
 } from '@core/types/tools';
+import { internFactSourceArray } from '@core/types/handle';
 
 const COMMON_FILE_EXTENSION_FIELDS = new Set([
   'json',
@@ -1657,11 +1658,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
         accessedValue = wrapExecResult(accessedValue);
       }
       if (isStructuredValue(accessedValue)) {
+        const factsources = internFactSourceArray(fieldMetadata.factsources);
         accessedValue.metadata = {
           ...(accessedValue.metadata ?? {}),
-          factsources: [...fieldMetadata.factsources]
+          factsources
         };
-        accessedValue.mx.factsources = [...fieldMetadata.factsources];
+        accessedValue.mx.factsources = factsources;
       }
     }
 

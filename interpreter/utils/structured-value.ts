@@ -26,6 +26,9 @@ import {
   getShelfSlotRefSnapshot,
   isShelfSlotRefValue
 } from '@core/types/shelf';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
+import { internFactSourceArray } from '@core/types/handle';
+import { internRecordProjectionMetadata } from '@core/types/record';
 
 export const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 const STRUCTURED_VALUE_CTX_INITIALIZED = Symbol('mlld.StructuredValueCtxInitialized');
@@ -358,7 +361,7 @@ export function wrapStructured<T>(
     return createStructuredValue(
       value.data,
       type ?? value.type,
-      text ?? value.text,
+      text ?? getMaterializedStructuredText(value),
       metadata ?? value.metadata
     );
   }
@@ -566,10 +569,10 @@ export function applySecurityDescriptorToStructuredValue(
   descriptor: SecurityDescriptor
 ): void {
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
-  const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
   const urlSources: unknown[] = [value.data];
-  if (textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string') {
-    urlSources.push(textDescriptor.value);
+  const materializedText = getMaterializedStructuredText(value);
+  if (materializedText !== undefined) {
+    urlSources.push(materializedText);
   }
   const resolvedDescriptor =
     replaceDescriptorUrls(normalized, extractUrlsFromValue(urlSources)) ?? normalized;
@@ -602,9 +605,10 @@ export function setRecordProjectionMetadata(
   value: StructuredValue,
   projection: RecordProjectionMetadata
 ): void {
+  const interned = internRecordProjectionMetadata(projection);
   value.metadata = {
     ...(value.metadata ?? {}),
-    projection
+    projection: interned
   };
 }
 
@@ -733,7 +737,7 @@ function buildVarMxFromMetadata(
     taint,
     attestations,
     schema: metadata?.schema,
-    factsources: Array.isArray(metadata?.factsources) ? [...metadata.factsources] : undefined,
+    factsources: Array.isArray(metadata?.factsources) ? internFactSourceArray(metadata.factsources) : undefined,
     sources,
     urls: normalizedDescriptor.urls ? [...normalizedDescriptor.urls] : [],
     tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
@@ -1053,11 +1057,12 @@ function materializeStructuredNamespaceChild(
     applySecurityDescriptorToStructuredValue(child, descriptor);
   }
   if (hasFactsources) {
+    const factsources = internFactSourceArray(payload.factsources as readonly FactSourceHandle[]);
     child.metadata = {
       ...(child.metadata ?? {}),
-      factsources: [...(payload.factsources as readonly FactSourceHandle[])]
+      factsources
     };
-    child.mx.factsources = [...(payload.factsources as readonly FactSourceHandle[])];
+    child.mx.factsources = factsources;
   }
   if (hasProjection) {
     setRecordProjectionMetadata(child, payload.projection as RecordProjectionMetadata);

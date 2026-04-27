@@ -15,6 +15,28 @@ export interface HandleWrapper {
   handle: string;
 }
 
+const EMPTY_FACT_SOURCE_ARRAY: readonly FactSourceHandle[] = Object.freeze([]);
+const FACT_SOURCE_HANDLE_CACHE = new Map<string, FactSourceHandle>();
+const FACT_SOURCE_ARRAY_CACHE = new Map<string, readonly FactSourceHandle[]>();
+const FACT_SOURCE_CACHE_LIMIT = 8192;
+const FACT_SOURCE_ARRAY_CACHE_LIMIT = 4096;
+const FACT_SOURCE_ARRAY_KEY_LIMIT = 8192;
+
+function rememberBounded<T>(cache: Map<string, T>, key: string, value: T, limit: number): T {
+  const existing = cache.get(key);
+  if (existing) {
+    return existing;
+  }
+  if (cache.size >= limit) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) {
+      cache.delete(firstKey);
+    }
+  }
+  cache.set(key, value);
+  return value;
+}
+
 function normalizeIdentifierPath(value: string, options?: { requireLeadingAt?: boolean }): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -38,6 +60,107 @@ function normalizeIdentifierPath(value: string, options?: { requireLeadingAt?: b
   });
 
   return `${options?.requireLeadingAt === true ? '@' : ''}${normalized.join('.')}`;
+}
+
+export function getFactSourceKey(handle: FactSourceHandle): string {
+  return JSON.stringify([
+    handle.kind,
+    handle.ref,
+    handle.sourceRef,
+    handle.field,
+    handle.instanceKey ?? null,
+    handle.coercionId ?? null,
+    handle.position ?? null,
+    handle.tiers ? Array.from(handle.tiers) : []
+  ]);
+}
+
+function getLegacyFactSourceKey(handle: Record<string, unknown>): string {
+  return JSON.stringify([
+    'legacy',
+    ...Object.keys(handle)
+      .sort()
+      .map(key => [key, handle[key]])
+  ]);
+}
+
+export function internFactSourceHandle(handle: FactSourceHandle): FactSourceHandle {
+  const tiers = handle.tiers && handle.tiers.length > 0
+    ? Object.freeze(Array.from(new Set(handle.tiers))) as readonly string[]
+    : undefined;
+  const normalized: FactSourceHandle = Object.freeze({
+    kind: handle.kind,
+    ref: handle.ref,
+    sourceRef: handle.sourceRef,
+    field: handle.field,
+    ...(handle.instanceKey !== undefined ? { instanceKey: handle.instanceKey } : {}),
+    ...(handle.coercionId !== undefined ? { coercionId: handle.coercionId } : {}),
+    ...(handle.position !== undefined ? { position: handle.position } : {}),
+    ...(tiers ? { tiers } : {})
+  });
+  return rememberBounded(
+    FACT_SOURCE_HANDLE_CACHE,
+    getFactSourceKey(normalized),
+    normalized,
+    FACT_SOURCE_CACHE_LIMIT
+  );
+}
+
+function internLegacyFactSourceHandle(handle: Record<string, unknown>): FactSourceHandle {
+  const normalized = Object.freeze({ ...handle }) as FactSourceHandle;
+  return rememberBounded(
+    FACT_SOURCE_HANDLE_CACHE,
+    getLegacyFactSourceKey(normalized as unknown as Record<string, unknown>),
+    normalized,
+    FACT_SOURCE_CACHE_LIMIT
+  );
+}
+
+export function internFactSourceArray(
+  handles: Iterable<FactSourceHandle> | undefined
+): readonly FactSourceHandle[] {
+  if (!handles) {
+    return EMPTY_FACT_SOURCE_ARRAY;
+  }
+  const deduped = new Map<string, FactSourceHandle>();
+  for (const handle of handles) {
+    if (isFactSourceHandle(handle)) {
+      const interned = internFactSourceHandle(handle);
+      const key = getFactSourceKey(interned);
+      if (!deduped.has(key)) {
+        deduped.set(key, interned);
+      }
+      continue;
+    }
+
+    if (handle && typeof handle === 'object' && typeof (handle as Record<string, unknown>).ref === 'string') {
+      const interned = internLegacyFactSourceHandle(handle as unknown as Record<string, unknown>);
+      const key = getLegacyFactSourceKey(interned as unknown as Record<string, unknown>);
+      if (!deduped.has(key)) {
+        deduped.set(key, interned);
+      }
+    }
+  }
+  if (deduped.size === 0) {
+    return EMPTY_FACT_SOURCE_ARRAY;
+  }
+
+  const key = Array.from(deduped.keys()).join('\u001f');
+  if (key.length <= FACT_SOURCE_ARRAY_KEY_LIMIT) {
+    const existing = FACT_SOURCE_ARRAY_CACHE.get(key);
+    if (existing) {
+      return existing;
+    }
+    const value = Object.freeze(Array.from(deduped.values()));
+    return rememberBounded(
+      FACT_SOURCE_ARRAY_CACHE,
+      key,
+      value,
+      FACT_SOURCE_ARRAY_CACHE_LIMIT
+    );
+  }
+
+  return Object.freeze(Array.from(deduped.values()));
 }
 
 export function createFactSourceHandle(input: {
@@ -64,7 +187,7 @@ export function createFactSourceHandle(input: {
     .filter(Boolean)
     .sort();
 
-  return {
+  return internFactSourceHandle({
     kind: 'record-field',
     ref: `${sourceRef}.${field}`,
     sourceRef,
@@ -73,7 +196,7 @@ export function createFactSourceHandle(input: {
     ...(coercionId ? { coercionId } : {}),
     ...(position !== undefined ? { position } : {}),
     ...(tiers && tiers.length > 0 ? { tiers: Object.freeze(Array.from(new Set(tiers))) } : {})
-  };
+  });
 }
 
 export function isFactSourceHandle(value: unknown): value is FactSourceHandle {

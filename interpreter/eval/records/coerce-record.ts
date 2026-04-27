@@ -12,15 +12,19 @@ import type {
   RecordDefinition,
   RecordFieldDefinition,
   RecordFieldProjectionMetadata,
-  RecordObjectProjectionMetadata,
   RecordSchemaMetadata,
   RecordValidationError,
   RecordWhenCondition,
   RecordWhenRule
 } from '@core/types/record';
 import {
+  buildRecordFieldProjectionMetadata,
+  buildRecordObjectProjectionMetadata
+} from '@core/types/record';
+import {
   createFactSourceHandle,
   isHandleWrapper,
+  internFactSourceArray,
   type FactSourceHandle
 } from '@core/types/handle';
 import {
@@ -111,20 +115,12 @@ function buildSchemaMetadata(
   };
 }
 
-function dedupeFactSources(factsources: readonly FactSourceHandle[]): FactSourceHandle[] {
-  const unique = new Map<string, FactSourceHandle>();
-  for (const handle of factsources) {
-    unique.set(JSON.stringify(handle), handle);
-  }
-  return Array.from(unique.values());
-}
-
 function setStructuredMetadata(
   value: StructuredValue,
   schema: RecordSchemaMetadata,
   factsources: readonly FactSourceHandle[]
 ): void {
-  const deduped = dedupeFactSources(factsources);
+  const deduped = internFactSourceArray(factsources);
   value.metadata = {
     ...(value.metadata ?? {}),
     schema,
@@ -178,37 +174,6 @@ function buildRecordFieldDescriptor(options: {
   }
 
   return makeSecurityDescriptor({ labels, taint });
-}
-
-function buildRecordObjectProjectionMetadata(
-  definition: RecordDefinition
-): RecordObjectProjectionMetadata {
-  return {
-    kind: 'record',
-    recordName: definition.name,
-    display: definition.display,
-    fields: Object.fromEntries(
-      definition.fields.map(field => [
-        field.name,
-        {
-          classification: field.classification
-        }
-      ])
-    )
-  };
-}
-
-function buildRecordFieldProjectionMetadata(
-  definition: RecordDefinition,
-  field: RecordFieldDefinition
-): RecordFieldProjectionMetadata {
-  return {
-    kind: 'field',
-    recordName: definition.name,
-    fieldName: field.name,
-    classification: field.classification,
-    display: definition.display
-  };
 }
 
 function setNamespaceMetadata(
@@ -506,12 +471,13 @@ function applyFieldMetadata(
   if (descriptor) {
     applySecurityDescriptorToStructuredValue(value, descriptor);
   }
+  const internedFactsources = internFactSourceArray(factsources);
   value.metadata = {
     ...(value.metadata ?? {}),
-    factsources: [...factsources],
+    factsources: internedFactsources,
     projection
   };
-  value.mx.factsources = [...factsources];
+  value.mx.factsources = internedFactsources;
   return value;
 }
 
@@ -539,7 +505,7 @@ function finalizeArrayFieldValue(options: {
     : sourceItems.map(cloneValueIfStructured);
 
   const wrapped = wrapStructured(items, 'array', undefined, {
-    factsources: [...options.factsources],
+    factsources: internFactSourceArray(options.factsources),
     projection: options.projection
   });
   return applyFieldMetadata(
@@ -563,7 +529,7 @@ function finalizeObjectFieldValue(options: {
   );
 
   const wrapped = wrapStructured(clonedEntries, 'object', undefined, {
-    factsources: [...options.factsources],
+    factsources: internFactSourceArray(options.factsources),
     projection: options.projection
   });
   return applyFieldMetadata(
@@ -822,7 +788,7 @@ async function coerceRecordEntry(
       continue;
     }
 
-    const fieldFactsources = [
+    const fieldFactsources = internFactSourceArray([
       createFactSourceHandle({
         sourceRef: definition.name,
         field: field.name,
@@ -831,7 +797,7 @@ async function coerceRecordEntry(
         position: identity.position,
         tiers: whenResult.tiers
       })
-    ];
+    ]);
     factsources.push(...fieldFactsources);
 
     const labels =
@@ -890,7 +856,7 @@ async function coerceRecordEntry(
 
   const structured = wrapStructured(shaped, 'object', undefined, {
     schema: buildSchemaMetadata(definition, errors),
-    factsources,
+    factsources: internFactSourceArray(factsources),
     projection: buildRecordObjectProjectionMetadata(definition),
     ...(wrapperSecurity ? { security: wrapperSecurity } : {})
   });
@@ -913,7 +879,7 @@ function buildRecordArrayOutput(options: {
   const wrapperSecurity = sanitizeRecordWrapperDescriptor(options.inheritedDescriptor);
   const wrapped = wrapStructured(options.items, 'array', undefined, {
     schema,
-    factsources: dedupeFactSources(options.factsources),
+    factsources: internFactSourceArray(options.factsources),
     ...(wrapperSecurity ? { security: wrapperSecurity } : {})
   });
   setStructuredMetadata(wrapped, schema, options.factsources);

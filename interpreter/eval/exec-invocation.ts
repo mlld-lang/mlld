@@ -59,7 +59,12 @@ import {
   type SecurityDescriptor,
   type ToolProvenance
 } from '@core/types/security';
-import type { FactSourceHandle } from '@core/types/handle';
+import {
+  getFactSourceKey,
+  internFactSourceArray,
+  type FactSourceHandle
+} from '@core/types/handle';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 import { normalizeTransformerResult } from '../utils/transformer-result';
 import { varMxToSecurityDescriptor, updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
@@ -1230,7 +1235,7 @@ function cloneFactSources(
   factsources: readonly FactSourceHandle[] | undefined
 ): readonly FactSourceHandle[] | undefined {
   return Array.isArray(factsources) && factsources.length > 0
-    ? [...factsources]
+    ? internFactSourceArray(factsources)
     : undefined;
 }
 
@@ -1360,7 +1365,7 @@ function mergeInvocationArgFactSources(options: {
     const merged = new Map<string, FactSourceHandle>();
     const push = (factsources: readonly FactSourceHandle[] | undefined): void => {
       for (const handle of factsources ?? []) {
-        const key = `${handle.instanceKey ?? ''}::${handle.coercionId ?? ''}::${handle.position ?? ''}::${handle.ref}`;
+        const key = getFactSourceKey(handle);
         if (!merged.has(key)) {
           merged.set(key, handle);
         }
@@ -1376,7 +1381,7 @@ function mergeInvocationArgFactSources(options: {
       continue;
     }
 
-    const nextFactsources = Array.from(merged.values());
+    const nextFactsources = internFactSourceArray(merged.values());
     const current = factsourceDescriptors[index];
     if (
       !Array.isArray(current)
@@ -1425,11 +1430,12 @@ function buildToolInputValidationArguments(options: {
       applySecurityDescriptorToStructuredValue(structured, descriptor);
     }
     if (Array.isArray(factsources) && factsources.length > 0) {
+      const internedFactsources = internFactSourceArray(factsources);
       structured.metadata = {
         ...(structured.metadata ?? {}),
-        factsources: [...factsources]
+        factsources: internedFactsources
       };
-      structured.mx.factsources = [...factsources];
+      structured.mx.factsources = internedFactsources;
     }
     return structured;
   };
@@ -1521,12 +1527,12 @@ function collectInputFactSources(value: unknown, seen = new Set<unknown>()): Fac
 
   const deduped = new Map<string, FactSourceHandle>();
   for (const handle of collected) {
-    const key = `${handle.instanceKey ?? ''}::${handle.coercionId ?? ''}::${handle.position ?? ''}::${handle.ref}`;
+    const key = getFactSourceKey(handle);
     if (!deduped.has(key)) {
       deduped.set(key, handle);
     }
   }
-  return Array.from(deduped.values());
+  return [...internFactSourceArray(deduped.values())];
 }
 
 function collectCorrelationKeys(factsources: readonly FactSourceHandle[]): string[] {
@@ -2675,13 +2681,6 @@ function getToolResultLength(value: unknown): number | undefined {
   } catch {
     return undefined;
   }
-}
-
-function getMaterializedStructuredText(value: StructuredValue): string | undefined {
-  const textDescriptor = Object.getOwnPropertyDescriptor(value, 'text');
-  return textDescriptor && 'value' in textDescriptor && typeof textDescriptor.value === 'string'
-    ? textDescriptor.value
-    : undefined;
 }
 
 function getEvalResultStdout(value: unknown): string | undefined {

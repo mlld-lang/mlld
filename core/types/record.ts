@@ -74,6 +74,194 @@ export type RecordProjectionMetadata =
   | RecordFieldProjectionMetadata
   | RecordObjectProjectionMetadata;
 
+const RECORD_PROJECTION_CACHE_LIMIT = 4096;
+const RECORD_PROJECTION_KEY_LIMIT = 8192;
+const RECORD_FIELD_PROJECTION_CACHE = new Map<string, RecordFieldProjectionMetadata>();
+const RECORD_OBJECT_PROJECTION_CACHE = new Map<string, RecordObjectProjectionMetadata>();
+
+function rememberBounded<T>(cache: Map<string, T>, key: string, value: T, limit: number): T {
+  const existing = cache.get(key);
+  if (existing) {
+    return existing;
+  }
+  if (cache.size >= limit) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) {
+      cache.delete(firstKey);
+    }
+  }
+  cache.set(key, value);
+  return value;
+}
+
+function stableSerialize(value: unknown): string | undefined {
+  if (value === null) {
+    return 'null';
+  }
+  const type = typeof value;
+  if (type === 'string' || type === 'number' || type === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    const entries = value.map(entry => stableSerialize(entry));
+    if (entries.some(entry => entry === undefined)) {
+      return undefined;
+    }
+    return `[${entries.join(',')}]`;
+  }
+  if (type !== 'object' || value === undefined) {
+    return undefined;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return undefined;
+  }
+
+  const entries: string[] = [];
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    const serialized = stableSerialize((value as Record<string, unknown>)[key]);
+    if (serialized === undefined) {
+      return undefined;
+    }
+    entries.push(`${JSON.stringify(key)}:${serialized}`);
+  }
+  return `{${entries.join(',')}}`;
+}
+
+function displayKey(display: RecordDisplayConfig): string | undefined {
+  const key = stableSerialize(display);
+  return key && key.length <= RECORD_PROJECTION_KEY_LIMIT ? key : undefined;
+}
+
+function freezeFieldProjection(
+  projection: RecordFieldProjectionMetadata
+): RecordFieldProjectionMetadata {
+  return Object.freeze({
+    kind: 'field',
+    recordName: projection.recordName,
+    fieldName: projection.fieldName,
+    classification: projection.classification,
+    ...(projection.dataTrust ? { dataTrust: projection.dataTrust } : {}),
+    display: projection.display
+  });
+}
+
+function freezeObjectProjection(
+  projection: RecordObjectProjectionMetadata
+): RecordObjectProjectionMetadata {
+  return Object.freeze({
+    kind: 'record',
+    recordName: projection.recordName,
+    display: projection.display,
+    fields: Object.freeze(
+      Object.fromEntries(
+        Object.entries(projection.fields).map(([name, field]) => [
+          name,
+          Object.freeze({
+            classification: field.classification,
+            ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+          })
+        ])
+      )
+    )
+  });
+}
+
+export function internRecordFieldProjectionMetadata(
+  projection: RecordFieldProjectionMetadata
+): RecordFieldProjectionMetadata {
+  const serializedDisplay = displayKey(projection.display);
+  if (!serializedDisplay) {
+    return freezeFieldProjection(projection);
+  }
+  const key = stableSerialize({
+    kind: projection.kind,
+    recordName: projection.recordName,
+    fieldName: projection.fieldName,
+    classification: projection.classification,
+    dataTrust: projection.dataTrust ?? null,
+    display: JSON.parse(serializedDisplay) as unknown
+  });
+  const frozen = freezeFieldProjection(projection);
+  return key && key.length <= RECORD_PROJECTION_KEY_LIMIT
+    ? rememberBounded(RECORD_FIELD_PROJECTION_CACHE, key, frozen, RECORD_PROJECTION_CACHE_LIMIT)
+    : frozen;
+}
+
+export function internRecordObjectProjectionMetadata(
+  projection: RecordObjectProjectionMetadata
+): RecordObjectProjectionMetadata {
+  const serializedDisplay = displayKey(projection.display);
+  if (!serializedDisplay) {
+    return freezeObjectProjection(projection);
+  }
+  const sortedFields = Object.fromEntries(
+    Object.entries(projection.fields)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, field]) => [
+        name,
+        {
+          classification: field.classification,
+          dataTrust: field.dataTrust ?? null
+        }
+      ])
+  );
+  const key = stableSerialize({
+    kind: projection.kind,
+    recordName: projection.recordName,
+    display: JSON.parse(serializedDisplay) as unknown,
+    fields: sortedFields
+  });
+  const frozen = freezeObjectProjection(projection);
+  return key && key.length <= RECORD_PROJECTION_KEY_LIMIT
+    ? rememberBounded(RECORD_OBJECT_PROJECTION_CACHE, key, frozen, RECORD_PROJECTION_CACHE_LIMIT)
+    : frozen;
+}
+
+export function internRecordProjectionMetadata(
+  projection: RecordProjectionMetadata
+): RecordProjectionMetadata {
+  return projection.kind === 'field'
+    ? internRecordFieldProjectionMetadata(projection)
+    : internRecordObjectProjectionMetadata(projection);
+}
+
+export function buildRecordObjectProjectionMetadata(
+  definition: RecordDefinition,
+  options?: { includeDataTrust?: boolean }
+): RecordObjectProjectionMetadata {
+  return internRecordObjectProjectionMetadata({
+    kind: 'record',
+    recordName: definition.name,
+    display: definition.display,
+    fields: Object.fromEntries(
+      definition.fields.map(field => [
+        field.name,
+        {
+          classification: field.classification,
+          ...(options?.includeDataTrust && field.dataTrust ? { dataTrust: field.dataTrust } : {})
+        }
+      ])
+    )
+  });
+}
+
+export function buildRecordFieldProjectionMetadata(
+  definition: RecordDefinition,
+  field: RecordFieldDefinition,
+  options?: { includeDataTrust?: boolean }
+): RecordFieldProjectionMetadata {
+  return internRecordFieldProjectionMetadata({
+    kind: 'field',
+    recordName: definition.name,
+    fieldName: field.name,
+    classification: field.classification,
+    ...(options?.includeDataTrust && field.dataTrust ? { dataTrust: field.dataTrust } : {}),
+    display: definition.display
+  });
+}
+
 export interface RecordInputFieldDefinition {
   kind: 'input';
   name: string;

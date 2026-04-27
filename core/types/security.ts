@@ -159,11 +159,20 @@ export function isAttestationLabel(label: string): boolean {
   return label === BUILTIN_LABELS.KNOWN || label.startsWith(`${BUILTIN_LABELS.KNOWN}:`);
 }
 
+const EMPTY_ARRAY: readonly never[] = Object.freeze([]);
+const NORMALIZED_DESCRIPTORS = new WeakSet<object>();
+const DESCRIPTOR_CACHE = new Map<string, SecurityDescriptor>();
+const DESCRIPTOR_CACHE_LIMIT = 4096;
+const DESCRIPTOR_KEY_LIMIT = 8192;
+
 function freezeArray<T>(values: Iterable<T> | undefined): readonly T[] {
   if (!values) {
-    return Object.freeze([]) as readonly T[];
+    return EMPTY_ARRAY as readonly T[];
   }
   const deduped = Array.from(new Set(values));
+  if (deduped.length === 0) {
+    return EMPTY_ARRAY as readonly T[];
+  }
   return Object.freeze(deduped);
 }
 
@@ -234,6 +243,124 @@ function freezeToolArray(
   return Object.freeze(deduped);
 }
 
+function stableSerialize(value: unknown): string | undefined {
+  if (value === null) {
+    return 'null';
+  }
+  const type = typeof value;
+  if (type === 'string' || type === 'number' || type === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    const entries = value.map(entry => stableSerialize(entry));
+    if (entries.some(entry => entry === undefined)) {
+      return undefined;
+    }
+    return `[${entries.join(',')}]`;
+  }
+  if (type !== 'object' || value === undefined) {
+    return undefined;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return undefined;
+  }
+
+  const entries: string[] = [];
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    const serialized = stableSerialize((value as Record<string, unknown>)[key]);
+    if (serialized === undefined) {
+      return undefined;
+    }
+    entries.push(`${JSON.stringify(key)}:${serialized}`);
+  }
+  return `{${entries.join(',')}}`;
+}
+
+function stableSerializeShallowPolicyContext(
+  value: Readonly<Record<string, unknown>>
+): string | undefined {
+  const entries: string[] = [];
+  for (const key of Object.keys(value).sort()) {
+    const entry = value[key];
+    if (
+      entry !== null &&
+      typeof entry !== 'string' &&
+      typeof entry !== 'number' &&
+      typeof entry !== 'boolean'
+    ) {
+      return undefined;
+    }
+    entries.push(`${JSON.stringify(key)}:${JSON.stringify(entry)}`);
+  }
+  return `{${entries.join(',')}}`;
+}
+
+function descriptorInternKey(options: {
+  labels: readonly DataLabel[];
+  taint: readonly DataLabel[];
+  attestations: readonly DataLabel[];
+  sources: readonly string[];
+  urls?: readonly string[];
+  tools?: readonly ToolProvenance[];
+  capability?: CapabilityKind;
+  policyContext?: Readonly<Record<string, unknown>>;
+}): string | undefined {
+  const policyContext = options.policyContext
+    ? stableSerializeShallowPolicyContext(options.policyContext)
+    : undefined;
+  if (options.policyContext && policyContext === undefined) {
+    return undefined;
+  }
+
+  const tools = options.tools
+    ? stableSerialize(options.tools.map(tool => ({
+        name: tool.name,
+        ...(tool.args ? { args: Array.from(tool.args) } : {}),
+        ...(tool.auditRef ? { auditRef: tool.auditRef } : {})
+      })))
+    : undefined;
+  if (options.tools && tools === undefined) {
+    return undefined;
+  }
+
+  const key = stableSerialize({
+    labels: Array.from(options.labels),
+    taint: Array.from(options.taint),
+    attestations: Array.from(options.attestations),
+    sources: Array.from(options.sources),
+    urls: options.urls ? Array.from(options.urls) : [],
+    tools: tools ?? null,
+    capability: options.capability ?? null,
+    policyContext: policyContext ?? null
+  });
+  return key && key.length <= DESCRIPTOR_KEY_LIMIT ? key : undefined;
+}
+
+function rememberDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
+  NORMALIZED_DESCRIPTORS.add(descriptor);
+  return descriptor;
+}
+
+function cacheDescriptor(key: string | undefined, descriptor: SecurityDescriptor): SecurityDescriptor {
+  if (!key) {
+    return rememberDescriptor(descriptor);
+  }
+  const existing = DESCRIPTOR_CACHE.get(key);
+  if (existing) {
+    return existing;
+  }
+  if (DESCRIPTOR_CACHE.size >= DESCRIPTOR_CACHE_LIMIT) {
+    const firstKey = DESCRIPTOR_CACHE.keys().next().value;
+    if (firstKey !== undefined) {
+      DESCRIPTOR_CACHE.delete(firstKey);
+    }
+  }
+  DESCRIPTOR_CACHE.set(key, descriptor);
+  return rememberDescriptor(descriptor);
+}
+
 function createDescriptor(
   labels: readonly DataLabel[],
   taint: readonly DataLabel[],
@@ -244,7 +371,7 @@ function createDescriptor(
   capability?: CapabilityKind,
   policyContext?: Readonly<Record<string, unknown>>
 ): SecurityDescriptor {
-  return Object.freeze({
+  const descriptor = Object.freeze({
     labels,
     taint,
     attestations,
@@ -254,6 +381,19 @@ function createDescriptor(
     capability,
     policyContext
   });
+  return cacheDescriptor(
+    descriptorInternKey({
+      labels,
+      taint,
+      attestations,
+      sources,
+      urls,
+      tools,
+      capability,
+      policyContext
+    }),
+    descriptor
+  );
 }
 
 export function makeSecurityDescriptor(options?: {
@@ -322,6 +462,8 @@ export function normalizeSecurityDescriptor(
     tools === undefined || (Array.isArray(tools) && typeof tools.forEach === 'function');
 
   if (
+    NORMALIZED_DESCRIPTORS.has(candidate) &&
+    Object.isFrozen(candidate) &&
     hasIterableLabels &&
     hasIterableSources &&
     hasIterableUrls &&
@@ -459,6 +601,7 @@ export function removeLabelsFromDescriptor(
     taint,
     attestations,
     sources: descriptor.sources,
+    urls: descriptor.urls,
     tools: descriptor.tools,
     capability: descriptor.capability,
     policyContext: descriptor.policyContext ? { ...descriptor.policyContext } : undefined

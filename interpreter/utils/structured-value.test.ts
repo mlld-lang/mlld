@@ -151,6 +151,30 @@ describe('text serialization fallbacks', () => {
     expect(toJsonCalls).toBe(1);
   });
 
+  it('clones structured values with new metadata without materializing lazy object text', () => {
+    let toJsonCalls = 0;
+    const data = {
+      nested: {
+        url: 'https://example.com/a#frag'
+      },
+      toJSON() {
+        toJsonCalls += 1;
+        return { nested: this.nested };
+      }
+    };
+    const original = wrapStructured(data, 'object');
+    const clone = wrapStructured(original, undefined, undefined, {
+      security: makeSecurityDescriptor({ labels: ['influenced'] })
+    });
+
+    expect(toJsonCalls).toBe(0);
+    expect(Object.getOwnPropertyDescriptor(clone, 'text')?.get).toBeTypeOf('function');
+    expect(clone.metadata?.security?.urls).toEqual(['https://example.com/a']);
+
+    expect(clone.text).toBe('{"nested":{"url":"https://example.com/a#frag"}}');
+    expect(toJsonCalls).toBe(1);
+  });
+
   it('serializes plain objects as JSON instead of [object Object]', () => {
     expect(asText({ name: 'Ada', active: true })).toBe('{"name":"Ada","active":true}');
   });

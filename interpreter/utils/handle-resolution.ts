@@ -11,6 +11,7 @@ import {
 } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -28,13 +29,6 @@ function cloneWithOwnDescriptors<T extends object>(value: T): T {
 
 function isBareHandleToken(value: string): boolean {
   return /^h_[a-z0-9]+$/.test(value.trim());
-}
-
-function getMaterializedStructuredText(value: { text: string }): string | undefined {
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
-  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : undefined;
 }
 
 export function extractProjectedHandleToken(value: unknown): string | undefined {

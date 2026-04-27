@@ -6,6 +6,7 @@ import {
   type VariableSource
 } from '@core/types/variable';
 import { wrapStructured } from '@interpreter/utils/structured-value';
+import { makeSecurityDescriptor } from '@core/types/security';
 
 const SOURCE: VariableSource = {
   directive: 'var',
@@ -75,5 +76,32 @@ describe('VariableFactory.createStructuredValue', () => {
 
     expect(variable.value.text).toBe('{"name":"Ada"}');
     expect(toJsonCalls).toBe(1);
+  });
+
+  it('recursively discovers structured object URLs during variable creation without materializing text', () => {
+    let toJsonCalls = 0;
+    const wrapped = wrapStructured(
+      {
+        link: {
+          url: 'https://example.com/a#frag'
+        },
+        toJSON() {
+          toJsonCalls += 1;
+          return { link: this.link };
+        }
+      },
+      'object',
+      undefined,
+      {
+        security: makeSecurityDescriptor({ labels: ['influenced'] })
+      }
+    );
+
+    const variable = createStructuredValueVariable('payload', wrapped, SOURCE);
+
+    expect(toJsonCalls).toBe(0);
+    expect(variable.value.metadata?.security?.urls).toEqual(['https://example.com/a']);
+    expect(variable.mx.urls).toEqual(['https://example.com/a']);
+    expect(Object.getOwnPropertyDescriptor(variable.value, 'text')?.get).toBeTypeOf('function');
   });
 });

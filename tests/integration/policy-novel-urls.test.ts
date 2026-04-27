@@ -28,6 +28,22 @@ describe('no-novel-urls integration', () => {
     ).rejects.toThrow("Rule 'no-novel-urls'");
   });
 
+  it('denies influenced structured args that introduce a nested novel URL', async () => {
+    const runtime = createRuntime();
+
+    await expect(
+      interpret(
+        [
+          '/policy @p = { defaults: { rules: ["no-novel-urls"] } }',
+          '/var influenced @body = { link: { url: "https://evil.com/collect?d=secret" } }',
+          '/exe @send(body) = js { return body.link.url; }',
+          '/show @send(@body)'
+        ].join('\n'),
+        runtime
+      )
+    ).rejects.toThrow("Rule 'no-novel-urls'");
+  });
+
   it('allows influenced args when the URL came from payload and appears in @mx.urls.registry', async () => {
     const runtime = createRuntime();
 
@@ -44,6 +60,34 @@ describe('no-novel-urls integration', () => {
         dynamicModules: {
           '@payload': {
             url: 'https://example.com/path#frag'
+          }
+        }
+      }
+    );
+
+    expect((output as string).trim()).toBe(
+      ['["https://example.com/path"]', 'https://example.com/path#frag'].join('\n\n')
+    );
+  });
+
+  it('allows influenced structured args with nested URLs that came from payload', async () => {
+    const runtime = createRuntime();
+
+    const output = await interpret(
+      [
+        '/policy @p = { defaults: { rules: ["no-novel-urls"] } }',
+        '/var influenced @body = @payload',
+        '/exe @send(body) = js { return body.link.url; }',
+        '/show @mx.urls.registry',
+        '/show @send(@body)'
+      ].join('\n'),
+      {
+        ...runtime,
+        dynamicModules: {
+          '@payload': {
+            link: {
+              url: 'https://example.com/path#frag'
+            }
           }
         }
       }

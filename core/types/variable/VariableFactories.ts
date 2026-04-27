@@ -42,6 +42,7 @@ import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
 import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
 import { normalizeSecurityDescriptor } from '@core/types/security';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 
 export interface VariableFactoryInitOptions {
   mx?: Partial<VariableContext>;
@@ -53,13 +54,6 @@ interface NormalizedFactoryState {
   metadata?: VariableMetadata;
   mx: VariableContext;
   internal: VariableInternalMetadata;
-}
-
-function getMaterializedStructuredText(value: StructuredValue): string | undefined {
-  const descriptor = Object.getOwnPropertyDescriptor(value, 'text');
-  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-    ? descriptor.value
-    : undefined;
 }
 
 function finalizeVariable<T extends Variable>(variable: T & { metadata?: VariableMetadata }): T {

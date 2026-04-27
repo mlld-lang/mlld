@@ -1070,4 +1070,52 @@ describe('record output coercion', () => {
       })
     ).rejects.toThrow(/expected handle/i);
   });
+
+  it('reuses projection metadata and exact factsource arrays where identity-safe', async () => {
+    const env = createEnvironment();
+    const definition = await registerRecord(env, `
+/record @contact = {
+  facts: [email: string, name: string],
+  data: [notes: string?],
+  display: [name]
+}
+`);
+
+    const first = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'ada@example.com',
+        name: 'Ada',
+        notes: 'First'
+      },
+      env
+    });
+    const second = await coerceRecordOutput({
+      definition,
+      value: {
+        email: 'grace@example.com',
+        name: 'Grace',
+        notes: 'Second'
+      },
+      env
+    });
+
+    expect(getRecordProjectionMetadata(second)).toBe(getRecordProjectionMetadata(first));
+    expect(Object.isFrozen(getRecordProjectionMetadata(first))).toBe(true);
+
+    const firstEmail = await accessNamedField(first, 'email');
+    const firstEmailAgain = await accessNamedField(first, 'email');
+    const secondEmail = await accessNamedField(second, 'email');
+    expect(isStructuredValue(firstEmail)).toBe(true);
+    expect(isStructuredValue(firstEmailAgain)).toBe(true);
+    expect(isStructuredValue(secondEmail)).toBe(true);
+
+    expect(getRecordProjectionMetadata(firstEmailAgain)).toBe(getRecordProjectionMetadata(firstEmail));
+    expect(firstEmail.metadata?.factsources).toBe(firstEmail.mx.factsources);
+    expect(firstEmailAgain.metadata?.factsources).toBe(firstEmail.metadata?.factsources);
+    expect(firstEmail.metadata?.factsources?.[0]).not.toBe(secondEmail.metadata?.factsources?.[0]);
+    expect(firstEmail.metadata?.factsources?.[0]?.coercionId).not.toBe(
+      secondEmail.metadata?.factsources?.[0]?.coercionId
+    );
+  });
 });

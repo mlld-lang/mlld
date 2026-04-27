@@ -3,7 +3,11 @@ import {
   type NodeFunctionExecutable
 } from '@core/types/executable';
 import { MlldInterpreterError, MlldSecurityError } from '@core/errors';
-import type { RecordDefinition, RecordFieldDefinition, RecordFieldProjectionMetadata, RecordObjectProjectionMetadata } from '@core/types/record';
+import type { RecordDefinition, RecordFieldDefinition, RecordFieldProjectionMetadata } from '@core/types/record';
+import {
+  buildRecordFieldProjectionMetadata,
+  buildRecordObjectProjectionMetadata
+} from '@core/types/record';
 import type {
   NormalizedShelfScope,
   SerializedShelfDefinition,
@@ -43,7 +47,7 @@ import {
 import { boundary } from '@interpreter/utils/boundary';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import type { DataAliasedValue, DataValue } from '@core/types/var';
-import { isHandleWrapper } from '@core/types/handle';
+import { internFactSourceArray, isHandleWrapper } from '@core/types/handle';
 import type { RuntimeTraceScope } from '@core/types/trace';
 import { traceRecordCoerce, traceRecordSchemaFail } from '@interpreter/tracing/events';
 import {
@@ -126,37 +130,6 @@ function buildSlotSourceDescriptor(shelfName: string, slotName: string): Securit
   return makeSecurityDescriptor({
     taint: [buildSlotSourceLabel(shelfName, slotName)]
   });
-}
-
-function buildRecordObjectProjectionMetadata(definition: RecordDefinition): RecordObjectProjectionMetadata {
-  return {
-    kind: 'record',
-    recordName: definition.name,
-    display: definition.display,
-    fields: Object.fromEntries(
-      definition.fields.map(field => [
-        field.name,
-        {
-          classification: field.classification,
-          ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
-        }
-      ])
-    )
-  };
-}
-
-function buildRecordFieldProjectionMetadata(
-  definition: RecordDefinition,
-  field: RecordFieldDefinition
-): RecordFieldProjectionMetadata {
-  return {
-    kind: 'field',
-    recordName: definition.name,
-    fieldName: field.name,
-    classification: field.classification,
-    ...(field.dataTrust ? { dataTrust: field.dataTrust } : {}),
-    display: definition.display
-  };
 }
 
 function setNamespaceMetadata(
@@ -590,7 +563,7 @@ async function validateShelfRecordValue(options: {
       value: options.env.summarizeTraceValue(coerced.value)
     }));
 
-    const projection = buildRecordFieldProjectionMetadata(options.definition, field);
+    const projection = buildRecordFieldProjectionMetadata(options.definition, field, { includeDataTrust: true });
     const fieldDescriptor = stripKnownDescriptor(
       mergeDescriptors(
         extractSecurityDescriptor(rawFieldValue, {
@@ -633,14 +606,14 @@ async function validateShelfRecordValue(options: {
     namespaceMetadata[field.name] = {
       ...(fieldDescriptor ? { security: serializeSecurityDescriptor(fieldDescriptor) } : {}),
       ...(Array.isArray(normalizedFieldValue.metadata?.factsources)
-        ? { factsources: [...normalizedFieldValue.metadata.factsources] }
+        ? { factsources: internFactSourceArray(normalizedFieldValue.metadata.factsources) }
         : {}),
       projection
     };
   }
 
   const root = wrapStructured(shaped, 'object', undefined, {
-    projection: buildRecordObjectProjectionMetadata(options.definition)
+    projection: buildRecordObjectProjectionMetadata(options.definition, { includeDataTrust: true })
   });
   const rootDescriptor = stripKnownDescriptor(
     mergeDescriptors(
