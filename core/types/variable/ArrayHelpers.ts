@@ -1,11 +1,13 @@
 import type { DataLabel } from '../security';
+import { normalizeSecurityDescriptor } from '../security';
 import type {
   ArrayVariable,
   Variable,
-  VariableContextSnapshot
+  VariableContextSnapshot,
+  VariableTypeDiscriminator
 } from './VariableTypes';
 import { VariableMetadataUtils } from './VariableMetadata';
-import { materializeExpressionValue } from '../provenance/ExpressionProvenance';
+import { getExpressionProvenance } from '../provenance/ExpressionProvenance';
 
 type QuantifierType = 'any' | 'all' | 'none';
 const QUANTIFIER_EVALUATOR = '__mlldQuantifierEvaluator';
@@ -38,6 +40,7 @@ export interface QuantifierHelper {
 export interface ArrayAggregateSnapshot {
   readonly contexts: VariableContextSnapshot[];
   readonly texts: readonly string[];
+  readonly textValues: QuantifierTextValues;
   readonly labels: readonly DataLabel[];
   readonly taint: readonly DataLabel[];
   readonly attestations: readonly DataLabel[];
@@ -45,6 +48,12 @@ export interface ArrayAggregateSnapshot {
   readonly tokens: readonly number[];
   totalTokens(): number;
   maxTokens(): number;
+}
+
+export interface QuantifierTextValues {
+  some(predicate: (text: string) => boolean): boolean;
+  every(predicate: (text: string) => boolean): boolean;
+  toArray(): readonly string[];
 }
 
 export interface GuardInputHelper {
@@ -67,9 +76,14 @@ export interface ArrayAggregateOptions {
   nameHint?: string;
 }
 
+interface ArrayAggregateEntry {
+  readonly context: VariableContextSnapshot;
+  readonly textValue: unknown;
+}
+
 export function createGuardInputHelper(inputs: readonly Variable[]): GuardInputHelper {
   const aggregate = buildArrayAggregate(inputs, { nameHint: '__guard_input__' });
-  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.texts);
+  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.textValues);
   return {
     raw: inputs,
     mx: {
@@ -102,7 +116,7 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   const aggregate = buildArrayAggregate(arrayValues, {
     nameHint: variable.name ?? '__array_helper__'
   });
-  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.texts);
+  const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.textValues);
 
   const helperTargets: unknown[] = [variable];
   if (Array.isArray(arrayValues) && Object.isExtensible(arrayValues)) {
@@ -151,16 +165,11 @@ export function buildArrayAggregate(
   options?: ArrayAggregateOptions
 ): ArrayAggregateSnapshot {
   const nameHint = options?.nameHint ?? '__array_helper__';
-  const variables = values
-    .map(value => {
-      if (isVariableLike(value)) {
-        return value as Variable;
-      }
-      return materializeExpressionValue(value, { name: nameHint });
-    })
-    .filter((value): value is Variable => Boolean(value));
-  const contexts = variables.map(ensureContext);
-  const texts = Object.freeze(variables.map(variable => formatQuantifierText(variable.value)));
+  const entries = values
+    .map(value => createArrayAggregateEntry(value, nameHint))
+    .filter((value): value is ArrayAggregateEntry => Boolean(value));
+  const contexts = entries.map(entry => entry.context);
+  const textValues = createLazyQuantifierTexts(entries.map(entry => entry.textValue));
   const tokenValues = contexts.map(mx => mx.tokens ?? mx.tokest ?? 0);
   const tokens = Object.freeze(tokenValues.slice()) as readonly number[];
   const labels = freezeArray(
@@ -181,9 +190,12 @@ export function buildArrayAggregate(
   const maxTokens = (): number =>
     tokenValues.reduce((max, value) => Math.max(max, value || 0), 0);
 
-  return {
+  const aggregate = {
     contexts,
-    texts,
+    get texts(): readonly string[] {
+      return textValues.toArray();
+    },
+    textValues,
     labels,
     taint,
     attestations,
@@ -192,11 +204,13 @@ export function buildArrayAggregate(
     totalTokens,
     maxTokens
   };
+
+  return aggregate;
 }
 
 function createQuantifierHelpers(
   contexts: VariableContextSnapshot[],
-  texts: readonly string[]
+  texts: QuantifierTextValues
 ): {
   any: QuantifierHelper;
   all: QuantifierHelper;
@@ -323,6 +337,97 @@ function createQuantifierHelper(
       tokens: tokensHelper
     },
     text: textHelper
+  };
+}
+
+function createArrayAggregateEntry(value: unknown, nameHint: string): ArrayAggregateEntry | undefined {
+  if (isVariableLike(value)) {
+    const variable = value as Variable;
+    return {
+      context: ensureContext(variable),
+      textValue: variable.value
+    };
+  }
+
+  const descriptor = normalizeSecurityDescriptor(getExpressionProvenance(value));
+  if (!descriptor) {
+    return undefined;
+  }
+
+  return {
+    context: {
+      name: nameHint,
+      type: inferContextType(value),
+      labels: descriptor.labels,
+      taint: descriptor.taint.length > 0 ? descriptor.taint : descriptor.labels,
+      attestations: descriptor.attestations,
+      sources: descriptor.sources,
+      urls: descriptor.urls,
+      tools: descriptor.tools,
+      policy: descriptor.policyContext ?? null
+    },
+    textValue: value
+  };
+}
+
+function inferContextType(value: unknown): VariableTypeDiscriminator {
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (value && typeof value === 'object') {
+    return 'object';
+  }
+  if (
+    typeof value === 'number'
+    || typeof value === 'boolean'
+    || typeof value === 'bigint'
+    || value === null
+  ) {
+    return 'primitive';
+  }
+  return 'simple-text';
+}
+
+function createLazyQuantifierTexts(values: readonly unknown[]): QuantifierTextValues {
+  const cache = new Array<string>(values.length);
+  const computed = new Uint8Array(values.length);
+  let snapshot: readonly string[] | undefined;
+
+  const at = (index: number): string => {
+    if (!computed[index]) {
+      cache[index] = formatQuantifierText(values[index]);
+      computed[index] = 1;
+    }
+    return cache[index];
+  };
+
+  return {
+    some(predicate: (text: string) => boolean): boolean {
+      for (let index = 0; index < values.length; index += 1) {
+        if (predicate(at(index))) {
+          return true;
+        }
+      }
+      return false;
+    },
+    every(predicate: (text: string) => boolean): boolean {
+      for (let index = 0; index < values.length; index += 1) {
+        if (!predicate(at(index))) {
+          return false;
+        }
+      }
+      return true;
+    },
+    toArray(): readonly string[] {
+      if (snapshot) {
+        return snapshot;
+      }
+      for (let index = 0; index < values.length; index += 1) {
+        at(index);
+      }
+      snapshot = Object.freeze(cache.slice());
+      return snapshot;
+    }
   };
 }
 

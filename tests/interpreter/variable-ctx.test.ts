@@ -9,12 +9,14 @@ import {
   createPipelineInputVariable,
   createSimpleTextVariable,
   createArrayVariable,
+  createObjectVariable,
   createStructuredValueVariable
 } from '@core/types/variable';
 import { VariableMetadataUtils } from '@core/types/variable/VariableMetadata';
 import { buildPipelineStructuredValue } from '@interpreter/utils/pipeline-input';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { createGuardInputHelper } from '@core/types/variable/ArrayHelpers';
+import { setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { wrapStructured } from '@interpreter/utils/structured-value';
 
 function createEnv(): Environment {
@@ -139,5 +141,73 @@ describe('guard input helper', () => {
     const textDescriptor = Object.getOwnPropertyDescriptor(structured, 'text');
     expect(textDescriptor).toBeDefined();
     expect(textDescriptor && 'get' in textDescriptor ? typeof textDescriptor.get : 'value').toBe('function');
+  });
+
+  it('defers object stringification for guard text quantifiers until text is queried', () => {
+    const source = VariableMetadataUtils.createSource('object', false, false);
+    let stringifyCount = 0;
+    const payload = {
+      toJSON() {
+        stringifyCount += 1;
+        return { marker: 'needle' };
+      }
+    };
+    const variable = createObjectVariable(
+      'payload',
+      payload,
+      false,
+      source
+    );
+
+    const helper = createGuardInputHelper([variable]);
+
+    expect(stringifyCount).toBe(0);
+    expect(helper.any.mx.labels.includes('missing')).toBe(false);
+    expect(stringifyCount).toBe(0);
+    expect(helper.any.text.includes('needle')).toBe(true);
+    expect(stringifyCount).toBe(1);
+  });
+});
+
+describe('array helper quantifier text projection', () => {
+  it('defers object stringification until text quantifiers are evaluated', () => {
+    const source = VariableMetadataUtils.createSource('array', false, false);
+    let stringifyCount = 0;
+    const payload = {
+      toJSON() {
+        stringifyCount += 1;
+        return { marker: 'needle' };
+      }
+    };
+
+    const itemVariable = createObjectVariable('item', payload, false, source);
+    const variable = createArrayVariable('items', [itemVariable], false, source);
+
+    expect(stringifyCount).toBe(0);
+    expect((variable as any).any.mx.labels.includes('missing')).toBe(false);
+    expect(stringifyCount).toBe(0);
+    expect((variable as any).any.text.includes('needle')).toBe(true);
+    expect(stringifyCount).toBe(1);
+  });
+
+  it('keeps provenance-only raw elements metadata-aware without eager text materialization', () => {
+    const source = VariableMetadataUtils.createSource('array', false, false);
+    let stringifyCount = 0;
+    const payload = {
+      toJSON() {
+        stringifyCount += 1;
+        return { marker: 'needle' };
+      }
+    };
+    setExpressionProvenance(payload, makeSecurityDescriptor({ labels: ['resolve:r'] }));
+
+    const variable = createArrayVariable('items', [payload], false, source);
+
+    expect(variable.mx?.labels).toEqual(['resolve:r']);
+    expect(stringifyCount).toBe(0);
+    expect((variable as any).any.mx.labels.includes('resolve:r')).toBe(true);
+    expect(stringifyCount).toBe(0);
+    expect((variable as any).any.text.includes('needle')).toBe(true);
+    expect(stringifyCount).toBe(1);
   });
 });
