@@ -296,6 +296,7 @@ type ExecutableDispatchArgNormalizationOptions = {
   preserveStructuredArgs?: boolean;
   disableNamedObjectSpread?: boolean;
   allowPartialNamedObjectSpread?: boolean;
+  usePreviewArgStrings?: boolean;
   bind?: Record<string, unknown>;
   evaluatedArgs: readonly unknown[];
   materializedArgs?: readonly unknown[];
@@ -395,6 +396,15 @@ function isVariable(value: unknown): value is Variable {
     'name' in value &&
     'value' in value &&
     'source' in value
+  );
+}
+
+function isReservedSessionMethodVariable(variable: Variable | undefined): boolean {
+  return Boolean(
+    variable?.type === 'executable' &&
+      variable.internal?.isReserved === true &&
+      variable.internal?.isSystem === true &&
+      variable.internal?.sessionDefinition
   );
 }
 
@@ -642,6 +652,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
   preserveStructuredArgs?: boolean;
   disableNamedObjectSpread?: boolean;
   allowPartialNamedObjectSpread?: boolean;
+  usePreviewArgStrings?: boolean;
   evaluatedArgs: readonly unknown[];
   originalVariables: readonly (Variable | undefined)[];
   guardVariableCandidates: readonly (Variable | undefined)[];
@@ -655,6 +666,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     preserveStructuredArgs,
     disableNamedObjectSpread,
     allowPartialNamedObjectSpread,
+    usePreviewArgStrings,
     evaluatedArgs,
     originalVariables,
     guardVariableCandidates,
@@ -676,6 +688,7 @@ async function normalizePlainObjectExecutableDispatchArguments(options: {
     preserveStructuredArgs,
     disableNamedObjectSpread,
     allowPartialNamedObjectSpread,
+    usePreviewArgStrings,
     evaluatedArgs: materializedArgs,
     materializedArgs,
     originalVariables,
@@ -713,8 +726,12 @@ async function normalizeExecutableDispatchArguments(
     argSourceNames,
     preserveStructuredArgs,
     disableNamedObjectSpread,
-    allowPartialNamedObjectSpread
+    allowPartialNamedObjectSpread,
+    usePreviewArgStrings
   } = options;
+  const stringifyNormalizedArg = usePreviewArgStrings
+    ? previewExecGuardArg
+    : stringifyExecGuardArg;
 
   if (executableParamNames.length === 0) {
     return {
@@ -769,7 +786,7 @@ async function normalizeExecutableDispatchArguments(
       const value = objectArg[paramName];
       normalizedEntries.set(paramName, {
         value,
-        stringValue: stringifyExecGuardArg(value),
+        stringValue: stringifyNormalizedArg(value),
         sourceName: paramName
       });
     }
@@ -779,7 +796,7 @@ async function normalizeExecutableDispatchArguments(
       const paramName = visibleParamNames[index];
       normalizedEntries.set(paramName, {
         value: normalizedMaterializedArgs[index],
-        stringValue: stringifyExecGuardArg(normalizedMaterializedArgs[index]),
+        stringValue: stringifyNormalizedArg(normalizedMaterializedArgs[index]),
         originalVariable: originalVariables[index],
         guardVariableCandidate: guardVariableCandidates[index],
         expressionSourceVariable: expressionSourceVariables[index],
@@ -804,7 +821,7 @@ async function normalizeExecutableDispatchArguments(
       const value = await resolveCollectionBoundValue(bind[paramName], env, { preserveStructuredArgs });
       entry = {
         value,
-        stringValue: stringifyExecGuardArg(value),
+        stringValue: stringifyNormalizedArg(value),
         sourceName: paramName
       };
     }
@@ -4470,6 +4487,19 @@ async function evaluateExecInvocationInternal(
     execEnv.setCapturedModuleEnv(capturedModuleEnv);
   }
 
+  const traceSessionMethodDispatch = (phase: string): void => {
+    if (!isReservedSessionMethodVariable(variable) || !runtimeEnv.isRuntimeMemoryTraceEnabled()) {
+      return;
+    }
+    runtimeEnv.emitRuntimeMemoryTrace('session.method.dispatch', phase, {
+      requiredLevel: 'verbose',
+      data: {
+        method: variable.name ?? commandName,
+        commandName
+      }
+    });
+  };
+
   // Circular reference / recursion depth guard — runs AFTER argument evaluation.
   //
   // Why here and not earlier: arguments are evaluated in the caller's scope before
@@ -4590,6 +4620,7 @@ async function evaluateExecInvocationInternal(
       }
     }
   }
+  traceSessionMethodDispatch('args_scanned');
 
   if (collectionDispatchContext) {
     const collectionMetadata = resolveToolCollectionEntryMetadata(
@@ -4648,6 +4679,7 @@ async function evaluateExecInvocationInternal(
       optionalParamNames: routerOptionalParamNames,
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
+      usePreviewArgStrings: isReservedSessionMethodVariable(variable),
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -4685,6 +4717,7 @@ async function evaluateExecInvocationInternal(
         : [],
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
+      usePreviewArgStrings: isReservedSessionMethodVariable(variable),
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -4726,6 +4759,7 @@ async function evaluateExecInvocationInternal(
       preserveStructuredArgs: variable.internal?.preserveStructuredArgs === true,
       disableNamedObjectSpread: variable.internal?.disableNamedObjectSpread === true,
       allowPartialNamedObjectSpread: true,
+      usePreviewArgStrings: isReservedSessionMethodVariable(variable),
       evaluatedArgs,
       originalVariables,
       guardVariableCandidates,
@@ -4747,6 +4781,7 @@ async function evaluateExecInvocationInternal(
     );
     argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
   }
+  traceSessionMethodDispatch('args_normalized');
 
   if (boundArgs.length > 0) {
     const boundArgStrings = stringifyDispatchArgs(definition, boundArgs);
@@ -4802,6 +4837,7 @@ async function evaluateExecInvocationInternal(
     evaluatedArgs,
     evaluatedArgStrings
   });
+  traceSessionMethodDispatch('handles_resolved');
 
   const pendingGuardAction = getGuardNextAction(runtimeEnv);
   const resumePrompt = readLlmResumePromptFromGuardAction(pendingGuardAction);
@@ -5022,6 +5058,7 @@ async function evaluateExecInvocationInternal(
         .map(entry => Array.isArray(entry) && entry.length > 0 ? [...entry] : undefined)
     : undefined;
   const effectiveOperationTaintFacts = false;
+  traceSessionMethodDispatch('arg_repair_start');
   const argRepair = await repairSecurityRelevantExecArgs({
     env: runtimeEnv,
     operationName: toolOperationName ?? variable.name ?? commandName,
@@ -5054,6 +5091,7 @@ async function evaluateExecInvocationInternal(
       evaluatedArgStrings
     });
   }
+  traceSessionMethodDispatch('arg_repair_finish');
   if (inputSecurityDescriptor) {
     resultSecurityDescriptor = resultSecurityDescriptor
       ? runtimeEnv.mergeSecurityDescriptors(resultSecurityDescriptor, inputSecurityDescriptor)
@@ -5261,6 +5299,7 @@ async function evaluateExecInvocationInternal(
     });
 
     const activePolicyEnforcer = policyEnforcer ?? new PolicyEnforcer(runtimeEnv.getPolicySummary());
+    traceSessionMethodDispatch('guard_inputs_start');
     const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
       env: runtimeEnv,
       evaluatedArgs,
@@ -5274,6 +5313,7 @@ async function evaluateExecInvocationInternal(
       mcpSecurityDescriptor,
       argNames: params
     });
+    traceSessionMethodDispatch('guard_inputs_finish');
     for (const entry of guardInputsWithMapping) {
       if (entry.index >= 0 && entry.index < guardVariableCandidates.length) {
         guardVariableCandidates[entry.index] = entry.variable;
@@ -5281,11 +5321,12 @@ async function evaluateExecInvocationInternal(
     }
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
-	    const {
-	      operationContext,
-	      exeLabels,
-	      mergePolicyInputDescriptor
-	    } = await createExecOperationContextAndEnforcePolicy({
+    traceSessionMethodDispatch('op_context_start');
+    const {
+      operationContext,
+      exeLabels,
+      mergePolicyInputDescriptor
+    } = await createExecOperationContextAndEnforcePolicy({
       node,
       definition,
       commandName,
@@ -5306,20 +5347,27 @@ async function evaluateExecInvocationInternal(
         interpolateWithResultDescriptor,
         getResultSecurityDescriptor: () => resultSecurityDescriptor,
         resolveStdinInput
-	      }
-	    });
+      }
+    });
+    if (isReservedSessionMethodVariable(variable)) {
+      operationContext.metadata = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>),
+        internalSessionMethod: true
+      };
+    }
+    traceSessionMethodDispatch('op_context_finish');
 
-	    const activeExeLabels = exeLabels.length > 0
-	      ? exeLabels
-	      : Array.from(runtimeEnv.getExeLabels() ?? runtimeEnv.getEnclosingExeLabels());
-	    if (activeExeLabels.length > 0) {
-	      execEnv.setExeLabels(activeExeLabels);
-	    }
+    const activeExeLabels = exeLabels.length > 0
+      ? exeLabels
+      : Array.from(runtimeEnv.getExeLabels() ?? runtimeEnv.getEnclosingExeLabels());
+    if (activeExeLabels.length > 0) {
+      execEnv.setExeLabels(activeExeLabels);
+    }
 
-	    if (llmResumeEligible || currentLlmResumeState) {
-	      const nextMetadata: Record<string, unknown> = {
-	        ...((operationContext.metadata ?? {}) as Record<string, unknown>)
-	      };
+    if (llmResumeEligible || currentLlmResumeState) {
+      const nextMetadata: Record<string, unknown> = {
+        ...((operationContext.metadata ?? {}) as Record<string, unknown>)
+      };
       if (llmResumeEligible) {
         nextMetadata.llmResumeEligible = true;
       }
@@ -5373,38 +5421,43 @@ async function evaluateExecInvocationInternal(
 
     const invocationResult = await runtimeEnv.withOpContext(operationContext, async () => {
       return AutoUnwrapManager.executeWithPreservation(async () => {
-      const {
-        preDecision,
-        postHookInputs: nextPostHookInputs,
-        transformedGuardSet
-      } = await runExecPreGuards({
-        env: runtimeEnv,
-        node,
-        operationContext,
-        guardInputs,
-        guardInputsWithMapping,
-        guardVariableCandidates,
-        evaluatedArgs,
-        evaluatedArgStrings,
-        stringifyArg: value => stringifyDispatchArg(definition, value)
-      });
-      emitResolvedAuthorizationTrace({
-        env: runtimeEnv,
-        operationContext,
-        preDecision
-      });
-      postHookInputs = nextPostHookInputs;
-      await bindExecParameterVariables({
-        params,
-        evaluatedArgs,
-        evaluatedArgStrings,
-        originalVariables,
-        guardVariableCandidates,
-        definition,
-        execEnv,
-        transformedGuardSet,
-        createParameterMetadata
-      });
+        traceSessionMethodDispatch('pre_guards_start');
+        const {
+          preDecision,
+          postHookInputs: nextPostHookInputs,
+          transformedGuardSet
+        } = await runExecPreGuards({
+          env: runtimeEnv,
+          node,
+          operationContext,
+          guardInputs,
+          guardInputsWithMapping,
+          guardVariableCandidates,
+          evaluatedArgs,
+          evaluatedArgStrings,
+          stringifyArg: value => stringifyDispatchArg(definition, value)
+        });
+        traceSessionMethodDispatch('pre_guards_finish');
+        emitResolvedAuthorizationTrace({
+          env: runtimeEnv,
+          operationContext,
+          preDecision
+        });
+        traceSessionMethodDispatch('authorization_trace_finish');
+        postHookInputs = nextPostHookInputs;
+        traceSessionMethodDispatch('bind_params_start');
+        await bindExecParameterVariables({
+          params,
+          evaluatedArgs,
+          evaluatedArgStrings,
+          originalVariables,
+          guardVariableCandidates,
+          definition,
+          execEnv,
+          transformedGuardSet,
+          createParameterMetadata
+        });
+        traceSessionMethodDispatch('bind_params_finish');
       if (!sessionSeedApplied && sessionSeedPending) {
         const sessionAttachment = getNormalizedSessionAttachment(execEnv);
         if (sessionAttachment) {
@@ -5528,6 +5581,7 @@ async function evaluateExecInvocationInternal(
   const isCommandDefinition = isCommandExecutable(definition);
   const isCodeDefinition = isCodeExecutable(definition);
   if (!isCommandDefinition && !isCodeDefinition) {
+    traceSessionMethodDispatch('body_start');
     const nonCommandResult = await runTrackedToolBody(() =>
       executeNonCommandExecutable({
         definition,

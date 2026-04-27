@@ -786,6 +786,14 @@ export async function runExecPreGuards(options: RunExecPreGuardsOptions): Promis
     evaluatedArgStrings,
     stringifyArg = previewExecGuardArg
   } = options;
+  if (operationContext.metadata?.internalSessionMethod === true) {
+    return {
+      preDecision: { action: 'continue' },
+      postHookInputs: guardInputs,
+      transformedGuardSet: null
+    };
+  }
+
   const hookManager = env.getHookManager();
   const userHookInputs = await runUserBeforeHooks(node, guardInputs, env, operationContext);
   const preHookInputs =

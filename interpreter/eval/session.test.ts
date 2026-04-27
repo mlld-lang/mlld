@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { interpret } from '@interpreter/index';
 import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { accessFields } from '@interpreter/utils/field-access';
-import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
+import {
+  asText,
+  getRecordProjectionMetadata,
+  isStructuredValue,
+  setRecordProjectionMetadata,
+  wrapStructured
+} from '@interpreter/utils/structured-value';
 import { Environment } from '@interpreter/env/Environment';
 import {
   createGuardSessionWriteBuffer,
@@ -263,6 +269,57 @@ describe('session runtime', () => {
 
     const labels = await extractVariableValue(env.getVariable('labels')!, env);
     expect(labels).toEqual(expect.arrayContaining(['untrusted']));
+  });
+
+  it('preserves factsources and projection metadata through object-style session set', async () => {
+    const { env } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  state: object?',
+      '}'
+    ].join('\n'));
+
+    const definition = env.getSessionDefinition('planner');
+    expect(definition).toBeDefined();
+
+    const sessionId = 'structured-session-set';
+    const instance = materializeSession(definition!, env, sessionId);
+    env.setLlmToolConfig({ sessionId } as any);
+    env.attachSessionInstance(sessionId, instance);
+
+    const accessor = createSessionAccessorVariable('planner', definition!, env);
+    const setMethod = (accessor.value as Record<string, any>).set;
+    const setExecutable = setMethod?.internal?.executableDef;
+    expect(setExecutable).toBeDefined();
+
+    const factsources = Object.freeze([
+      { kind: 'record-field', ref: 'contact_1', field: 'email' } as any
+    ]);
+    const projection = {
+      kind: 'field' as const,
+      recordName: 'contact',
+      fieldName: 'email',
+      classification: 'fact' as const,
+      dataTrust: 'trusted' as const,
+      display: { kind: 'open' as const }
+    };
+    const payload = wrapStructured(
+      { email: 'ada@example.com' },
+      'object',
+      undefined,
+      { factsources }
+    );
+    setRecordProjectionMetadata(payload, projection);
+
+    await setExecutable!.fn({ state: payload }, env);
+
+    const stored = instance.getSlot('state');
+    expect(isStructuredValue(stored)).toBe(true);
+    if (!isStructuredValue(stored)) {
+      throw new Error('expected structured session state');
+    }
+    expect(stored.data).toEqual({ email: 'ada@example.com' });
+    expect(stored.mx.factsources).toEqual(factsources);
+    expect(getRecordProjectionMetadata(stored)).toEqual(projection);
   });
 
   it('strips nested session snapshots from structured values copied into session snapshots', async () => {

@@ -63,6 +63,18 @@ type PendingMutationState = {
   readonly commitWrite: () => void;
 };
 
+type SessionCloneStats = {
+  visited: number;
+  exactReuses: number;
+  seenReuses: number;
+  structuredValues: number;
+  arrays: number;
+  objects: number;
+  variables: number;
+  functions: number;
+  primitives: number;
+};
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -87,6 +99,34 @@ function cloneSessionStructuredMetadata(
   }
   const { sessions: _sessions, ...rest } = metadata;
   return rest;
+}
+
+function createSessionCloneStats(): SessionCloneStats {
+  return {
+    visited: 0,
+    exactReuses: 0,
+    seenReuses: 0,
+    structuredValues: 0,
+    arrays: 0,
+    objects: 0,
+    variables: 0,
+    functions: 0,
+    primitives: 0
+  };
+}
+
+function sessionCloneStatsData(stats: SessionCloneStats): Record<string, unknown> {
+  return {
+    cloneVisited: stats.visited,
+    cloneExactReuses: stats.exactReuses,
+    cloneSeenReuses: stats.seenReuses,
+    cloneStructuredValues: stats.structuredValues,
+    cloneArrays: stats.arrays,
+    cloneObjects: stats.objects,
+    cloneVariables: stats.variables,
+    cloneFunctions: stats.functions,
+    clonePrimitives: stats.primitives
+  };
 }
 
 function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new WeakMap()): T {
@@ -156,34 +196,58 @@ function cloneSessionValue<T>(value: T, seen: WeakMap<object, unknown> = new Wea
 function cloneSessionValueWithReuse<T>(
   value: T,
   previous: unknown,
-  seen: WeakMap<object, unknown> = new WeakMap()
+  seen: WeakMap<object, unknown> = new WeakMap(),
+  stats?: SessionCloneStats
 ): T {
+  if (stats) {
+    stats.visited += 1;
+  }
+
   if (value === previous) {
+    if (stats) {
+      stats.exactReuses += 1;
+    }
     return previous as T;
   }
 
   if (value === null || value === undefined) {
+    if (stats) {
+      stats.primitives += 1;
+    }
     return value;
   }
 
   if (typeof value === 'function') {
+    if (stats) {
+      stats.functions += 1;
+    }
     return value;
   }
 
   if (isVariable(value)) {
+    if (stats) {
+      stats.variables += 1;
+    }
     return value;
   }
 
   if (isStructuredValue(value)) {
     const existing = seen.get(value as object);
     if (existing) {
+      if (stats) {
+        stats.seenReuses += 1;
+      }
       return existing as T;
+    }
+    if (stats) {
+      stats.structuredValues += 1;
     }
     const previousStructured = isStructuredValue(previous) ? previous : undefined;
     const clonedData = cloneSessionValueWithReuse(
       value.data as T,
       previousStructured?.data,
-      seen
+      seen,
+      stats
     );
     const clone = wrapStructured(
       clonedData,
@@ -202,13 +266,19 @@ function cloneSessionValueWithReuse<T>(
   if (Array.isArray(value)) {
     const existing = seen.get(value as object);
     if (existing) {
+      if (stats) {
+        stats.seenReuses += 1;
+      }
       return existing as T;
+    }
+    if (stats) {
+      stats.arrays += 1;
     }
     const previousArray = Array.isArray(previous) ? previous : undefined;
     const clone: unknown[] = [];
     seen.set(value as object, clone);
     for (let index = 0; index < value.length; index += 1) {
-      clone.push(cloneSessionValueWithReuse(value[index], previousArray?.[index], seen));
+      clone.push(cloneSessionValueWithReuse(value[index], previousArray?.[index], seen, stats));
     }
     inheritExpressionProvenance(clone, value);
     return clone as T;
@@ -217,18 +287,27 @@ function cloneSessionValueWithReuse<T>(
   if (isPlainObject(value)) {
     const existing = seen.get(value as object);
     if (existing) {
+      if (stats) {
+        stats.seenReuses += 1;
+      }
       return existing as T;
+    }
+    if (stats) {
+      stats.objects += 1;
     }
     const previousObject = isPlainObject(previous) ? previous as Record<string, unknown> : undefined;
     const clone: Record<string, unknown> = Object.create(Object.getPrototypeOf(value));
     seen.set(value as object, clone);
     for (const [key, entry] of Object.entries(value)) {
-      clone[key] = cloneSessionValueWithReuse(entry, previousObject?.[key], seen);
+      clone[key] = cloneSessionValueWithReuse(entry, previousObject?.[key], seen, stats);
     }
     inheritExpressionProvenance(clone, value);
     return clone as T;
   }
 
+  if (stats) {
+    stats.primitives += 1;
+  }
   return value;
 }
 
@@ -1058,10 +1137,44 @@ function applySlotMutation(args: {
     const previousObservedValue = hadPreviousTrace
       ? previousTraceValue
       : (hadPrevious ? previousValue : undefined);
-    args.instance.setTraceSlot(
-      args.binding.name,
-      cloneSessionValueWithReuse(args.nextValue, previousObservedValue)
+    const cloneStats = args.env.isRuntimeMemoryTraceEnabled()
+      ? createSessionCloneStats()
+      : undefined;
+    const cloneStartedAt = cloneStats ? process.hrtime.bigint() : undefined;
+    if (cloneStats) {
+      args.env.emitRuntimeMemoryTrace('session.clone', 'start', {
+        requiredLevel: 'verbose',
+        data: {
+          sessionName: args.instance.definition.canonicalName,
+          operation: args.operation,
+          path: args.path,
+          slot: args.binding.name,
+          mode: 'observed'
+        }
+      });
+    }
+    const observedClone = cloneSessionValueWithReuse(
+      args.nextValue,
+      previousObservedValue,
+      new WeakMap(),
+      cloneStats
     );
+    args.instance.setTraceSlot(args.binding.name, observedClone);
+    if (cloneStats && cloneStartedAt) {
+      const durationMs = Number(process.hrtime.bigint() - cloneStartedAt) / 1_000_000;
+      args.env.emitRuntimeMemoryTrace('session.clone', 'finish', {
+        requiredLevel: 'verbose',
+        data: {
+          sessionName: args.instance.definition.canonicalName,
+          operation: args.operation,
+          path: args.path,
+          slot: args.binding.name,
+          mode: 'observed',
+          durationMs,
+          ...sessionCloneStatsData(cloneStats)
+        }
+      });
+    }
   }
 
   stageMutation(args.env, {
@@ -1451,10 +1564,29 @@ function createSessionAccessorValue(
     name: 'set',
     fn: async (...args: unknown[]) => {
       const { executionEnv, invocationArgs } = splitBoundExecutionEnv(args, env);
+      if (executionEnv.isRuntimeMemoryTraceEnabled()) {
+        executionEnv.emitRuntimeMemoryTrace('session.set', 'start', {
+          requiredLevel: 'verbose',
+          data: {
+            sessionName: instance.definition.canonicalName,
+            argCount: invocationArgs.length
+          }
+        });
+      }
       const objectUpdates =
         invocationArgs.length === 1
           ? await getSessionObjectUpdates(invocationArgs[0], executionEnv)
           : undefined;
+      if (executionEnv.isRuntimeMemoryTraceEnabled() && invocationArgs.length === 1) {
+        executionEnv.emitRuntimeMemoryTrace('session.set.object_updates', 'finish', {
+          requiredLevel: 'verbose',
+          data: {
+            sessionName: instance.definition.canonicalName,
+            objectUpdateCount: objectUpdates ? Object.keys(objectUpdates).length : 0,
+            objectUpdateMode: objectUpdates ? 'object' : 'positional'
+          }
+        });
+      }
       const updateEntries = objectUpdates
         ? Object.entries(objectUpdates).filter((entry): entry is [string, unknown] => entry[1] !== undefined)
         : slotNames
@@ -1463,12 +1595,22 @@ function createSessionAccessorValue(
       if (updateEntries.length === 0) {
         throw createSessionError('@session.set requires at least one named slot argument.', 'INVALID_SESSION_SET');
       }
-      return setSlotValues(
+      const result = await setSlotValues(
         instance,
         Object.fromEntries(updateEntries),
         executionEnv,
         'set'
       );
+      if (executionEnv.isRuntimeMemoryTraceEnabled()) {
+        executionEnv.emitRuntimeMemoryTrace('session.set', 'finish', {
+          requiredLevel: 'verbose',
+          data: {
+            sessionName: instance.definition.canonicalName,
+            writtenCount: updateEntries.length
+          }
+        });
+      }
+      return result;
     },
     bindExecutionEnv: true,
     sourceDirective: 'exec',
