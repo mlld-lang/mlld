@@ -159,6 +159,7 @@ output-test.md
 # Error capture directory
 errors/captured/
 parseperf-results.json
+.perf-results/
 .aider*
 .crush
 .last-build

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   evaluateBudgets,
+  evaluateRegression,
   loadScenario,
   resolveScenarioConfig,
   runScenarioFile
@@ -11,6 +12,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '../..');
 const localScenarioPath = path.join(repoRoot, 'tests/performance/scenarios/local-smoke.json');
+const cliScenarioPath = path.join(repoRoot, 'tests/performance/scenarios/cli-smoke.json');
 
 describe('perf harness', () => {
   it('loads and resolves scenario manifests', () => {
@@ -47,6 +49,43 @@ describe('perf harness', () => {
       'wallMs 150.0 > 100',
       'peakRssMb 80.0 > 64',
       'metric heapUsedMb.max 20.0 > 16'
+    ]);
+  });
+
+  it('applies target defaults for named adapters', () => {
+    const { scenario, scenarioDir } = loadScenario(cliScenarioPath);
+    const config = resolveScenarioConfig(scenario, scenarioDir, 'short');
+
+    expect(config.target).toBe('cli-script');
+    expect(config.command).toBe('node');
+    expect(config.args.slice(0, 2)).toEqual([
+      'dist/cli.cjs',
+      path.join(repoRoot, 'tests/performance/fixtures/perf-cli-smoke.mld')
+    ]);
+  });
+
+  it('evaluates baseline regression failures', () => {
+    const failures = evaluateRegression({
+      wallMs: 140,
+      peakRssMb: 120,
+      metrics: {
+        avgMergeUs: { max: 20 }
+      }
+    }, {
+      wallMs: 100,
+      peakRssMb: 100,
+      metrics: {
+        avgMergeUs: { max: 10 }
+      }
+    }, {
+      wallMsPct: 25,
+      peakRssMbPct: 25,
+      metricsPct: 50
+    });
+
+    expect(failures).toEqual([
+      'wallMs 140.0 regressed > 25% from baseline 100.0',
+      'metric avgMergeUs.max 20.0 regressed > 50% from baseline 10.0'
     ]);
   });
 

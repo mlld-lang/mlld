@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile, execFileSync, spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -73,7 +73,10 @@ export function resolveScenarioConfig(scenario, scenarioDir, mode = 'short') {
   };
 
   merged.cwd = expandPath(merged.cwd || '{repoRoot}', scenarioDir);
-  merged.args = merged.args || [];
+  merged.entry = expandPath(merged.entry || '', merged.cwd);
+  applyTargetDefaults(merged);
+  merged.command = expandCommand(merged.command, scenarioDir);
+  merged.args = (merged.args || []).map(arg => expandArg(arg, scenarioDir));
   merged.collect = merged.collect || ['wall'];
   merged.timeoutMs = Number(merged.timeoutMs || 0);
   merged.sampleIntervalMs = Number(merged.sampleIntervalMs || 250);
@@ -86,6 +89,57 @@ export function resolveScenarioConfig(scenario, scenarioDir, mode = 'short') {
   }
 
   return merged;
+}
+
+function applyTargetDefaults(config) {
+  if (config.command) return;
+
+  if (config.target === 'cli-script') {
+    if (!config.entry) {
+      throw new Error(`Scenario ${config.name} target cli-script requires entry or command`);
+    }
+    config.command = 'node';
+    config.args = ['dist/cli.cjs', config.entry, '--stdout', '--no-progress', ...(config.args || [])];
+    return;
+  }
+
+  if (config.target === 'sdk-script') {
+    if (!config.entry) {
+      throw new Error(`Scenario ${config.name} target sdk-script requires entry or command`);
+    }
+    config.command = 'node';
+    config.args = [config.entry, ...(config.args || [])];
+    return;
+  }
+
+  if (config.target === 'module') {
+    if (!config.entry) {
+      throw new Error(`Scenario ${config.name} target module requires entry or command`);
+    }
+    config.command = 'npx';
+    config.args = ['tsx', config.entry, ...(config.args || [])];
+    return;
+  }
+
+  if (config.target === 'fixture-replay') {
+    throw new Error(`Scenario ${config.name} target fixture-replay requires command until native fixture replay is implemented`);
+  }
+}
+
+function expandCommand(command, baseDir) {
+  if (!command) return command;
+  if (command.includes('/') || command.startsWith('~') || command.includes('{repoRoot}')) {
+    return expandPath(command, baseDir);
+  }
+  return command;
+}
+
+function expandArg(arg, baseDir) {
+  if (typeof arg !== 'string') return arg;
+  if (arg.startsWith('~/') || arg === '~' || arg.includes('{repoRoot}')) {
+    return expandPath(arg, baseDir);
+  }
+  return arg;
 }
 
 export function evaluateBudgets(result, budgets = {}) {
@@ -123,6 +177,35 @@ export function evaluateBudgets(result, budgets = {}) {
   return failures;
 }
 
+export function evaluateRegression(result, baseline, regression = {}) {
+  if (!baseline) return [];
+
+  const failures = [];
+  const wallMsPct = Number(regression.wallMsPct ?? regression.maxWallMsPct ?? 0);
+  const peakRssMbPct = Number(regression.peakRssMbPct ?? regression.maxPeakRssMbPct ?? 0);
+  const metricsPct = Number(regression.metricsPct ?? regression.maxMetricsPct ?? 0);
+
+  if (wallMsPct > 0 && Number.isFinite(baseline.wallMs) && result.wallMs > baseline.wallMs * (1 + wallMsPct / 100)) {
+    failures.push(`wallMs ${result.wallMs.toFixed(1)} regressed > ${wallMsPct}% from baseline ${baseline.wallMs.toFixed(1)}`);
+  }
+
+  if (peakRssMbPct > 0 && Number.isFinite(baseline.peakRssMb) && Number.isFinite(result.peakRssMb) && result.peakRssMb > baseline.peakRssMb * (1 + peakRssMbPct / 100)) {
+    failures.push(`peakRssMb ${result.peakRssMb.toFixed(1)} regressed > ${peakRssMbPct}% from baseline ${baseline.peakRssMb.toFixed(1)}`);
+  }
+
+  if (metricsPct > 0) {
+    for (const [name, metric] of Object.entries(result.metrics || {})) {
+      const baselineMetric = baseline.metrics?.[name];
+      if (!baselineMetric || !Number.isFinite(metric.max) || !Number.isFinite(baselineMetric.max)) continue;
+      if (metric.max > baselineMetric.max * (1 + metricsPct / 100)) {
+        failures.push(`metric ${name}.max ${metric.max.toFixed(1)} regressed > ${metricsPct}% from baseline ${baselineMetric.max.toFixed(1)}`);
+      }
+    }
+  }
+
+  return failures;
+}
+
 export async function runScenarioFile(scenarioPath, options = {}) {
   const { scenario, scenarioDir } = loadScenario(scenarioPath);
   return runScenario(scenario, scenarioDir, options);
@@ -144,6 +227,8 @@ async function runProcessTarget(config, options = {}) {
     await runPreRunStep(step, config);
   }
 
+  const artifactDir = prepareArtifactDir(config, options);
+  const env = buildChildEnv(config, artifactDir);
   const startedAt = performance.now();
   const stdoutLines = [];
   const stderrLines = [];
@@ -153,7 +238,7 @@ async function runProcessTarget(config, options = {}) {
 
   const child = spawn(config.command, config.args, {
     cwd: config.cwd,
-    env: { ...process.env, ...config.env },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32'
   });
@@ -234,6 +319,8 @@ async function runProcessTarget(config, options = {}) {
     peakRssMb,
     rssSamples,
     metrics,
+    artifactDir,
+    artifacts: collectArtifactPaths(config, artifactDir),
     exitCode: exit.exitCode ?? null,
     signal: exit.signal ?? null,
     timedOut,
@@ -243,10 +330,74 @@ async function runProcessTarget(config, options = {}) {
   };
 
   const budgetFailures = evaluateBudgets(result, config.budgets);
+  const regressionFailures = evaluateRegression(result, options.baseline, config.regression);
   result.budgetFailures = budgetFailures;
-  result.status = exit.error || timedOut || budgetFailures.length > 0 ? 'fail' : 'pass';
+  result.regressionFailures = regressionFailures;
+  result.status = exit.error || timedOut || budgetFailures.length > 0 || regressionFailures.length > 0 ? 'fail' : 'pass';
 
   return result;
+}
+
+function prepareArtifactDir(config, options) {
+  if (options.artifactDir === false) return null;
+  const needsArtifacts = config.collect.some(name => ['trace', 'trace-memory', 'cpu', 'heap'].includes(name));
+  const configured = options.artifactDir || config.artifactDir;
+  if (!needsArtifacts && !configured) return null;
+
+  const timestamp = new Date().toISOString().replaceAll(':', '').replace(/\.\d+Z$/, 'Z');
+  const template = configured || '.perf-results/{name}-{mode}-{timestamp}';
+  const artifactDir = expandPath(
+    template
+      .replaceAll('{name}', config.name)
+      .replaceAll('{mode}', config.mode)
+      .replaceAll('{timestamp}', timestamp),
+    config.cwd
+  );
+  mkdirSync(artifactDir, { recursive: true });
+  return artifactDir;
+}
+
+function buildChildEnv(config, artifactDir) {
+  const env = { ...process.env, ...config.env };
+  const nodeOptions = [];
+
+  if (env.NODE_OPTIONS) {
+    nodeOptions.push(env.NODE_OPTIONS);
+  }
+
+  if (artifactDir && config.collect.includes('trace')) {
+    env.MLLD_TRACE = env.MLLD_TRACE || 'verbose';
+    env.MLLD_TRACE_FILE = env.MLLD_TRACE_FILE || path.join(artifactDir, 'runtime-trace.jsonl');
+  }
+
+  if (artifactDir && config.collect.includes('trace-memory')) {
+    env.MLLD_TRACE = env.MLLD_TRACE || 'verbose';
+    env.MLLD_TRACE_MEMORY = env.MLLD_TRACE_MEMORY || '1';
+    env.MLLD_TRACE_FILE = env.MLLD_TRACE_FILE || path.join(artifactDir, 'runtime-trace.jsonl');
+  }
+
+  if (artifactDir && config.collect.includes('cpu')) {
+    nodeOptions.push(`--cpu-prof-dir=${artifactDir}`, '--cpu-prof');
+  }
+
+  if (artifactDir && config.collect.includes('heap')) {
+    nodeOptions.push(`--diagnostic-dir=${artifactDir}`, '--heapsnapshot-near-heap-limit=1');
+  }
+
+  if (nodeOptions.length > 0) {
+    env.NODE_OPTIONS = nodeOptions.join(' ');
+  }
+
+  return env;
+}
+
+function collectArtifactPaths(config, artifactDir) {
+  if (!artifactDir) return {};
+  const artifacts = { dir: artifactDir };
+  if (config.collect.includes('trace') || config.collect.includes('trace-memory')) {
+    artifacts.traceFile = path.join(artifactDir, 'runtime-trace.jsonl');
+  }
+  return artifacts;
 }
 
 async function runPreRunStep(step, parentConfig) {
@@ -383,6 +534,15 @@ function printHumanResult(result) {
       console.log(`    - ${failure}`);
     }
   }
+  if (result.regressionFailures.length > 0) {
+    console.log('  regression failures:');
+    for (const failure of result.regressionFailures) {
+      console.log(`    - ${failure}`);
+    }
+  }
+  if (result.artifactDir) {
+    console.log(`  artifacts: ${result.artifactDir}`);
+  }
 }
 
 function parseArgs(argv) {
@@ -392,7 +552,11 @@ function parseArgs(argv) {
   const parsed = {
     scenarioPath: null,
     mode: 'short',
-    json: false
+    json: false,
+    save: false,
+    output: null,
+    baseline: null,
+    artifactDir: null
   };
 
   while (args.length > 0) {
@@ -401,6 +565,14 @@ function parseArgs(argv) {
       parsed.mode = args.shift() || parsed.mode;
     } else if (arg === '--json') {
       parsed.json = true;
+    } else if (arg === '--save') {
+      parsed.save = true;
+    } else if (arg === '--output') {
+      parsed.output = args.shift() || null;
+    } else if (arg === '--baseline') {
+      parsed.baseline = args.shift() || null;
+    } else if (arg === '--artifact-dir') {
+      parsed.artifactDir = args.shift() || null;
     } else if (!parsed.scenarioPath) {
       parsed.scenarioPath = arg;
     } else {
@@ -409,7 +581,7 @@ function parseArgs(argv) {
   }
 
   if (!parsed.scenarioPath) {
-    throw new Error('Usage: node scripts/perf-harness.mjs <scenario.json> [--mode short|full] [--json]');
+    throw new Error('Usage: node scripts/perf-harness.mjs <scenario.json> [--mode short|full] [--json] [--save] [--output result.json] [--baseline result.json] [--artifact-dir dir]');
   }
 
   return parsed;
@@ -417,13 +589,37 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const result = await runScenarioFile(args.scenarioPath, { mode: args.mode });
+  const baseline = args.baseline ? JSON.parse(readFileSync(expandPath(args.baseline, process.cwd()), 'utf8')) : null;
+  const result = await runScenarioFile(args.scenarioPath, {
+    mode: args.mode,
+    baseline,
+    artifactDir: args.artifactDir
+  });
+  const outputPath = resolveOutputPath(args, result);
+  if (outputPath) {
+    mkdirSync(path.dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, JSON.stringify(result, null, 2) + '\n');
+  }
   if (args.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     printHumanResult(result);
+    if (outputPath) {
+      console.log(`  result: ${outputPath}`);
+    }
   }
   process.exitCode = result.status === 'pass' ? 0 : 1;
+}
+
+function resolveOutputPath(args, result) {
+  if (args.output) {
+    return expandPath(args.output, process.cwd());
+  }
+  if (!args.save) {
+    return null;
+  }
+  const timestamp = new Date().toISOString().replaceAll(':', '').replace(/\.\d+Z$/, 'Z');
+  return path.join(repoRoot, '.perf-results', `${result.scenario}-${result.mode}-${timestamp}.json`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

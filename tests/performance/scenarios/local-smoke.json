@@ -20,6 +20,22 @@
           "retainedChunks": { "min": 4, "max": 4 }
         }
       }
+    },
+    "diagnostics": {
+      "command": "node",
+      "args": ["tests/performance/fixtures/perf-smoke-child.mjs"],
+      "collect": ["wall", "rss", "cpu"],
+      "timeoutMs": 5000,
+      "sampleIntervalMs": 50,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 3000,
+        "peakRssMb": 512,
+        "metrics": {
+          "heapUsedMb": { "max": 128 },
+          "retainedChunks": { "min": 4, "max": 4 }
+        }
+      }
     }
   }
 }

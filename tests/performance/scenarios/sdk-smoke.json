@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "sdk-smoke",
+  "target": "sdk-script",
+  "description": "Small SDK processMlld smoke scenario.",
+  "cwd": "{repoRoot}",
+  "entry": "tests/performance/fixtures/perf-sdk-smoke.mjs",
+  "collect": ["wall", "rss"],
+  "modes": {
+    "short": {
+      "env": {
+        "PERF_ITERATIONS": "20"
+      },
+      "timeoutMs": 5000,
+      "sampleIntervalMs": 50,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 3000,
+        "peakRssMb": 512,
+        "metrics": {
+          "avgProcessMlldMs": { "max": 100 },
+          "heapUsedMb": { "max": 128 }
+        }
+      },
+      "regression": {
+        "wallMsPct": 30,
+        "peakRssMbPct": 30,
+        "metricsPct": 30
+      }
+    }
+  }
+}

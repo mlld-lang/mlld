@@ -1,0 +1,3 @@
+/var @items = ["alpha", "beta", "gamma"]
+/var @joined = @items.join(",")
+/show `cli-smoke:@items.length:@joined`

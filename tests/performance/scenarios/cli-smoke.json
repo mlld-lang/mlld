@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "cli-smoke",
+  "target": "cli-script",
+  "description": "Tiny mlld CLI execution smoke scenario.",
+  "cwd": "{repoRoot}",
+  "entry": "tests/performance/fixtures/perf-cli-smoke.mld",
+  "collect": ["wall", "rss"],
+  "modes": {
+    "short": {
+      "timeoutMs": 5000,
+      "sampleIntervalMs": 50,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 3000,
+        "peakRssMb": 512
+      }
+    }
+  }
+}

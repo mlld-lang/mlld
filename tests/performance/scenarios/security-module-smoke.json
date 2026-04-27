@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "security-module-smoke",
+  "target": "module",
+  "description": "Small module-level security descriptor merge smoke scenario.",
+  "cwd": "{repoRoot}",
+  "entry": "tests/performance/fixtures/perf-security-module-smoke.ts",
+  "collect": ["wall", "rss"],
+  "modes": {
+    "short": {
+      "env": {
+        "PERF_ITERATIONS": "25000"
+      },
+      "timeoutMs": 10000,
+      "sampleIntervalMs": 50,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 5000,
+        "peakRssMb": 768,
+        "metrics": {
+          "avgMergeUs": { "max": 250 },
+          "mergedLabelCount": { "min": 5 }
+        }
+      },
+      "regression": {
+        "wallMsPct": 30,
+        "peakRssMbPct": 30,
+        "metricsPct": 30
+      }
+    }
+  }
+}

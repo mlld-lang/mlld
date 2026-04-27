@@ -67,6 +67,37 @@ Use short capped runs while hillclimbing. Use full harness runs only when measur
 - **Trace-memory summaries:** keep bounded. `m-15d9` owns trace summary hygiene.
 - **Perf harness:** use `npm run perf:harness -- <scenario.json> --mode short` for child-process scenarios with wall/RSS/budget output. Harness correctness tests run in the default suite; performance scenarios and benchmarks remain opt-in.
 
+## Perf Scenarios
+
+Perf scenarios live under `tests/performance/scenarios/*.json` and run in isolated child processes:
+
+```bash
+npm run perf:harness -- tests/performance/scenarios/sdk-smoke.json --mode short
+npm run perf:harness -- tests/performance/scenarios/security-module-smoke.json --mode short --save
+npm run perf:harness -- tests/performance/scenarios/c8dff-ut19-mock.json --mode full --artifact-dir /tmp/c8dff-perf
+```
+
+Scenario fields:
+
+- `name`: stable scenario id used in output and saved result filenames.
+- `target`: `process`, `cli-script`, `sdk-script`, `module`, or `fixture-replay`.
+- `cwd`: working directory. Supports `{repoRoot}` and `~`.
+- `entry`: target entrypoint. `cli-script`, `sdk-script`, and `module` infer commands from this.
+- `command` / `args`: explicit process command. Required for `process` and current `fixture-replay` scenarios.
+- `collect`: any of `wall`, `rss`, `trace`, `trace-memory`, `cpu`, `heap`. RSS samples the process tree. Trace collectors set `MLLD_TRACE*`; CPU/heap collectors set Node diagnostic options and write artifacts.
+- `modes`: named mode configs such as `short` and `full`. Mode values override root fields.
+- `budgets`: hard limits for `exitCode`, `wallMs`, `peakRssMb`, and metric `min`/`max`.
+- `regression`: optional baseline comparison thresholds: `wallMsPct`, `peakRssMbPct`, `metricsPct`.
+- `preRun`: optional command steps run before the scenario.
+
+Child processes can emit extra metrics as JSON lines:
+
+```json
+{"type":"metric","name":"avgMergeUs","value":12.4}
+```
+
+Use `--save` to write a timestamped result under `.perf-results/`, `--output result.json` to pick a path, and `--baseline result.json` to enforce the scenario's `regression` thresholds.
+
 ## Current Hot Paths
 
 - `core/types/variable/ArrayHelpers.ts`: helper attachment and quantifier projections. `m-9179` fixed eager text projection that retained huge serialized handle strings.
