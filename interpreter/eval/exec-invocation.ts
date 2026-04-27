@@ -2815,6 +2815,8 @@ function getImportedExecutableSourcePath(variable: Variable | undefined): string
   }
 }
 
+const LLM_EXEC_BOUNDARY_TRACE_EMIT_THRESHOLD_BYTES = 16 * 1024 * 1024;
+
 /**
  * Evaluate an ExecInvocation node
  * This executes a previously defined exec command with arguments and optional tail modifiers
@@ -2844,6 +2846,21 @@ async function evaluateExecInvocationInternal(
   let mcpIdleRetained = false;
   const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
   const invocationWithClause = normalizeInvocationWithClause(node);
+  const traceEnclosingLlmExecMemory = (
+    label: string,
+    phase: 'start' | 'finish',
+    data: Record<string, unknown> = {}
+  ): void => {
+    if (!env.hasExeLabel('llm')) {
+      return;
+    }
+    env.emitRuntimeMemoryTrace(`llm.exec.${label}`, phase, {
+      requiredLevel: 'verbose',
+      data,
+      emitThresholdBytes: LLM_EXEC_BOUNDARY_TRACE_EMIT_THRESHOLD_BYTES
+    });
+  };
+  traceEnclosingLlmExecMemory('entry', 'start');
 
   const normalizeFields = (fields?: Array<{ type: string; value: any }>) =>
     (fields || []).map(field => {
@@ -3170,15 +3187,18 @@ async function evaluateExecInvocationInternal(
   if (!commandName) {
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
+  traceEnclosingLlmExecMemory('command_ref', 'finish');
 
   // Collect metadata needed for the circular-reference / recursion-depth guard.
   // The guard itself runs AFTER argument evaluation (see below) so that legitimate
   // nested calls like @f(@f(x)) are not incorrectly blocked — arguments are
   // evaluated in the caller's scope before the callee's body begins executing.
   const isBuiltinCommand = isBuiltinMethod(commandName);
+  traceEnclosingLlmExecMemory('resolve_lookup', 'start');
   const existingVar = env.hasVariable(commandName)
     ? (env.getVariable(commandName) as any)
     : null;
+  traceEnclosingLlmExecMemory('resolve_lookup', 'finish');
   let isReservedName = existingVar?.internal?.isReserved;
   // exe recursive @fn(...) — the 'recursive' label opts in to bounded self-calls
   let isRecursiveExe = Array.isArray(existingVar?.mx?.labels)
@@ -3197,6 +3217,9 @@ async function evaluateExecInvocationInternal(
   let collectionDispatchContext: CollectionDispatchContext | undefined;
   let objectMethodExecutableDispatch = false;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
+  traceEnclosingLlmExecMemory('resolve_dispatch', 'start', {
+    hasObjectRef: Boolean(commandRefWithObject.objectReference || commandRefWithObject.objectSource)
+  });
   if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     let namespaceMethodPreferred = false;
     if (commandRefWithObject.objectReference) {
@@ -3528,6 +3551,7 @@ async function evaluateExecInvocationInternal(
     
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
+      traceEnclosingLlmExecMemory('resolve_rehydrate', 'start');
       // Deserialize shadow environments if needed
       const rawInternal =
         (variable.internal as Record<string, unknown> | undefined) ??
@@ -3592,6 +3616,7 @@ async function evaluateExecInvocationInternal(
           }
         }
       );
+      traceEnclosingLlmExecMemory('resolve_rehydrate', 'finish');
     }
   } else {
     // Regular command lookup
@@ -3632,6 +3657,7 @@ async function evaluateExecInvocationInternal(
       }
     }
   }
+  traceEnclosingLlmExecMemory('resolve_dispatch', 'finish');
 
   if (
     variable &&
@@ -3647,6 +3673,7 @@ async function evaluateExecInvocationInternal(
   }
 
   if (typeof variable === 'object' && variable !== null && '__executable' in variable && (variable as any).__executable) {
+    traceEnclosingLlmExecMemory('resolve_rehydrate', 'start');
     const rawInternal =
       ((variable as any).internal as Record<string, unknown> | undefined) ??
       {};
@@ -3706,6 +3733,7 @@ async function evaluateExecInvocationInternal(
         }
       }
     );
+    traceEnclosingLlmExecMemory('resolve_rehydrate', 'finish');
   }
 
   // Ensure it's an executable variable

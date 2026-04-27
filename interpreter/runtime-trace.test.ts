@@ -119,6 +119,23 @@ describe('runtime trace', () => {
     expect(env.getRuntimeTraceEvents().map((event: any) => event.data.label)).toEqual(['two', 'three']);
   });
 
+  it('can observe memory samples for summaries without retaining below-threshold events', () => {
+    const env = createEnvironment();
+    env.setRuntimeTrace('verbose', { memory: true });
+
+    env.emitRuntimeMemoryTrace('kept', 'sample');
+    env.emitRuntimeMemoryTrace('observed', 'sample', {
+      emitThresholdBytes: Number.MAX_SAFE_INTEGER
+    });
+    env.emitRuntimeMemoryTrace('run', 'finish');
+
+    const events = env.getRuntimeTraceEvents();
+    expect(events.some((event: any) => event.data?.label === 'observed')).toBe(false);
+    const summary = events.find((event: any) => event.event === 'memory.summary') as any;
+    expect(summary?.data?.sampleCount).toBe(3);
+    expect(summary?.data?.finalSample?.label).toBe('run');
+  });
+
   it('collects runtime trace events end-to-end when tracing is enabled', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();

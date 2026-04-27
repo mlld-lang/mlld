@@ -54,9 +54,9 @@ describe('evaluateExecInvocation runtime trace', () => {
       traceMemory: true
     }) as any;
 
-    const labels = result.traceEvents
+    const memoryEvents = result.traceEvents
       .filter((event: any) => event.category === 'memory')
-      .map((event: any) => event.data?.label);
+    const labels = memoryEvents.map((event: any) => event.data?.label);
 
     expect(labels).toEqual(expect.arrayContaining([
       'llm.exec.resolve',
@@ -79,6 +79,9 @@ describe('evaluateExecInvocation runtime trace', () => {
       'llm.exec.result_normalize',
       'llm.exec.finalize'
     ]));
+
+    const summary = result.traceEvents.find((event: any) => event.event === 'memory.summary') as any;
+    expect(summary?.data?.sampleCount).toBeGreaterThan(memoryEvents.length);
   });
 
   it('adds frame nesting to nested llm call trace scopes', async () => {

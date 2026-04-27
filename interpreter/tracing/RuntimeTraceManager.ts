@@ -201,6 +201,7 @@ export class RuntimeTraceManager {
       requiredLevel?: RuntimeTraceEmissionLevel;
       event?: 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure';
       data?: Record<string, unknown>;
+      emitThresholdBytes?: number;
     },
     scope: RuntimeTraceScope
   ): RuntimeTraceEvent | undefined {
@@ -215,9 +216,23 @@ export class RuntimeTraceManager {
     const previous = this.root.lastMemorySample;
     const event = args.event ?? (previous ? 'memory.delta' : 'memory.sample');
     const requiredLevel = args.requiredLevel ?? (event === 'memory.gc' ? 'verbose' : 'effects');
+    const deltaScore = previous
+      ? Math.max(
+          usage.rss - previous.usage.rss,
+          usage.heapUsed - previous.usage.heapUsed,
+          usage.heapTotal - previous.usage.heapTotal,
+          0
+        )
+      : Number.POSITIVE_INFINITY;
+    const meetsEmitThreshold =
+      args.emitThresholdBytes === undefined ||
+      deltaScore >= args.emitThresholdBytes;
     const shouldEmit =
-      this.shouldEmitTrace(requiredLevel, 'memory') ||
-      requiredLevel === 'effects';
+      meetsEmitThreshold &&
+      (
+        this.shouldEmitTrace(requiredLevel, 'memory') ||
+        requiredLevel === 'effects'
+      );
     const data = {
       label: args.label,
       ...(args.phase ? { phase: args.phase } : {}),
@@ -259,7 +274,7 @@ export class RuntimeTraceManager {
         )
       : undefined;
 
-    if (payload) {
+    if (payload || args.emitThresholdBytes !== undefined) {
       this.root.lastMemorySample = {
         label: args.label,
         usage

@@ -4357,6 +4357,7 @@ export class Environment
       event?: 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure';
       data?: Record<string, unknown>;
       scope?: Partial<RuntimeTraceScope>;
+      emitThresholdBytes?: number;
     } = {}
   ): void {
     const payload = this.runtimeTraceManager.emitMemoryTrace(
@@ -4365,7 +4366,8 @@ export class Environment
         ...(phase ? { phase } : {}),
         ...(options.requiredLevel ? { requiredLevel: options.requiredLevel } : {}),
         ...(options.event ? { event: options.event } : {}),
-        ...(options.data ? { data: options.data } : {})
+        ...(options.data ? { data: options.data } : {}),
+        ...(options.emitThresholdBytes !== undefined ? { emitThresholdBytes: options.emitThresholdBytes } : {})
       },
       this.buildRuntimeTraceScope(options.scope)
     );
