@@ -71,6 +71,7 @@
     "test:heredoc": "vitest run --config vitest.config.heredoc.mts",
     "test:nvim-lsp": "node scripts/test-nvim-lsp.mjs",
     "perf": "node scripts/measure-performance.js",
+    "perf:harness": "node scripts/perf-harness.mjs",
     "tokens": "npm test tokens",
     "validate:tokens": "tsx scripts/validate-tokens.mjs",
     "validate:tokens:strict": "tsx scripts/validate-tokens.mjs --mode=strict",

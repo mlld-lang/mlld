@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "local-smoke",
+  "target": "process",
+  "description": "Tiny deterministic harness self-test. Exercises child-process execution, metric parsing, RSS sampling, and budget checks.",
+  "cwd": "{repoRoot}",
+  "collect": ["wall", "rss"],
+  "modes": {
+    "short": {
+      "command": "node",
+      "args": ["tests/performance/fixtures/perf-smoke-child.mjs"],
+      "timeoutMs": 5000,
+      "sampleIntervalMs": 50,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 3000,
+        "peakRssMb": 512,
+        "metrics": {
+          "heapUsedMb": { "max": 128 },
+          "retainedChunks": { "min": 4, "max": 4 }
+        }
+      }
+    }
+  }
+}

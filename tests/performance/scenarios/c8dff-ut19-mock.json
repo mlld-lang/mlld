@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "c8dff-ut19-mock",
+  "target": "fixture-replay",
+  "description": "External clean-repo deterministic UT19/c-8dff mock-agent replay. Run npm run build in ~/mlld/mlld before using this scenario against local runtime changes.",
+  "cwd": "~/mlld/clean",
+  "command": "uv",
+  "args": ["run", "--project", "bench", "python3", "scripts/repro_c63fe_mem.py"],
+  "collect": ["wall", "rss"],
+  "env": {
+    "MLLD_HEAP": "12g"
+  },
+  "modes": {
+    "short": {
+      "env": {
+        "MOCK_TIMEOUT_S": "180"
+      },
+      "timeoutMs": 210000,
+      "sampleIntervalMs": 1000,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 180000,
+        "peakRssMb": 2500
+      }
+    },
+    "full": {
+      "env": {
+        "MOCK_TIMEOUT_S": "300"
+      },
+      "timeoutMs": 360000,
+      "sampleIntervalMs": 1000,
+      "budgets": {
+        "exitCode": 0,
+        "wallMs": 300000,
+        "peakRssMb": 2500
+      }
+    }
+  }
+}

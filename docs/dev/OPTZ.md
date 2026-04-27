@@ -40,6 +40,13 @@ cd ~/mlld/clean
 MLLD_HEAP=12g MOCK_TIMEOUT_S=240 uv run --project bench python3 scripts/repro_c63fe_mem.py
 ```
 
+Or run it through the local perf harness:
+
+```bash
+cd ~/mlld/mlld
+npm run perf:harness -- tests/performance/scenarios/c8dff-ut19-mock.json --mode short
+```
+
 The harness files are:
 
 - `~/mlld/clean/rig/test-harness/mock-opencode.mld`
@@ -50,7 +57,7 @@ The harness files are:
 
 The mock must be declared as `exe llm`. That is what makes `with { session: @planner }` enter the session path. A plain `exe` mock does not reproduce the hot path.
 
-Use short capped runs while hillclimbing. Use full harness runs only when measuring proof of improvement. The native mlld version of this harness is tracked by `m-5203`.
+Use short capped runs while hillclimbing. Use full harness runs only when measuring proof of improvement. The native mlld version of this harness is tracked by `m-5203`; perf gate wiring is tracked by `m-9485`.
 
 ## Instruments
 
@@ -58,6 +65,7 @@ Use short capped runs while hillclimbing. Use full harness runs only when measur
 - **Heap snapshot:** use for retained memory. Signal-triggered heap snapshots are more useful than heap profiles when the process may not exit cleanly.
 - **Runtime trace:** use for phase attribution and thresholds. `m-9712` showed that broad labels like `llm.exec.resolve` can hide caller-side projection and helper churn.
 - **Trace-memory summaries:** keep bounded. `m-15d9` owns trace summary hygiene.
+- **Perf harness:** use `npm run perf:harness -- <scenario.json> --mode short` for child-process scenarios with wall/RSS/budget output. Fast harness smoke tests run in the default suite; long/noisy benchmarks remain opt-in.
 
 ## Current Hot Paths
 
@@ -69,6 +77,7 @@ Use short capped runs while hillclimbing. Use full harness runs only when measur
 ## Ticket Map
 
 - `m-5203` - `OPTZ:INFRA: Bring deterministic c-8dff-style optimization harness into mlld`
+- `m-9485` - `OPTZ:INFRA: Add memory and speed performance gates`
 - `m-8f1a` - `OPTZ:SPEED: Profile post-fix c-8dff wall-time bottlenecks`
 - `m-79a7` - `OPTZ:SPEED: Cache eager URL extraction for immutable values`
 - `m-77e3` - `OPTZ:SPEED: Explore immutable security descriptor merge cache`
