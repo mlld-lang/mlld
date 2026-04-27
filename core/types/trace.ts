@@ -440,6 +440,10 @@ export interface RuntimeTraceEventSpecMap {
       errorCode?: number;
       durationMs: number;
       responseBytes?: number;
+      contentTextKind?: 'missing' | 'empty' | 'literal_null' | 'json_object' | 'json_array' | 'json_string' | 'json_number' | 'json_boolean' | 'json_null' | 'non_json';
+      contentTextBytes?: number;
+      contentTextHash?: string;
+      contentTextPreview?: string;
       clientClosed: boolean;
     }>;
   };

@@ -445,6 +445,52 @@ describe('createFunctionMcpBridge', () => {
       });
       expect(callFinish.data.durationMs).toEqual(expect.any(Number));
       expect(callFinish.data.responseBytes).toEqual(expect.any(Number));
+      expect(callFinish.data.contentTextKind).toBe('empty');
+      expect(callFinish.data.contentTextBytes).toBe(0);
+      expect(callFinish.data.contentTextHash).toEqual(expect.any(String));
+      expect(callFinish.data.contentTextPreview).toBe('');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('classifies literal null tool response text in runtime traces', async () => {
+    const env = await createInterpretedEnv('/exe @nullText() = js { return "null"; }');
+    env.setRuntimeTrace('verbose');
+    const functionTool = env.getVariable('nullText') as ExecutableVariable;
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]]),
+      sessionId: 'trace-null-text'
+    });
+
+    try {
+      await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: mcpName,
+          arguments: {}
+        }
+      });
+
+      const finish = env.getRuntimeTraceEvents().find((event: any) =>
+        event.event === 'mcp.response' && event.data.tool === mcpName
+      );
+      expect(finish).toBeDefined();
+      if (!finish) {
+        throw new Error('Missing mcp.response trace event');
+      }
+      expect(finish.data).toMatchObject({
+        ok: true,
+        contentTextKind: 'literal_null',
+        contentTextBytes: 4,
+        contentTextPreview: 'null'
+      });
+      expect(finish.data.contentTextHash).toEqual(expect.any(String));
     } finally {
       await bridge.cleanup();
       env.cleanup();

@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Environment } from '@interpreter/env/Environment';
 import type {
   AvailableToolDescriptor,
@@ -663,6 +663,7 @@ class FunctionMcpBridgeServer {
     }
     const responseText = response ? `${JSON.stringify(response)}\n` : undefined;
     const outcome = describeMcpResponse(response, thrownError);
+    const contentTrace = describeMcpResponseContent(response);
     this.toolEnv.emitRuntimeTraceEvent(traceMcpResponse({
       bridge: 'function',
       sessionId: this.sessionId,
@@ -676,6 +677,7 @@ class FunctionMcpBridgeServer {
       ...(outcome.errorCode !== undefined ? { errorCode: outcome.errorCode } : {}),
       durationMs: Math.max(0, Date.now() - context.startedAt),
       ...(responseText !== undefined ? { responseBytes: Buffer.byteLength(responseText, 'utf8') } : {}),
+      ...contentTrace,
       clientClosed: isSocketClosed(socket)
     }));
   }
@@ -766,6 +768,64 @@ function firstTextContent(result: Record<string, unknown>): string | undefined {
   }
   const text = (first as Record<string, unknown>).text;
   return typeof text === 'string' ? text : undefined;
+}
+
+function describeMcpResponseContent(response: JsonRpcResponse | null): {
+  contentTextKind?: 'missing' | 'empty' | 'literal_null' | 'json_object' | 'json_array' | 'json_string' | 'json_number' | 'json_boolean' | 'json_null' | 'non_json';
+  contentTextBytes?: number;
+  contentTextHash?: string;
+  contentTextPreview?: string;
+} {
+  if (!response || response.error) {
+    return {};
+  }
+  const result = response.result as Record<string, unknown> | undefined;
+  if (!result || typeof result !== 'object') {
+    return {};
+  }
+  const text = firstTextContent(result);
+  if (text === undefined) {
+    return { contentTextKind: 'missing' };
+  }
+
+  const trimmed = text.trim();
+  const contentTextBytes = Buffer.byteLength(text, 'utf8');
+  const contentTextHash = createHash('sha256').update(text).digest('hex').slice(0, 16);
+  const base = {
+    contentTextBytes,
+    contentTextHash
+  };
+
+  if (text.length === 0) {
+    return { ...base, contentTextKind: 'empty', contentTextPreview: '' };
+  }
+  if (trimmed === 'null') {
+    return { ...base, contentTextKind: 'literal_null', contentTextPreview: trimmed };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed === null) {
+      return { ...base, contentTextKind: 'json_null', contentTextPreview: trimmed.slice(0, 160) };
+    }
+    if (Array.isArray(parsed)) {
+      return { ...base, contentTextKind: 'json_array' };
+    }
+    switch (typeof parsed) {
+      case 'object':
+        return { ...base, contentTextKind: 'json_object' };
+      case 'string':
+        return { ...base, contentTextKind: 'json_string' };
+      case 'number':
+        return { ...base, contentTextKind: 'json_number' };
+      case 'boolean':
+        return { ...base, contentTextKind: 'json_boolean' };
+      default:
+        return { ...base, contentTextKind: 'non_json', contentTextPreview: trimmed.slice(0, 160) };
+    }
+  } catch {
+    return { ...base, contentTextKind: 'non_json', contentTextPreview: trimmed.slice(0, 160) };
+  }
 }
 
 function safeJsonByteLength(value: unknown): number | undefined {
