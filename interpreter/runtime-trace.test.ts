@@ -8,6 +8,7 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { asText, isStructuredValue, wrapStructured } from '@interpreter/utils/structured-value';
 import { buildSessionWriteTraceEnvelope } from '@interpreter/session/trace-envelope';
+import { estimateRuntimeTraceValueBytes } from '@interpreter/tracing/RuntimeTraceValue';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { fileURLToPath } from 'url';
 
@@ -49,6 +50,22 @@ describe('runtime trace', () => {
         })
       ])
     );
+    expect(result.traceEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'memory',
+          event: 'memory.summary',
+          level: 'effects',
+          data: expect.objectContaining({
+            sampleCount: expect.any(Number),
+            peakRss: expect.any(Object),
+            peakHeapUsed: expect.any(Object),
+            topDeltas: expect.any(Array),
+            topLabels: expect.any(Array)
+          })
+        })
+      ])
+    );
   });
 
   it('does not enable non-memory effects when only traceMemory is requested', async () => {
@@ -77,6 +94,17 @@ describe('runtime trace', () => {
 
     expect(result.traceEvents.some((event: any) => event.category === 'memory')).toBe(true);
     expect(result.traceEvents.some((event: any) => event.event === 'session.write')).toBe(false);
+    expect(result.traceEvents.some((event: any) =>
+      event.category === 'memory' &&
+      event.data?.label === 'session.write'
+    )).toBe(false);
+    const memorySummary = result.traceEvents.find((event: any) => event.event === 'memory.summary') as any;
+    expect(memorySummary?.data?.sessionWrites).toMatchObject({
+      count: expect.any(Number),
+      totalValueBytes: expect.any(Number),
+      maxValueBytes: expect.any(Number)
+    });
+    expect(memorySummary.data.sessionWrites.count).toBeGreaterThan(0);
   });
 
   it('bounds retained runtime trace events when a retain limit is configured', () => {
@@ -312,6 +340,22 @@ describe('runtime trace', () => {
     expect(stringified).toBe(false);
   });
 
+  it('estimates runtime trace value sizes without materializing toJSON payloads', () => {
+    let stringified = false;
+    const payload = {
+      value: 'x'.repeat(1_000_000),
+      toJSON() {
+        stringified = true;
+        return { value: this.value };
+      }
+    };
+
+    const bytes = estimateRuntimeTraceValueBytes(payload);
+
+    expect(bytes).toBeGreaterThan(1_000_000);
+    expect(stringified).toBe(false);
+  });
+
   it('emits session.seed events for seeded slots before the first callback', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
@@ -359,7 +403,7 @@ describe('runtime trace', () => {
     );
   });
 
-  it('shows full session values at verbose trace level', async () => {
+  it('keeps session trace payloads bounded at verbose trace level', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
     const source = [
@@ -386,18 +430,13 @@ describe('runtime trace', () => {
 
     const writeEvent = result.traceEvents.find((event: any) => event.event === 'session.write');
     const finalEvent = result.traceEvents.find((event: any) => event.event === 'session.final');
-    const unwrapTraceValue = (value: any) =>
-      isStructuredValue(value)
-        ? asText(value)
-        : value && typeof value === 'object' && 'data' in value
-          ? value.data
-          : value;
-
     const verboseWriteValue = writeEvent?.data?.value;
     const verboseFinalValue = finalEvent?.data?.finalState?.note;
 
-    expect(unwrapTraceValue(verboseWriteValue)).toBe('sk-live-123');
-    expect(unwrapTraceValue(verboseFinalValue)).toBe('sk-live-123');
+    expect(verboseWriteValue).toMatch(/^<labels=\[secret\] size=\d+>$/);
+    expect(verboseFinalValue).toMatch(/^<labels=\[secret\] size=\d+>$/);
+    const finalNote = result.sessions[0]?.finalState?.note;
+    expect(isStructuredValue(finalNote) ? asText(finalNote) : finalNote).toBe('sk-live-123');
   });
 
   it('applies defaults.unlabeled redaction to session traces at effects level', async () => {

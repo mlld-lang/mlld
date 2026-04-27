@@ -259,7 +259,7 @@ export function traceMcpProgress(
   });
 }
 
-export function traceMemoryEvent<K extends 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure'>(
+export function traceMemoryEvent<K extends 'memory.sample' | 'memory.delta' | 'memory.gc' | 'memory.pressure' | 'memory.summary'>(
   level: RuntimeTraceEventSpecMap[K]['level'],
   event: K,
   data: RuntimeTraceEventSpecMap[K]['data']

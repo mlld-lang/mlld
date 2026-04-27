@@ -36,6 +36,10 @@ import {
   buildSessionWriteSdkPayload,
   buildSessionWriteTraceEnvelope
 } from './trace-envelope';
+import {
+  estimateRuntimeTraceValueBytes,
+  formatRuntimeTraceSize
+} from '@interpreter/tracing/RuntimeTraceValue';
 
 const SESSION_VARIABLE_SOURCE: VariableSource = {
   directive: 'var',
@@ -982,7 +986,8 @@ function recordCommittedSessionWrite(args: {
     data: {
       sessionName: args.instance.definition.canonicalName,
       operation: args.operation,
-      path: args.path
+      path: args.path,
+      ...buildSessionWriteMemoryTraceData(args.env, args.previousValue, args.nextValue)
     }
   });
   if (args.env.hasSDKEmitter()) {
@@ -1000,6 +1005,25 @@ function recordCommittedSessionWrite(args: {
       timestamp: Date.now()
     });
   }
+}
+
+function buildSessionWriteMemoryTraceData(
+  env: Environment,
+  previousValue: unknown,
+  nextValue: unknown
+): Record<string, unknown> {
+  if (!env.isRuntimeMemoryTraceEnabled()) {
+    return {};
+  }
+
+  const previousBytes = estimateRuntimeTraceValueBytes(previousValue) ?? 0;
+  const valueBytes = estimateRuntimeTraceValueBytes(nextValue) ?? 0;
+  return {
+    previousBytes,
+    previousHuman: formatRuntimeTraceSize(previousBytes),
+    valueBytes,
+    valueHuman: formatRuntimeTraceSize(valueBytes)
+  };
 }
 
 function applySlotMutation(args: {

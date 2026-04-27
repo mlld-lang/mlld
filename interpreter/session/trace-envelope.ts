@@ -187,6 +187,10 @@ function redactForObserver(value: unknown, env: Environment, verbose: boolean): 
   return formatSizedValueWithSize(size, sensitiveLabels);
 }
 
+function sessionTraceValue(value: unknown, env: Environment): unknown {
+  return redactForObserver(value, env, false);
+}
+
 export function buildSessionSeedTraceEnvelope(args: {
   env: Environment;
   frameId: string;
@@ -194,7 +198,6 @@ export function buildSessionSeedTraceEnvelope(args: {
   path: string;
   nextValue: unknown;
 }): RuntimeTraceEnvelope<'session.seed'> {
-  const verbose = args.env.getRuntimeTraceLevel() === 'verbose';
   return traceSessionSeed({
     frameId: args.frameId,
     sessionName: args.definition.canonicalName,
@@ -202,7 +205,7 @@ export function buildSessionSeedTraceEnvelope(args: {
     originPath: args.definition.originPath,
     path: args.path,
     operation: 'seed',
-    ...(args.nextValue !== undefined ? { value: redactForObserver(args.nextValue, args.env, verbose) } : {})
+    ...(args.nextValue !== undefined ? { value: sessionTraceValue(args.nextValue, args.env) } : {})
   });
 }
 
@@ -215,7 +218,6 @@ export function buildSessionWriteTraceEnvelope(args: {
   previousValue: unknown;
   nextValue: unknown;
 }): RuntimeTraceEnvelope<'session.write'> {
-  const verbose = args.env.getRuntimeTraceLevel() === 'verbose';
   return traceSessionWrite({
     frameId: args.frameId,
     sessionName: args.definition.canonicalName,
@@ -223,8 +225,8 @@ export function buildSessionWriteTraceEnvelope(args: {
     originPath: args.definition.originPath,
     path: args.path,
     operation: args.operation,
-    ...(args.previousValue !== undefined ? { previous: redactForObserver(args.previousValue, args.env, verbose) } : {}),
-    ...(args.nextValue !== undefined ? { value: redactForObserver(args.nextValue, args.env, verbose) } : {})
+    ...(args.previousValue !== undefined ? { previous: sessionTraceValue(args.previousValue, args.env) } : {}),
+    ...(args.nextValue !== undefined ? { value: sessionTraceValue(args.nextValue, args.env) } : {})
   });
 }
 
@@ -234,12 +236,9 @@ export function buildSessionFinalTraceEnvelope(args: {
   definition: SessionDefinition;
   finalState: Record<string, unknown>;
 }): RuntimeTraceEnvelope<'session.final'> {
-  const verbose = args.env.getRuntimeTraceLevel() === 'verbose';
-  const finalState = verbose
-    ? args.finalState
-    : Object.fromEntries(
-        Object.entries(args.finalState).map(([key, value]) => [key, redactForObserver(value, args.env, false)])
-      );
+  const finalState = Object.fromEntries(
+    Object.entries(args.finalState).map(([key, value]) => [key, sessionTraceValue(value, args.env)])
+  );
 
   return traceSessionFinal({
     frameId: args.frameId,

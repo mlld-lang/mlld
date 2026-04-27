@@ -48,7 +48,7 @@ var @result = @claude(@task, { tools: @writeTools }) with { trace: "effects" }
 | `off` | Nothing (default) |
 | `effects` | Session seed/write/final events, shelf writes/clears, guard decisions, policy builds, auth checks, record schema failures, stale-read detection |
 | `handle` / `handles` | Only handle lifecycle events (`handle.issued`, `handle.resolved`, `handle.resolve_failed`, `handle.released`) |
-| `verbose` | Everything in `effects` plus shelf reads, handle lifecycle events, display projections, LLM calls, tool calls, record coercions, and unredacted session values |
+| `verbose` | Everything in `effects` plus shelf reads, handle lifecycle events, display projections, LLM calls, tool calls, and record coercions |
 
 Start with `effects` for debugging. Use `handle` when you're isolating proof-bearing handle flow. Use `verbose` when you need the full runtime picture.
 
@@ -119,7 +119,7 @@ Session traces are commit-aware:
 - if the guard denies or discards the write, both the trace envelope and the SDK `session_write` event are dropped
 - on commit, the write and its trace emit together
 
-At `effects`, sensitive or large session values are redacted to size-oriented summaries. `verbose` keeps the real values.
+Sensitive or large session values are redacted to size-oriented summaries at both `effects` and `verbose`. This keeps trace output bounded for long tool-use sessions.
 
 This redaction only affects the trace envelope. The final committed session snapshot returned through SDK `result.sessions` and on returned `exe llm` values at `.mx.sessions.<name>` keeps the actual runtime value, including wrapper-bearing leaves and their `.mx` metadata.
 

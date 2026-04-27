@@ -62,7 +62,7 @@ const result = await execute(filePath, payload, {
 const memoryEvents = result.traceEvents.filter(event => event.category === 'memory');
 ```
 
-`traceMemory: true` adds `memory.*` events with RSS, heap, external, and ArrayBuffer samples. To correlate memory samples with non-memory runtime events, set `trace` as well. `processMlld()` accepts the same trace options, but since it returns only text output, use `traceFile` to persist trace events:
+`traceMemory: true` adds `memory.*` events with RSS, heap, external, and ArrayBuffer samples, plus a final `memory.summary` event with peak usage and top positive deltas. To correlate memory samples with non-memory runtime events, set `trace` as well. `processMlld()` accepts the same trace options, but since it returns only text output, use `traceFile` to persist trace events:
 
 ```typescript
 await processMlld(script, {

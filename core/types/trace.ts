@@ -91,6 +91,7 @@ export type RuntimeTraceEventName =
   | 'memory.delta'
   | 'memory.gc'
   | 'memory.pressure'
+  | 'memory.summary'
   | 'record.coerce'
   | 'record.schema_fail'
   | 'proof.lifted';
@@ -139,6 +140,20 @@ type RuntimeMemoryTraceRecord = TraceRecord<{
   gcAvailable?: boolean;
   detail?: string;
   pressure?: string;
+}>;
+
+type RuntimeMemorySummaryRecord = TraceRecord<{
+  sampleCount: number;
+  majorJumpBytes: number;
+  topDeltaLimit: number;
+  firstSample?: unknown;
+  finalSample?: unknown;
+  peakRss?: unknown;
+  peakHeapUsed?: unknown;
+  firstMajorJump?: unknown;
+  topDeltas: unknown[];
+  topLabels: unknown[];
+  sessionWrites?: unknown;
 }>;
 
 export interface RuntimeTraceEventSpecMap {
@@ -462,6 +477,11 @@ export interface RuntimeTraceEventSpecMap {
     category: 'memory';
     level: 'effects';
     data: RuntimeMemoryTraceRecord;
+  };
+  'memory.summary': {
+    category: 'memory';
+    level: 'effects';
+    data: RuntimeMemorySummaryRecord;
   };
   'record.coerce': {
     category: 'record';

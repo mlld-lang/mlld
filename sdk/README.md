@@ -90,7 +90,7 @@ All SDKs expose request-scoped runtime trace options for `process` and `execute`
 - `traceFile` / `trace_file`
 - `traceStderr` / `trace_stderr`
 
-Memory tracing emits `memory.*` events with RSS, heap, external, and ArrayBuffer samples. Use a trace file to persist JSONL traces for post-run analysis.
+Memory tracing emits `memory.*` events with RSS, heap, external, and ArrayBuffer samples, ending with a `memory.summary` event for peak usage and top positive deltas. Use a trace file to persist JSONL traces for post-run analysis.
 
 Wrapper SDKs also expose client-scoped heap startup options for the persistent `mlld live --stdio` subprocess. Heap must be configured before the subprocess starts; JS/TS callers run in the host Node process and should use Node heap flags or `NODE_OPTIONS`.
 

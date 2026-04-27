@@ -2,9 +2,22 @@
 
 ## Overview
 
-Reduce travel/c-63fe memory pressure by tightening mlld's existing runtime lazy-value discipline without changing security, record, policy, session, MCP, or JS interop semantics. This version intentionally scopes active work to Phases 0-3 only: characterization, lazy structured clone behavior, immutable security descriptor interning, and factsource/projection metadata interning.
+Runtime lazy-value memory hygiene for mlld structured values, without changing security, record, policy, session, MCP, or JS interop semantics. This document intentionally scopes itself to Phases 0-3 only: characterization, lazy structured clone behavior, immutable security descriptor interning, and factsource/projection metadata interning.
 
-Deferred work is explicitly out of scope for this plan: lazy public `mx` contexts, copy-on-write session snapshots, and plain prompt projections. Sessions appear here only as preservation tests, because Phase 0-3 changes must not break session read/write behavior.
+Deferred work is explicitly out of scope for this plan: lazy public `mx` contexts, copy-on-write session snapshots, session-write retention, and plain prompt projections. Sessions appear here only as preservation tests, because Phase 0-3 changes must not break session read/write behavior.
+
+## Current Status: 2026-04-27
+
+Phases 0-3 have landed as runtime cleanup, but they did not materially reduce the remaining travel/c-63fe memory pressure. Treat this plan as the structured-value hygiene track, not the active c-63fe rig fix plan.
+
+Current work is split:
+
+- clean:c-63fe tracks rig throughput, timeout cascades, and the next deterministic reproduction of the travel hot path. The rig indexed-bucket/planner-cache/resolve-delta experiments are preserved in `mem-experiments/c-63fe-rig-memory` and should be judged by clean-side evidence.
+- mlld:m-0710 tracks outer opencode-to-mlld MCP timeout/cascade behavior, bridge lifecycle, cancellation, and instrumentation. It is not the primary retained-memory ticket.
+- mlld:m-7316 is the next focused mlld retained-memory target: summarize `sessionWrites` instead of retaining full cloned slot payloads. Related follow-ups are m-4193 for completed session instances and m-c902 for `traceValues`.
+- mlld:m-15d9 tracks the missing memory-summary instrumentation layer on top of raw `--trace-memory`.
+
+Do not continue descriptor/factsource interning as the next memory lever without new evidence. The next useful instrumentation should attribute session write sizes, clone counts, and first major RSS jumps rather than producing only dense per-event `--trace-memory` output.
 
 ## Critical Evaluation Of The Prior Draft
 
@@ -489,7 +502,8 @@ These are intentionally not part of Phases 0-3:
 
 - Lazy or compact public `mx` contexts.
 - Copy-on-write session snapshots.
+- Session write/snapshot/debugTrace retention (`m-7316`, `m-4193`, `m-c902`; historical context in `m-1841`, `m-2241`, `m-1446`).
 - Boundary-specific plain prompt projections.
 - Rig-side source filtering or prompt composition changes.
 
-Reassess after Phase 3 using the harness and the targeted travel/c-63fe repro. Only start the deferred work if the remaining memory spike is still dominated by `mx` construction, session snapshot cloning, or prompt payload shape.
+Reassess deferred runtime work using a targeted repro and memory summary that identifies retained payload classes. Do not use the old travel/c-63fe failure as evidence for more descriptor interning unless instrumentation shows `mx` construction or proof metadata is again the dominant retained graph.

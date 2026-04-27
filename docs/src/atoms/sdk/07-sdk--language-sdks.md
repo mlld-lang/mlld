@@ -61,7 +61,7 @@ Naming follows each language's conventions. JS/TS and Go use `traceMemory` / `Tr
 
 ## Runtime Tracing and Heap
 
-Memory tracing is request-scoped. It emits `memory.sample` and `memory.delta` trace events with RSS, heap, external, and ArrayBuffer measurements:
+Memory tracing is request-scoped. It emits `memory.sample`, `memory.delta`, and a final `memory.summary` trace event with RSS, heap, external, ArrayBuffer, peak, and top-delta measurements:
 
 ```python
 result = client.execute(
