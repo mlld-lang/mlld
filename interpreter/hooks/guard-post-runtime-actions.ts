@@ -13,7 +13,10 @@ import { evaluate } from '../core/interpreter';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluateCondition } from '../eval/when';
 import { extractVariableValue, isVariable } from '../utils/variable-resolution';
-import { combineValues } from '../utils/value-combine';
+import {
+  combineValues,
+  createCombinedAssignmentVariable
+} from '../utils/value-combine';
 import { materializeGuardTransform } from '../utils/guard-transform';
 import {
   applyGuardLabelModifications,
@@ -103,13 +106,11 @@ export async function evaluatePostGuardBlock(
       const existingValue = await extractVariableValue(existing, currentEnv);
       const combined = combineValues(existingValue, rhsValue, entry.identifier);
 
-      const importer = new VariableImporter();
-      const updatedVar = importer.createVariableFromValue(
+      const updatedVar = createCombinedAssignmentVariable(
         entry.identifier,
         combined,
-        'let',
-        undefined,
-        { env: currentEnv }
+        existing,
+        currentEnv
       );
       currentEnv.updateVariable(entry.identifier, updatedVar);
       continue;

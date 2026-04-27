@@ -116,6 +116,103 @@ describe('exe block return structured metadata', () => {
     expect(readVariableData(env, 'schemaCode')).toBe('required');
   });
 
+  it('preserves structured metadata when array augmented assignment appends proof-bearing entries', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/var @schema = @contact',
+      '/exe @viaConcat(ctx, entry) = [',
+      '  let @entries = @ctx.entries',
+      '  let @entries = @entries.concat([@entry])',
+      '  => { entries: @entries }',
+      ']',
+      '/exe @viaAugmented(ctx, entry) = [',
+      '  let @entries = @ctx.entries',
+      '  let @entries += [@entry]',
+      '  => { entries: @entries }',
+      ']',
+      '/var @entry = { email: "ada@example.com", name: "Ada" } as record @schema',
+      '/var @bucketEntry = { identity_value: @entry, field_values: { email: @entry.email }, value: { email: @entry.email } }',
+      '/var @ctx = { entries: [] }',
+      '/var @concat = @viaConcat(@ctx, @bucketEntry)',
+      '/var @augmented = @viaAugmented(@ctx, @bucketEntry)',
+      '/var @concatIdentityLabel = @concat.entries[0].identity_value.email.mx.labels[0]',
+      '/var @augmentedIdentityLabel = @augmented.entries[0].identity_value.email.mx.labels[0]',
+      '/var @concatFieldSource = @concat.entries[0].field_values.email.mx.factsources[0].ref',
+      '/var @augmentedFieldSource = @augmented.entries[0].field_values.email.mx.factsources[0].ref',
+      '/var @concatValueSource = @concat.entries[0].value.email.mx.factsources[0].ref',
+      '/var @augmentedValueSource = @augmented.entries[0].value.email.mx.factsources[0].ref',
+      '/var @concatSchemaValid = @concat.entries[0].identity_value.mx.schema.valid',
+      '/var @augmentedSchemaValid = @augmented.entries[0].identity_value.mx.schema.valid'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'concatIdentityLabel')).toBe('fact:@contact.email');
+    expect(readVariableData(env, 'augmentedIdentityLabel')).toBe('fact:@contact.email');
+    expect(readVariableData(env, 'concatFieldSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'augmentedFieldSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'concatValueSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'augmentedValueSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'concatSchemaValid')).toBe(true);
+    expect(readVariableData(env, 'augmentedSchemaValid')).toBe(true);
+  });
+
+  it('preserves structured metadata when loop accumulators append proof-bearing entries', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/var @schema = @contact',
+      '/exe @loopConcat(first, second) = loop(3) [',
+      '  let @ctx = when [',
+      '    @input.kind == "append" => @input',
+      '    * => { kind: "append", index: 0, entries: [] }',
+      '  ]',
+      '  if @ctx.index >= 2 [ done @ctx.entries ]',
+      '  let @entry = when [',
+      '    @ctx.index == 0 => @first',
+      '    * => @second',
+      '  ]',
+      '  let @nextEntries = @ctx.entries',
+      '  let @nextEntries = @nextEntries.concat([@entry])',
+      '  continue { kind: "append", index: @ctx.index + 1, entries: @nextEntries }',
+      ']',
+      '/exe @loopAugmented(first, second) = loop(3) [',
+      '  let @ctx = when [',
+      '    @input.kind == "append" => @input',
+      '    * => { kind: "append", index: 0, entries: [] }',
+      '  ]',
+      '  if @ctx.index >= 2 [ done @ctx.entries ]',
+      '  let @entry = when [',
+      '    @ctx.index == 0 => @first',
+      '    * => @second',
+      '  ]',
+      '  let @nextEntries = @ctx.entries',
+      '  let @nextEntries += [@entry]',
+      '  continue { kind: "append", index: @ctx.index + 1, entries: @nextEntries }',
+      ']',
+      '/var @ada = { email: "ada@example.com", name: "Ada" } as record @schema',
+      '/var @lin = { email: "lin@example.com", name: "Lin" } as record @schema',
+      '/var @first = { identity_value: @ada, field_values: { email: @ada.email }, value: { email: @ada.email } }',
+      '/var @second = { identity_value: @lin, field_values: { email: @lin.email }, value: { email: @lin.email } }',
+      '/var @concat = @loopConcat(@first, @second)',
+      '/var @augmented = @loopAugmented(@first, @second)',
+      '/var @concatSecondLabel = @concat[1].identity_value.email.mx.labels[0]',
+      '/var @augmentedSecondLabel = @augmented[1].identity_value.email.mx.labels[0]',
+      '/var @concatSecondFieldSource = @concat[1].field_values.email.mx.factsources[0].ref',
+      '/var @augmentedSecondFieldSource = @augmented[1].field_values.email.mx.factsources[0].ref',
+      '/var @concatSecondValueSource = @concat[1].value.email.mx.factsources[0].ref',
+      '/var @augmentedSecondValueSource = @augmented[1].value.email.mx.factsources[0].ref',
+      '/var @concatSecondSchemaValid = @concat[1].identity_value.mx.schema.valid',
+      '/var @augmentedSecondSchemaValid = @augmented[1].identity_value.mx.schema.valid'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'concatSecondLabel')).toBe('fact:@contact.email');
+    expect(readVariableData(env, 'augmentedSecondLabel')).toBe('fact:@contact.email');
+    expect(readVariableData(env, 'concatSecondFieldSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'augmentedSecondFieldSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'concatSecondValueSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'augmentedSecondValueSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'concatSecondSchemaValid')).toBe(true);
+    expect(readVariableData(env, 'augmentedSecondSchemaValid')).toBe(true);
+  });
+
   it('preserves deep mx field access through interpolation after exe passthrough wrapping', async () => {
     const env = await evaluateSource([
       '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',

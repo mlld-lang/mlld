@@ -7,7 +7,10 @@ import type { Environment } from '../env/Environment';
 import { VariableImporter } from '../eval/import/VariableImporter';
 import { evaluateCondition } from '../eval/when';
 import { extractVariableValue } from '../utils/variable-resolution';
-import { combineValues } from '../utils/value-combine';
+import {
+  combineValues,
+  createCombinedAssignmentVariable
+} from '../utils/value-combine';
 
 function isRawPrimitiveValue(value: unknown): boolean {
   return value === null ||
@@ -81,13 +84,11 @@ export async function evaluateGuardBlock(
       const existingValue = await extractVariableValue(existing, currentEnv);
       const combined = combineValues(existingValue, rhsValue, entry.identifier);
 
-      const importer = new VariableImporter();
-      const updatedVar = importer.createVariableFromValue(
+      const updatedVar = createCombinedAssignmentVariable(
         entry.identifier,
         combined,
-        'let',
-        undefined,
-        { env: currentEnv }
+        existing,
+        currentEnv
       );
       currentEnv.updateVariable(entry.identifier, updatedVar);
       continue;

@@ -8,7 +8,10 @@ import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { evaluate, interpolate } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { isVariable, extractVariableValue } from '@interpreter/utils/variable-resolution';
-import { combineValues } from '@interpreter/utils/value-combine';
+import {
+  combineValues,
+  createCombinedAssignmentVariable
+} from '@interpreter/utils/value-combine';
 import { isExeReturnControl } from '@interpreter/eval/exe-return';
 
 function isExpressionNode(value: unknown): boolean {
@@ -328,13 +331,11 @@ export async function evaluateAugmentedAssignment(
   const combined = combineValues(existingValue, rhsValue, entry.identifier);
 
   // Update variable in local scope (use updateVariable to bypass redefinition check)
-  const importer = new VariableImporter();
-  const updatedVar = importer.createVariableFromValue(
+  const updatedVar = createCombinedAssignmentVariable(
     entry.identifier,
     combined,
-    'let',
-    undefined,
-    { env }
+    existing,
+    env
   );
 
   // Update the variable in the owning environment (current scope or ancestor)

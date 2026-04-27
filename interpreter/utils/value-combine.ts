@@ -6,8 +6,17 @@
  */
 
 import { MlldDirectiveError } from '@core/errors';
+import {
+  createArrayVariable,
+  type Variable,
+  type VariableSource
+} from '@core/types/variable';
+import type { Environment } from '@interpreter/env/Environment';
+import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { asText, asData, isStructuredValue } from './structured-value';
 import { toNumber } from '../eval/expressions';
+
+const ARRAY_APPEND_ACCUMULATOR = Symbol.for('mlld.arrayAppendAccumulator');
 
 /**
  * Check if a value is a plain object (not null, not array, not special type)
@@ -19,6 +28,74 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype
   );
+}
+
+function isVariableLike(value: unknown): value is Variable {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'name' in value &&
+    'value' in value &&
+    'source' in value
+  );
+}
+
+function hasComplexContent(value: unknown, seen = new WeakSet<object>()): boolean {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  if (isStructuredValue(value)) {
+    return true;
+  }
+
+  if (isVariableLike(value)) {
+    return false;
+  }
+
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.some(item => hasComplexContent(item, seen));
+  }
+
+  if ('type' in value) {
+    return true;
+  }
+
+  return Object.values(value).some(item => hasComplexContent(item, seen));
+}
+
+function isArrayAppendAccumulator(value: unknown): value is unknown[] {
+  return (
+    Array.isArray(value) &&
+    (value as Record<PropertyKey, unknown>)[ARRAY_APPEND_ACCUMULATOR] === true
+  );
+}
+
+function markArrayAppendAccumulator<T extends unknown[]>(value: T): T {
+  try {
+    Object.defineProperty(value, ARRAY_APPEND_ACCUMULATOR, {
+      value: true,
+      enumerable: false,
+      configurable: true
+    });
+  } catch {
+    // Frozen arrays still behave correctly; they just fall back to copy-on-write next time.
+  }
+  return value;
+}
+
+function getArrayAppendItems(source: unknown): unknown[] {
+  if (isStructuredValue(source)) {
+    const sourceData = asData(source);
+    return Array.isArray(sourceData) ? sourceData : [source];
+  }
+  return Array.isArray(source) ? source : [source];
 }
 
 /**
@@ -39,16 +116,21 @@ export function combineValues(
   source: unknown,
   targetName: string
 ): unknown {
-  // Unwrap StructuredValue if needed
+  // Array append has to preserve proof-bearing element wrappers. Only unwrap a
+  // StructuredValue source when the source itself is an array to be spread.
   const targetValue = isStructuredValue(target) ? asData(target) : target;
-  const sourceValue = isStructuredValue(source) ? asData(source) : source;
 
   // Array: concat
   if (Array.isArray(targetValue)) {
-    // If source is array, spread it; otherwise wrap as single item
-    const sourceArray = Array.isArray(sourceValue) ? sourceValue : [sourceValue];
-    return [...targetValue, ...sourceArray];
+    const destination = isArrayAppendAccumulator(targetValue)
+      ? targetValue
+      : markArrayAppendAccumulator([...targetValue]);
+    destination.push(...getArrayAppendItems(source));
+    return destination;
   }
+
+  // Unwrap StructuredValue if needed for scalar/object operators.
+  const sourceValue = isStructuredValue(source) ? asData(source) : source;
 
   // Number: add (numeric)
   if (typeof targetValue === 'number') {
@@ -86,5 +168,44 @@ export function combineValues(
     'let',
     `+= requires array, number, string, or object target. ` +
     `@${targetName} is ${typeName}.`
+  );
+}
+
+const LET_ARRAY_SOURCE: VariableSource = {
+  directive: 'var',
+  syntax: 'array',
+  hasInterpolation: false,
+  isMultiLine: false
+};
+
+export function createCombinedAssignmentVariable(
+  targetName: string,
+  combined: unknown,
+  existing: Variable,
+  env: Environment
+): Variable {
+  if (Array.isArray(combined)) {
+    return createArrayVariable(
+      targetName,
+      combined,
+      hasComplexContent(combined),
+      existing.source ?? LET_ARRAY_SOURCE,
+      {
+        mx: {
+          ...(existing.mx ?? {}),
+          importPath: existing.mx?.importPath ?? 'let'
+        },
+        internal: { ...(existing.internal ?? {}) }
+      }
+    );
+  }
+
+  const importer = new VariableImporter();
+  return importer.createVariableFromValue(
+    targetName,
+    combined,
+    'let',
+    undefined,
+    { env }
   );
 }
