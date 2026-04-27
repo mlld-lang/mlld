@@ -192,6 +192,66 @@ describe('MCP exe wrapper - parameter resolution', () => {
     expect(output).toContain('bcc=[]');
   });
 
+  it('binds input-record args by name before wrapper exe calls namespace MCP tools', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const serverSpec = `${process.execPath} ${fakeServerPath}`;
+    await fileSystem.writeFile('/bridge.mld', [
+      '/exe @asString(inputValue) = js {',
+      '  if (inputValue == null) return "";',
+      '  return String(inputValue);',
+      '}',
+      '/export { @asString }'
+    ].join('\n'));
+    await fileSystem.writeFile('/tools.mld', [
+      `/import tools from mcp "${serverSpec}" as @mcp`,
+      '/import { @asString } from "/bridge.mld"',
+      '/exe tool:w @addParts(event_id, arr_arg: array) = [',
+      '  => @mcp.typeMirror(@asString(@event_id), @arr_arg)',
+      ']',
+      '/var tools @writeTools = {',
+      '  add_parts: {',
+      '    mlld: @addParts,',
+      '    inputs: @add_parts_inputs,',
+      '    labels: ["tool:w"]',
+      '  }',
+      '}',
+      '/export { @addParts, @writeTools }'
+    ].join('\n'));
+    const source = [
+      '/record @event = { facts: [id_: string], data: [title: string] }',
+      // Keep input-record field order different from the wrapper exe parameter
+      // order; collection dispatch must bind by name before the MCP call.
+      '/record @add_parts_inputs = {',
+      '  facts: [arr_arg: array, event_id: handle],',
+      '  data: [],',
+      '  correlate: false,',
+      '  validate: "strict"',
+      '}',
+      '/import { @writeTools } from "/tools.mld"',
+      '/exe @getEvent() = { id_: "24", title: "launch" } => event',
+      '/var @event = @getEvent()',
+      '/var @args = { event_id: @event.id_, arr_arg: ["bob@test.com"] }',
+      '/var @intent = {',
+      '  known: { add_parts: { arr_arg: ["bob@test.com"] } },',
+      '  resolved: { add_parts: { event_id: @event.id_ } }',
+      '}',
+      '/var @built = @policy.build(@intent, @writeTools, { task: "Add bob@test.com to launch" })',
+      '/show @writeTools["add_parts"](@args) with { policy: @built.policy }'
+    ].join('\n');
+
+    const output = await interpret(source, {
+      fileSystem,
+      pathService,
+      pathContext,
+      format: 'markdown',
+      captureEnvironment: env => { environment = env; }
+    });
+
+    expect(output).toContain('str_arg:string="24"');
+    expect(output).toContain('arr_arg:array=["bob@test.com"]');
+    expect(output).not.toContain('str_arg:object=');
+  });
+
   // create_calendar_event through dispatch (the one the agent says works)
   it('dispatch routes create_event through imported wrapper', async () => {
     const fileSystem = new MemoryFileSystem();
