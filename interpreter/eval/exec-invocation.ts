@@ -3712,6 +3712,27 @@ async function evaluateExecInvocationInternal(
   if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
   }
+  const variableLabels = variable.mx?.labels;
+  hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
+  let isLlmResumeContinuation = false;
+  let runtimeEnv = env;
+  const traceLlmExecMemory = (
+    label: string,
+    phase: 'start' | 'finish',
+    data: Record<string, unknown> = {}
+  ): void => {
+    if (!hasLlmLabel) {
+      return;
+    }
+    runtimeEnv.emitRuntimeMemoryTrace(`llm.exec.${label}`, phase, {
+      requiredLevel: 'verbose',
+      data: {
+        resume: isLlmResumeContinuation,
+        ...data
+      }
+    });
+  };
+  traceLlmExecMemory('resolve', 'finish');
 
   if (shouldTrackResolution) {
     resolutionIdentifier = getExecutableResolutionIdentifier(variable, commandName);
@@ -4280,6 +4301,7 @@ async function evaluateExecInvocationInternal(
     return applyInvocationWithClause(resolvedValue, wrapOptions);
   }
   
+  traceLlmExecMemory('definition_setup', 'start');
   // Get the full executable definition from metadata
   let definition = variable.internal?.executableDef as ExecutableDefinition;
   if (!definition) {
@@ -4346,8 +4368,9 @@ async function evaluateExecInvocationInternal(
       whenExprNode = enclosingWhenExpr.node;
     }
   }
+  traceLlmExecMemory('definition_setup', 'finish');
 
-  let runtimeEnv = env;
+  traceLlmExecMemory('runtime_config', 'start');
   runtimeEnv = await applyInvocationScopedRuntimeConfig({
     runtimeEnv,
     env,
@@ -4355,10 +4378,9 @@ async function evaluateExecInvocationInternal(
     node,
     invocationWithClause
   });
+  traceLlmExecMemory('runtime_config', 'finish');
   let sessionSeedApplied = false;
   let sessionSeedPending = false;
-  const variableLabels = variable.mx?.labels;
-  hasLlmLabel = Array.isArray(variableLabels) && variableLabels.includes('llm');
   let attachedSessionFrameId: string | undefined;
   let attachedSessionCleanupRegistered = false;
   const llmTraceFrameId = hasLlmLabel ? randomUUID() : undefined;
@@ -4385,6 +4407,7 @@ async function evaluateExecInvocationInternal(
     runtimeEnv = frameScopedEnv;
   }
 
+  traceLlmExecMemory('session_attach', 'start');
   const preattachedSession = hasLlmLabel ? getNormalizedSessionAttachment(runtimeEnv) : undefined;
   if (preattachedSession) {
     attachedSessionFrameId = llmTraceFrameId ?? randomUUID();
@@ -4402,12 +4425,14 @@ async function evaluateExecInvocationInternal(
       throw error;
     }
   }
+  traceLlmExecMemory('session_attach', 'finish');
 
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
   let evaluatedArgStrings: string[] = [];
   let evaluatedArgs: unknown[] = [];
   try {
+    traceLlmExecMemory('args_evaluate', 'start', { argCount: args.length });
     ({ evaluatedArgStrings, evaluatedArgs } = await evaluateExecInvocationArgs({
       args,
       env: runtimeEnv,
@@ -4419,6 +4444,7 @@ async function evaluateExecInvocationInternal(
         mergeResultDescriptor
       }
     }));
+    traceLlmExecMemory('args_evaluate', 'finish', { argCount: args.length });
 
     if (collectionDispatchContext) {
       const scopedConfig = runtimeEnv.getScopedEnvironmentConfig();
@@ -4453,6 +4479,7 @@ async function evaluateExecInvocationInternal(
 
     policyEnforcer = new PolicyEnforcer(runtimeEnv.getPolicySummary());
 
+    traceLlmExecMemory('scope_setup', 'start');
     // Function-scope boundary stops findVisibleVariableOwner from walking past
     // this frame into caller/ancestor scopes. Setting it unconditionally is
     // what fixes the m-20d3/m-2f2c family of sibling-call leaks — any local
@@ -4475,6 +4502,7 @@ async function evaluateExecInvocationInternal(
       });
       attachedSessionCleanupRegistered = true;
     }
+    traceLlmExecMemory('scope_setup', 'finish');
   } catch (error) {
     if (attachedSessionFrameId && !attachedSessionCleanupRegistered) {
       runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
@@ -4483,6 +4511,7 @@ async function evaluateExecInvocationInternal(
   }
 
   // Set captured module environment for variable lookup fallback
+  traceLlmExecMemory('captured_env', 'start');
   const capturedModuleEnv = await ensureCapturedModuleEnvMap(
     variable as { internal?: Record<string, unknown> } | undefined,
     execEnv
@@ -4490,6 +4519,7 @@ async function evaluateExecInvocationInternal(
   if (capturedModuleEnv instanceof Map) {
     execEnv.setCapturedModuleEnv(capturedModuleEnv);
   }
+  traceLlmExecMemory('captured_env', 'finish');
 
   const traceSessionMethodDispatch = (phase: string): void => {
     if (!isReservedSessionMethodVariable(variable) || !runtimeEnv.isRuntimeMemoryTraceEnabled()) {
@@ -4546,6 +4576,7 @@ async function evaluateExecInvocationInternal(
   };
 
   // Track original Variables for arguments
+  traceLlmExecMemory('args_scan', 'start', { argCount: args.length });
   const originalVariables: (Variable | undefined)[] = new Array(args.length);
   const guardVariableCandidates: (Variable | undefined)[] = new Array(args.length);
   const expressionSourceVariables: (Variable | undefined)[] = new Array(args.length);
@@ -4624,8 +4655,10 @@ async function evaluateExecInvocationInternal(
       }
     }
   }
+  traceLlmExecMemory('args_scan', 'finish', { argCount: args.length });
   traceSessionMethodDispatch('args_scanned');
 
+  traceLlmExecMemory('args_normalize', 'start');
   if (collectionDispatchContext) {
     const collectionMetadata = resolveToolCollectionEntryMetadata(
       env,
@@ -4785,6 +4818,7 @@ async function evaluateExecInvocationInternal(
     );
     argSourceNames.splice(0, argSourceNames.length, ...normalizedArgs.argSourceNames);
   }
+  traceLlmExecMemory('args_normalize', 'finish');
   traceSessionMethodDispatch('args_normalized');
 
   if (boundArgs.length > 0) {
@@ -4823,6 +4857,7 @@ async function evaluateExecInvocationInternal(
   });
   const toolLabels = effectiveToolMetadata.labels;
 
+  traceLlmExecMemory('handles_resolve', 'start');
   evaluatedArgs = await Promise.all(
     evaluatedArgs.map((arg, index) =>
       shouldResolveHandlesBeforeExecutableDispatch({
@@ -4841,12 +4876,12 @@ async function evaluateExecInvocationInternal(
     evaluatedArgs,
     evaluatedArgStrings
   });
+  traceLlmExecMemory('handles_resolve', 'finish');
   traceSessionMethodDispatch('handles_resolved');
 
   const pendingGuardAction = getGuardNextAction(runtimeEnv);
   const resumePrompt = readLlmResumePromptFromGuardAction(pendingGuardAction);
   const resumeToolsOverride = readLlmResumeToolsFromGuardAction(pendingGuardAction);
-  let isLlmResumeContinuation = false;
   let llmResumeEligible = false;
   let currentLlmResumeState = readLlmResumeStateFromGuardDetails(pendingGuardAction?.details) ?? undefined;
   surfacedLlmSessionId = currentLlmResumeState?.sessionId;
@@ -4855,6 +4890,7 @@ async function evaluateExecInvocationInternal(
   let llmTraceModel: string | undefined;
   let llmTraceToolCount: number | undefined;
   let llmTraceStartedAt: number | undefined;
+  traceLlmExecMemory('prepare', 'start');
 
   if (pendingGuardAction?.decision === 'resume' && evaluatedArgs.length > 0) {
     evaluatedArgs[0] = resumePrompt ?? '';
@@ -5011,6 +5047,7 @@ async function evaluateExecInvocationInternal(
       captureLlmTraceConfig(nextConfig);
     }
   }
+  traceLlmExecMemory('prepare', 'finish');
   if (hasLlmLabel) {
     llmTraceStartedAt = Date.now();
     runtimeEnv.emitRuntimeMemoryTrace('llm.call', 'start', {
@@ -5317,6 +5354,7 @@ async function evaluateExecInvocationInternal(
 
     const activePolicyEnforcer = policyEnforcer ?? new PolicyEnforcer(runtimeEnv.getPolicySummary());
     traceSessionMethodDispatch('guard_inputs_start');
+    traceLlmExecMemory('guard_inputs', 'start');
     const { guardInputsWithMapping, guardInputs } = prepareExecGuardInputs({
       env: runtimeEnv,
       evaluatedArgs,
@@ -5330,6 +5368,7 @@ async function evaluateExecInvocationInternal(
       mcpSecurityDescriptor,
       argNames: params
     });
+    traceLlmExecMemory('guard_inputs', 'finish');
     traceSessionMethodDispatch('guard_inputs_finish');
     for (const entry of guardInputsWithMapping) {
       if (entry.index >= 0 && entry.index < guardVariableCandidates.length) {
@@ -5339,6 +5378,7 @@ async function evaluateExecInvocationInternal(
     let postHookInputs: readonly Variable[] = guardInputs;
     const execDescriptor = getVariableSecurityDescriptor(variable);
     traceSessionMethodDispatch('op_context_start');
+    traceLlmExecMemory('op_context', 'start');
     const {
       operationContext,
       exeLabels,
@@ -5366,6 +5406,7 @@ async function evaluateExecInvocationInternal(
         resolveStdinInput
       }
     });
+    traceLlmExecMemory('op_context', 'finish');
     if (isReservedSessionMethodVariable(variable)) {
       operationContext.metadata = {
         ...((operationContext.metadata ?? {}) as Record<string, unknown>),
@@ -5439,6 +5480,7 @@ async function evaluateExecInvocationInternal(
     const invocationResult = await runtimeEnv.withOpContext(operationContext, async () => {
       return AutoUnwrapManager.executeWithPreservation(async () => {
         traceSessionMethodDispatch('pre_guards_start');
+        traceLlmExecMemory('pre_guards', 'start');
         const {
           preDecision,
           postHookInputs: nextPostHookInputs,
@@ -5454,6 +5496,7 @@ async function evaluateExecInvocationInternal(
           evaluatedArgStrings,
           stringifyArg: value => stringifyDispatchArg(definition, value)
         });
+        traceLlmExecMemory('pre_guards', 'finish');
         traceSessionMethodDispatch('pre_guards_finish');
         emitResolvedAuthorizationTrace({
           env: runtimeEnv,
@@ -5463,6 +5506,7 @@ async function evaluateExecInvocationInternal(
         traceSessionMethodDispatch('authorization_trace_finish');
         postHookInputs = nextPostHookInputs;
         traceSessionMethodDispatch('bind_params_start');
+        traceLlmExecMemory('bind_params', 'start');
         await bindExecParameterVariables({
           params,
           evaluatedArgs,
@@ -5492,7 +5536,9 @@ async function evaluateExecInvocationInternal(
           sessionSeedPending = false;
         }
       }
+      traceLlmExecMemory('bind_params', 'finish');
 
+      traceLlmExecMemory('descriptors', 'start');
       // Capture descriptors from executable definition and parameters
       const descriptorPieces: SecurityDescriptor[] = [];
       const strictToolDescriptorPieces: SecurityDescriptor[] = [];
@@ -5572,6 +5618,7 @@ async function evaluateExecInvocationInternal(
       if (preGuardHandled) {
         return finalizeResult(preGuardHandled);
       }
+      traceLlmExecMemory('descriptors', 'finish');
 
       let result: unknown;
       let strictToolResult: unknown;
@@ -5594,6 +5641,7 @@ async function evaluateExecInvocationInternal(
     workspacePushed = resolvedWorkingDirectory.workspacePushed;
   }
 
+  traceLlmExecMemory('body', 'start');
   try {
   const isCommandDefinition = isCommandExecutable(definition);
   const isCodeDefinition = isCodeExecutable(definition);
@@ -5701,7 +5749,9 @@ async function evaluateExecInvocationInternal(
   } else {
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
+  traceLlmExecMemory('body', 'finish');
 
+  traceLlmExecMemory('result_normalize', 'start');
   const resumeEnvelope = tryExtractLlmResumeEnvelope(result);
   if (resumeEnvelope) {
     result = resumeEnvelope.value;
@@ -5883,6 +5933,7 @@ async function evaluateExecInvocationInternal(
       result = structured;
     }
   }
+  traceLlmExecMemory('result_normalize', 'finish');
 
   // Clean up resolution tracking after executable body completes, before pipeline/with clause processing
   // This allows pipelines to retry/re-execute the same function without false circular reference detection
@@ -5891,6 +5942,9 @@ async function evaluateExecInvocationInternal(
 
   // Apply withClause transformations if present
   if (!useStrictToolResult && invocationWithClause && !isLlmResumeContinuation) {
+    traceLlmExecMemory('with_clause', 'start', {
+      pipeline: Boolean(invocationWithClause.pipeline)
+    });
     if (invocationWithClause.pipeline) {
       // When an ExecInvocation has a pipeline, we need to create a special pipeline
       // where the ExecInvocation itself becomes stage 0, retryable
@@ -5966,15 +6020,23 @@ async function evaluateExecInvocationInternal(
         execEnv
       );
       const finalWithClauseResult = await finalizeResult(withClauseResult);
+      traceLlmExecMemory('with_clause', 'finish', {
+        pipeline: true
+      });
       return finalWithClauseResult;
     } else {
       const withClauseResult = await applyWithClause(result, invocationWithClause, execEnv);
       const finalWithClauseResult = await finalizeResult(withClauseResult);
+      traceLlmExecMemory('with_clause', 'finish', {
+        pipeline: false
+      });
       return finalWithClauseResult;
     }
   }
 
+  traceLlmExecMemory('finalize', 'start');
   const finalEvalResult = await finalizeResult(createEvalResult(result, execEnv));
+  traceLlmExecMemory('finalize', 'finish');
   return finalEvalResult;
   } finally {
     await execEnv.runScopeCleanups();

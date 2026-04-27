@@ -35,6 +35,52 @@ describe('evaluateExecInvocation runtime trace', () => {
     expect(llmCall.data.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('emits stable llm exec phase memory labels when trace memory is enabled', async () => {
+    const source = [
+      '/exe @helper(value) = @value',
+      '/exe llm @agent(prompt, config) = [',
+      '  let @value = @helper(@prompt)',
+      '  => @value',
+      ']',
+      '/show @agent("hello", { model: "phase-model" })'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem: new MemoryFileSystem(),
+      pathService: new PathService(),
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose',
+      traceMemory: true
+    }) as any;
+
+    const labels = result.traceEvents
+      .filter((event: any) => event.category === 'memory')
+      .map((event: any) => event.data?.label);
+
+    expect(labels).toEqual(expect.arrayContaining([
+      'llm.exec.resolve',
+      'llm.exec.definition_setup',
+      'llm.exec.runtime_config',
+      'llm.exec.session_attach',
+      'llm.exec.args_evaluate',
+      'llm.exec.scope_setup',
+      'llm.exec.captured_env',
+      'llm.exec.args_scan',
+      'llm.exec.args_normalize',
+      'llm.exec.handles_resolve',
+      'llm.exec.prepare',
+      'llm.exec.guard_inputs',
+      'llm.exec.op_context',
+      'llm.exec.pre_guards',
+      'llm.exec.bind_params',
+      'llm.exec.descriptors',
+      'llm.exec.body',
+      'llm.exec.result_normalize',
+      'llm.exec.finalize'
+    ]));
+  });
+
   it('adds frame nesting to nested llm call trace scopes', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
