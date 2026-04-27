@@ -70,6 +70,18 @@ function createFunctionTool(name: string, command = 'printf hello'): ExecutableV
   } as ExecutableVariable;
 }
 
+function serializedStructuredValue(data: unknown, type = 'text'): Record<string, unknown> {
+  return {
+    type,
+    data,
+    text: typeof data === 'string' ? data : JSON.stringify(data),
+    metadata: {
+      isStructuredValue: true,
+      structuredValueType: type
+    }
+  };
+}
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
@@ -832,6 +844,42 @@ describe('createFunctionMcpBridge', () => {
 
       expect((called.result as any)?.isError).not.toBe(true);
       expect((called.result as any)?.content?.[0]?.text).toBe('get_current_datetime');
+    } finally {
+      await bridge.cleanup();
+      env.cleanup();
+    }
+  });
+
+  it('unwraps serialized StructuredValue-shaped tool-call args on the bridge path', async () => {
+    const env = await createInterpretedEnv(`
+      /exe @addParticipants(participants: array, event_id) = \`added:@event_id:@participants.length:@participants[0]\`
+    `);
+    const functionTool = env.getVariable('addParticipants') as ExecutableVariable;
+    const mcpName = mlldNameToMCPName(functionTool.name);
+    const bridge = await createFunctionMcpBridge({
+      env,
+      functions: new Map([[mcpName, functionTool]]),
+      sessionId: 'serialized-structured-args'
+    });
+
+    try {
+      const called = await sendJsonRpc(bridge.socketPath, {
+        jsonrpc: '2.0',
+        id: 1002,
+        method: 'tools/call',
+        params: {
+          name: mcpName,
+          arguments: {
+            event_id: serializedStructuredValue('24'),
+            participants: serializedStructuredValue([
+              serializedStructuredValue('alice@example.com')
+            ], 'array')
+          }
+        }
+      });
+
+      expect((called.result as any)?.isError).not.toBe(true);
+      expect((called.result as any)?.content?.[0]?.text).toBe('added:24:1:alice@example.com');
     } finally {
       await bridge.cleanup();
       env.cleanup();

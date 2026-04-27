@@ -3,7 +3,7 @@ import type { NodeFunctionExecutable } from '@core/types/executable';
 import { createExecutableVariable } from '@core/types/variable/VariableFactories';
 import type { VariableSource, Variable } from '@core/types/variable';
 import { MlldImportError } from '@core/errors';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { unwrapMcpArgList, unwrapMcpArgPayload } from '@interpreter/mcp/arg-normalization';
 import type { Environment } from '../../env/Environment';
 import type { MCPToolSchema } from '../../mcp/McpImportManager';
 import { buildMcpArgs, coerceMcpArgs, deriveMcpParamInfo } from './McpImportResolver';
@@ -25,7 +25,7 @@ export class McpImportService {
     const optionalParams = paramInfo.paramNames.filter(name => !paramInfo.requiredParams.includes(name));
     const manager = this.env.getMcpImportManager();
     const execFn = async (...args: unknown[]) => {
-      const rawArgs = args.map(arg => unwrapMcpArgValue(arg));
+      const rawArgs = unwrapMcpArgList(args);
       const payload = coerceMcpArgs(unwrapMcpArgPayload(buildMcpArgs(paramInfo.paramNames, rawArgs)), paramInfo);
       return await manager.callTool(importPath, mcpName, payload);
     };
@@ -112,59 +112,4 @@ export class McpImportService {
       );
     }
   }
-}
-
-function unwrapMcpArgPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const unwrapped = unwrapMcpArgValue(payload);
-  return isPlainRecord(unwrapped) ? unwrapped : payload;
-}
-
-function unwrapMcpArgValue(value: unknown, seen = new WeakSet<object>()): unknown {
-  if (isStructuredValue(value)) {
-    return unwrapMcpArgValue(asData(value), seen);
-  }
-
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-
-  if (seen.has(value)) {
-    return value;
-  }
-  seen.add(value);
-
-  if (Array.isArray(value)) {
-    let result: unknown[] | undefined;
-    for (let i = 0; i < value.length; i++) {
-      const current = value[i];
-      const next = unwrapMcpArgValue(current, seen);
-      if (next !== current) {
-        result ??= value.slice();
-        result[i] = next;
-      }
-    }
-    return result ?? value;
-  }
-
-  if (!isPlainRecord(value)) {
-    return value;
-  }
-
-  let result: Record<string, unknown> | undefined;
-  for (const [key, current] of Object.entries(value)) {
-    const next = unwrapMcpArgValue(current, seen);
-    if (next !== current) {
-      result ??= { ...value };
-      result[key] = next;
-    }
-  }
-  return result ?? value;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
 }

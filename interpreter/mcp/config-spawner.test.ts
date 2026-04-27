@@ -25,6 +25,30 @@ function buildTool(name: string): MCPToolSchema {
   };
 }
 
+function buildToolWithSchema(name: string, properties: Record<string, unknown>, required: string[] = []): MCPToolSchema {
+  return {
+    name,
+    description: `${name} tool`,
+    inputSchema: {
+      type: 'object',
+      properties,
+      required
+    }
+  };
+}
+
+function serializedStructuredValue(data: unknown, type = 'text'): Record<string, unknown> {
+  return {
+    type,
+    data,
+    text: typeof data === 'string' ? data : JSON.stringify(data),
+    metadata: {
+      isStructuredValue: true,
+      structuredValueType: type
+    }
+  };
+}
+
 function attachMockManager(
   env: Environment,
   toolsBySpec: Record<string, MCPToolSchema[]>
@@ -119,6 +143,48 @@ describe('registerMcpToolsFromConfig', () => {
 
       expect(result).toBe('called:node fake-server:ping:{}');
       expect(manager.callTool).toHaveBeenCalledWith('node fake-server', 'ping', {});
+    } finally {
+      managerSpy.mockRestore();
+      env.cleanup();
+    }
+  });
+
+  it('unwraps serialized StructuredValue-shaped args for config-spawned MCP tools', async () => {
+    const env = createEnvironment();
+    const { manager, managerSpy } = attachMockManager(env, {
+      'node fake-server': [
+        buildToolWithSchema(
+          'share_file',
+          {
+            file_id: { type: 'string' },
+            target_user: { type: 'string' }
+          },
+          ['file_id', 'target_user']
+        )
+      ]
+    });
+
+    try {
+      const config = normalizeMcpConfig({
+        servers: [
+          { command: 'node', args: ['fake-server'], tools: ['share_file'] }
+        ]
+      });
+
+      const added = await registerMcpToolsFromConfig(env, config);
+      expect(added).toEqual(['shareFile']);
+
+      const shareFile = env.getVariable('shareFile') as any;
+      const result = await shareFile.internal.executableDef.fn({
+        file_id: serializedStructuredValue('26'),
+        target_user: 'bob@example.com'
+      });
+
+      expect(result).toBe('called:node fake-server:share_file:{"file_id":"26","target_user":"bob@example.com"}');
+      expect(manager.callTool).toHaveBeenCalledWith('node fake-server', 'share_file', {
+        file_id: '26',
+        target_user: 'bob@example.com'
+      });
     } finally {
       managerSpy.mockRestore();
       env.cleanup();

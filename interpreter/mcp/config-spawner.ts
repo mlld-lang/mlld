@@ -5,6 +5,7 @@ import type { VariableSource } from '@core/types/variable';
 import { createExecutableVariable, createObjectVariable } from '@core/types/variable';
 import type { Environment } from '@interpreter/env/Environment';
 import type { MCPToolSchema } from './McpImportManager';
+import { unwrapMcpArgList, unwrapMcpArgPayload } from './arg-normalization';
 
 export interface McpServerConfig {
   module?: string;
@@ -340,7 +341,8 @@ function createMcpToolVariable(
   const paramInfo = deriveMcpParamInfo(tool);
   const optionalParams = paramInfo.paramNames.filter(name => !paramInfo.requiredParams.includes(name));
   const execFn = async (...args: unknown[]) => {
-    const payload = coerceMcpArgs(buildMcpArgs(paramInfo.paramNames, args), paramInfo);
+    const rawArgs = unwrapMcpArgList(args);
+    const payload = coerceMcpArgs(unwrapMcpArgPayload(buildMcpArgs(paramInfo.paramNames, rawArgs)), paramInfo);
     return await manager.callTool(importPath, mcpName, payload);
   };
 

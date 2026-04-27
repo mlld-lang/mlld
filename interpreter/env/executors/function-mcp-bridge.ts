@@ -28,6 +28,7 @@ import {
   createMcpRequestCancelledError,
   MCP_CANCELLATION_CONTEXT
 } from '@interpreter/mcp/cancellation';
+import { unwrapMcpArgPayload } from '@interpreter/mcp/arg-normalization';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const FUNCTION_SOCKET_ENV = 'MLLD_FUNCTION_MCP_SOCKET';
@@ -497,7 +498,8 @@ class FunctionMcpBridgeServer {
         try {
           this.throwIfRequestCancelled(control);
           const paramInfo = this.toolParamInfo.get(toolName);
-          const coercedArgs = paramInfo ? coerceMcpArgs(args, paramInfo) : args;
+          const unwrappedArgs = unwrapMcpArgPayload(args);
+          const coercedArgs = paramInfo ? coerceMcpArgs(unwrappedArgs, paramInfo) : unwrappedArgs;
           const text = await this.executeToolCall(toolName, coercedArgs, control);
           return {
             jsonrpc: '2.0',

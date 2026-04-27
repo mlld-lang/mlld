@@ -12,6 +12,18 @@ function createEnvStub(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+function serializedStructuredValue(data: unknown, type = 'text'): Record<string, unknown> {
+  return {
+    type,
+    data,
+    text: typeof data === 'string' ? data : JSON.stringify(data),
+    metadata: {
+      isStructuredValue: true,
+      structuredValueType: type
+    }
+  };
+}
+
 describe('McpImportService', () => {
   it('creates MCP executable variables with stable metadata and argument mapping', async () => {
     const env = createEnvStub();
@@ -129,6 +141,42 @@ describe('McpImportService', () => {
     const manager = env.getMcpImportManager.mock.results[0]?.value ?? env.getMcpImportManager();
     expect(manager.callTool).toHaveBeenCalledWith('mcp://workspace', 'share_file', {
       file_id: 'file_7',
+      target_user: 'bob@example.com'
+    });
+  });
+
+  it('unwraps serialized StructuredValue-shaped MCP arguments before dispatch', async () => {
+    const env = createEnvStub();
+    const service = new McpImportService(env);
+
+    const variable = service.createMcpToolVariable({
+      alias: 'share_file',
+      tool: {
+        name: 'share_file',
+        inputSchema: {
+          type: 'object',
+          required: ['file_id', 'target_user'],
+          properties: {
+            file_id: { type: 'string' },
+            target_user: { type: 'string' }
+          }
+        }
+      } as any,
+      mcpName: 'share_file',
+      importPath: 'mcp://workspace'
+    });
+
+    const execFn = (variable as any).internal?.executableDef?.fn as (...args: unknown[]) => Promise<unknown>;
+    await expect(
+      execFn({
+        file_id: serializedStructuredValue('26'),
+        target_user: 'bob@example.com'
+      })
+    ).resolves.toBe('ok');
+
+    const manager = env.getMcpImportManager.mock.results[0]?.value ?? env.getMcpImportManager();
+    expect(manager.callTool).toHaveBeenCalledWith('mcp://workspace', 'share_file', {
+      file_id: '26',
       target_user: 'bob@example.com'
     });
   });
