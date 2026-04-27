@@ -45,4 +45,18 @@ describe('universal array helpers', () => {
     expect(mx.totalTokens!()).toBe(0);
     expect(mx.maxTokens!()).toBe(0);
   });
+
+  it('does not decorate frozen backing arrays', () => {
+    const source = VariableMetadataUtils.createSource('array', false, false);
+    const frozenValues = Object.freeze([{ text: 'hello' }]) as unknown as any[];
+
+    const arrayVar = createArrayVariable('frozen', frozenValues, false, source);
+
+    expect(arrayVar.raw).toBe(frozenValues);
+    expect(arrayVar.any?.mx.labels.includes('secret')).toBe(false);
+    expect(Object.isFrozen(frozenValues)).toBe(true);
+    expect(Object.isExtensible(frozenValues)).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(frozenValues, 'raw')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(arrayVar, 'raw')).toBe(true);
+  });
 });

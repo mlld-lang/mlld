@@ -105,7 +105,7 @@ export function attachArrayHelpers(variable: ArrayVariable): void {
   const quantifiers = createQuantifierHelpers(aggregate.contexts, aggregate.texts);
 
   const helperTargets: unknown[] = [variable];
-  if (Array.isArray(arrayValues)) {
+  if (Array.isArray(arrayValues) && Object.isExtensible(arrayValues)) {
     helperTargets.push(arrayValues);
   }
 
@@ -395,6 +395,15 @@ function defineHelperProperty<T>(
   key: string,
   value: unknown
 ): void {
+  if (!target || (typeof target !== 'object' && typeof target !== 'function')) {
+    return;
+  }
+  if (
+    !Object.isExtensible(target) &&
+    !Object.prototype.hasOwnProperty.call(target, key)
+  ) {
+    return;
+  }
   Object.defineProperty(target, key, {
     value,
     enumerable: false,
