@@ -5176,15 +5176,19 @@ async function evaluateExecInvocationInternal(
           timestamp: Date.now()
         }
       : null;
-  const isSurfacedLlmToolCall =
+  const isSurfacedToolCall =
     trackedMcpName.length > 0 ||
     toolOperationName !== undefined ||
     (variable.internal as any)?.isToolbridgeWrapper === true ||
     hasToolSurfaceLabel(effectiveToolMetadata.labels);
+  const enclosingOperation = runtimeEnv.getContextManager().peekOperation();
+  const isNestedExecutableCall = enclosingOperation?.type === 'exe';
+  const isInsideLlmFrame = Array.from(env.getEnclosingExeLabels()).includes('llm');
+  const shouldWriteToolAuditEvent = !isNestedExecutableCall || isSurfacedToolCall;
   const shouldTraceLlmToolCall =
-    isSurfacedLlmToolCall &&
+    isSurfacedToolCall &&
     trackedToolName.length > 0 &&
-    Array.from(env.getEnclosingExeLabels()).includes('llm');
+    isInsideLlmFrame;
   if (shouldTraceLlmToolCall) {
     runtimeEnv.emitRuntimeMemoryTrace('llm.tool_call', 'start', {
       requiredLevel: 'verbose',
@@ -5223,6 +5227,9 @@ async function evaluateExecInvocationInternal(
       toolBodyStartedAt === undefined ||
       toolBodyEndedAt === undefined
     ) {
+      return;
+    }
+    if (!shouldWriteToolAuditEvent) {
       return;
     }
 

@@ -224,6 +224,96 @@ describe('Security metadata propagation', () => {
     expect(typeof toolCallEvent?.resultLength).toBe('number');
   });
 
+  it('skips audit ledger records for internal helper calls inside llm frames', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    const directives = parseSync(`
+/exe @helper(value) = @value
+/exe llm @agent(prompt, config) = [
+  let @first = @helper("raw")
+  let @second = @helper("again")
+  let @third = @helper("done")
+  => [@first, @second, @third]
+]
+/var @result = @agent("run", { model: "fake" })
+    `).filter((directive): directive is DirectiveNode => Boolean((directive as DirectiveNode | undefined)?.kind));
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const auditEvents = await readAuditEvents(fileSystem, projectRoot);
+    const toolCallTools = auditEvents
+      .filter(event => event.event === 'toolCall')
+      .map(event => event.tool);
+    expect(toolCallTools).toContain('agent');
+    expect(toolCallTools).not.toContain('helper');
+
+    const ambientToolCalls = env.getContextManager().getToolsSnapshot().calls;
+    expect(ambientToolCalls.filter(tool => tool === 'helper')).toHaveLength(3);
+  });
+
+  it('skips audit ledger records for nested internal helper calls', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    const directives = parseSync(`
+/exe @helper(value) = @value
+/exe @wrapper(value) = [
+  let @first = @helper(@value)
+  let @second = @helper("again")
+  => [@first, @second]
+]
+/var @result = @wrapper("raw")
+    `).filter((directive): directive is DirectiveNode => Boolean((directive as DirectiveNode | undefined)?.kind));
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const auditEvents = await readAuditEvents(fileSystem, projectRoot);
+    const toolCallTools = auditEvents
+      .filter(event => event.event === 'toolCall')
+      .map(event => event.tool);
+    expect(toolCallTools).toContain('wrapper');
+    expect(toolCallTools).not.toContain('helper');
+
+    const ambientToolCalls = env.getContextManager().getToolsSnapshot().calls;
+    expect(ambientToolCalls.filter(tool => tool === 'helper')).toHaveLength(2);
+  });
+
+  it('keeps audit ledger records for surfaced tool calls inside llm frames', async () => {
+    const fileSystem = new MemoryFileSystem();
+    const projectRoot = '/project';
+    const env = new Environment(fileSystem, new PathService(), projectRoot);
+    const directives = parseSync(`
+/exe tool:w @send_message(recipient, body) = \`sent:@recipient:@body\` with { controlArgs: ["recipient"] }
+/exe llm @agent(prompt, config) = [
+  => @send_message("ada@example.com", "hello")
+]
+/var @result = @agent("run", { model: "fake" })
+    `).filter((directive): directive is DirectiveNode => Boolean((directive as DirectiveNode | undefined)?.kind));
+
+    for (const directive of directives) {
+      await evaluateDirective(directive, env);
+    }
+
+    const auditEvents = await readAuditEvents(fileSystem, projectRoot);
+    const sendEvent = auditEvents.find(
+      event => event.event === 'toolCall' && event.tool === 'send_message'
+    );
+    expect(sendEvent).toMatchObject({
+      event: 'toolCall',
+      tool: 'send_message',
+      ok: true,
+      args: {
+        recipient: 'ada@example.com',
+        body: 'hello'
+      }
+    });
+  });
+
   it('skips toolCall audit events when pre-guards short-circuit before the tool body runs', async () => {
     const fileSystem = new MemoryFileSystem();
     const projectRoot = '/project';
