@@ -213,6 +213,68 @@ describe('exe block return structured metadata', () => {
     expect(readVariableData(env, 'augmentedSecondSchemaValid')).toBe(true);
   });
 
+  it('keeps rig-shaped native loop accumulators indexable after done ctx entries', async () => {
+    const env = await evaluateSource([
+      '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',
+      '/var @schema = @contact',
+      '/exe @name(inputValue) = when [',
+      '  !@inputValue.isDefined() => null',
+      '  @typeof(@inputValue) == "string" => @inputValue',
+      '  @inputValue.mx.data.isDefined() => @inputValue.mx.data',
+      '  @inputValue["mx"].data.isDefined() => @inputValue["mx"].data',
+      '  @inputValue.data.isDefined() => @inputValue.data',
+      '  @inputValue.text.isDefined() => @inputValue.text',
+      '  * => @inputValue',
+      ']',
+      '/exe @valueField(inputValue, fieldName) = [',
+      '  let @fieldKey = @name(@fieldName)',
+      '  => when [',
+      '    !@fieldKey.isDefined() => @inputValue',
+      '    @inputValue.mx.data[@fieldKey].isDefined() => @inputValue.mx.data[@fieldKey]',
+      '    @inputValue.data[@fieldKey].isDefined() => @inputValue.data[@fieldKey]',
+      '    @inputValue[@fieldKey].isDefined() => @inputValue[@fieldKey]',
+      '    * => null',
+      '  ]',
+      ']',
+      '/exe @indexed(bucket) = [',
+      '  let @rawOrder = @valueField(@bucket, "order") ?? []',
+      '  let @byHandle = @valueField(@bucket, "by_handle") ?? {}',
+      '  let @orderLength = when [',
+      '    @typeof(@rawOrder) == "array" => @rawOrder.length',
+      '    @rawOrder.mx.data.length.isDefined() => @rawOrder.mx.data.length',
+      '    @rawOrder.data.length.isDefined() => @rawOrder.data.length',
+      '    * => 0',
+      '  ]',
+      '  let @resolved = loop(1000) [',
+      '    let @ctx = when [',
+      '      @input["_rig_cursor"] == "indexedEntries" => @input',
+      '      * => { _rig_cursor: "indexedEntries", index: 0, entries: [] }',
+      '    ]',
+      '    if @ctx.index >= @orderLength [ done @ctx.entries ]',
+      '    let @handle = @rawOrder[@ctx.index]',
+      '    let @entry = @valueField(@byHandle, @name(@handle))',
+      '    let @nextEntries = @ctx.entries',
+      '    if @entry.isDefined() && @entry != null [',
+      '      @nextEntries += [@entry]',
+      '    ]',
+      '    continue { _rig_cursor: "indexedEntries", index: @ctx.index + 1, entries: @nextEntries }',
+      '  ]',
+      '  => @resolved',
+      ']',
+      '/var @ada = { email: "ada@example.com", name: "Ada" } as record @schema',
+      '/var @entry = { identity_value: @ada, field_values: { email: @ada.email }, value: { email: @ada.email } }',
+      '/var @bucket = { _rig_bucket: "resolved_index_v1", order: ["h1"], by_handle: { h1: @entry } }',
+      '/var @items = @indexed(@bucket)',
+      '/var @label = @items[0].identity_value.email.mx.labels[0]',
+      '/var @fieldSource = @items[0].field_values.email.mx.factsources[0].ref',
+      '/var @schemaValid = @items[0].identity_value.mx.schema.valid'
+    ].join('\n'));
+
+    expect(readVariableData(env, 'label')).toBe('fact:@contact.email');
+    expect(readVariableData(env, 'fieldSource')).toBe('@contact.email');
+    expect(readVariableData(env, 'schemaValid')).toBe(true);
+  });
+
   it('preserves deep mx field access through interpolation after exe passthrough wrapping', async () => {
     const env = await evaluateSource([
       '/record @contact = { facts: [email: string], data: [name: string], validate: "demote" }',

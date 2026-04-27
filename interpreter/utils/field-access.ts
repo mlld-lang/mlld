@@ -78,6 +78,19 @@ const COMMON_FILE_EXTENSION_FIELDS = new Set([
 const WORKSPACE_MX_CONTEXT = Symbol('mlld.workspace-mx-context');
 const OBJECT_UTILITY_MX_VIEW = Symbol('mlld.object-utility-mx-view');
 
+function isSerializedArrayVariableEnvelope(value: unknown): value is { type: 'array'; value: unknown[] } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    record.type === 'array' &&
+    Array.isArray(record.value) &&
+    (typeof record.name === 'string' || Object.prototype.hasOwnProperty.call(record, 'name'))
+  );
+}
+
 interface WorkspaceMxContext {
   workspace?: WorkspaceValue;
   path?: string;
@@ -865,7 +878,6 @@ export interface FieldAccessOptions {
 export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
   // Check if the input is a Variable
   const directParentVariable = isVariable(value) ? value : (value as any)?.__variable;
-  const contextualParentVariable = directParentVariable ?? options?.parentVariable;
   const strictMissingFieldAccess = Boolean(
     isVariable(value) &&
       value.internal &&
@@ -886,6 +898,26 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     rawValue = slotRefValue.data;
   }
 
+  // Some runtime boundaries can carry a Variable envelope as the data inside a
+  // StructuredValue. Treat that nested envelope like a normal Variable so array
+  // indexing and field access see its value instead of the { type, name, value }
+  // object shape.
+  const nestedParentVariable = !directParentVariable && isVariable(rawValue)
+    ? rawValue
+    : undefined;
+  if (nestedParentVariable) {
+    rawValue = nestedParentVariable.value;
+  }
+
+  if (
+    isSerializedArrayVariableEnvelope(rawValue) &&
+    field.type === 'field' &&
+    String(field.value) === 'length'
+  ) {
+    rawValue = rawValue.value;
+  }
+
+  const contextualParentVariable = directParentVariable ?? nestedParentVariable ?? options?.parentVariable;
   const fieldValue = field.value;
   const fieldName = String(fieldValue);
   const missingValue = options?.returnUndefinedForMissing ? undefined : null;
@@ -1473,7 +1505,11 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // Handle regular arrays
       // CRITICAL: rawValue might itself be a StructuredValue (nested wrapping)
       // We need to unwrap it before array operations
-      const arrayData = isStructuredValue(rawValue) ? asData(rawValue) : rawValue;
+      const arrayData = isStructuredValue(rawValue)
+        ? asData(rawValue)
+        : isSerializedArrayVariableEnvelope(rawValue)
+          ? rawValue.value
+          : rawValue;
 
       if (!Array.isArray(arrayData)) {
         // Try object access with numeric key as fallback

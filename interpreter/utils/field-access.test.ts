@@ -3,6 +3,7 @@ import { accessField, accessFields } from './field-access';
 import { makeSecurityDescriptor, serializeSecurityDescriptor } from '@core/types/security';
 import { materializeExpressionValue } from '@core/types/provenance/ExpressionProvenance';
 import {
+  createArrayVariable,
   createObjectVariable,
   createSimpleTextVariable,
   createStructuredValueVariable
@@ -282,6 +283,45 @@ describe('missing field access', () => {
   it('returns null for out-of-bounds array indices', async () => {
     const result = await accessField([1, 2], { type: 'arrayIndex', value: 5 });
     expect(result).toBeNull();
+  });
+
+  it('indexes array Variable envelopes carried inside StructuredValue data', async () => {
+    const arrayVariable = createArrayVariable(
+      'resolved',
+      [{ value: 'first' }],
+      false,
+      {
+        directive: 'var',
+        syntax: 'array',
+        hasInterpolation: false,
+        isMultiLine: false
+      }
+    );
+    const wrapped = wrapStructured(arrayVariable, 'array', undefined);
+
+    const result = await accessField(wrapped, { type: 'arrayIndex', value: 0 });
+
+    expect(result).toEqual({ value: 'first' });
+  });
+
+  it('indexes serialized array Variable envelopes without source metadata', async () => {
+    const envelope = {
+      type: 'array',
+      name: 'resolved',
+      value: [{ value: 'first' }],
+      labels: ['fact:@contact.email'],
+      metadata: {
+        isStructuredValue: true,
+        structuredValueType: 'object'
+      },
+      tokens: [1]
+    };
+
+    const result = await accessField(envelope, { type: 'arrayIndex', value: 0 });
+    const length = await accessField(envelope, { type: 'field', value: 'length' });
+
+    expect(result).toEqual({ value: 'first' });
+    expect(length).toBe(1);
   });
 
   it('adds an extension hint for common file suffix fields', async () => {
