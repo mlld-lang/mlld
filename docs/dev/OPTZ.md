@@ -65,7 +65,7 @@ Use short capped runs while hillclimbing. Use full harness runs only when measur
 - **Heap snapshot:** use for retained memory. Signal-triggered heap snapshots are more useful than heap profiles when the process may not exit cleanly.
 - **Runtime trace:** use for phase attribution and thresholds. `m-9712` showed that broad labels like `llm.exec.resolve` can hide caller-side projection and helper churn.
 - **Trace-memory summaries:** keep bounded. `m-15d9` owns trace summary hygiene.
-- **Perf harness:** use `npm run perf:harness -- <scenario.json> --mode short` for child-process scenarios with wall/RSS/budget output. Fast harness smoke tests run in the default suite; long/noisy benchmarks remain opt-in.
+- **Perf harness:** use `npm run perf:harness -- <scenario.json> --mode short` for child-process scenarios with wall/RSS/budget output. Harness correctness tests run in the default suite; performance scenarios and benchmarks remain opt-in.
 
 ## Current Hot Paths
 

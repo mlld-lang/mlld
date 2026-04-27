@@ -25,9 +25,8 @@ export default defineConfig({
       '**/lib/**',
       '**/tests/ast-perf.test.ts',
       '**/tests/ephemeral-mode.test.ts',
-      // Keep old noisy benchmarks opt-in; fast/stable perf smoke tests stay in the default suite.
-      'tests/performance/performance.test.ts',
-      'tests/performance/variable-preservation-benchmark.ts',
+      // Performance scenarios and benchmarks are opt-in; harness correctness tests live outside this directory.
+      'tests/performance/**',
       // Exclude token edge case tests - run with npm run test:tokens
       'tests/tokens/**/*.test.ts',
       'services/lsp/semantic-tokens*.test.ts',
