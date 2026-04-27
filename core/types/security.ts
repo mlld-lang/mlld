@@ -161,6 +161,11 @@ export function isAttestationLabel(label: string): boolean {
 
 const EMPTY_ARRAY: readonly never[] = Object.freeze([]);
 const NORMALIZED_DESCRIPTORS = new WeakSet<object>();
+const NORMALIZED_TOOL_PROVENANCE = new WeakSet<object>();
+const NORMALIZED_TOOL_ARRAYS = new WeakSet<object>();
+const TOOL_PROVENANCE_KEY_CACHE = new WeakMap<object, string>();
+const TOOL_ARRAY_KEY_CACHE = new WeakMap<object, string>();
+const STRING_ARRAY_KEY_CACHE = new WeakMap<object, string>();
 const DESCRIPTOR_CACHE = new Map<string, SecurityDescriptor>();
 const DESCRIPTOR_CACHE_LIMIT = 4096;
 const DESCRIPTOR_KEY_LIMIT = 8192;
@@ -183,9 +188,21 @@ function freezeObject<T extends Record<string, unknown> | undefined>(input: T): 
   return Object.freeze({ ...input }) as T;
 }
 
+function rememberToolProvenance(entry: ToolProvenance): ToolProvenance {
+  NORMALIZED_TOOL_PROVENANCE.add(entry);
+  return entry;
+}
+
 function freezeToolProvenanceEntry(entry: ToolProvenance): ToolProvenance | undefined {
   if (!entry || typeof entry.name !== 'string') {
     return undefined;
+  }
+  if (
+    typeof entry === 'object' &&
+    NORMALIZED_TOOL_PROVENANCE.has(entry) &&
+    Object.isFrozen(entry)
+  ) {
+    return entry;
   }
 
   const name = entry.name.trim();
@@ -205,11 +222,12 @@ function freezeToolProvenanceEntry(entry: ToolProvenance): ToolProvenance | unde
       ? entry.auditRef.trim()
       : undefined;
 
-  return Object.freeze({
+  const normalized = Object.freeze({
     name,
     ...(args && args.length > 0 ? { args } : {}),
     ...(auditRef ? { auditRef } : {})
   });
+  return rememberToolProvenance(normalized);
 }
 
 function freezeToolArray(
@@ -217,6 +235,13 @@ function freezeToolArray(
 ): readonly ToolProvenance[] | undefined {
   if (!values) {
     return undefined;
+  }
+  if (
+    Array.isArray(values) &&
+    NORMALIZED_TOOL_ARRAYS.has(values) &&
+    Object.isFrozen(values)
+  ) {
+    return values;
   }
 
   const deduped: ToolProvenance[] = [];
@@ -240,7 +265,20 @@ function freezeToolArray(
     return undefined;
   }
 
-  return Object.freeze(deduped);
+  const normalized = Object.freeze(deduped);
+  NORMALIZED_TOOL_ARRAYS.add(normalized);
+  return normalized;
+}
+
+function freezeNormalizedToolArray(
+  values: ToolProvenance[]
+): readonly ToolProvenance[] | undefined {
+  if (values.length === 0) {
+    return undefined;
+  }
+  const normalized = Object.freeze(values);
+  NORMALIZED_TOOL_ARRAYS.add(normalized);
+  return normalized;
 }
 
 function stableSerialize(value: unknown): string | undefined {
@@ -297,6 +335,52 @@ function stableSerializeShallowPolicyContext(
   return `{${entries.join(',')}}`;
 }
 
+function stableStringArrayKey(values: readonly string[]): string {
+  const cached = STRING_ARRAY_KEY_CACHE.get(values as object);
+  if (cached) {
+    return cached;
+  }
+  if (values.length === 0) {
+    return '[]';
+  }
+  const key = `[${values.map(value => JSON.stringify(value)).join(',')}]`;
+  STRING_ARRAY_KEY_CACHE.set(values as object, key);
+  return key;
+}
+
+function toolProvenanceKey(tool: ToolProvenance): string {
+  if (typeof tool === 'object' && tool !== null) {
+    const cached = TOOL_PROVENANCE_KEY_CACHE.get(tool);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const parts = [`"name":${JSON.stringify(tool.name)}`];
+  if (tool.args && tool.args.length > 0) {
+    parts.unshift(`"args":${stableStringArrayKey(Array.from(tool.args))}`);
+  }
+  if (tool.auditRef) {
+    const insertAt = tool.args && tool.args.length > 0 ? 1 : 0;
+    parts.splice(insertAt, 0, `"auditRef":${JSON.stringify(tool.auditRef)}`);
+  }
+  const key = `{${parts.join(',')}}`;
+  if (typeof tool === 'object' && tool !== null) {
+    TOOL_PROVENANCE_KEY_CACHE.set(tool, key);
+  }
+  return key;
+}
+
+function toolArrayKey(tools: readonly ToolProvenance[]): string {
+  const cached = TOOL_ARRAY_KEY_CACHE.get(tools as object);
+  if (cached) {
+    return cached;
+  }
+  const key = `[${tools.map(tool => toolProvenanceKey(tool)).join(',')}]`;
+  TOOL_ARRAY_KEY_CACHE.set(tools as object, key);
+  return key;
+}
+
 function descriptorInternKey(options: {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
@@ -315,26 +399,28 @@ function descriptorInternKey(options: {
   }
 
   const tools = options.tools
-    ? stableSerialize(options.tools.map(tool => ({
-        name: tool.name,
-        ...(tool.args ? { args: Array.from(tool.args) } : {}),
-        ...(tool.auditRef ? { auditRef: tool.auditRef } : {})
-      })))
+    ? toolArrayKey(options.tools)
     : undefined;
-  if (options.tools && tools === undefined) {
-    return undefined;
-  }
 
-  const key = stableSerialize({
-    labels: Array.from(options.labels),
-    taint: Array.from(options.taint),
-    attestations: Array.from(options.attestations),
-    sources: Array.from(options.sources),
-    urls: options.urls ? Array.from(options.urls) : [],
-    tools: tools ?? null,
-    capability: options.capability ?? null,
-    policyContext: policyContext ?? null
-  });
+  const key = [
+    '{"attestations":',
+    stableStringArrayKey(options.attestations),
+    ',"capability":',
+    JSON.stringify(options.capability ?? null),
+    ',"labels":',
+    stableStringArrayKey(options.labels),
+    ',"policyContext":',
+    policyContext ?? 'null',
+    ',"sources":',
+    stableStringArrayKey(options.sources),
+    ',"taint":',
+    stableStringArrayKey(options.taint),
+    ',"tools":',
+    tools ?? 'null',
+    ',"urls":',
+    stableStringArrayKey(options.urls ?? EMPTY_ARRAY),
+    '}'
+  ].join('');
   return key && key.length <= DESCRIPTOR_KEY_LIMIT ? key : undefined;
 }
 
@@ -396,6 +482,32 @@ function createDescriptor(
   );
 }
 
+let EMPTY_SECURITY_DESCRIPTOR: SecurityDescriptor | undefined;
+
+function getEmptySecurityDescriptor(): SecurityDescriptor {
+  if (!EMPTY_SECURITY_DESCRIPTOR) {
+    EMPTY_SECURITY_DESCRIPTOR = createDescriptor(
+      EMPTY_ARRAY,
+      EMPTY_ARRAY,
+      EMPTY_ARRAY,
+      EMPTY_ARRAY,
+      EMPTY_ARRAY
+    );
+  }
+  return EMPTY_SECURITY_DESCRIPTOR;
+}
+
+function isEmptySecurityDescriptor(descriptor: SecurityDescriptor): boolean {
+  return descriptor.labels.length === 0
+    && descriptor.taint.length === 0
+    && descriptor.attestations.length === 0
+    && descriptor.sources.length === 0
+    && (!descriptor.urls || descriptor.urls.length === 0)
+    && (!descriptor.tools || descriptor.tools.length === 0)
+    && descriptor.capability === undefined
+    && descriptor.policyContext === undefined;
+}
+
 export function makeSecurityDescriptor(options?: {
   labels?: Iterable<DataLabel>;
   taint?: Iterable<DataLabel>;
@@ -406,6 +518,9 @@ export function makeSecurityDescriptor(options?: {
   capability?: CapabilityKind;
   policyContext?: Record<string, unknown>;
 }): SecurityDescriptor {
+  if (!options) {
+    return getEmptySecurityDescriptor();
+  }
   const labels = freezeArray(options?.labels);
   const attestations = freezeArray([
     ...(options?.attestations ?? []),
@@ -510,6 +625,22 @@ export function normalizeSecurityDescriptor(
 export function mergeDescriptors(
   ...descriptors: Array<SecurityDescriptorLike>
 ): SecurityDescriptor {
+  const normalizedDescriptors: SecurityDescriptor[] = [];
+  for (const incoming of descriptors) {
+    const descriptor = normalizeSecurityDescriptor(incoming);
+    if (!descriptor || isEmptySecurityDescriptor(descriptor)) {
+      continue;
+    }
+    normalizedDescriptors.push(descriptor);
+  }
+
+  if (normalizedDescriptors.length === 0) {
+    return getEmptySecurityDescriptor();
+  }
+  if (normalizedDescriptors.length === 1) {
+    return normalizedDescriptors[0];
+  }
+
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
   const urlSet = new Set<string>();
@@ -520,10 +651,7 @@ export function mergeDescriptors(
   let capability: CapabilityKind | undefined;
   let policyContext: Record<string, unknown> | undefined;
 
-  for (const incoming of descriptors) {
-    const descriptor = normalizeSecurityDescriptor(incoming);
-    if (!descriptor) continue;
-
+  for (const descriptor of normalizedDescriptors) {
     descriptor.labels.forEach(label => {
       labelSet.add(label);
       if (!isAttestationLabel(label)) {
@@ -562,7 +690,7 @@ export function mergeDescriptors(
     freezeArray(attestationSet),
     freezeArray(sourceSet),
     freezeArray(urlSet),
-    freezeToolArray(toolList),
+    freezeNormalizedToolArray(toolList),
     capability,
     freezeObject(policyContext)
   );

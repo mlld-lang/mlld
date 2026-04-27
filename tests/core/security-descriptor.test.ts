@@ -132,6 +132,43 @@ describe('SecurityDescriptor helpers', () => {
     expect(restored?.tools).toEqual(merged.tools);
   });
 
+  it('interns equivalent tool provenance descriptors after normalization', () => {
+    const first = makeSecurityDescriptor({
+      tools: [
+        { name: ' fetchIssue ', args: [' id ', '', 'content'], auditRef: ' audit-1 ' }
+      ]
+    });
+    const second = makeSecurityDescriptor({
+      tools: [
+        { name: 'fetchIssue', args: ['id', 'content'], auditRef: 'audit-1' }
+      ]
+    });
+
+    expect(second).toBe(first);
+    expect(first.tools).toEqual([
+      { name: 'fetchIssue', args: ['id', 'content'], auditRef: 'audit-1' }
+    ]);
+    expect(Object.isFrozen(first.tools)).toBe(true);
+    expect(Object.isFrozen(first.tools?.[0])).toBe(true);
+    expect(Object.isFrozen(first.tools?.[0]?.args)).toBe(true);
+  });
+
+  it('returns canonical descriptors for empty and single-descriptor merges', () => {
+    const empty = makeSecurityDescriptor();
+    const descriptor = makeSecurityDescriptor({
+      labels: ['secret'],
+      sources: ['src:mcp'],
+      urls: ['https://example.com/a'],
+      tools: [{ name: 'fetchIssue', auditRef: 'audit-1' }]
+    });
+
+    expect(mergeDescriptors()).toBe(empty);
+    expect(mergeDescriptors(empty)).toBe(empty);
+    expect(mergeDescriptors(descriptor)).toBe(descriptor);
+    expect(mergeDescriptors(empty, descriptor)).toBe(descriptor);
+    expect(mergeDescriptors(undefined, null, descriptor, empty)).toBe(descriptor);
+  });
+
   it('merges and deduplicates url provenance', () => {
     const first = makeSecurityDescriptor({
       urls: ['https://example.com/a', 'https://example.com/a']
