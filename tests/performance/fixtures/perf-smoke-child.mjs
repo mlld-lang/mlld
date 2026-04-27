@@ -16,3 +16,7 @@ console.log(JSON.stringify({
   name: 'retainedChunks',
   value: retained.length
 }));
+
+// Keep the smoke child alive long enough for the parent harness to take an
+// RSS sample even when the full test suite is under load.
+await new Promise(resolve => setTimeout(resolve, 100));
