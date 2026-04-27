@@ -35,6 +35,7 @@ npm run test:case -- <fixture-path>  # Run specific fixture test(s) by path
                      #   npm run test:case -- feat
                      #   npm run test:case -- feat/alligator
                      #   npm run test:case -- feat/alligator/glob-concat
+npm run perf:harness -- <scenario.json> --mode short  # Opt-in memory/speed perf scenario; see docs/dev/OPTZ.md
 npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
 npm run ast -- file.mld         # Shows AST for a file (auto-detects if file exists)
 cat file.mld | npm run ast      # Shows AST from stdin
@@ -59,6 +60,7 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
   - **Support files**: Auto-copied from test dir to VFS root. Manual setup in `interpreter.fixture.test.ts:870+` for complex cases
   - **Naming**: CRITICAL - Unique names across ALL tests. Prefix with context: `import-all-config.mld` not `config.mld`
 - **Build**: `npm run build:fixtures` → generates `.generated-fixture.json` files with AST + expected output
+- **Performance tests**: Keep real memory/speed scenarios opt-in under `tests/performance/**`; harness correctness can run in the default suite. See `docs/dev/OPTZ.md`.
 - **Skip system**: Place `skip.md` or `skip-*.md` files in test dirs to skip during fixture generation
 - **Session feature references**: Session-state design and implementation context live in `spec-session-scoped-state.md`, `plan-var-session-implementation.md`, and `plan-var-session-dossier-*.md`
 - **Error Handling**: Use specialized MlldError classes (MlldDirectiveError, MlldParseError, etc.) Many error conditions use the same method as tests to test our effectiveness at capturing error conditions and delivering consistent error messages. tests/cases/invalid (syntax errors), tests/cases/exceptions (runtime errors), tests/cases/warnings (plausibly valid syntax but common mistakes new mlld learners make), tests/cases/deprecated (deprecated examples - empty currently) 

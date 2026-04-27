@@ -1,6 +1,6 @@
 # Testing Documentation
 
-This document describes the comprehensive testing approach for the Mlld project, including the fixture system, test organization, and different types of tests.
+This document describes the comprehensive testing approach for the mlld project, including the fixture system, test organization, and different types of tests.
 
 ### Fixture System
 
@@ -233,6 +233,9 @@ Located in `tests/cases/invalid/`. These tests:
   - hook observability emissions (`output`/`append`/`run`) with non-fatal hook-side failures (`hooks-state-emission-nonfatal`)
 - Execute multi-run checkpoint fixture scenarios in `tests/interpreter/checkpoint/integration-fixtures.test.ts`.
 - For docs-published checkpoint/resume examples, generated syntax smoke fixtures are expected artifacts and should be committed with phase updates when regenerated.
+
+#### 7. Performance Tests
+Performance scenarios and benchmarks live under `tests/performance/**` and are opt-in; run them with `npm run perf:harness -- <scenario.json> --mode short`. Keep harness correctness tests in the default suite, and see `docs/dev/OPTZ.md` for memory/speed workflow details.
 
 ### Live Tests
 
