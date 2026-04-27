@@ -2733,6 +2733,10 @@ function isToolWriteLabelSet(labels: readonly string[]): boolean {
   return labels.some(label => label === 'tool:w' || label.startsWith('tool:w:'));
 }
 
+function hasToolSurfaceLabel(labels: readonly string[]): boolean {
+  return labels.some(label => label === 'tool' || label.startsWith('tool:'));
+}
+
 function isStructuredInteropCodeExecutable(definition: ExecutableDefinition): boolean {
   if (!isCodeExecutable(definition)) {
     return false;
@@ -5172,7 +5176,13 @@ async function evaluateExecInvocationInternal(
           timestamp: Date.now()
         }
       : null;
+  const isSurfacedLlmToolCall =
+    trackedMcpName.length > 0 ||
+    toolOperationName !== undefined ||
+    (variable.internal as any)?.isToolbridgeWrapper === true ||
+    hasToolSurfaceLabel(effectiveToolMetadata.labels);
   const shouldTraceLlmToolCall =
+    isSurfacedLlmToolCall &&
     trackedToolName.length > 0 &&
     Array.from(env.getEnclosingExeLabels()).includes('llm');
   if (shouldTraceLlmToolCall) {

@@ -137,6 +137,60 @@ describe('evaluateExecInvocation runtime trace', () => {
     );
   });
 
+  it('does not trace ordinary helper executables as llm tool calls inside an llm frame', async () => {
+    const source = [
+      '/exe @helper(state) = [',
+      '  => @state.answer',
+      ']',
+      '/exe llm @agent(prompt, config) = [',
+      '  let @answer = @helper({ answer: "ok", payload: "large internal state" })',
+      '  => @answer',
+      ']',
+      '/show @agent("root", { model: "helper-test" })'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem: new MemoryFileSystem(),
+      pathService: new PathService(),
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    const toolCalls = result.traceEvents.filter((event: any) => event.event === 'llm.tool_call');
+    const toolResults = result.traceEvents.filter((event: any) => event.event === 'llm.tool_result');
+    expect(toolCalls.map((event: any) => event.data.tool)).not.toContain('helper');
+    expect(toolResults.map((event: any) => event.data.tool)).not.toContain('helper');
+  });
+
+  it('still traces explicit tool executables as llm tool calls inside an llm frame', async () => {
+    const source = [
+      '/exe tool:w @send_message(recipient, body) = `sent:@recipient:@body` with { controlArgs: ["recipient"] }',
+      '/exe llm @agent(prompt, config) = [',
+      '  => @send_message("ada@example.com", "hello")',
+      ']',
+      '/show @agent("root", { model: "tool-test" })'
+    ].join('\n');
+
+    const result = await interpret(source, {
+      fileSystem: new MemoryFileSystem(),
+      pathService: new PathService(),
+      basePath: '/',
+      mode: 'structured',
+      trace: 'verbose'
+    }) as any;
+
+    const toolCall = result.traceEvents.find(
+      (event: any) => event.event === 'llm.tool_call' && event.data.tool === 'send_message'
+    );
+    const toolResult = result.traceEvents.find(
+      (event: any) => event.event === 'llm.tool_result' && event.data.tool === 'send_message'
+    );
+    expect(toolCall).toBeDefined();
+    expect(toolResult).toBeDefined();
+    expect(toolResult.data.ok).toBe(true);
+  });
+
   it('returns collection input-record policy failures as failed llm tool results', async () => {
     const source = [
       '/record @event = { facts: [id: string] }',

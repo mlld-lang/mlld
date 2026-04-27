@@ -326,11 +326,21 @@ export class ContextManager {
   }
 
   recordToolCall(call: ToolCallRecord): void {
-    this.toolCalls.push(Object.freeze({ ...call }));
+    const frozenResult = call.result !== undefined
+      ? this.deepFreezeValue(call.result)
+      : undefined;
+    const storedCall: ToolCallRecord = {
+      name: call.name,
+      timestamp: call.timestamp,
+      ok: call.ok,
+      ...(call.error !== undefined ? { error: call.error } : {}),
+      ...(frozenResult !== undefined ? { result: frozenResult } : {})
+    };
+    this.toolCalls.push(Object.freeze(storedCall));
     this.toolsSnapshotVersion++;
     if (call.ok) {
-      if (call.result !== undefined) {
-        this.toolResults[call.name] = this.deepFreezeValue(call.result);
+      if (frozenResult !== undefined) {
+        this.toolResults[call.name] = frozenResult;
       }
       return;
     }
