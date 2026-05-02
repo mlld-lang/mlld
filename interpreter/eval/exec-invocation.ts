@@ -2955,6 +2955,7 @@ async function evaluateExecInvocationInternal(
     let resultSecurityDescriptor: SecurityDescriptor | undefined;
     let strictToolResultDescriptor: SecurityDescriptor | undefined;
     let strictToolResultBaseDescriptor: SecurityDescriptor | undefined;
+    let policyInputDescriptor: SecurityDescriptor | undefined;
     let surfacedLlmSessionId: string | undefined;
     let hasLlmLabel = false;
     let execEnv: Environment = env;
@@ -5583,6 +5584,24 @@ async function evaluateExecInvocationInternal(
         descriptorPieces.push(mcpSecurityDescriptor);
         strictToolDescriptorPieces.push(mcpSecurityDescriptor);
       }
+      // Capture an input-only descriptor (parameter args + mcp tool descriptor)
+      // for output-rule preconditions. This excludes the exe variable's own
+      // labels (e.g. 'llm') and source-language taint (e.g. 'src:js') so the
+      // unlabeled-default ('untrusted') promotion still fires when input data
+      // carries only system source labels like 'src:dynamic'. See m-c713.
+      const inputDescriptorPieces: SecurityDescriptor[] = [];
+      if (mergedParamDescriptor) {
+        inputDescriptorPieces.push(mergedParamDescriptor);
+      }
+      if (mcpSecurityDescriptor) {
+        inputDescriptorPieces.push(mcpSecurityDescriptor);
+      }
+      policyInputDescriptor =
+        inputDescriptorPieces.length === 0
+          ? undefined
+          : inputDescriptorPieces.length === 1
+            ? inputDescriptorPieces[0]
+            : runtimeEnv.mergeSecurityDescriptors(...inputDescriptorPieces);
       const sourceTaintLabel = deriveExecutableSourceTaintLabel({
         type: (definition as any).type,
         language: (definition as any).language
@@ -5628,7 +5647,8 @@ async function evaluateExecInvocationInternal(
       resultSecurityDescriptor = applyExecOutputPolicyLabels({
         policyEnforcer: activePolicyEnforcer,
         exeLabels,
-        resultSecurityDescriptor
+        resultSecurityDescriptor,
+        inputDescriptor: policyInputDescriptor
       });
       if (resultSecurityDescriptor) {
         runtimeEnv.recordSecurityDescriptor(resultSecurityDescriptor);
@@ -5922,7 +5942,8 @@ async function evaluateExecInvocationInternal(
     resultSecurityDescriptor = applyExecOutputPolicyLabels({
       policyEnforcer: activePolicyEnforcer,
       exeLabels,
-      resultSecurityDescriptor
+      resultSecurityDescriptor,
+      inputDescriptor: policyInputDescriptor
     });
   } else {
     const localExecutionDescriptor = execEnv.getLocalSecurityDescriptor();

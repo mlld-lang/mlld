@@ -41,7 +41,7 @@ import { VariableMetadataUtils } from './VariableMetadata';
 import { attachArrayHelpers } from './ArrayHelpers';
 import type { TokenEstimationOptions } from '@core/utils/token-metrics';
 import { extractUrlsFromValue, replaceDescriptorUrls } from '@core/security/url-provenance';
-import { normalizeSecurityDescriptor } from '@core/types/security';
+import { mergeDescriptors, normalizeSecurityDescriptor } from '@core/types/security';
 import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 
 export interface VariableFactoryInitOptions {
@@ -985,6 +985,20 @@ export class VariableFactory {
       structuredValue.metadata as any,
       baseMetadata as any
     );
+    // mergeMetadata is a shallow merge; if both inputs carry a `security`
+    // descriptor, the second one wins outright. For StructuredValue variables
+    // that means an env-snapshot descriptor on `baseMetadata` would silently
+    // strip rule-applied labels (e.g. `influenced` from
+    // applyOutputPolicyLabels) that live on the structured value's own
+    // metadata. Re-merge security descriptors explicitly so neither side's
+    // labels are lost. See m-c713.
+    const valueSecurity = (structuredValue.metadata as any)?.security;
+    const baseSecurity = (baseMetadata as any)?.security;
+    if (valueSecurity && baseSecurity && valueSecurity !== baseSecurity) {
+      (mergedMetadata as any).security = mergeDescriptors(valueSecurity, baseSecurity);
+    } else if (valueSecurity && !baseSecurity) {
+      (mergedMetadata as any).security = valueSecurity;
+    }
     const securityAwareMetadata = VariableMetadataUtils.applySecurityMetadata(mergedMetadata);
     // Attach metadata/security in place to preserve identity
     structuredValue.metadata = securityAwareMetadata as any;

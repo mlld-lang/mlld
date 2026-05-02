@@ -174,6 +174,7 @@ export type ApplyExecOutputPolicyLabelsOptions = {
   policyEnforcer: PolicyEnforcer;
   exeLabels: readonly string[];
   resultSecurityDescriptor?: SecurityDescriptor;
+  inputDescriptor?: SecurityDescriptor;
 };
 
 export type RunExecPostGuardsOptions = {
@@ -948,12 +949,19 @@ export async function enforceExecParamLabelFlow(
 export function applyExecOutputPolicyLabels(
   options: ApplyExecOutputPolicyLabelsOptions
 ): SecurityDescriptor | undefined {
-  const { policyEnforcer, exeLabels, resultSecurityDescriptor } = options;
+  const { policyEnforcer, exeLabels, resultSecurityDescriptor, inputDescriptor } = options;
+  // Rule preconditions look at INPUT data labels. resultSecurityDescriptor at this
+  // point already has the exe's own labels (e.g. 'llm') and source-language taint
+  // (e.g. 'src:js') merged in, which would make hasUserLabels() return true and
+  // suppress the unlabeled-default promotion (m-c713). Prefer the input-only
+  // descriptor when supplied.
+  const inputTaintSource = inputDescriptor ?? resultSecurityDescriptor;
   const outputDescriptor = policyEnforcer.applyOutputPolicyLabels(
     resultSecurityDescriptor,
     {
-      inputTaint: descriptorToInputTaint(resultSecurityDescriptor),
-      exeLabels
+      inputTaint: descriptorToInputTaint(inputTaintSource),
+      exeLabels,
+      inputDescriptor
     }
   );
   return outputDescriptor ?? resultSecurityDescriptor;

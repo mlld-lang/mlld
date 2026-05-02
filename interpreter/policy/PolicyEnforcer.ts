@@ -36,12 +36,16 @@ export class PolicyEnforcer {
 
   applyOutputPolicyLabels(
     descriptor: SecurityDescriptor | undefined,
-    ctx: { inputTaint: readonly string[]; exeLabels: readonly string[] }
+    ctx: {
+      inputTaint: readonly string[];
+      exeLabels: readonly string[];
+      inputDescriptor?: SecurityDescriptor;
+    }
   ): SecurityDescriptor | undefined {
     if (!this.policy) {
       return descriptor;
     }
-    const baseDescriptor = this.applyDefaultTrustLabel(descriptor);
+    const baseDescriptor = this.applyDefaultTrustLabel(descriptor, ctx.inputDescriptor);
     if (!shouldAddInfluencedLabel(this.policy, ctx.inputTaint, ctx.exeLabels)) {
       return baseDescriptor;
     }
@@ -51,7 +55,10 @@ export class PolicyEnforcer {
       : influencedDescriptor;
   }
 
-  applyDefaultTrustLabel(descriptor: SecurityDescriptor | undefined): SecurityDescriptor | undefined {
+  applyDefaultTrustLabel(
+    descriptor: SecurityDescriptor | undefined,
+    inputDescriptor?: SecurityDescriptor
+  ): SecurityDescriptor | undefined {
     if (!this.policy) {
       return descriptor;
     }
@@ -59,14 +66,24 @@ export class PolicyEnforcer {
     if (!defaultTrust || !descriptor) {
       return descriptor;
     }
-    const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
-    const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
-    const sources = Array.isArray(descriptor.sources) ? descriptor.sources : [];
-    const tools = Array.isArray(descriptor.tools) ? descriptor.tools : [];
-    if (labels.length === 0 && taint.length === 0 && sources.length === 0 && tools.length === 0) {
+    // The "is this unlabeled?" decision should look at the input data descriptor
+    // when available, not the merged result descriptor — otherwise the exe's
+    // own labels (e.g. 'llm') and source-language taint look like user labels
+    // and suppress the default-trust promotion. See m-c713.
+    const decisionDescriptor = inputDescriptor ?? descriptor;
+    const decisionLabels = Array.isArray(decisionDescriptor.labels) ? decisionDescriptor.labels : [];
+    const decisionTaint = Array.isArray(decisionDescriptor.taint) ? decisionDescriptor.taint : [];
+    const decisionSources = Array.isArray(decisionDescriptor.sources) ? decisionDescriptor.sources : [];
+    const decisionTools = Array.isArray(decisionDescriptor.tools) ? decisionDescriptor.tools : [];
+    if (
+      decisionLabels.length === 0 &&
+      decisionTaint.length === 0 &&
+      decisionSources.length === 0 &&
+      decisionTools.length === 0
+    ) {
       return descriptor;
     }
-    const hasUserLabel = [...labels, ...taint].some(label => {
+    const hasUserLabel = [...decisionLabels, ...decisionTaint].some(label => {
       if (label.startsWith('src:') || label.startsWith('dir:')) {
         return false;
       }
@@ -78,6 +95,8 @@ export class PolicyEnforcer {
     if (hasUserLabel) {
       return descriptor;
     }
+    const labels = Array.isArray(descriptor.labels) ? descriptor.labels : [];
+    const taint = Array.isArray(descriptor.taint) ? descriptor.taint : [];
     if (labels.includes(defaultTrust) || taint.includes(defaultTrust)) {
       return descriptor;
     }

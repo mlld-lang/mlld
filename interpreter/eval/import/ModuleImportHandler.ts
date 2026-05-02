@@ -2,6 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import { MlldImportError, ErrorSeverity } from '@core/errors';
 import { deriveImportTaint } from '@core/security/taint';
 import { makeSecurityDescriptor } from '@core/types/security';
+import { PolicyEnforcer } from '@interpreter/policy/PolicyEnforcer';
 import type { Environment } from '../../env/Environment';
 import type { EvalResult } from '../../core/interpreter';
 import type { ImportResolution } from './ImportPathResolver';
@@ -88,13 +89,24 @@ export class ModuleImportHandler {
           sourceType: 'module',
           labels: resolverContent.mx?.labels
         });
-        env.recordSecurityDescriptor(
-          makeSecurityDescriptor({
-            taint: importDescriptor.taint,
-            labels: importDescriptor.labels,
-            sources: importDescriptor.sources
-          })
-        );
+        let importDescriptorRecord = makeSecurityDescriptor({
+          taint: importDescriptor.taint,
+          labels: importDescriptor.labels,
+          sources: importDescriptor.sources
+        });
+        // Apply the policy's `defaults.unlabeled` trust label to dynamic-module
+        // imports (e.g. SDK `@payload`) at ingestion. Other resolver-loaded
+        // modules already have their own trust-resolution paths (signer-based
+        // for files, URL handler for network); dynamic modules carry only
+        // `src:dynamic` and previously slipped through unlabeled. See m-c713.
+        if (resolverContent.resolverName === 'dynamic') {
+          const policyEnforcer = new PolicyEnforcer(env.getPolicySummary());
+          const promoted = policyEnforcer.applyDefaultTrustLabel(importDescriptorRecord);
+          if (promoted) {
+            importDescriptorRecord = promoted;
+          }
+        }
+        env.recordSecurityDescriptor(importDescriptorRecord);
 
         await this.validateLockFileVersion(resolverContent, env);
         return await importFromResolverContent(directive, candidate, resolverContent, env);

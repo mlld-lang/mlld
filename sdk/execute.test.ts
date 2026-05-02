@@ -353,6 +353,146 @@ describe('execute', () => {
     expect(payloadModule?.content).toContain("/var untrusted @tool_result = 'external'");
   });
 
+  it('applies policy unlabeled default to payload-imported variables (m-c713)', async () => {
+    // When `policy.defaults.unlabeled = "untrusted"` is in scope at payload
+    // import time, payload-imported fields should pick up `untrusted` the same
+    // way file/cmd ingestion does. Without the ingestion-time default, the
+    // downstream untrusted-llms-get-influenced rule never fires for SDK-injected
+    // payload because the value carries only the system source label
+    // `src:dynamic` and never gets promoted to `untrusted`.
+    await fileSystem.writeFile(
+      routePath,
+      [
+        '/policy @policy = {',
+        '  defaults: { rules: ["untrusted-llms-get-influenced"], unlabeled: "untrusted" },',
+        '  capabilities: { allow: ["sh", "js", "node", "cmd:*"] },',
+        '  operations: { exfil: ["exfil:send"] },',
+        '  labels: { influenced: { deny: ["exfil"] } }',
+        '}',
+        '/import { @query } from @payload',
+        '/exe llm @stubLlm(prompt, config) = js { return `STUB:${prompt}`; }',
+        '/var @raw = @stubLlm(@query, {}) with { policy: @policy }',
+        '/show @query.mx.labels.includes("untrusted")',
+        '/show @query.mx.labels.includes("src:dynamic")',
+        '/show @raw.mx.labels.includes("influenced")',
+        '/show @raw.mx.labels.includes("untrusted")'
+      ].join('\n')
+    );
+
+    const result = await execute(
+      routePath,
+      { query: 'Alice loves painting' },
+      { fileSystem, pathService }
+    );
+
+    const lines = result.output
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(lines).toEqual(['true', 'true', 'true', 'true']);
+  });
+
+  it('preserves influenced label across let-binding inside nested exe blocks (m-c713)', async () => {
+    // Production canary scenario: rig wraps the LLM call inside multiple
+    // exe-block layers. The descriptor-with-influenced is correctly attached
+    // at the inner LLM exec-invocation, but a shallow mergeMetadata in
+    // createStructuredValue lets an env-snapshot security descriptor
+    // override the value's own (rule-applied) descriptor when the let
+    // binding constructs the Variable. The fix re-merges security
+    // descriptors explicitly so neither side's labels are lost.
+    await fileSystem.writeFile(
+      routePath,
+      [
+        '/policy @policy = {',
+        '  defaults: { rules: ["untrusted-llms-get-influenced"], unlabeled: "untrusted" },',
+        '  capabilities: { allow: ["sh", "js", "node", "cmd:*"] },',
+        '  operations: { exfil: ["exfil:send"] },',
+        '  labels: { influenced: { deny: ["exfil"] } }',
+        '}',
+        '/exe llm @innerLlm(prompt, config) = js { return `INNER:${prompt}` }',
+        '/exe llm @llmCall(prompt, config) = when [',
+        '  * => @innerLlm(@prompt, @config)',
+        ']',
+        '/exe @runDerive(prompt) = [',
+        '  let @raw = @llmCall(@prompt, {}) with { policy: @policy }',
+        '  show `INSIDE @raw.mx.labels.includes("influenced")`',
+        '  => @raw',
+        ']',
+        '/exe @plannerDerive(prompt) = [',
+        '  let @derived = @runDerive(@prompt)',
+        '  show `MID @derived.mx.labels.includes("influenced")`',
+        '  => @derived',
+        ']',
+        '/var untrusted @prompt = "Alice loves painting"',
+        '/var @final = @plannerDerive(@prompt)',
+        '/show `OUT @final.mx.labels.includes("influenced")`'
+      ].join('\n')
+    );
+
+    const result = await execute(
+      routePath,
+      undefined,
+      { fileSystem, pathService }
+    );
+
+    const lines = result.output
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(lines).toEqual([
+      'INSIDE true',
+      'MID true',
+      'OUT true'
+    ]);
+  });
+
+  it('fires untrusted-llms-get-influenced when input carries untrusted alongside non-system meta-labels (m-c713)', async () => {
+    // Production canary scenario: by the time an LLM call is dispatched in a
+    // multi-stage pipeline, the input arg carries `untrusted` plus a swarm of
+    // non-system meta-labels ("role:planner", "tool:r", "extract:r",
+    // "recursive", "llm", etc.). Pre-fix, applyExecOutputPolicyLabels computed
+    // inputTaint from the merged result descriptor, which mixed in the exe's
+    // own labels and the source-language taint. shouldAddInfluencedLabel still
+    // fires when `untrusted` is on input regardless, but the parallel issue
+    // affecting applyDefaultTrustLabel meant `untrusted` could be suppressed
+    // from the OUTPUT — and downstream consumers checking `.mx.labels` saw a
+    // stripped result. This test exercises the input-only descriptor path.
+    await fileSystem.writeFile(
+      routePath,
+      [
+        '/policy @policy = {',
+        '  defaults: { rules: ["untrusted-llms-get-influenced"], unlabeled: "untrusted" },',
+        '  capabilities: { allow: ["sh", "js", "node", "cmd:*"] },',
+        '  operations: { exfil: ["exfil:send"] },',
+        '  labels: { influenced: { deny: ["exfil"] } }',
+        '}',
+        '/var untrusted @msg = "Alice loves painting"',
+        '/exe llm @stubLlm(prompt, config) = js { return `STUB:${prompt}`; }',
+        '/var @raw = @stubLlm(@msg, {}) with { policy: @policy }',
+        '/show @raw.mx.labels.includes("influenced")',
+        '/show @raw.mx.labels.includes("untrusted")'
+      ].join('\n')
+    );
+
+    const result = await execute(
+      routePath,
+      undefined,
+      { fileSystem, pathService }
+    );
+
+    const lines = result.output
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    expect(lines).toEqual(['true', 'true']);
+  });
+
   it('applies payload labels and labeled state updates during stream execution', async () => {
     await fileSystem.writeFile(
       routePath,
