@@ -14,6 +14,18 @@ async function readAuditLog(
     .map(line => JSON.parse(line) as Record<string, unknown>);
 }
 
+async function readAuditWriteIndex(
+  fileSystem: MemoryFileSystem,
+  projectRoot: string
+): Promise<Array<Record<string, unknown>>> {
+  const contents = await fileSystem.readFile(`${projectRoot}/.llm/sec/audit-writes.jsonl`);
+  return contents
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as Record<string, unknown>);
+}
+
 describe('AuditLogger', () => {
   it('returns generated ids and writes them into every audit record', async () => {
     const fileSystem = new MemoryFileSystem();
@@ -29,6 +41,13 @@ describe('AuditLogger', () => {
     expect(id.length).toBeGreaterThan(0);
     expect(record?.id).toBe(id);
     expect(record?.event).toBe('write');
+
+    const [indexRecord] = await readAuditWriteIndex(fileSystem, projectRoot);
+    expect(indexRecord).toMatchObject({
+      id,
+      event: 'write',
+      path: '/project/out.txt'
+    });
   });
 
   it('writes toolCall records with the extended payload fields', async () => {
@@ -50,6 +69,9 @@ describe('AuditLogger', () => {
     });
 
     const [record] = await readAuditLog(fileSystem, projectRoot);
+    await expect(
+      fileSystem.readFile(`${projectRoot}/.llm/sec/audit-writes.jsonl`)
+    ).rejects.toThrow();
     expect(record).toMatchObject({
       id: 'tool-audit-id',
       event: 'toolCall',

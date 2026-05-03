@@ -2,7 +2,7 @@ import path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { makeSecurityDescriptor } from '@core/types/security';
 import type { DataLabel, SecurityDescriptor } from '@core/types/security';
-import { auditLogPath } from '@core/paths/state-dirs';
+import { auditLogPath, auditWriteIndexPath } from '@core/paths/state-dirs';
 
 export type AuditFileRecord = {
   taint: string[];
@@ -10,14 +10,31 @@ export type AuditFileRecord = {
 };
 
 type AuditIndexState = {
+  path?: string;
   size?: number;
   records: Map<string, AuditFileRecord>;
 };
 
 const auditIndex = new Map<string, AuditIndexState>();
+const DEFAULT_MAX_FULL_AUDIT_INDEX_BYTES = 16 * 1024 * 1024;
 
 function getAuditLogPath(projectRoot: string): string {
   return auditLogPath(projectRoot);
+}
+
+function getAuditWriteIndexPath(projectRoot: string): string {
+  return auditWriteIndexPath(projectRoot);
+}
+
+function maxFullAuditIndexBytes(): number {
+  const raw = process.env.MLLD_AUDIT_INDEX_MAX_BYTES;
+  if (!raw) {
+    return DEFAULT_MAX_FULL_AUDIT_INDEX_BYTES;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : DEFAULT_MAX_FULL_AUDIT_INDEX_BYTES;
 }
 
 function normalizePath(value: string): string {
@@ -33,21 +50,32 @@ async function loadAuditIndex(
   projectRoot: string,
   state: AuditIndexState
 ): Promise<void> {
+  const writeIndexPath = getAuditWriteIndexPath(projectRoot);
+  const hasWriteIndex = await fileSystem.exists(writeIndexPath).catch(() => false);
   const logPath = getAuditLogPath(projectRoot);
-  const exists = await fileSystem.exists(logPath).catch(() => false);
+  const sourcePath = hasWriteIndex ? writeIndexPath : logPath;
+  const exists = hasWriteIndex || await fileSystem.exists(logPath).catch(() => false);
   if (!exists) {
     state.records.clear();
+    state.path = sourcePath;
     state.size = 0;
     return;
   }
 
-  const stats = await fileSystem.stat(logPath).catch(() => null);
+  const stats = await fileSystem.stat(sourcePath).catch(() => null);
   const size = stats?.size;
-  if (size !== undefined && state.size === size) {
+  if (size !== undefined && state.path === sourcePath && state.size === size) {
     return;
   }
 
-  const content = await fileSystem.readFile(logPath).catch(() => '');
+  if (!hasWriteIndex && size !== undefined && size > maxFullAuditIndexBytes()) {
+    state.records.clear();
+    state.path = sourcePath;
+    state.size = size;
+    return;
+  }
+
+  const content = await fileSystem.readFile(sourcePath).catch(() => '');
   const records = new Map<string, AuditFileRecord>();
 
   for (const line of content.split(/\r?\n/)) {
@@ -96,6 +124,7 @@ async function loadAuditIndex(
   }
 
   state.records = records;
+  state.path = sourcePath;
   state.size = size;
 }
 

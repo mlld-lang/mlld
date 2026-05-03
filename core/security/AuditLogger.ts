@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import { logger } from '@core/utils/logger';
-import { auditLogPath } from '@core/paths/state-dirs';
+import { auditLogPath, auditWriteIndexPath } from '@core/paths/state-dirs';
 import {
   summarizeAuditValue,
   enforceAuditRecordCap
@@ -87,6 +87,10 @@ export async function appendAuditEvent(
   try {
     await fileSystem.mkdir(dirPath, { recursive: true });
     await fileSystem.appendFile(logPath, `${JSON.stringify(capped)}\n`);
+    if (capped.event === 'write' && typeof capped.path === 'string') {
+      const indexPath = auditWriteIndexPath(projectRoot);
+      await fileSystem.appendFile(indexPath, `${JSON.stringify(capped)}\n`);
+    }
   } catch (error) {
     logger.warn('Audit log write failed', { error });
   }

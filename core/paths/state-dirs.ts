@@ -35,6 +35,10 @@ export function auditLogPath(projectRoot: string): string {
   return path.join(projectStateDir(projectRoot), 'sec', 'audit.jsonl');
 }
 
+export function auditWriteIndexPath(projectRoot: string): string {
+  return path.join(projectStateDir(projectRoot), 'sec', 'audit-writes.jsonl');
+}
+
 export function projectCacheDir(projectRoot: string, ...segments: string[]): string {
   return path.join(projectStateDir(projectRoot), 'cache', ...segments);
 }
