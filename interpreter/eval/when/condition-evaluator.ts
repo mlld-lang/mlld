@@ -70,6 +70,13 @@ export async function evaluateCondition(
   return evaluateGenericConditionPath(condition, env, runtime, variableName);
 }
 
+function recordConditionSecurityDescriptor(env: Environment, childEnv: Environment): void {
+  const descriptor = childEnv.getLocalSecurityDescriptor();
+  if (descriptor) {
+    env.recordSecurityDescriptor(descriptor);
+  }
+}
+
 function safeTruthy(
   value: unknown,
   runtime: WhenConditionRuntime,
@@ -157,11 +164,13 @@ async function evaluateExecInvocationCondition(
       };
 
       const result = await invokeExecCondition(modifiedExecNode, childEnv);
+      recordConditionSecurityDescriptor(env, childEnv);
       return evaluateExecResultTruthiness(result, childEnv, runtime);
     }
   }
 
   const result = await invokeExecCondition(execNode, childEnv);
+  recordConditionSecurityDescriptor(env, childEnv);
   return evaluateExecResultTruthiness(result, childEnv, runtime);
 }
 
@@ -192,6 +201,7 @@ async function evaluateGenericConditionPath(
       err
     );
   }
+  recordConditionSecurityDescriptor(env, childEnv);
 
   if (variableName && childEnv.hasVariable('_whenValue')) {
     const whenValue = childEnv.getVariable('_whenValue');

@@ -18,9 +18,31 @@ import { VariableImporter } from '@interpreter/eval/import/VariableImporter';
 import { evaluateAugmentedAssignment, evaluateLetAssignment } from '@interpreter/eval/when';
 import { isLoopControlValue } from './definition-helpers';
 import { analyzeReturnChannels } from './return-channel-analysis';
+import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 
 export interface ExeBlockOptions {
   scope?: 'function' | 'block';
+}
+
+function hasDescriptorSignals(mx: Record<string, unknown>): boolean {
+  return (
+    (Array.isArray(mx.labels) && mx.labels.length > 0) ||
+    (Array.isArray(mx.taint) && mx.taint.length > 0) ||
+    (Array.isArray(mx.attestations) && mx.attestations.length > 0) ||
+    (Array.isArray(mx.sources) && mx.sources.length > 0) ||
+    (Array.isArray(mx.urls) && mx.urls.length > 0) ||
+    (Array.isArray(mx.tools) && mx.tools.length > 0) ||
+    Boolean(mx.policy)
+  );
+}
+
+function recordAssignedVariableDescriptor(env: Environment, name: string): void {
+  const variable = env.getCurrentVariables().get(name);
+  const mx = variable?.mx;
+  if (!mx || !hasDescriptorSignals(mx as Record<string, unknown>)) {
+    return;
+  }
+  env.recordSecurityDescriptor(varMxToSecurityDescriptor(mx));
 }
 
 export async function evaluateExeBlock(
@@ -83,10 +105,12 @@ export async function evaluateExeBlock(
     for (const [index, stmt] of statements.entries()) {
       if (isLetAssignment(stmt)) {
         blockEnv = await evaluateLetAssignment(stmt, blockEnv);
+        recordAssignedVariableDescriptor(blockEnv, stmt.identifier);
         continue;
       }
       if (isAugmentedAssignment(stmt)) {
         blockEnv = await evaluateAugmentedAssignment(stmt, blockEnv);
+        recordAssignedVariableDescriptor(blockEnv, stmt.identifier);
         continue;
       }
       if (stmt.type === 'ExeReturn') {

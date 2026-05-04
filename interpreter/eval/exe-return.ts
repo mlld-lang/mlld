@@ -168,16 +168,15 @@ export async function resolveExeReturnValue(
     preserveBareVariableReference
   });
   let returnValue = result.value;
-  if (preserveBareVariableReference) {
-    const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
-    if (isVariable(returnValue) && !isExecutableVariable(returnValue)) {
-      const extractedValue = await extractVariableValue(returnValue, result.env || evaluationEnv);
-      const preserveVariableWrapper =
-        Boolean(returnValue.mx && hasSecurityVarMx(returnValue.mx))
-        && !isStructuredValue(extractedValue);
-      if (!preserveVariableWrapper) {
-        returnValue = extractedValue;
-      }
+  const { extractVariableValue, isVariable } = await import('../utils/variable-resolution');
+  if (isVariable(returnValue) && !isExecutableVariable(returnValue)) {
+    const extractedValue = await extractVariableValue(returnValue, result.env || evaluationEnv);
+    const preserveVariableWrapper =
+      preserveBareVariableReference &&
+      Boolean(returnValue.mx && hasSecurityVarMx(returnValue.mx)) &&
+      !isStructuredValue(extractedValue);
+    if (!preserveVariableWrapper) {
+      returnValue = extractedValue;
     }
   }
   const descriptor = options.isolateSecurityDescriptor

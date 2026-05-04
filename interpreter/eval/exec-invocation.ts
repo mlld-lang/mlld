@@ -5960,6 +5960,17 @@ async function evaluateExecInvocationInternal(
     result = strictToolResult;
   }
 
+  if (hasLlmLabel && result && typeof result === 'object') {
+    const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+    if (isVariable(result) && !isExecutableVariable(result)) {
+      let extracted = await extractVariableValue(result, execEnv);
+      while (isVariable(extracted) && !isExecutableVariable(extracted)) {
+        extracted = await extractVariableValue(extracted, execEnv);
+      }
+      result = extracted;
+    }
+  }
+
   if (hasLlmLabel) {
     result = attachLlmResultMetadata(wrapExecResult(result), execEnv);
   }
