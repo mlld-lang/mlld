@@ -207,21 +207,21 @@ function extractUrlsFromValueInternal(
     return;
   }
 
-  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(record))) {
-    if (!descriptor.enumerable || SKIPPED_OBJECT_KEYS.has(key)) {
+  for (const key of Object.keys(record)) {
+    if (SKIPPED_OBJECT_KEYS.has(key)) {
       continue;
     }
 
-    if ('get' in descriptor || 'set' in descriptor) {
+    const descriptor = Object.getOwnPropertyDescriptor(record, key);
+    if (!descriptor || !('value' in descriptor)) {
       continue;
     }
 
-    const entry = descriptor.value;
-    if (typeof entry === 'function') {
+    if (typeof descriptor.value === 'function') {
       continue;
     }
 
-    extractUrlsFromValueInternal(entry, seenObjects, urls, seenUrls);
+    extractUrlsFromValueInternal(descriptor.value, seenObjects, urls, seenUrls);
   }
 }
 

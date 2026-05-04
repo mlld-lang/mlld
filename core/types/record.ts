@@ -78,6 +78,7 @@ const RECORD_PROJECTION_CACHE_LIMIT = 4096;
 const RECORD_PROJECTION_KEY_LIMIT = 8192;
 const RECORD_FIELD_PROJECTION_CACHE = new Map<string, RecordFieldProjectionMetadata>();
 const RECORD_OBJECT_PROJECTION_CACHE = new Map<string, RecordObjectProjectionMetadata>();
+const RECORD_DISPLAY_KEY_CACHE = new WeakMap<object, string | null>();
 
 function rememberBounded<T>(cache: Map<string, T>, key: string, value: T, limit: number): T {
   const existing = cache.get(key);
@@ -130,7 +131,36 @@ function stableSerialize(value: unknown): string | undefined {
 }
 
 function displayKey(display: RecordDisplayConfig): string | undefined {
+  if (display && typeof display === 'object') {
+    const cached = RECORD_DISPLAY_KEY_CACHE.get(display);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
+  }
   const key = stableSerialize(display);
+  const bounded = key && key.length <= RECORD_PROJECTION_KEY_LIMIT ? key : undefined;
+  if (display && typeof display === 'object') {
+    RECORD_DISPLAY_KEY_CACHE.set(display, bounded ?? null);
+  }
+  return bounded;
+}
+
+function cacheKey(parts: readonly unknown[]): string | undefined {
+  const key = `[${parts.map(part => JSON.stringify(part)).join(',')}]`;
+  return key.length <= RECORD_PROJECTION_KEY_LIMIT ? key : undefined;
+}
+
+function sortedFieldsKey(
+  fields: RecordObjectProjectionMetadata['fields']
+): string | undefined {
+  const parts = Object.entries(fields)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, field]) => [
+      name,
+      field.classification,
+      field.dataTrust ?? null
+    ]);
+  const key = stableSerialize(parts);
   return key && key.length <= RECORD_PROJECTION_KEY_LIMIT ? key : undefined;
 }
 
@@ -175,16 +205,16 @@ export function internRecordFieldProjectionMetadata(
   if (!serializedDisplay) {
     return freezeFieldProjection(projection);
   }
-  const key = stableSerialize({
-    kind: projection.kind,
-    recordName: projection.recordName,
-    fieldName: projection.fieldName,
-    classification: projection.classification,
-    dataTrust: projection.dataTrust ?? null,
-    display: JSON.parse(serializedDisplay) as unknown
-  });
+  const key = cacheKey([
+    projection.kind,
+    projection.recordName,
+    projection.fieldName,
+    projection.classification,
+    projection.dataTrust ?? null,
+    serializedDisplay
+  ]);
   const frozen = freezeFieldProjection(projection);
-  return key && key.length <= RECORD_PROJECTION_KEY_LIMIT
+  return key
     ? rememberBounded(RECORD_FIELD_PROJECTION_CACHE, key, frozen, RECORD_PROJECTION_CACHE_LIMIT)
     : frozen;
 }
@@ -196,25 +226,17 @@ export function internRecordObjectProjectionMetadata(
   if (!serializedDisplay) {
     return freezeObjectProjection(projection);
   }
-  const sortedFields = Object.fromEntries(
-    Object.entries(projection.fields)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([name, field]) => [
-        name,
-        {
-          classification: field.classification,
-          dataTrust: field.dataTrust ?? null
-        }
+  const fieldsKey = sortedFieldsKey(projection.fields);
+  const key = fieldsKey
+    ? cacheKey([
+        projection.kind,
+        projection.recordName,
+        serializedDisplay,
+        fieldsKey
       ])
-  );
-  const key = stableSerialize({
-    kind: projection.kind,
-    recordName: projection.recordName,
-    display: JSON.parse(serializedDisplay) as unknown,
-    fields: sortedFields
-  });
+    : undefined;
   const frozen = freezeObjectProjection(projection);
-  return key && key.length <= RECORD_PROJECTION_KEY_LIMIT
+  return key
     ? rememberBounded(RECORD_OBJECT_PROJECTION_CACHE, key, frozen, RECORD_PROJECTION_CACHE_LIMIT)
     : frozen;
 }

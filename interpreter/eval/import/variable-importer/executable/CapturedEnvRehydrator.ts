@@ -21,6 +21,8 @@ export type CapturedEnvVariableFactory = (
 ) => Variable;
 
 export class CapturedEnvRehydrator {
+  private readonly rehydratedModuleScopeSizes = new WeakMap<object, number>();
+
   deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
     const result: ShadowEnvironmentCapture = {};
 
@@ -78,6 +80,9 @@ export class CapturedEnvRehydrator {
     createVariableFromValue?: CapturedEnvVariableFactory,
     env?: Environment
   ): void {
+    if (this.rehydratedModuleScopeSizes.get(moduleEnv) === moduleEnv.size) {
+      return;
+    }
     cache.set(moduleEnv, moduleEnv);
 
     for (const [, variable] of moduleEnv) {
@@ -122,6 +127,8 @@ export class CapturedEnvRehydrator {
       sealCapturedModuleEnv(internal, moduleEnv);
       variable.internal = internal;
     }
+
+    this.rehydratedModuleScopeSizes.set(moduleEnv, moduleEnv.size);
   }
 
   private extractMetadataMap(
