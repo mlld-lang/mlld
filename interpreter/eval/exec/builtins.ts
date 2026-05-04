@@ -86,12 +86,15 @@ export const BUILTIN_METHODS: readonly (
   'isDefined'
 ];
 
+const BUILTIN_METHOD_SET = new Set<string>(BUILTIN_METHODS);
+const TYPE_CHECKING_BUILTIN_SET = new Set<string>(TYPE_CHECKING_BUILTINS);
+
 export function isBuiltinMethod(name: string): boolean {
-  return (BUILTIN_METHODS as readonly string[]).includes(name);
+  return BUILTIN_METHOD_SET.has(name);
 }
 
 export function isTypeCheckingBuiltinMethod(name: string): boolean {
-  return (TYPE_CHECKING_BUILTINS as readonly string[]).includes(name);
+  return TYPE_CHECKING_BUILTIN_SET.has(name);
 }
 
 const STRUCTURED_ARRAY_STRING_VIEW_METHODS = new Set<string>([

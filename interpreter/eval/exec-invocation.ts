@@ -49,7 +49,7 @@ import {
   type StructuredValue
 } from '../utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
-import { inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import { getExpressionProvenance, inheritExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
 import { coerceValueForStdin } from '../utils/shell-value';
 import { wrapExecResult, wrapPipelineResult } from '../utils/structured-exec';
 import {
@@ -90,6 +90,7 @@ import {
   dispatchBuiltinMethod,
   evaluateBuiltinArguments,
   isBuiltinMethod,
+  isTypeCheckingBuiltinMethod,
   normalizeBuiltinTargetValue,
   resolveBuiltinInvocationObject
 } from './exec/builtins';
@@ -217,6 +218,64 @@ function resolveObjectMethod(obj: unknown, name: string): unknown {
   }
   // Plain objects
   return record[name];
+}
+
+function hasNonEmptyDescriptorArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasCheapMxDescriptorSignals(mx: unknown): boolean {
+  if (!mx || typeof mx !== 'object') {
+    return false;
+  }
+  const record = mx as Record<string, unknown>;
+  return (
+    hasNonEmptyDescriptorArray(record.labels) ||
+    hasNonEmptyDescriptorArray(record.taint) ||
+    hasNonEmptyDescriptorArray(record.attestations) ||
+    hasNonEmptyDescriptorArray(record.sources) ||
+    hasNonEmptyDescriptorArray(record.urls) ||
+    hasNonEmptyDescriptorArray(record.tools) ||
+    Boolean(record.policy)
+  );
+}
+
+function hasCheapMetadataDescriptorSignals(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
+  const record = metadata as Record<string, unknown>;
+  return Boolean(
+    record.security ||
+      hasNonEmptyDescriptorArray(record.factsources) ||
+      record.projection
+  );
+}
+
+function hasCheapValueDescriptorSignals(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (getExpressionProvenance(value)) {
+    return true;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    hasCheapMxDescriptorSignals(record.mx) ||
+    hasCheapMetadataDescriptorSignals(record.metadata)
+  );
+}
+
+function hasCheapBuiltinSourceDescriptorSignals(
+  objectValue: unknown,
+  objectVar: Variable | undefined,
+  sourceDescriptor: SecurityDescriptor | undefined
+): boolean {
+  return Boolean(
+    sourceDescriptor ||
+      hasCheapValueDescriptorSignals(objectValue) ||
+      (objectVar && hasCheapMxDescriptorSignals(objectVar.mx))
+  );
 }
 
 function isSerializedExecutableValue(value: unknown): boolean {
@@ -886,6 +945,7 @@ async function ensureCapturedModuleEnvMap(
   if (variableLike?.internal) {
     sealCapturedModuleEnv(variableLike.internal, moduleEnvMap);
   }
+  sealCapturedModuleEnv(variableLike, moduleEnvMap);
 
   return moduleEnvMap;
 }
@@ -2846,12 +2906,14 @@ async function evaluateExecInvocationInternal(
   let mcpIdleRetained = false;
   const skipInternalToolCallTracking = (node as any)?.meta?.toolCallTracking === 'router';
   const invocationWithClause = normalizeInvocationWithClause(node);
+  const shouldTraceEnclosingLlmExecMemory =
+    env.isRuntimeMemoryTraceEnabled() && env.hasExeLabel('llm');
   const traceEnclosingLlmExecMemory = (
     label: string,
     phase: 'start' | 'finish',
     data: Record<string, unknown> = {}
   ): void => {
-    if (!env.hasExeLabel('llm')) {
+    if (!shouldTraceEnclosingLlmExecMemory) {
       return;
     }
     env.emitRuntimeMemoryTrace(`llm.exec.${label}`, phase, {
@@ -3195,8 +3257,12 @@ async function evaluateExecInvocationInternal(
   // nested calls like @f(@f(x)) are not incorrectly blocked — arguments are
   // evaluated in the caller's scope before the callee's body begins executing.
   const isBuiltinCommand = isBuiltinMethod(commandName);
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
+  const hasObjectDispatch = Boolean(commandRefWithObject.objectReference || commandRefWithObject.objectSource);
   traceEnclosingLlmExecMemory('resolve_lookup', 'start');
-  const existingVar = env.hasVariable(commandName)
+  const existingVar = isBuiltinCommand && hasObjectDispatch
+    ? null
+    : env.hasVariable(commandName)
     ? (env.getVariable(commandName) as any)
     : null;
   traceEnclosingLlmExecMemory('resolve_lookup', 'finish');
@@ -3217,11 +3283,10 @@ async function evaluateExecInvocationInternal(
   let variable;
   let collectionDispatchContext: CollectionDispatchContext | undefined;
   let objectMethodExecutableDispatch = false;
-  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: unknown };
   traceEnclosingLlmExecMemory('resolve_dispatch', 'start', {
-    hasObjectRef: Boolean(commandRefWithObject.objectReference || commandRefWithObject.objectSource)
+    hasObjectRef: hasObjectDispatch
   });
-  if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
+  if (node.commandRef && hasObjectDispatch) {
     let namespaceMethodPreferred = false;
     if (commandRefWithObject.objectReference) {
       const namespaceCandidate = await resolveNamespaceMethodCandidate(
@@ -3254,6 +3319,30 @@ async function evaluateExecInvocationInternal(
       let objectValue = builtinResolution.value.objectValue;
       const objectVar = builtinResolution.value.objectVar;
       const sourceDescriptor = builtinResolution.value.sourceDescriptor;
+      const postFieldsBuiltin: any[] = (node as any).fields || [];
+      const canUseDescriptorFreeBuiltinFastPath =
+        args.length === 0 &&
+        postFieldsBuiltin.length === 0 &&
+        !hasCheapBuiltinSourceDescriptorSignals(objectValue, objectVar, sourceDescriptor);
+
+      if (canUseDescriptorFreeBuiltinFastPath && isTypeCheckingBuiltinMethod(commandName)) {
+        const typeCheckTarget = commandName === 'isDefined'
+          ? objectValue
+          : normalizeBuiltinTargetValue(objectValue, commandName);
+        const dispatchResult = dispatchBuiltinMethod({
+          commandName,
+          objectValue: typeCheckTarget,
+          evaluatedArgs: []
+        });
+        return applyInvocationWithClause(dispatchResult.result);
+      }
+
+      if (canUseDescriptorFreeBuiltinFastPath && commandName === 'length') {
+        const lengthTarget = normalizeBuiltinTargetValue(objectValue, commandName);
+        if (typeof lengthTarget === 'string' || Array.isArray(lengthTarget)) {
+          return applyInvocationWithClause(lengthTarget.length);
+        }
+      }
 
       chainDebug('builtin invocation start', {
         commandName,
@@ -3307,7 +3396,6 @@ async function evaluateExecInvocationInternal(
       }
       
       // Apply post-invocation fields if present (e.g., @str.split(',')[1])
-      const postFieldsBuiltin: any[] = (node as any).fields || [];
       if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
         const { accessField } = await import('../utils/field-access');
         for (const f of postFieldsBuiltin) {
@@ -3750,7 +3838,7 @@ async function evaluateExecInvocationInternal(
     phase: 'start' | 'finish',
     data: Record<string, unknown> = {}
   ): void => {
-    if (!hasLlmLabel) {
+    if (!hasLlmLabel || !runtimeEnv.isRuntimeMemoryTraceEnabled()) {
       return;
     }
     runtimeEnv.emitRuntimeMemoryTrace(`llm.exec.${label}`, phase, {
@@ -5229,11 +5317,9 @@ async function evaluateExecInvocationInternal(
           metadata: effectiveToolMetadata
         })
       : undefined;
-  const toolAuditId = trackedToolName.length > 0 ? randomUUID() : undefined;
   let toolBodyExecuted = false;
   let toolBodyStartedAt: number | undefined;
   let toolBodyEndedAt: number | undefined;
-  const toolProvenance = buildToolProvenance(trackedToolName, toolCallArguments, toolAuditId);
   const toolCallRecordBase =
     !skipInternalToolCallTracking && trackedToolName.length > 0
       ? {
@@ -5251,6 +5337,11 @@ async function evaluateExecInvocationInternal(
   const isNestedExecutableCall = enclosingOperation?.type === 'exe';
   const isInsideLlmFrame = Array.from(env.getEnclosingExeLabels()).includes('llm');
   const shouldWriteToolAuditEvent = !isNestedExecutableCall || isSurfacedToolCall;
+  const toolAuditId =
+    shouldWriteToolAuditEvent && trackedToolName.length > 0 ? randomUUID() : undefined;
+  const toolProvenance = toolAuditId
+    ? buildToolProvenance(trackedToolName, toolCallArguments, toolAuditId)
+    : undefined;
   const shouldTraceLlmToolCall =
     isSurfacedToolCall &&
     trackedToolName.length > 0 &&
@@ -5363,18 +5454,20 @@ async function evaluateExecInvocationInternal(
         });
       }
     }
-    const validationArgs = buildToolInputValidationArguments({
-      paramNames: params,
-      evaluatedArgs,
-      metadata: effectiveToolMetadata,
-      argSecurityDescriptors: effectiveArgSecurityDescriptors,
-      argFactSourceDescriptors: effectiveArgFactSourceDescriptors
-    });
-    validateToolInputSchema({
-      env,
-      metadata: effectiveToolMetadata,
-      args: validationArgs
-    });
+    if (effectiveToolMetadata.inputSchema) {
+      const validationArgs = buildToolInputValidationArguments({
+        paramNames: params,
+        evaluatedArgs,
+        metadata: effectiveToolMetadata,
+        argSecurityDescriptors: effectiveArgSecurityDescriptors,
+        argFactSourceDescriptors: effectiveArgFactSourceDescriptors
+      });
+      validateToolInputSchema({
+        env,
+        metadata: effectiveToolMetadata,
+        args: validationArgs
+      });
+    }
     enforceUpdateToolArguments({
       metadata: effectiveToolMetadata,
       args: authorizationArgs,

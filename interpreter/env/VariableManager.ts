@@ -23,6 +23,7 @@ export interface IVariableManager {
   setParameterVariable(name: string, variable: Variable): void;
   updateVariable(name: string, variable: Variable): void;
   getVariable(name: string): Variable | undefined;
+  getVariableForChildLookup(name: string): Variable | undefined;
   getVariableValue(name: string): any;
   hasVariable(name: string): boolean;
   getAllVariables(): Map<string, Variable>;
@@ -70,6 +71,7 @@ export interface VariableManagerDependencies {
 export interface VariableManagerContext {
   hasVariable(name: string): boolean;
   getVariable(name: string): Variable | undefined;
+  getVariableForChildLookup?(name: string): Variable | undefined;
   getAllVariables(): Map<string, Variable>;
 }
 
@@ -290,6 +292,21 @@ export class VariableManager implements IVariableManager {
   }
 
   getVariable(name: string): Variable | undefined {
+    return this.getVariableInternal(name, true);
+  }
+
+  getVariableForChildLookup(name: string): Variable | undefined {
+    return this.getVariableInternal(name, false);
+  }
+
+  private recordVariableDescriptor(variable: Variable | undefined, recordAccess: boolean): void {
+    if (!recordAccess || !variable?.mx) {
+      return;
+    }
+    this.deps.recordSecurityDescriptor?.(varMxToSecurityDescriptor(variable.mx));
+  }
+
+  private getVariableInternal(name: string, recordAccess: boolean): Variable | undefined {
     // Ambient, read-only @mx support (calculated on access)
     if (name === 'mx') {
       // Allow tests to override via @test_mx
@@ -340,9 +357,7 @@ export class VariableManager implements IVariableManager {
     const parent = this.deps.getParent();
     
     if (variable) {
-      this.deps.recordSecurityDescriptor?.(
-        variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
-      );
+      this.recordVariableDescriptor(variable, recordAccess);
       // Special handling for lazy variables like @debug
       if (variable.internal && 'isLazy' in variable.internal && variable.internal.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
@@ -363,20 +378,18 @@ export class VariableManager implements IVariableManager {
       if (capturedEnv && capturedEnv.has(name)) {
         variable = capturedEnv.get(name);
         if (variable) {
-          this.deps.recordSecurityDescriptor?.(
-            variable.mx ? varMxToSecurityDescriptor(variable.mx) : undefined
-          );
+          this.recordVariableDescriptor(variable, recordAccess);
           return variable;
         }
       }
     }
     
     // Check parent scope for regular variables
-    const parentVar = parent?.getVariable(name);
+    const parentVar = parent?.getVariableForChildLookup
+      ? parent.getVariableForChildLookup(name)
+      : parent?.getVariable(name);
     if (parentVar) {
-      this.deps.recordSecurityDescriptor?.(
-        parentVar.mx ? varMxToSecurityDescriptor(parentVar.mx) : undefined
-      );
+      this.recordVariableDescriptor(parentVar, recordAccess);
       return parentVar;
     }
     

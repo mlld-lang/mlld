@@ -156,32 +156,76 @@ export interface StructuredValueContext {
 
 const EMPTY_LABELS: readonly DataLabel[] = Object.freeze([]);
 const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
+const EMPTY_URLS: readonly string[] = Object.freeze([]);
+const EMPTY_TOOLS: readonly ToolProvenance[] = Object.freeze([]);
 const DEV_ENV = typeof process !== 'undefined' ? process.env : undefined;
 const SHOULD_ASSERT_STRUCTURED =
   DEV_ENV?.MLLD_DEV_ASSERTIONS === 'true' || DEV_ENV?.MLLD_DEBUG_STRUCTURED === 'true';
 
+interface LocalVarMxDescriptorCacheEntry {
+  labels?: readonly DataLabel[];
+  taint?: unknown;
+  attestations?: readonly DataLabel[];
+  sources?: readonly string[];
+  urls?: readonly string[];
+  tools?: readonly ToolProvenance[];
+  policy?: Readonly<Record<string, unknown>> | null;
+  descriptor: SecurityDescriptor;
+}
+
+const LOCAL_VAR_MX_DESCRIPTOR_CACHE = new WeakMap<object, LocalVarMxDescriptorCacheEntry>();
+
 function varMxToSecurityDescriptor(
   mx: {
     labels?: readonly DataLabel[];
-    taint?: string;
+    taint?: readonly DataLabel[] | DataLabel;
+    attestations?: readonly DataLabel[];
     sources?: readonly string[];
     urls?: readonly string[];
+    tools?: readonly ToolProvenance[];
     policy?: Readonly<Record<string, unknown>> | null;
   }
 ): SecurityDescriptor {
-  return makeSecurityDescriptor({
-    labels: mx.labels ? [...mx.labels] : [],
-    taint: Array.isArray(mx.taint) ? [...mx.taint] : [],
-    attestations: Array.isArray((mx as { attestations?: readonly DataLabel[] }).attestations)
-      ? [...((mx as { attestations?: readonly DataLabel[] }).attestations ?? [])]
-      : [],
-    sources: mx.sources ? [...mx.sources] : [],
-    urls: Array.isArray(mx.urls) ? [...mx.urls] : [],
-    tools: Array.isArray((mx as { tools?: readonly ToolProvenance[] }).tools)
-      ? [...((mx as { tools?: readonly ToolProvenance[] }).tools ?? [])]
-      : [],
+  const canCache = Boolean(mx && typeof mx === 'object');
+  const mxObject = mx as object;
+  if (canCache) {
+    const cached = LOCAL_VAR_MX_DESCRIPTOR_CACHE.get(mxObject);
+    if (
+      cached &&
+      cached.labels === mx.labels &&
+      cached.taint === mx.taint &&
+      cached.attestations === mx.attestations &&
+      cached.sources === mx.sources &&
+      cached.urls === mx.urls &&
+      cached.tools === mx.tools &&
+      cached.policy === mx.policy
+    ) {
+      return cached.descriptor;
+    }
+  }
+
+  const descriptor = makeSecurityDescriptor({
+    labels: mx.labels ?? EMPTY_LABELS,
+    taint: Array.isArray(mx.taint) ? mx.taint : EMPTY_LABELS,
+    attestations: Array.isArray(mx.attestations) ? mx.attestations : EMPTY_LABELS,
+    sources: mx.sources ?? EMPTY_SOURCES,
+    urls: Array.isArray(mx.urls) ? mx.urls : EMPTY_URLS,
+    tools: Array.isArray(mx.tools) ? mx.tools : EMPTY_TOOLS,
     policyContext: mx.policy ?? undefined
   });
+  if (canCache) {
+    LOCAL_VAR_MX_DESCRIPTOR_CACHE.set(mxObject, {
+      labels: mx.labels,
+      taint: mx.taint,
+      attestations: mx.attestations,
+      sources: mx.sources,
+      urls: mx.urls,
+      tools: mx.tools,
+      policy: mx.policy,
+      descriptor
+    });
+  }
+  return descriptor;
 }
 
 export function isStructuredValue<T = unknown>(value: unknown): value is StructuredValue<T> {
@@ -470,17 +514,19 @@ function createStructuredValue<T>(
   } as StructuredValue<T>;
 
   const syncMetadataAfterTextMaterialization = (resolvedText: string): void => {
-    const nextMetadata = cloneMetadataWithDerivedUrls(data, resolvedText, metadata);
+    const nextMetadata = cloneMetadataWithAdditionalTextUrls(resolvedText, cachedMetadata ?? metadata);
     if (nextMetadata !== undefined) {
       cachedMetadata = nextMetadata;
       structuredValue.metadata = nextMetadata;
     }
   };
 
-  const defineMaterializedText = (resolvedText: string): void => {
+  const defineMaterializedText = (resolvedText: string, syncMetadata = true): void => {
     cachedText = resolvedText;
     hasMaterializedText = true;
-    syncMetadataAfterTextMaterialization(resolvedText);
+    if (syncMetadata) {
+      syncMetadataAfterTextMaterialization(resolvedText);
+    }
     Object.defineProperty(structuredValue, 'text', {
       value: resolvedText,
       enumerable: true,
@@ -490,7 +536,7 @@ function createStructuredValue<T>(
   };
 
   if (hasMaterializedText) {
-    defineMaterializedText(cachedText ?? '');
+    defineMaterializedText(cachedText ?? '', false);
   } else {
     Object.defineProperty(structuredValue, 'text', {
       enumerable: true,
@@ -519,6 +565,31 @@ function cloneMetadataWithDerivedUrls(
   const urls = extractUrlsFromValue(text === undefined ? [data] : [data, text]);
   const normalizedDescriptor = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
   const security = replaceDescriptorUrls(normalizedDescriptor, urls);
+
+  if (!metadata && !security) {
+    return undefined;
+  }
+
+  const cloned = {
+    ...(metadata ? { ...metadata } : {}),
+    ...(security ? { security } : {})
+  } as StructuredValueMetadata;
+  return Object.freeze(cloned);
+}
+
+function cloneMetadataWithAdditionalTextUrls(
+  text: string,
+  metadata?: StructuredValueMetadata
+): StructuredValueMetadata | undefined {
+  const urls = extractUrlsFromValue(text);
+  if (urls.length === 0) {
+    return metadata;
+  }
+  const normalizedDescriptor = normalizeSecurityDescriptor(metadata?.security as SecurityDescriptor | undefined);
+  const mergedUrls = normalizedDescriptor?.urls && normalizedDescriptor.urls.length > 0
+    ? [...normalizedDescriptor.urls, ...urls]
+    : urls;
+  const security = replaceDescriptorUrls(normalizedDescriptor, mergedUrls);
 
   if (!metadata && !security) {
     return undefined;
@@ -580,12 +651,13 @@ export function applySecurityDescriptorToStructuredValue(
     ...(value.metadata ?? {}),
     security: resolvedDescriptor
   };
-  value.mx.labels = resolvedDescriptor.labels ? [...resolvedDescriptor.labels] : [];
-  value.mx.taint = resolvedDescriptor.taint ? [...resolvedDescriptor.taint] : [];
-  value.mx.attestations = resolvedDescriptor.attestations ? [...resolvedDescriptor.attestations] : [];
-  value.mx.sources = resolvedDescriptor.sources ? [...resolvedDescriptor.sources] : [];
-  value.mx.urls = resolvedDescriptor.urls ? [...resolvedDescriptor.urls] : [];
-  value.mx.tools = resolvedDescriptor.tools ? [...resolvedDescriptor.tools] : [];
+  LOCAL_VAR_MX_DESCRIPTOR_CACHE.delete(value.mx);
+  value.mx.labels = resolvedDescriptor.labels;
+  value.mx.taint = resolvedDescriptor.taint;
+  value.mx.attestations = resolvedDescriptor.attestations;
+  value.mx.sources = resolvedDescriptor.sources;
+  value.mx.urls = resolvedDescriptor.urls ?? EMPTY_URLS;
+  value.mx.tools = resolvedDescriptor.tools ?? EMPTY_TOOLS;
   value.mx.policy = resolvedDescriptor.policyContext ?? null;
 }
 
@@ -739,8 +811,8 @@ function buildVarMxFromMetadata(
     schema: metadata?.schema,
     factsources: Array.isArray(metadata?.factsources) ? internFactSourceArray(metadata.factsources) : undefined,
     sources,
-    urls: normalizedDescriptor.urls ? [...normalizedDescriptor.urls] : [],
-    tools: normalizedDescriptor.tools ? [...normalizedDescriptor.tools] : [],
+    urls: normalizedDescriptor.urls ?? EMPTY_URLS,
+    tools: normalizedDescriptor.tools ?? EMPTY_TOOLS,
     policy: normalizedDescriptor.policyContext ?? null,
     filename: flattenedFilename ?? loadResult?.filename,
     relative: flattenedRelative ?? loadResult?.relative,

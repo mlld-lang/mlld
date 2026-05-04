@@ -2096,7 +2096,22 @@ export class Environment
     if (!descriptor) {
       return;
     }
+    if (
+      descriptor.labels.length === 0
+      && descriptor.taint.length === 0
+      && descriptor.attestations.length === 0
+      && descriptor.sources.length === 0
+      && (descriptor.urls?.length ?? 0) === 0
+      && (descriptor.tools?.length ?? 0) === 0
+      && !descriptor.capability
+      && !descriptor.policyContext
+    ) {
+      return;
+    }
     const runtime = this.ensureSecurityRuntime();
+    if (runtime.descriptor === descriptor) {
+      return;
+    }
     runtime.descriptor = mergeDescriptors(runtime.descriptor, descriptor);
   }
 
@@ -2502,6 +2517,21 @@ export class Environment
       });
     }
     return variable;
+  }
+
+  getVariableForChildLookup(name: string): Variable | undefined {
+    const shadowingVariable =
+      name === 'fyi' || name === 'shelf' || name === 'shelve'
+        ? this.getBuiltinShadowingVariable(name)
+        : undefined;
+    return shadowingVariable ??
+      (name === 'fyi'
+        ? createFyiVariable(this)
+        : name === 'shelf'
+          ? (this.isShelfBuiltinAvailable() ? createShelfBuiltinVariable(this) : undefined)
+        : name === 'shelve'
+          ? (this.isShelfBuiltinAvailable() ? createShelveVariable(this) : undefined)
+        : this.variableManager.getVariableForChildLookup(name));
   }
 
   /**

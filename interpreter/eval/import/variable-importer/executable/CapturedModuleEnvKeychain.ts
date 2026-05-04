@@ -5,6 +5,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
+function hasOwnCapturedModuleEnv(target: Record<string, unknown>): boolean {
+  return Object.prototype.hasOwnProperty.call(target, 'capturedModuleEnv');
+}
+
 /**
  * Store captured module environments in a sealed/non-enumerable slot.
  * This keeps runtime access intact while preventing accidental user-space leaks
@@ -24,16 +28,21 @@ export function sealCapturedModuleEnv(
     return;
   }
 
-  capturedModuleEnvKeychain.set(target, capturedModuleEnv);
+  if (hasOwnCapturedModuleEnv(target) && target.capturedModuleEnv === capturedModuleEnv) {
+    return;
+  }
+
+  const existing = Object.getOwnPropertyDescriptor(target, 'capturedModuleEnv');
+  if (existing && 'value' in existing && existing.enumerable === false) {
+    target.capturedModuleEnv = capturedModuleEnv;
+    return;
+  }
+
   Object.defineProperty(target, 'capturedModuleEnv', {
     configurable: true,
     enumerable: false,
-    get(this: object) {
-      return capturedModuleEnvKeychain.get(this);
-    },
-    set(this: object, next: unknown) {
-      capturedModuleEnvKeychain.set(this, next);
-    }
+    writable: true,
+    value: capturedModuleEnv
   });
 }
 
@@ -56,6 +65,10 @@ export function stashCapturedModuleEnv(
 export function getCapturedModuleEnv(target: unknown): unknown {
   if (!isRecord(target)) {
     return undefined;
+  }
+
+  if (hasOwnCapturedModuleEnv(target)) {
+    return target.capturedModuleEnv;
   }
 
   if (capturedModuleEnvKeychain.has(target)) {

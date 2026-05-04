@@ -359,7 +359,6 @@ async function runUserHooks(
   }
 
   const matches = collectMatchingUserHooks(timing, node, env, operation, inputs);
-  const hookErrors = ensureOperationHookErrorBucket(operation);
   if (matches.length === 0) {
     return {
       inputs,
@@ -367,6 +366,7 @@ async function runUserHooks(
     };
   }
 
+  const hookErrors = ensureOperationHookErrorBucket(operation);
   let currentInputs = inputs;
   let currentResult = result;
   return env.withHookSuppression(async () => {

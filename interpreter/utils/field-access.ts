@@ -38,7 +38,11 @@ import {
 } from './structured-value';
 import { isShelfSlotRefValue } from '@core/types/shelf';
 import { wrapExecResult } from './structured-exec';
-import { inheritExpressionProvenance, setExpressionProvenance } from '@core/types/provenance/ExpressionProvenance';
+import {
+  getExpressionProvenance,
+  inheritExpressionProvenance,
+  setExpressionProvenance
+} from '@core/types/provenance/ExpressionProvenance';
 import type { DataObjectValue } from '@core/types/var';
 import type { WorkspaceValue } from '@core/types/workspace';
 import { isWorkspaceValue } from '@core/types/workspace';
@@ -803,6 +807,186 @@ function hasCapturedModuleEnv(value: unknown): boolean {
   return 'capturedModuleEnv' in (value as Record<string, unknown>);
 }
 
+function hasNonEmptyArray(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasMxSecuritySignals(mx: unknown): boolean {
+  if (!mx || typeof mx !== 'object') {
+    return false;
+  }
+  const record = mx as Record<string, unknown>;
+  return (
+    hasNonEmptyArray(record.labels) ||
+    hasNonEmptyArray(record.taint) ||
+    hasNonEmptyArray(record.attestations) ||
+    hasNonEmptyArray(record.sources) ||
+    hasNonEmptyArray(record.urls) ||
+    hasNonEmptyArray(record.tools) ||
+    Boolean(record.policy)
+  );
+}
+
+function hasNamespaceMetadataSignal(value: unknown): boolean {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { internal?: Record<string, unknown> }).internal &&
+      typeof (value as { internal?: unknown }).internal === 'object' &&
+      (value as { internal?: Record<string, unknown> }).internal?.namespaceMetadata
+  );
+}
+
+function hasMetadataSecuritySignals(metadata: unknown): boolean {
+  return Boolean(
+    metadata &&
+      typeof metadata === 'object' &&
+      (
+        (metadata as Record<string, unknown>).security ||
+        hasNonEmptyArray((metadata as Record<string, unknown>).factsources) ||
+        (metadata as Record<string, unknown>).projection ||
+        (metadata as Record<string, unknown>).loadResult
+      )
+  );
+}
+
+function hasFieldAccessSecuritySignals(
+  value: unknown,
+  options: { allowPlainStructured?: boolean } = {}
+): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (getExpressionProvenance(value)) {
+    return true;
+  }
+  if (isStructuredValue(value)) {
+    if (!options.allowPlainStructured) {
+      return true;
+    }
+    return (
+      hasMxSecuritySignals(value.mx) ||
+      hasMetadataSecuritySignals(value.metadata) ||
+      hasNamespaceMetadataSignal(value)
+    );
+  }
+  if (isVariable(value) || isShelfSlotRefValue(value)) {
+    return true;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    hasMxSecuritySignals(record.mx) ||
+    hasMetadataSecuritySignals(record.metadata) ||
+    hasNamespaceMetadataSignal(record)
+  );
+}
+
+function isSimpleFieldFastPathBlocked(
+  value: unknown,
+  rawValue: unknown,
+  fieldName: string,
+  structuredWrapper?: StructuredValue
+): boolean {
+  if (isVariable(value) || isVariable(rawValue)) {
+    return true;
+  }
+  if (
+    (isStructuredValue(value) && value !== structuredWrapper) ||
+    isStructuredValue(rawValue)
+  ) {
+    return true;
+  }
+  if (isShelfSlotRefValue(value) || isShelfSlotRefValue(rawValue)) {
+    return true;
+  }
+  if (isLoadContentResult(rawValue) || isWorkspaceValue(rawValue) || isObjectAST(rawValue)) {
+    return true;
+  }
+  if (isGuardArgsView(rawValue)) {
+    return true;
+  }
+  if (
+    fieldName === 'mx' ||
+    fieldName === 'keep' ||
+    fieldName === 'keepStructured' ||
+    fieldName === 'internal' ||
+    fieldName === 'edits' ||
+    fieldName === 'diff'
+  ) {
+    return true;
+  }
+  if (
+    fieldName === 'handle' ||
+    fieldName === 'handles'
+  ) {
+    return Boolean(
+      rawValue &&
+        typeof rawValue === 'object' &&
+        (rawValue as Record<PropertyKey, unknown>)[OBJECT_UTILITY_MX_VIEW] === true
+    );
+  }
+  return (
+    hasFieldAccessSecuritySignals(value, { allowPlainStructured: value === structuredWrapper }) ||
+    hasFieldAccessSecuritySignals(rawValue)
+  );
+}
+
+const SIMPLE_FIELD_FAST_PATH_MISS = Symbol('mlld.simpleFieldFastPathMiss');
+
+function trySimpleFieldAccessFastPath(
+  rawValue: unknown,
+  field: FieldAccessNode,
+  fieldName: string,
+  missingValue: null | undefined
+): unknown {
+  switch (field.type) {
+    case 'field':
+    case 'stringIndex':
+    case 'bracketAccess': {
+      if (typeof rawValue === 'string') {
+        return fieldName === 'length'
+          ? rawValue.length
+          : SIMPLE_FIELD_FAST_PATH_MISS;
+      }
+      if (!rawValue || typeof rawValue !== 'object') {
+        return rawValue === null || rawValue === undefined
+          ? missingValue
+          : SIMPLE_FIELD_FAST_PATH_MISS;
+      }
+      if (Array.isArray(rawValue) && fieldName === 'length') {
+        return rawValue.length;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(rawValue, fieldName);
+      if (descriptor && (typeof descriptor.get === 'function' || typeof descriptor.set === 'function')) {
+        return SIMPLE_FIELD_FAST_PATH_MISS;
+      }
+      return fieldName in rawValue
+        ? (rawValue as Record<string, unknown>)[fieldName]
+        : missingValue;
+    }
+    case 'arrayIndex': {
+      if (!Array.isArray(rawValue)) {
+        return SIMPLE_FIELD_FAST_PATH_MISS;
+      }
+      const index = Number(field.value);
+      return index >= 0 && index < rawValue.length ? rawValue[index] : missingValue;
+    }
+    case 'numericField': {
+      if (!rawValue || typeof rawValue !== 'object') {
+        return rawValue === null || rawValue === undefined
+          ? missingValue
+          : SIMPLE_FIELD_FAST_PATH_MISS;
+      }
+      const key = String(field.value);
+      return key in rawValue
+        ? (rawValue as Record<string, unknown>)[key]
+        : missingValue;
+    }
+    default:
+      return SIMPLE_FIELD_FAST_PATH_MISS;
+  }
+}
+
 function isSerializedExecutableWithInternal(value: unknown): boolean {
   if (!value || typeof value !== 'object') {
     return false;
@@ -928,6 +1112,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       : field.type === 'stringIndex' || field.type === 'bracketAccess'
         ? 'bracket'
         : null;
+
+  if (
+    options?.preserveContext === false &&
+    !isSimpleFieldFastPathBlocked(value, rawValue, fieldName, structuredWrapper)
+  ) {
+    const fastValue = trySimpleFieldAccessFastPath(rawValue, field, fieldName, missingValue);
+    if (fastValue !== SIMPLE_FIELD_FAST_PATH_MISS) {
+      return fastValue;
+    }
+  }
 
   if (guardArgsMode && isGuardArgsView(rawValue)) {
     const resolved = resolveGuardArgsViewProperty(rawValue, fieldName, guardArgsMode);

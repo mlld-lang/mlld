@@ -701,7 +701,9 @@ export const guardPreHook: PreHook = async (
 
     logGuardEmitContextDebug(env, operation);
     const registry = env.getGuardRegistry();
-    const variableInputs = materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
+    const variableInputs = inputs.every(isVariable)
+      ? inputs as readonly Variable[]
+      : materializeGuardInputs(inputs, { nameHint: '__guard_input__' });
     const guardArgNames = getGuardArgNamesFromMetadata(operation.metadata);
 
     const runtimePolicyGuards = buildRuntimePolicyGuards(env);

@@ -93,6 +93,10 @@ function collectCandidateGuardIds(candidates: Array<{ guards: GuardDefinition[] 
   return ids;
 }
 
+function isAfterTimingGuard(guard: GuardDefinition): boolean {
+  return guard.timing === 'after' || guard.timing === 'always';
+}
+
 export async function executePostGuard(options: ExecutePostGuardOptions): Promise<EvalResult> {
   const { node, result, inputs, env, operation } = options;
   const guardOverride = normalizeGuardOverride(extractGuardOverride(node));
@@ -120,6 +124,20 @@ export async function executePostGuard(options: ExecutePostGuardOptions): Promis
 
   const retryContext = getGuardRetryContext(env);
   const registry = env.getGuardRegistry();
+  const afterGuards = registry.getAllGuards().filter(isAfterTimingGuard);
+  if (afterGuards.length === 0) {
+    return result;
+  }
+  if (!afterGuards.some(guard => guard.filterKind === 'data')) {
+    const operationOnlyGuards = collectOperationGuards(registry, operation, guardOverride, {
+      timing: 'after',
+      includeDataIndexForOperationKeys: false
+    });
+    if (operationOnlyGuards.length === 0) {
+      return result;
+    }
+  }
+
   const baseOutputValue = normalizeRawOutput(result.value);
   const outputVariables = materializeGuardInputs([result.value], { nameHint: '__guard_output__' });
   const inputVariables = materializeGuardInputs(inputs ?? [], { nameHint: '__guard_input__' });

@@ -165,10 +165,49 @@ const NORMALIZED_TOOL_PROVENANCE = new WeakSet<object>();
 const NORMALIZED_TOOL_ARRAYS = new WeakSet<object>();
 const TOOL_PROVENANCE_KEY_CACHE = new WeakMap<object, string>();
 const TOOL_ARRAY_KEY_CACHE = new WeakMap<object, string>();
+const TOOL_ARRAY_KEY_TOO_LONG = new WeakSet<object>();
+const TOOL_ARRAY_INFO_CACHE = new WeakMap<object, {
+  auditRefs: ReadonlySet<string>;
+  hasAuditlessTool: boolean;
+}>();
+const TOOL_ARRAY_MERGE_CACHE = new WeakMap<object, WeakMap<object, readonly ToolProvenance[]>>();
 const STRING_ARRAY_KEY_CACHE = new WeakMap<object, string>();
 const DESCRIPTOR_CACHE = new Map<string, SecurityDescriptor>();
 const DESCRIPTOR_CACHE_LIMIT = 4096;
 const DESCRIPTOR_KEY_LIMIT = 8192;
+const MERGE_PAIR_CACHE = new WeakMap<SecurityDescriptor, WeakMap<SecurityDescriptor, SecurityDescriptor>>();
+
+function rememberToolArrayInfo(
+  tools: readonly ToolProvenance[],
+  auditRefs: ReadonlySet<string>,
+  hasAuditlessTool: boolean
+): void {
+  TOOL_ARRAY_INFO_CACHE.set(tools as object, {
+    auditRefs,
+    hasAuditlessTool
+  });
+}
+
+function getCachedToolArrayMerge(
+  left: readonly ToolProvenance[],
+  right: readonly ToolProvenance[]
+): readonly ToolProvenance[] | undefined {
+  return TOOL_ARRAY_MERGE_CACHE.get(left as object)?.get(right as object);
+}
+
+function cacheToolArrayMerge(
+  left: readonly ToolProvenance[],
+  right: readonly ToolProvenance[],
+  merged: readonly ToolProvenance[]
+): readonly ToolProvenance[] {
+  let rightMap = TOOL_ARRAY_MERGE_CACHE.get(left as object);
+  if (!rightMap) {
+    rightMap = new WeakMap<object, readonly ToolProvenance[]>();
+    TOOL_ARRAY_MERGE_CACHE.set(left as object, rightMap);
+  }
+  rightMap.set(right as object, merged);
+  return merged;
+}
 
 function freezeArray<T>(values: Iterable<T> | undefined): readonly T[] {
   if (!values) {
@@ -246,6 +285,7 @@ function freezeToolArray(
 
   const deduped: ToolProvenance[] = [];
   const seenAuditRefs = new Set<string>();
+  let hasAuditlessTool = false;
 
   for (const value of values) {
     const normalized = freezeToolProvenanceEntry(value);
@@ -257,6 +297,8 @@ function freezeToolArray(
         continue;
       }
       seenAuditRefs.add(normalized.auditRef);
+    } else {
+      hasAuditlessTool = true;
     }
     deduped.push(normalized);
   }
@@ -267,6 +309,7 @@ function freezeToolArray(
 
   const normalized = Object.freeze(deduped);
   NORMALIZED_TOOL_ARRAYS.add(normalized);
+  rememberToolArrayInfo(normalized, seenAuditRefs, hasAuditlessTool);
   return normalized;
 }
 
@@ -278,7 +321,98 @@ function freezeNormalizedToolArray(
   }
   const normalized = Object.freeze(values);
   NORMALIZED_TOOL_ARRAYS.add(normalized);
+  const auditRefs = new Set<string>();
+  let hasAuditlessTool = false;
+  for (const tool of normalized) {
+    if (tool.auditRef) {
+      auditRefs.add(tool.auditRef);
+    } else {
+      hasAuditlessTool = true;
+    }
+  }
+  rememberToolArrayInfo(normalized, auditRefs, hasAuditlessTool);
   return normalized;
+}
+
+function getToolArrayInfo(tools: readonly ToolProvenance[]): {
+  auditRefs: ReadonlySet<string>;
+  hasAuditlessTool: boolean;
+} {
+  const cached = TOOL_ARRAY_INFO_CACHE.get(tools as object);
+  if (cached) {
+    return cached;
+  }
+  const auditRefs = new Set<string>();
+  let hasAuditlessTool = false;
+  for (const tool of tools) {
+    if (tool.auditRef) {
+      auditRefs.add(tool.auditRef);
+    } else {
+      hasAuditlessTool = true;
+    }
+  }
+  const info = { auditRefs, hasAuditlessTool };
+  TOOL_ARRAY_INFO_CACHE.set(tools as object, info);
+  return info;
+}
+
+function mergeToolArrays(
+  left: readonly ToolProvenance[] | undefined,
+  right: readonly ToolProvenance[] | undefined
+): readonly ToolProvenance[] | undefined {
+  if (!left || left.length === 0) {
+    return right && right.length > 0 ? right : undefined;
+  }
+  if (!right || right.length === 0) {
+    return left;
+  }
+
+  const cached = getCachedToolArrayMerge(left, right);
+  if (cached) {
+    return cached;
+  }
+
+  const leftInfo = getToolArrayInfo(left);
+  const rightInfo = getToolArrayInfo(right);
+  if (!rightInfo.hasAuditlessTool) {
+    let allRightToolsAlreadyPresent = true;
+    for (const auditRef of rightInfo.auditRefs) {
+      if (!leftInfo.auditRefs.has(auditRef)) {
+        allRightToolsAlreadyPresent = false;
+        break;
+      }
+    }
+    if (allRightToolsAlreadyPresent) {
+      return cacheToolArrayMerge(left, right, left);
+    }
+  }
+
+  const seenAuditRefs = new Set(leftInfo.auditRefs);
+  const merged = [...left];
+  let changed = false;
+  for (const tool of right) {
+    if (tool.auditRef) {
+      if (seenAuditRefs.has(tool.auditRef)) {
+        continue;
+      }
+      seenAuditRefs.add(tool.auditRef);
+    }
+    merged.push(tool);
+    changed = true;
+  }
+
+  if (!changed) {
+    return cacheToolArrayMerge(left, right, left);
+  }
+
+  const normalized = Object.freeze(merged);
+  NORMALIZED_TOOL_ARRAYS.add(normalized);
+  rememberToolArrayInfo(
+    normalized,
+    seenAuditRefs,
+    leftInfo.hasAuditlessTool || rightInfo.hasAuditlessTool
+  );
+  return cacheToolArrayMerge(left, right, normalized);
 }
 
 function stableSerialize(value: unknown): string | undefined {
@@ -381,6 +515,60 @@ function toolArrayKey(tools: readonly ToolProvenance[]): string {
   return key;
 }
 
+function quotedStringLowerBound(value: unknown): number {
+  return typeof value === 'string' ? value.length + 2 : 2;
+}
+
+function stringArrayKeyLowerBound(values: readonly string[] | undefined): number {
+  if (!values || values.length === 0) {
+    return 2;
+  }
+  let length = 2;
+  for (let index = 0; index < values.length; index += 1) {
+    if (index > 0) {
+      length += 1;
+    }
+    length += quotedStringLowerBound(values[index]);
+  }
+  return length;
+}
+
+function toolProvenanceKeyLowerBound(tool: ToolProvenance): number {
+  let length = '{"name":'.length + quotedStringLowerBound(tool.name) + 1;
+  if (tool.args && tool.args.length > 0) {
+    length += ',"args":'.length + stringArrayKeyLowerBound(tool.args);
+  }
+  if (tool.auditRef) {
+    length += ',"auditRef":'.length + quotedStringLowerBound(tool.auditRef);
+  }
+  return length;
+}
+
+function toolArrayKeyExceedsLimit(
+  tools: readonly ToolProvenance[],
+  limit: number
+): boolean {
+  if (TOOL_ARRAY_KEY_CACHE.has(tools as object)) {
+    return false;
+  }
+  if (TOOL_ARRAY_KEY_TOO_LONG.has(tools as object)) {
+    return true;
+  }
+
+  let length = 2;
+  for (let index = 0; index < tools.length; index += 1) {
+    if (index > 0) {
+      length += 1;
+    }
+    length += toolProvenanceKeyLowerBound(tools[index]);
+    if (length > limit) {
+      TOOL_ARRAY_KEY_TOO_LONG.add(tools as object);
+      return true;
+    }
+  }
+  return false;
+}
+
 function descriptorInternKey(options: {
   labels: readonly DataLabel[];
   taint: readonly DataLabel[];
@@ -399,8 +587,13 @@ function descriptorInternKey(options: {
   }
 
   const tools = options.tools
-    ? toolArrayKey(options.tools)
+    ? toolArrayKeyExceedsLimit(options.tools, DESCRIPTOR_KEY_LIMIT)
+      ? undefined
+      : toolArrayKey(options.tools)
     : undefined;
+  if (options.tools && tools === undefined) {
+    return undefined;
+  }
 
   const key = [
     '{"attestations":',
@@ -422,6 +615,27 @@ function descriptorInternKey(options: {
     '}'
   ].join('');
   return key && key.length <= DESCRIPTOR_KEY_LIMIT ? key : undefined;
+}
+
+function getCachedPairMerge(
+  left: SecurityDescriptor,
+  right: SecurityDescriptor
+): SecurityDescriptor | undefined {
+  return MERGE_PAIR_CACHE.get(left)?.get(right);
+}
+
+function cachePairMerge(
+  left: SecurityDescriptor,
+  right: SecurityDescriptor,
+  merged: SecurityDescriptor
+): SecurityDescriptor {
+  let rightMap = MERGE_PAIR_CACHE.get(left);
+  if (!rightMap) {
+    rightMap = new WeakMap<SecurityDescriptor, SecurityDescriptor>();
+    MERGE_PAIR_CACHE.set(left, rightMap);
+  }
+  rightMap.set(right, merged);
+  return merged;
 }
 
 function rememberDescriptor(descriptor: SecurityDescriptor): SecurityDescriptor {
@@ -640,6 +854,49 @@ export function mergeDescriptors(
   if (normalizedDescriptors.length === 1) {
     return normalizedDescriptors[0];
   }
+  if (normalizedDescriptors.length > 2) {
+    let merged = normalizedDescriptors[0];
+    for (let index = 1; index < normalizedDescriptors.length; index += 1) {
+      merged = mergeDescriptors(merged, normalizedDescriptors[index]);
+    }
+    return merged;
+  }
+  const pairLeft = normalizedDescriptors.length === 2 ? normalizedDescriptors[0] : undefined;
+  const pairRight = normalizedDescriptors.length === 2 ? normalizedDescriptors[1] : undefined;
+  if (pairLeft && pairRight) {
+    const cached = getCachedPairMerge(pairLeft, pairRight);
+    if (cached) {
+      return cached;
+    }
+  }
+  if (pairLeft && pairRight) {
+    const mergedTools = mergeToolArrays(pairLeft.tools, pairRight.tools);
+    const capability = pairRight.capability ?? pairLeft.capability;
+    const policyContext = pairLeft.policyContext && pairRight.policyContext
+      ? freezeObject({ ...pairLeft.policyContext, ...pairRight.policyContext })
+      : pairRight.policyContext ?? pairLeft.policyContext;
+    const merged = createDescriptor(
+      freezeArray([
+        ...pairLeft.labels,
+        ...pairRight.labels,
+        ...pairLeft.attestations,
+        ...pairRight.attestations
+      ]),
+      freezeArray([
+        ...pairLeft.taint,
+        ...pairRight.taint,
+        ...pairLeft.labels.filter(label => !isAttestationLabel(label)),
+        ...pairRight.labels.filter(label => !isAttestationLabel(label))
+      ]),
+      freezeArray([...pairLeft.attestations, ...pairRight.attestations]),
+      freezeArray([...pairLeft.sources, ...pairRight.sources]),
+      freezeArray([...(pairLeft.urls ?? []), ...(pairRight.urls ?? [])]),
+      mergedTools,
+      capability,
+      policyContext
+    );
+    return cachePairMerge(pairLeft, pairRight, merged);
+  }
 
   const labelSet = new Set<DataLabel>();
   const sourceSet = new Set<string>();
@@ -684,7 +941,7 @@ export function mergeDescriptors(
     }
   }
 
-  return createDescriptor(
+  const merged = createDescriptor(
     freezeArray(labelSet),
     freezeArray(taintSet),
     freezeArray(attestationSet),
@@ -694,6 +951,9 @@ export function mergeDescriptors(
     capability,
     freezeObject(policyContext)
   );
+  return pairLeft && pairRight
+    ? cachePairMerge(pairLeft, pairRight, merged)
+    : merged;
 }
 
 export function removeLabelsFromDescriptor(

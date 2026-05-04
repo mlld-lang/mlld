@@ -15,6 +15,19 @@ const EMPTY_SOURCES: readonly string[] = Object.freeze([]);
 const EMPTY_URLS: readonly string[] = Object.freeze([]);
 const EMPTY_TOOLS: readonly ToolProvenance[] = Object.freeze([]);
 
+interface VarMxDescriptorCacheEntry {
+  labels?: readonly DataLabel[];
+  taint?: readonly DataLabel[];
+  attestations?: readonly DataLabel[];
+  sources?: readonly string[];
+  urls?: readonly string[];
+  tools?: readonly ToolProvenance[];
+  policy?: Readonly<Record<string, unknown>> | null;
+  descriptor: SecurityDescriptor;
+}
+
+const VAR_MX_DESCRIPTOR_CACHE = new WeakMap<VariableContext, VarMxDescriptorCacheEntry>();
+
 interface LegacyLoadResult extends Partial<LoadContentResult> {
   url?: string;
   domain?: string;
@@ -30,15 +43,45 @@ interface LoadResultWithExtras extends Partial<LoadContentResult> {
 }
 
 export function varMxToSecurityDescriptor(mx: VariableContext): SecurityDescriptor {
-  return makeSecurityDescriptor({
-    labels: mx.labels ? [...mx.labels] : [],
-    taint: mx.taint ? [...mx.taint] : [],
-    attestations: mx.attestations ? [...mx.attestations] : [],
-    sources: mx.sources ? [...mx.sources] : [],
-    urls: mx.urls ? [...mx.urls] : [],
-    tools: mx.tools ? [...mx.tools] : [],
+  const canCache = Boolean(mx && typeof mx === 'object');
+  if (canCache) {
+    const cached = VAR_MX_DESCRIPTOR_CACHE.get(mx);
+    if (
+      cached &&
+      cached.labels === mx.labels &&
+      cached.taint === mx.taint &&
+      cached.attestations === mx.attestations &&
+      cached.sources === mx.sources &&
+      cached.urls === mx.urls &&
+      cached.tools === mx.tools &&
+      cached.policy === mx.policy
+    ) {
+      return cached.descriptor;
+    }
+  }
+
+  const descriptor = makeSecurityDescriptor({
+    labels: mx.labels ?? EMPTY_LABELS,
+    taint: mx.taint ?? EMPTY_LABELS,
+    attestations: mx.attestations ?? EMPTY_LABELS,
+    sources: mx.sources ?? EMPTY_SOURCES,
+    urls: mx.urls ?? EMPTY_URLS,
+    tools: mx.tools ?? EMPTY_TOOLS,
     policyContext: mx.policy ?? undefined
   });
+  if (canCache) {
+    VAR_MX_DESCRIPTOR_CACHE.set(mx, {
+      labels: mx.labels,
+      taint: mx.taint,
+      attestations: mx.attestations,
+      sources: mx.sources,
+      urls: mx.urls,
+      tools: mx.tools,
+      policy: mx.policy,
+      descriptor
+    });
+  }
+  return descriptor;
 }
 
 export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableContext {
@@ -49,16 +92,16 @@ export function legacyMetadataToVarMx(metadata?: VariableMetadata): VariableCont
   const loadResult = metadata?.loadResult as (LoadContentResult & Partial<LegacyLoadResult>) | undefined;
 
   const mx: VariableContext = {
-    labels: descriptor.labels ? cloneArray(descriptor.labels) : EMPTY_LABELS,
-    taint: descriptor.taint ? cloneArray(descriptor.taint) : [],
-    attestations: descriptor.attestations ? cloneArray(descriptor.attestations) : EMPTY_LABELS,
+    labels: descriptor.labels ?? EMPTY_LABELS,
+    taint: descriptor.taint ?? EMPTY_LABELS,
+    attestations: descriptor.attestations ?? EMPTY_LABELS,
     schema: metadata?.schema,
     factsources: Array.isArray((metadata as { factsources?: readonly unknown[] } | undefined)?.factsources)
       ? cloneArray((metadata as { factsources?: readonly unknown[] }).factsources as readonly any[])
       : undefined,
-    sources: descriptor.sources ? cloneArray(descriptor.sources) : EMPTY_SOURCES,
-    urls: descriptor.urls ? cloneArray(descriptor.urls) : EMPTY_URLS,
-    tools: descriptor.tools ? cloneArray(descriptor.tools) : EMPTY_TOOLS,
+    sources: descriptor.sources ?? EMPTY_SOURCES,
+    urls: descriptor.urls ?? EMPTY_URLS,
+    tools: descriptor.tools ?? EMPTY_TOOLS,
     policy: descriptor.policyContext ?? null,
     source: metadata?.source,
     retries: metadata?.retries,
@@ -120,13 +163,14 @@ export function updateVarMxFromDescriptor(
   mx: VariableContext,
   descriptor: SecurityDescriptor
 ): void {
+  VAR_MX_DESCRIPTOR_CACHE.delete(mx);
   const normalized = normalizeSecurityDescriptor(descriptor) ?? makeSecurityDescriptor();
-  mx.labels = normalized.labels ? [...normalized.labels] : [];
-  mx.taint = normalized.taint ? [...normalized.taint] : [];
-  mx.attestations = normalized.attestations ? [...normalized.attestations] : [];
-  mx.sources = normalized.sources ? [...normalized.sources] : [];
-  mx.urls = normalized.urls ? [...normalized.urls] : (mx.urls ? [...mx.urls] : []);
-  mx.tools = normalized.tools ? [...normalized.tools] : [];
+  mx.labels = normalized.labels;
+  mx.taint = normalized.taint;
+  mx.attestations = normalized.attestations;
+  mx.sources = normalized.sources;
+  mx.urls = normalized.urls ?? (mx.urls ?? EMPTY_URLS);
+  mx.tools = normalized.tools ?? EMPTY_TOOLS;
   mx.policy = normalized.policyContext ?? null;
 }
 

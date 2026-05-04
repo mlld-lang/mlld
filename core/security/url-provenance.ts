@@ -5,6 +5,11 @@ import type { SecurityDescriptor } from '@core/types/security';
 const URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"'`]+/gi;
 const TRAILING_TRIM_CHARS = new Set(['.', ',', ';', ':', '!', '?']);
 const EXTERNAL_INPUT_MARKERS = ['src:file', 'src:network', 'src:mcp', 'src:user'] as const;
+const URL_TEXT_CACHE = new Map<string, readonly string[]>();
+const URL_TEXT_CACHE_LIMIT = 2048;
+const URL_TEXT_CACHE_MAX_TEXT_LENGTH = 256 * 1024;
+const URL_TEXT_CACHE_MAX_TOTAL_CHARS = 16 * 1024 * 1024;
+let urlTextCacheChars = 0;
 const SKIPPED_OBJECT_KEYS = new Set([
   'mx',
   'metadata',
@@ -75,6 +80,18 @@ export function extractUrlsFromText(text: string): readonly string[] {
   if (typeof text !== 'string' || text.length === 0) {
     return [];
   }
+  if (text.length <= URL_TEXT_CACHE_MAX_TEXT_LENGTH) {
+    const cached = URL_TEXT_CACHE.get(text);
+    if (cached) {
+      URL_TEXT_CACHE.delete(text);
+      URL_TEXT_CACHE.set(text, cached);
+      return cached;
+    }
+  }
+  if (!text.includes(':') && !text.includes('.')) {
+    cacheUrlTextResult(text, []);
+    return [];
+  }
 
   const results: string[] = [];
   const seen = new Set<string>();
@@ -86,7 +103,33 @@ export function extractUrlsFromText(text: string): readonly string[] {
     seen.add(normalized);
     results.push(normalized);
   }
-  return results;
+  return cacheUrlTextResult(text, results);
+}
+
+function cacheUrlTextResult(text: string, urls: readonly string[]): readonly string[] {
+  if (text.length > URL_TEXT_CACHE_MAX_TEXT_LENGTH) {
+    return urls;
+  }
+  const cached = Object.freeze([...urls]);
+  URL_TEXT_CACHE.set(text, cached);
+  urlTextCacheChars += text.length;
+  while (URL_TEXT_CACHE.size > URL_TEXT_CACHE_LIMIT) {
+    const firstKey = URL_TEXT_CACHE.keys().next().value;
+    if (firstKey === undefined) {
+      break;
+    }
+    URL_TEXT_CACHE.delete(firstKey);
+    urlTextCacheChars -= firstKey.length;
+  }
+  while (urlTextCacheChars > URL_TEXT_CACHE_MAX_TOTAL_CHARS) {
+    const firstKey = URL_TEXT_CACHE.keys().next().value;
+    if (firstKey === undefined) {
+      break;
+    }
+    URL_TEXT_CACHE.delete(firstKey);
+    urlTextCacheChars -= firstKey.length;
+  }
+  return cached;
 }
 
 function isVariableLike(value: Record<string, unknown>): value is Record<string, unknown> & { value: unknown } {
