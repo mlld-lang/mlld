@@ -187,7 +187,9 @@ See `pattern-planner` for the full planner-worker pattern and `shelf-slots` for 
 
 ### Discovery is operation-aware
 
-Display projections, `@fyi.known()`, and positive checks all share the fact requirement resolver. It derives requirements from built-in symbolic specs, live operation metadata, and declarative `policy.facts.requirements`. Discovery and enforcement use the same model -- they can't drift.
+Display projections, `@fyi.known()`, and positive checks all share the fact requirement resolver. It derives requirements from built-in symbolic specs, record-backed input metadata, live operation metadata, and declarative `policy.facts.requirements`. Discovery and enforcement use the same model -- they can't drift.
+
+For record-backed tools, input `facts` can declare `kind` tags. `@policy.build(...)` builds a kind index from records in scope and accepts proof from fields with the same exact `kind`. This lets `send_email.recipient` and `contact.email` match as `kind: "email"` without normalizing field names. `accepts` is the schema-level override for a field that needs an explicit pattern list, and untagged facts keep the strict `fact:*.<argName>` fallback.
 
 For explicit handle discovery beyond the current tool result, use `@fyi.known()`. See `fyi-known`.
 

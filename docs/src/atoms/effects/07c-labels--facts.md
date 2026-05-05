@@ -66,6 +66,8 @@ Positive checks and discovery match facts with patterns:
 
 Wildcard `*` matches any record name. Tier-qualified patterns only match values with that tier.
 
+Record `kind` tags do not change the labels that are minted. A value from `record @contact = { facts: [email: { type: string, kind: "email" }] }` still carries `fact:@contact.email`. The `kind` metadata is used later to derive which fact label patterns a tool input accepts.
+
 ## Policy rules that use facts
 
 Built-in positive checks accept both `fact:` labels and `known` attestations:
@@ -76,9 +78,17 @@ Built-in positive checks accept both `fact:` labels and `known` attestations:
 
 When the runtime knows the surfaced tool's effective control args, any `fact:*` proof on those args satisfies the check — the developer already asserted which args are destinations/targets. On record-backed tool catalogs, those args come from input-record `facts`. Without that metadata, the runtime uses field-name heuristics (`fact:*.email` for sends, `fact:*.id` for deletes).
 
-## Declarative fact requirements
+## Derived and declarative fact requirements
 
-Policy can declare additional fact requirements per operation and argument:
+For record-backed tool inputs, `@policy.build(...)` derives fact requirements from the input record's fact fields:
+
+- `accepts: [...]` uses that exact pattern list
+- `kind: "email"` accepts `known` plus every in-scope `fact:@record.field` with the same exact kind
+- untagged fact fields accept `known` or `fact:*.<argName>`
+
+There is no name normalization. `user_email` does not match `email` unless both fields share a `kind` tag, or an `accepts` override says so.
+
+Policy can also declare fact requirements per operation and argument:
 
 ```json
 {
@@ -95,7 +105,7 @@ Policy can declare additional fact requirements per operation and argument:
 }
 ```
 
-These compose conjunctively with built-in requirements. If both a built-in rule and a declarative requirement apply, a candidate must satisfy both.
+Explicit policy entries override record-kind derivation for the same operation argument. They still compose conjunctively with built-in requirements. If both a built-in rule and a declarative requirement apply, a candidate must satisfy both.
 
 ## Discovery
 
@@ -104,10 +114,11 @@ Agents discover facts through display projections on tool results. When a record
 The fact requirement resolver powers both display projections and enforcement. It derives requirements from:
 
 1. Built-in symbolic specs (like `op:named:email_send`)
-2. Live operation metadata (`labels`, effective control/source args)
-3. Declarative `policy.facts.requirements`
+2. Record-backed input metadata (`kind`, `accepts`, and exact field-name fallback)
+3. Live operation metadata (`labels`, effective control/source args)
+4. Declarative `policy.facts.requirements`
 
-If none resolve, discovery returns nothing. It never guesses from arg names.
+If none resolve, discovery returns nothing. The only field-name fallback is the exact untagged input-record arg name; mlld does not normalize names such as `user_email` to `email`.
 
 For explicit handle discovery beyond the current tool result, use `@fyi.known()`. See `fyi-known`.
 

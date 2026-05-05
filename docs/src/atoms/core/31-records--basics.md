@@ -17,6 +17,18 @@ Records declare which fields in structured data are authoritative facts and whic
 
 Field syntax is the same in both directions: `name: type?` means an optional field. `name?: type` is not valid mlld syntax.
 
+Fields can also use config form when they need metadata:
+
+```mlld
+facts: [
+  email: { type: string, kind: "email" },
+  account_id: { type: string?, kind: ["account_id", "billing_account_id"] },
+  recipient: { type: string, accepts: ["known", "fact:*.email"] }
+]
+```
+
+`kind` and `accepts` are fact-field metadata. They are valid only inside `facts`, not `data`. Use `kind` on producer and consumer fact fields; use `accepts` on input-record fact fields that need an explicit accepted-proof list.
+
 For tool results, this is also the canonical secure data-plane return path to an LLM caller. Returning through `=> contact`, `=> record @schema`, or `=> @cast(@value, @schema)` turns on record-mediated return filtering at the bridge: the active `role:*` display projection shapes what the LLM sees.
 
 If the exe result is labeled `untrusted`, records also refine that trust at the field level:
@@ -60,7 +72,11 @@ record @issue = {
 var @approvedRecipients = ["ada@example.com", "team@example.com"]
 
 record @send_email_inputs = {
-  facts: [recipient: string, cc: string?, bcc: string?],
+  facts: [
+    recipient: { type: string, kind: "email" },
+    cc: { type: string?, kind: "email" },
+    bcc: { type: string?, kind: "email" }
+  ],
   data: {
     trusted: [subject: string],
     untrusted: [body: string?]
@@ -97,6 +113,54 @@ For record-backed tool inputs:
 - `data.untrusted` and plain `data` fields are payload fields, not authorization-grade identifiers
 - `validate: "strict"` enforces required fields and types before the executable body runs
 - `exact`, `update`, `allowlist`, `blocklist`, and `optional_benign` are top-level input-only policy sections for surfaced tools
+
+### Fact kinds and accepted proof
+
+Input-record `facts` can declare `kind` tags to say what kind of authoritative value a tool argument expects. Output-record `facts` can declare the same `kind` tags to say what kind of authoritative value they produce:
+
+```mlld
+record @contact = {
+  facts: [
+    email: { type: string, kind: "email" }
+  ]
+}
+
+record @slack_msg = {
+  facts: [
+    sender: { type: string, kind: "slack_user_name" }
+  ],
+  data: [body: string]
+}
+
+record @invite_user_to_slack_inputs = {
+  facts: [
+    user: { type: string, kind: "slack_user_name" },
+    user_email: { type: string, kind: "email" }
+  ],
+  validate: "strict"
+}
+```
+
+When `@policy.build(...)` sees `invite_user_to_slack.user_email`, it derives accepted proof from exact `kind` matches. `fact:@contact.email` is accepted because both fields are `kind: "email"`. `fact:@slack_msg.sender` is rejected because `slack_user_name` is a different kind.
+
+There is no field-name normalization. `user_email` and `email` match only because both are explicitly tagged `kind: "email"`. Untagged fact fields keep the strict fallback: `known` or `fact:*.<argName>`.
+
+Use `accepts` for narrow exceptions where one input field should accept an explicit pattern list instead of deriving from `kind`:
+
+```mlld
+record @send_email_inputs = {
+  facts: [
+    recipient: {
+      type: string,
+      kind: "email",
+      accepts: ["known", "fact:*.email", "fact:@directory.list_email"]
+    }
+  ],
+  validate: "strict"
+}
+```
+
+`accepts` replaces the derived list for that field. Include `known` when known-attested values should still be allowed.
 
 When a write-tool input record has more than one fact field, set `correlate: true` to require that those fact values came from the same source record instance:
 

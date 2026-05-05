@@ -59,7 +59,11 @@ For surfaced tool catalogs, the trusted metadata usually lives on the tool entry
 
 ```mlld
 record @send_email_inputs = {
-  facts: [recipients: array, cc: array?, bcc: array?],
+  facts: [
+    recipients: { type: array, kind: "email" },
+    cc: { type: array?, kind: "email" },
+    bcc: { type: array?, kind: "email" }
+  ],
   data: {
     trusted: [subject: string],
     untrusted: [body: string?]
@@ -93,10 +97,13 @@ For record-backed tool catalogs:
 - executable params must be covered by either `inputs` or `bind`
 - record `facts` become the tool's effective control args on write surfaces
 - record `facts` become the tool's effective source args on read-only surfaces
+- fact-field `kind` tags and `accepts` overrides drive the proof patterns `@policy.build(...)` accepts for control args
 - record `correlate: true` becomes the same-source check for multi-fact write tools
 - record `exact` runs at builder time only, `allowlist` / `blocklist` / `update` run at builder and dispatch, `optional_benign` is validator-only, and `correlate` is dispatch-only
 - `data.trusted` and `data.untrusted` flow into runtime validation, `@toolDocs()`, MCP annotations, and injected tool notes
 - tool catalog `labels` are added to the invoked exe when the surfaced tool is called
+
+`kind` matching is exact string equality. Untagged fact fields fall back to `known` or `fact:*.<argName>`. Use `accepts` on the input-record fact field when a tool needs an explicit pattern list instead of the derived kind set.
 
 `mlld validate --context tools.mld` and runtime activation both use this trusted metadata when checking `policy.authorizations`. Native function-tool calls carry the same metadata through the bridge. Imported tool collections, object fields, and exe-parameter handoffs preserve that trusted metadata, so framework modules can build or re-validate authorizations against the surfaced tool names without importing the underlying executables into local scope.
 
