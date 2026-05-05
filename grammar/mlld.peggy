@@ -286,8 +286,12 @@ StrictBlankLine
 StrictModeTextError
   = &{ return options?.mode === 'strict'; }
     &{ return !helpers.isDirectiveContext(input, offset()); }
-    (!LineTerminator .)+ LineTerminator? {
-      error("Text content not allowed in strict mode (.mld). Use .mld.md for prose.");
+    offending:$((!LineTerminator .)+) LineTerminator? {
+      const trimmed = offending.trim();
+      const commentHint = /^(;;|\/\/|#|--)/.test(trimmed)
+        ? "\nDid you mean >>? mlld uses >> and << for line comments."
+        : "";
+      error("Text content not allowed in strict mode (.mld). Use .mld.md for prose." + commentHint);
     }
 
 // -------------------------------------------------------------------------

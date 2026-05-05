@@ -1,1 +1,1 @@
-Circular reference detected: executable '@helper' calls itself recursively
+Circular reference detected: executable '@helper' calls itself recursively without a terminating condition. If this recursion is intentional, declare it with 'exe recursive @helper(...)'. Recursive exes are bounded by MLLD_RECURSION_DEPTH (default 64).

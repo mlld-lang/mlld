@@ -24,6 +24,34 @@ describe('mode-aware parsing', () => {
     expect(result.error?.message).toContain('Text content not allowed in strict mode (.mld). Use .mld.md for prose.');
   });
 
+  it('formats the offending strict-mode text span', async () => {
+    const source = 'just text\n';
+    const result = await parse(source, { mode: 'strict' });
+    expect(result.success).toBe(false);
+
+    const error = result.error as Error & {
+      location?: { source?: string };
+      format?: (sources: Array<{ source: string; text: string }>) => string;
+    };
+    expect(typeof error.format).toBe('function');
+
+    if (error.location) {
+      error.location.source = 'example.mld';
+    }
+
+    const formatted = error.format?.([{ source: 'example.mld', text: source }]);
+    expect(formatted).toContain('1 | just text');
+    expect(formatted).toContain('^^^^^^^^^');
+  });
+
+  it('suggests mlld comments for common strict-mode comment markers', async () => {
+    for (const marker of [';;', '//', '#', '--']) {
+      const result = await parse(`${marker} not a comment\n`, { mode: 'strict' });
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('Did you mean >>? mlld uses >> and << for line comments.');
+    }
+  });
+
   it('ignores blank lines in strict mode', async () => {
     const source = '\n   \n/var @name = "ok"\n';
     const result = await parse(source, { mode: 'strict' });

@@ -4670,7 +4670,7 @@ async function evaluateExecInvocationInternal(
         ?? resolutionIdentifier;
     if (!isRecursiveExe) {
       throw new CircularReferenceError(
-        `Circular reference detected: executable '@${displayName}' calls itself recursively without a terminating condition`,
+        `Circular reference detected: executable '@${displayName}' calls itself recursively without a terminating condition. If this recursion is intentional, declare it with 'exe recursive @${displayName}(...)'. Recursive exes are bounded by MLLD_RECURSION_DEPTH (default 64).`,
         { identifier: resolutionIdentifier, location: nodeSourceLocation }
       );
     }

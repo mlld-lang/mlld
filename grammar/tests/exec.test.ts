@@ -164,6 +164,15 @@ describe('Exec directive', () => {
       // Type guard
       expect(isExeCommandDirective(directiveNode)).toBe(true);
     });
+
+    test('Optional parameter marker shows targeted error', async () => {
+      const parseResult = await parse('/exe @formatFile(file, type?) = cmd {fmt @file}');
+
+      expect(parseResult.success).toBe(false);
+      expect(parseResult.error?.message).toContain(
+        'Optional parameters are not supported. Use a default value, separate exe overloads, or pass an opts object.'
+      );
+    });
     
     test('Exec command with metadata', async () => {
       const content = '/exe @dangerous.risk.high = cmd {rm -rf @dir}';

@@ -664,7 +664,13 @@ ExecParameterList
     }
 
 ExecParameter
-  = "@"? paramName:BaseIdentifier _ ":" _ paramType:BaseIdentifier {
+  = "@"? paramName:BaseIdentifier _ "?" _ ":" _ paramType:BaseIdentifier {
+      error("Optional parameters are not supported. Use a default value, separate exe overloads, or pass an opts object.");
+    }
+  / "@"? paramName:BaseIdentifier _ "?" {
+      error("Optional parameters are not supported. Use a default value, separate exe overloads, or pass an opts object.");
+    }
+  / "@"? paramName:BaseIdentifier _ ":" _ paramType:BaseIdentifier {
       // Create a proper Parameter node
       // Accept both @param and param syntax for consistency
       return helpers.createNode(NodeType.Parameter, {
