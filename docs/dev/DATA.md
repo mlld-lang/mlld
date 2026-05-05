@@ -1,5 +1,5 @@
 ---
-updated: 2026-04-18
+updated: 2026-05-05
 tags: #arch, #data, #pipeline
 related-docs: docs/dev/PIPELINE.md, docs/dev/INTERPRETER.md
 related-code: grammar/patterns/file-reference.peggy, grammar/deps/grammar-core.ts, interpreter/utils/structured-value.ts, interpreter/utils/load-content-structured.ts, interpreter/eval/content-loader/finalization-adapter.ts, interpreter/eval/auto-unwrap-manager.ts, interpreter/shelf/runtime.ts, interpreter/eval/import/variable-importer/ModuleExportSerializer.ts, interpreter/utils/boundary.ts, interpreter/eval/pipeline/*.ts
@@ -278,6 +278,7 @@ Use this matrix when a value arrived wrong and you need to know which transform 
 - If a bug appears only through an imported helper or only after forwarding an object argument through another exe, inspect parameter rebinding before blaming display, `@pretty`, or generic serialization.
 - When a callee needs detached plain data, materialize once at the boundary (`boundary.config`, `boundary.plainData`, or an intentional object spread). Do not rely on downstream field access or stringification to perform that separation implicitly.
 - On object/array wrappers, `.text` is effectively a materialization boundary. If a wrapper bug smells like "somewhere this became huge" or "somewhere labels disappeared", ask who asked for text before asking who serialized the object.
+- V8 `JsonStringify` stack frames are not proof of a data-boundary owner. First match them to the runtime phase in `--trace`/`--trace-memory`; session attach, guard retry, and scoped config evaluation can serialize nearby values while the re-entry bug lives elsewhere.
 - Grep for accidental display/materialization paths, not just `JSON.stringify`: `.text`, `asText(`, `String(`, template interpolation, pretty/log helpers, token/length metrics, and audit summarizers.
 - Tool collections, routed tool entries, and imported agent objects are identity-bearing and large. Prefer keyed access on the existing wrapper/object surface. Rebuilding them into fresh plain objects is a real materialization step with both perf and metadata risk.
 - Shelf round-trip identity preservation is **by reference only** (see matrix note `R`). If a deep-clone happens anywhere upstream of a shelf write, identity is lost before it reaches storage and cannot be recovered on read.

@@ -1,5 +1,5 @@
 ---
-updated: 2026-05-04
+updated: 2026-05-05
 tags: #runtime, #performance, #memory, #optimization
 related-docs: docs/dev/DOCS-DEV.md, docs/dev/TESTS.md, spec-testing-infra.md, plan-testing-infra.md
 related-code: core/types/security.ts, core/types/record.ts, core/types/variable/ArrayHelpers.ts, core/types/variable/VarMxHelpers.ts, core/security/url-provenance.ts, interpreter/env/Environment.ts, interpreter/eval/exec-invocation.ts, interpreter/eval/exe/block-execution.ts, interpreter/session/runtime.ts, interpreter/tracing/RuntimeTraceManager.ts, interpreter/utils/structured-value.ts
@@ -11,6 +11,7 @@ related-types: core/types/security { SecurityDescriptor, ToolProvenance }, core/
 ## tldr
 
 - Reproduce first. Prefer deterministic zero-LLM harnesses over live agent runs.
+- Preserve the interpreter path in the repro: `exe llm`, sessions, guards, and scoped config matter more than the provider.
 - Separate retained heap from RSS peaks. A faster run can briefly use more RSS because it has more useful work in flight.
 - Use CPU profiles for speed, heap snapshots for retained memory, and runtime trace only for phase attribution.
 - Keep security semantics fixed. Do not strip factsources, proof metadata, labels, tool provenance, or eager URL extraction to win a benchmark.

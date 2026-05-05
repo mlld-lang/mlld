@@ -1,5 +1,5 @@
 ---
-updated: 2026-04-22
+updated: 2026-05-05
 tags: #arch, #llm, #mcp, #session, #tools
 related-docs: docs/dev/INTERPRETER.md, docs/dev/SECURITY.md, docs/dev/DATA.md, docs/dev/PIPELINE.md, docs/user/mcp.md
 related-code: interpreter/eval/exec-invocation.ts, interpreter/env/executors/call-mcp-config.ts, interpreter/env/executors/function-mcp-bridge.ts, interpreter/session/runtime.ts, cli/commands/mcp.ts, cli/mcp/*.ts
@@ -90,6 +90,8 @@ Step 3 enables wrapper exes (which may not have `llm` label) to propagate resume
 `var session` declares typed mutable state scoped to an LLM bridge frame.
 
 **Attachment:** `with { session: @planner, seed: { ... } }` on a call → `getNormalizedSessionAttachment(execEnv)` reads scoped config → `materializeSession` creates a `RuntimeSessionInstance` attached to ROOT keyed by `callConfig.sessionId` → `applySeedWrites` initializes slots.
+
+**Seed evaluation:** seed expressions are evaluated while attachment is being built, so they run in a child env that masks the in-progress `session` and `seed` scoped config. Helper exes inside seed must not inherit the same attachment they are materializing, or session attach can recursively re-enter itself.
 
 **Scoped config propagation:** the scoped config must survive through source-scoped envs (imported executables) and frame-scoped envs (LLM trace frames). Both create child environments; the scoped config is explicitly copied to each child.
 
@@ -208,6 +210,7 @@ This creates multiple scope boundaries. Key behaviors:
 - `MLLD_TRACE=guard` — guard evaluation decisions.
 - `MLLD_TRACE=all` — everything including tool bridge setup.
 - `MLLD_TRACE=verbose` with `MLLD_TRACE_FILE=...` — includes `mcp.request`, long-running `mcp.progress`, and `mcp.response` events for the `exe llm` function bridge. Use these to time opencode→mlld MCP calls; `mcp.response` includes `durationMs`, `responseBytes`, `ok`, `isError`, `error`, and `clientClosed`.
+- Hangs in ordinary-looking LLM calls: build the smallest zero-LLM `exe llm` repro, then run with `--trace verbose`; add `--trace-memory` only long enough to find the repeated phase. Repeated `llm.exec.session_attach` points at session/seed scoped config inheritance before JSON/stringify walkers.
 - `DEBUG_MCP=1` — MCP server diagnostics on stderr.
 - `MLLD_DEBUG=true` — interpreter logging for argument binding and execution flow.
 - Verify bridge wiring from inside `exe llm` block: `show @mx.llm.hasTools` / `show @mx.llm.config`.
