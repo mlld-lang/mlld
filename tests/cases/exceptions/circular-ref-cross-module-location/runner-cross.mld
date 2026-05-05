@@ -1,0 +1,8 @@
+/exe @runOne(s, testFn) = [
+  let @r = @testFn(@s)
+  => @r
+]
+
+/exe @runSuites(suites, testFn) = for @s in @suites => @runOne(@s, @testFn)
+
+/export { @runSuites }

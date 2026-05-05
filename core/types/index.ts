@@ -205,10 +205,18 @@ export type CommandDefinition = CommandTemplateDefinition | CommandRefDefinition
 // =========================================================================
 
 /**
- * Convert AST SourceLocation (with start/end) to unified SourceLocation format
+ * Convert AST SourceLocation (with start/end) to unified SourceLocation format.
+ *
+ * Peggy stamps each AST node's location with `source = grammarSource` at parse
+ * time (see ModuleContentProcessor's parse calls). That source is the file the
+ * node was parsed from and must win over the caller-supplied filePath, which is
+ * typically env.getCurrentFilePath() — the *currently executing* module, not
+ * the module the node came from. Using the env's path attributed cross-module
+ * errors (e.g. recursion guards firing during parametric calls) to the wrong
+ * file with the right line/column, pointing at unrelated code.
  */
 export function astLocationToSourceLocation(
-  astLocation?: { start: Position; end: Position },
+  astLocation?: { start: Position; end: Position; source?: string },
   filePath?: string
 ): SourceLocation | undefined {
   if (!astLocation) return undefined;
@@ -217,7 +225,7 @@ export function astLocationToSourceLocation(
     line: astLocation.start.line,
     column: astLocation.start.column,
     offset: astLocation.start.offset,
-    filePath
+    filePath: astLocation.source ?? filePath
   };
 }
 

@@ -1,0 +1,1 @@
+Circular reference detected: executable '@runSuites' calls itself recursively without a terminating condition. If this recursion is intentional, declare it with 'exe recursive @runSuites(...)'. Recursive exes are bounded by MLLD_RECURSION_DEPTH (default 64).

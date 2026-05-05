@@ -427,10 +427,14 @@ export async function interpret(
     'strict'
   );
   
-  // Parse the source into AST (or use provided AST)
+  // Parse the source into AST (or use provided AST). Pass grammarSource so
+  // every node's location.source carries the entry-point file path — without
+  // this, downstream evaluators fall back to env.getCurrentFilePath(), which
+  // mis-attributes cross-module errors (e.g. recursion guards) to the wrong
+  // file.
   const parseResult = options.ast
     ? { success: true as const, ast: options.ast }
-    : await parse(source, { mode: languageMode });
+    : await parse(source, { mode: languageMode, grammarSource: options.filePath });
   
   // Check if parsing was successful
   if (!parseResult.success || (parseResult as any).error) {
