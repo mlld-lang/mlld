@@ -172,12 +172,52 @@ function extractValue(value: unknown): unknown {
   return value;
 }
 
-function arraysAreEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
+// Bound recursion in structural equality. Past this depth we fall back to
+// reference equality so pathological objects (deeply nested, accidentally
+// cyclic) don't blow the stack.
+const MAX_EQUALITY_DEPTH = 32;
+
+function isPlainObjectForEquality(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function arraysAreEqual(
+  a: readonly unknown[],
+  b: readonly unknown[],
+  depth: number = 0,
+  seen?: WeakMap<object, WeakSet<object>>
+): boolean {
   if (a.length !== b.length) {
     return false;
   }
 
-  return a.every((item, index) => isEqual(item, b[index]));
+  return a.every((item, index) => isEqualInternal(item, b[index], depth + 1, seen));
+}
+
+function objectsAreEqual(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+  depth: number,
+  seen: WeakMap<object, WeakSet<object>>
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) {
+      return false;
+    }
+    if (!isEqualInternal(a[key], b[key], depth + 1, seen)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function isNullLikeForTolerantMatch(value: unknown): boolean {
@@ -332,6 +372,15 @@ export function isTolerantMatch(actual: unknown, expected: unknown): boolean {
  * - Strings are compared as strings
  */
 export function isEqual(a: unknown, b: unknown): boolean {
+  return isEqualInternal(a, b, 0, undefined);
+}
+
+function isEqualInternal(
+  a: unknown,
+  b: unknown,
+  depth: number,
+  seen: WeakMap<object, WeakSet<object>> | undefined
+): boolean {
   // Extract Variable values
   const aValue = extractValue(a);
   const bValue = extractValue(b);
@@ -344,9 +393,35 @@ export function isEqual(a: unknown, b: unknown): boolean {
     return false;
   }
 
-  // Collections compare structurally so literal equality works in guards and expressions.
+  // Bound recursion: at the depth limit, fall back to reference equality
+  // for collection types. Primitives below still compare structurally.
+  if (depth > MAX_EQUALITY_DEPTH) {
+    return aValue === bValue;
+  }
+
+  // Arrays: structural comparison.
   if (Array.isArray(aValue) || Array.isArray(bValue)) {
-    return Array.isArray(aValue) && Array.isArray(bValue) && arraysAreEqual(aValue, bValue);
+    if (!Array.isArray(aValue) || !Array.isArray(bValue)) {
+      return false;
+    }
+    if (aValue === bValue) return true;
+    return withCycleGuard(aValue, bValue, seen, (s) =>
+      arraysAreEqual(aValue, bValue, depth, s)
+    );
+  }
+
+  // Objects: structural comparison parallels arrays so literal equality works
+  // in guards (e.g. `when @meta == { role: "admin" }`). Mirrors the array
+  // branch above; reference identity short-circuits, then own enumerable keys
+  // are compared recursively under a depth + cycle guard.
+  if (isPlainObjectForEquality(aValue) || isPlainObjectForEquality(bValue)) {
+    if (!isPlainObjectForEquality(aValue) || !isPlainObjectForEquality(bValue)) {
+      return false;
+    }
+    if (aValue === bValue) return true;
+    return withCycleGuard(aValue, bValue, seen, (s) =>
+      objectsAreEqual(aValue, bValue, depth, s)
+    );
   }
 
   // Handle boolean string coercion
@@ -369,6 +444,32 @@ export function isEqual(a: unknown, b: unknown): boolean {
 
   // Default to strict equality
   return aValue === bValue;
+}
+
+function withCycleGuard(
+  a: object,
+  b: object,
+  seen: WeakMap<object, WeakSet<object>> | undefined,
+  body: (seen: WeakMap<object, WeakSet<object>>) => boolean
+): boolean {
+  const tracker = seen ?? new WeakMap<object, WeakSet<object>>();
+  const existing = tracker.get(a);
+  if (existing?.has(b)) {
+    // Already comparing this pair on the stack — assume structural match to
+    // avoid infinite recursion. Other key/element comparisons still decide.
+    return true;
+  }
+  let mates = existing;
+  if (!mates) {
+    mates = new WeakSet<object>();
+    tracker.set(a, mates);
+  }
+  mates.add(b);
+  try {
+    return body(tracker);
+  } finally {
+    mates.delete(b);
+  }
 }
 
 /**
