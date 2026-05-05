@@ -41,6 +41,27 @@ describe('errorSerialization', () => {
     });
   });
 
+  it('serializes structured values through data without invoking lazy text getters', () => {
+    let textReads = 0;
+    const structured = {
+      type: 'object',
+      data: { ok: true },
+      [Symbol.for('mlld.StructuredValue')]: true
+    };
+    Object.defineProperty(structured, 'text', {
+      enumerable: true,
+      get() {
+        textReads += 1;
+        throw new Error('text should stay lazy');
+      }
+    });
+
+    expect(sanitizeSerializableValue({ structured })).toEqual({
+      structured: { ok: true }
+    });
+    expect(textReads).toBe(0);
+  });
+
   it('truncateText preserves explicit truncation behavior', () => {
     const long = 'x'.repeat(5000);
 

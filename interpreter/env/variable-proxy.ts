@@ -13,8 +13,9 @@ import { getToolCollectionMetadata } from '@core/types/tools';
 import { isExecutableVariable, isRecordVariable } from '@core/types/variable';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { wrapLoadContentValue, isFileLoadedValue } from '@interpreter/utils/load-content-structured';
-import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asData, isStructuredValue, type StructuredValue } from '@interpreter/utils/structured-value';
 import { getCapturedModuleEnv } from '@interpreter/eval/import/variable-importer/executable/CapturedModuleEnvKeychain';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 
 function cloneValue<T>(input: T | undefined): T | undefined {
   if (input === undefined) {
@@ -152,6 +153,17 @@ function isIdentityBearingToolEntry(value: unknown): boolean {
   }
 
   return isVariable(record.mlld) || isVariable(record.inputs);
+}
+
+function structuredShadowMetadata(value: StructuredValue, typeOverride?: string) {
+  const text = getMaterializedStructuredText(value);
+  return {
+    isVariable: false,
+    type: typeOverride ?? value.type,
+    mx: value.mx,
+    internal: value.internal,
+    ...(text !== undefined ? { text } : {})
+  };
 }
 
 /**
@@ -329,25 +341,13 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     if (isStructuredValue(value)) {
       if ((value.internal as any)?.keepStructured) {
         if (target && key) {
-          recordPrimitiveMetadata(target, key, {
-            isVariable: false,
-            type: 'load-content',
-            mx: value.mx,
-            internal: value.internal,
-            text: value.text
-          });
+          recordPrimitiveMetadata(target, key, structuredShadowMetadata(value, 'load-content'));
         }
         return value;
       }
       // StructuredValue with file metadata
       if (target && key) {
-        recordPrimitiveMetadata(target, key, {
-          isVariable: false,
-          type: 'load-content',
-          mx: value.mx,
-          internal: value.internal,
-          text: value.text
-        });
+        recordPrimitiveMetadata(target, key, structuredShadowMetadata(value, 'load-content'));
       }
       return value.text;
     } else {
@@ -368,13 +368,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
   if (isStructuredValue(value)) {
     if ((value.internal as any)?.keepStructured) {
       if (target && key) {
-        recordPrimitiveMetadata(target, key, {
-          isVariable: false,
-          type: value.type,
-          mx: value.mx,
-          internal: value.internal,
-          text: value.text
-        });
+        recordPrimitiveMetadata(target, key, structuredShadowMetadata(value));
       }
       return value;
     }
@@ -386,13 +380,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
       if (isLoadContentArray) {
         // Return text for display - preserves concatenation
         if (target && key) {
-          recordPrimitiveMetadata(target, key, {
-            isVariable: false,
-            type: value.type,
-            mx: value.mx,
-            internal: value.internal,
-            text: value.text
-          });
+          recordPrimitiveMetadata(target, key, structuredShadowMetadata(value));
         }
         return value.text;
       }
@@ -401,13 +389,7 @@ export function prepareValueForShadow(value: any, key?: string, target?: Record<
     // For non-load-content structured values, extract data
     const data = unwrapStructuredRecursively(asData(value));
     if (target && key) {
-      recordPrimitiveMetadata(target, key, {
-        isVariable: false,
-        type: value.type,
-        mx: value.mx,
-        internal: value.internal,
-        text: value.text
-      });
+      recordPrimitiveMetadata(target, key, structuredShadowMetadata(value));
     }
     return data;
   }

@@ -72,6 +72,7 @@ const INTERNAL_STATE_KEYS = new Set([
   'contextManager',
   'fileSystem'
 ]);
+const STRUCTURED_VALUE_SYMBOL = Symbol.for('mlld.StructuredValue');
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object') {
@@ -85,6 +86,18 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function summarizeObject(value: object): string {
   const name = value.constructor?.name;
   return name && name !== 'Object' ? `[${name}]` : '[Object]';
+}
+
+function isStructuredValueLike(value: unknown): value is { data: unknown } {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as Record<PropertyKey, unknown>;
+  return (
+    record[STRUCTURED_VALUE_SYMBOL] === true &&
+    typeof record.type === 'string' &&
+    Object.prototype.hasOwnProperty.call(record, 'data')
+  );
 }
 
 export function truncateText(value: string, maxLength = 0): string {
@@ -135,6 +148,14 @@ function sanitizeValueInternal(
     return ENVIRONMENT_SERIALIZE_PLACEHOLDER;
   }
 
+  if (isStructuredValueLike(value)) {
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    seen.add(value);
+    return sanitizeValueInternal(value.data, options, depth, seen);
+  }
+
   if (value instanceof Date) {
     return value.toISOString();
   }
@@ -178,10 +199,15 @@ function sanitizeValueInternal(
     return summarizeObject(value);
   }
 
-  const entries = Object.entries(value);
+  const keys = Object.keys(value);
   const output: Record<string, unknown> = {};
 
-  for (const [key, entry] of entries.slice(0, resolvedOptions.maxObjectKeys)) {
+  for (const key of keys.slice(0, resolvedOptions.maxObjectKeys)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !('value' in descriptor)) {
+      continue;
+    }
+    const entry = descriptor.value;
     if (INTERNAL_STATE_KEYS.has(key) && entry && typeof entry === 'object') {
       output[key] = '[omitted internal state]';
       continue;
@@ -198,8 +224,8 @@ function sanitizeValueInternal(
     }
   }
 
-  if (entries.length > resolvedOptions.maxObjectKeys) {
-    output.__truncatedKeys = entries.length - resolvedOptions.maxObjectKeys;
+  if (keys.length > resolvedOptions.maxObjectKeys) {
+    output.__truncatedKeys = keys.length - resolvedOptions.maxObjectKeys;
   }
 
   return output;

@@ -32,6 +32,29 @@ describe('prepareValueForShadow (structured)', () => {
     });
   });
 
+  it('does not materialize lazy structured object text while recording metadata', () => {
+    let stringifyAttempts = 0;
+    const payload = wrapStructured(
+      {
+        ok: true,
+        toJSON() {
+          stringifyAttempts += 1;
+          return { ok: true };
+        }
+      },
+      'object'
+    );
+
+    const params = prepareParamsForShadow({ payload });
+
+    expect(params.payload).toEqual({ ok: true, toJSON: expect.any(Function) });
+    expect(params.__mlldPrimitiveMetadata.payload).toMatchObject({
+      type: 'object'
+    });
+    expect(params.__mlldPrimitiveMetadata.payload).not.toHaveProperty('text');
+    expect(stringifyAttempts).toBe(0);
+  });
+
   it('unwraps nested StructuredValue elements inside arrays for shadow params', () => {
     const nestedItem = wrapStructured(
       { findings: [{ id: 1 }] },
