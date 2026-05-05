@@ -310,7 +310,9 @@ var @failures = for @r in @results when @r.error => @r
 
 `@exists(@var)` checks if the *variable* is defined. `@fileExists(@var)` checks if the *file at that path* exists.
 
-`[]` and `{}` are falsy in mlld 
+`[]` and `{}` are falsy in mlld
+
+`==` compares structurally for arrays and objects: `{x: 1} == {x: 1}` and `[1, 2] == [1, 2]` are both true. Recurses into nested values.
 
 **Reserved variables**: `@root`, `@base`, `@now`, `@input`, `@payload`, `@state`, `@debug`, `@keychain`, `@fm`, `@mx`, `@p`
 
