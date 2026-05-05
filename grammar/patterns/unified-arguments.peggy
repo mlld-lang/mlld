@@ -105,13 +105,18 @@ UnifiedArgumentBase "unified argument"
   / WhenExpression              // Allow when-expressions as arguments
   / ForeachCommandExpression    // Allow foreach as argument (returns array)
   / GroupedCoerceExpressionAccess
-  / ExecResultMethodCall        // Allow chained helper calls (e.g., @secret.trim().slice())
-  / FieldAccessExecPattern      // Allow builtin helpers invoked on variables (@var.trim())
-  / ExecInvocationPattern       // Allow direct exec invocations @helper()
+  // Function-call branches: decline if immediately followed by an operator so
+  // `ExpressionWithOperator` (later in this alternation) can consume the full
+  // expression, e.g. `@f(@deepEq(1,1) && true, "m")`. Without this guard, the
+  // call rule greedily matches `@deepEq(1,1)` and the argument list then
+  // chokes on `&&`.
+  / call:ExecResultMethodCall !ArgOpFollowsCall { return call; }
+  / call:FieldAccessExecPattern !ArgOpFollowsCall { return call; }
+  / call:ExecInvocationPattern !ArgOpFollowsCall { return call; }
   / CodeExecution               // Allow inline run/command executions as arguments
-  / CommandTemplateArgument     // Template arguments ::...:: 
+  / CommandTemplateArgument     // Template arguments ::...::
   / BacktickTemplateArgument    // Backtick templates `...`
-  / NestedExecInvocation       // Nested function calls @func(args)
+  / call:NestedExecInvocation !ArgOpFollowsCall { return call; }
   / DataObjectLiteral           // Object literals: {"key": "value"}
   / ArrayLiteral                // Arrays: [1, 2, 3]
   / AlligatorExpression         // File loading: <file.md>
@@ -137,6 +142,13 @@ UnifiedArgumentBase "unified argument"
   / PrimitiveValue       // Direct primitives: 42, true, false, null
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
+
+// Lookahead: matches when an argument-position function call is immediately
+// followed by an operator that should belong to a wrapping expression. Used
+// by UnifiedArgumentBase to defer to ExpressionWithOperator instead of letting
+// the call alone satisfy the argument and leaving an orphaned operator behind.
+ArgOpFollowsCall
+  = _ ("&&" / "||" / "==" / "!=" / "!~=" / "~=" / "<=" / ">=" / "<" / ">" / "??" / "+" / "-" / "*" / "/" / "%" / "?")
 
 PipeInArgumentError "pipe expression in argument"
   = "@" id:BaseIdentifier fields:AnyFieldAccessOptional* _ "|" {
