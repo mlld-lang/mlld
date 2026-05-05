@@ -89,17 +89,19 @@ Step 3 enables wrapper exes (which may not have `llm` label) to propagate resume
 
 `var session` declares typed mutable state scoped to an LLM bridge frame.
 
-**Attachment:** `with { session: @planner, seed: { ... } }` on a call → `getNormalizedSessionAttachment(execEnv)` reads scoped config → `materializeSession` creates a `RuntimeSessionInstance` attached to ROOT keyed by `callConfig.sessionId` → `applySeedWrites` initializes slots.
+**Attachment:** `with { session: @planner, seed: { ... } }` on a call -> `getNormalizedSessionAttachment(execEnv)` reads scoped config -> `materializeSession` creates a `RuntimeSessionInstance` attached to ROOT under the logical LLM frame id -> `applySeedWrites` initializes slots.
 
 **Seed evaluation:** seed expressions are evaluated while attachment is being built, so they run in a child env that masks the in-progress `session` and `seed` scoped config. Helper exes inside seed must not inherit the same attachment they are materializing, or session attach can recursively re-enter itself.
 
 **Scoped config propagation:** the scoped config must survive through source-scoped envs (imported executables) and frame-scoped envs (LLM trace frames). Both create child environments; the scoped config is explicitly copied to each child.
 
+**Logical frame ownership:** a single logical LLM call may cross wrapper, imported-module, provider, and tool-bridge scopes. If the outer call attaches a session, its frame id is propagated through scoped config and used as the tool bridge `sessionId`. Seed writes, tool writes, guard reads, `.mx.sessions`, and final snapshots must all observe that same frame. Do not replace this with "reuse any live session with the same definition"; sibling calls using the same session schema still require separate frames.
+
 **Read path:** `resolveVariable` detects session schemas via `internal.isSessionSchema`, calls `resolveAttachedSessionInstance(definition, env)` which looks up by `getCurrentLlmSessionId()` first, then falls back to `findSessionInstanceByDefinition` (scans all frames for matching definition ID). Fallback enables reads from outer scopes and module-level reads after the call returns.
 
 **Write path:** `@session.set(...)` resolves the instance the same way, then `applySlotMutation` → `stageMutation`. If a guard write buffer is active, mutations are staged. Otherwise they commit immediately.
 
-**Disposal:** session instances are kept alive after frame exit so outer scopes and post-call reads work. Each call has its own sessionId key; instances from different calls don't conflict.
+**Disposal:** the owning frame records a completed snapshot, emits final traces, then disposes live instances. Post-call reads use the completed snapshot. Each call has its own frame key; instances from different calls don't conflict.
 
 ## Guard resume
 
@@ -188,7 +190,7 @@ This creates multiple scope boundaries. Key behaviors:
 
 - **Tool bridge:** set up by the inner `exe llm` call, not the wrapper. The wrapper's `execEnv` has no `llmToolConfig`. The inner call's `@mx.llm` is populated normally.
 - **Resume eligibility:** the wrapper has no `llm` label, so resume state propagates via `_mlldResumeState` on the StructuredValue result (see envelope propagation above).
-- **Session:** attached inside the inner call's scope. Scoped config must propagate through source-scoped envs. Session instances survive frame exit for outer-scope reads.
+- **Session:** attached inside the inner call's scope. Scoped config must propagate through source-scoped envs, and nested `exe llm` calls must keep the same logical frame id for the tool bridge. Otherwise tool callbacks write one frame while guards and `.mx.sessions` read another.
 - **Tool collection identity:** imported `var tools` collections lose their `capturedModuleEnv` and authorization metadata (Symbol property `mlld.toolCollectionMetadata`) when nested in a config object and forwarded through the wrapper parameter. The bridge resolver falls back to `looksLikeToolCollection` + `normalizeToolCollection`, which re-resolves executables by name — failing across module isolation boundaries. Local tool collections survive because their executables are in the same module scope. See m-9993.
 - **Session roundtrip identity loss:** when the agent config (containing `toolsCollection`) is seeded into a planner session, the session write→read cycle strips Symbol and WeakMap identity from all nested objects. The collection object arrives at the execute worker structurally intact but without the tool collection Symbol. Dispatch recovers via `recoverToolCollectionFromStructure` (structural shape detection). Degraded Variable objects inside entries (`{type: 'executable', name: '...'}`) are recovered by `normalizeCollectionExecutableReferenceName`. The `_mlld.resume.sessionId` key injected by the session framework must be filtered during collection iteration. See m-5178.
 
@@ -197,6 +199,7 @@ This creates multiple scope boundaries. Key behaviors:
 - **Imported tools through wrappers:** imported `var tools` collections nested in config objects lose tool collection identity when forwarded through exe parameters. `@mx.llm.hasTools` may be true but `@mx.llm.allowed` is empty. Workaround: re-attach the lexical tool collection reference at the actual `exe llm` call site rather than forwarding `@config.tools`. Core fix tracked in m-9993.
 - **Session-seeded agent loses tool collection identity:** when `agent: @agent` is seeded into a planner session, the session write→read cycle creates new plain objects that drop Symbol-keyed and non-enumerable properties from the `toolsCollection`. Dispatch recovers structurally (m-5178), but `getToolCollectionMetadata` returns `undefined` on the recovered object. The `_mlld` resume key injected by session framework appears as a sibling of tool entries and must be filtered by code that iterates `Object.entries` on the collection.
 - Session not attaching for imported modules: check scoped config propagation through source-scoped envs (child env from `setModuleIsolated`). Most common "Session not attached" cause.
+- Session writes visible in trace but guards see seed state: compare `session.seed`, `session.write`, `guard.evaluate`, and `session.final` frame ids. A logical LLM call should not split session writes and guard/final reads across two frame ids. See m-fff2 for the wrapper case.
 - `_mlld` envelope consumed by inner call: inner `exe llm` extracts envelope at its level. Outer wrapper sees stripped value. Resume eligibility propagates via `_mlldResumeState` on StructuredValue metadata.
 - Guard resume denied: `evaluateResumeEnforcement` requires `llmResumeEligible` and `llmResumeState` on operation metadata. Both set when exe has `llm` label or result has `_mlld` envelope.
 - Tools not visible in harness: verify `@mx.llm.hasTools`, `@mx.llm.config`, `@mx.llm.allowed` from inside the `exe llm` block body. If empty, config arg may not have `tools` or the `hasLlmLabel && llmParamNames >= 2` gate wasn't entered.
@@ -210,6 +213,7 @@ This creates multiple scope boundaries. Key behaviors:
 - `MLLD_TRACE=guard` — guard evaluation decisions.
 - `MLLD_TRACE=all` — everything including tool bridge setup.
 - `MLLD_TRACE=verbose` with `MLLD_TRACE_FILE=...` — includes `mcp.request`, long-running `mcp.progress`, and `mcp.response` events for the `exe llm` function bridge. Use these to time opencode→mlld MCP calls; `mcp.response` includes `durationMs`, `responseBytes`, `ok`, `isError`, `error`, and `clientClosed`.
+- For session bugs, trace frame ids are the contract: one logical LLM call should have seed/write/guard/final events on the same session frame. A zero-LLM repro is useful only if it still exercises the tool write path that mutates the attached session.
 - Hangs in ordinary-looking LLM calls: build the smallest zero-LLM `exe llm` repro, then run with `--trace verbose`; add `--trace-memory` only long enough to find the repeated phase. Repeated `llm.exec.session_attach` points at session/seed scoped config inheritance before JSON/stringify walkers.
 - `DEBUG_MCP=1` — MCP server diagnostics on stderr.
 - `MLLD_DEBUG=true` — interpreter logging for argument binding and execution flow.
