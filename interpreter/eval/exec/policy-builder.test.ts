@@ -12,6 +12,7 @@ import { extractVariableValue } from '@interpreter/utils/variable-resolution';
 import { compilePolicyAuthorizations } from '@interpreter/policy/authorization-compiler';
 import { buildAuthorizationToolContextForCollection } from '@interpreter/eval/exec/tool-metadata';
 import type { ToolCollection } from '@core/types/tools';
+import type { RecordDefinition } from '@core/types/record';
 import { createSimpleTextVariable, createStructuredValueVariable } from '@core/types/variable';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { wrapStructured } from '@interpreter/utils/structured-value';
@@ -321,6 +322,324 @@ describe('@policy builtin', () => {
           {
             eq: 'ada@example.com',
             attestations: ['known']
+          }
+        ]
+      }
+    });
+  });
+
+  it('derives fact requirements from matching input and source record kinds', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [
+          email: { type: string, kind: "email" }
+        ]
+      }
+      /record @slack_msg = {
+        facts: [
+          sender: { type: string, kind: "slack_user_name" }
+        ]
+      }
+      /record @invite_user_to_slack_inputs = {
+        facts: [
+          user: { type: string, kind: "slack_user_name" },
+          user_email: { type: string, kind: "email" }
+        ],
+        validate: "strict"
+      }
+
+      /exe tool:w, exfil:send @invite_user_to_slack(user, user_email) = js {
+        return user_email;
+      }
+
+      /var tools @writeTools = {
+        invite_user_to_slack: {
+          mlld: @invite_user_to_slack,
+          inputs: @invite_user_to_slack_inputs,
+          labels: ["execute:w", "tool:w", "exfil:send"]
+        }
+      }
+    `);
+
+    const accepted = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        invite_user_to_slack: {
+          user: { eq: 'Dora', attestations: ['known'] },
+          user_email: {
+            eq: 'dora@example.com',
+            attestations: ['fact:@contact.email']
+          }
+        }
+      },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(accepted.valid).toBe(true);
+    expect(accepted.issues).toEqual([]);
+    expect(accepted.policy.facts.requirements).toMatchObject({
+      'op:named:invite_user_to_slack': {
+        user: [
+          expect.arrayContaining([
+            'known',
+            'fact:@slack_msg.sender',
+            'fact:@invite_user_to_slack_inputs.user'
+          ])
+        ],
+        user_email: [
+          expect.arrayContaining([
+            'known',
+            'fact:@contact.email',
+            'fact:@invite_user_to_slack_inputs.user_email'
+          ])
+        ]
+      }
+    });
+
+    const rejected = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        invite_user_to_slack: {
+          user: { eq: 'Dora', attestations: ['known'] },
+          user_email: {
+            eq: 'dora@example.com',
+            attestations: ['fact:@slack_msg.sender']
+          }
+        }
+      },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(rejected.valid).toBe(false);
+    expect(rejected.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'proofless_control_arg',
+          tool: 'invite_user_to_slack',
+          arg: 'user_email'
+        })
+      ])
+    );
+    expect(rejected.policy.authorizations.allow).toEqual({});
+  });
+
+  it('indexes kind-tagged records declared on tool returns', async () => {
+    const env = await interpretWithEnv(`
+      /record @send_email_inputs = {
+        facts: [
+          recipient: { type: string, kind: "email" }
+        ],
+        validate: "strict"
+      }
+
+      /exe tool:r @lookup_contact() = js {
+        return { email: "ada@example.com" };
+      }
+
+      /exe tool:w, exfil:send @send_email(recipient) = js {
+        return recipient;
+      }
+    `);
+
+    const contactOutputRecord: RecordDefinition = {
+      name: 'contact',
+      rootMode: 'object',
+      display: { kind: 'open' },
+      direction: 'output',
+      validate: 'strict',
+      fields: [
+        {
+          kind: 'computed',
+          name: 'email',
+          classification: 'fact',
+          factKinds: ['email'],
+          expression: '',
+          valueType: 'string',
+          optional: false
+        }
+      ]
+    };
+
+    const toolCollection: ToolCollection = {
+      lookup_contact: {
+        mlld: '@lookup_contact',
+        returns: contactOutputRecord,
+        labels: ['tool:r']
+      },
+      send_email: {
+        mlld: '@send_email',
+        inputs: '@send_email_inputs',
+        labels: ['execute:w', 'tool:w', 'exfil:send']
+      }
+    };
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        send_email: {
+          recipient: {
+            eq: 'ada@example.com',
+            attestations: ['fact:@contact.email']
+          }
+        }
+      },
+      toolCollection
+    ) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.facts.requirements).toMatchObject({
+      'op:named:send_email': {
+        recipient: [
+          expect.arrayContaining([
+            'known',
+            'fact:@contact.email',
+            'fact:@send_email_inputs.recipient'
+          ])
+        ]
+      }
+    });
+  });
+
+  it('uses input-record accepts to override derived kind requirements', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [
+          email: string
+        ]
+      }
+      /record @invite_user_to_slack_inputs = {
+        facts: [
+          user: string,
+          user_email: { type: string, kind: "workspace_email", accepts: ["known", "fact:*.email"] }
+        ],
+        validate: "strict"
+      }
+
+      /exe tool:w, exfil:send @invite_user_to_slack(user, user_email) = js {
+        return user_email;
+      }
+
+      /var tools @writeTools = {
+        invite_user_to_slack: {
+          mlld: @invite_user_to_slack,
+          inputs: @invite_user_to_slack_inputs,
+          labels: ["execute:w", "tool:w", "exfil:send"]
+        }
+      }
+    `);
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        invite_user_to_slack: {
+          user: { eq: 'Dora', attestations: ['known'] },
+          user_email: {
+            eq: 'dora@example.com',
+            attestations: ['fact:@contact.email']
+          }
+        }
+      },
+      env.getVariable('writeTools')?.value
+    ) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.facts.requirements).toMatchObject({
+      'op:named:invite_user_to_slack': {
+        user: [['known', 'fact:*.user']],
+        user_email: [['known', 'fact:*.email']]
+      }
+    });
+    expect(built.policy.authorizations.allow.invite_user_to_slack).toEqual({
+      kind: 'constrained',
+      args: {
+        user: [
+          {
+            eq: 'Dora',
+            attestations: ['known']
+          }
+        ],
+        user_email: [
+          {
+            eq: 'dora@example.com',
+            attestations: ['fact:@contact.email']
+          }
+        ]
+      }
+    });
+  });
+
+  it('lets explicit policy fact requirements override kind derivation', async () => {
+    const env = await interpretWithEnv(`
+      /record @contact = {
+        facts: [
+          email: { type: string, kind: "email" }
+        ]
+      }
+      /record @send_email_inputs = {
+        facts: [
+          recipient: { type: string, kind: "email" }
+        ],
+        validate: "strict"
+      }
+
+      /exe tool:w, exfil:send @send_email(recipient) = js {
+        return recipient;
+      }
+
+      /var tools @writeTools = {
+        send_email: {
+          mlld: @send_email,
+          inputs: @send_email_inputs,
+          labels: ["execute:w", "tool:w", "exfil:send"]
+        }
+      }
+    `);
+
+    const built = await invokePolicyBuiltin(
+      env,
+      'build',
+      {
+        send_email: {
+          recipient: {
+            eq: 'dora@example.com',
+            attestations: ['fact:@directory.email']
+          }
+        }
+      },
+      env.getVariable('writeTools')?.value,
+      {
+        basePolicy: {
+          facts: {
+            requirements: {
+              '@send_email': {
+                recipient: ['known', 'fact:@directory.email']
+              }
+            }
+          }
+        }
+      }
+    ) as any;
+
+    expect(built.valid).toBe(true);
+    expect(built.issues).toEqual([]);
+    expect(built.policy.facts.requirements).toEqual({
+      'op:named:send_email': {
+        recipient: [['known', 'fact:@directory.email']]
+      }
+    });
+    expect(built.policy.authorizations.allow.send_email).toEqual({
+      kind: 'constrained',
+      args: {
+        recipient: [
+          {
+            eq: 'dora@example.com',
+            attestations: ['fact:@directory.email']
           }
         ]
       }

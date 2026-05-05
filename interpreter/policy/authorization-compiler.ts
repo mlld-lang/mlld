@@ -19,7 +19,7 @@ import {
 import { DECLARED_CONTROL_ARG_KNOWN_PATTERNS } from '@core/policy/fact-requirements';
 import { matchesLabelPattern } from '@core/policy/fact-labels';
 import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
-import type { PolicyConfig } from '@core/policy/union';
+import { normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
 import { MlldSecurityError } from '@core/errors';
 import { makeSecurityDescriptor } from '@core/types/security';
 import { collectProofClaimLabels } from '@interpreter/security/proof-claims';
@@ -1828,9 +1828,47 @@ function normalizeAuthorizationProofLabels(labels: readonly string[] | undefined
   );
 }
 
-function hasAcceptedProofLabels(labels: readonly string[] | undefined): boolean {
-  return normalizeAuthorizationProofLabels(labels).some(label =>
-    DECLARED_CONTROL_ARG_KNOWN_PATTERNS.some(pattern => matchesLabelPattern(pattern, label))
+type AcceptedProofClauses = readonly (readonly string[])[];
+
+const DEFAULT_ACCEPTED_PROOF_CLAUSES: AcceptedProofClauses = [
+  DECLARED_CONTROL_ARG_KNOWN_PATTERNS
+];
+
+function getAcceptedProofClausesForControlArg(options: {
+  policy?: PolicyConfig;
+  toolName: string;
+  argName: string;
+}): AcceptedProofClauses {
+  const opRef = normalizeNamedOperationRef(options.toolName);
+  if (!opRef) {
+    return DEFAULT_ACCEPTED_PROOF_CLAUSES;
+  }
+
+  const argName = options.argName.trim().toLowerCase();
+  if (!argName) {
+    return DEFAULT_ACCEPTED_PROOF_CLAUSES;
+  }
+
+  const normalizedPolicy = normalizePolicyConfig(options.policy);
+  const declarativeClauses = normalizedPolicy.facts?.requirements?.[opRef]?.[argName];
+  return Array.isArray(declarativeClauses) && declarativeClauses.length > 0
+    ? declarativeClauses
+    : DEFAULT_ACCEPTED_PROOF_CLAUSES;
+}
+
+function hasAcceptedProofLabels(
+  labels: readonly string[] | undefined,
+  acceptedClauses: AcceptedProofClauses = DEFAULT_ACCEPTED_PROOF_CLAUSES
+): boolean {
+  const normalizedLabels = normalizeAuthorizationProofLabels(labels);
+  if (normalizedLabels.length === 0) {
+    return false;
+  }
+
+  return acceptedClauses.every(clause =>
+    clause.some(pattern =>
+      normalizedLabels.some(label => matchesLabelPattern(pattern, label))
+    )
   );
 }
 
@@ -2846,10 +2884,11 @@ async function enforceEqClauseProof(options: {
   clause: Extract<AuthorizationConstraintClause, { eq: unknown }>;
   env: Environment;
   mode: 'builder' | 'runtime';
+  acceptedProofClauses: AcceptedProofClauses;
   issues: PolicyAuthorizationCompilerIssue[];
   report: PolicyAuthorizationCompileReport;
 }): Promise<AuthorizationConstraintClause | undefined> {
-  if (hasAcceptedProofLabels(options.clause.attestations)) {
+  if (hasAcceptedProofLabels(options.clause.attestations, options.acceptedProofClauses)) {
     return options.clause;
   }
   const repairedEq = (
@@ -2864,7 +2903,7 @@ async function enforceEqClauseProof(options: {
   ).value;
 
   const repairedDirectLabels = collectDirectValueProofLabels(repairedEq);
-  if (hasAcceptedProofLabels(repairedDirectLabels)) {
+  if (hasAcceptedProofLabels(repairedDirectLabels, options.acceptedProofClauses)) {
     return {
       ...options.clause,
       eq: repairedEq,
@@ -2877,7 +2916,7 @@ async function enforceEqClauseProof(options: {
     !Array.isArray(repairedEq)
       ? collectValueProofLabels(repairedEq)
       : [];
-  if (!Array.isArray(repairedEq) && hasAcceptedProofLabels(repairedValueLabels)) {
+  if (!Array.isArray(repairedEq) && hasAcceptedProofLabels(repairedValueLabels, options.acceptedProofClauses)) {
     return {
       ...options.clause,
       eq: repairedEq,
@@ -2888,7 +2927,7 @@ async function enforceEqClauseProof(options: {
   }
 
   const directLabels = collectDirectValueProofLabels(options.clause.eq);
-  if (hasAcceptedProofLabels(directLabels)) {
+  if (hasAcceptedProofLabels(directLabels, options.acceptedProofClauses)) {
     return {
       ...options.clause,
       ...(!Array.isArray(options.clause.attestations) || options.clause.attestations.length === 0
@@ -2902,7 +2941,7 @@ async function enforceEqClauseProof(options: {
     let sawInvalidElement = false;
     for (let index = 0; index < repairedEq.length; index += 1) {
       const element = repairedEq[index];
-      if (hasAcceptedProofLabels(collectElementProofLabels(element))) {
+      if (hasAcceptedProofLabels(collectElementProofLabels(element), options.acceptedProofClauses)) {
         retained.push(element);
         continue;
       }
@@ -2913,7 +2952,7 @@ async function enforceEqClauseProof(options: {
           : undefined;
       if (
         liftedMatch !== undefined
-        && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch))
+        && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch), options.acceptedProofClauses)
       ) {
         const liftedLabels = collectValueProofLabels(liftedMatch);
         options.report.liftedArgs.push({
@@ -2957,7 +2996,7 @@ async function enforceEqClauseProof(options: {
       : undefined;
   if (liftedMatch !== undefined) {
     const liftedLabels = collectValueProofLabels(liftedMatch);
-    if (hasAcceptedProofLabels(liftedLabels)) {
+    if (hasAcceptedProofLabels(liftedLabels, options.acceptedProofClauses)) {
       options.report.liftedArgs.push({
         tool: options.toolName,
         arg: options.argName,
@@ -2986,6 +3025,7 @@ async function enforceOneOfClauseProof(options: {
   clause: Extract<AuthorizationConstraintClause, { oneOf: unknown[] }>;
   env: Environment;
   mode: 'builder' | 'runtime';
+  acceptedProofClauses: AcceptedProofClauses;
   issues: PolicyAuthorizationCompilerIssue[];
   report: PolicyAuthorizationCompileReport;
 }): Promise<AuthorizationConstraintClause | undefined> {
@@ -3009,9 +3049,18 @@ async function enforceOneOfClauseProof(options: {
       })
     ).value;
     if (
-      hasAcceptedProofLabels(candidateAttestations)
-      || hasAcceptedProofLabels(collectDirectValueProofLabels(repairedCandidate))
-      || (!Array.isArray(repairedCandidate) && hasAcceptedProofLabels(collectValueProofLabels(repairedCandidate)))
+      hasAcceptedProofLabels(candidateAttestations, options.acceptedProofClauses)
+      || hasAcceptedProofLabels(
+        collectDirectValueProofLabels(repairedCandidate),
+        options.acceptedProofClauses
+      )
+      || (
+        !Array.isArray(repairedCandidate)
+        && hasAcceptedProofLabels(
+          collectValueProofLabels(repairedCandidate),
+          options.acceptedProofClauses
+        )
+      )
     ) {
       retainedValues.push(repairedCandidate);
       retainedAttestations.push(candidateAttestations);
@@ -3024,7 +3073,7 @@ async function enforceOneOfClauseProof(options: {
         : undefined;
     if (
       liftedMatch !== undefined
-      && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch))
+      && hasAcceptedProofLabels(collectValueProofLabels(liftedMatch), options.acceptedProofClauses)
     ) {
       const liftedLabels = collectValueProofLabels(liftedMatch);
       options.report.liftedArgs.push({
@@ -3067,6 +3116,7 @@ async function enforceControlArgProof(options: {
   authorizations: PolicyAuthorizations | undefined;
   env: Environment;
   toolContext?: ReadonlyMap<string, AuthorizationToolContext>;
+  policy?: PolicyConfig;
   mode: 'builder' | 'runtime';
   issues: PolicyAuthorizationCompilerIssue[];
   report: PolicyAuthorizationCompileReport;
@@ -3092,6 +3142,11 @@ async function enforceControlArgProof(options: {
       }
       sawValidatedControlArg = true;
 
+      const acceptedProofClauses = getAcceptedProofClausesForControlArg({
+        policy: options.policy,
+        toolName,
+        argName
+      });
       const nextClauses: AuthorizationConstraintClause[] = [];
       for (const clause of entry.args[argName] ?? []) {
         const nextClause =
@@ -3102,6 +3157,7 @@ async function enforceControlArgProof(options: {
                 clause,
                 env: options.env,
                 mode: options.mode,
+                acceptedProofClauses,
                 issues: options.issues,
                 report: options.report
               })
@@ -3111,6 +3167,7 @@ async function enforceControlArgProof(options: {
                 clause,
                 env: options.env,
                 mode: options.mode,
+                acceptedProofClauses,
                 issues: options.issues,
                 report: options.report
               });
@@ -3246,6 +3303,7 @@ export async function compilePolicyAuthorizations(
     authorizations: normalized,
     env: options.env,
     toolContext: options.toolContext,
+    policy: options.policy,
     mode: options.mode,
     issues,
     report

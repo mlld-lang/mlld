@@ -101,6 +101,47 @@ describe('evaluateRecord', () => {
     expect(definition?.location?.filePath).toBe('/project/records.mld');
   });
 
+  it('preserves fact kind tags and accepts overrides on record fields', async () => {
+    const env = createEnv();
+    const directive = parseRecord(`
+/record @send_email_inputs = {
+  facts: [
+    recipients: { type: array, kind: "email" },
+    cc: { type: array?, kind: ["email", "verified_email"], accepts: ["known", "fact:*.email"] }
+  ],
+  data: [subject: string],
+  validate: "strict"
+}
+`);
+
+    await evaluateDirective(directive, env);
+
+    expect(env.getRecordDefinition('send_email_inputs')).toMatchObject({
+      fields: [
+        {
+          name: 'recipients',
+          classification: 'fact',
+          valueType: 'array',
+          optional: false,
+          factKinds: ['email']
+        },
+        {
+          name: 'cc',
+          classification: 'fact',
+          valueType: 'array',
+          optional: true,
+          factKinds: ['email', 'verified_email'],
+          factAccepts: ['known', 'fact:*.email']
+        },
+        {
+          name: 'subject',
+          classification: 'data',
+          valueType: 'string'
+        }
+      ]
+    });
+  });
+
   it('makes registered records visible to child environments', async () => {
     const env = createEnv();
     const directive = parseRecord('/record @contact = { facts: [email: string] }');

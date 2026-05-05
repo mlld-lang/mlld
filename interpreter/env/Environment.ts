@@ -1656,6 +1656,14 @@ export class Environment
     return this.recordDefinitions?.get(recordName) ?? this.parent?.getRecordDefinition(recordName);
   }
 
+  getAllRecordDefinitions(): Map<string, RecordDefinition> {
+    const records = this.parent?.getAllRecordDefinitions() ?? new Map<string, RecordDefinition>();
+    for (const [recordName, definition] of this.recordDefinitions ?? []) {
+      records.set(recordName, definition);
+    }
+    return records;
+  }
+
   registerShelfDefinition(name: string, definition: ShelfDefinition): void {
     const shelfName = typeof name === 'string' ? name.trim() : '';
     if (!shelfName) {

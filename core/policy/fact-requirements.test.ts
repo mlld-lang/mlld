@@ -281,6 +281,61 @@ describe('fact requirements', () => {
     });
   });
 
+  it('resolves exact arg-field requirements without name inference', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: '@invite_user_to_slack',
+        argName: 'user_email',
+        policy: normalizePolicyConfig({
+          facts: {
+            requirements: {
+              '@invite_user_to_slack': {
+                user_email: ['known', 'fact:*.user_email']
+              }
+            }
+          }
+        })
+      })
+    ).toEqual({
+      status: 'resolved',
+      opRef: 'op:named:invite_user_to_slack',
+      requirements: [
+        {
+          arg: 'user_email',
+          patterns: ['known', 'fact:*.user_email'],
+          source: 'declarative',
+          rule: 'policy.facts.requirements.op:named:invite_user_to_slack.user_email'
+        }
+      ]
+    });
+  });
+
+  it('allows explicit overrides for intentionally different source field names', () => {
+    expect(
+      resolveFactRequirementsForOperationArg({
+        opRef: '@invite_user_to_slack',
+        argName: 'user_email',
+        policy: normalizePolicyConfig({
+          facts: {
+            requirements: {
+              '@invite_user_to_slack': {
+                user_email: ['known', 'fact:*.email']
+              }
+            }
+          }
+        })
+      })
+    ).toMatchObject({
+      requirements: [
+        {
+          arg: 'user_email',
+          patterns: ['known', 'fact:*.email'],
+          source: 'declarative'
+        }
+      ]
+    });
+  });
+
   it('falls back to the first provided arg for non-tool send operations and targeted destroy', () => {
     expect(
       selectDestinationArgs(

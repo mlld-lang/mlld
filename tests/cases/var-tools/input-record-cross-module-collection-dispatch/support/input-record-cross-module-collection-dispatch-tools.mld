@@ -1,11 +1,14 @@
 /record @calendar_evt = {
-  facts: [id_: string],
+  facts: [id_: { type: string, kind: "calendar_event_id" }],
   data: [title: string],
   key: id_
 }
 
 /record @add_participants_inputs = {
-  facts: [participants: array, event_id: handle],
+  facts: [
+    participants: array,
+    event_id: { type: handle, kind: "calendar_event_id" }
+  ],
   data: [],
   correlate: false,
   validate: "strict"

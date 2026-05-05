@@ -14,9 +14,12 @@ import {
   createExecutableVariable,
   createObjectVariable,
   isExecutableVariable,
+  isRecordVariable,
   type VariableSource
 } from '@core/types/variable';
-import { mergePolicyConfigs, type PolicyConfig } from '@core/policy/union';
+import { normalizeNamedOperationRef } from '@core/policy/operation-labels';
+import { mergePolicyConfigs, normalizePolicyConfig, type PolicyConfig } from '@core/policy/union';
+import { isRecordDefinition, type RecordDefinition } from '@core/types/record';
 import {
   clonePolicyAuthorizationCompileReport,
   compilePolicyAuthorizations,
@@ -395,6 +398,236 @@ function uniquePreservingOrder(values: readonly string[]): string[] {
   return unique;
 }
 
+function normalizePolicyFactArgName(value: string): string | undefined {
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizePolicyFactPatternList(values: readonly string[] | undefined): string[] {
+  const normalized: string[] = [];
+  for (const value of values ?? []) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (trimmed.length > 0 && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
+}
+
+function normalizeFactKindList(values: readonly string[] | undefined): string[] {
+  const normalized: string[] = [];
+  for (const value of values ?? []) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (trimmed.length > 0 && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+  return normalized;
+}
+
+function addFactKindIndexEntry(
+  kindIndex: Map<string, Set<string>>,
+  kind: string,
+  pattern: string
+): void {
+  const existing = kindIndex.get(kind) ?? new Set<string>();
+  existing.add(pattern);
+  kindIndex.set(kind, existing);
+}
+
+function addRecordDefinitionToFactKindIndex(
+  kindIndex: Map<string, Set<string>>,
+  record: RecordDefinition
+): void {
+  for (const field of record.fields) {
+    if (field.classification !== 'fact') {
+      continue;
+    }
+    for (const kind of normalizeFactKindList(field.factKinds)) {
+      addFactKindIndexEntry(kindIndex, kind, `fact:@${record.name}.${field.name}`);
+    }
+  }
+}
+
+function getRecordDefinitionForPolicyRecord(
+  env: Environment,
+  recordRef: unknown
+): RecordDefinition | undefined {
+  if (typeof recordRef === 'string') {
+    const recordName = recordRef.trim();
+    if (!recordName) {
+      return undefined;
+    }
+    const normalizedName = recordName.startsWith('@') ? recordName.slice(1) : recordName;
+    return env.getRecordDefinition(normalizedName);
+  }
+
+  if (!recordRef || typeof recordRef !== 'object') {
+    return undefined;
+  }
+
+  if (isRecordVariable(recordRef as any)) {
+    return (recordRef as { value: RecordDefinition }).value;
+  }
+
+  if (isRecordDefinition(recordRef)) {
+    return recordRef;
+  }
+
+  return undefined;
+}
+
+function buildFactKindIndex(
+  env: Environment,
+  toolContext: ReadonlyMap<string, AuthorizationToolContext>,
+  toolCollection: ToolCollection | undefined
+): Map<string, Set<string>> {
+  const kindIndex = new Map<string, Set<string>>();
+  const seenRecords = new Set<string>();
+  const addRecord = (record: RecordDefinition): void => {
+    if (seenRecords.has(record.name)) {
+      return;
+    }
+    seenRecords.add(record.name);
+    addRecordDefinitionToFactKindIndex(kindIndex, record);
+  };
+
+  for (const record of env.getAllRecordDefinitions().values()) {
+    addRecord(record);
+  }
+
+  for (const [, variable] of env.getAllVariables()) {
+    const embeddedRecords = variable.internal?.recordDefinitions;
+    if (isPlainObject(embeddedRecords)) {
+      for (const embeddedRecord of Object.values(embeddedRecords)) {
+        if (isRecordDefinition(embeddedRecord)) {
+          addRecord(embeddedRecord);
+        }
+      }
+    }
+
+    if (isRecordVariable(variable as any) && isRecordDefinition((variable as any).value)) {
+      addRecord((variable as any).value as RecordDefinition);
+    }
+  }
+
+  for (const definition of Object.values(toolCollection ?? {})) {
+    const inputRecord = getRecordDefinitionForPolicyRecord(env, definition?.inputs);
+    if (inputRecord) {
+      addRecord(inputRecord);
+    }
+
+    const outputRecord = getRecordDefinitionForPolicyRecord(env, definition?.returns);
+    if (outputRecord) {
+      addRecord(outputRecord);
+    }
+  }
+
+  for (const tool of toolContext.values()) {
+    const inputSchema = tool.inputSchema;
+    if (!inputSchema || seenRecords.has(inputSchema.recordName)) {
+      continue;
+    }
+    seenRecords.add(inputSchema.recordName);
+    for (const field of inputSchema.fields) {
+      if (field.classification !== 'fact') {
+        continue;
+      }
+      for (const kind of normalizeFactKindList(field.factKinds)) {
+        addFactKindIndexEntry(kindIndex, kind, `fact:@${inputSchema.recordName}.${field.name}`);
+      }
+    }
+  }
+
+  return kindIndex;
+}
+
+function getDerivedFactRequirementPatterns(options: {
+  argName: string;
+  field: NonNullable<AuthorizationToolContext['inputSchema']>['fields'][number];
+  kindIndex: ReadonlyMap<string, ReadonlySet<string>>;
+}): string[] {
+  const accepts = normalizePolicyFactPatternList(options.field.factAccepts);
+  if (accepts.length > 0) {
+    return accepts;
+  }
+
+  const factKinds = normalizeFactKindList(options.field.factKinds);
+  if (factKinds.length > 0) {
+    const patterns = ['known'];
+    for (const kind of factKinds) {
+      for (const pattern of options.kindIndex.get(kind) ?? []) {
+        if (!patterns.includes(pattern)) {
+          patterns.push(pattern);
+        }
+      }
+    }
+    return patterns;
+  }
+
+  return ['known', `fact:*.${options.argName}`];
+}
+
+function mergeDerivedInputFactRequirements(
+  basePolicy: PolicyConfig | undefined,
+  env: Environment,
+  toolContext: ReadonlyMap<string, AuthorizationToolContext>,
+  toolCollection?: ToolCollection
+): PolicyConfig | undefined {
+  const normalizedBasePolicy = normalizePolicyConfig(basePolicy);
+  const existingRequirements = normalizedBasePolicy.facts?.requirements ?? {};
+  const derivedRequirements: NonNullable<PolicyConfig['facts']>['requirements'] = {};
+  const kindIndex = buildFactKindIndex(env, toolContext, toolCollection);
+
+  for (const [toolName, tool] of toolContext) {
+    if (!tool.inputSchema || tool.hasControlArgsMetadata !== true || tool.controlArgs.size === 0) {
+      continue;
+    }
+
+    const opRef = normalizeNamedOperationRef(toolName);
+    if (!opRef) {
+      continue;
+    }
+
+    const existingArgRequirements = existingRequirements[opRef] ?? {};
+    const factFields = new Map(
+      tool.inputSchema.fields
+        .filter(field => field.classification === 'fact')
+        .map(field => [field.name.trim(), field] as const)
+    );
+    for (const rawArgName of tool.controlArgs) {
+      const trimmedArgName = rawArgName.trim();
+      const field = factFields.get(trimmedArgName);
+      if (!field) {
+        continue;
+      }
+
+      const argName = normalizePolicyFactArgName(trimmedArgName);
+      if (!argName || existingArgRequirements[argName]) {
+        continue;
+      }
+
+      const opRequirements = derivedRequirements[opRef] ?? {};
+      opRequirements[argName] = getDerivedFactRequirementPatterns({
+        argName,
+        field,
+        kindIndex
+      });
+      derivedRequirements[opRef] = opRequirements;
+    }
+  }
+
+  if (Object.keys(derivedRequirements).length === 0) {
+    return basePolicy;
+  }
+
+  return mergePolicyConfigs(basePolicy, {
+    facts: {
+      requirements: derivedRequirements
+    }
+  });
+}
+
 function stripAuthorizableFromIntent(value: unknown): unknown {
   if (!isPlainObject(value)) {
     return value;
@@ -706,8 +939,13 @@ async function buildPolicyAuthorizations(
   const strippedAuthorizations = stripAuthorizableFromIntent(rawAuthorizations);
   const builderOptions = await resolvePolicyBuilderOptions(options, executionEnv);
   const toolContext = buildAuthorizationToolContextForCollection(executionEnv, toolCollection);
-  const basePolicy = mergeCatalogPolicyDefaults(
-    builderOptions.basePolicy ?? executionEnv.getPolicySummary(),
+  const basePolicy = mergeDerivedInputFactRequirements(
+    mergeCatalogPolicyDefaults(
+      builderOptions.basePolicy ?? executionEnv.getPolicySummary(),
+      toolCollection
+    ),
+    executionEnv,
+    toolContext,
     toolCollection
   );
   const authorizationRole =

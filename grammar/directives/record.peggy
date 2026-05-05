@@ -314,7 +314,7 @@ RecordField
   / RecordInputField
 
 RecordInputField
-  = source:RecordFieldSource alias:RecordFieldAlias? fieldType:RecordFieldTypeAnnotation? _ bag:RecordFieldAttributeBag? {
+  = source:RecordFieldSource alias:RecordFieldAlias? fieldType:(RecordFieldConfigAnnotation / RecordFieldTypeAnnotation)? _ bag:RecordFieldAttributeBag? {
       const sourceName = helpers.recordFieldSourceName(source);
       const fieldName = alias || sourceName;
       return {
@@ -323,17 +323,21 @@ RecordInputField
         sourceRoot: helpers.recordFieldSourceRoot(source),
         source,
         valueType: fieldType?.valueType,
+        ...(fieldType?.factKinds ? { factKinds: fieldType.factKinds } : {}),
+        ...(fieldType?.factAccepts ? { factAccepts: fieldType.factAccepts } : {}),
         optional: fieldType?.optional === true
       };
     }
 
 RecordComputedField
-  = "{" _ key:BaseIdentifier _ ":" _ value:DataPropertyValue _ "}" fieldType:RecordFieldTypeAnnotation? _ bag:RecordFieldAttributeBag? {
+  = "{" _ key:BaseIdentifier _ ":" _ value:DataPropertyValue _ "}" fieldType:(RecordFieldConfigAnnotation / RecordFieldTypeAnnotation)? _ bag:RecordFieldAttributeBag? {
       return {
         kind: 'computed',
         name: key,
         expression: value,
         valueType: fieldType?.valueType,
+        ...(fieldType?.factKinds ? { factKinds: fieldType.factKinds } : {}),
+        ...(fieldType?.factAccepts ? { factAccepts: fieldType.factAccepts } : {}),
         optional: fieldType?.optional === true
       };
     }
@@ -376,6 +380,64 @@ RecordFieldTypeAnnotation
         valueType,
         optional: Boolean(optional)
       };
+    }
+
+RecordFieldConfigAnnotation
+  = _ ":" _ config:RecordFieldConfig {
+      return config;
+    }
+
+RecordFieldConfig
+  = "{" _ entries:RecordFieldConfigEntries? _ "}" {
+      const config = {};
+      for (const entry of entries || []) {
+        if (Object.prototype.hasOwnProperty.call(config, entry.key)) {
+          error(`Duplicate record field config '${entry.key}'`);
+        }
+        config[entry.key] = entry.value;
+      }
+      return {
+        ...(config.type ? { valueType: config.type.valueType, optional: config.type.optional } : {}),
+        ...(config.kind ? { factKinds: config.kind } : {}),
+        ...(config.accepts ? { factAccepts: config.accepts } : {})
+      };
+    }
+
+RecordFieldConfigEntries
+  = first:RecordFieldConfigEntry rest:(_ ","? _ entry:RecordFieldConfigEntry { return entry; })* _ ","? {
+      return [first, ...rest];
+    }
+
+RecordFieldConfigEntry
+  = "type" _ ":" _ valueType:RecordFieldValueType optional:"?"? {
+      return { key: 'type', value: { valueType, optional: Boolean(optional) } };
+    }
+  / "kind" _ ":" _ value:RecordFieldKindValue {
+      return { key: 'kind', value };
+    }
+  / "accepts" _ ":" _ value:RecordFieldAcceptsValue {
+      return { key: 'accepts', value };
+    }
+
+RecordFieldKindValue
+  = value:StringLiteral {
+      return value.trim().length > 0 ? [value.trim()] : [];
+    }
+  / "[" _ values:RecordFieldStringValues? _ "]" {
+      return values || [];
+    }
+
+RecordFieldAcceptsValue
+  = "[" _ values:RecordFieldStringValues? _ "]" {
+      return values || [];
+    }
+
+RecordFieldStringValues
+  = first:StringLiteral rest:(_ ","? _ value:StringLiteral { return value; })* _ ","? {
+      const values = [first, ...rest]
+        .map(value => value.trim())
+        .filter(value => value.length > 0);
+      return Array.from(new Set(values));
     }
 
 RecordFieldAttributeBag

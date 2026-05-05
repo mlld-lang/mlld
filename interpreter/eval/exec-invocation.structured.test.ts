@@ -1383,11 +1383,14 @@ print(json.dumps(value))
   it('accepts fact-backed values for handle-typed collection input records under policy', async () => {
     const src = `
 /record @event = {
-  facts: [id_: string],
+  facts: [id_: { type: string, kind: "calendar_event_id" }],
   data: [subject: string]
 }
 /record @add_parts_inputs = {
-  facts: [participants: array, event_id: handle],
+  facts: [
+    participants: array,
+    event_id: { type: handle, kind: "calendar_event_id" }
+  ],
   data: [],
   correlate: false,
   validate: "strict"
@@ -1472,11 +1475,14 @@ print(json.dumps(value))
   it('preserves fact-backed handle fields through rig-style arg rebuild before policy collection dispatch', async () => {
     const src = `
 /record @event = {
-  facts: [id_: string],
+  facts: [id_: { type: string, kind: "calendar_event_id" }],
   data: [subject: string]
 }
 /record @add_parts_inputs = {
-  facts: [participants: array, event_id: handle],
+  facts: [
+    participants: array,
+    event_id: { type: handle, kind: "calendar_event_id" }
+  ],
   data: [],
   correlate: false,
   validate: "strict"

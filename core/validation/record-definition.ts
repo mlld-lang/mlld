@@ -379,16 +379,29 @@ function validateRecordFieldShape(
   filePath?: string,
   fallbackLocation?: SourceLocation
 ): StaticValidationIssue[] {
+  const issues: StaticValidationIssue[] = [];
   if (field.classification === 'data' && field.valueType === 'handle') {
-    return [
+    issues.push(
       issue(
         'HANDLE_ON_DATA',
         `Record '@${recordName}' data field '${field.name}' cannot use handle type`,
         getRecordFieldLocation(field, filePath, fallbackLocation)
       )
-    ];
+    );
   }
-  return [];
+  if (
+    field.classification === 'data' &&
+    ((field.factKinds?.length ?? 0) > 0 || (field.factAccepts?.length ?? 0) > 0)
+  ) {
+    issues.push(
+      issue(
+        'FACT_METADATA_ON_DATA',
+        `Record '@${recordName}' data field '${field.name}' cannot declare fact kind or accepts metadata`,
+        getRecordFieldLocation(field, filePath, fallbackLocation)
+      )
+    );
+  }
+  return issues;
 }
 
 function normalizeRecordDataTrustLevel(value: unknown): RecordDataTrustLevel {

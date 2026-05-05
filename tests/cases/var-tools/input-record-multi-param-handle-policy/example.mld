@@ -1,24 +1,30 @@
 /record @calendar_evt = {
-  facts: [id_: string],
+  facts: [id_: { type: string, kind: "calendar_event_id" }],
   data: [title: string],
   key: id_
 }
 
 /record @file_entry = {
-  facts: [id_: string],
+  facts: [id_: { type: string, kind: "file_id" }],
   data: [filename: string],
   key: id_
 }
 
 /record @add_calendar_event_participants_inputs = {
-  facts: [participants: array, event_id: handle],
+  facts: [
+    participants: array,
+    event_id: { type: handle, kind: "calendar_event_id" }
+  ],
   data: [],
   correlate: false,
   validate: "strict"
 }
 
 /record @share_file_inputs = {
-  facts: [email: string, file_id: handle],
+  facts: [
+    email: string,
+    file_id: { type: handle, kind: "file_id" }
+  ],
   data: {
     trusted: [permission: string]
   },

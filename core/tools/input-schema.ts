@@ -33,7 +33,13 @@ export function buildToolInputSchemaFromRecordDefinition(options: {
       classification: field.classification,
       ...(field.valueType ? { valueType: field.valueType } : {}),
       optional: field.optional === true,
-      ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+      ...(field.dataTrust ? { dataTrust: field.dataTrust } : {}),
+      ...(Array.isArray(field.factKinds) && field.factKinds.length > 0
+        ? { factKinds: [...field.factKinds] }
+        : {}),
+      ...(Array.isArray(field.factAccepts) && field.factAccepts.length > 0
+        ? { factAccepts: [...field.factAccepts] }
+        : {})
     }));
 
   return {

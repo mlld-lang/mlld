@@ -289,6 +289,8 @@ export interface RecordInputFieldDefinition {
   name: string;
   classification: RecordFieldClassification;
   dataTrust?: RecordDataTrustLevel;
+  factKinds?: string[];
+  factAccepts?: string[];
   sourceRoot: RecordInputSourceRoot;
   source: VariableReferenceNode;
   valueType?: RecordFieldValueType;
@@ -300,6 +302,8 @@ export interface RecordComputedFieldDefinition {
   name: string;
   classification: RecordFieldClassification;
   dataTrust?: RecordDataTrustLevel;
+  factKinds?: string[];
+  factAccepts?: string[];
   expression: DataValue;
   valueType?: RecordFieldValueType;
   optional: boolean;
@@ -427,7 +431,29 @@ export function isSerializedRecordVariable(value: unknown): value is SerializedR
   );
 }
 
+function formatRecordStringList(values: readonly string[]): string {
+  return `[${values.map(value => JSON.stringify(value)).join(', ')}]`;
+}
+
 function formatRecordFieldValueType(field: RecordFieldDefinition): string {
+  const factKinds = field.factKinds ?? [];
+  const factAccepts = field.factAccepts ?? [];
+  if (factKinds.length > 0 || factAccepts.length > 0) {
+    const entries: string[] = [];
+    if (field.valueType) {
+      entries.push(`type: ${field.valueType}${field.optional ? '?' : ''}`);
+    }
+    if (factKinds.length === 1) {
+      entries.push(`kind: ${JSON.stringify(factKinds[0])}`);
+    } else if (factKinds.length > 1) {
+      entries.push(`kind: ${formatRecordStringList(factKinds)}`);
+    }
+    if (factAccepts.length > 0) {
+      entries.push(`accepts: ${formatRecordStringList(factAccepts)}`);
+    }
+    return entries.length > 0 ? `: { ${entries.join(', ')} }` : '';
+  }
+
   return field.valueType ? `: ${field.valueType}${field.optional ? '?' : ''}` : '';
 }
 

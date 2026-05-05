@@ -218,11 +218,17 @@ describe('MCP exe wrapper - parameter resolution', () => {
       '/export { @addParts, @writeTools }'
     ].join('\n'));
     const source = [
-      '/record @event = { facts: [id_: string], data: [title: string] }',
+      '/record @event = {',
+      '  facts: [id_: { type: string, kind: "calendar_event_id" }],',
+      '  data: [title: string]',
+      '}',
       // Keep input-record field order different from the wrapper exe parameter
       // order; collection dispatch must bind by name before the MCP call.
       '/record @add_parts_inputs = {',
-      '  facts: [arr_arg: array, event_id: handle],',
+      '  facts: [',
+      '    arr_arg: array,',
+      '    event_id: { type: handle, kind: "calendar_event_id" }',
+      '  ],',
       '  data: [],',
       '  correlate: false,',
       '  validate: "strict"',

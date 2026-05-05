@@ -17,6 +17,8 @@ export interface ToolInputFieldSchema {
   valueType?: RecordFieldValueType;
   optional: boolean;
   dataTrust?: RecordDataTrustLevel;
+  factKinds?: string[];
+  factAccepts?: string[];
 }
 
 export interface ToolInputSchema {
@@ -107,7 +109,13 @@ function cloneToolInputSchemaField(field: ToolInputFieldSchema): ToolInputFieldS
     classification: field.classification,
     ...(field.valueType ? { valueType: field.valueType } : {}),
     optional: field.optional === true,
-    ...(field.dataTrust ? { dataTrust: field.dataTrust } : {})
+    ...(field.dataTrust ? { dataTrust: field.dataTrust } : {}),
+    ...(Array.isArray(field.factKinds) && field.factKinds.length > 0
+      ? { factKinds: cloneStringList(field.factKinds) }
+      : {}),
+    ...(Array.isArray(field.factAccepts) && field.factAccepts.length > 0
+      ? { factAccepts: cloneStringList(field.factAccepts) }
+      : {})
   };
 }
 
@@ -187,7 +195,15 @@ function isToolInputFieldSchema(value: unknown): value is ToolInputFieldSchema {
       || candidate.valueType === 'array'
       || candidate.valueType === 'object'
       || candidate.valueType === 'handle') &&
-    (candidate.dataTrust === undefined || candidate.dataTrust === 'trusted' || candidate.dataTrust === 'untrusted')
+    (candidate.dataTrust === undefined || candidate.dataTrust === 'trusted' || candidate.dataTrust === 'untrusted') &&
+    (candidate.factKinds === undefined || (
+      Array.isArray(candidate.factKinds) &&
+      candidate.factKinds.every(entry => typeof entry === 'string')
+    )) &&
+    (candidate.factAccepts === undefined || (
+      Array.isArray(candidate.factAccepts) &&
+      candidate.factAccepts.every(entry => typeof entry === 'string')
+    ))
   );
 }
 
