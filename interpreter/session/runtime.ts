@@ -107,10 +107,39 @@ function createSessionSeedEvaluationEnv(env: Environment): Environment {
     return env;
   }
 
-  const { session: _session, seed: _seed, ...detachedConfig } = scopedConfig as EnvironmentConfig;
+  const {
+    session: _session,
+    seed: _seed,
+    [ATTACHED_SESSION_FRAME_CONFIG_KEY]: _attachedSessionFrame,
+    ...detachedConfig
+  } = scopedConfig as EnvironmentConfig;
   const seedEnv = env.createChild();
   seedEnv.setScopedEnvironmentConfig(detachedConfig);
   return seedEnv;
+}
+
+const ATTACHED_SESSION_FRAME_CONFIG_KEY = '__mlldAttachedSessionFrameId';
+
+export function getScopedAttachedSessionFrameId(env: Environment): string | undefined {
+  const value = env.getLocalScopedEnvironmentConfig()?.[ATTACHED_SESSION_FRAME_CONFIG_KEY];
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+export function setScopedAttachedSessionFrameId(env: Environment, sessionId: string): void {
+  const normalized = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!normalized) {
+    return;
+  }
+  const localScopedConfig = env.getLocalScopedEnvironmentConfig();
+  if (!localScopedConfig) {
+    return;
+  }
+  env.setScopedEnvironmentConfig({
+    ...localScopedConfig,
+    [ATTACHED_SESSION_FRAME_CONFIG_KEY]: normalized
+  });
 }
 
 function createSessionCloneStats(): SessionCloneStats {

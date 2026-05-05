@@ -243,6 +243,98 @@ describe('session runtime', () => {
     expect(isStructuredValue(init) ? asText(init) : init).toBe('seeded');
   });
 
+  it('surfaces session snapshots from llm wrappers whose config is not the second parameter', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  count: number?',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  => @planner.count',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @inner(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/exe llm @outer(harness, prompt, config) = @inner(@prompt, @config)',
+      '/var @raw = @outer("stub", "hello", { tools: @toolList }) with {',
+      '  session: @planner,',
+      '  seed: { count: 0 }',
+      '}',
+      '/var @summary = { raw: @raw, count: @raw.mx.sessions.planner.count }'
+    ].join('\n'));
+
+    const summary = await extractVariableValue(env.getVariable('summary')!, env) as any;
+    expect(isStructuredValue(summary.raw) ? summary.raw.data : summary.raw).toBe('1');
+    expect(isStructuredValue(summary.count) ? summary.count.data : summary.count).toBe(1);
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.finalState?.count).toBe(1);
+  });
+
+  it('preserves terminal session snapshots through plain wrappers around nonstandard llm calls', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  runtime: object?',
+      '}',
+      '/exe tool:w @finish() = [',
+      '  @planner.set({ runtime: { terminal: { status: "complete", text: "done" } } })',
+      '  => "finished"',
+      ']',
+      '/var @toolList = [@finish]',
+      `/exe llm @inner(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" finish '{}' }`,
+      '/exe llm @outer(harness, prompt, config) = @inner(@prompt, @config)',
+      '/guard after for op:named:outer = when [',
+      '  !@planner.runtime.terminal.isDefined() => deny "missing terminal"',
+      '  * => allow',
+      ']',
+      '/exe @plannerCall(prompt, config) = @outer("stub", @prompt, @config) with {',
+      '  session: @planner,',
+      '  seed: { runtime: {} }',
+      '}',
+      '/var @raw = @plannerCall("hello", { tools: @toolList })',
+      '/var @terminal = @raw.mx.sessions.planner.runtime.terminal'
+    ].join('\n'));
+
+    const raw = await extractVariableValue(env.getVariable('raw')!, env);
+    const terminal = await extractVariableValue(env.getVariable('terminal')!, env);
+    expect(isStructuredValue(raw) ? raw.data : raw).toBe('finished');
+    expect(terminal).toEqual({ status: 'complete', text: 'done' });
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.finalState?.runtime).toEqual({
+      terminal: { status: 'complete', text: 'done' }
+    });
+  });
+
+  it('keeps sibling session-bearing wrapper calls on separate frames', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  count: number?',
+      '}',
+      '/exe tool:w @track() = [',
+      '  @planner.increment("count")',
+      '  => @planner.count',
+      ']',
+      '/var @toolList = [@track]',
+      `/exe llm @inner(prompt, config) = cmd { node "${callToolFromConfigPath}" "@mx.llm.config" track '{}' }`,
+      '/exe llm @outer(prompt, config) = @inner(@prompt, @config)',
+      '/var @first = @outer("one", { tools: @toolList }) with {',
+      '  session: @planner,',
+      '  seed: { count: 0 }',
+      '}',
+      '/var @second = @outer("two", { tools: @toolList }) with {',
+      '  session: @planner,',
+      '  seed: { count: 10 }',
+      '}',
+      '/var @summary = {',
+      '  first: @first.mx.sessions.planner.count,',
+      '  second: @second.mx.sessions.planner.count',
+      '}'
+    ].join('\n'));
+
+    const summary = await extractVariableValue(env.getVariable('summary')!, env) as any;
+    expect(isStructuredValue(summary.first) ? summary.first.data : summary.first).toBe(1);
+    expect(isStructuredValue(summary.second) ? summary.second.data : summary.second).toBe(11);
+    expect(result.sessions.map((session: any) => session.finalState?.count)).toEqual([1, 11]);
+  });
+
   it('exposes final session state on the returned llm value via .mx.sessions and matches ExecuteResult.sessions', async () => {
     const { env, result } = await interpretWithEnv([
       '/var session @planner = {',

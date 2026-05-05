@@ -178,7 +178,9 @@ import {
   applySeedWrites,
   disposeSessionFrame,
   getNormalizedSessionAttachment,
+  getScopedAttachedSessionFrameId,
   materializeSession,
+  setScopedAttachedSessionFrameId,
   snapshotSessionsForFrame,
   resolveAttachedSessionInstance
 } from '@interpreter/session/runtime';
@@ -3065,11 +3067,17 @@ async function evaluateExecInvocationInternal(
     if (!hasLlmLabel) {
       return undefined;
     }
-    const sessionId = sessionEnv.getCurrentLlmSessionId();
-    if (!sessionId) {
-      return undefined;
+    const currentSessionId = sessionEnv.getCurrentLlmSessionId();
+    if (currentSessionId) {
+      const snapshots = snapshotSessionsForFrame(currentSessionId, sessionEnv);
+      if (snapshots) {
+        return snapshots;
+      }
     }
-    return snapshotSessionsForFrame(sessionId, sessionEnv);
+    if (attachedSessionFrameId && attachedSessionFrameId !== currentSessionId) {
+      return snapshotSessionsForFrame(attachedSessionFrameId, sessionEnv);
+    }
+    return undefined;
   };
 
   const attachLlmResultMetadata = <T>(
@@ -4499,6 +4507,7 @@ async function evaluateExecInvocationInternal(
   let sessionSeedApplied = false;
   let sessionSeedPending = false;
   let attachedSessionFrameId: string | undefined;
+  let attachedSessionFrameOwnsFrame = false;
   let attachedSessionCleanupRegistered = false;
   const llmTraceFrameId = hasLlmLabel ? randomUUID() : undefined;
   const importedExecutableSourcePath = getImportedExecutableSourcePath(variable);
@@ -4527,19 +4536,35 @@ async function evaluateExecInvocationInternal(
   traceLlmExecMemory('session_attach', 'start');
   const preattachedSession = hasLlmLabel ? getNormalizedSessionAttachment(runtimeEnv) : undefined;
   if (preattachedSession) {
-    attachedSessionFrameId = llmTraceFrameId ?? randomUUID();
-    const sessionInstance = materializeSession(
-      preattachedSession.definition,
-      runtimeEnv,
-      attachedSessionFrameId
-    );
-    runtimeEnv.attachSessionInstance(attachedSessionFrameId, sessionInstance);
-    try {
-      await applySeedWrites(sessionInstance, preattachedSession.seed, runtimeEnv);
-      sessionSeedApplied = true;
-    } catch (error) {
-      runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
-      throw error;
+    const scopedAttachedSessionFrameId = getScopedAttachedSessionFrameId(runtimeEnv);
+    if (scopedAttachedSessionFrameId) {
+      const inheritedSessionInstance = runtimeEnv.getSessionInstance(
+        scopedAttachedSessionFrameId,
+        preattachedSession.definition.id
+      );
+      if (inheritedSessionInstance) {
+        attachedSessionFrameId = scopedAttachedSessionFrameId;
+        sessionSeedApplied = true;
+      }
+    }
+
+    if (!attachedSessionFrameId) {
+      attachedSessionFrameId = llmTraceFrameId ?? randomUUID();
+      attachedSessionFrameOwnsFrame = true;
+      const sessionInstance = materializeSession(
+        preattachedSession.definition,
+        runtimeEnv,
+        attachedSessionFrameId
+      );
+      runtimeEnv.attachSessionInstance(attachedSessionFrameId, sessionInstance);
+      setScopedAttachedSessionFrameId(runtimeEnv, attachedSessionFrameId);
+      try {
+        await applySeedWrites(sessionInstance, preattachedSession.seed, runtimeEnv);
+        sessionSeedApplied = true;
+      } catch (error) {
+        runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
+        throw error;
+      }
     }
   }
   traceLlmExecMemory('session_attach', 'finish');
@@ -4612,7 +4637,7 @@ async function evaluateExecInvocationInternal(
       execEnv.setScopedEnvironmentConfig(localScopedConfig);
     }
     execEnv.setFunctionScopeBoundary(true);
-    if (attachedSessionFrameId) {
+    if (attachedSessionFrameId && attachedSessionFrameOwnsFrame) {
       const sessionFrameId = attachedSessionFrameId;
       execEnv.registerScopeCleanup(async () => {
         disposeSessionFrame(sessionFrameId, execEnv);
@@ -4621,7 +4646,7 @@ async function evaluateExecInvocationInternal(
     }
     traceLlmExecMemory('scope_setup', 'finish');
   } catch (error) {
-    if (attachedSessionFrameId && !attachedSessionCleanupRegistered) {
+    if (attachedSessionFrameId && attachedSessionFrameOwnsFrame && !attachedSessionCleanupRegistered) {
       runtimeEnv.disposeSessionInstances(attachedSessionFrameId);
     }
     throw error;
@@ -5098,10 +5123,11 @@ async function evaluateExecInvocationInternal(
         const workingDirectory = typeof dirValue === 'string' && dirValue.trim().length > 0
           ? dirValue.trim()
           : execEnv.getProjectRoot();
+        const toolBridgeSessionId = attachedSessionFrameId ?? llmTraceFrameId;
         const callConfig = await createCallMcpConfig({
           tools: toolsValue,
           env: execEnv,
-          ...(llmTraceFrameId ? { sessionId: llmTraceFrameId } : {}),
+          ...(toolBridgeSessionId ? { sessionId: toolBridgeSessionId } : {}),
           workingDirectory,
           conversationDescriptor: resultSecurityDescriptor,
           isMcpContext: true,
