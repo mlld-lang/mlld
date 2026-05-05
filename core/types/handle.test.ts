@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createFactSourceHandle,
   createHandleWrapper,
+  getFactSourceKey,
+  internFactSourceArray,
   isFactSourceHandle,
   isHandleWrapper
 } from './handle';
@@ -31,6 +33,40 @@ describe('handle types', () => {
       '{"kind":"record-field","ref":"@contact.email","sourceRef":"@contact","field":"email","instanceKey":"ada@example.com","coercionId":"coerce-1","position":0,"tiers":["internal","verified"]}'
     );
     expect(isFactSourceHandle(handle)).toBe(true);
+  });
+
+  it('rejects malformed tier metadata before factsource keying', () => {
+    const cyclic: unknown[] = ['safe'];
+    cyclic.push(cyclic);
+    const malformed = {
+      kind: 'record-field',
+      ref: '@contact.email',
+      sourceRef: '@contact',
+      field: 'email',
+      tiers: cyclic
+    };
+
+    expect(isFactSourceHandle(malformed)).toBe(false);
+    expect(() => internFactSourceArray([malformed as any])).not.toThrow();
+    expect(internFactSourceArray([malformed as any])).toEqual([]);
+  });
+
+  it('keys legacy factsources without descending into runtime-shaped objects', () => {
+    const cyclic: Record<string, unknown> = {
+      ref: '@legacy.value',
+      sourceRef: '@legacy',
+      field: 'value'
+    };
+    cyclic.self = cyclic;
+
+    expect(() => internFactSourceArray([cyclic as any])).not.toThrow();
+    expect(() => getFactSourceKey({
+      kind: 'record-field',
+      ref: '@legacy.value',
+      sourceRef: '@legacy',
+      field: 'value',
+      tiers: cyclic.self as any
+    })).not.toThrow();
   });
 
   it('recognizes only exact single-key handle wrappers', () => {

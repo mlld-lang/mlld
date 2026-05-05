@@ -6,7 +6,7 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { SecurityDescriptor } from '@core/types/security';
 import type { Variable } from '@core/types/variable';
-import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, extractSecurityDescriptor, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { boundary } from '@interpreter/utils/boundary';
 import { createParameterVariable } from '@interpreter/utils/parameter-factory';
 import { isVariable } from '@interpreter/utils/variable-resolution';
@@ -110,7 +110,7 @@ function stringifyParameterBindingValue(
   }
   if (typeof value === 'object' && value !== null) {
     try {
-      return JSON.stringify(value);
+      return stringifyStructured(value);
     } catch {
       return String(value);
     }

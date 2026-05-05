@@ -5,7 +5,7 @@ import {
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import type { Environment } from '@interpreter/env/Environment';
 import { AutoUnwrapManager } from '@interpreter/eval/auto-unwrap-manager';
-import { asText, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { interpolateAndRecord } from './definition-helpers';
 
 export function createExecWrapper(
@@ -29,10 +29,10 @@ export function createExecWrapper(
         const stringValue =
           typeof argValue === 'string'
             ? argValue
-            : argValue === null || argValue === undefined
-              ? String(argValue)
-              : typeof argValue === 'object'
-                ? (isStructuredValue(argValue) ? asText(argValue) : JSON.stringify(argValue))
+              : argValue === null || argValue === undefined
+                ? String(argValue)
+                : typeof argValue === 'object'
+                  ? (isStructuredValue(argValue) ? asText(argValue) : stringifyStructured(argValue))
                 : String(argValue);
 
         const paramVar = createSimpleTextVariable(

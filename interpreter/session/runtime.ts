@@ -101,6 +101,18 @@ function cloneSessionStructuredMetadata(
   return rest;
 }
 
+function createSessionSeedEvaluationEnv(env: Environment): Environment {
+  const scopedConfig = env.getScopedEnvironmentConfig();
+  if (!scopedConfig || (!('session' in scopedConfig) && !('seed' in scopedConfig))) {
+    return env;
+  }
+
+  const { session: _session, seed: _seed, ...detachedConfig } = scopedConfig as EnvironmentConfig;
+  const seedEnv = env.createChild();
+  seedEnv.setScopedEnvironmentConfig(detachedConfig);
+  return seedEnv;
+}
+
 function createSessionCloneStats(): SessionCloneStats {
   return {
     visited: 0,
@@ -1832,18 +1844,19 @@ export async function applySeedWrites(
   }
 
   const seedInputs = Array.isArray(rawSeed) ? rawSeed : [rawSeed];
+  const seedEvalEnv = createSessionSeedEvaluationEnv(env);
   for (const seedInput of seedInputs) {
     if (seedInput === undefined) {
       continue;
     }
-    const resolvedSeed = await materializeSeedInput(seedInput, env);
+    const resolvedSeed = await materializeSeedInput(seedInput, seedEvalEnv);
     if (resolvedSeed === undefined || resolvedSeed === null) {
       continue;
     }
     if (!isPlainObject(resolvedSeed)) {
       throw createSessionError('seed must evaluate to an object keyed by session slot name.', 'INVALID_SESSION_SEED');
     }
-    const seedUpdates = await getSessionObjectUpdates(resolvedSeed, env);
+    const seedUpdates = await getSessionObjectUpdates(resolvedSeed, seedEvalEnv);
     await setSlotValues(instance, seedUpdates ?? resolvedSeed, env, 'seed');
   }
 }

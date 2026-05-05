@@ -22,6 +22,39 @@ const FACT_SOURCE_CACHE_LIMIT = 8192;
 const FACT_SOURCE_ARRAY_CACHE_LIMIT = 4096;
 const FACT_SOURCE_ARRAY_KEY_LIMIT = 8192;
 
+function normalizeTiers(tiers: unknown): readonly string[] | undefined {
+  if (!Array.isArray(tiers)) {
+    return undefined;
+  }
+
+  const normalized = tiers
+    .filter((tier): tier is string => typeof tier === 'string')
+    .map(tier => tier.trim().toLowerCase())
+    .filter(Boolean)
+    .sort();
+
+  return normalized.length > 0
+    ? Object.freeze(Array.from(new Set(normalized)))
+    : undefined;
+}
+
+function primitiveKeyPart(value: unknown): unknown {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === 'string');
+  }
+
+  return undefined;
+}
+
 function rememberBounded<T>(cache: Map<string, T>, key: string, value: T, limit: number): T {
   const existing = cache.get(key);
   if (existing) {
@@ -71,7 +104,7 @@ export function getFactSourceKey(handle: FactSourceHandle): string {
     handle.instanceKey ?? null,
     handle.coercionId ?? null,
     handle.position ?? null,
-    handle.tiers ? Array.from(handle.tiers) : []
+    normalizeTiers(handle.tiers) ?? []
   ]);
 }
 
@@ -80,14 +113,12 @@ function getLegacyFactSourceKey(handle: Record<string, unknown>): string {
     'legacy',
     ...Object.keys(handle)
       .sort()
-      .map(key => [key, handle[key]])
+      .map(key => [key, primitiveKeyPart(handle[key])])
   ]);
 }
 
 export function internFactSourceHandle(handle: FactSourceHandle): FactSourceHandle {
-  const tiers = handle.tiers && handle.tiers.length > 0
-    ? Object.freeze(Array.from(new Set(handle.tiers))) as readonly string[]
-    : undefined;
+  const tiers = normalizeTiers(handle.tiers);
   const normalized: FactSourceHandle = Object.freeze({
     kind: handle.kind,
     ref: handle.ref,
@@ -133,8 +164,14 @@ export function internFactSourceArray(
       continue;
     }
 
-    if (handle && typeof handle === 'object' && typeof (handle as Record<string, unknown>).ref === 'string') {
-      const interned = internLegacyFactSourceHandle(handle as unknown as Record<string, unknown>);
+    const candidate = handle as Record<string, unknown> | null;
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      candidate.kind !== 'record-field' &&
+      typeof candidate.ref === 'string'
+    ) {
+      const interned = internLegacyFactSourceHandle(candidate);
       const key = getLegacyFactSourceKey(interned as unknown as Record<string, unknown>);
       if (!deduped.has(key)) {
         deduped.set(key, interned);
@@ -182,10 +219,7 @@ export function createFactSourceHandle(input: {
   const position = typeof input.position === 'number' && Number.isInteger(input.position) && input.position >= 0
     ? input.position
     : undefined;
-  const tiers = input.tiers
-    ?.map(tier => tier.trim().toLowerCase())
-    .filter(Boolean)
-    .sort();
+  const tiers = normalizeTiers(input.tiers);
 
   return internFactSourceHandle({
     kind: 'record-field',
@@ -195,7 +229,7 @@ export function createFactSourceHandle(input: {
     ...(instanceKey !== undefined ? { instanceKey } : {}),
     ...(coercionId ? { coercionId } : {}),
     ...(position !== undefined ? { position } : {}),
-    ...(tiers && tiers.length > 0 ? { tiers: Object.freeze(Array.from(new Set(tiers))) } : {})
+    ...(tiers ? { tiers } : {})
   });
 }
 
@@ -229,7 +263,13 @@ export function isFactSourceHandle(value: unknown): value is FactSourceHandle {
     return false;
   }
 
-  if (candidate.tiers !== undefined && !Array.isArray(candidate.tiers)) {
+  if (
+    candidate.tiers !== undefined &&
+    (
+      !Array.isArray(candidate.tiers) ||
+      !candidate.tiers.every(tier => typeof tier === 'string')
+    )
+  ) {
     return false;
   }
 

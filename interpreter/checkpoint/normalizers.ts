@@ -2,6 +2,7 @@ import {
   isShelfSlotRefValue,
   type ShelfSlotRefValue
 } from '@core/types/shelf';
+import { summarizeOpaqueRuntimeValue } from '@core/security/opaque-runtime-values';
 import { asData, isStructuredValue } from '@interpreter/utils/structured-value';
 import { registerCheckpointNormalizer } from './CheckpointManager';
 
@@ -36,6 +37,25 @@ export function registerCoreCheckpointNormalizers(): void {
         data: recurse(currentData)
       };
     }
+  });
+
+  // StructuredValue: checkpoint inputs already unwrap top-level structured
+  // values to their data view. Do the same for nested wrappers, without
+  // reading lazy `.text` getters.
+  registerCheckpointNormalizer({
+    test: isStructuredValue,
+    normalize: (value, recurse) => recurse(asData(value))
+  });
+
+  // Executables, environments, and similar runtime carriers are identity /
+  // capability objects, not serializable data. Summarize them before the
+  // generic walker can descend into captured scopes or provenance graphs.
+  registerCheckpointNormalizer({
+    test: value => summarizeOpaqueRuntimeValue(value) !== undefined,
+    normalize: value => ({
+      $type: 'opaque-runtime-value',
+      value: summarizeOpaqueRuntimeValue(value)
+    })
   });
 }
 

@@ -578,6 +578,7 @@ export class Environment
       getCurrentFilePath: this.getCurrentFilePath.bind(this),
       getReservedNames: () => this.reservedNames,
       getParent: () => this.parent,
+      findParentVariableForChildLookup: this.findParentVariableForChildLookup.bind(this),
       findVisibleParentVariableOwner: this.findVisibleParentVariableOwner.bind(this),
       getCapturedModuleEnv: () => this.capturedModuleEnv,
       isModuleIsolated: () => this.moduleIsolated,
@@ -903,7 +904,12 @@ export class Environment
 
   findVisibleVariableOwner(name: string): Environment | undefined {
     let current: Environment | undefined = this;
+    const seen = new Set<Environment>();
     while (current) {
+      if (seen.has(current)) {
+        return undefined;
+      }
+      seen.add(current);
       if (current.getCurrentVariables().has(name)) {
         return current;
       }
@@ -925,6 +931,31 @@ export class Environment
   findVisibleParentVariableOwner(name: string): Environment | undefined {
     const parent = this.getParent();
     return parent ? parent.findVisibleVariableOwner(name) : undefined;
+  }
+
+  findParentVariableForChildLookup(name: string): Variable | undefined {
+    let current: Environment | undefined = this.parent;
+    const seen = new Set<Environment>();
+    while (current) {
+      if (seen.has(current)) {
+        return undefined;
+      }
+      seen.add(current);
+
+      const localVariable = current.variableManager.getCurrentVariables().get(name);
+      if (localVariable) {
+        return localVariable;
+      }
+
+      const capturedVariable = current.capturedModuleEnv?.get(name);
+      if (capturedVariable) {
+        return capturedVariable;
+      }
+
+      current = current.parent;
+    }
+
+    return undefined;
   }
 
   setExportManifest(manifest: ExportManifest | null | undefined): void {
@@ -3801,12 +3832,26 @@ export class Environment
   }
 
   releaseChildScope(): void {
-    for (const child of this.childEnvironments) {
-      child.releaseChildScope();
+    const stack: Environment[] = [this];
+    const seen = new Set<Environment>();
+
+    for (let index = 0; index < stack.length; index += 1) {
+      const env = stack[index];
+      if (seen.has(env)) {
+        continue;
+      }
+      seen.add(env);
+
+      for (const child of env.childEnvironments) {
+        stack.push(child);
+      }
+      env.childEnvironments.clear();
     }
-    this.childEnvironments.clear();
-    if (this.parent) {
-      this.parent.childEnvironments.delete(this);
+
+    for (const env of seen) {
+      if (env.parent) {
+        env.parent.childEnvironments.delete(env);
+      }
     }
   }
   

@@ -171,6 +171,30 @@ describe('session runtime', () => {
     expect(result.sessions[0]?.finalState).toEqual({ query: 'seeded', count: 4 });
   });
 
+  it('does not recursively inherit the attached session while evaluating seed helpers', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/var session @planner = {',
+      '  init: string',
+      '}',
+      '/exe llm @seedSource(prompt, config) = js {',
+      '  return "seeded";',
+      '}',
+      '/exe llm @agent(prompt, config) = js {',
+      '  return "ok";',
+      '}',
+      '/var @result = @agent("hello", {}) with {',
+      '  session: @planner,',
+      '  seed: { init: @seedSource("seed", {}) }',
+      '}'
+    ].join('\n'));
+
+    const output = await extractVariableValue(env.getVariable('result')!, env);
+    expect(isStructuredValue(output) ? asText(output) : output).toBe('ok');
+    expect(result.sessions).toHaveLength(1);
+    const init = result.sessions[0]?.finalState?.init;
+    expect(isStructuredValue(init) ? asText(init) : init).toBe('seeded');
+  });
+
   it('exposes final session state on the returned llm value via .mx.sessions and matches ExecuteResult.sessions', async () => {
     const { env, result } = await interpretWithEnv([
       '/var session @planner = {',
@@ -292,7 +316,7 @@ describe('session runtime', () => {
     expect(setExecutable).toBeDefined();
 
     const factsources = Object.freeze([
-      { kind: 'record-field', ref: 'contact_1', field: 'email' } as any
+      { kind: 'record-field', ref: 'contact_1', sourceRef: 'contact', field: 'email' } as any
     ]);
     const projection = {
       kind: 'field' as const,

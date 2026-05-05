@@ -50,7 +50,7 @@ import {
   mergeGuardArgNamesIntoMetadata,
   type GuardArgName
 } from '@interpreter/utils/guard-args';
-import { asText, extractSecurityDescriptor, isStructuredValue } from '@interpreter/utils/structured-value';
+import { asText, extractSecurityDescriptor, isStructuredValue, stringifyStructured } from '@interpreter/utils/structured-value';
 import { isVariable } from '@interpreter/utils/variable-resolution';
 import { resolveOpTypeFromLanguage } from '@interpreter/eval/exec/context';
 import { formatGuardWarning, handleExecGuardDenial } from '@interpreter/eval/guard-denial-handler';
@@ -253,7 +253,7 @@ export function stringifyExecGuardArg(value: unknown): string {
     return 'null';
   }
   try {
-    return JSON.stringify(value);
+    return stringifyStructured(value);
   } catch {
     return String(value);
   }

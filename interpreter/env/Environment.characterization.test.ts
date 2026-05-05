@@ -66,6 +66,28 @@ describe('Environment characterization', () => {
       expect((child as any).importResolver).not.toBe((env as any).importResolver);
       expect(child.getEffectHandler()).toBe(env.getEffectHandler());
     });
+
+    it('resolves parent variables through deep child chains without recursive lookup overflow', () => {
+      const env = createEnvironment();
+      env.setParameterVariable('agent', createSimpleTextVariable('agent', 'ok', mockSource));
+      let current = env;
+      for (let index = 0; index < 530; index += 1) {
+        current = current.createChild();
+      }
+
+      expect(current.getVariable('agent')?.value).toBe('ok');
+    });
+
+    it('releases deep tracked child scope chains without recursive cleanup overflow', () => {
+      const env = createEnvironment();
+      let current = env;
+      for (let index = 0; index < 1500; index += 1) {
+        current = current.createChild(undefined, { trackForCleanup: true });
+      }
+
+      expect(() => env.releaseChildScope()).not.toThrow();
+      expect((env as any).childEnvironments.size).toBe(0);
+    });
   });
 
   describe('resolver variable behavior', () => {

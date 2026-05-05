@@ -253,8 +253,17 @@ function normalizeForSerialization(value: unknown, seen: Map<object, number>): u
     // explicitly. A toJSON that returns the same object (or another object with
     // a toJSON that returns itself) would loop, so fall through to the generic
     // walk if toJSON doesn't move us to a different value.
-    if (typeof (value as { toJSON?: unknown }).toJSON === 'function') {
-      const jsonified = (value as { toJSON: () => unknown }).toJSON();
+    const ownToJson = Object.getOwnPropertyDescriptor(value, 'toJSON');
+    const proto = Object.getPrototypeOf(value);
+    const protoToJson = proto ? Object.getOwnPropertyDescriptor(proto, 'toJSON') : undefined;
+    const toJson =
+      ownToJson && 'value' in ownToJson
+        ? ownToJson.value
+        : protoToJson && 'value' in protoToJson
+          ? protoToJson.value
+          : undefined;
+    if (typeof toJson === 'function') {
+      const jsonified = toJson.call(value);
       if (jsonified !== value) {
         return normalizeForSerialization(jsonified, seen);
       }
@@ -263,7 +272,11 @@ function normalizeForSerialization(value: unknown, seen: Map<object, number>): u
     const plain = value as Record<string, unknown>;
     const normalized: Record<string, unknown> = {};
     for (const key of Object.keys(plain).sort()) {
-      normalized[key] = normalizeForSerialization(plain[key], seen);
+      const descriptor = Object.getOwnPropertyDescriptor(plain, key);
+      if (!descriptor || !('value' in descriptor)) {
+        continue;
+      }
+      normalized[key] = normalizeForSerialization(descriptor.value, seen);
     }
     return normalized;
   }

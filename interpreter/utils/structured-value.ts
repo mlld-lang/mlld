@@ -174,6 +174,8 @@ interface LocalVarMxDescriptorCacheEntry {
 }
 
 const LOCAL_VAR_MX_DESCRIPTOR_CACHE = new WeakMap<object, LocalVarMxDescriptorCacheEntry>();
+const STRUCTURED_JSON_MAX_DEPTH = 200;
+const SECURITY_DESCRIPTOR_MAX_DEPTH = 64;
 
 function varMxToSecurityDescriptor(
   mx: {
@@ -242,7 +244,104 @@ export function isStructuredValue<T = unknown>(value: unknown): value is Structu
 }
 
 export function stringifyStructured(value: unknown, space?: number): string {
-  return JSON.stringify(value, structuredValueJsonReplacer, space);
+  return JSON.stringify(normalizeStructuredJsonValue(value, new WeakSet(), 0), undefined, space);
+}
+
+function getCallableToJson(value: object): (() => unknown) | undefined {
+  const ownToJson = Object.getOwnPropertyDescriptor(value, 'toJSON');
+  if (ownToJson && 'value' in ownToJson && typeof ownToJson.value === 'function') {
+    return ownToJson.value as () => unknown;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+  const protoToJson = proto ? Object.getOwnPropertyDescriptor(proto, 'toJSON') : undefined;
+  if (protoToJson && 'value' in protoToJson && typeof protoToJson.value === 'function') {
+    return protoToJson.value as () => unknown;
+  }
+
+  return undefined;
+}
+
+function normalizeStructuredJsonValue(
+  value: unknown,
+  stack: WeakSet<object>,
+  depth: number
+): unknown {
+  if (depth > STRUCTURED_JSON_MAX_DEPTH) {
+    return '[MaxDepth]';
+  }
+
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return value.toString(10);
+  }
+
+  if (
+    typeof value === 'undefined' ||
+    typeof value === 'function' ||
+    typeof value === 'symbol'
+  ) {
+    return undefined;
+  }
+
+  if (isStructuredValue(value)) {
+    return normalizeStructuredJsonValue(value.data, stack, depth + 1);
+  }
+
+  const opaqueSummary = summarizeOpaqueRuntimeValue(value);
+  if (opaqueSummary) {
+    return opaqueSummary;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  if (stack.has(value)) {
+    return '[Circular]';
+  }
+
+  stack.add(value);
+  try {
+    const toJson = getCallableToJson(value);
+    if (toJson) {
+      const jsonified = toJson.call(value);
+      if (jsonified !== value) {
+        return normalizeStructuredJsonValue(jsonified, stack, depth + 1);
+      }
+    }
+
+    if (Array.isArray(value)) {
+      const result = new Array(value.length);
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        result[index] = descriptor && 'value' in descriptor
+          ? normalizeStructuredJsonValue(descriptor.value, stack, depth + 1)
+          : undefined;
+      }
+      return result;
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !('value' in descriptor)) {
+        continue;
+      }
+      result[key] = normalizeStructuredJsonValue(descriptor.value, stack, depth + 1);
+    }
+    return result;
+  } finally {
+    stack.delete(value);
+  }
 }
 
 function stringifyTextValue(value: unknown): string {
@@ -266,19 +365,6 @@ function stringifyTextValue(value: unknown): string {
   } catch {}
 
   return '[unserializable object]';
-}
-
-function structuredValueJsonReplacer(_key: string, val: unknown): unknown {
-  if (isStructuredValue(val)) {
-    return val.data;
-  }
-
-  const opaqueSummary = summarizeOpaqueRuntimeValue(val);
-  if (opaqueSummary) {
-    return opaqueSummary;
-  }
-
-  return val;
 }
 
 export function asText(value: unknown): string {
@@ -943,7 +1029,8 @@ export function extractSecurityDescriptor(
 function extractDescriptorInternal(
   value: unknown,
   options: Required<ExtractSecurityDescriptorOptions>,
-  seen: WeakSet<object>
+  seen: WeakSet<object>,
+  depth = 0
 ): SecurityDescriptor | undefined {
   if (value === null || value === undefined) {
     return undefined;
@@ -959,7 +1046,7 @@ function extractDescriptorInternal(
   }
 
   if (isShelfSlotRefValue(value)) {
-    const currentDescriptor = extractDescriptorInternal(value.current, options, seen);
+    const currentDescriptor = extractDescriptorInternal(value.current, options, seen, depth + 1);
     return mergeDescriptorSources(provenanceDescriptor, currentDescriptor);
   }
 
@@ -969,7 +1056,7 @@ function extractDescriptorInternal(
       normalizeIfNeeded(candidateMetadataSecurity(value), options.normalize)
       ?? normalizeIfNeeded(varMxToSecurityDescriptor(value.mx), options.normalize)
     );
-    if (!options.recursive) {
+    if (!options.recursive || depth >= SECURITY_DESCRIPTOR_MAX_DEPTH) {
       return normalizeIfNeeded(metadataDescriptor, options.normalize);
     }
 
@@ -978,12 +1065,23 @@ function extractDescriptorInternal(
     }
     seen.add(value);
 
+    const dataObject =
+      value.data && typeof value.data === 'object'
+        ? value.data
+        : undefined;
+    if (dataObject && seen.has(dataObject)) {
+      return normalizeIfNeeded(metadataDescriptor, options.normalize);
+    }
+    if (dataObject) {
+      seen.add(dataObject);
+    }
+
     if (isOpaqueRuntimeValue(value.data)) {
       return normalizeIfNeeded(metadataDescriptor, options.normalize);
     }
 
     const nestedDescriptors = getStructuredChildValues(value)
-      .map(item => extractDescriptorInternal(item, options, seen))
+      .map(item => extractDescriptorInternal(item, options, seen, depth + 1))
       .filter(isSecurityDescriptor);
 
     if (nestedDescriptors.length === 0) {
@@ -1018,7 +1116,7 @@ function extractDescriptorInternal(
   }
 
   const metadataDescriptor = directObjectDescriptor(value, provenanceDescriptor, options.normalize);
-  if (isOpaqueRuntimeValue(value)) {
+  if (depth >= SECURITY_DESCRIPTOR_MAX_DEPTH || isOpaqueRuntimeValue(value)) {
     return metadataDescriptor;
   }
 
@@ -1029,7 +1127,7 @@ function extractDescriptorInternal(
 
   if (Array.isArray(value)) {
     const descriptors = value
-      .map(item => extractDescriptorInternal(item, options, seen))
+      .map(item => extractDescriptorInternal(item, options, seen, depth + 1))
       .filter(isSecurityDescriptor);
     if (descriptors.length === 0) {
       return undefined;
@@ -1041,7 +1139,7 @@ function extractDescriptorInternal(
   }
 
   const nestedDescriptors = Object.values(value as Record<string, unknown>)
-    .map(item => extractDescriptorInternal(item, options, seen))
+    .map(item => extractDescriptorInternal(item, options, seen, depth + 1))
     .filter(isSecurityDescriptor);
 
   if (nestedDescriptors.length === 0) {

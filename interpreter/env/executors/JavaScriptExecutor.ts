@@ -5,6 +5,7 @@ import { createMlldHelpers, prepareParamsForShadow } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 import { enhanceJSError } from '@core/errors/patterns/init';
 import { addImplicitReturn } from './implicit-return';
+import { stringifyStructured } from '@interpreter/utils/structured-value';
 
 export interface ShadowEnvironment {
   /**
@@ -23,7 +24,7 @@ function serializeExplicitJavaScriptResult(result: unknown): string {
   }
   if (typeof result === 'object') {
     try {
-      return JSON.stringify(result);
+      return stringifyStructured(result);
     } catch {
       return String(result);
     }
@@ -98,7 +99,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
           originalLog(...args);
         }
         consoleOutput += args.map(arg => 
-          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+          typeof arg === 'object' ? stringifyStructured(arg, 2) : String(arg)
         ).join(' ') + '\n';
       };
 

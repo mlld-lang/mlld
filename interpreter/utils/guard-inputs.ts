@@ -14,7 +14,8 @@ import { resolveNestedValue } from './display-materialization';
 import {
   ensureStructuredValue,
   extractSecurityDescriptor,
-  isStructuredValue
+  isStructuredValue,
+  stringifyStructured
 } from './structured-value';
 import { updateVarMxFromDescriptor } from '@core/types/variable/VarMxHelpers';
 import { createASTAwareJSONReplacer } from './ast-evaluation';
@@ -87,9 +88,13 @@ function formatGuardInputValue(value: unknown): string {
   }
   if (typeof value === 'object') {
     try {
-      return JSON.stringify(value, createASTAwareJSONReplacer());
+      return stringifyStructured(value);
     } catch {
-      return '[object]';
+      try {
+        return JSON.stringify(value, createASTAwareJSONReplacer());
+      } catch {
+        return '[object]';
+      }
     }
   }
   return String(value);

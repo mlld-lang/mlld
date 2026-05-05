@@ -17,6 +17,8 @@ import type { ContextManager, PipelineContextSnapshot } from './ContextManager';
 import { varMxToSecurityDescriptor } from '@core/types/variable/VarMxHelpers';
 import type { WorkspaceMcpBridgeHandle } from '@core/types/workspace';
 
+const MAX_VARIABLE_LOOKUP_DEPTH = 512;
+
 export interface IVariableManager {
   // Core variable operations
   setVariable(name: string, variable: Variable): void;
@@ -41,6 +43,7 @@ export interface VariableManagerDependencies {
   getCurrentFilePath(): string | undefined;
   getReservedNames(): Set<string>;
   getParent(): VariableManagerContext | undefined;
+  findParentVariableForChildLookup?(name: string): Variable | undefined;
   findVisibleParentVariableOwner?(name: string): VariableManagerContext | undefined;
   getCapturedModuleEnv(): Map<string, Variable> | undefined;
   isModuleIsolated?(): boolean;
@@ -73,10 +76,13 @@ export interface VariableManagerContext {
   getVariable(name: string): Variable | undefined;
   getVariableForChildLookup?(name: string): Variable | undefined;
   getAllVariables(): Map<string, Variable>;
+  getCurrentVariables?(): Map<string, Variable>;
 }
 
 export class VariableManager implements IVariableManager {
   private variables = new Map<string, Variable>();
+  private activeLookups = new Set<string>();
+  private static activeLookupDepth = 0;
   
   constructor(private deps: VariableManagerDependencies) {}
   
@@ -292,11 +298,28 @@ export class VariableManager implements IVariableManager {
   }
 
   getVariable(name: string): Variable | undefined {
-    return this.getVariableInternal(name, true);
+    return this.withLookupGuard(name, () => this.getVariableInternal(name, true));
   }
 
   getVariableForChildLookup(name: string): Variable | undefined {
-    return this.getVariableInternal(name, false);
+    return this.withLookupGuard(name, () => this.getVariableInternal(name, false));
+  }
+
+  private withLookupGuard(name: string, lookup: () => Variable | undefined): Variable | undefined {
+    if (this.activeLookups.has(name)) {
+      return undefined;
+    }
+    if (VariableManager.activeLookupDepth >= MAX_VARIABLE_LOOKUP_DEPTH) {
+      return undefined;
+    }
+    this.activeLookups.add(name);
+    VariableManager.activeLookupDepth += 1;
+    try {
+      return lookup();
+    } finally {
+      VariableManager.activeLookupDepth -= 1;
+      this.activeLookups.delete(name);
+    }
   }
 
   private recordVariableDescriptor(variable: Variable | undefined, recordAccess: boolean): void {
@@ -384,10 +407,22 @@ export class VariableManager implements IVariableManager {
       }
     }
     
-    // Check parent scope for regular variables
-    const parentVar = parent?.getVariableForChildLookup
-      ? parent.getVariableForChildLookup(name)
-      : parent?.getVariable(name);
+    // Check parent scope for regular variables. Prefer the environment's
+    // iterative owner search when available; recursive parent lookups can
+    // overflow on deeply nested block/exe chains.
+    const iterativeParentVar = this.deps.findParentVariableForChildLookup?.(name);
+    const parentOwner = iterativeParentVar ? undefined : this.deps.findVisibleParentVariableOwner?.(name);
+    const parentVar = iterativeParentVar
+      ?? (parentOwner
+        ? (
+            parentOwner.getCurrentVariables?.().get(name)
+            ?? (parentOwner.getVariableForChildLookup
+              ? parentOwner.getVariableForChildLookup(name)
+              : parentOwner.getVariable(name))
+          )
+        : (parent?.getVariableForChildLookup
+          ? parent.getVariableForChildLookup(name)
+          : parent?.getVariable(name)));
     if (parentVar) {
       this.recordVariableDescriptor(parentVar, recordAccess);
       return parentVar;

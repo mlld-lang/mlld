@@ -6,9 +6,11 @@ import {
   collectParameterDescriptors,
   collectAndMergeParameterDescriptors,
   extractSecurityDescriptor,
+  stringifyStructured,
   wrapStructured,
   isStructuredValue
 } from '@interpreter/utils/structured-value';
+import { getMaterializedStructuredText } from '@core/utils/materialized-text';
 import type { Variable, VariableSource } from '@core/types/variable';
 import {
   makeSecurityDescriptor,
@@ -179,12 +181,12 @@ describe('text serialization fallbacks', () => {
     expect(asText({ name: 'Ada', active: true })).toBe('{"name":"Ada","active":true}');
   });
 
-  it('surfaces circular objects as unserializable instead of [object Object]', () => {
+  it('surfaces circular objects with a stable placeholder instead of [object Object]', () => {
     const value: Record<string, unknown> = {};
     value.self = value;
 
-    expect(asText(value)).toBe('[unserializable object]');
-    expect(wrapStructured(value, 'object').text).toBe('[unserializable object]');
+    expect(asText(value)).toBe('{"self":"[Circular]"}');
+    expect(wrapStructured(value, 'object').text).toBe('{"self":"[Circular]"}');
   });
 
   it('summarizes executable definitions instead of materializing their codeTemplate', () => {
@@ -192,6 +194,13 @@ describe('text serialization fallbacks', () => {
 
     expect(wrapStructured(executable, 'object').text).toBe('<function(payload)>');
     expect(asText({ tool: executable })).toBe(JSON.stringify({ tool: '<function(payload)>' }));
+  });
+
+  it('does not materialize nested structured object text while stringifying', () => {
+    const nested = wrapStructured({ ok: true }, 'object');
+
+    expect(stringifyStructured({ nested })).toBe('{"nested":{"ok":true}}');
+    expect(getMaterializedStructuredText(nested)).toBeUndefined();
   });
 });
 
@@ -333,5 +342,32 @@ describe('extractSecurityDescriptor with refined record metadata', () => {
     });
 
     expect(recursive?.labels).toEqual(['src:mcp']);
+  });
+
+  it('does not recurse forever when namespace metadata wraps the same data object', () => {
+    const data: Record<string, unknown> = { name: 'root' };
+    data.self = data;
+    const structured = wrapStructured(data, 'object', undefined, {
+      security: makeSecurityDescriptor({ labels: ['src:mcp'] })
+    });
+    structured.internal = {
+      ...(structured.internal ?? {}),
+      namespaceMetadata: {
+        self: {
+          security: serializeSecurityDescriptor(
+            makeSecurityDescriptor({ labels: ['fact:@record.self'] })
+          )
+        }
+      }
+    };
+
+    const recursive = extractSecurityDescriptor(structured, {
+      recursive: true,
+      mergeArrayElements: true
+    });
+
+    expect(recursive?.labels).toEqual(
+      expect.arrayContaining(['src:mcp', 'fact:@record.self'])
+    );
   });
 });

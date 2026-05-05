@@ -59,6 +59,8 @@ export interface VariableManagerDependencyContext {
   getCurrentFilePath(): string | undefined;
   getReservedNames(): Set<string>;
   getParent(): VariableManagerContext | undefined;
+  findParentVariableForChildLookup?(name: string): Variable | undefined;
+  findVisibleParentVariableOwner?(name: string): VariableManagerContext | undefined;
   getCapturedModuleEnv(): Map<string, Variable> | undefined;
   isModuleIsolated(): boolean;
   getResolverManager(): ResolverManager | undefined;
@@ -253,6 +255,8 @@ export function buildVariableManagerDependencies(
     getCurrentFilePath: context.getCurrentFilePath,
     getReservedNames: context.getReservedNames,
     getParent: context.getParent,
+    findParentVariableForChildLookup: context.findParentVariableForChildLookup,
+    findVisibleParentVariableOwner: context.findVisibleParentVariableOwner,
     getCapturedModuleEnv: context.getCapturedModuleEnv,
     isModuleIsolated: context.isModuleIsolated,
     getResolverManager: context.getResolverManager,

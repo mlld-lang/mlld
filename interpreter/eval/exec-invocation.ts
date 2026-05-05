@@ -5035,8 +5035,12 @@ async function evaluateExecInvocationInternal(
     if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
       const captureLlmTraceConfig = (config: Record<string, unknown>): void => {
         const runtimeConfig = readLlmRuntimeResumeConfig(config);
-        llmTraceSessionId = runtimeConfig?.sessionId;
-        llmTraceProvider = runtimeConfig?.provider;
+        if (runtimeConfig?.sessionId) {
+          llmTraceSessionId = runtimeConfig.sessionId;
+        }
+        if (runtimeConfig?.provider) {
+          llmTraceProvider = runtimeConfig.provider;
+        }
         llmTraceModel = typeof config.model === 'string' ? config.model : undefined;
         llmTraceToolCount = Array.isArray(config.tools) ? config.tools.length : undefined;
       };
@@ -5107,6 +5111,10 @@ async function evaluateExecInvocationInternal(
           // spec-guard-resume.md#resume-invariants.
           disableAutoProvisionedShelve: isLlmResumeContinuation
         });
+        if (!llmTraceSessionId) {
+          llmTraceSessionId = callConfig.sessionId;
+          llmTraceProvider = llmTraceProvider ?? 'unknown';
+        }
         const previousSystem = nextConfig.system;
         const toolNotesSystem = appendToolNotesToSystemPrompt(nextConfig.system, callConfig.toolNotes);
         const nextSystem = appendInjectedNotesToSystemPrompt(
