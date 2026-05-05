@@ -18,10 +18,10 @@ describe('pipeline executor helper primitives', () => {
     expect(formatParallelStageError({ code: 403 })).toBe('{"code":403}');
   });
 
-  it('falls back safely when structured serialization throws', () => {
+  it('serializes circular values with stable placeholders', () => {
     const circular: any = {};
     circular.self = circular;
-    expect(safeJSONStringify(circular)).toBe('[object Object]');
+    expect(safeJSONStringify(circular)).toBe('{"self":"[Circular]"}');
   });
 
   it('extracts values from structured wrappers and pipeline-input variables', () => {
