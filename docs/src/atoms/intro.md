@@ -218,15 +218,31 @@ This catches people who expect the last expression to be the return value. It's 
 
 Labels are comma-separated: `var secret,pii @data = "x"`
 
-`var` is module-level and immutable, `let` is block-scoped and mutable
+`var` is module-level and immutable, `let` is block-scoped and mutable. Use `var` at module scope, `let` inside `for` / `if` / `when` / exe bodies. They are not interchangeable — each errors in the other position.
 
 ```mlld
 var @config = "global"
+let @global = "x"        >> WRONG: let not allowed at module scope
+
 if true [
   let @temp = "local"    >> correct
   var @temp = "local"    >> WRONG: var not allowed in blocks
 ]
 ```
+
+To accumulate or count inside a loop, declare the container with `var` at module scope and mutate it with `let +=` inside the block. Read the result back at module scope:
+
+```mlld
+var @passes = []
+var @fails = []
+for @r in @results [
+  if @r.ok [ let @passes += [@r] ]
+  else [ let @fails += [@r] ]
+]
+var @passCount = @passes.length    >> count by reading .length, not by += on a number
+```
+
+`var @count += 1` inside a loop does not work — `var` is module-only and immutable. The container-and-length pattern above is the idiom.
 
 `var` can be labeled, `let` cannot be labeled. This is because labels get taint-tracked (taint tracking on a mutable object is a nightmare). Design your variable usage accordingly; use `exe` to create abstractions at top level which can also be labeled.
 
@@ -236,6 +252,13 @@ if @cond [block] else [block]                  >> Run block if true
 when @cond => value                            >> Select first match
 when [cond => val; * => default]               >> First-match list
 when @val ["a" => x; * => y]                   >> Match value against patterns
+```
+
+`run` is a value, not a process-control statement. `run sh { exit 1 }` produces a result with a non-zero `exit_code`; it does NOT make the script exit non-zero. The CLI exits 0 unless `/bail` (or an unhandled error) fires. To make a failed shell command fail the script — for test rigs, CI checks, etc. — use `/bail`:
+
+```mlld
+var @r = run sh { exit 1 }
+when @r.exit_code != 0 => bail "shell step failed"
 ```
 
 `cmd` interpolates `@variables`. Pipes work, but `>`, `&&`, `;`, `2>/dev/null` are rejected. Use `sh` for full shell syntax.
