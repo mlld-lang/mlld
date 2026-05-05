@@ -195,6 +195,54 @@ describe('session runtime', () => {
     expect(isStructuredValue(init) ? asText(init) : init).toBe('seeded');
   });
 
+  it('handles module-scope record output feeding a later session-seeded llm wrapper', async () => {
+    const { env, result } = await interpretWithEnv([
+      '/record @adviceShape = {',
+      '  data: [is_advice: boolean, advice_kind: string?, why: string?],',
+      '  validate: "demote"',
+      '}',
+      '/var session @planner = {',
+      '  init: string,',
+      '  mode: boolean?',
+      '}',
+      '/exe @classify(query) = [',
+      '  let @raw = { is_advice: true, advice_kind: "hotel", why: "stubbed" }',
+      '  => @raw',
+      '] => record @adviceShape',
+      '/exe llm @seedSource(prompt, config) = js {',
+      '  return "seeded";',
+      '}',
+      '/exe llm @plannerProvider(prompt, config) = js {',
+      '  return {',
+      '    terminal: config?.adviceMode ? "blocked" : "allowed",',
+      '    text: prompt',
+      '  };',
+      '}',
+      '/exe @run(agent, query) = [',
+      '  let @planned = @plannerProvider(@query, { adviceMode: @agent.adviceMode }) with {',
+      '    session: @planner,',
+      '    seed: { init: @seedSource("seed", {}), mode: @agent.adviceMode }',
+      '  }',
+      '  => @planned',
+      ']',
+      '/var @cls = @classify("Recommend the highest-rated hotel in Paris")',
+      '/var @adviceMode = @cls.is_advice',
+      '/var @agent = { adviceMode: @adviceMode }',
+      '/var @runResult = @run(@agent, "trigger query")',
+      '/var @summary = { adviceMode: @adviceMode, terminal: @runResult.terminal, text: @runResult.text }'
+    ].join('\n'));
+
+    const summary = await extractVariableValue(env.getVariable('summary')!, env) as any;
+    expect(isStructuredValue(summary.adviceMode) ? summary.adviceMode.data : summary.adviceMode).toBe(true);
+    expect(summary.terminal).toBe('blocked');
+    expect(summary.text).toBe('trigger query');
+    expect(result.sessions).toHaveLength(1);
+    const mode = result.sessions[0]?.finalState?.mode;
+    expect(isStructuredValue(mode) ? mode.data : mode).toBe(true);
+    const init = result.sessions[0]?.finalState?.init;
+    expect(isStructuredValue(init) ? asText(init) : init).toBe('seeded');
+  });
+
   it('exposes final session state on the returned llm value via .mx.sessions and matches ExecuteResult.sessions', async () => {
     const { env, result } = await interpretWithEnv([
       '/var session @planner = {',
