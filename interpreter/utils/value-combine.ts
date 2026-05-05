@@ -125,6 +125,12 @@ export function combineValues(
     const destination = isArrayAppendAccumulator(targetValue)
       ? targetValue
       : markArrayAppendAccumulator([...targetValue]);
+    // when-expressions return null on no-match; += null/undefined is a no-op
+    // so partition idioms (`let @bucket += when [pred => [@r]]`) work without
+    // smearing nulls into the accumulator.
+    if (source === null || source === undefined) {
+      return destination;
+    }
     destination.push(...getArrayAppendItems(source));
     return destination;
   }
